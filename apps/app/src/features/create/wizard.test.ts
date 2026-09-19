@@ -49,4 +49,16 @@ describe("the wizard registry", () => {
       expect(skill?.steps(draft).at(-1)).toBe("pullRequest");
     }
   });
+
+  it("carries the agent wizard: five steps, ending on a pull request", () => {
+    const agent = WIZARDS.agent;
+    expect(agent?.need).toBe("agent.write");
+    expect(agent?.steps(agent.init())).toEqual([
+      "describe",
+      "identity",
+      "definition",
+      "toolbelt",
+      "pullRequest",
+    ]);
+  });
 });

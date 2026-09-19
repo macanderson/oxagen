@@ -96,10 +96,11 @@ export function draftAgentDefinition(args: {
   const tools = args.belt.length > 0 ? args.belt : FALLBACK_BELT;
   const list = (xs: readonly string[]) =>
     `[${xs.map((x) => `"${basicString(x)}"`).join(", ")}]`;
-  const body = (args.desc.trim() || args.copy.placeholder).replace(
-    /"""/g,
-    '""\\"',
-  );
+  // A multi-line basic string still reads escapes: double every backslash,
+  // and break a triple quote so it cannot close the string early.
+  const body = (args.desc.trim() || args.copy.placeholder)
+    .replace(/\\/g, "\\\\")
+    .replace(/"""/g, '""\\"');
   return [
     `# .oxagen/agents/${args.slug}.toml`,
     ...args.copy.header.split("\n").map((l) => `# ${l}`),
