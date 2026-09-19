@@ -279,6 +279,7 @@ function nextSurface(publicDir, brand) {
 /** apps/web is a flat static site: assets sit beside index.html. */
 function staticSurface(root, brand) {
   const tileDark = svg(`${brand}-icon-tile-dark.svg`);
+  const tileLight = svg(`${brand}-icon-tile-light.svg`);
   emit(`${root}/favicon.svg`, readFileSync(svg(`${brand}-favicon.svg`)));
   const icoParts = [];
   for (const size of [16, 32, 48]) {
@@ -288,6 +289,59 @@ function staticSurface(root, brand) {
   }
   emit(`${root}/favicon.ico`, ico(icoParts));
   emit(`${root}/apple-touch-icon.png`, raster(tileDark, 180));
+  // Home-screen / installed-PWA icons — same tiles the Next surfaces wear.
+  for (const size of [192, 512]) {
+    emit(`${root}/icon-${size}.png`, raster(tileDark, size));
+  }
+  const scratch = mkdtempSync(join(tmpdir(), "oxagen-brand-web-"));
+  const maskDark = join(scratch, `maskable-${brand}-dark.svg`);
+  writeFileSync(maskDark, maskableSvg(tileDark));
+  for (const size of MASKABLE) {
+    emit(`${root}/maskable-${size}.png`, raster(maskDark, size));
+  }
+  // Kit webmanifest with paths rewritten for the flat static layout.
+  const kitManifest = JSON.parse(
+    readFileSync(join(BRAND, `icons/${brand}.webmanifest`), "utf8"),
+  );
+  emit(
+    `${root}/${brand}.webmanifest`,
+    `${JSON.stringify(
+      {
+        ...kitManifest,
+        icons: [
+          {
+            src: "/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/maskable-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "/maskable-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  // Silence unused-light warning: light tiles stay available for a future
+  // light-scheme webmanifest without a second kit checkout.
+  void tileLight;
   copy(`social/${brand}-og-1200x630-dark.png`, `${root}/og.png`);
   for (const b of [brand]) {
     emit(
