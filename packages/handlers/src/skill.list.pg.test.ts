@@ -3,14 +3,20 @@
 // key acts as its creator, a key with no creator is refused); another
 // workspace's sessions are never counted; a null inventory counts as not
 // reported while an empty one counts as reported with no names; a name listed
-// twice in one inventory counts that session once; and the window includes
-// its start and excludes its end. Runs wherever DATABASE_URL points at a
-// migrated database — CI's `test` job migrates Postgres with Atlas before
-// `turbo run build test:unit`; a local run without one is skipped, not red.
-// Every row it writes is removed in afterAll.
+// twice in one inventory counts that session once; the window includes its
+// start and excludes its end; a session with an empty harness label neither
+// fails the read nor gets dropped; and a skill's harness list is capped with
+// its true distinct count carried past the cap (ADR-104, #3103). Runs
+// wherever DATABASE_URL points at a migrated database — CI's `test` job
+// migrates Postgres with Atlas before `turbo run build test:unit`; a local
+// run without one is skipped, not red. Every row it writes is removed in
+// afterAll.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { skillList } from "@oxagen/oxagen/contracts/skill.list";
+import {
+  SKILL_HARNESS_CAP,
+  skillList,
+} from "@oxagen/oxagen/contracts/skill.list";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { eq, inArray } from "drizzle-orm";
@@ -184,6 +190,26 @@ describe.skipIf(!enabled)("list_skills against Postgres", () => {
           skills: ["other-workspace"],
           workspaceId: otherWorkspaceId,
         }),
+        // Harness aggregation fixtures (#3103), dated outside the default
+        // 30-day window so they don't perturb the counts above; read directly
+        // against a matching window in the dedicated test below.
+        session({
+          startedAt: "2026-07-01T09:00:00.000Z",
+          harness: "",
+          skills: ["quiet-harness"],
+        }),
+        session({
+          startedAt: "2026-07-01T09:05:00.000Z",
+          harness: "claude-code\ncodex",
+          skills: ["loud-harness"],
+        }),
+        ...Array.from({ length: SKILL_HARNESS_CAP + 1 }, (_, i) =>
+          session({
+            startedAt: "2026-07-01T09:10:00.000Z",
+            harness: `harness-${String(i + 1).padStart(2, "0")}`,
+            skills: ["many-harness"],
+          }),
+        ),
       ]);
     });
   });
@@ -231,6 +257,7 @@ describe.skipIf(!enabled)("list_skills against Postgres", () => {
         name: "edge-from",
         sessions: 1,
         harnesses: ["claude-code"],
+        harnessCount: 1,
         firstSeenAt: "2026-08-16T12:00:00.000Z",
         lastSeenAt: "2026-08-16T12:00:00.000Z",
       },
@@ -238,6 +265,7 @@ describe.skipIf(!enabled)("list_skills against Postgres", () => {
         name: "release-notes",
         sessions: 2,
         harnesses: ["claude-code", "codex"],
+        harnessCount: 2,
         firstSeenAt: "2026-09-10T09:00:00.000Z",
         lastSeenAt: "2026-09-12T09:00:00.000Z",
       },
@@ -245,11 +273,45 @@ describe.skipIf(!enabled)("list_skills against Postgres", () => {
         name: "triage",
         sessions: 1,
         harnesses: ["claude-code"],
+        harnessCount: 1,
         firstSeenAt: "2026-09-10T09:00:00.000Z",
         lastSeenAt: "2026-09-10T09:00:00.000Z",
       },
     ]);
     expect(skillList.output.parse(out)).toEqual(out);
+  });
+
+  it("keeps a session with an empty or newline-bearing harness label, and caps a skill's harness list while carrying its true count (#3103)", async () => {
+    const window = {
+      from: new Date("2026-07-01T00:00:00.000Z"),
+      to: new Date("2026-07-02T00:00:00.000Z"),
+    };
+    const rows = await runInTenantScope({ orgId, workspaceId }, () =>
+      postgresSkillQueries.names({ orgId, workspaceId }, window, {
+        after: null,
+        limit: 100,
+      }),
+    );
+    const byName = Object.fromEntries(rows.map((row) => [row.name, row]));
+
+    // An empty harness label round-trips whole, never fails the read.
+    expect(byName["quiet-harness"]?.harnesses).toEqual([""]);
+    expect(byName["quiet-harness"]?.harnessCount).toBe(1);
+
+    // A harness label containing a newline is never re-split into invented labels.
+    expect(byName["loud-harness"]?.harnesses).toEqual(["claude-code\ncodex"]);
+    expect(byName["loud-harness"]?.harnessCount).toBe(1);
+
+    // A skill with more than SKILL_HARNESS_CAP distinct harnesses is capped in
+    // the returned list; harnessCount still carries the true distinct count.
+    expect(byName["many-harness"]?.harnesses).toEqual(
+      Array.from(
+        { length: SKILL_HARNESS_CAP },
+        (_, i) => `harness-${String(i + 1).padStart(2, "0")}`,
+      ),
+    );
+    expect(byName["many-harness"]?.harnessCount).toBe(SKILL_HARNESS_CAP + 1);
+    expect(byName["many-harness"]?.sessions).toBe(SKILL_HARNESS_CAP + 1);
   });
 
   it("never counts another workspace's sessions (negative)", async () => {
