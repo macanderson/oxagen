@@ -21,8 +21,10 @@ import type { FrameBody } from "../evidence/frame-body";
 import { minimalSession } from "../test-helpers";
 import {
   TACHO_MAX_BATCH,
+  base64Size,
   TACHO_MAX_BATCH_BODY_BYTES,
   TACHO_MAX_BODY_BYTES,
+  TACHO_MAX_REQUEST_BYTES,
   type DeliveredCommand,
   type TachoBody,
 } from "../wire";
@@ -658,7 +660,8 @@ describe("shipper", () => {
         ingest: async (batch, _daemon, bodies = []) => {
           sent.push({ seqs: batch.map((e) => e.seq), bodies: bodies.length });
           // The route refuses any request that carries this body.
-          if (bodies.length > 0) throw new ControlError(413, "Payload Too Large");
+          if (bodies.length > 0)
+            throw new ControlError(413, "Payload Too Large");
           return okResponse(batch);
         },
       },
@@ -708,18 +711,38 @@ describe("shipper", () => {
     expect(wal.stats().unshipped).toBe(events.length);
     // No leaf above the left ceiling was attempted: the split stopped.
     expect(
-      sent.some((seqs) => seqs.length === 1 && (seqs[0] as number) > leftCeiling),
+      sent.some(
+        (seqs) => seqs.length === 1 && (seqs[0] as number) > leftCeiling,
+      ),
     ).toBe(false);
   });
 
-  it("keeps a body cap that a single request can actually carry", () => {
-    // These three numbers are only correct with respect to each other. A
-    // body cap above what the route accepts does not yield a rejected body,
-    // it yields a request nobody can ship.
-    const ROUTE_LIMIT = 1_048_576;
-    const base64 = (bytes: number) => Math.ceil(bytes / 3) * 4;
-    expect(base64(TACHO_MAX_BODY_BYTES)).toBeLessThan(ROUTE_LIMIT);
-    expect(base64(TACHO_MAX_BATCH_BODY_BYTES)).toBeLessThan(ROUTE_LIMIT);
+  it("keeps the body caps inside the request budget they are spent against", () => {
+    // These numbers are only correct with respect to each other, in both
+    // directions. A cap above the budget yields a request nobody can ship.
+    // A cap far below it discards recordings for nothing.
+    //
+    // The earlier version of this test hardcoded the route's limit as a
+    // literal, which is how the drift got through: the route moved from a
+    // hardcoded 1 MiB to the host's own ceiling, the caps stayed sized for
+    // the old number, and the test went on agreeing with the copy rather
+    // than the source. It asserts against the real constant now.
+    expect(base64Size(TACHO_MAX_BODY_BYTES)).toBeLessThan(
+      TACHO_MAX_REQUEST_BYTES,
+    );
+    expect(base64Size(TACHO_MAX_BATCH_BODY_BYTES)).toBeLessThan(
+      TACHO_MAX_REQUEST_BYTES,
+    );
+    // A full batch of bodies has to leave room for the events carrying
+    // them, so it may not fill the budget on its own.
+    expect(base64Size(TACHO_MAX_BATCH_BODY_BYTES)).toBeLessThan(
+      TACHO_MAX_REQUEST_BYTES * 0.8,
+    );
+    // And the budget is not so far above the caps that bodies a workspace
+    // pays to keep are discarded while the request had room for them.
+    expect(base64Size(TACHO_MAX_BATCH_BODY_BYTES)).toBeGreaterThan(
+      TACHO_MAX_REQUEST_BYTES * 0.5,
+    );
   });
 
   // ── Orphaned events after a re-enrollment ──────────────────────────────────

@@ -167,8 +167,14 @@ describe("the daemon's git seam", () => {
     );
     await handle.api.handleHook(hook("SessionStart"));
     const ticking = handle.tick();
-    // Let the tick reach its first git command and block there.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Wait for the probe to actually start rather than assuming one turn of
+    // the event loop is enough. The tick does a variable amount of work
+    // before it reaches the first git command, so a single `setTimeout(0)`
+    // sometimes returned first and the assertion below failed for timing
+    // rather than for behaviour. Measured at roughly one run in four.
+    const deadline = Date.now() + 2_000;
+    while (!started && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 1));
     expect(started).toBe(true);
     const answered = await handle.api.handleHook(
       hook("PreToolUse", { tool_name: "Read", tool_input: { file_path: "a" } }),

@@ -70,6 +70,13 @@ export interface GitWorkingTreeChange {
 }
 
 /**
+ * Git's empty tree, the object every repository has before its first
+ * commit. Diffing against it is what `HEAD` would mean if `HEAD` existed,
+ * and the hash is a constant of the format rather than of any repository.
+ */
+const EMPTY_TREE_OBJECT = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/**
  * The most stdout this module parses from one git invocation. A worktree
  * with a build directory in it produces megabytes of `status` output, and
  * the collector must cost the same whether or not the agent ran a build.
@@ -380,10 +387,25 @@ export async function readWorkingTreeChanges(
   const entries = parsePorcelainZ(status);
   if (entries.length === 0) return [];
   const [numstatOut, root] = await Promise.all([
-    git(exec, cwd, ["diff", "--numstat", "HEAD"]).then(
-      async (head) =>
-        head ?? (await git(exec, cwd, ["diff", "--numstat"])) ?? "",
-    ),
+    git(exec, cwd, ["diff", "--numstat", "HEAD"]).then(async (head) => {
+      if (head !== undefined) return head;
+      // No HEAD means the first commit has not been made. A plain
+      // `git diff` then reports only what is unstaged, so a file already
+      // staged in a fresh repository counted as zero added lines even
+      // though `git status` reported it. The empty tree is what HEAD would
+      // be if it existed, so the cached diff against it gives the staged
+      // file its real count, and the unstaged diff still covers the rest.
+      const staged = await git(exec, cwd, [
+        "diff",
+        "--numstat",
+        "--cached",
+        EMPTY_TREE_OBJECT,
+      ]);
+      const unstaged = await git(exec, cwd, ["diff", "--numstat"]);
+      return [staged ?? "", unstaged ?? ""]
+        .filter((part) => part.length > 0)
+        .join("\n");
+    }),
     git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
   ]);
   const counts = parseNumstat(numstatOut);

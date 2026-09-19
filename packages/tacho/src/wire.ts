@@ -610,22 +610,29 @@ export type DaemonHealth = z.output<typeof daemonHealthSchema>;
 export const TACHO_MAX_BATCH = 200;
 
 /**
+ * Base64 on the wire costs four bytes for every three, rounded up to the
+ * next quad. Every cap below is compared against the request budget through
+ * this, because the budget is spent in encoded bytes and the caps are
+ * written in raw ones.
+ */
+export const base64Size = (bytes: number): number => Math.ceil(bytes / 3) * 4;
+
+/**
  * The most bytes one frame body may carry, before base64.
  *
- * Sized against the ingest route, which refuses a request over 1 MiB
- * (`apps/api/src/routes/v1/tacho.events.ingest.ts`). Base64 costs a third
- * on top, so a body at the old 1 MiB ceiling reached the wire at about
- * 1.37 MB and could not fit a request even travelling alone. 600 KiB
- * encodes to roughly 800 KB and still leaves room for its event and the
- * batch envelope, so a body at the maximum is one the control plane can
- * actually accept.
+ * Derived from `TACHO_MAX_REQUEST_BYTES` rather than written as a number,
+ * because the two have to agree and they did not. An earlier pass sized
+ * these against a route that hardcoded a 1 MiB request limit, which was
+ * true when it was written. The route now reads the host's own ceiling, so
+ * the hand-written caps silently became a downgrade: every `content_exact`
+ * body over the smaller number was marked too large and its bytes were
+ * never written, which is the content a workspace pays to keep.
  *
- * These two numbers have to be read together with the route's. A cap above
- * what the route accepts does not produce a rejected body, it produces a
- * request nobody can ship, and until 413 became a refusal the shipper
- * bisects, that wedged the host for ever.
+ * A cap above the budget produces a request nobody can ship, and a cap far
+ * below it discards recordings for nothing. Deriving both from the budget
+ * is the only way neither happens again when one of them moves.
  */
-export const TACHO_MAX_BODY_BYTES = 600 * 1024;
+export const TACHO_MAX_BODY_BYTES = 1_048_576;
 
 /**
  * The most body bytes one batch carries, before base64. A batch of 200
@@ -633,13 +640,12 @@ export const TACHO_MAX_BODY_BYTES = 600 * 1024;
  * the event whose body would cross this line so every body still travels
  * with its own event.
  *
- * Also bounded by the route's 1 MiB request limit rather than set well
- * above it. At 700 KiB the base64 form is about 933 KB, so a full batch
- * lands under the limit instead of relying on bisection to discover that it
- * does not. Bisection is the floor that keeps a host draining, not the
- * mechanism the common case should depend on.
+ * Sized so the encoded form leaves room for the events themselves inside
+ * the request budget. `wire.test.ts` holds it to that, so a change to
+ * either number fails rather than quietly wedging a host or discarding a
+ * body.
  */
-export const TACHO_MAX_BATCH_BODY_BYTES = 700 * 1024;
+export const TACHO_MAX_BATCH_BODY_BYTES = 4 * 1_048_576;
 
 /**
  * The largest ingest request, in bytes on the wire: the ceiling the API route

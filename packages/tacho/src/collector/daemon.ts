@@ -893,6 +893,17 @@ export async function startDaemon(
     const work = [...gitPending.keys()].slice(0, GIT_READS_PER_TICK);
     const found: Array<{
       session: SessionRecord;
+      /**
+       * The directory these facts were read from.
+       *
+       * The probes are asynchronous now, and a hook can move a session to
+       * another repository while they run. `found` holds the mutable
+       * `SessionRecord`, so without this the apply step would write one
+       * repository's head and branch onto a session already working in
+       * another, and could seal its reconciliation there too. The read is
+       * discarded instead when the session has moved.
+       */
+      cwd: string;
       // Absent for a repository with no commit yet, which has no HEAD to
       // describe but does have a worktree to reconcile.
       facts?: GitFacts;
@@ -923,6 +934,7 @@ export async function startDaemon(
       if (facts === undefined && !due) continue;
       found.push({
         session,
+        cwd,
         facts,
         // A read that failed reports no changes rather than an empty list,
         // so no reconciliation frame is sealed for it. A frame saying the
@@ -939,8 +951,11 @@ export async function startDaemon(
     if (found.length === 0) return;
     await serial.run(async () => {
       const events: TachoEvent[] = [];
-      for (const { session, facts, changes } of found) {
+      for (const { session, cwd, facts, changes } of found) {
         if (session.sealed) continue;
+        // The session moved while the probe ran, so this answer describes a
+        // repository it is no longer in. A later turn reads the new one.
+        if (session.cwd !== cwd) continue;
         if (facts !== undefined)
           session.recorder.noteContext(gitContextOf(facts));
         if (changes === undefined) continue;
