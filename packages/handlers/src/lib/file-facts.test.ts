@@ -64,6 +64,46 @@ describe("repoRelativePathOf", () => {
     expect(repoRelativePathOf("/repo-brand/src/a.ts", "/repo")).toBeUndefined();
   });
 
+  it("refuses a path whose dot segments climb out of the worktree", () => {
+    // `/repo/../shared/config.ts` starts with `/repo/` as a string but
+    // resolves to `/shared/config.ts`. Reported as `../shared/config.ts` it
+    // would attribute an external file to this repository and collide with a
+    // genuine relative path in the same column.
+    expect(
+      repoRelativePathOf("/repo/../shared/config.ts", "/repo"),
+    ).toBeUndefined();
+  });
+
+  it("keeps a path whose dot segments stay inside the worktree", () => {
+    expect(repoRelativePathOf("/repo/packages/../src/a.ts", "/repo")).toBe(
+      "src/a.ts",
+    );
+    expect(repoRelativePathOf("/repo/./src/a.ts", "/repo")).toBe("src/a.ts");
+  });
+
+  it("refuses a sibling reached through the root's own dot segments", () => {
+    // The sibling-prefix trap with a non-normalized root on both sides: a
+    // naive prefix test passes `/repo-other/x.ts` under `/repo`, and dot
+    // segments must not smuggle it back in either.
+    expect(repoRelativePathOf("/repo-other/x.ts", "/repo")).toBeUndefined();
+    expect(
+      repoRelativePathOf("/repo/../repo-other/x.ts", "/repo/."),
+    ).toBeUndefined();
+  });
+
+  it("measures against a root that carries its own dot segments", () => {
+    expect(repoRelativePathOf("/repo/src/a.ts", "/repo/packages/..")).toBe(
+      "src/a.ts",
+    );
+  });
+
+  it("refuses a relative path that climbs above the worktree", () => {
+    expect(repoRelativePathOf("../shared/config.ts", "/repo")).toBeUndefined();
+    expect(
+      repoRelativePathOf("../shared/config.ts", undefined),
+    ).toBeUndefined();
+  });
+
   it("refuses a path outside the worktree", () => {
     expect(repoRelativePathOf("/etc/passwd", "/repo")).toBeUndefined();
   });

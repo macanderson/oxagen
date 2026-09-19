@@ -87,6 +87,46 @@ function isWindowsAbsolute(path: string): boolean {
 }
 
 /**
+ * `path` with its `.` and `..` segments resolved, on forward slashes.
+ *
+ * A tool is free to report `/repo/../shared/config.ts`, and without this the
+ * containment test below sees a string that starts with `/repo/` and hands
+ * back `../shared/config.ts` — a file that resolves outside the checkout,
+ * recorded as if it belonged to this repository and liable to collide with a
+ * genuine relative path in the same column. Resolving the segments first
+ * makes the path say where it actually is before anything is measured.
+ *
+ * The resolution is lexical, never a filesystem read: `path.resolve` answers
+ * for the host this process runs on, and these paths come off other machines,
+ * including `win32` ones this module is required to read on POSIX. A symlink
+ * can still make a lexically contained path resolve elsewhere, which is the
+ * host's business and not something an ingest-time string can settle.
+ *
+ * Leading slashes are kept, because they carry meaning: one is a POSIX root,
+ * two are a UNC share. `..` that climbs above an absolute root is dropped, as
+ * POSIX does; on a relative path it is kept, so the caller can see the escape.
+ */
+function normalizeDotSegments(path: string): string {
+  const leading = /^\/+/.exec(path)?.[0] ?? "";
+  const root = leading.length >= 2 ? "//" : leading;
+  const segments: string[] = [];
+  for (const segment of path.split("/")) {
+    if (segment.length === 0 || segment === ".") continue;
+    if (segment === "..") {
+      const last = segments[segments.length - 1];
+      // A drive letter is a root of its own, so `..` stops at it rather than
+      // popping it and turning `C:/../repo/x.ts` into a relative path.
+      if (last !== undefined && /^[A-Za-z]:$/.test(last)) continue;
+      if (last !== undefined && last !== "..") segments.pop();
+      else if (root.length === 0) segments.push("..");
+      continue;
+    }
+    segments.push(segment);
+  }
+  return `${root}${segments.join("/")}`;
+}
+
+/**
  * The comparable form of a path: forward slashes, and case folded on the
  * hosts that do not distinguish it.
  *
@@ -117,6 +157,10 @@ function comparablePath(path: string): string {
  * undefined. A path that is already relative is returned as it stands,
  * since a relative path in the record is relative to the worktree already.
  *
+ * `.` and `..` are resolved before the boundary is tested, so a path such as
+ * `/repo/../shared/config.ts` is measured as `/shared/config.ts` and refused
+ * rather than recorded as `../shared/config.ts` inside this repository.
+ *
  * Absolute means absolute on any supported host, not just a leading slash.
  * `C:\\repo\\src\\a.ts` and `\\\\server\\share\\src\\a.ts` are absolute on
  * `win32`, which `tachoPlatformSchema` allows, and reading either as
@@ -131,16 +175,23 @@ export function repoRelativePathOf(
   root: string | undefined,
 ): string | undefined {
   if (path.length === 0) return undefined;
-  const absolute = toForwardSlashes(path);
+  // Dot segments are resolved before anything is measured, so a path that
+  // climbs out of the worktree says so instead of passing the prefix test.
+  const absolute = normalizeDotSegments(toForwardSlashes(path));
+  if (absolute.length === 0) return undefined;
   // An already relative path is returned normalized, not as it arrived. A
   // tool on Windows reports `src\\a.ts` for the file a POSIX host calls
   // `src/a.ts`, and returning the first unchanged would store two keys for
   // one file in the column whose whole purpose is to read the same on every
-  // machine.
-  if (!absolute.startsWith("/") && !isWindowsAbsolute(absolute))
+  // machine. One that still climbs after normalization names a file above
+  // the worktree, which this column cannot describe, so it returns undefined
+  // rather than a key that would collide with a path inside the checkout.
+  if (!absolute.startsWith("/") && !isWindowsAbsolute(absolute)) {
+    if (absolute === ".." || absolute.startsWith("../")) return undefined;
     return absolute;
+  }
   if (root === undefined) return undefined;
-  const base = toForwardSlashes(root);
+  const base = normalizeDotSegments(toForwardSlashes(root));
   if (!base.startsWith("/") && !isWindowsAbsolute(base)) return undefined;
   // Compare against the root plus its separator, so the boundary is checked
   // once for every root including `/`, whose separator is already there.
