@@ -64,6 +64,14 @@ export interface PriceBookSyncReport {
   retired: number;
   /** The book held no list row before this run; see `syncPriceBook`. */
   coldStart: boolean;
+  /**
+   * The book holds at least one row backdated to the cold-start floor,
+   * whether this run wrote it or an earlier run did. With `coldStart`, this is
+   * the standing request to re-roll the runs those rows can now price, so a
+   * caller whose `cost/price-book.backdated` dispatch failed can send it again
+   * on a run that writes nothing (see `syncPriceBook`).
+   */
+  hasBackdatedRows: boolean;
   /** Distinct models the book now prices. */
   models: number;
   /** How many models each source ended up being the authority for. */
@@ -112,6 +120,7 @@ export interface SyncPriceBookFromSourcesArgs {
     superseded?: number;
     retired?: number;
     coldStart?: boolean;
+    hasBackdatedRows?: boolean;
   }>;
 }
 
@@ -209,6 +218,9 @@ export async function syncPriceBookFromSources(
       superseded: 0,
       retired: 0,
       coldStart: false,
+      // A dry run reads nothing back, so it claims no obligation: the caller
+      // wrote nothing and owes no repricing.
+      hasBackdatedRows: false,
       models: merged.prices.length,
       counts: merged.counts,
       failures,
@@ -245,6 +257,7 @@ export async function syncPriceBookFromSources(
     superseded: result.superseded ?? 0,
     retired: result.retired ?? 0,
     coldStart: result.coldStart ?? false,
+    hasBackdatedRows: result.hasBackdatedRows ?? false,
     models: merged.prices.length,
     counts: merged.counts,
     failures,

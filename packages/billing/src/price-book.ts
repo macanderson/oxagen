@@ -443,6 +443,20 @@ interface PriceBookSyncResult {
    * covering the frames that ran before the first sync.
    */
   coldStart: boolean;
+  /**
+   * True when the book holds at least one row effective from
+   * {@link COLD_BOOK_EFFECTIVE_FROM} — one this run floored, or one an
+   * earlier run floored and this run left alone.
+   *
+   * This is the obligation to reprice, read off the book rather than off what
+   * this run happened to change. `written` cannot carry it: a caller that
+   * backdates rows and then fails to dispatch `cost/price-book.backdated` has
+   * already committed them, so its retry reads a correct book, writes
+   * nothing, and would ask for nothing — the runs those floored rows can now
+   * price would stay blank for ever. While the book is cold this says the
+   * request is still owed, whether or not this run wrote a row.
+   */
+  hasBackdatedRows: boolean;
 }
 
 /**
@@ -586,6 +600,17 @@ export async function syncPriceBook(args: {
       bookCreatedAt === null ||
       now.getTime() - bookCreatedAt < COLD_START_WINDOW_MS;
     const coldStart = withinColdWindow;
+    // Rows the book already carries at the floor. A floored row is the only
+    // kind that prices a run which has already sealed, so its presence — not
+    // this run's write count — is what says a repricing is owed. A run that
+    // writes nothing because an earlier run already wrote the same floored
+    // rows still reports the obligation, which is how a caller whose dispatch
+    // failed recovers on its next attempt.
+    const flooredBefore = existing.some(
+      (r) =>
+        r.effectiveFrom.getTime() === COLD_BOOK_EFFECTIVE_FROM.getTime(),
+    );
+    let flooredHere = false;
     // Which sources wrote at initialization, read off the book itself. Every
     // row the first sync inserted carries that transaction's `now()` as its
     // `created_at`, so the catalogs stamped on rows created at that instant
@@ -807,6 +832,8 @@ export async function syncPriceBook(args: {
           updated_at = now()
       `);
       if (!pricedTheSame) written += 1;
+      if (seed.effectiveFrom.getTime() === COLD_BOOK_EFFECTIVE_FROM.getTime())
+        flooredHere = true;
     }
 
     // Close any open row this sync has superseded under a DIFFERENT provider
@@ -1033,6 +1060,7 @@ export async function syncPriceBook(args: {
       superseded,
       retired,
       coldStart,
+      hasBackdatedRows: flooredBefore || flooredHere,
     };
   });
 }

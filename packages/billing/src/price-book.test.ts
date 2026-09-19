@@ -1422,6 +1422,74 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(old?.effectiveTo).toEqual(T1);
   });
 
+  // The obligation to reprice is read off the book, not off what a run wrote.
+  // The rows commit before `cost/price-book.backdated` is sent, so a send that
+  // fails leaves the book seeded and the repricing unrequested — and keyed on
+  // `written`, the retry and every hourly sync after it read a correct book,
+  // wrote nothing, and asked for nothing. The floored rows those runs left
+  // alone are exactly what still needs repricing, so the report names them.
+  it("reports the floored rows in force, so a run that writes nothing still owes the repricing", async () => {
+    fake.rows.push(
+      priceRow({
+        effectiveFrom: COLD_BOOK_EFFECTIVE_FROM,
+        createdAt: new Date("2026-09-08T00:00:00.000Z"),
+      }),
+    );
+    const unchanged = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 3_000_000n,
+          effectiveFrom: T1,
+          effectiveTo: null,
+        },
+      ],
+    });
+    expect(unchanged.written).toBe(0);
+    expect(unchanged.unchanged).toBe(1);
+    expect(unchanged.coldStart).toBe(true);
+    expect(unchanged.hasBackdatedRows).toBe(true);
+  });
+
+  // The inverse: a cold book with nothing floored prices nothing that has
+  // already run, however many rows the run wrote at its own boundary, so no
+  // repricing is owed and none is asked for.
+  it("reports no floored rows when a cold run wrote only at its own boundary", async () => {
+    fake.rows.push(
+      priceRow({
+        effectiveFrom: new Date("2026-09-08T00:00:00.000Z"),
+        createdAt: new Date("2026-09-08T00:00:00.000Z"),
+      }),
+    );
+    const written = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 4_000_000n,
+          effectiveFrom: T1,
+          effectiveTo: null,
+        },
+      ],
+    });
+    expect(written.written).toBe(1);
+    expect(written.coldStart).toBe(true);
+    expect(written.hasBackdatedRows).toBe(false);
+  });
+
   // A book whose rates never moved had no real-instant row, so it stayed cold
   // for ever, and a model a catalog added months later was backdated to the
   // floor: a rollup retry then priced frames from before any rate was known.
