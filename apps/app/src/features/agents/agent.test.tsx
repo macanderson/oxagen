@@ -796,6 +796,19 @@ describe("Configuration", () => {
     expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();
   });
 
+  it("locks irreversible when the agent's only mandate is not in effect (negative)", async () => {
+    await renderAgent(
+      {
+        get: readOk(agentDetail({ definition: committedDefinition() })),
+        mandates: mandateList([mandateRow({ status: "revoked" })]),
+      },
+      "definition",
+    );
+    const locked = screen.getByRole("checkbox", { name: /^irreversible/ });
+    expect(locked).toBeDisabled();
+    expect(locked.closest("label")).toHaveTextContent("This agent holds none.");
+  });
+
   it("seeds a form for an agent with no committed file and locks irreversible without a mandate", async () => {
     await renderAgent(
       { get: readOk(agentDetail()), mandates: mandateList([]) },
