@@ -330,6 +330,66 @@ describe("fetchAuthz()", () => {
     expect(result.roleGrants[0]?.effect).toBe("allow");
     const adminRole = result.roles.find((r) => r.id === "role_admin");
     expect(adminRole?.principalIds).toContain("prn_internal");
+    // A plain org key (no scope.purpose) names no purpose: checkIAM's
+    // downstream identity split (#3151) is a no-op for this key.
+    expect(result.apiKeyPurpose).toBeNull();
+  });
+
+  // ── apiKeyPurpose: what checkIAM uses to tell a purpose-scoped key's ──────
+  // role-grant inheritance apart from a person's, for evidence (#3151).
+
+  it("reports a purpose-scoped key's scope.purpose alongside its creator's grants", async () => {
+    mocks.dbFn.mockReturnValue(
+      buildApiKeyDbMock({
+        apiKey: [
+          {
+            createdById: "usr_creator",
+            scope: { purpose: "tacho_gateway_v1", host_enrollment_id: "tch_1" },
+          },
+        ],
+        principals: [{ ...PRINCIPAL_ROW, parentUserId: "usr_creator" }],
+      }),
+    );
+
+    const result = await fetchAuthz({
+      userId: null,
+      apiKeyId: "aky_gw",
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      capability: "query_ontology",
+    });
+
+    // Role-grant resolution is unchanged: the creator's principal, still.
+    expect(result.principal?.id).toBe("prn_internal");
+    // But the purpose is now visible to the caller, which is what lets
+    // checkIAM attribute this call's evidence to the credential rather than
+    // to "prn_internal", the creator whose grants decided the outcome.
+    expect(result.apiKeyPurpose).toBe("tacho_gateway_v1");
+  });
+
+  it("reports a cli_session_v1 key's purpose too: it is a person's own credential, not a machine one", async () => {
+    mocks.dbFn.mockReturnValue(
+      buildApiKeyDbMock({
+        apiKey: [
+          { createdById: "usr_creator", scope: { purpose: "cli_session_v1" } },
+        ],
+        principals: [{ ...PRINCIPAL_ROW, parentUserId: "usr_creator" }],
+      }),
+    );
+
+    const result = await fetchAuthz({
+      userId: null,
+      apiKeyId: "aky_cli",
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      capability: "generate_markdown",
+    });
+
+    // fetchAuthz reports the purpose verbatim; it is checkIAM's
+    // machineAttributedPrincipal that special-cases cli_session_v1 as a
+    // person's credential rather than a machine one. This function does
+    // not draw that line itself.
+    expect(result.apiKeyPurpose).toBe("cli_session_v1");
   });
 
   it("fails closed when the API key row is missing / soft-deleted / foreign-org", async () => {
