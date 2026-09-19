@@ -13,6 +13,7 @@ export { handleGithubSetup } from "./github-setup";
 export { decideInvitation } from "./invitation";
 export { loadInvitation } from "./invitations";
 export { InvitationBody, InvitationNotFound } from "./invite-view";
+export { oauthQueryOutcome } from "./auth-errors";
 export { LoginForm } from "./login-form";
 export { ForgotPasswordForm, ResetPasswordForm } from "./password-reset-forms";
 export { AFTER_SIGNUP } from "./routes";

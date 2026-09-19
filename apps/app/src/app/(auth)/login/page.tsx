@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { LoginForm, OAuthButtons } from "@/features/auth";
-import { oauthQueryOutcome } from "@/features/auth/auth-errors";
+import { LoginForm, OAuthButtons, oauthQueryOutcome } from "@/features/auth";
 import { firstParam, readNext, routes } from "@/shared/safe-path";
 import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
