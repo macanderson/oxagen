@@ -26,7 +26,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { routes } from "@/shared/safe-path";
+import { routes, sanitizeNext } from "@/shared/safe-path";
 import { timeZoneChoices } from "@/shared/time-zone";
 import { Avatar } from "@/ui/avatar";
 import { buttonPrimary, inputBase, panel } from "@/ui/control-styles";
@@ -173,19 +173,34 @@ export function AccountDialog({ data }: { data: ShellData }) {
   }, [guardUnload]);
 
   // `beforeunload` covers a reload, a closed tab and a typed address. It does
-  // not run for a client-side transition, and two of those leave the shell
-  // and so unmount this dialog with the codes in it: signing out, and a link
-  // into another organization (the shell is mounted per organization). So
-  // while codes are at stake the shell holds its own exits too. Sign out reads
-  // `exitHeld`; a link click out of this organization is caught here, before
-  // the router sees it. Either one brings the person back to the codes. A link
-  // inside the organization keeps the shell, and the codes, mounted, so it is
-  // left alone.
+  // not run for a client-side transition, and three of those leave the shell
+  // and so unmount this dialog with the codes in it: signing out, a link into
+  // another organization (the shell is mounted per organization), and the
+  // browser's Back or Forward button. So while codes are at stake the shell
+  // holds its own exits too. Sign out reads `exitHeld`; a link click out of
+  // this organization is caught here, before the router sees it; history
+  // navigation is caught on `popstate`. Each one brings the person back to the
+  // codes. A link inside the organization keeps the shell, and the codes,
+  // mounted, so it is left alone.
+  //
+  // Back is held here even though `exit-guard.ts` refuses it for ordinary
+  // writes. That module will not pay a no-op Back press on every successful
+  // write; losing the only plaintext recovery codes is worse than that cost,
+  // so a sentinel history entry is pushed for Back to consume, and `popstate`
+  // pushes again and reopens Security. The sentinel is left in place when the
+  // hold ends: pulling it with `history.back()` races any navigation the shell
+  // may start in the same tick.
   const orgSlug = data.org.slug;
+  const navigate = useNavigate();
   useEffect(() => {
     setExitHeld(guardUnload);
     if (!guardUnload) return;
-    const hold = (event: MouseEvent) => {
+    const held = sanitizeNext(
+      `${window.location.pathname}${window.location.search}`,
+      routes.root(),
+    );
+    window.history.pushState({ oxagenRecoveryHold: 1 }, "", window.location.href);
+    const holdClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0) return;
       // A modified click opens a new tab or window and leaves this page alone.
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
@@ -203,11 +218,25 @@ export function AccountDialog({ data }: { data: ShellData }) {
       event.stopPropagation();
       openAccount("security");
     };
-    document.addEventListener("click", hold, true);
-    return () => {
-      document.removeEventListener("click", hold, true);
+    const holdHistory = () => {
+      // `popstate` fires after the traverse has committed, so the URL may
+      // already be the previous entry and Next may be mid soft-nav. Put the
+      // held path back and reopen Security before the shell finishes leaving.
+      window.history.pushState(
+        { oxagenRecoveryHold: 1 },
+        "",
+        window.location.href,
+      );
+      navigate.replace(held);
+      openAccount("security");
     };
-  }, [guardUnload, orgSlug, openAccount, setExitHeld]);
+    document.addEventListener("click", holdClick, true);
+    window.addEventListener("popstate", holdHistory);
+    return () => {
+      document.removeEventListener("click", holdClick, true);
+      window.removeEventListener("popstate", holdHistory);
+    };
+  }, [guardUnload, orgSlug, openAccount, setExitHeld, navigate]);
   useEffect(
     () => () => {
       setExitHeld(false);

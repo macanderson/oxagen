@@ -7,6 +7,7 @@
 // recovery codes; Privacy queues export_data. The onboarding demo tab of the
 // mockup is not here (negative).
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -62,8 +63,9 @@ vi.mock("./session-client", () => ({
 // The dialog re-renders the server tree after a save, through useNavigate ---
 // the app's one useRouter importer (INV-13).
 const refresh = vi.fn();
+const replace = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh, push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ refresh, push: vi.fn(), replace }),
 }));
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
@@ -175,6 +177,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   refresh.mockReset();
+  replace.mockReset();
   updateProfile.mockReset();
   updateProfile.mockResolvedValue({
     ok: true,
@@ -950,6 +953,51 @@ describe("Security", () => {
       "/acme/core-platform/fleet",
       "/other-org/people",
     ]);
+  });
+
+  // Back and Forward are client history transitions: no `beforeunload`, no
+  // click. `popstate` fires after the traverse commits, so the hold pushes a
+  // sentinel for Back to consume and, on `popstate`, pushes again, replaces
+  // onto the held path and reopens Security.
+  it("holds browser history navigation while codes are at stake", async () => {
+    replace.mockClear();
+    const pushState = vi.spyOn(window.history, "pushState");
+    const { user } = await openDialog("security");
+
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes");
+    expect(screen.getByTestId("exit-held")).toHaveTextContent("true");
+    expect(pushState).toHaveBeenCalled();
+
+    await user.keyboard("{Escape}");
+    expect(screen.getByTestId("which")).toHaveTextContent("none");
+    const pushesBefore = pushState.mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(pushState.mock.calls.length).toBeGreaterThan(pushesBefore);
+    expect(replace).toHaveBeenCalled();
+    expect(screen.getByTestId("which")).toHaveTextContent("account");
+    expect(screen.getByTestId("account-tab-security")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    // The held set is still here: Cancel closed the sheet, not the island.
+    expect(screen.getByTestId("account-codes")).toBeTruthy();
+
+    await user.click(screen.getByTestId("account-codes-saved"));
+    expect(screen.getByTestId("exit-held")).toHaveTextContent("false");
+    replace.mockClear();
+    const pushesAfterSave = pushState.mock.calls.length;
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(pushState.mock.calls.length).toBe(pushesAfterSave);
+    expect(replace).not.toHaveBeenCalled();
+    pushState.mockRestore();
   });
 
   it("asks before unloading the page while a rotation is in flight", async () => {
