@@ -83,6 +83,19 @@ pre-push:
         - "scripts/**"
       run: pnpm check:contracts
 
+    # src/i18n/messages.d.ts is GENERATED from messages/*.json and is what types
+    # every t() key. A catalogue that gains or renames a key without the file
+    # being regenerated leaves the two disagreeing, and tsc believes the file —
+    # so the error surfaces as `Argument of type '"someKey"' is not assignable to
+    # NamespacedMessageKeys<…>` on a key the catalogue plainly holds. That broke
+    # CI three times on 2026-09-19 alone, each time a red run and a round trip
+    # for one regenerated file. The staged typecheck does not catch it, because
+    # the stale declaration is consistent with itself. Fixed by running the
+    # generator's own check here, where it costs seconds.
+    app-messages:
+      glob: "apps/app/{messages/*.json,src/i18n/messages.d.ts,src/**/*.tsx,src/**/*.ts}"
+      run: pnpm --filter @oxagen/app check:messages
+
     # Registered env vars must validate against the schema — an unregistered var
     # (NEXT_PUBLIC_DOCS_URL, OXAGEN_LOCAL_DEV, …) silently red-jobs the CI gate.
     env-check:
