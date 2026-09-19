@@ -250,6 +250,16 @@ export interface GitHubClient {
   }): Promise<string[]>;
 
   /**
+   * One branch's head commit by name, or null when the branch does not exist
+   * (HTTP 404). Any other refusal surfaces as the thrown error.
+   */
+  getBranch(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<{ name: string; sha: string } | null>;
+
+  /**
    * Fetch a single pull request's details (stats, refs, comment totals).
    */
   getPullRequest(args: {

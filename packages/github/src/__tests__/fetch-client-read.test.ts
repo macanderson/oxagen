@@ -508,3 +508,50 @@ describe("listBranches", () => {
     expect(branches).toHaveLength(300);
   });
 });
+
+// ---------------------------------------------------------------------------
+// getBranch
+// ---------------------------------------------------------------------------
+
+describe("getBranch", () => {
+  it("answers the branch's head commit by name", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({ commit: { sha: "abc123", commit: { tree: { sha: "t" } } } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+    const out = await client.getBranch({
+      owner: "acme",
+      repo: "widgets",
+      branch: "release/2026",
+    });
+    expect(out).toEqual({ name: "release/2026", sha: "abc123" });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/repos/acme/widgets/branches/release%2F2026",
+    );
+  });
+
+  it("answers null when GitHub says the branch does not exist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(makeResponse({ message: "Not Found" }, 404)),
+    );
+    const client = createGitHubClient({ token: "tok" });
+    await expect(
+      client.getBranch({ owner: "acme", repo: "widgets", branch: "gone" }),
+    ).resolves.toBeNull();
+  });
+
+  it("rethrows any other refusal", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(makeResponse({ message: "Forbidden" }, 403)),
+    );
+    const client = createGitHubClient({ token: "tok" });
+    await expect(
+      client.getBranch({ owner: "acme", repo: "widgets", branch: "main" }),
+    ).rejects.toThrow(/403/);
+  });
+});

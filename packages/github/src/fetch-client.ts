@@ -569,6 +569,28 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     }
   }
 
+  /**
+   * One branch's head commit, or null when GitHub answers 404: the branch
+   * does not exist. Unlike `listBranches`, which stops at 300, this answers
+   * for any branch by name.
+   */
+  async function getBranch(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<{ name: string; sha: string } | null> {
+    try {
+      const data = await request<GHBranch>(
+        "GET",
+        `/repos/${seg(args.owner)}/${seg(args.repo)}/branches/${encodeURIComponent(args.branch)}`,
+      );
+      return { name: args.branch, sha: data.commit.sha };
+    } catch (err) {
+      if (isNotFound(err)) return null;
+      throw err;
+    }
+  }
+
   async function getTree(args: {
     owner: string;
     repo: string;
@@ -935,6 +957,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     listPullRequests,
     getFileContent,
     getTree,
+    getBranch,
     getPullRequest,
     listPullRequestComments,
     listCiChecks,
