@@ -229,8 +229,10 @@
           "tool_version": "The version’s id, tlv_….",
           "connection": "The stored credential’s id, mcrd_….",
           "agent": "The agent’s id, agt_….",
-          "operator": "The person’s user id."
+          "operator": "Every agent this member is accountable for is denied."
         },
+        "targetOperatorPlaceholder": "Choose a member",
+        "targetOperatorEmpty": "No org members to choose from.",
         "blastTitle": "Blast radius",
         "blastBody": "Every affected call is denied at its next boundary. Nothing in flight is killed, and nothing is destroyed — you can clear this switch at any time.",
         "restoreTitle": "What this restores",
@@ -248,7 +250,7 @@
         "pending": "Recording…",
         "unchanged": "Nothing changed: the switch was already that way, so no deny generation advanced and nothing new was recorded."
       },
-      "noNames": "A flip records the user id of whoever made it. The record carries no display name, so this page prints the id rather than guessing at a person."
+      "noNames": "A flip records the public id of whoever made it, the same usr_… id list_members and the audit log print. The record carries no display name, so this page prints the id rather than guessing at a person."
     },
     "failure": {
       "back": "Back to Fleet",
