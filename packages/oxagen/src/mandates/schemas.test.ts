@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_CONSEQUENCE_ROLES,
   effectiveConsequenceRoles,
+  isIso4217Currency,
   mandateApproverSchema,
   mandateBodySchema,
   mandateLimitChangesSchema,
@@ -75,6 +76,60 @@ describe("measure values", () => {
       }).success,
     ).toBe(false);
   });
+
+  // #3448 (residue from #3442, ADR-111): an `amount` measure's unit must be
+  // ISO 4217, refused here rather than passing this schema, the grant-time
+  // unit-match check and only failing later at `Money.safeParse`, taking
+  // every mandate naming the measure down with it (`record_unmappable`).
+  it("refuses a non-ISO-4217 unit on an amount measure", () => {
+    const result = measureDeclarationSchema.safeParse({
+      path: "amount.value",
+      type: "amount",
+      unit: "USDC",
+      scale: 2,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.path).toEqual(["unit"]);
+      expect(result.error.issues[0]?.message).toMatch(/ISO 4217/);
+    }
+  });
+
+  it("accepts a count measure denominated in a currency-code unit", () => {
+    // ADR-108's own example: a count of dollar bills, not an amount of
+    // dollars. The ISO 4217 constraint applies only to `type: "amount"`.
+    expect(
+      measureDeclarationSchema.safeParse({
+        path: "bills",
+        type: "count",
+        unit: "USD",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts a count measure denominated in an arbitrary, non-ISO unit", () => {
+    expect(
+      measureDeclarationSchema.safeParse({
+        path: "amount.value",
+        type: "count",
+        unit: "USDC",
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each(["USD", "EUR", "JPY", "GBP"])(
+    "isIso4217Currency accepts %s",
+    (code) => {
+      expect(isIso4217Currency(code)).toBe(true);
+    },
+  );
+
+  it.each(["USDC", "GAU", "RPM", "xyz", ""])(
+    "isIso4217Currency refuses %j",
+    (code) => {
+      expect(isIso4217Currency(code)).toBe(false);
+    },
+  );
 });
 
 describe("the mandate body", () => {
@@ -128,9 +183,9 @@ describe("the mandate body", () => {
         .success,
     ).toBe(true);
     expect(mandateLimitChangesSchema.safeParse({}).success).toBe(false);
-    expect(
-      mandateLimitChangesSchema.safeParse({ amount: {} }).success,
-    ).toBe(false);
+    expect(mandateLimitChangesSchema.safeParse({ amount: {} }).success).toBe(
+      false,
+    );
     expect(
       mandateLimitChangesSchema.safeParse({ amount: { perPeriod: "5.5" } })
         .success,

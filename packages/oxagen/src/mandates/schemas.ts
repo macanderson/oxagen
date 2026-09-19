@@ -105,10 +105,45 @@ const measureNameSchema = z
 export const CALLS_MEASURE = "calls";
 
 /**
+ * The ISO 4217 codes this runtime knows. Independent of apps/app's own
+ * `isCurrencyCode` (`data/contracts/money.ts`, same `Intl.supportedValuesOf`
+ * source) rather than imported from it: §2 deliberately keeps this module out
+ * of the app, so the two stay two call sites of the same platform fact rather
+ * than one importing the other.
+ *
+ * ADR-111: an `amount`-typed measure's unit is checked against this set at
+ * declaration time (`measureDeclarationSchema` below), the one write boundary
+ * every tool declaration passes through (`publish_tool_declaration`,
+ * `import_tool`). A declared `currency` further downstream — `Money.currency`
+ * (`apps/app/src/data/contracts/money.ts`) is exactly three characters —
+ * therefore never sees a unit ISO 4217 does not recognize; before this, a
+ * declaration such as `{ type: "amount", unit: "USDC" }` passed here, then
+ * failed `Money`'s schema the first time a mandate naming it was mapped for
+ * the app, and `MandateList.safeParse`/`MandateDetail.safeParse` answered
+ * `record_unmappable` for every mandate naming that measure (#3448).
+ */
+const ISO_4217_CODES: ReadonlySet<string> = new Set(
+  Intl.supportedValuesOf("currency"),
+);
+
+export function isIso4217Currency(code: string): boolean {
+  return ISO_4217_CODES.has(code);
+}
+
+/**
  * How a tool version exposes one measure (§6.9 part 1, ADR-059 decision 6):
  * a dot path into the call's input, its type, its unit, and for an amount
  * the number of decimal places the tool uses (default 2, so `12.50` in a
  * currency with cents becomes 12500000 micros).
+ *
+ * An `amount`-typed measure's `unit` must be an ISO 4217 currency code
+ * (ADR-111): the money it denominates is eventually rendered through
+ * `Money`, whose `currency` field is exactly three characters, and a unit
+ * this refuses here would otherwise pass the declaration and fail that
+ * schema much later, for every mandate naming the measure at once (#3448). A
+ * `count`-typed measure is unconstrained and may legitimately carry a
+ * currency-code unit (`{ type: "count", unit: "USD" }` — a count of dollar
+ * bills, not an amount of dollars).
  */
 export const measureDeclarationSchema = z
   .object({
@@ -117,7 +152,16 @@ export const measureDeclarationSchema = z
     unit: z.string().min(1).max(32),
     scale: z.number().int().min(0).max(6).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((declaration, ctx) => {
+    if (declaration.type === "amount" && !isIso4217Currency(declaration.unit)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["unit"],
+        message: `an "amount" measure's unit must be an ISO 4217 currency code, got ${JSON.stringify(declaration.unit)}`,
+      });
+    }
+  });
 export type MeasureDeclaration = z.infer<typeof measureDeclarationSchema>;
 
 export const measureDeclarationsSchema = z.record(

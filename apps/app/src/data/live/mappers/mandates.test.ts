@@ -169,6 +169,34 @@ describe("toMandateList", () => {
     });
   });
 
+  // #3448 (residue from #3442, ADR-111): a non-ISO-4217 unit on an `amount`
+  // measure used to reach here from `measures.<name>.unit` (up to 32
+  // characters, no ISO check) whenever a mandate's limit named it, and
+  // `moneyFromMicros` built a `Money` value the schema then refused, taking
+  // every mandate naming the measure down with `record_unmappable`. ADR-111
+  // closes this at `measureDeclarationSchema`, the one write boundary every
+  // tool declaration passes through, so a money-kind authority reaching this
+  // mapper is now guaranteed an ISO 4217 `currencyOrUnit` by construction —
+  // this asserts that guarantee holds through the mapper and `Money`'s
+  // schema, rather than merely being untested.
+  it("maps a money-kind authority's currency to a Money value that parses (ADR-111)", () => {
+    const view = MandateList.parse(
+      toMandateList(
+        mandateListOutput([
+          mandateOutput({
+            authority: [authorityOutput({ currencyOrUnit: "USD" })],
+          }),
+        ]),
+        100,
+      ),
+    );
+    const measure = firstMeasure(view.mandates);
+    expect(measure.settled).toEqual({
+      kind: "money",
+      money: { micros: "1204180000", currency: "USD" },
+    });
+  });
+
   it("reads a three-letter unit that is no currency as a count (negative)", () => {
     // GAU is what this product bills in, and RPM is a rate: both are
     // well-formed three-letter units, and neither is an ISO 4217 code.
