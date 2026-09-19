@@ -65,6 +65,8 @@ export {
   hasDrawnInCurrentPeriod,
   hasOpenReservation,
   hasSettlementOverlappingPeriod,
+  hasUnstampedLedgerHistory,
+  lastLedgerKind,
   lockMandate,
   parseMandateRow,
   readAuthority,
@@ -72,7 +74,14 @@ export {
   releaseParked,
   type MandateRecord,
 } from "./mandates";
-export { periodKey, periodKeyRange, periodKeysOverlap, toolMatches } from "./mandates/measures";
+export {
+  legacyMeasureKindGuess,
+  measureKindOf,
+  periodKey,
+  periodKeyRange,
+  periodKeysOverlap,
+  toolMatches,
+} from "./mandates/measures";
 export {
   bootstrapDecisionRulesRuntime,
   clearDecisionRulesCache,

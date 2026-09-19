@@ -47,6 +47,19 @@ const doubles = vi.hoisted(() => ({
    * can refuse a Tuesday daily-to-weekly rename when today's key is empty.
    */
   overlappingSettlement: false,
+  /**
+   * What `lastLedgerKind` answers for a measure absent from `before`: the
+   * kind the ledger's own most recent row for it was stamped under, or null
+   * for a measure with no ledger history at all.
+   */
+  lastLedgerKind: null as "money" | "count" | null,
+  /**
+   * What `hasUnstampedLedgerHistory` answers when `lastLedgerKind` is null:
+   * whether a pre-stamp ledger row for the measure is still open or drawn
+   * this period. False by default, matching a measure with genuinely no
+   * history (stamped or not) to protect.
+   */
+  unstampedLedgerHistory: false,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -102,6 +115,11 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
       agentPrincipalId: "prn_1",
       consequenceTags: ["moves_money"],
       limits: doubles.locked.limits,
+      // Every case here writes through limitChanges naming the measure it
+      // asserts on, so nothing needs the untouched-measure kind preserved
+      // from a real (non-legacy) prior stamp; an empty set keeps that path
+      // out of these cases' way.
+      legacyKindMeasures: new Set<string>(),
       targets: {},
       tools: ["stripe__create_payment@*"],
       approval: { humanAbove: {}, alwaysHumanFor: [], approvers: [] },
@@ -118,6 +136,8 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
   hasDrawnInCurrentPeriod: async () => doubles.drawn,
   hasOpenReservation: async () => doubles.openReservation,
   hasSettlementOverlappingPeriod: async () => doubles.overlappingSettlement,
+  lastLedgerKind: async () => doubles.lastLedgerKind,
+  hasUnstampedLedgerHistory: async () => doubles.unstampedLedgerHistory,
 }));
 
 vi.mock("./_mandate", async (importOriginal) => ({
@@ -130,7 +150,15 @@ vi.mock("./_mandate", async (importOriginal) => ({
     consequenceTags: ["moves_money"],
     limits: doubles.stale,
   }),
-  assertToolsDeclareMeasures: async () => undefined,
+  // Passthrough (ADR-108): the real function stamps `kind` from the tool
+  // declaration and returns the limits the handler persists. These cases are
+  // about the merge, not the kind, so the double hands back what it was given
+  // unchanged rather than fabricating a declaration.
+  assertToolsDeclareMeasures: async (
+    _tx: unknown,
+    _workspaceId: string,
+    args: { limits: MandateLimits },
+  ) => args.limits,
   mapMandates: async () => [{ id: "mnd_1", status: "active" }],
 }));
 
@@ -138,8 +166,12 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-const { mandateLimitsUpdateHandler, applyLimitChanges, assertPeriodChangeAllowed } =
-  await import("./mandate.limits.update");
+const {
+  mandateLimitsUpdateHandler,
+  applyLimitChanges,
+  assertPeriodChangeAllowed,
+  assertKindChangeAllowed,
+} = await import("./mandate.limits.update");
 const { mandateLimitsUpdate } = await import(
   "@oxagen/oxagen/contracts/mandate.limits.update"
 );
@@ -191,6 +223,8 @@ beforeEach(() => {
   doubles.drawn = false;
   doubles.openReservation = false;
   doubles.overlappingSettlement = false;
+  doubles.lastLedgerKind = null;
+  doubles.unstampedLedgerHistory = false;
 });
 
 describe("update_mandate_limits, limitChanges", () => {
@@ -460,6 +494,168 @@ describe("assertPeriodChangeAllowed", () => {
         { amount: { ...AMOUNT, period: "daily" } },
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("assertKindChangeAllowed", () => {
+  const tx = {} as Parameters<typeof assertKindChangeAllowed>[0];
+  const mandateId = "11111111-1111-4111-8111-111111111111";
+  const legacy = new Set<string>();
+
+  it("refuses when `before` holds the measure and the current window still has authority drawn under the old kind", async () => {
+    doubles.drawn = true;
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        { amount: { ...AMOUNT, kind: "money" } },
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacy,
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "measure_kind_drawn",
+    );
+  });
+
+  // A whole-record `limits` replacement can delete a measure while the
+  // ledger still holds movements for it; a later call can re-add the same
+  // measure under a different kind with no `before` entry to compare
+  // against. `lastLedgerKind` is the fallback for exactly that gap.
+  it("refuses a re-added measure absent from `before` when the ledger's last stamp disagrees and authority is still drawn", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = "money";
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        {},
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacy,
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "measure_kind_drawn",
+    );
+  });
+
+  it("allows a re-added measure absent from `before` when the ledger has no history for it", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = null;
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        {},
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacy,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("allows a re-added measure absent from `before` when the ledger's last stamp already agrees with the new kind", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = "count";
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        {},
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacy,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  // `lastLedgerKind` returning null does not by itself mean there is no
+  // history: a measure can carry real, pre-stamp ledger rows the column
+  // predates. `hasUnstampedLedgerHistory` says those rows are still open or
+  // drawn this period, so the change must go through the same drawn/open
+  // guard as a real disagreement rather than being waved through.
+  it("refuses a re-added measure absent from `before` when unstamped ledger history is still live", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = null;
+    doubles.unstampedLedgerHistory = true;
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        {},
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacy,
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "measure_kind_drawn",
+    );
+  });
+
+  it("allows a re-added measure absent from `before` when unstamped ledger history is live but nothing is currently drawn or open", async () => {
+    doubles.drawn = false;
+    doubles.openReservation = false;
+    doubles.lastLedgerKind = null;
+    doubles.unstampedLedgerHistory = true;
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        {},
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacy,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  // A legacy measure's stored `kind` is only a guess, but `reserve` stamps
+  // every ledger row from the live declaration once a real call has been
+  // made, guess or not. A measure present in `before` but named in
+  // `legacyKindMeasures` must therefore be checked against the ledger's own
+  // stamp, not skipped outright the way it used to be.
+  it("refuses a legacy measure present in `before` when the ledger's own stamp disagrees and authority is drawn", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = "money";
+    const legacyMeasure = new Set(["amount"]);
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        { amount: { ...AMOUNT, kind: "money" } },
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacyMeasure,
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "measure_kind_drawn",
+    );
+  });
+
+  it("allows a legacy measure present in `before` when the ledger has no real stamp yet", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = null;
+    const legacyMeasure = new Set(["amount"]);
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        { amount: { ...AMOUNT, kind: "money" } },
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacyMeasure,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("refuses a legacy measure present in `before` when unstamped ledger history is still live", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = null;
+    doubles.unstampedLedgerHistory = true;
+    const legacyMeasure = new Set(["amount"]);
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        { amount: { ...AMOUNT, kind: "money" } },
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacyMeasure,
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "measure_kind_drawn",
+    );
   });
 });
 

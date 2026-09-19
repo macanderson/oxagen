@@ -808,7 +808,8 @@ export function evaluateEffectiveMcpScope(
   let result: McpRuleEffect = "allow";
   for (const rules of scope.ruleSets) {
     const decision = evaluateMcpRules(rules, serverTool);
-    if (MCP_EFFECT_RANK[decision] > MCP_EFFECT_RANK[result]) result = decision;
+    if (MCP_EFFECT_RANK[decision]! > MCP_EFFECT_RANK[result]!)
+      result = decision;
   }
   return result;
 }
@@ -949,7 +950,7 @@ function minGraphMode(
 ): GraphScopeMode | undefined {
   if (a === undefined) return b;
   if (b === undefined) return a;
-  return GRAPH_MODE_RANK[a] <= GRAPH_MODE_RANK[b] ? a : b;
+  return GRAPH_MODE_RANK[a]! <= GRAPH_MODE_RANK[b]! ? a : b;
 }
 
 /** Element-wise min of two optional numeric budget ceilings. undefined = no ceiling. */
