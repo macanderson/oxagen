@@ -61,6 +61,43 @@ const BASELINE = join(ROOT, APP_DIR, "capability-ui-parity-baseline.json");
 const APP_SRC = join(ROOT, APP_DIR, "src");
 
 // ── Contract parsing (kept byte-compatible with check_manifest.mjs) ──────────
+/**
+ * One contract file read as `{ file, name, layers, hasRegister, ident }`.
+ *
+ * Every field pattern is anchored to the start of a line. A contract's prose
+ * is JSDoc, and a JSDoc line begins with `*`, so anchoring is what keeps a
+ * sentence out of the registry: `run.list.ts` documents its operator fields
+ * with "a person whose user record carries no name: `operatorKind` is what
+ * separates them", and an unanchored `name:` match read `operatorKind` as
+ * the capability's name. The checker then demanded a page for a capability
+ * that does not exist and failed `--strict` on a contract nobody had
+ * touched.
+ *
+ * Exported so the parse can be tested without a contracts directory.
+ *
+ * @param {string} file - the contract's filename, used as the fallback name
+ * @param {string} src - the file's source
+ */
+export function parseContract(file, src) {
+  const nameMatch = src.match(/^\s*name:\s*["'`]([^"'`]+)["'`]/m);
+  const layersMatch = src.match(/^\s*layers:\s*\[([^\]]*)\]/m);
+  // The exported identifier bound to registerCapability(...) — this is what
+  // app code imports and invokes as `invoke(<ident>.name, ...)`.
+  const identMatch = src.match(
+    /export const (\w+)\s*=\s*registerCapability\s*\(/,
+  );
+  const name = nameMatch ? nameMatch[1] : file.replace(/\.ts$/, "");
+  const layers = layersMatch
+    ? layersMatch[1]
+        .split(",")
+        .map((s) => s.trim().replace(/["'`]/g, ""))
+        .filter(Boolean)
+    : [];
+  const hasRegister = /registerCapability\s*\(/.test(src);
+  const ident = identMatch ? identMatch[1] : null;
+  return { file, name, layers, hasRegister, ident };
+}
+
 function readCapabilities() {
   if (!existsSync(CAP_DIR)) {
     console.error(`No capabilities dir at ${CAP_DIR}.`);
@@ -74,26 +111,9 @@ function readCapabilities() {
         !f.endsWith(".test.ts") &&
         !f.endsWith(".handler.ts"),
     )
-    .map((file) => {
-      const src = readFileSync(join(CAP_DIR, file), "utf8");
-      const nameMatch = src.match(/name:\s*["'`]([^"'`]+)["'`]/);
-      const layersMatch = src.match(/layers:\s*\[([^\]]*)\]/);
-      // The exported identifier bound to registerCapability(...) — this is what
-      // app code imports and invokes as `invoke(<ident>.name, ...)`.
-      const identMatch = src.match(
-        /export const (\w+)\s*=\s*registerCapability\s*\(/,
-      );
-      const name = nameMatch ? nameMatch[1] : file.replace(/\.ts$/, "");
-      const layers = layersMatch
-        ? layersMatch[1]
-            .split(",")
-            .map((s) => s.trim().replace(/["'`]/g, ""))
-            .filter(Boolean)
-        : [];
-      const hasRegister = /registerCapability\s*\(/.test(src);
-      const ident = identMatch ? identMatch[1] : null;
-      return { file, name, layers, hasRegister, ident };
-    })
+    .map((file) =>
+      parseContract(file, readFileSync(join(CAP_DIR, file), "utf8")),
+    )
     .filter((c) => c.hasRegister);
 }
 

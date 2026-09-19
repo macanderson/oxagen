@@ -298,11 +298,15 @@ function readCapabilities() {
     )
     .map((file) => {
       const src = readFileSync(join(CAP_DIR, file), "utf8");
-      const nameMatch = src.match(/name:\s*["'`]([^"'`]+)["'`]/);
-      const domainMatch = src.match(/domain:\s*["'`]([^"'`]+)["'`]/);
-      const modeMatch = src.match(/mode:\s*["'`]([^"'`]+)["'`]/);
-      const layersMatch = src.match(/layers:\s*\[([^\]]*)\]/);
-      const surfacesMatch = src.match(/surfaces:\s*\[([^\]]*)\]/);
+      // Anchored to the start of a line so a prose mention inside a JSDoc
+      // block cannot be read as a contract field. A comment line begins
+      // with `*`, an object property does not. `check_ui_parity.mjs`
+      // parses contracts the same way and must stay in step.
+      const nameMatch = src.match(/^\s*name:\s*["'`]([^"'`]+)["'`]/m);
+      const domainMatch = src.match(/^\s*domain:\s*["'`]([^"'`]+)["'`]/m);
+      const modeMatch = src.match(/^\s*mode:\s*["'`]([^"'`]+)["'`]/m);
+      const layersMatch = src.match(/^\s*layers:\s*\[([^\]]*)\]/m);
+      const surfacesMatch = src.match(/^\s*surfaces:\s*\[([^\]]*)\]/m);
       const name = nameMatch ? nameMatch[1] : file.replace(/\.ts$/, "");
       const domain = domainMatch ? domainMatch[1] : "unknown";
       const mode = modeMatch ? modeMatch[1] : "sync";

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveInvoked, computeParity } from "./check_ui_parity.mjs";
+import {
+  computeParity,
+  parseContract,
+  resolveInvoked,
+} from "./check_ui_parity.mjs";
 
 // Two contract fixtures: one declares the "app" layer, one does not.
 const CAPS = [
@@ -182,5 +186,42 @@ describe("computeParity — reverse advisory", () => {
       pageExists,
     });
     expect(reverse).toHaveLength(0);
+  });
+});
+
+describe("parseContract", () => {
+  const SRC = [
+    "/**",
+    " * List the runs.",
+    " *",
+    " * A person whose record carries no name: `operatorKind` separates them.",
+    " * Historically this read `layers: [\"app\"]` in prose too.",
+    " */",
+    "export const runList = registerCapability({",
+    '  name: "list_runs",',
+    '  layers: ["schema", "api", "mcp", "app"],',
+    "});",
+    "",
+  ].join("\n");
+
+  it("reads the registered name and layers, not a sentence that mentions them", () => {
+    // The regression: an unanchored match read `operatorKind` out of the
+    // JSDoc above, and --strict then demanded a page for a capability that
+    // does not exist.
+    expect(parseContract("run.list.ts", SRC)).toEqual({
+      file: "run.list.ts",
+      name: "list_runs",
+      layers: ["schema", "api", "mcp", "app"],
+      hasRegister: true,
+      ident: "runList",
+    });
+  });
+
+  it("falls back to the filename when no contract declares a name (negative)", () => {
+    const parsed = parseContract("orphan.ts", "// nothing here\n");
+    expect(parsed.name).toBe("orphan");
+    expect(parsed.hasRegister).toBe(false);
+    expect(parsed.layers).toEqual([]);
+    expect(parsed.ident).toBeNull();
   });
 });
