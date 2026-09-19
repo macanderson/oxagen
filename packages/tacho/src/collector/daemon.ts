@@ -40,7 +40,11 @@ import { readModelBaseUrlState } from "../host/model-base-url";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
 import type { Exec, ExecAsync, ExecResult } from "../host/service";
-import { NO_RETENTION, type RetentionMandate } from "../evidence/retention";
+import {
+  HOST_RETENTION_CLASSES,
+  NO_RETENTION,
+  type RetentionMandate,
+} from "../evidence/retention";
 import { Wal } from "../host/wal";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
@@ -518,6 +522,50 @@ export async function startDaemon(
     };
   }
 
+  /**
+   * Erase bodies on disk that a replacement mandate no longer covers.
+   *
+   * The trigger is a confirmed narrowing, and that is deliberately not the
+   * condition that withholds a body from a shipment. The shipper asks
+   * `retentionInForce`, which answers `NO_RETENTION` whenever the cached
+   * bundle does not verify or has outlived its signed window, because on any
+   * doubt the right move is to send nothing. Both of those states are often
+   * transient: a bundle that fails verification now can verify on the next
+   * poll, and a lapsed window is confirmed again by one `not_modified`. Doubt
+   * is reason enough to withhold and is not reason to delete, so this reads
+   * only the retention clause of a replacement bundle whose signature has
+   * just verified, compares it with the clause that was in force, and runs
+   * only for the classes that clause covered and this one does not.
+   *
+   * Erasing does not reverse. A workspace that narrows and then widens again
+   * does not get these bodies back; see `Wal.purgeBodiesOutsideMandate`.
+   */
+  function purgeBodiesNarrowedOut(
+    previous: RetentionMandate,
+    next: RetentionMandate,
+  ): void {
+    const dropped = HOST_RETENTION_CLASSES.filter(
+      (contentClass) =>
+        retentionAllows(previous, contentClass) &&
+        !retentionAllows(next, contentClass),
+    );
+    if (dropped.length === 0) return;
+    try {
+      const purged = wal.purgeBodiesOutsideMandate(next);
+      log(
+        `mandate narrowed (${dropped.join(", ")}): erased ${purged} queued body(ies) from the WAL`,
+      );
+    } catch (error) {
+      // Logged and not rethrown, on purpose. Throwing erases nothing, and it
+      // would abort a refresh that has already cached the narrower mandate,
+      // so the host would go on withholding these bodies and stop reporting
+      // why they are still on disk. The line says what is still there.
+      log(
+        `failed to erase bodies the narrowed mandate no longer covers (${dropped.join(", ")}); content remains in the WAL: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   async function refreshBundle(): Promise<boolean> {
     try {
       const response = await client.bundle(host.bundle.etag);
@@ -548,11 +596,16 @@ export async function startDaemon(
         );
         return false;
       }
+      const previousRetention = host.bundle.retention;
       host = applyControlFacts(paths.hostFile, host, {
         bundle: response.bundle,
         bundle_fetched_at: toProtocolTimestamp(now()),
       });
       bundleVerified = true;
+      // A verified replacement is the control plane's own word on what may be
+      // kept, which is the one thing that authorises erasing what is already
+      // on disk.
+      purgeBodiesNarrowedOut(previousRetention, response.bundle.retention);
       // The replacement verified, so this response is a confirmation.
       mandateConfirmedAt = now();
       log(`bundle ${response.bundle.version} (${response.bundle.etag}) cached`);

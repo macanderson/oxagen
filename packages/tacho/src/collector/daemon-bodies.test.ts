@@ -5,7 +5,9 @@
  * the log. Kept apart from daemon.test.ts, whose fake control plane accepts
  * events and never looks at bodies.
  */
+import { existsSync, readFileSync } from "node:fs";
 import { request } from "node:http";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { digestBytes, digestJcs } from "../digest";
 import type { TachoEvent } from "../envelope";
@@ -179,7 +181,7 @@ describe("tachod and frame bodies", () => {
       ...(now !== undefined ? { now } : {}),
     });
     handles.push(handle);
-    return { handle, host, log, signer };
+    return { handle, host, log, signer, paths };
   }
 
   const session = "sess-bodies-1";
@@ -352,19 +354,19 @@ describe("tachod and frame bodies", () => {
     // the drain sends what is queued. The control plane refusing it is too
     // late — the prompt has already left the machine, which is the one thing
     // the retention boundary exists to prevent.
-    let narrowed: PolicyBundle | undefined;
+    const narrowed: { bundle?: PolicyBundle } = {};
     const { fetch, batches } = plane(
       () => undefined,
       () =>
-        narrowed === undefined
+        narrowed.bundle === undefined
           ? BUNDLE_UNCHANGED
           : {
               ok: true,
               status: 200,
               payload: {
                 not_modified: false,
-                etag: narrowed.etag,
-                bundle: narrowed,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
               },
             },
     );
@@ -375,7 +377,7 @@ describe("tachod and frame bodies", () => {
     await runSession(handle.port as number, host.local_token);
     // Queued, not shipped: the bodies are sitting in the WAL.
     expect(handle.wal.stats().unshipped).toBeGreaterThan(0);
-    narrowed = signer.sign(
+    narrowed.bundle = signer.sign(
       unsignedBundle({
         version: 4,
         etag: "etag-4",
@@ -419,5 +421,154 @@ describe("tachod and frame bodies", () => {
     expect(batches.flatMap((b) => b.bodies ?? [])).toEqual([]);
     expect(batches.flatMap((b) => b.events).length).toBeGreaterThan(0);
     expect(handle.wal.stats().unshipped).toBe(0);
+  });
+
+  /**
+   * The body file of the one agent session this WAL holds. The WAL files a
+   * session under its tacho `session_uuid`, not under the harness id the hook
+   * posts, and the daemon's own chain is a session too, so the agent's is the
+   * one with a body file beside it.
+   */
+  function bodyFileOf(walDir: string, handle: DaemonHandle): string {
+    const found = handle.wal
+      .sessions()
+      .map((uuid) => join(walDir, `${uuid}.bodies.jsonl`))
+      .filter((path) => existsSync(path));
+    expect(found.length).toBe(1);
+    return found[0] as string;
+  }
+
+  /** Every hook of `runSession` but the one that seals: this session stays live. */
+  async function runLiveSession(port: number, token: string) {
+    expect(
+      await post(port, token, {
+        session_id: session,
+        hook_event_name: "SessionStart",
+        cwd: "/repo",
+      }),
+    ).toBe(200);
+    expect(
+      await post(port, token, {
+        session_id: session,
+        hook_event_name: "UserPromptSubmit",
+        prompt: "Read README.md, then stop.",
+      }),
+    ).toBe(200);
+    expect(
+      await post(port, token, {
+        session_id: session,
+        hook_event_name: "PreToolUse",
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/README.md" },
+        tool_use_id: "toolu_1",
+      }),
+    ).toBe(200);
+  }
+
+  const PROMPT_BASE64 = Buffer.from("Read README.md, then stop.").toString(
+    "base64",
+  );
+
+  it("erases queued bodies from the WAL when the mandate narrows, on a session that never seals", async () => {
+    // The finding: the shipper stopped transmitting these bytes, and the bytes
+    // stayed on disk. `Wal.compact` removes a body file only once its session
+    // is sealed, fully shipped, and past the retention window, so a live or
+    // abandoned session kept the raw prompt with no bound at all.
+    const narrowed: { bundle?: PolicyBundle } = {};
+    const { fetch, batches } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, log, signer, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runLiveSession(handle.port as number, host.local_token);
+    const bodyPath = bodyFileOf(paths.wal, handle);
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+    // Nothing sealed this session, so compaction would never remove the bytes.
+    expect(handle.wal.compact(Date.now() + 365 * 24 * 60 * 60_000, 0)).toEqual(
+      [],
+    );
+
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.tick();
+
+    expect(readFileSync(bodyPath, "utf8")).not.toContain(PROMPT_BASE64);
+    expect(log.some((line) => line.startsWith("mandate narrowed ("))).toBe(
+      true,
+    );
+    // The events still seal and ship, digests and all: only the bytes went.
+    expect(batches.flatMap((b) => b.bodies ?? [])).toEqual([]);
+    expect(
+      batches
+        .flatMap((b) => b.events)
+        .some(
+          (e) => e.kind === "turn_start" && e.content?.digest !== undefined,
+        ),
+    ).toBe(true);
+    expect(handle.wal.stats().unshipped).toBe(0);
+  });
+
+  it("keeps queued bodies through a mandate it cannot establish, and ships them once it can", async () => {
+    // Withholding and erasing are different triggers, and this is why. A
+    // cached mandate that has outlived its signed window, with a control plane
+    // that cannot confirm it, is authority for nothing, so the shipper sends
+    // nothing (the test above). It is not a narrowing: one poll can confirm
+    // the same clause again, and the bytes have to still be there when it
+    // does.
+    const clock = { at: Date.parse("2026-09-15T00:00:00.000Z") };
+    const unavailable: BundleAnswer = {
+      ok: false,
+      status: 503,
+      payload: { error: "unavailable" },
+    };
+    const answer = { current: unavailable };
+    const { fetch, batches } = plane(
+      () => undefined,
+      () => answer.current,
+    );
+    const { handle, host, log, paths } = await boot(
+      fetch,
+      { mode: "content_exact", classes: ["model_call", "tool_call"] },
+      () => clock.at,
+    );
+    await runLiveSession(handle.port as number, host.local_token);
+    const walBodyPath = bodyFileOf(paths.wal, handle);
+
+    // Past the signed window, and the poll that would renew it fails.
+    clock.at = Date.parse("2027-10-01T00:00:00.000Z");
+    await handle.refreshBundle();
+    expect(readFileSync(walBodyPath, "utf8")).toContain(PROMPT_BASE64);
+    expect(log.some((line) => line.startsWith("mandate narrowed ("))).toBe(
+      false,
+    );
+
+    // The lapse passes: one poll confirms the same clause, and the bodies it
+    // covers are still there to ship.
+    answer.current = BUNDLE_UNCHANGED;
+    await handle.tick();
+    expect(
+      batches
+        .flatMap((b) => b.bodies ?? [])
+        .map((b) => Buffer.from(b.bytes_base64, "base64").toString("utf8")),
+    ).toContain("Read README.md, then stop.");
   });
 });

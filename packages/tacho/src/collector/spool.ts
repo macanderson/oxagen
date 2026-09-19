@@ -289,6 +289,14 @@ export class Shipper {
     // case this guards: the body is dropped here rather than sent and refused
     // after it has already left the machine.
     //
+    // This filter answers for the wire only, and it withholds on any doubt,
+    // including the doubt of an unverifiable cached bundle. The bytes on disk
+    // are erased by `Wal.purgeBodiesOutsideMandate`, which the daemon calls
+    // when a verified replacement bundle narrows the mandate. The two
+    // conditions are deliberately different: withholding is right whenever
+    // the mandate cannot be read, and erasing is right only when the control
+    // plane has said the mandate is narrower.
+    //
     // The class comes from the body's own event rather than from the body,
     // because the WAL stores bodies as bytes and does not persist a class.
     // `contentClassOf` is the one table that maps a frame kind to a class, so

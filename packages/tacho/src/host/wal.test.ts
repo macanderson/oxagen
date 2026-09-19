@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { FrameBody } from "../evidence/frame-body";
@@ -109,5 +109,146 @@ describe("Wal", () => {
       wal.compact(Date.now() + 10 * 24 * 60 * 60_000, 7 * 24 * 60 * 60_000),
     ).toEqual([uuid]);
     expect(existsSync(join(paths.wal, `${uuid}.bodies.jsonl`))).toBe(false);
+  });
+
+  it("erases bodies a narrowed mandate no longer covers, in a session that never seals", () => {
+    // The leak this closes: `compact` removes body bytes one whole session at
+    // a time, and only once that session is sealed, fully shipped, and older
+    // than the retention window. A session that never seals is never
+    // compacted, so a body queued under `content_exact` used to sit on disk
+    // with no bound at all once the mandate narrowed.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const session = minimalSession();
+    const uuid = session[0]?.session_uuid as string;
+    // Every event but the closing `agent_stop`: nothing seals this session, so
+    // `compact` will never touch it.
+    const live = session.slice(0, -1);
+    const bodyAt = (index: number, text: string): FrameBody => ({
+      event_id_idem: live[index]?.event_id_idem as string,
+      session_uuid: uuid,
+      seq: live[index]?.seq as number,
+      content_type: "text/plain; charset=utf-8",
+      bytes: new TextEncoder().encode(text),
+      content_class: "model_call",
+    });
+    const promptIndex = live.findIndex((event) => event.kind === "turn_start");
+    const toolIndex = live.findIndex(
+      (event) => event.kind === "tool_requested",
+    );
+    wal.append(live, [
+      bodyAt(promptIndex, "the raw prompt"),
+      bodyAt(toolIndex, "the tool arguments"),
+    ]);
+    const bodyPath = join(paths.wal, `${uuid}.bodies.jsonl`);
+    const before = readFileSync(bodyPath, "utf8");
+    expect(before).toContain(Buffer.from("the raw prompt").toString("base64"));
+    expect(
+      wal.compact(Date.now() + 365 * 24 * 60 * 60_000, 7 * 24 * 60 * 60_000),
+    ).toEqual([]);
+
+    // The mandate narrows to tool content only. The prompt body goes; the tool
+    // body stays.
+    expect(
+      wal.purgeBodiesOutsideMandate({
+        mode: "content_exact",
+        classes: ["tool_call"],
+      }),
+    ).toBe(1);
+    const after = readFileSync(bodyPath, "utf8");
+    expect(after).not.toContain(
+      Buffer.from("the raw prompt").toString("base64"),
+    );
+    expect(after).toContain(
+      Buffer.from("the tool arguments").toString("base64"),
+    );
+    // In place: same file, same length, so no line's offset moved.
+    expect(after.length).toBe(before.length);
+    expect(wal.bodiesFor(live).map((b) => b.event_id_idem)).toEqual([
+      live[toolIndex]?.event_id_idem,
+    ]);
+    // The chain is untouched: the events still read, digests and all.
+    expect(wal.read(uuid).length).toBe(live.length);
+
+    // An append made after the erasure survives it and reads back, which is
+    // what the in-place write buys: the hook only ever writes past the end of
+    // the file, and the erasure only ever writes inside the length it read.
+    appendFileSync(
+      bodyPath,
+      `${JSON.stringify({
+        event_id_idem: live[live.length - 1]?.event_id_idem,
+        seq: live[live.length - 1]?.seq,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: Buffer.from(
+          "appended while the daemon was down",
+        ).toString("base64"),
+      })}\n`,
+    );
+    expect(statSync(bodyPath).size).toBeGreaterThan(before.length);
+    expect(wal.bodiesFor(live).map((b) => b.event_id_idem)).toEqual([
+      live[toolIndex]?.event_id_idem,
+      live[live.length - 1]?.event_id_idem,
+    ]);
+
+    // Nothing is covered now, so both remaining bodies go.
+    expect(
+      wal.purgeBodiesOutsideMandate({ mode: "digest_only", classes: [] }),
+    ).toBe(2);
+    expect(wal.bodiesFor(live)).toEqual([]);
+    // Erasing does not reverse: widening the mandate again brings nothing back.
+    expect(
+      wal.purgeBodiesOutsideMandate({
+        mode: "content_exact",
+        classes: ["model_call", "tool_call"],
+      }),
+    ).toBe(0);
+    expect(wal.bodiesFor(live)).toEqual([]);
+  });
+
+  it("keeps a body whose event is not on the chain yet, and erases a torn line", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const session = minimalSession();
+    const uuid = session[0]?.session_uuid as string;
+    const promptIndex = session.findIndex(
+      (event) => event.kind === "turn_start",
+    );
+    const bodyPath = join(paths.wal, `${uuid}.bodies.jsonl`);
+    wal.append(session, [
+      {
+        event_id_idem: session[promptIndex]?.event_id_idem as string,
+        session_uuid: uuid,
+        seq: session[promptIndex]?.seq as number,
+        content_type: "text/plain; charset=utf-8",
+        bytes: new TextEncoder().encode("covered prompt"),
+        content_class: "model_call",
+      },
+    ]);
+    // `append` writes bodies before events, so a crash between the two leaves
+    // a body whose event is not on the chain. That is a microsecond, not an
+    // orphan, and the next pass judges it once the event lands.
+    appendFileSync(
+      bodyPath,
+      `${JSON.stringify({
+        event_id_idem: "evt_not_on_this_chain",
+        seq: 99,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: Buffer.from("body ahead of its event").toString("base64"),
+      })}\n`,
+    );
+    // A line cut short by a crash names no event, so nothing can ever ship it.
+    appendFileSync(bodyPath, '{"event_id_idem":"evt_torn","bytes_base6\n');
+
+    expect(
+      wal.purgeBodiesOutsideMandate({ mode: "digest_only", classes: [] }),
+    ).toBe(2);
+    const after = readFileSync(bodyPath, "utf8");
+    expect(after).not.toContain(
+      Buffer.from("covered prompt").toString("base64"),
+    );
+    expect(after).not.toContain("evt_torn");
+    expect(after).toContain(
+      Buffer.from("body ahead of its event").toString("base64"),
+    );
   });
 });

@@ -17,15 +17,24 @@
  */
 import {
   appendFileSync,
+  closeSync,
   existsSync,
+  fsyncSync,
+  openSync,
   readdirSync,
   readFileSync,
   statSync,
   unlinkSync,
+  writeSync,
 } from "node:fs";
 import { join } from "node:path";
 import type { TachoEvent } from "../envelope";
-import type { FrameBody } from "../evidence/frame-body";
+import {
+  contentClassOf,
+  type FrameBody,
+  retentionAllows,
+} from "../evidence/frame-body";
+import type { RetentionMandate } from "../evidence/retention";
 import type { TachoBody } from "../wire";
 import {
   ensureDir,
@@ -235,6 +244,130 @@ export class Wal {
       unshipped,
       ...(oldest !== undefined ? { oldestUnshippedAt: oldest } : {}),
     };
+  }
+
+  /**
+   * Erase every stored body whose class `retention` does not cover, in every
+   * session this host holds, and answer how many were erased.
+   *
+   * Why this exists. `compact` is the only other path that removes body
+   * bytes, and it removes them one whole session at a time, once that session
+   * is sealed, fully shipped, and older than the retention window. A session
+   * that never seals is never compacted, so before this method a body queued
+   * under `content_exact` stayed on disk for as long as the host ran, or for
+   * ever on a host that never came back. The shipper stopped transmitting it
+   * once the mandate narrowed, which protected the wire and left the bytes
+   * where they were.
+   *
+   * How the write is safe against a concurrent append. `tacho-hook` appends
+   * to a session's body file while the daemon is down, and the file is
+   * append-only, so a line's offset never moves once it is written. This
+   * method therefore overwrites each doomed line's bytes in place with
+   * spaces, through one `r+` descriptor, and never truncates the file, moves
+   * it, or changes its length. Every write lands inside `[0, length)` as it
+   * stood at the read; an appender only ever writes past the end of the file.
+   * The two cannot touch the same byte, so no append can be lost. A rewrite
+   * through a temporary file and a rename would lose any line appended
+   * between the read and the rename, which is why it is not used here.
+   *
+   * A blanked line reads as whitespace, and `bodiesFor` already skips a line
+   * that trims to nothing, so the file stays valid for every reader. The
+   * bytes are gone: the base64 text is replaced on the same blocks of the
+   * same file, which is what `unlinkSync` in `compact` offers as well.
+   *
+   * Erasing is not reversible. A workspace that narrows its mandate and then
+   * widens it again does not get these bodies back: the host holds no copy,
+   * and neither does the control plane for anything it had not already
+   * accepted. Widening applies to frames sealed after it, and the sessions
+   * that ran under the narrower mandate keep their digests and carry a
+   * `body_missing` gap for the content. Callers must not offer a mandate they
+   * cannot stand behind.
+   *
+   * The caller decides when to call this, and the condition is not the one
+   * that withholds a body from a shipment. See
+   * `purgeBodiesNarrowedOut` in the daemon.
+   */
+  purgeBodiesOutsideMandate(retention: RetentionMandate): number {
+    let purged = 0;
+    for (const session of this.sessions()) {
+      const path = this.bodyFileFor(session);
+      if (!existsSync(path)) continue;
+      const kindOf = new Map(
+        this.read(session).map(
+          (event) => [event.event_id_idem, event.kind] as const,
+        ),
+      );
+      const stored = readFileSync(path);
+      const doomed: Array<{ start: number; length: number }> = [];
+      let offset = 0;
+      while (offset < stored.length) {
+        const newline = stored.indexOf(0x0a, offset);
+        const end = newline === -1 ? stored.length : newline;
+        const length = end - offset;
+        const line = stored.toString("utf8", offset, end);
+        if (
+          length > 0 &&
+          line.trim().length > 0 &&
+          !this.keeps(line, kindOf, retention)
+        )
+          doomed.push({ start: offset, length });
+        offset = end + 1;
+      }
+      if (doomed.length === 0) continue;
+      const fd = openSync(path, "r+");
+      try {
+        for (const span of doomed) {
+          writeSync(
+            fd,
+            Buffer.alloc(span.length, 0x20),
+            0,
+            span.length,
+            span.start,
+          );
+        }
+        // The point of the call is that the bytes are gone from the disk, so
+        // the erasure is flushed before the caller is told it happened.
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+      purged += doomed.length;
+    }
+    return purged;
+  }
+
+  /**
+   * Whether one line of a body file survives this mandate.
+   *
+   * Three answers, each for a reason:
+   *
+   * - A line that does not parse names no event, so nothing can ever ship it.
+   *   A crash part way through an append leaves exactly this, with content in
+   *   it, and keeping it would keep content under no mandate at all.
+   * - A line whose event is not on the session's chain yet is kept. `append`
+   *   writes bodies before events on purpose, so this is the microsecond
+   *   between the two writes, not an orphan; the next pass sees the event and
+   *   judges the body against its class.
+   * - Otherwise the class comes from the event's kind and the one retention
+   *   gate answers. A kind the table does not name has no class, so no
+   *   mandate can cover it and the body is erased.
+   */
+  private keeps(
+    line: string,
+    kindOf: ReadonlyMap<string, string>,
+    retention: RetentionMandate,
+  ): boolean {
+    let stored: StoredBody;
+    try {
+      stored = JSON.parse(line) as StoredBody;
+    } catch {
+      return false;
+    }
+    const kind = kindOf.get(stored.event_id_idem);
+    if (kind === undefined) return true;
+    const contentClass = contentClassOf(kind);
+    if (contentClass === undefined) return false;
+    return retentionAllows(retention, contentClass);
   }
 
   /**
