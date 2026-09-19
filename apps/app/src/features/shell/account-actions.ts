@@ -17,9 +17,14 @@
 // would be a privilege-escalation surface reachable from a form field.
 import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.set";
 import { userProfileUpdate } from "@oxagen/oxagen/contracts/user.profile.update";
+import { cookies, headers } from "next/headers";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import {
+  TIME_ZONE_COOKIE,
+  timeZoneCookieOptions,
+} from "@/shared/time-zone-cookie";
 
 export type ProfileDraft = {
   displayName: string;
@@ -64,6 +69,10 @@ export async function updateProfile(
  * defaults keep their stored values. The contract admits an IANA name; a value
  * outside that shape is answered `invalid` before the kernel runs. Like the
  * profile write it carries no user id: the handler acts on the principal.
+ *
+ * On success the `tz` cookie is updated so the next request's server formatters
+ * (which read the zone from `i18n/request.ts`, not from the client provider)
+ * agree with what was just stored. The Account dialog refreshes after save.
  */
 export async function updateTimeZone(
   org: string,
@@ -73,7 +82,16 @@ export async function updateTimeZone(
   const result = await kernelWrite(ctx, userPreferencesSet, {
     timezone: timeZone,
   });
-  return result.ok
-    ? { ok: true, value: { timeZone: result.value.timezone } }
-    : result;
+  if (!result.ok) return result;
+  const stored = result.value.timezone;
+  const h = await headers();
+  const secure =
+    h.get("x-forwarded-proto") === "https" ||
+    h.get("x-url")?.startsWith("https:") === true;
+  (await cookies()).set(
+    TIME_ZONE_COOKIE,
+    stored,
+    timeZoneCookieOptions(secure),
+  );
+  return { ok: true, value: { timeZone: stored } };
 }

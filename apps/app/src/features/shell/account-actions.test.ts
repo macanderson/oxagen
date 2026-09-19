@@ -7,8 +7,8 @@
 // would let a form field name someone else's row.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { invoke, getSession, orgRole, redirect, captureError } = vi.hoisted(
-  () => ({
+const { invoke, getSession, orgRole, redirect, captureError, cookieSet } =
+  vi.hoisted(() => ({
     invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
     getSession: vi.fn(),
     orgRole: vi.fn<() => Promise<string | null>>(),
@@ -16,8 +16,8 @@ const { invoke, getSession, orgRole, redirect, captureError } = vi.hoisted(
       throw new Error(`NEXT_REDIRECT ${url}`);
     }),
     captureError: vi.fn(),
-  }),
-);
+    cookieSet: vi.fn(),
+  }));
 vi.mock("@oxagen/oxagen", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/oxagen")>()),
   invoke,
@@ -38,6 +38,11 @@ vi.mock("next/server", async (importOriginal) => ({
 }));
 vi.mock("next/headers", () => ({
   headers: () => Promise.resolve(new Headers()),
+  cookies: () =>
+    Promise.resolve({
+      set: cookieSet,
+      get: vi.fn(),
+    }),
 }));
 vi.mock("@/server/session", () => ({ getSession }));
 vi.mock("@/server/tenancy-lookups", () => ({
@@ -63,6 +68,7 @@ beforeEach(() => {
   invoke.mockReset();
   redirect.mockClear();
   captureError.mockClear();
+  cookieSet.mockReset();
   orgRole.mockResolvedValue("member");
   getSession.mockResolvedValue({
     user: { id: "u-marcus", email: "marcus.bell@acme.example" },
@@ -164,13 +170,24 @@ describe("updateTimeZone", () => {
       { timezone: "Europe/London" },
       expect.anything(),
     );
+    expect(cookieSet).toHaveBeenCalledWith(
+      "tz",
+      "Europe/London",
+      expect.objectContaining({
+        path: "/",
+        maxAge: 31536000,
+        sameSite: "lax",
+      }),
+    );
   });
 
   // The contract's schema refuses the value before the kernel runs, so a
-  // string that is not a zone name never reaches the handler.
-  it("answers invalid for a value that is not an IANA zone name, without invoking (negative)", async () => {
+  // string that is not a zone name never reaches the handler, and the cookie
+  // stays untouched.
+  it("answers invalid for a value that is not an IANA zone name, without invoking or writing the cookie (negative)", async () => {
     const result = await updateTimeZone("acme", "not a zone");
     expect(result).toMatchObject({ ok: false, reason: "invalid" });
     expect(invoke).not.toHaveBeenCalled();
+    expect(cookieSet).not.toHaveBeenCalled();
   });
 });
