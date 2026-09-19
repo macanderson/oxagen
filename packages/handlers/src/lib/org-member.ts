@@ -15,7 +15,7 @@ import { HandlerError } from "@oxagen/oxagen";
 import { and, eq } from "drizzle-orm";
 
 /** `idMixin("usr")`: the prefix and the Crockford alphabet of a user's public id. */
-const USER_PUBLIC_ID = /^usr_[0-9A-Za-z]+$/;
+export const USER_PUBLIC_ID = /^usr_[0-9A-Za-z]+$/;
 
 export async function resolveMemberUserId(
   tx: Tx,

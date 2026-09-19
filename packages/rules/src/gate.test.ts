@@ -303,7 +303,7 @@ describe("auto-approval at a require_approval verdict", () => {
       expect.objectContaining({
         capability: "issue_refund",
         verdict: expect.objectContaining({ ruleId: "approve-medium" }),
-        ctx: { orgId: "org1", workspaceId: "ws1", userId: null },
+        ctx: { orgId: "org1", workspaceId: "ws1", userId: null, runId: null },
       }),
     );
 
@@ -320,6 +320,24 @@ describe("auto-approval at a require_approval verdict", () => {
       gate({ capability: "send_email", input: {}, ctx: CTX }),
     ).resolves.toBeUndefined();
     expect(autoApprove).not.toHaveBeenCalled();
+  });
+
+  // #3153: an auto-approved receipt must name the run it belongs to, so
+  // list_resolved_approvals can find it. The gate is the thread from the
+  // kernel's agent-run context to the write path.
+  test("threads the call's run id through to the auto-approval hook", async () => {
+    const commit = vi.fn(async () => {});
+    const autoApprove = vi.fn(async () => ({ ok: true, commit }));
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove,
+    });
+    await gate({ ...parked, ctx: { ...CTX, runId: "run-uuid-1" } });
+    expect(autoApprove).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ctx: expect.objectContaining({ runId: "run-uuid-1" }),
+      }),
+    );
   });
 
   test("leaves the call with the person when no rule qualified, or none covered it", async () => {

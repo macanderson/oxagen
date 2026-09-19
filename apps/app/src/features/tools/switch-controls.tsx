@@ -43,6 +43,7 @@ export function FlipControls({
   at,
   denyGeneration,
   existing,
+  members,
 }: {
   at: ToolsAt;
   denyGeneration: KillSwitchBoard["denyGeneration"];
@@ -56,6 +57,13 @@ export function FlipControls({
    * secondary whichever way its switch is pointing.
    */
   existing: KillSwitch | null;
+  /**
+   * The org's members, to submit an operator switch's target as the `usr_…`
+   * public id `set_kill_switch` now resolves (#3147), rather than asking for
+   * a uuid this page never prints. Only the header's dialog reads this: a
+   * card's target is already fixed to `existing.target.ref`.
+   */
+  members: readonly { id: string; name: string | null; email: string }[];
 }) {
   const t = useTranslations("tools.switches.dialog");
   const kinds = useTranslations("tools.switches.kinds");
@@ -206,6 +214,45 @@ export function FlipControls({
                 >
                   {t("target")} · {t(`targetHint.${kind}`)}
                 </p>
+              ) : kind === "operator" ? (
+                // set_kill_switch resolves the member's `usr_…` public id
+                // within the org (#3147); the picker submits exactly that, so
+                // the dialog never asks for a uuid this page does not print.
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <label
+                    htmlFor="target"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    {t("target")}
+                  </label>
+                  <select
+                    id="target"
+                    name="target"
+                    required
+                    defaultValue=""
+                    className={inputBase}
+                  >
+                    <option value="" disabled>
+                      {t("targetOperatorPlaceholder")}
+                    </option>
+                    {members.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.name === null
+                          ? member.email
+                          : `${member.name} (${member.email})`}
+                      </option>
+                    ))}
+                  </select>
+                  {members.length === 0 ? (
+                    <p className="text-xs text-destructive">
+                      {t("targetOperatorEmpty")}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {t(`targetHint.${kind}`)}
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="flex min-w-0 flex-col gap-1.5">
                   <label

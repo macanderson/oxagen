@@ -2271,6 +2271,13 @@ type Messages = {
         service: string;
       };
     };
+    resolvedApprovals: {
+      title: string;
+      resolution: string;
+      resolvedBy: string;
+      resolvedAt: string;
+      empty: string;
+    };
     tabs: {
       label: string;
       transcript: string;
@@ -3719,6 +3726,8 @@ type Messages = {
           agent: string;
           operator: string;
         };
+        targetOperatorPlaceholder: string;
+        targetOperatorEmpty: string;
         blastTitle: string;
         blastBody: string;
         restoreTitle: string;
