@@ -14,7 +14,9 @@ import { runChain } from "./run.builders";
 
 afterEach(cleanup);
 
-function renderChain(read: ReturnType<typeof readOk<RunChain>> | ReturnType<typeof readError>) {
+function renderChain(
+  read: ReturnType<typeof readOk<RunChain>> | ReturnType<typeof readError>,
+) {
   return render(
     <IntlProvider>
       <ChainSection read={read} />
@@ -64,9 +66,9 @@ describe("ChainSection", () => {
         "This run's seal recorded no grade, so nothing here states one. The ladder says what the recording holds.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Replay grade").nextElementSibling).toHaveTextContent(
-      "not recorded",
-    );
+    expect(
+      screen.getByText("Replay grade").nextElementSibling,
+    ).toHaveTextContent("not recorded");
   });
 
   it("renders sequence gaps as ranges, a single-sequence gap as one number, and the missing-frame and missing-body counts", () => {
@@ -86,12 +88,12 @@ describe("ChainSection", () => {
         }),
       ),
     );
-    expect(screen.getByText("Missing sequences").nextElementSibling).toHaveTextContent(
-      "12-14, 20",
-    );
-    expect(screen.getByText("Missing frames").nextElementSibling).toHaveTextContent(
-      "4",
-    );
+    expect(
+      screen.getByText("Missing sequences").nextElementSibling,
+    ).toHaveTextContent("12-14, 20");
+    expect(
+      screen.getByText("Missing frames").nextElementSibling,
+    ).toHaveTextContent("4");
     expect(
       screen.getByText("Frames with no retained body").nextElementSibling,
     ).toHaveTextContent("2");
@@ -123,8 +125,8 @@ describe("ChainSection", () => {
     );
   });
 
-  it("renders the chain-unsealed line and no seal facts when seal is null (negative)", () => {
-    renderChain(readOk(runChain({ seal: null })));
+  it("renders the chain-unsealed line and no seal facts when seals is empty (negative)", () => {
+    renderChain(readOk(runChain({ seals: [] })));
     expect(screen.getByTestId("chain-unsealed")).toHaveTextContent(
       "This run has no seal yet. A seal is written when the run ends, and it is what an attestation signs.",
     );
@@ -134,22 +136,42 @@ describe("ChainSection", () => {
 
   it("renders the seal's terminal status, event stream digest and Merkle root, with a null seal Merkle root reading 'not recorded' rather than blank", () => {
     const base = runChain();
-    if (base.seal === null) throw new Error("the fixture carries a seal");
-    const chain = runChain({ seal: { ...base.seal, merkleRoot: null } });
+    const [firstSeal] = base.seals;
+    if (firstSeal === undefined) throw new Error("the fixture carries a seal");
+    const chain = runChain({
+      seals: [{ ...firstSeal, merkleRoot: null }],
+    });
     renderChain(readOk(chain));
     const sealHeading = screen.getByText("Seal");
     const sealSection = sealHeading.closest("div");
     if (sealSection === null) throw new Error("the seal has a section");
     const scoped = within(sealSection);
-    expect(scoped.getByText("Terminal status").nextElementSibling).toHaveTextContent(
-      "completed",
-    );
+    expect(
+      scoped.getByText("Terminal status").nextElementSibling,
+    ).toHaveTextContent("completed");
     expect(
       scoped.getByText("Event stream digest").nextElementSibling,
-    ).toHaveTextContent(base.seal.eventStreamDigest ?? "");
-    expect(scoped.getByText("Merkle root").nextElementSibling).toHaveTextContent(
-      "not recorded",
-    );
+    ).toHaveTextContent(firstSeal.eventStreamDigest ?? "");
+    expect(
+      scoped.getByText("Merkle root").nextElementSibling,
+    ).toHaveTextContent("not recorded");
+  });
+
+  it("labels each seal with its attempt number when a run has more than one (finding 8, negative)", () => {
+    const base = runChain();
+    const [firstSeal] = base.seals;
+    if (firstSeal === undefined) throw new Error("the fixture carries a seal");
+    const chain = runChain({
+      seals: [
+        { ...firstSeal, terminalStatus: "abandoned" },
+        { ...firstSeal, terminalStatus: "completed" },
+      ],
+    });
+    renderChain(readOk(chain));
+    expect(screen.getByText("Seal: Attempt 1")).toBeInTheDocument();
+    expect(screen.getByText("Seal: Attempt 2")).toBeInTheDocument();
+    // A single-seal run keeps the plain heading, with no attempt suffix.
+    expect(screen.queryByText("Seal: Attempt")).not.toBeInTheDocument();
   });
 
   it("renders the chain-no-checkpoints explanation rather than an empty table when checkpoints is empty", () => {

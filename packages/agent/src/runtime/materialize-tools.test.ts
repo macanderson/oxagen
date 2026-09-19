@@ -532,6 +532,72 @@ describe("materializeTools", () => {
     expect(events).toHaveLength(1);
   });
 
+  it("attaches a parked approval to the run set on runIdRef AFTER materialization, not the run captured at materialize time (finding 9, negative)", async () => {
+    // The in-app assistant materializes tools before `openAssistantRun` opens
+    // the run (the belt has to exist first, to build the run's own
+    // `toolAllowlist`), so `ctx.agentRun` is unset when these closures are
+    // built. `runIdRef` is how the run, once opened, reaches a call that
+    // executes later — every `execute` closure reads `runIdRef.current` at
+    // call time, not a value captured when materializeTools ran.
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const runIdRef: { current: string | null } = { current: null };
+    const { tools } = await mt({ ...CTX, messageId: "msg_42" }, { runIdRef });
+    // The run opens only after materializeTools has already returned —
+    // exactly the order `runPreparedTurn` follows.
+    runIdRef.current = "arun_after_materialize";
+    await (
+      tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ y: 1 });
+    const call = mocks.createApprovalRequest.mock.calls.at(0)?.at(0) as
+      | { runId: string | null }
+      | undefined;
+    expect(call?.runId).toBe("arun_after_materialize");
+  });
+
+  it("falls back to ctx.agentRun.runId when the caller passes no runIdRef (negative)", async () => {
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const { tools } = await mt({ ...CTX, messageId: "msg_44" });
+    await (
+      tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ y: 1 });
+    const call = mocks.createApprovalRequest.mock.calls.at(0)?.at(0) as
+      | { runId: string | null }
+      | undefined;
+    // CTX (no agentRun, no runIdRef) carries neither, so the call is not
+    // attached to a run rather than to a wrong one.
+    expect(call?.runId).toBeNull();
+  });
+
   it("denied approval throws and the handler never runs", async () => {
     mocks.createApprovalRequest.mockClear();
     mocks.waitForApproval.mockClear();

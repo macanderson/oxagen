@@ -753,6 +753,21 @@ function closesStep(current: TranscriptFold, frame: RunFrame): boolean {
  * made with and what it came back with. Folding them separately, as this did
  * before, showed one tool call as two entries, each with half the exchange.
  *
+ * ## Overlapping calls
+ *
+ * Tool calls run in parallel in the ordinary case, not the exotic one: a step
+ * recorder can write `start A, start B, complete A, complete B`. A response is
+ * therefore matched against every request still waiting for one
+ * (`pendingByCallId`, keyed on the call id the producer recorded), not only
+ * `current` — the one most recently opened. Comparing only `current` closed
+ * completion A against B's still-open request, found no match, and opened a
+ * response-only entry for it; completion B then did the same. Two calls
+ * became four entries with every response detached from the request it
+ * answered — the one thing a transcript exists to get right (finding 5,
+ * macanderson/oxagen#3370). A wrapped session records no call id at all, so a
+ * response with none falls back to `closesStep`'s adjacency check against
+ * `current`, exactly as before.
+ *
  * A policy frame that arrives once the current step already has its response
  * is held rather than absorbed into it: `PreToolUse` writes `policy_decision`
  * immediately before `tool_requested` (`hook-handler.ts`), so a wrapped
@@ -768,17 +783,55 @@ function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
   const out: TranscriptFold[] = [];
   let current: TranscriptFold | null = null;
   const pendingPolicy: RunFrame[] = [];
+  // Open step folds still waiting for their response, keyed by the request's
+  // call id. Deleted the moment a response matches it, so a second response
+  // with the same id (should not happen) falls through to `closesStep` and
+  // then to a response-only entry, rather than silently overwriting the
+  // first response.
+  const pendingByCallId = new Map<string, TranscriptFold>();
+
+  const openEntry = (
+    frame: RunFrame,
+    kind: TranscriptEntryKind,
+  ): TranscriptFold => {
+    const next = open(frame, kind);
+    out.push(next);
+    for (const pending of pendingPolicy) absorbPending(next, pending);
+    pendingPolicy.length = 0;
+    return next;
+  };
+
   for (const frame of frames) {
-    if (current !== null && closesStep(current, frame)) {
-      absorb(current, frame);
+    const kind = stepKind(frame);
+    if (kind !== null) {
+      if (frame.phase === "response") {
+        const callId = frame.identity.callId;
+        const pending =
+          callId !== null ? pendingByCallId.get(callId) : undefined;
+        if (pending !== undefined) {
+          absorb(pending, frame);
+          pendingByCallId.delete(callId as string);
+          current = pending;
+          continue;
+        }
+        if (current !== null && closesStep(current, frame)) {
+          absorb(current, frame);
+          continue;
+        }
+      }
+      // A request-phase step frame, or a response nothing pending could
+      // match, opens its own entry. A request with a call id registers so a
+      // later response — wherever `current` has moved on to by then — finds
+      // it above.
+      current = openEntry(frame, kind);
+      if (frame.phase === "request") {
+        const callId = frame.identity.callId;
+        if (callId !== null) pendingByCallId.set(callId, current);
+      }
       continue;
     }
-    const kind = stepKind(frame);
-    if (kind !== null || current === null) {
-      current = open(frame, kind ?? "frame");
-      out.push(current);
-      for (const pending of pendingPolicy) absorbPending(current, pending);
-      pendingPolicy.length = 0;
+    if (current === null) {
+      current = openEntry(frame, "frame");
       continue;
     }
     if (current.response !== null && POLICY_TYPES.has(frame.type)) {

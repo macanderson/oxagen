@@ -177,8 +177,15 @@ export const runChainGet = registerCapability({
       merkleRoot: z.string().nullable(),
       checkpoints: z.array(chainCheckpointSchema),
       gaps: chainGapsSchema,
-      /** Null while the run is unsealed, or where no seal was recorded. */
-      seal: chainSealSchema.nullable(),
+      /**
+       * Every seal the run carries, oldest first: one per ledger attempt (a
+       * retry or a lease reclaim starts a new one), or the wrapped session's
+       * one seal. Empty while the run is unsealed. `merkleRoot` above is the
+       * last entry's root, for a quick render; this is the full audit trail,
+       * so a retried run does not present one root beside a frame count and
+       * gap analysis that span every attempt.
+       */
+      seals: z.array(chainSealSchema),
       /** Where the run's actions were observed from (spec §8.4). */
       enforcementTier: z.enum(["gateway", "harness", "observe"]),
       /**

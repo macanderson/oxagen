@@ -482,6 +482,53 @@ describe("the engine's own call halves", () => {
     expect(folded[1]?.request).toBeNull();
   });
 
+  it("matches an overlapping call's completion to its own request, not to whichever call opened most recently (finding 5, negative)", () => {
+    // start A, start B, complete A, complete B: parallel tool calls are the
+    // ordinary case. Comparing a response only against the most recently
+    // opened step matched neither completion, splitting two calls into four
+    // entries with every response detached from its request.
+    const frames = [
+      ledgerFrame(
+        event(1, "tool.engine_call_started", {
+          tool_call_id: "tc_a",
+          tool_name: "a",
+          input_digest: `sha256:${"a".repeat(64)}`,
+        }),
+      ),
+      ledgerFrame(
+        event(2, "tool.engine_call_started", {
+          tool_call_id: "tc_b",
+          tool_name: "b",
+          input_digest: `sha256:${"b".repeat(64)}`,
+        }),
+      ),
+      ledgerFrame(
+        event(3, "tool.engine_call_completed", {
+          tool_call_id: "tc_a",
+          tool_name: "a",
+          outcome: "completed",
+          input_digest: `sha256:${"a".repeat(64)}`,
+          duration_ms: 1,
+        }),
+      ),
+      ledgerFrame(
+        event(4, "tool.engine_call_completed", {
+          tool_call_id: "tc_b",
+          tool_name: "b",
+          outcome: "completed",
+          input_digest: `sha256:${"b".repeat(64)}`,
+          duration_ms: 1,
+        }),
+      ),
+    ];
+    const folded = foldTranscript(frames, "steps");
+    expect(folded).toHaveLength(2);
+    expect(folded[0]?.request?.seq).toBe("1");
+    expect(folded[0]?.response?.seq).toBe("3");
+    expect(folded[1]?.request?.seq).toBe("2");
+    expect(folded[1]?.response?.seq).toBe("4");
+  });
+
   it("a model engine call opens a step: it used to fold into whatever came before it", () => {
     const frames = [
       ledgerFrame(event(1, "admission.run_admitted", { engine_name: "s" })),

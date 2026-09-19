@@ -35,7 +35,14 @@ import {
   isReplayGrade,
 } from "@oxagen/tacho";
 import { and, asc, eq } from "drizzle-orm";
-import { publishedGaps, publishedTier, runScope, type RunScope } from "./run.list";
+import {
+  ledgerAllSealsQuery,
+  publishedGaps,
+  publishedTier,
+  runScope,
+  type LedgerSeal,
+  type RunScope,
+} from "./run.list";
 import {
   defaultRunReadDeps,
   readAllFrames,
@@ -92,6 +99,13 @@ export type RunChainGetDeps = RunReadDeps & {
     scope: RunScope,
     sessionUuid: string,
   ) => Promise<CheckpointRow[]>;
+  /**
+   * Every attempt seal of a ledger run, oldest first — not only the latest,
+   * which `readAllFrames` already walks past (finding 8,
+   * macanderson/oxagen#3370): a retried run's frame count and gaps span
+   * every attempt, so the seals shown beside them must too.
+   */
+  ledgerSeals: (scope: RunScope, runId: string) => Promise<LedgerSeal[]>;
 };
 
 export const postgresChainCheckpoints = async (
@@ -99,6 +113,12 @@ export const postgresChainCheckpoints = async (
   sessionUuid: string,
 ): Promise<CheckpointRow[]> =>
   withTenantDb((tx) => tachoCheckpointQuery(tx, scope, sessionUuid));
+
+export const postgresChainLedgerSeals = async (
+  scope: RunScope,
+  runId: string,
+): Promise<LedgerSeal[]> =>
+  withTenantDb((tx) => ledgerAllSealsQuery(tx, scope, runId));
 
 // ---- Gaps -----------------------------------------------------------------------------
 
@@ -166,44 +186,56 @@ function toCheckpoint(row: CheckpointRow): ChainCheckpoint {
   };
 }
 
+/** One ledger attempt seal in the tab's wire shape. */
+function toChainSeal(seal: LedgerSeal): RunChainGetOutput["seals"][number] {
+  return {
+    sealedAt: seal.sealedAt.toISOString(),
+    // The attempt's terminal status, not the run's: a run can be `failed`
+    // while the attempt under the seal was `abandoned`, and the tab is
+    // reporting on the attempt.
+    terminalStatus: seal.terminalStatus,
+    eventCount: seal.eventCount,
+    finalRunSeq: seal.finalRunSeq,
+    finalEventDigest: seal.finalEventDigest,
+    eventStreamDigest: seal.eventStreamDigest,
+    merkleRoot: seal.merkleRoot,
+    archiveSegmentRef: seal.archiveSegmentRef,
+  };
+}
+
 /**
- * The seal, as each store records it. A wrapped session has no seal row of its
- * own: the sealed columns on the session are its seal, and the chain head of
- * its last checkpoint is the commitment it carries in place of a Merkle root.
+ * Every seal a run carries, oldest first. A ledger run can hold one per
+ * attempt (a retry or a lease reclaim starts a new one), so this walks all of
+ * them rather than the latest alone — matching `readAllFrames`, which already
+ * reads every attempt's frames into `frameCount` and the gap analysis
+ * (finding 8, macanderson/oxagen#3370). A wrapped session has no seal row of
+ * its own: the sealed columns on the session are its one seal. Its commitment
+ * is `final_hash`, the hash `terminalPatch` writes at `agent_stop` over the
+ * *whole* session — not the last periodic checkpoint's chain head, which the
+ * collector stops advancing once `session.sealed` is written and so can cover
+ * only a prefix when frames arrived after it.
  */
-function sealOf(
+function sealsOf(
   run: ResolvedRun,
-  lastCheckpoint: CheckpointRow | undefined,
-): RunChainGetOutput["seal"] {
+  ledgerSeals: readonly LedgerSeal[],
+): RunChainGetOutput["seals"] {
   if (run.source === "ledger") {
-    const seal = run.record.seal;
-    if (!seal) return null;
-    return {
-      sealedAt: seal.sealedAt.toISOString(),
-      // The attempt's terminal status, not the run's: a run can be `failed`
-      // while the attempt under the seal was `abandoned`, and the tab is
-      // reporting on the attempt.
-      terminalStatus: seal.terminalStatus,
-      eventCount: seal.eventCount,
-      finalRunSeq: seal.finalRunSeq,
-      finalEventDigest: seal.finalEventDigest,
-      eventStreamDigest: seal.eventStreamDigest,
-      merkleRoot: seal.merkleRoot,
-      archiveSegmentRef: seal.archiveSegmentRef,
-    };
+    return ledgerSeals.map(toChainSeal);
   }
   const { session } = run.row;
-  if (session.sealedAt === null) return null;
-  return {
-    sealedAt: session.sealedAt.toISOString(),
-    terminalStatus: session.outcome,
-    eventCount: session.seqCount,
-    finalRunSeq: session.seqCount > 0 ? String(session.seqCount) : null,
-    finalEventDigest: lastCheckpoint?.chainHead ?? null,
-    eventStreamDigest: lastCheckpoint?.chainHead ?? null,
-    merkleRoot: lastCheckpoint?.chainHead ?? null,
-    archiveSegmentRef: null,
-  };
+  if (session.sealedAt === null) return [];
+  return [
+    {
+      sealedAt: session.sealedAt.toISOString(),
+      terminalStatus: session.outcome,
+      eventCount: session.seqCount,
+      finalRunSeq: session.seqCount > 0 ? String(session.seqCount) : null,
+      finalEventDigest: session.finalHash,
+      eventStreamDigest: session.finalHash,
+      merkleRoot: session.finalHash,
+      archiveSegmentRef: null,
+    },
+  ];
 }
 
 export function createRunChainGetHandler(
@@ -217,6 +249,8 @@ export function createRunChainGetHandler(
       run.source === "tacho"
         ? await deps.checkpoints(scope, run.sessionUuid)
         : [];
+    const ledgerSeals =
+      run.source === "ledger" ? await deps.ledgerSeals(scope, run.runId) : [];
 
     const sequences = sequenceGaps(read.frames);
     const recorded =
@@ -258,10 +292,15 @@ export function createRunChainGetHandler(
       frameCount: read.frames.length,
       firstSeq: first?.seq ?? null,
       lastSeq: last?.seq ?? null,
+      // The latest attempt's root: the one field that summarizes "the current
+      // commitment" for a quick render. `seals` below carries every attempt's
+      // root for a caller that needs the full audit trail.
       merkleRoot:
         run.source === "ledger"
-          ? (run.record.seal?.merkleRoot ?? null)
-          : (rows.at(-1)?.chainHead ?? null),
+          ? (ledgerSeals.at(-1)?.merkleRoot ?? null)
+          : run.row.session.sealedAt !== null
+            ? run.row.session.finalHash
+            : (rows.at(-1)?.chainHead ?? null),
       checkpoints: rows.map(toCheckpoint),
       gaps: {
         missingSequences: sequences.gaps,
@@ -269,7 +308,7 @@ export function createRunChainGetHandler(
         missingBodies: missingBodies(read.frames),
         recorded,
       },
-      seal: sealOf(run, rows.at(-1)),
+      seals: sealsOf(run, ledgerSeals),
       enforcementTier,
       recordedGrade: isReplayGrade(recordedGrade) ? recordedGrade : null,
       ladder: explained.ladder,
@@ -281,4 +320,5 @@ export function createRunChainGetHandler(
 export const runChainGetHandler = createRunChainGetHandler({
   ...defaultRunReadDeps(),
   checkpoints: postgresChainCheckpoints,
+  ledgerSeals: postgresChainLedgerSeals,
 });

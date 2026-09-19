@@ -63,17 +63,28 @@ function tachoHarness(
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames(SESSION_UUID, rows),
     checkpoints: () => Promise.resolve(over.checkpoints ?? []),
+    ledgerSeals: () =>
+      Promise.reject(new Error("a wrapped session reads no ledger seals")),
   };
   return createRunChainGetHandler(deps);
 }
 
-function ledgerHarness(sealOver: Record<string, unknown> = {}) {
+/**
+ * `attemptSeals`, oldest first, stands in for `ledgerAllSealsQuery`: every
+ * attempt seal the run carries, not only the latest (finding 8,
+ * macanderson/oxagen#3370). Defaults to one attempt built from `sealOver`, the
+ * same single-seal shape the harness offered before that fix.
+ */
+function ledgerHarness(
+  sealOver: Record<string, unknown> = {},
+  attemptSeals = [seal(RUN_UUID, sealOver)],
+) {
   const stores = memoryStores(
     [
       ledgerRun({
         publicId: LEDGER_ID,
         runId: RUN_UUID,
-        seal: seal(RUN_UUID, sealOver),
+        seal: attemptSeals.at(-1) ?? seal(RUN_UUID, sealOver),
       }),
     ],
     [],
@@ -93,6 +104,7 @@ function ledgerHarness(sealOver: Record<string, unknown> = {}) {
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames(SESSION_UUID, []),
     checkpoints: () => Promise.reject(new Error("a ledger run reads none")),
+    ledgerSeals: () => Promise.resolve(attemptSeals),
   };
   return createRunChainGetHandler(deps);
 }
@@ -136,14 +148,33 @@ describe("missingBodies", () => {
 });
 
 describe("get_run_chain", () => {
+  it("uses the sealed session's final_hash, not a checkpoint that only covers a prefix (finding 1, negative)", async () => {
+    // The collector stops checkpointing once `session.sealed` is written
+    // (`terminalPatch`), so a checkpoint recorded well before the session
+    // sealed covers only a prefix; `final_hash` is the commitment over the
+    // whole session.
+    const prefixHead = `sha256:${"b".repeat(64)}`;
+    const wholeSessionHash = `sha256:${"c".repeat(64)}`;
+    const chain = tachoHarness([tachoRow(0), tachoRow(1), tachoRow(2)], {
+      checkpoints: [checkpoint({ seq: 1, chainHead: prefixHead })],
+      session: { finalHash: wholeSessionHash },
+    });
+    const out = await chain({ runId: TACHO_ID }, ctx());
+    expect(out.merkleRoot).toBe(wholeSessionHash);
+    expect(out.seals).toEqual([
+      expect.objectContaining({
+        finalEventDigest: wholeSessionHash,
+        eventStreamDigest: wholeSessionHash,
+        merkleRoot: wholeSessionHash,
+      }),
+    ]);
+  });
+
   it("answers a wrapped session's hash rule, checkpoints and root, and the grade ladder", async () => {
-    const chain = tachoHarness(
-      [tachoRow(0), tachoRow(1), tachoRow(2)],
-      {
-        checkpoints: [checkpoint({ seq: 2, eventCount: 3 })],
-        session: { replayGrade: "inspect", enforcementTier: "observe" },
-      },
-    );
+    const chain = tachoHarness([tachoRow(0), tachoRow(1), tachoRow(2)], {
+      checkpoints: [checkpoint({ seq: 2, eventCount: 3 })],
+      session: { replayGrade: "inspect", enforcementTier: "observe" },
+    });
     const out = await chain({ runId: TACHO_ID }, ctx());
     expect(runChainGet.output.parse(out)).toEqual(out);
     expect(out.hashRule).toBe("tacho.sha256_prev_hash_v1");
@@ -201,8 +232,9 @@ describe("get_run_chain", () => {
     expect(out.hashRule).toBe("ledger.event_stream_digest_v1");
     expect(out.checkpoints).toEqual([]);
     expect(out.enforcementTier).toBe("gateway");
+    expect(out.seals).toHaveLength(1);
     // The ATTEMPT's terminal status and digests, not the run's word for them.
-    expect(out.seal).toMatchObject({
+    expect(out.seals[0]).toMatchObject({
       terminalStatus: "completed",
       eventCount: 3,
       finalRunSeq: "3",
@@ -210,7 +242,36 @@ describe("get_run_chain", () => {
       eventStreamDigest: `sha256:${"d".repeat(64)}`,
       merkleRoot: `sha256:${"f".repeat(64)}`,
     });
+    expect(out.merkleRoot).toBe(`sha256:${"f".repeat(64)}`);
     expect(out.recordedGrade).toBe("view");
+  });
+
+  it("a retried run answers one seal per attempt, not only the latest (finding 8, negative)", async () => {
+    const firstAttempt = seal(RUN_UUID, {
+      attemptId: "0192d4a8-7c1e-7a00-8000-0000000000b1",
+      sealedAt: new Date("2026-09-11T10:01:00.000Z"),
+      terminalStatus: "abandoned",
+      merkleRoot: `sha256:${"1".repeat(64)}`,
+    });
+    const secondAttempt = seal(RUN_UUID, {
+      attemptId: "0192d4a8-7c1e-7a00-8000-0000000000b2",
+      sealedAt: new Date("2026-09-11T10:05:00.000Z"),
+      terminalStatus: "completed",
+      merkleRoot: `sha256:${"2".repeat(64)}`,
+    });
+    const chain = ledgerHarness({}, [firstAttempt, secondAttempt]);
+    const out = await chain({ runId: LEDGER_ID }, ctx());
+    expect(runChainGet.output.parse(out)).toEqual(out);
+    // Both attempt seals are present, oldest first, each with its own root —
+    // not the latest attempt's root presented beside a frame count and gap
+    // analysis that (via `readAllFrames`) already span every attempt.
+    expect(out.seals).toHaveLength(2);
+    expect(out.seals[0]?.terminalStatus).toBe("abandoned");
+    expect(out.seals[0]?.merkleRoot).toBe(`sha256:${"1".repeat(64)}`);
+    expect(out.seals[1]?.terminalStatus).toBe("completed");
+    expect(out.seals[1]?.merkleRoot).toBe(`sha256:${"2".repeat(64)}`);
+    // The top-level summary field is the latest attempt's root.
+    expect(out.merkleRoot).toBe(`sha256:${"2".repeat(64)}`);
   });
 
   it("a seal with no recorded tier reads as harness, which is what it was graded under", async () => {

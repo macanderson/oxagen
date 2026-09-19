@@ -207,88 +207,84 @@
         ],
         "additionalProperties": false
       },
-      "seal": {
-        "anyOf": [
-          {
-            "type": "object",
-            "properties": {
-              "sealedAt": {
-                "type": "string"
-              },
-              "terminalStatus": {
-                "type": "string"
-              },
-              "eventCount": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "finalRunSeq": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "finalEventDigest": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "eventStreamDigest": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "merkleRoot": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "archiveSegmentRef": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
+      "seals": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sealedAt": {
+              "type": "string"
             },
-            "required": [
-              "sealedAt",
-              "terminalStatus",
-              "eventCount",
-              "finalRunSeq",
-              "finalEventDigest",
-              "eventStreamDigest",
-              "merkleRoot",
-              "archiveSegmentRef"
-            ],
-            "additionalProperties": false
+            "terminalStatus": {
+              "type": "string"
+            },
+            "eventCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "finalRunSeq": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "finalEventDigest": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "eventStreamDigest": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "merkleRoot": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "archiveSegmentRef": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
           },
-          {
-            "type": "null"
-          }
-        ]
+          "required": [
+            "sealedAt",
+            "terminalStatus",
+            "eventCount",
+            "finalRunSeq",
+            "finalEventDigest",
+            "eventStreamDigest",
+            "merkleRoot",
+            "archiveSegmentRef"
+          ],
+          "additionalProperties": false
+        }
       },
       "enforcementTier": {
         "type": "string",
@@ -356,7 +352,7 @@
       "merkleRoot",
       "checkpoints",
       "gaps",
-      "seal",
+      "seals",
       "enforcementTier",
       "recordedGrade",
       "ladder",

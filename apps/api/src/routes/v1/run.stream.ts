@@ -111,9 +111,13 @@ runStreamRoute.get("/", async (c) => {
         }
         if (page.frames.cursor !== null) cursor = page.frames.cursor;
         if (closed) break;
-        // A sealed run whose page had nothing behind it answers no cursor:
-        // nothing will ever lie past it, so the stream is complete.
-        if (page.frames.cursor === null) {
+        // A sealed or halted run whose page had nothing behind it is done:
+        // nothing will ever lie past it. A `live` run with a null cursor is
+        // merely caught up — no frames yet, or a reconnect that landed
+        // exactly on the head — and is not sealed; it keeps waiting below
+        // rather than reporting a false `sealed` that closes a run still
+        // going (finding 4, macanderson/oxagen#3370).
+        if (page.frames.cursor === null && page.run.status !== "live") {
           write(
             `event: done\ndata: ${JSON.stringify({ reason: "sealed", cursor: cursor ?? null })}\n\n`,
           );
@@ -186,7 +190,7 @@ function readRun(
     ctx,
     { surface: "api" },
   ) as Promise<{
-    run: unknown;
+    run: { status: "live" | "sealed" | "halted" };
     frames: { frames: { cursor: string }[]; cursor: string | null };
   }>;
 }

@@ -288,6 +288,7 @@
       "missingSequences": "Missing sequences",
       "recordedGaps": "Gaps the seal recorded",
       "sealTitle": "Seal",
+      "attemptLabel": "Attempt {n}",
       "sealedAt": "Sealed",
       "terminalStatus": "Terminal status",
       "sealedFrames": "Frames under the seal",

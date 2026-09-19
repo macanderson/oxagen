@@ -22,7 +22,7 @@ const output = {
     missingBodies: 0,
     recorded: [],
   },
-  seal: null,
+  seals: [],
   enforcementTier: "observe",
   recordedGrade: null,
   ladder: [
@@ -44,13 +44,13 @@ describe("get_run_chain contract", () => {
 
   it("takes a run id of either store and nothing else (negative)", () => {
     expect(runChainGet.input.safeParse({ runId: RUN }).success).toBe(true);
-    expect(
-      runChainGet.input.safeParse({ runId: "arun_0a1b2c" }).success,
-    ).toBe(true);
+    expect(runChainGet.input.safeParse({ runId: "arun_0a1b2c" }).success).toBe(
+      true,
+    );
     expect(runChainGet.input.safeParse({ runId: "nope" }).success).toBe(false);
-    expect(
-      runChainGet.input.safeParse({ runId: RUN, limit: 10 }).success,
-    ).toBe(false);
+    expect(runChainGet.input.safeParse({ runId: RUN, limit: 10 }).success).toBe(
+      false,
+    );
   });
 
   it("names the hash rule from a closed set, so a verifier recomputes with it (negative)", () => {
@@ -60,17 +60,39 @@ describe("get_run_chain contract", () => {
     ).toBe(false);
   });
 
-  it("answers null for a root and a seal a run has not recorded, never a zero", () => {
+  it("answers null for a root and no seals for a run that has not recorded one, never a zero", () => {
     const unsealed = runChainGet.output.safeParse({
       ...output,
       merkleRoot: null,
-      seal: null,
+      seals: [],
       recordedGrade: null,
       firstSeq: null,
       lastSeq: null,
       frameCount: 0,
     });
     expect(unsealed.success).toBe(true);
+  });
+
+  it("carries one seal per attempt, oldest first, not only the latest (finding 8, negative)", () => {
+    const seal = {
+      sealedAt: "2026-09-11T10:05:00.000Z",
+      terminalStatus: "completed",
+      eventCount: 3,
+      finalRunSeq: "3",
+      finalEventDigest: `sha256:${"d".repeat(64)}`,
+      eventStreamDigest: `sha256:${"e".repeat(64)}`,
+      merkleRoot: `sha256:${"f".repeat(64)}`,
+      archiveSegmentRef: null,
+    };
+    const retried = runChainGet.output.safeParse({
+      ...output,
+      seals: [{ ...seal, terminalStatus: "abandoned" }, seal],
+    });
+    expect(retried.success).toBe(true);
+    // `seal` (singular, nullable) is not the shape any more.
+    expect(runChainGet.output.safeParse({ ...output, seal }).success).toBe(
+      false,
+    );
   });
 
   it("carries a signed checkpoint with its countersignature and anchor, both nullable", () => {

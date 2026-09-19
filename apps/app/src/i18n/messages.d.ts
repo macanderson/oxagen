@@ -1926,6 +1926,7 @@ type Messages = {
       missingSequences: string;
       recordedGaps: string;
       sealTitle: string;
+      attemptLabel: string;
       sealedAt: string;
       terminalStatus: string;
       sealedFrames: string;
