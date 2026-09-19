@@ -58,8 +58,6 @@ describe("get_run contract", () => {
       // from a field the shape never had.
       operatorKind: "human",
       operatorName: "Marcus Bell",
-      model: null,
-      machine: null,
       status: "live",
       turns: null,
       steps: 0,
