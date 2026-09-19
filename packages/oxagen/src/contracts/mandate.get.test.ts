@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getCapability } from "../registry";
 import { mandateGet } from "./mandate.get";
+import { mandateList } from "./mandate.list";
 
 describe("get_mandate contract", () => {
   it("is a console read with the same readers as list_mandates", () => {
@@ -13,6 +14,22 @@ describe("get_mandate contract", () => {
       Billing: "allow",
       Compliance: "allow",
     });
+    expect(mandateGet.defaultRoles.workspace).toEqual({
+      Owner: "allow",
+      Member: "allow",
+    });
+  });
+
+  // #3138 (ADR-107): the mandate a list row links to must be readable by the
+  // same caller who could see it in the list, or `readerFilter`'s
+  // creator-narrowing (packages/handlers/src/_mandate.ts), already wired
+  // into this handler, stays unreachable for exactly the reader list_mandates
+  // now admits.
+  it("admits exactly the roles list_mandates admits", () => {
+    expect(mandateGet.defaultRoles.org).toEqual(mandateList.defaultRoles.org);
+    expect(mandateGet.defaultRoles.workspace).toEqual(
+      mandateList.defaultRoles.workspace,
+    );
   });
 
   it("takes a mandate public id and a bounded ledger page", () => {

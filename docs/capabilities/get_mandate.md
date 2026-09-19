@@ -58,13 +58,21 @@ ledger's own accounting.
 
 ## Readers
 
-As `list_mandates`: the accountable office, or the operator of the agent.
+As `list_mandates` (ADR-107): the accountable office reads every mandate; a
+workspace Owner or Member reads the mandates of agents they created, and the
+mandates they requested themselves for any agent. An enterprise org's own IAM
+configuration can widen that with any other explicit allow path naming this
+capability (a custom `role_grants` entry, a direct grant, or an enforced
+allow policy), and an agent run authorized to call it clears the kernel's
+delegation-ceiling resolver on any tier: both take the same narrowed-reader
+scope without the built-in workspace check, per `list_mandates.md`'s
+Readers section, which this capability shares in full.
 
 ## Errors
 
 | code | reason | meaning |
 | --- | --- | --- |
-| `forbidden` | `org_role_required`, `no_principal` | Neither the office nor the agent's operator. |
+| `forbidden` | `org_role_required`, `no_principal` | Neither an accountable office role, a workspace Owner/Member reading an agent they created or a mandate they requested, nor (on an enterprise org) any other explicit IAM allow path admits the caller. |
 | `not_found` | `mandate_not_found` | Not in this workspace. |
 
 ## SPEC references

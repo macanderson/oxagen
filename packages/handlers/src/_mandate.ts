@@ -6,6 +6,7 @@
 // Every lookup is workspace-scoped and runs in the caller's tenant
 // transaction; only public ids leave through the mapping.
 
+import { canAccessACL, resolveOrgTierDetailed } from "@oxagen/billing";
 import { schema, type Tx } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
@@ -314,10 +315,50 @@ export async function assertToolsDeclareMeasures(
 }
 
 /**
- * Who may read: an accountable org role reads every mandate; any other
- * acting user (the signed-in user, or the API key's creator) reads the
- * mandates of agents they created. Returns null
- * for the office, or the user id to filter agents by.
+ * Who may read: an accountable org role reads every mandate; a workspace
+ * Owner or Member (the same set `request_mandate` admits) reads the
+ * mandates of agents they created, and the mandates they requested
+ * themselves for any agent (list_mandates, get_mandate). Returns null for
+ * the office, or the user id callers narrow both `agents.createdById` and
+ * `mandates.requestedBy` against.
+ *
+ * Both checks run through `assertOrgRole` explicitly, in two calls rather
+ * than one call naming both role sets, because the two admissions mean
+ * different things to the caller (the office sees everything; a narrowed
+ * reader sees only its own) and one combined call cannot say which leg
+ * passed. This matters beyond enterprise orgs: `checkIAM` allows every
+ * capability unconditionally on a non-enterprise tier (the `tier_gate`
+ * step in `packages/iam/src/check-iam.ts`), so a contract's `defaultRoles`
+ * is documentation there, not enforcement, and this handler-level check is
+ * the only gate a Free/Build/Scale org actually runs. Treating every
+ * signed-in user `assertOrgRole`'s org leg refused as a narrowed reader,
+ * without also checking the workspace leg, would admit a workspace Viewer,
+ * or an Owner/Member demoted after creating an agent, on those tiers.
+ *
+ * The workspace-role check runs only when the org's tier is the reason the
+ * call reached here at all (`tier_gate` bypassed IAM's resolver). On an
+ * enterprise org, `checkIAM` runs the full resolver, so a caller who is
+ * neither an accountable office role nor a built-in workspace Owner/Member
+ * can still legitimately reach the handler through any other explicit IAM
+ * allow path naming this capability (`packages/oxagen/src/iam/resolve.ts`):
+ * a custom `role_grants` entry, a workspace or organization direct grant,
+ * or an enforced org allow policy. Enforcing the built-in workspace roles
+ * unconditionally would refuse that configured grant and
+ * silently revoke access the enterprise org's own IAM setup deliberately
+ * gave (#3440 follow-on finding). Every caller who reaches this point has
+ * already cleared the kernel's real check on that tier, so they take the
+ * narrowed-reader scope without a second role assertion.
+ *
+ * The same skip applies to an agent-run call regardless of tier. `checkIAM`
+ * never gives an agent principal the non-enterprise `tier_gate` bypass
+ * (`packages/iam/src/check-iam.ts`'s agent-run branch runs the full
+ * delegation-ceiling resolver at every tier, before the tier check is even
+ * consulted): an agent explicitly authorized for this capability, whose
+ * invoking human holds a direct or custom grant rather than a built-in
+ * workspace role, already cleared the kernel on a Free/Build/Scale org the
+ * same way an enterprise custom grant clears it. Re-running the workspace
+ * check here for an agent run would refuse an authorized agent call the
+ * kernel already allowed (#3440 follow-on finding).
  */
 export async function readerFilter(
   ctx: CheckedContext,
@@ -330,15 +371,31 @@ export async function readerFilter(
     );
     return null;
   } catch (err) {
-    if (
-      err instanceof HandlerError &&
-      err.reason === "org_role_required" &&
-      actingUserId
-    ) {
-      return actingUserId;
+    if (!(err instanceof HandlerError && err.reason === "org_role_required")) {
+      throw err;
     }
-    throw err;
   }
+  const isAgentRun = ctx.agentRun?.principalKind === "agent";
+  if (!isAgentRun) {
+    const tierResolution = await resolveOrgTierDetailed(ctx.orgId);
+    if (!tierResolution.established || !canAccessACL(tierResolution.tier)) {
+      // Non-enterprise (or an org tier nothing established, which fails
+      // closed the same way `checkIAM`'s own tier gate does): `checkIAM`
+      // admitted every signed-in human/service principal regardless of
+      // role, so this is the only place a Viewer is actually refused.
+      await assertOrgRole(
+        { ...ctx, userId: actingUserId },
+        { org: [], workspace: ["Owner", "Member"] },
+      );
+    }
+  }
+  // assertOrgRole refused a call with no acting user; on an enterprise org
+  // that ran the full resolver, reaching this line already means the
+  // kernel granted it, built-in role or custom role_grant alike.
+  if (actingUserId === null) {
+    throw new HandlerError({ code: "forbidden", reason: "no_principal" });
+  }
+  return actingUserId;
 }
 
 /** Public ids of the users a set of mandate rows name. */

@@ -645,6 +645,49 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(forbidden("no_principal"));
     });
 
+    // #3138 (ADR-107): request_mandate and list_mandates now admit the same
+    // roles, so IAM lets a non-accountable reader reach the handler; this
+    // pins what readerFilter's creator-narrowing does with that admission:
+    // a reader who created nothing reads nothing, not the whole ledger.
+    it("list: a reader with no accountable role who created no agent reads nothing", async () => {
+      const bystanderUserId = randomUUID();
+      doubles.roles.set(bystanderUserId, { org: null, workspace: "Member" });
+      const bystander = await inScope(() =>
+        mandateListHandler({ limit: 50 }, ctx(bystanderUserId)),
+      );
+      expect(bystander.items).toEqual([]);
+    });
+
+    // #3440: readerFilter's workspace leg must run its own assertOrgRole
+    // check against Owner/Member, not treat every signed-in user the org
+    // leg refused as a narrowed reader. This matters beyond enterprise
+    // orgs: checkIAM allows every capability unconditionally on a
+    // non-enterprise tier, so this handler-level check is the only gate a
+    // Free/Build/Scale org actually runs, and a workspace Viewer (or an
+    // Owner/Member demoted after creating an agent) must not pass it.
+    it("list/get: a workspace Viewer is refused, not treated as a narrowed reader", async () => {
+      const viewerUserId = randomUUID();
+      doubles.roles.set(viewerUserId, { org: null, workspace: "Viewer" });
+      await expect(
+        inScope(() => mandateListHandler({ limit: 50 }, ctx(viewerUserId))),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
+      const m = await grant(billingUserId, body());
+      await expect(
+        inScope(() =>
+          mandateGetHandler(
+            { mandateId: m.id, ledgerLimit: 100 },
+            ctx(viewerUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
     it("get: the operator of another agent is refused; the office reads the ledger newest first; an unknown id is not found", async () => {
       const m = await grant(billingUserId, body());
       await seedReservation(m.id, "150000000", randomUUID());
@@ -695,6 +738,136 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ),
         ),
       ).rejects.toSatisfy(notFound);
+    });
+
+    // #3440 (ADR-107 widened): request_mandate admits a workspace Owner or
+    // Member to request a mandate for ANY agent, not only one they created,
+    // so readerFilter's creator-only narrowing let a requester create a
+    // draft they could never read back for an agent someone else operates.
+    // list_mandates and get_mandate now also admit a mandate the caller
+    // requested themselves, whichever agent it names.
+    it("list/get: a requester who does not operate the agent still reads the draft they requested", async () => {
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({ ...body(), agentId: otherBotId }),
+          ctx(operatorUserId),
+        ),
+      );
+      expect(draft.agentId).toBe(otherBotId);
+
+      // operatorUserId created invoiceBotId, not otherBotId, so only the
+      // requestedBy match admits them here.
+      const asRequester = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: otherBotId },
+          ctx(operatorUserId),
+        ),
+      );
+      expect(asRequester.items.map((m) => m.id)).toContain(draft.id);
+
+      const getAsRequester = await inScope(() =>
+        mandateGetHandler(
+          { mandateId: draft.id, ledgerLimit: 100 },
+          ctx(operatorUserId),
+        ),
+      );
+      expect(getAsRequester.mandate.id).toBe(draft.id);
+
+      // otherOperatorUserId created otherBotId, so the creator path still
+      // admits them independently of who requested this particular draft.
+      const asCreator = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: otherBotId },
+          ctx(otherOperatorUserId),
+        ),
+      );
+      expect(asCreator.items.map((m) => m.id)).toContain(draft.id);
+
+      // A bystander who neither created the agent nor requested the draft
+      // reads neither the list row nor the record.
+      const bystanderUserId = randomUUID();
+      doubles.roles.set(bystanderUserId, { org: null, workspace: "Member" });
+      const asBystander = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: otherBotId },
+          ctx(bystanderUserId),
+        ),
+      );
+      expect(asBystander.items.map((m) => m.id)).not.toContain(draft.id);
+      await expect(
+        inScope(() =>
+          mandateGetHandler(
+            { mandateId: draft.id, ledgerLimit: 100 },
+            ctx(bystanderUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
+    });
+
+    it("list/get: a requester's grant does not survive the agent's soft-delete", async () => {
+      const softDeletedAgentPrincipal = randomUUID();
+      const [softDeletedAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            // Agent slugs are capped at 18 characters for the 32-char
+            // agentKey budget (agent.enforce_agent_slug_length()).
+            slug: `del-bot-${randomUUID().slice(0, 8)}`,
+            name: "Soft-deleted bot",
+            agentType: "custom",
+            principalId: softDeletedAgentPrincipal,
+            createdById: otherOperatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({
+            ...body(),
+            agentId: softDeletedAgent!.publicId,
+          }),
+          ctx(operatorUserId),
+        ),
+      );
+
+      // Before the soft-delete, the requester grant works the same as the
+      // still-live case above.
+      const beforeDelete = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: softDeletedAgent!.publicId },
+          ctx(operatorUserId),
+        ),
+      );
+      expect(beforeDelete.items.map((m) => m.id)).toContain(draft.id);
+
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.agents)
+          .set({ deletedAt: new Date() })
+          .where(eq(schema.agents.publicId, softDeletedAgent!.publicId)),
+      );
+
+      // Once the agent is soft-deleted, neither list nor get admits the
+      // requester through the requester grant: a row that hasn't been purged
+      // yet is not the same as a live agent, and the requester's visibility
+      // must not outlive the agent it was requested for. Listed with no
+      // `agentId` filter, since that filter alone already excludes a
+      // soft-deleted agent's mandates (line ~33 above) and would pass even
+      // without the fix this test protects.
+      const afterDelete = await inScope(() =>
+        mandateListHandler({ limit: 500 }, ctx(operatorUserId)),
+      );
+      expect(afterDelete.items.map((m) => m.id)).not.toContain(draft.id);
+      await expect(
+        inScope(() =>
+          mandateGetHandler(
+            { mandateId: draft.id, ledgerLimit: 100 },
+            ctx(operatorUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
     });
 
     // ── revoke, limits ─────────────────────────────────────────────────────────
@@ -991,6 +1164,43 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
+    it("list: a narrowed reader with no live agent to narrow by reads nothing, never every mandate in the workspace", async () => {
+      const m = await grant(billingUserId, body());
+      const bystanderUserId = randomUUID();
+      doubles.roles.set(bystanderUserId, { org: null, workspace: "Member" });
+      // Every agent in the workspace soft-deleted at once: `createdByOperator`
+      // and `livePrincipalIds` both resolve empty, the exact state that made
+      // `or(undefined, undefined)` collapse `readerScope` to `undefined` and
+      // fall through the surrounding `and(...)` to an unfiltered read.
+      // Restored in `finally` since `invoiceBotId`/`otherBotId` are shared
+      // fixtures every other test in this file depends on being live.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.agents)
+          .set({ deletedAt: new Date() })
+          .where(eq(schema.agents.workspaceId, workspaceId)),
+      );
+      try {
+        const asBystander = await inScope(() =>
+          mandateListHandler({ limit: 500 }, ctx(bystanderUserId)),
+        );
+        expect(asBystander.items).toEqual([]);
+      } finally {
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.agents)
+            .set({ deletedAt: null })
+            .where(eq(schema.agents.workspaceId, workspaceId)),
+        );
+      }
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
     // #3130 (ADR-108 §4): a measure's kind is only re-derived from the
     // active declaration when the operator actually touches that measure's
     // limit. An update that names only validTo, targets or approval must
@@ -1043,6 +1253,93 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ctx(billingUserId),
         ),
       );
+    });
+
+    it("list: an enterprise org's custom role reaches the handler without a workspace Owner/Member fallback", async () => {
+      // A separate org, so resolveOrgTierDetailed reads its own row rather
+      // than the shared fixture's (which has none, and so resolves
+      // `established: false` and always takes the workspace-role branch).
+      // This stands in for a custom `role_grants` entry that admitted the
+      // caller through checkIAM's real resolver without either an
+      // accountable org role or a built-in workspace Owner/Member role: the
+      // mocked `assertOrgRole` refuses both legs for this user exactly as a
+      // custom-role-only grant would refuse them under the real resolver,
+      // and readerFilter must still let the call through rather than
+      // refusing a caller the kernel already admitted (#3440 follow-on).
+      const enterpriseOrgId = randomUUID();
+      const enterpriseWorkspaceId = randomUUID();
+      const customRoleUserId = randomUUID();
+      doubles.roles.set(customRoleUserId, {
+        org: "CustomAuditor",
+        workspace: null,
+      });
+      await withSystemDb((tx) =>
+        tx.insert(schema.organizations).values({
+          id: enterpriseOrgId,
+          name: "Enterprise Co",
+          slug: `enterprise-${tag}`,
+          namespace: `ent${tag}`.slice(0, 6),
+          planType: "enterprise",
+          status: "active",
+        }),
+      );
+      await withSystemDb((tx) =>
+        tx.insert(schema.workspaces).values({
+          id: enterpriseWorkspaceId,
+          orgId: enterpriseOrgId,
+          name: "Enterprise Workspace",
+          slug: `entws-${tag}`,
+          namespace: `entw${tag}`.slice(0, 6),
+        }),
+      );
+      const enterpriseCtx: CapabilityContext = {
+        orgId: enterpriseOrgId,
+        workspaceId: enterpriseWorkspaceId,
+        userId: customRoleUserId,
+        apiKeyId: null,
+        requestId: `req_${tag}_ent`,
+        surface: "api",
+        messageId: null,
+      };
+      await expect(
+        runInTenantScope(
+          { orgId: enterpriseOrgId, workspaceId: enterpriseWorkspaceId },
+          () => mandateListHandler({ limit: 50 }, enterpriseCtx),
+        ),
+      ).resolves.toMatchObject({ items: [] });
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.workspaces)
+          .where(eq(schema.workspaces.id, enterpriseWorkspaceId)),
+      );
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.organizations)
+          .where(eq(schema.organizations.id, enterpriseOrgId)),
+      );
+    });
+
+    it("list: an agent-run call never runs the human workspace-role fallback", async () => {
+      // Mirrors the enterprise custom-grant case above, but for an agent
+      // principal on the shared fixture org's non-enterprise tier.
+      // checkIAM never gives an agent principal the tier_gate bypass
+      // (packages/iam/src/check-iam.ts): an agent run resolves the full
+      // delegation-ceiling resolver at every tier, before the tier check
+      // is even consulted, so an agent explicitly authorized for this
+      // capability already cleared the kernel the same way an enterprise
+      // custom grant does. readerFilter's workspace-role fallback exists
+      // only to close the gap the tier_gate bypass leaves for human/
+      // service calls; running it for an agent-run call would refuse an
+      // agent the kernel already admitted (#3440 follow-on finding).
+      const agentUserId = randomUUID();
+      doubles.roles.set(agentUserId, { org: null, workspace: null });
+      const agentCtx = {
+        ...ctx(agentUserId),
+        agentRun: { principalKind: "agent" },
+      } as unknown as CapabilityContext;
+      await expect(
+        inScope(() => mandateListHandler({ limit: 50 }, agentCtx)),
+      ).resolves.toMatchObject({ items: [] });
     });
 
     it("limits: a kind change is refused while the ledger still holds authority drawn under the old kind", async () => {
