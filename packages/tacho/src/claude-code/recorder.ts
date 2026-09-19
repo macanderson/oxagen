@@ -865,6 +865,28 @@ export class SessionRecorder {
   }
 
   private sealOtelDraft(draft: OtelDraft): TachoEvent | undefined {
+    // The standard fields are sticky: every later event inherits them. A
+    // value the envelope refuses (an `account_uuid` past 512 characters, say)
+    // must not outlive the record that carried it, or every later record
+    // that omits the attribute inherits it and is refused too.
+    const before = {
+      anthropic: this.anthropic,
+      context: this.context,
+      host: this.host,
+      harnessVersion: this.harnessVersion,
+    };
+    try {
+      return this.sealOtelDraftAbsorbed(draft);
+    } catch (error) {
+      this.anthropic = before.anthropic;
+      this.context = before.context;
+      this.host = before.host;
+      this.harnessVersion = before.harnessVersion;
+      throw error;
+    }
+  }
+
+  private sealOtelDraftAbsorbed(draft: OtelDraft): TachoEvent | undefined {
     this.absorbStandard(draft.standard);
     // Only the log record takes part: the control plane counts tokens from
     // `otel_log`, never from a span, so a span sealed first must not turn the
