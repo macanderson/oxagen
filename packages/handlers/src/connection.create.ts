@@ -4,8 +4,21 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { encrypt } from "@oxagen/crypto";
 import { createIngestionCryptoAdapter } from "@oxagen/crypto";
 import { getConnector } from "@oxagen/ingestion/connectors";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { logger } from "./logger";
 import { assertGithubInstallationAccessible } from "./lib/github-installation-access";
+
+/**
+ * The roles the contract declares (`connection.create.ts`: org Owner/Admin, or
+ * workspace Owner). `checkIAM` fast-paths a non-enterprise org to an
+ * unconditional allow for non-agent principals (CLAUDE.md "Gotchas"), so a
+ * capability whose contract restricts by role must assert that role itself in
+ * the handler or the restriction only holds on enterprise orgs — #3258.
+ */
+const CREATE_CONNECTION_ROLES = {
+  org: ["Owner", "Admin"],
+  workspace: ["Owner"],
+} as const;
 
 export const connectionCreateHandler: CapabilityHandler<
   typeof connectionCreate
@@ -13,6 +26,12 @@ export const connectionCreateHandler: CapabilityHandler<
   if (!ctx.userId) {
     throw new Error("connection.create requires an authenticated user");
   }
+
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    CREATE_CONNECTION_ROLES,
+  );
 
   // Validate connector exists before touching the DB
   const connector = getConnector(input.connectorId);
