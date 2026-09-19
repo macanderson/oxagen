@@ -144,8 +144,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       businessHours: null,
     };
 
-    const set = (userId: string, rules: unknown[]) =>
-      inScope(() => approvalRuleSetHandler({ rules } as never, ctx(userId)));
+    const set = (userId: string, rules: unknown[], saving?: string[]) =>
+      inScope(() =>
+        approvalRuleSetHandler({ rules, saving } as never, ctx(userId)),
+      );
     const list = (userId: string) =>
       inScope(() => approvalRuleListHandler({}, ctx(userId)));
 
@@ -588,11 +590,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // refused a step later by the consequence gate, because accountability
       // for money is not seniority. Every other handler in this file takes an
       // Admin; only authoring a rule over this tool does not.
+      // Explicitly save the existing rule to exercise its authoring gate.
       // No user row: the consequence gate refuses before anything reads a
       // public id, and the role is the double's.
       const adminOnlyId = randomUUID();
       doubles.roles.set(adminOnlyId, "Admin");
-      await expect(set(adminOnlyId, [RULE])).rejects.toSatisfy(
+      await expect(set(adminOnlyId, [RULE], [RULE.id])).rejects.toSatisfy(
         forbidden("org_role_required"),
       );
     });
@@ -626,12 +629,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where(eq(schema.toolVersions.id, paymentVersionId)),
       );
       try {
-        await expect(set(adminId, [RULE])).rejects.toSatisfy(
+        await expect(set(adminId, [RULE], [RULE.id])).rejects.toSatisfy(
           forbidden("org_role_required"),
         );
         // An Owner is accountable for money and may still author it, so the
         // gate refuses the unaccountable caller rather than the tool.
-        await expect(set(ownerUserId, [RULE])).resolves.toBeDefined();
+        await expect(set(ownerUserId, [RULE], [RULE.id])).resolves.toBeDefined();
       } finally {
         await withSystemDb((tx) =>
           tx
