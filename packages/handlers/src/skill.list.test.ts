@@ -36,6 +36,7 @@ const skillRow = (name: string) => ({
   name,
   sessions: 1,
   harnesses: ["claude-code"],
+  harnessCount: 1,
   firstSeenAt: "2026-09-14T09:00:00.000Z",
   lastSeenAt: "2026-09-14T09:00:00.000Z",
 });
@@ -202,12 +203,13 @@ describe("the cursor", () => {
 });
 
 describe("toInventoryRow", () => {
-  it("splits the harnesses Postgres joined and keeps the reported instants", () => {
+  it("carries the jsonb harness array and harness count through, and keeps the reported instants", () => {
     expect(
       toInventoryRow({
         name: "release-notes",
         sessions: "2",
-        harnesses: "claude-code\ncodex",
+        harnesses: ["claude-code", "codex"],
+        harness_count: "2",
         first_seen_at: "2026-09-01T09:00:00.000Z",
         last_seen_at: "2026-09-14T09:00:00.000Z",
       }),
@@ -215,20 +217,49 @@ describe("toInventoryRow", () => {
       name: "release-notes",
       sessions: 2,
       harnesses: ["claude-code", "codex"],
+      harnessCount: 2,
       firstSeenAt: "2026-09-01T09:00:00.000Z",
       lastSeenAt: "2026-09-14T09:00:00.000Z",
     });
   });
 
-  it("fails a row with no session or no harness rather than guessing (negative)", () => {
+  it("round-trips a harness label containing a newline whole, never re-split into invented labels", () => {
+    expect(
+      toInventoryRow({
+        name: "release-notes",
+        sessions: "1",
+        harnesses: ["claude-code\ncodex"],
+        harness_count: "1",
+        first_seen_at: "2026-09-01T09:00:00.000Z",
+        last_seen_at: "2026-09-01T09:00:00.000Z",
+      }).harnesses,
+    ).toEqual(["claude-code\ncodex"]);
+  });
+
+  it("keeps a session with an empty harness label rather than failing the whole read", () => {
+    expect(
+      toInventoryRow({
+        name: "release-notes",
+        sessions: "1",
+        harnesses: ["", "claude-code"],
+        harness_count: "2",
+        first_seen_at: "2026-09-01T09:00:00.000Z",
+        last_seen_at: "2026-09-01T09:00:00.000Z",
+      }).harnesses,
+    ).toEqual(["", "claude-code"]);
+  });
+
+  it("fails a row with no session, no harness, or a non-positive harness count rather than guessing (negative)", () => {
     const base = {
       name: "x",
       sessions: 1,
-      harnesses: "claude-code",
+      harnesses: ["claude-code"],
+      harness_count: 1,
       first_seen_at: "2026-09-01T09:00:00.000Z",
       last_seen_at: "2026-09-01T09:00:00.000Z",
     };
     expect(() => toInventoryRow({ ...base, sessions: 0 })).toThrow();
-    expect(() => toInventoryRow({ ...base, harnesses: "" })).toThrow();
+    expect(() => toInventoryRow({ ...base, harnesses: [] })).toThrow();
+    expect(() => toInventoryRow({ ...base, harness_count: 0 })).toThrow();
   });
 });

@@ -31,6 +31,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
+  SKILL_HARNESS_CAP,
   SKILL_PAGE_SIZE,
   SKILL_WINDOW_DAYS_MAX,
   type SkillInventoryRow,
@@ -156,9 +157,22 @@ const iso = (column: SQL) =>
 
 /**
  * One row per reported name: the sessions whose inventory named it (a name
- * listed twice in one inventory counts that session once), their harnesses
- * joined by newlines, and the first and last start. Reads one row past the
- * page so the caller knows whether a next page exists.
+ * listed twice in one inventory counts that session once), up to
+ * `SKILL_HARNESS_CAP` of its distinct harnesses plus the true distinct count,
+ * and the first and last start. Reads one row past the page so the caller
+ * knows whether a next page exists.
+ *
+ * Harnesses aggregate as a `jsonb_agg`, not a delimited string: `agent.harness`
+ * is `z.string().max(512)` at the wire (packages/tacho/src/envelope.ts) with no
+ * constraint on content, so a delimiter character can appear inside a real
+ * value. `jsonb_agg` round-trips whatever the harness sent, including an empty
+ * string, byte-for-byte — nothing here rejects or re-splits it (#3103).
+ *
+ * The aggregate is bounded: `ranked_harness` ranks each skill's distinct
+ * harnesses and `harness_summary` keeps only the first `SKILL_HARNESS_CAP` in
+ * the returned array, alongside `harness_count`, the true distinct count. A
+ * workspace whose wrapper stamps a unique label per session (a host name, a
+ * run id) can no longer make one row's harness list grow without bound.
  */
 export function namesQuery(
   scope: SkillScope,
@@ -166,22 +180,48 @@ export function namesQuery(
   q: { after: string | null; limit: number },
 ): SQL {
   return sql`
-    select skill.name as name,
-      count(distinct s.id)::int as sessions,
-      string_agg(distinct s.harness, E'\n' order by s.harness) as harnesses,
-      ${iso(sql`min(s.started_at)`)} as first_seen_at,
-      ${iso(sql`max(s.started_at)`)} as last_seen_at
-    from ${sessions} as s
-    cross join lateral jsonb_array_elements_text(s.skills_available) as skill(name)
-    where s.org_id = ${scope.orgId}::uuid
-      and s.workspace_id = ${scope.workspaceId}::uuid
-      and s.started_at >= ${window.from.toISOString()}::timestamptz
-      and s.started_at < ${window.to.toISOString()}::timestamptz
-      and jsonb_typeof(s.skills_available) = 'array'
-      and skill.name <> ''
-      ${q.after === null ? sql`` : sql`and skill.name > ${q.after}`}
-    group by skill.name
-    order by skill.name
+    with expanded as (
+      select
+        skill.name as name,
+        s.id as session_id,
+        s.harness as harness,
+        s.started_at as started_at
+      from ${sessions} as s
+      cross join lateral jsonb_array_elements_text(s.skills_available) as skill(name)
+      where s.org_id = ${scope.orgId}::uuid
+        and s.workspace_id = ${scope.workspaceId}::uuid
+        and s.started_at >= ${window.from.toISOString()}::timestamptz
+        and s.started_at < ${window.to.toISOString()}::timestamptz
+        and jsonb_typeof(s.skills_available) = 'array'
+        and skill.name <> ''
+    ),
+    ranked_harness as (
+      select name, harness,
+        row_number() over (partition by name order by harness) as rn,
+        count(*) over (partition by name) as harness_count
+      from (select distinct name, harness from expanded) as distinct_harness
+    ),
+    harness_summary as (
+      select name,
+        jsonb_agg(harness order by harness)
+          filter (where rn <= ${SKILL_HARNESS_CAP}) as harnesses,
+        max(harness_count)::int as harness_count
+      from ranked_harness
+      group by name
+    )
+    select
+      e.name as name,
+      count(distinct e.session_id)::int as sessions,
+      hs.harnesses as harnesses,
+      hs.harness_count as harness_count,
+      ${iso(sql`min(e.started_at)`)} as first_seen_at,
+      ${iso(sql`max(e.started_at)`)} as last_seen_at
+    from expanded e
+    join harness_summary hs on hs.name = e.name
+    where true
+      ${q.after === null ? sql`` : sql`and e.name > ${q.after}`}
+    group by e.name, hs.harnesses, hs.harness_count
+    order by e.name
     limit ${q.limit + 1}
   `;
 }
@@ -189,7 +229,8 @@ export function namesQuery(
 const nameRowSchema = z.object({
   name: z.string().min(1),
   sessions: z.coerce.number().int().positive(),
-  harnesses: z.string().min(1),
+  harnesses: z.array(z.string().max(512)).min(1),
+  harness_count: z.coerce.number().int().positive(),
   first_seen_at: z.string(),
   last_seen_at: z.string(),
 });
@@ -200,7 +241,8 @@ export function toInventoryRow(raw: unknown): SkillInventoryRow {
   return {
     name: row.name,
     sessions: row.sessions,
-    harnesses: row.harnesses.split("\n"),
+    harnesses: row.harnesses,
+    harnessCount: row.harness_count,
     firstSeenAt: row.first_seen_at,
     lastSeenAt: row.last_seen_at,
   };

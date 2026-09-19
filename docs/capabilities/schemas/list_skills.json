@@ -90,8 +90,14 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "minLength": 1
-              }
+                "maxLength": 512
+              },
+              "minItems": 1,
+              "maxItems": 20
+            },
+            "harnessCount": {
+              "type": "integer",
+              "minimum": 0
             },
             "firstSeenAt": {
               "type": "string"
@@ -104,6 +110,7 @@
             "name",
             "sessions",
             "harnesses",
+            "harnessCount",
             "firstSeenAt",
             "lastSeenAt"
           ],

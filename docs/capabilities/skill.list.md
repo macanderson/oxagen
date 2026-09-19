@@ -31,10 +31,12 @@ The skills this workspace's harness sessions reported when they started, over a 
 | `sessions` | integer | sessions started in the window |
 | `reportedSessions` | integer or null | sessions in the window that reported an inventory; null when none did |
 | `notReportedSessions` | integer | sessions in the window whose inventory is null |
-| `skills` | object[] | `{ name, sessions, harnesses, firstSeenAt, lastSeenAt }` per reported name, by name, at most 100 a page |
+| `skills` | object[] | `{ name, sessions, harnesses, harnessCount, firstSeenAt, lastSeenAt }` per reported name, by name, at most 100 a page |
 | `nextCursor` | string or null | the next page, or null on the last |
 
 A session whose `skills_available` is null (or anything but a JSON array) did not report an inventory and counts toward `notReportedSessions`, never as a session with no skills. A session that reported an empty array counts toward `reportedSessions` and names no skill. A name an inventory lists twice counts that session once.
+
+A skill row's `harnesses` round-trips exactly what its sessions reported, byte-for-byte, including an empty string when a session reported none — this read never invents a value or fails over one session's harness label ([ADR-104](../adr/ADR-104-a-harness-label-round-trips-whatever-it-holds.md)). The list is capped at 20 distinct harnesses; `harnessCount` carries the true distinct count past that cap.
 
 ## Errors
 
