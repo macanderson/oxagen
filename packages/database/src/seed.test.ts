@@ -61,6 +61,7 @@ const mocks = vi.hoisted(() => {
   );
 
   const closeDatabaseMock = vi.fn().mockResolvedValue(undefined);
+  const seedBookEditionsMock = vi.fn().mockResolvedValue(undefined);
 
   return {
     limitMock,
@@ -77,11 +78,15 @@ const mocks = vi.hoisted(() => {
     mockTx,
     withSystemDbMock,
     closeDatabaseMock,
+    seedBookEditionsMock,
   };
 });
 
 vi.mock("./tenant", () => ({ withSystemDb: mocks.withSystemDbMock }));
 vi.mock("./client", () => ({ closeDatabase: mocks.closeDatabaseMock }));
+vi.mock("./seed-book-editions", () => ({
+  seedBookEditions: mocks.seedBookEditionsMock,
+}));
 
 import { seedPlatform, seedDev, seed } from "./seed";
 
@@ -114,6 +119,7 @@ function resetAllMocks() {
         cb(mocks.mockTx),
     );
   mocks.closeDatabaseMock.mockReset().mockResolvedValue(undefined);
+  mocks.seedBookEditionsMock.mockReset().mockResolvedValue(undefined);
 }
 
 // Sequence of select().from().where().limit() resolved values for seedDev():
@@ -149,6 +155,11 @@ describe("seedPlatform()", () => {
     expect(mocks.insertMock).toHaveBeenCalledOnce();
     expect(mocks.valuesMock).toHaveBeenCalledOnce();
     expect(mocks.onConflictDoUpdateMock).toHaveBeenCalledOnce();
+  });
+
+  it("seeds book editions after the free plan", async () => {
+    await seedPlatform();
+    expect(mocks.seedBookEditionsMock).toHaveBeenCalledOnce();
   });
 
   it("rewrites an existing free row's GAU terms to the v1 published figures", async () => {

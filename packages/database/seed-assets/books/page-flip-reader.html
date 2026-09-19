@@ -1373,7 +1373,9 @@ function updateChrome() {
   $("#live").textContent = `Page ${shown} of ${totalPages}`;
   // reflect chapter in URL for shareable position
   const id = nearestAnchorId();
-  if (id) history.replaceState(null, "", id === "cover" ? location.pathname : "#" + id);
+  // Keep ?e=&c= on the cover URL so a refresh re-redeems the rotated code
+  // instead of dropping the visitor back on the lead form.
+  if (id) history.replaceState(null, "", id === "cover" ? location.pathname + location.search : "#" + id);
   $("#edgeL").style.visibility = spread > 0 ? "visible" : "hidden";
   $("#edgeR").style.visibility = spread < maxSpread ? "visible" : "hidden";
   // highlight toc

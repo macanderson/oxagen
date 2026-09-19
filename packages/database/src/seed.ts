@@ -14,6 +14,7 @@ import {
   agents,
   agentVersions,
 } from "./schema/index";
+import { seedBookEditions } from "./seed-book-editions";
 
 // Seed runs idempotently. Re-running won't duplicate plans, the dev
 // org, the dev user, or their memberships — every insert is guarded
@@ -87,6 +88,11 @@ export async function seedPlatform(): Promise<void> {
         });
     }
   });
+  // Book editions back the code-gated /v1/cms/book/redeem path. Without this,
+  // a migrate that only recreates cms.book_editions leaves the table empty and
+  // every redemption fails as unknown_edition until an operator finds the
+  // standalone db:seed-books command.
+  await seedBookEditions();
 }
 
 /**

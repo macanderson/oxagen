@@ -32,6 +32,7 @@ import {
   type EditionSlug,
 } from "@oxagen/database";
 import { rateLimiter } from "../../middleware/rate-limit";
+import { trustedClientIpBucketKey } from "../../middleware/distributed-rate-limit";
 import {
   captureLead,
   captureLeadAndIssueCode,
@@ -41,6 +42,10 @@ import {
 } from "../../lib/cms/access";
 import { logger } from "../../middleware/logger";
 import type { AppEnv } from "../../app";
+
+/** Per-IP CMS ceilings keyed by the trusted edge address (ADR-083). */
+const cmsIpLimit = (windowMs: number, max: number) =>
+  rateLimiter({ windowMs, max, keyFn: trustedClientIpBucketKey });
 
 export const cmsRoute = new Hono<AppEnv>();
 
@@ -155,7 +160,7 @@ async function emailReaderLink(
 
 // ── POST /v1/cms/leads ────────────────────────────────────────────────────────
 // Generous but bounded: a handful of submissions per minute per IP.
-cmsRoute.use("/leads", rateLimiter({ windowMs: 60_000, max: 10 }));
+cmsRoute.use("/leads", cmsIpLimit(60_000, 10));
 cmsRoute.post("/leads", async (c) => {
   let raw: unknown;
   try {
@@ -232,7 +237,7 @@ cmsRoute.post("/leads", async (c) => {
 
 // ── POST /v1/cms/book/redeem ──────────────────────────────────────────────────
 // Higher ceiling: legitimate readers open/refresh, and each rotates a code.
-cmsRoute.use("/book/redeem", rateLimiter({ windowMs: 60_000, max: 60 }));
+cmsRoute.use("/book/redeem", cmsIpLimit(60_000, 60));
 cmsRoute.post("/book/redeem", async (c) => {
   let raw: unknown;
   try {
@@ -265,7 +270,7 @@ cmsRoute.post("/book/redeem", async (c) => {
 
 // ── POST /v1/cms/book/resend ──────────────────────────────────────────────────
 // Stricter: this triggers an email, so bound it tightly per IP.
-cmsRoute.use("/book/resend", rateLimiter({ windowMs: 60_000, max: 5 }));
+cmsRoute.use("/book/resend", cmsIpLimit(60_000, 5));
 cmsRoute.post("/book/resend", async (c) => {
   let raw: unknown;
   try {
