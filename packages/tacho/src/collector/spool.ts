@@ -56,9 +56,13 @@ export interface ShipperOptions {
    * clause is asked again here, against the mandate the last refresh
    * established, and a body it no longer covers is never transmitted.
    *
-   * Optional, so a caller that does not supply it keeps the old behaviour.
+   * Required, and deliberately. An optional clause that a caller may omit is
+   * the same bypass in a new shape: the filter would read `undefined` and
+   * transmit every queued body, and a shipper built without it would look
+   * correct at the call site. A caller with no trustworthy mandate to offer
+   * passes `NO_RETENTION`, which keeps nothing, rather than passing nothing.
    */
-  retentionInForce?: () => RetentionMandate;
+  retentionInForce: () => RetentionMandate;
   log: (line: string) => void;
   now: () => number;
   minBackoffMs?: number;
@@ -289,7 +293,7 @@ export class Shipper {
     // because the WAL stores bodies as bytes and does not persist a class.
     // `contentClassOf` is the one table that maps a frame kind to a class, so
     // asking it here cannot disagree with what the append path asked.
-    const retention = this.options.retentionInForce?.();
+    const retention = this.options.retentionInForce();
     const kindOf = new Map(
       own.map((event) => [event.event_id_idem, event.kind] as const),
     );
@@ -297,7 +301,6 @@ export class Shipper {
       this.options.wal
         .bodiesFor(own)
         .filter((body) => {
-          if (retention === undefined) return true;
           const kind = kindOf.get(body.event_id_idem);
           const contentClass =
             kind === undefined ? undefined : contentClassOf(kind);
