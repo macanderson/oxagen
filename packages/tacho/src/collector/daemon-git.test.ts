@@ -80,6 +80,9 @@ describe("the daemon's git seam", () => {
     // Called on every control-plane request, so a test can record where the
     // poll falls relative to the git spawns.
     onFetch?: () => void,
+    // Run the real interval driver, for the one case that is about the driver's
+    // `ticking` guard rather than about the order inside a single tick.
+    driver?: { shipMs: number },
   ) {
     const paths = scratchPaths();
     const signer = bundleSigner();
@@ -114,9 +117,17 @@ describe("the daemon's git seam", () => {
       ...(execAsync !== undefined ? { execAsync } : {}),
       now,
       log: () => undefined,
-      listen: false,
+      listen: driver !== undefined,
+      ...(driver !== undefined ? { port: 0 } : {}),
       transcriptRoots: [`${paths.root}/no-transcripts`],
-      timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
+      timers: {
+        detectorMs: 0,
+        sweepMs: 0,
+        checkpointMs: 0,
+        commandsPollMs: 0,
+        ...(driver ?? {}),
+        ...(driver !== undefined ? { bundleRefreshMs: 0 } : {}),
+      },
     });
     handles.push(handle);
     return handle;
@@ -256,6 +267,62 @@ describe("the daemon's git seam", () => {
     expect(timeline).toContain("control");
     expect(timeline).toContain("git");
     expect(timeline.indexOf("control")).toBeLessThan(timeline.indexOf("git"));
+  });
+
+  it("keeps polling control state while a worktree read is stuck", async () => {
+    // Ordering inside one tick is the other test above. This is the half
+    // ordering cannot fix.
+    //
+    // A reconciliation's ceilings multiply: `readGitFacts` is `rev-parse HEAD`
+    // then three reads at once (2 x 10 s), and `readWorkingTreeChanges` is
+    // `status`, then numstat-and-root at once with a no-HEAD fallback, then 64
+    // untracked probes through a pool of 4, which is 16 waves — 10 + 20 + 160 s,
+    // so 210 s for one session and 840 s for the four a tick drains. Awaited
+    // anywhere inside the tick, that holds the interval driver's `ticking`
+    // guard for the whole fourteen minutes and every poll in between is
+    // dropped, whichever end of the tick the drain sits at. The allow state the
+    // hooks read would stay fourteen minutes behind the operator's withdrawal
+    // of it, and the record would name the withdrawn state as the live one.
+    //
+    // So the drain runs in a lane of its own, and this asserts the consequence:
+    // the driver keeps polling while a git read is in flight and will not
+    // answer.
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let probeStarted = false;
+    const stuck: ExecAsync = async () => {
+      probeStarted = true;
+      await held;
+      return { status: 1, stdout: "", stderr: "released" };
+    };
+    let polls = 0;
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      stuck,
+      () => {
+        polls += 1;
+      },
+      { shipMs: 10 },
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    const started = Date.now() + 2_000;
+    while (!probeStarted && Date.now() < started)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(probeStarted).toBe(true);
+
+    // Several polls, not one. Awaited in the tick, the guard is held by the
+    // stuck read and the count stops at the poll that preceded it.
+    polls = 0;
+    const deadline = Date.now() + 1_500;
+    while (polls < 3 && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(polls).toBeGreaterThanOrEqual(3);
+
+    release();
   });
 
   it("does not reconcile on a tool call or a prompt", async () => {
