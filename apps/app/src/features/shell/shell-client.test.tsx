@@ -253,7 +253,6 @@ describe("sidebar", () => {
       ["Fleet", "/acme/core-platform"],
       ["Agent IAM", "/acme/core-platform/agents"],
       ["Tools", "/acme/core-platform/tools"],
-      ["Skills", "/acme/core-platform/skills"],
       ["Steering", "/acme/core-platform/steering"],
       ["Spend", "/acme/core-platform/spend"],
       ["Organization", "/acme"],
@@ -345,7 +344,6 @@ describe("command menu", () => {
       "Fleet",
       "Agent IAM",
       "Tools",
-      "Skills",
       "Steering",
       "Spend",
       "Organization",
@@ -354,6 +352,8 @@ describe("command menu", () => {
       "Model funding",
       "Billing",
       "Audit",
+      "Create anything",
+      "Add a skill",
     ]);
     expect(within(menu).queryAllByRole("group")).toEqual([]);
     await user.type(input, "api keys");

@@ -1,0 +1,47 @@
+// The creation wizards' open signal (roadmap creation-spec §1). Every entry
+// point, ⌘K Create, a page's own button such as Steering · Skills "Add a
+// skill", reaches the one wizard host the workspace layout mounts by
+// dispatching this event on `window`. It is a DOM event rather than a React
+// context because the entry points live in different features and in the
+// shell, and a feature may not import another feature's internals: this module
+// is the one both sides are allowed to import.
+//
+// The kinds are the things an operator creates in Oxagen: each is a file in the
+// workspace's main repository, and each wizard ends on a pull request. A kind
+// is offered (in the chooser and in ⌘K) once the host carries its wizard; the
+// order here is the chooser's order.
+
+/** Every kind the wizard shell is built to host. */
+export type CreateKind = "agent" | "tool" | "skill" | "record";
+
+/**
+ * The kinds offered today, in the chooser's order. The agent and context
+ * record wizards join this list when their step modules land; the tool wizard
+ * is left out on purpose until its importer and manifest steps are built.
+ */
+export const CREATE_KINDS: readonly CreateKind[] = ["skill"];
+
+export const CREATE_EVENT = "oxagen:create";
+
+export type CreateRequest = { kind: CreateKind | null };
+
+/** Open the chooser (`null`) or one kind's wizard over the current page. */
+export function openCreate(kind: CreateKind | null = null): void {
+  window.dispatchEvent(
+    new CustomEvent<CreateRequest>(CREATE_EVENT, { detail: { kind } }),
+  );
+}
+
+/** Narrow an event's detail to a request, refusing anything else. */
+export function createRequestOf(event: Event): CreateRequest | null {
+  if (!(event instanceof CustomEvent)) return null;
+  const detail: unknown = event.detail;
+  if (typeof detail !== "object" || detail === null || !("kind" in detail))
+    return null;
+  const { kind } = detail as { kind: unknown };
+  if (kind === null) return { kind: null };
+  return typeof kind === "string" &&
+    (CREATE_KINDS as readonly string[]).includes(kind)
+    ? { kind: kind as CreateKind }
+    : null;
+}

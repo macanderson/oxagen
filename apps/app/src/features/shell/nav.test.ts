@@ -80,7 +80,6 @@ describe("isNavItemCurrent", () => {
     ["/acme/core-platform/runs/run_01/chain", "fleet"],
     ["/acme/core-platform/agents/acme.core.triage", "agents"],
     ["/acme/core-platform/tools/switches", "tools"],
-    ["/acme/core-platform/skills", "skills"],
     ["/acme/core-platform/steering", "steering"],
     ["/acme/core-platform/spend/budgets", "spend"],
   ] as const)("%s → %s", (path, key) => {
@@ -95,9 +94,10 @@ describe("isNavItemCurrent", () => {
     );
   });
 
-  it("marks nothing current on a path no nav item holds, Ontology's included (negative)", () => {
+  it("marks nothing current on a path no nav item holds, Ontology's and the retired Skills page's included (negative)", () => {
     for (const path of [
       "/",
+      "/acme/core-platform/skills",
       "/acme/core-platform/scenarios",
       "/acme/core-platform/ontology",
     ])
@@ -137,14 +137,13 @@ describe("hrefs", () => {
 });
 
 describe("sidebarSections", () => {
-  it("has the mockup's nine links in order, Skills between Tools and Steering and Audit after Billing, and no Run or Ontology entry", () => {
+  it("has the mockup's eight links in order, Audit after Billing, and no Run, Skills or Ontology entry", () => {
     const sections = sidebarSections("acme", "core-platform");
     expect(sections.map((s) => s.key)).toEqual(["workspace", "organization"]);
     expect(sections.flatMap((s) => s.items)).toEqual([
       { key: "fleet", href: "/acme/core-platform" },
       { key: "agents", href: "/acme/core-platform/agents" },
       { key: "tools", href: "/acme/core-platform/tools" },
-      { key: "skills", href: "/acme/core-platform/skills" },
       { key: "steering", href: "/acme/core-platform/steering" },
       { key: "spend", href: "/acme/core-platform/spend" },
       { key: "organization", href: "/acme" },
@@ -152,7 +151,7 @@ describe("sidebarSections", () => {
       { key: "audit", href: "/acme/audit" },
     ]);
     for (const { href } of sections.flatMap((s) => s.items))
-      expect(href).not.toMatch(/\/(ontology|runs)(\/|$)/);
+      expect(href).not.toMatch(/\/(ontology|runs|skills)(\/|$)/);
   });
 
   it("carries a key and an href per item and nothing else (negative)", () => {
@@ -170,11 +169,10 @@ describe("sidebarSections", () => {
 });
 
 describe("the phone's thumb bar and More sheet", () => {
-  it("split the eight sidebar keys: four slots, the rest in the sheet, each key once", () => {
+  it("split the sidebar keys: four slots, the rest in the sheet, each key once", () => {
     expect(THUMB_SLOTS).toEqual(["fleet", "agents", "tools", "spend"]);
     expect(MORE_SHEET).toEqual([
       "steering",
-      "skills",
       "organization",
       "billing",
       "audit",
@@ -192,7 +190,6 @@ describe("the phone's thumb bar and More sheet", () => {
       "/acme/billing",
       "/acme/audit",
       "/acme/core-platform/steering",
-      "/acme/core-platform/skills",
     ])
       expect(isMoreCurrent(path)).toBe(true);
   });

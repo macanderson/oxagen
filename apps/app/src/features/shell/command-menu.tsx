@@ -1,7 +1,8 @@
 "use client";
-// The ⌘K command menu (mockup `cmdMenu()`): a combobox over the static routes.
-// Arrow keys move, Enter opens, Esc closes. On a phone it rises from the bottom
-// edge as a sheet (src/ui/phone.css).
+// The ⌘K command menu (mockup `cmdMenu()`): a combobox over the static routes
+// and, inside a workspace, Create (the chooser and each wizard). Arrow keys
+// move, Enter opens, Esc closes. On a phone it rises from the bottom edge as a
+// sheet (src/ui/phone.css).
 import { Dialog } from "@base-ui/react/dialog";
 import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -15,6 +16,7 @@ import {
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 import { useSidebarSections } from "./sidebar";
+import { openCreate } from "@/shared/create";
 import { useNavigate } from "@/ui/navigation";
 import { SheetHandle } from "@/ui/sheet-dialog";
 
@@ -59,7 +61,10 @@ function CommandPalette({
     () =>
       buildCommands(
         { org: data.org.slug, ws },
-        { nav: (key) => t(`nav.${key}`) },
+        {
+          nav: (key) => t(`nav.${key}`),
+          create: (kind) => t(`commands.create.${kind ?? "any"}`),
+        },
       ),
     [data.org.slug, ws, t],
   );
@@ -68,7 +73,8 @@ function CommandPalette({
 
   const open = (c: Command) => {
     onClose();
-    navigate.push(c.href);
+    if ("href" in c) navigate.push(c.href);
+    else openCreate(c.create);
   };
 
   return (
