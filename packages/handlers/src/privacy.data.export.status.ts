@@ -5,8 +5,9 @@
 // change. A refused read of an organization archive would be worth its own
 // row by the bar the secret lifecycle sets in security-event-types.ts, and no
 // type in that taxonomy fits one: adding it needs a taxonomy entry and a
-// migration widening the event_type constraint, so it is tracked rather than
-// invented here.
+// migration widening the event_type constraint, so it is tracked in #3391
+// rather than invented here.
+//
 // get_export_status: where one of the calling person's own exports has got to.
 //
 // `privacy.privacy_export_requests` is a person-keyed table with no
