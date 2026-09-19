@@ -307,7 +307,7 @@ describe("the other dialogs on a phone", () => {
       within(drawer)
         .getByRole("navigation", { name: "Main" })
         .querySelectorAll("a"),
-    ).toHaveLength(9);
+    ).toHaveLength(10);
   });
 
   // The rail that carries the launcher is `hidden md:flex`, so without this a
