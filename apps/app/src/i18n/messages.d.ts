@@ -1147,6 +1147,8 @@ type Messages = {
       deny: string;
       anyTarget: string;
       noPattern: string;
+      allowAnyTarget: string;
+      anyNotDenied: string;
       tools: string;
       approval: string;
       approvalAbove: string;
