@@ -339,7 +339,12 @@ export function runSource(reads: RunReads) {
       contextPr: refuse,
       freshness: refuse,
     },
-    tools: { versions: refuse, grants: refuse, killSwitches: refuse },
+    tools: {
+      versions: refuse,
+      grants: refuse,
+      killSwitches: refuse,
+      approvalRules: refuse,
+    },
   };
   return { source, calls };
 }

@@ -87,7 +87,12 @@ const source: DataSource = {
     contextPr: refuse,
     freshness: refuse,
   },
-  tools: { versions: refuse, grants: refuse, killSwitches: refuse },
+  tools: {
+    versions: refuse,
+    grants: refuse,
+    killSwitches: refuse,
+    approvalRules: refuse,
+  },
 };
 
 function spend(over: Partial<FleetSpend> = {}): Read<FleetSpend> {

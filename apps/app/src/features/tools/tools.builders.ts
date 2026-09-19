@@ -2,17 +2,20 @@
 // renders, each built from the contract-parsed record through the same mapper
 // the live port uses, so a fixture cannot drift from the contract.
 import {
+  toApprovalRuleSet,
   toCredentialGrantPage,
   toKillSwitchBoard,
   toToolVersionPage,
 } from "@/data/live/mappers/tools";
 import type { DataSource } from "@/data/ports";
 import type {
+  ApprovalRuleSet,
   CredentialGrantPage,
   KillSwitchBoard,
   ToolVersionPage,
 } from "@/data/contracts/tools";
 import {
+  ApprovalRuleSet as ApprovalRuleSetShape,
   CredentialGrantPage as CredentialGrantPageShape,
   KILL_SWITCH_BOARD_LIMIT,
   KillSwitchBoard as KillSwitchBoardShape,
@@ -22,6 +25,7 @@ import type { AgentPage, AgentStatus } from "@/data/contracts/agents";
 import type { MandateList } from "@/data/contracts/mandates";
 import { type Read, readOk } from "@/data/read";
 import {
+  approvalRuleListOutput,
   credentialGrantListOutput,
   killSwitchListOutput,
   toolVersionListOutput,
@@ -53,6 +57,7 @@ export function killSwitchBoard(
   );
 }
 
+<<<<<<< HEAD
 /** One agent as `list_agents` pages it, for the grant dialog's picker. */
 export function agentPageRow(
   slug: string,
@@ -86,6 +91,14 @@ export function agentPage(
       tamperIncidents: 0,
     },
   };
+=======
+export function approvalRuleSet(
+  over: Parameters<typeof approvalRuleListOutput>[0] = {},
+): ApprovalRuleSet {
+  return ApprovalRuleSetShape.parse(
+    toApprovalRuleSet(approvalRuleListOutput(over)),
+  );
+>>>>>>> fix/tools-gaps-autoapprovals
 }
 
 type ToolsReads = {
@@ -95,12 +108,16 @@ type ToolsReads = {
   /** The Mandates tab's read (#2957); built by `@/test/mandate-views`, which
    * three features share because no feature may reach into another's folder. */
   mandates?: Read<MandateList>;
+<<<<<<< HEAD
   /**
    * The agents the Mandates tab reads for a reader who may grant. Defaults to
    * one enrolled agent, since every such reader makes this read; a test that
    * cares what the picker offers hands its own.
    */
   agents?: Read<AgentPage>;
+=======
+  approvalRules?: Read<ApprovalRuleSet>;
+>>>>>>> fix/tools-gaps-autoapprovals
 };
 
 /** A DataSource answering the Tools reads it was handed; `calls` records each read's arguments. */
@@ -110,7 +127,11 @@ export function toolsSource(reads: ToolsReads) {
     grants: [],
     killSwitches: [],
     mandates: [],
+<<<<<<< HEAD
     agents: [],
+=======
+    approvalRules: [],
+>>>>>>> fix/tools-gaps-autoapprovals
   };
   const refuse = () => Promise.reject(new Error("not a Tools read"));
   const answer =
@@ -179,6 +200,7 @@ export function toolsSource(reads: ToolsReads) {
       versions: answer(reads.versions, "versions"),
       grants: answer(reads.grants, "grants"),
       killSwitches: answer(reads.killSwitches, "killSwitches"),
+      approvalRules: answer(reads.approvalRules, "approvalRules"),
     },
     mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
   };

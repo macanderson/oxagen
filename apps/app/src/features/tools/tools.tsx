@@ -1,13 +1,14 @@
 // Tools (#2958, #2957; ARCHITECTURE.md §1.2, mockup `mockups/pages/tools.md`):
 // the registry of tool versions with their safety classification, the
 // credential grants the broker minted, the kill switches reaching this
-// workspace, and the ledger of every mandate the workspace has granted.
+// workspace, the ledger of every mandate the workspace has granted, and the
+// auto-approval rules that let a call skip a person (ADR-070).
 //
-// Four tabs, because four of the mockup's six are backed today. #2958 shipped
+// Five tabs, because five of the mockup's six are backed today. #2958 shipped
 // the shell and the first three and left the slot this comment described;
-// #2957's ledger fills it, adding its name to TOOLS_TABS and its case below
-// and moving nothing else. Policy and Auto-approvals are still their own lanes
-// and arrive the same way.
+// #2957's ledger filled it, and Auto-approvals arrived the same way: its name
+// in TOOLS_TABS, its case below, and nothing else moved. Policy is still its
+// own lane.
 //
 // Each tab makes only the reads it shows, except the switch count on the tab
 // strip: a count in navigation appears where something waits on a person, and
@@ -19,6 +20,7 @@ import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { panel } from "@/ui/control-styles";
 import { useTranslations } from "next-intl";
+import { AutoApprovals } from "./auto-approvals";
 import { Connections } from "./connections";
 import { type LedgerGrant, MandatesLedger } from "./mandates-ledger";
 import { Registry } from "./registry";
@@ -27,8 +29,9 @@ import { ToolsTabs } from "./tabs";
 import { parseToolsView, type ToolsAt, type ToolsView } from "./view";
 
 /**
- * An org Owner or Admin: exactly what `set_tool_classification` and
- * `set_kill_switch` declare (both grant no workspace role at all), so hiding
+ * An org Owner or Admin: exactly what `set_tool_classification`,
+ * `set_kill_switch`, `set_approval_rules`, `set_approval_rule_enabled` and
+ * `delete_approval_rule` declare (none grants a workspace role), so hiding
  * their controls from anyone else hides nothing the kernel would have allowed.
  * Each of those handlers asserts the same pair itself, on every org tier, and
  * INV-29 pins the assertion — see the note on `canImportTools`.
@@ -197,6 +200,21 @@ async function TabBody({
           orgRole={ctx.orgRole}
           at={at}
           grant={agents === null ? null : grantableAgents(agents)}
+        />
+      );
+    }
+    case "autoapprovals": {
+      // `list_approval_rules` admits an org Owner, Admin or Compliance, so a
+      // Compliance reader sees the rules and the counters with no control on
+      // them. The three writes admit an org Owner or Admin only, which is
+      // `canAdministerOrg` exactly; each handler asserts the same pair.
+      const read = await source.tools.approvalRules(ctx);
+      return (
+        <AutoApprovals
+          at={at}
+          orgRole={ctx.orgRole}
+          canWrite={canAdministerOrg(ctx)}
+          read={read}
         />
       );
     }

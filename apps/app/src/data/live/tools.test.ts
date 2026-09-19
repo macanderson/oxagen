@@ -1,12 +1,14 @@
-// The three Tools ports: one kernel read each on the Tools page's failure row,
+// The four Tools ports: one kernel read each on the Tools page's failure row,
 // mapped into the page's view models, with a refusal passed through and an
 // unmappable record reported once.
+import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KILL_SWITCH_BOARD_LIMIT } from "@/data/contracts/tools";
 import {
+  approvalRuleListOutput,
   credentialGrantListOutput,
   killSwitchListOutput,
   toolVersionListOutput,
@@ -227,6 +229,74 @@ describe("tools.killSwitches", () => {
       ),
     );
     expect(await tools.killSwitches(ctx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("tools.approvalRules", () => {
+  it("reads the whole rule set on the tools failure row and carries every field the edit dialog shows", async () => {
+    kernelRead.mockResolvedValue(readOk(approvalRuleListOutput()));
+    const read = await tools.approvalRules(ctx);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: approvalRuleList,
+      input: {},
+      page: "tools",
+    });
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.value.windowDays).toBe(30);
+    const [refunds, deploys] = read.value.rules;
+    expect(refunds).toEqual({
+      id: "small-refunds",
+      name: "Small refunds to known customers",
+      tools: ["stripe__create_refund@*"],
+      enabled: true,
+      maxMeasures: { amount: "50000000" },
+      allowTargets: { counterparty: ["cus_*", "vendor:aws"] },
+      standingWindowMs: null,
+      businessHours: {
+        timezone: "Europe/London",
+        days: [1, 2, 3, 4, 5],
+        start: "09:00",
+        end: "17:00",
+      },
+      lastWrittenBy: "usr_01k5a1",
+      lastWrittenAt: "2026-09-12T10:00:00.000Z",
+      authoredConsequences: ["moves_money"],
+      released: 212,
+      held: 9,
+    });
+    // A rule the record carries no stamp for says so as null, which the tab
+    // prints as "releases nothing until saved again", never as an empty set.
+    expect(deploys?.authoredConsequences).toBeNull();
+    expect(deploys?.lastWrittenBy).toBeNull();
+  });
+
+  it("passes a refusal through as the kernel classified it", async () => {
+    const denied = {
+      ok: false,
+      reason: "denied",
+      permission: "tools.read",
+    } as const;
+    kernelRead.mockResolvedValue(denied);
+    expect(await tools.approvalRules(ctx)).toEqual(denied);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("reports a rule set the view model refuses", async () => {
+    kernelRead.mockResolvedValue(
+      readOk(
+        approvalRuleListOutput({
+          items: approvalRuleListOutput().items.map((item) => ({
+            ...item,
+            createdBy: "not a public id",
+          })),
+        }),
+      ),
+    );
+    expect(await tools.approvalRules(ctx)).toEqual(
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledTimes(1);

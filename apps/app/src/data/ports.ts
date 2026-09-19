@@ -72,6 +72,7 @@ import type {
   SteeringFreshness,
 } from "./contracts/steering";
 import type {
+  ApprovalRuleSet,
   CredentialGrantPage,
   KillSwitchBoard,
   ToolVersionPage,
@@ -331,7 +332,7 @@ export interface DataSource {
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
   };
   /**
-   * The Tools page's three noBillingGate reads on the workspace (#2958), each
+   * The Tools page's four noBillingGate reads on the workspace (#2958), each
    * role-checked in its handler (INV-29); caller: features/tools/tools.tsx.
    */
   tools: {
@@ -347,5 +348,7 @@ export interface DataSource {
     ): Promise<Read<CredentialGrantPage>>;
     /** list_kill_switches: the switches reaching this workspace, with the deny generation */
     killSwitches(ctx: WsCtx): Promise<Read<KillSwitchBoard>>;
+    /** list_approval_rules: the workspace's auto-approval rules with their 30-day counters */
+    approvalRules(ctx: WsCtx): Promise<Read<ApprovalRuleSet>>;
   };
 }

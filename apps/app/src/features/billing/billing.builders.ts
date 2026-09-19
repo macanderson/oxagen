@@ -268,7 +268,12 @@ export function billingSource(
       contextPr: refuse,
       freshness: refuse,
     },
-    tools: { versions: refuse, grants: refuse, killSwitches: refuse },
+    tools: {
+      versions: refuse,
+      grants: refuse,
+      killSwitches: refuse,
+      approvalRules: refuse,
+    },
   };
   return { source, calls };
 }

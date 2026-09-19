@@ -13,12 +13,18 @@
 // set", and one line above the rows says what is missing, so neither the empty
 // state nor the table asserts more than the read can support.
 //
+<<<<<<< HEAD
 // Grant a mandate sits in the ledger's header, and a requested row carries its
 // own Grant, which opens the same dialog on that draft (`grant-mandate.tsx`).
 // Both are drawn only for a reader whose org role some consequence can name
 // (`canGrantMandates` in tools.tsx). A draft whose agent is retired is offered
 // no Grant: retirement suspends the principal, so authority granted to it
 // could never be drawn, and the handler would still record it (#3124).
+=======
+// The registry, connections, kill switches and auto-approval rules are the
+// other tabs of this page, drawn by their own files; the tab bar is
+// `tabs.tsx`.
+>>>>>>> fix/tools-gaps-autoapprovals
 import { useTranslations } from "next-intl";
 import type { OrgRole } from "@/data/contracts/common";
 import {

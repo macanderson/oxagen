@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp, agent
 **Sensitivity:** high
 **Metering:** none (`noBillingGate`, a settings write)
+**App:** Tools › Auto-approvals › Create rule, and Edit on a row. The app reads the set, splices the one rule in, and writes the whole set back.
 
 ## Intent
 

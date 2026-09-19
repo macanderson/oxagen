@@ -1,4 +1,4 @@
-// The three Tools writes through the real kernel seam: the viewer resolution
+// The Tools writes through the real kernel seam: the viewer resolution
 // and the kernel's invoke() are the only fakes, so each case shows what the
 // person gets back and whether the capability ran — ok, invalid (refused
 // before the kernel), and denied with the handler's reason (INV-19).
@@ -26,9 +26,15 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { flipKillSwitch, importTools, setToolClassification } = await import(
-  "./actions"
-);
+const {
+  deleteApprovalRule,
+  flipKillSwitch,
+  importTools,
+  saveApprovalRule,
+  setApprovalRuleEnabled,
+  setToolClassification,
+} = await import("./actions");
+const { approvalRuleListOutput } = await import("@/test/tools-outputs");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -428,5 +434,231 @@ describe("flipKillSwitch", () => {
         reason: "Stop money movement.",
       }),
     ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
+  });
+});
+
+describe("saveApprovalRule", () => {
+  const stored = () => approvalRuleListOutput();
+  /** What set_approval_rules answers: the list shape, which the action ignores past `ok`. */
+  const written = () => approvalRuleListOutput();
+
+  const draft = {
+    id: " night-deploys ",
+    name: " Deploys to staging at night ",
+    tools: [" deploy__release ", ""],
+    enabled: true,
+    maxMeasures: {},
+    allowTargets: { environment: ["staging"] },
+    standingWindowMs: null,
+    businessHours: null,
+  };
+
+  /** The stored rules as the write body carries them back: provenance and counters off. */
+  const bodies = () =>
+    stored().items.map((rule) => ({
+      id: rule.id,
+      name: rule.name,
+      tools: rule.tools,
+      enabled: rule.enabled,
+      maxMeasures: rule.maxMeasures,
+      allowTargets: rule.allowTargets,
+      standingWindowMs: rule.standingWindowMs,
+      businessHours: rule.businessHours,
+    }));
+
+  it("appends a new rule to the set as it stands now, trimmed", async () => {
+    invoke.mockResolvedValueOnce(stored()).mockResolvedValueOnce(written());
+    expect(
+      await saveApprovalRule("acme", "core-platform", "create", draft),
+    ).toEqual({ ok: true, value: { ruleId: "night-deploys" } });
+    expect(invoke).toHaveBeenNthCalledWith(
+      1,
+      "list_approval_rules",
+      {},
+      expect.objectContaining(TENANT),
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      2,
+      "set_approval_rules",
+      {
+        rules: [
+          ...bodies(),
+          {
+            id: "night-deploys",
+            name: "Deploys to staging at night",
+            tools: ["deploy__release"],
+            enabled: true,
+            maxMeasures: {},
+            allowTargets: { environment: ["staging"] },
+            standingWindowMs: null,
+            businessHours: null,
+          },
+        ],
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("replaces the edited rule in place and sends every other rule back unchanged", async () => {
+    invoke.mockResolvedValueOnce(stored()).mockResolvedValueOnce(written());
+    const edit = {
+      ...draft,
+      id: "repeat-deploys",
+      name: "Repeat deploys",
+      tools: ["deploy__release"],
+      standingWindowMs: 7_200_000,
+    };
+    expect(
+      await saveApprovalRule("acme", "core-platform", "edit", edit),
+    ).toEqual({ ok: true, value: { ruleId: "repeat-deploys" } });
+    const [first] = bodies();
+    expect(invoke).toHaveBeenLastCalledWith(
+      "set_approval_rules",
+      {
+        rules: [
+          first,
+          {
+            id: "repeat-deploys",
+            name: "Repeat deploys",
+            tools: ["deploy__release"],
+            enabled: true,
+            maxMeasures: {},
+            allowTargets: { environment: ["staging"] },
+            standingWindowMs: 7_200_000,
+            businessHours: null,
+          },
+        ],
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  // The id is the audit citation: creating over one would rewrite a rule
+  // receipts already cite, so the action refuses before it writes.
+  it("refuses to create over an id already in the set, and writes nothing", async () => {
+    invoke.mockResolvedValueOnce(stored());
+    expect(
+      await saveApprovalRule("acme", "core-platform", "create", {
+        ...draft,
+        id: "small-refunds",
+      }),
+    ).toEqual({ ok: false, reason: "conflict", code: "rule_id_taken" });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("says the rule is gone when the one being edited left the set", async () => {
+    invoke.mockResolvedValueOnce(stored());
+    expect(
+      await saveApprovalRule("acme", "core-platform", "edit", {
+        ...draft,
+        id: "deleted-meanwhile",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "not_found",
+      code: "approval_rule_not_found",
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the read that failed rather than writing over a set it could not see", async () => {
+    invoke.mockRejectedValueOnce(refused("org_role_required"));
+    const result = await saveApprovalRule(
+      "acme",
+      "core-platform",
+      "create",
+      draft,
+    );
+    expect(result).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "tools.read",
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("says the store did not answer when the read fails, and writes nothing", async () => {
+    invoke.mockRejectedValueOnce(new Error("socket hang up"));
+    expect(
+      await saveApprovalRule("acme", "core-platform", "create", draft),
+    ).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "tool_registry_unavailable",
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the handler's reason when the save is refused", async () => {
+    invoke
+      .mockResolvedValueOnce(stored())
+      .mockRejectedValueOnce(
+        new kernel.HandlerError({ code: "conflict", reason: "no_tool_matches" }),
+      );
+    expect(
+      await saveApprovalRule("acme", "core-platform", "create", draft),
+    ).toEqual({ ok: false, reason: "conflict", code: "no_tool_matches" });
+  });
+
+  it("is refused before the kernel writes when a ceiling is not an integer string", async () => {
+    invoke.mockResolvedValueOnce(stored());
+    const result = await saveApprovalRule("acme", "core-platform", "create", {
+      ...draft,
+      maxMeasures: { amount: "12.50" },
+    });
+    expect(result).toMatchObject({ ok: false, reason: "invalid" });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("setApprovalRuleEnabled", () => {
+  it("switches one rule without sending the set", async () => {
+    invoke.mockResolvedValue(approvalRuleListOutput());
+    expect(
+      await setApprovalRuleEnabled(
+        "acme",
+        "core-platform",
+        "small-refunds",
+        false,
+      ),
+    ).toEqual({ ok: true, value: { ruleId: "small-refunds", enabled: false } });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_approval_rule_enabled",
+      { ruleId: "small-refunds", enabled: false },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns the handler's reason when the role gate refuses it", async () => {
+    invoke.mockRejectedValue(refused("org_role_required"));
+    expect(
+      await setApprovalRuleEnabled(
+        "acme",
+        "core-platform",
+        "small-refunds",
+        true,
+      ),
+    ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
+  });
+});
+
+describe("deleteApprovalRule", () => {
+  it("removes the one rule it names", async () => {
+    invoke.mockResolvedValue(approvalRuleListOutput());
+    expect(
+      await deleteApprovalRule("acme", "core-platform", "repeat-deploys"),
+    ).toEqual({ ok: true, value: { ruleId: "repeat-deploys" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "delete_approval_rule",
+      { ruleId: "repeat-deploys" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("is refused before the kernel when the id is not a rule id", async () => {
+    expect(
+      await deleteApprovalRule("acme", "core-platform", "Not A Slug"),
+    ).toMatchObject({ ok: false, reason: "invalid" });
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

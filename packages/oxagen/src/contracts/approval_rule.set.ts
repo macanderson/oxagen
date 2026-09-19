@@ -23,7 +23,7 @@ export const approvalRuleSet = registerCapability({
     "Replace the workspace's auto-approval rules — the conditions under which a call a policy sent to a person may skip them",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

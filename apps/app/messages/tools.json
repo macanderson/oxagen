@@ -20,7 +20,8 @@
       "switches": "Kill switches",
       "mandates": "Mandates",
       "switchesOn": "{count, plural, one {# on} other {# on}}",
-      "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}"
+      "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}",
+      "autoapprovals": "Auto-approvals"
     },
     "gate": {
       "open": "Open",
@@ -280,7 +281,16 @@
         "refused": "Refused: {code}. Nothing was changed.",
         "invalid": "Check the values above and try again.",
         "pendingApproval": "This is waiting for approval. Access request {accessRequestId}.",
-        "unavailable": "Could not be recorded ({code}). Nothing was changed."
+        "unavailable": "Could not be recorded ({code}). Nothing was changed.",
+        "consequenceRoleRequired": "Saving this rule needs an organization Owner or Admin who also holds the role accountable for every consequence its tools carry. Nothing was changed.",
+        "noRoleCoversAllTags": "No single organization role is accountable for every consequence these tools carry together. Split the rule by tool. Nothing was changed.",
+        "ruleIdTaken": "A rule with that id already exists. Pick another id, or edit that rule. Nothing was changed.",
+        "ruleNotFound": "That rule is no longer in this workspace’s rule set. Reload the tab to see the rules as they are now.",
+        "noToolMatches": "A tool pattern matches no declared tool in this workspace. Nothing was changed.",
+        "ruleNotGated": "A tool pattern matches a tool that Oxagen does not route through the decision rules, so a rule over it would never be enforced. Nothing was changed.",
+        "measureNotDeclared": "A condition names a measure that a matched tool does not declare. Nothing was changed.",
+        "measureWrongType": "A condition names a measure of the wrong kind: a ceiling needs an amount or a count, and an allow list needs a text measure. Nothing was changed.",
+        "tooManyConsequences": "The rule’s tools carry more than 64 distinct consequences. Narrow its tool patterns. Nothing was changed."
       }
     },
     "mandates": {
@@ -392,6 +402,107 @@
         "invalid": "Something in the form is not a value a grant accepts. Nothing was granted.",
         "pendingApproval": "The grant is waiting for approval. Access request {accessRequestId}.",
         "unavailable": "The grant could not be answered: {code}. Nothing was granted."
+      }
+    },
+    "autoApprovals": {
+      "title": "Auto-approval rules",
+      "lead": "A call the policy sends to a person skips them when a rule here covers it and every condition holds. The receipt names the rule as the approver, so it says plainly that no person looked.",
+      "floors": "No rule releases a call with tainted input, a call to a critical or irreversible tool, or a call to an undeclared tool. Those floors are code, not configuration.",
+      "counted": "Released and held count the approval rows of the last {days} days that name each rule.",
+      "on": "on",
+      "off": "off",
+      "written": "Last written {at} by {by}",
+      "writtenUnattributed": "Last written {at}, by no recorded person",
+      "unstamped": "Releases nothing until it is saved again: the record does not say which consequences it was checked against.",
+      "checkedAgainst": "Checked against: {tags}",
+      "empty": {
+        "title": "No auto-approval rules yet",
+        "body": "Every call the policy sends to a person waits for one. Create a rule to let a call that meets its conditions skip the queue."
+      },
+      "tiles": {
+        "label": "Auto-approval totals",
+        "on": {
+          "title": "Rules on",
+          "basis": "of {total} in the rule set"
+        },
+        "released": {
+          "title": "Auto-approved, {days} days",
+          "basis": "Calls a rule released with no person"
+        },
+        "held": {
+          "title": "Sent to a person, {days} days",
+          "basis": "Calls that reached a person with a rule read beside them"
+        }
+      },
+      "columns": {
+        "rule": "Rule",
+        "appliesTo": "Applies to",
+        "requires": "Requires",
+        "released": "Approved {days}d",
+        "held": "Held {days}d",
+        "on": "On",
+        "actions": "Actions"
+      },
+      "requires": {
+        "ceiling": "{measure} at most {value}",
+        "allow": "{measure} matches {globs}",
+        "standing": "A person approved the same call in the last {minutes} minutes",
+        "hours": "{days}, {start} to {end} ({timezone})",
+        "floorsOnly": "Nothing beyond the floors"
+      },
+      "days": {
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat",
+        "7": "Sun"
+      },
+      "editor": {
+        "openCreate": "Create rule",
+        "openEdit": "Edit",
+        "titleCreate": "Create an auto-approval rule",
+        "titleEdit": "Edit this rule",
+        "id": "Rule id",
+        "idHint": "Lowercase letters, digits, dots, dashes, and underscores. Receipts cite the rule by this id, so it cannot change later.",
+        "name": "Name",
+        "tools": "Tools",
+        "toolsHint": "One pattern per line, over slug@version or the bare slug, such as stripe__create_payment@*.",
+        "maxMeasures": "Ceilings",
+        "maxMeasuresHint": "One measure per line, as measure = value. Micros for a currency, whole units for a count.",
+        "allowTargets": "Allow lists",
+        "allowTargetsHint": "One measure per line, as measure = pattern, pattern.",
+        "standingMinutes": "Standing approval window, in minutes",
+        "standingMinutesHint": "Leave blank for none. A person’s approval of the same call re-applies inside this window.",
+        "hoursOn": "Only during business hours",
+        "hours": "Business hours",
+        "timezone": "Time zone",
+        "timezoneHint": "An IANA name, such as Europe/London.",
+        "start": "From",
+        "end": "Until",
+        "enabled": "On once saved",
+        "checks": "Saving checks that every pattern matches a declared tool, that each measure is declared by those tools, and that you hold the role accountable for their consequences.",
+        "confirmCreate": "Create rule",
+        "confirmEdit": "Save rule",
+        "pending": "Saving",
+        "unreadable": {
+          "maxMeasures": "Each ceiling line needs a measure, an equals sign, and a value, and names each measure once.",
+          "allowTargets": "Each allow-list line needs a measure, an equals sign, and at least one pattern, and names each measure once."
+        }
+      },
+      "toggle": {
+        "on": "Switch on",
+        "off": "Switch off"
+      },
+      "delete": {
+        "open": "Delete",
+        "title": "Delete this rule",
+        "body": "Deleting removes {name} from the rule set. Calls it would have released go to a person.",
+        "keep": "Switching it off instead keeps its id, so its counters and every receipt that cites {citation} stay readable.",
+        "switchOff": "Switch off instead",
+        "confirm": "Delete rule",
+        "pending": "Deleting"
       }
     }
   }
