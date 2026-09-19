@@ -12,19 +12,25 @@ import {
   decodeTranscriptCursor,
   elapsedMs,
   encodeTranscriptCursor,
+  foldPageStart,
   type RunTranscriptGetDeps,
 } from "./run.transcript.get";
 import {
   ctx,
+  event,
+  ledgerRun,
   memoryEvents,
   memoryStores,
   memoryTachoFrames,
+  summary,
   tachoRow,
   tachoSession,
 } from "./run.test-support";
 
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const SESSION_UUID = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+const RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
+const LEDGER_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
 
 const enc = new TextEncoder();
 const objects = new Map<string, { bytes: Uint8Array; contentType: string }>();
@@ -441,5 +447,112 @@ describe("get_run_transcript", () => {
     const out = await transcript(input({ zoom: "everything" }), ctx());
     expect(out.entries).toHaveLength(rows.length);
     expect(out.cursor).toBeNull();
+  });
+
+  it("pages overlapping steps in fold order, not by opening.seq vs endSeq (negative)", async () => {
+    // start A, start B, complete A, complete B. Fold A owns 1..3 and fold B
+    // owns 2..4. A cursor that stores A's endSeq used to look for
+    // opening.seq > 3 and skip B entirely (Codex P1 on #3352).
+    const events = [
+      event(1, {
+        eventType: "tool.engine_call_started",
+        payload: {
+          tool_call_id: "tc_a",
+          tool_name: "a",
+          input_digest: `sha256:${"a".repeat(64)}`,
+        },
+      }),
+      event(2, {
+        eventType: "tool.engine_call_started",
+        payload: {
+          tool_call_id: "tc_b",
+          tool_name: "b",
+          input_digest: `sha256:${"b".repeat(64)}`,
+        },
+      }),
+      event(3, {
+        eventType: "tool.engine_call_completed",
+        payload: {
+          tool_call_id: "tc_a",
+          tool_name: "a",
+          outcome: "completed",
+          input_digest: `sha256:${"a".repeat(64)}`,
+          duration_ms: 1,
+        },
+      }),
+      event(4, {
+        eventType: "tool.engine_call_completed",
+        payload: {
+          tool_call_id: "tc_b",
+          tool_name: "b",
+          outcome: "completed",
+          input_digest: `sha256:${"b".repeat(64)}`,
+          duration_ms: 1,
+        },
+      }),
+    ];
+    const stores = memoryStores(
+      [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
+      [],
+    );
+    const deps: RunTranscriptGetDeps = {
+      queries: stores.queries,
+      store: {
+        getRunByPublicId: (id) =>
+          Promise.resolve(id === LEDGER_ID ? summary() : null),
+        readAttemptEventsSince: memoryEvents(events),
+      },
+      readRunRollups: stores.readRunRollups,
+      readWitnessFor: stores.readWitnessFor,
+      tachoFrames: memoryTachoFrames(SESSION_UUID, []),
+      bodies: {
+        getBody: () => Promise.reject(new Error("no bodies in this test")),
+      },
+    };
+    const transcript = createRunTranscriptGetHandler(deps);
+    const first = await transcript(
+      runTranscriptGet.input.parse({
+        runId: LEDGER_ID,
+        zoom: "steps",
+        limit: 1,
+      }),
+      ctx(),
+    );
+    expect(first.entries.map((e) => [e.seq, e.endSeq])).toEqual([["1", "3"]]);
+    expect(first.cursor).not.toBeNull();
+    const second = await transcript(
+      runTranscriptGet.input.parse({
+        runId: LEDGER_ID,
+        zoom: "steps",
+        limit: 1,
+        after: first.cursor as string,
+      }),
+      ctx(),
+    );
+    expect(second.entries.map((e) => [e.seq, e.endSeq])).toEqual([["2", "4"]]);
+  });
+});
+
+describe("foldPageStart", () => {
+  const fold = (opening: string, endSeq: string) => ({
+    opening: { seq: opening } as { seq: string },
+    endSeq,
+  });
+
+  it("resumes at the next fold after an endSeq cursor, even when openings overlap", () => {
+    const folds = [fold("1", "3"), fold("2", "4")];
+    expect(foldPageStart(folds, null)).toBe(0);
+    expect(foldPageStart(folds, "3")).toBe(1);
+    expect(foldPageStart(folds, "4")).toBe(-1);
+  });
+
+  it("re-emits a fold that grew past the cursor (a live request that gained its response)", () => {
+    const folds = [fold("1", "3"), fold("4", "4")];
+    expect(foldPageStart(folds, "1")).toBe(0);
+  });
+
+  it("falls through to opening.seq when the cursor sits between folds", () => {
+    const folds = [fold("1", "1"), fold("5", "5")];
+    expect(foldPageStart(folds, "3")).toBe(1);
   });
 });

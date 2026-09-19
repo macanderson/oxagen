@@ -75,8 +75,12 @@ const frame = (seq: string) => ({
 });
 
 /** A `get_run` page: the frames it returns and the cursor it leaves. */
-const page = (seqs: string[], cursor: string | null) => ({
-  run: RUN,
+const page = (
+  seqs: string[],
+  cursor: string | null,
+  status: "live" | "sealed" | "halted" = "live",
+) => ({
+  run: { ...RUN, status },
   frames: { frames: seqs.map(frame), cursor },
   witnessFor: null,
 });
@@ -85,10 +89,10 @@ async function open(
   headers: Record<string, string> = {},
   query = "",
 ): Promise<{ status: number; text: string }> {
-  const res = await app.request(
-    `/v1/acme/core/runs/${RUN_ID}/stream${query}`,
-    { method: "GET", headers },
-  );
+  const res = await app.request(`/v1/acme/core/runs/${RUN_ID}/stream${query}`, {
+    method: "GET",
+    headers,
+  });
   const text = res.status === 200 ? await res.text() : await res.text();
   return { status: res.status, text };
 }
@@ -116,7 +120,7 @@ describe("GET /runs/:run_id/stream", () => {
   it("opens with the run, writes each frame with its own cursor, and closes when the recording ends", async () => {
     mocks.invoke
       .mockResolvedValueOnce(page(["1", "2"], "cur_2"))
-      .mockResolvedValueOnce(page(["3"], null));
+      .mockResolvedValueOnce(page(["3"], null, "sealed"));
 
     const { status, text } = await open();
     expect(status).toBe(200);
@@ -131,7 +135,7 @@ describe("GET /runs/:run_id/stream", () => {
   it("invokes get_run through the kernel on every read, so the gates run on each", async () => {
     mocks.invoke
       .mockResolvedValueOnce(page(["1"], "cur_1"))
-      .mockResolvedValueOnce(page([], null));
+      .mockResolvedValueOnce(page([], null, "sealed"));
 
     await open();
     for (const call of mocks.invoke.mock.calls) {
@@ -149,8 +153,27 @@ describe("GET /runs/:run_id/stream", () => {
     expect(mocks.invoke.mock.calls[1]?.[1]).toMatchObject({ waitMs: 20_000 });
   });
 
+  it("keeps a caught-up live run open rather than reporting a false sealed (finding 4, negative)", async () => {
+    // A client connecting before the run's first frame, or reconnecting while
+    // already caught up: `get_run` answers no frames and a null cursor
+    // because there is no new `last` frame, but the run's status says it is
+    // still `live`.
+    mocks.invoke
+      .mockResolvedValueOnce(page([], null))
+      .mockResolvedValueOnce(page(["5"], "cur_5"))
+      .mockResolvedValueOnce(page([], null, "sealed"));
+
+    const { status, text } = await open();
+    expect(status).toBe(200);
+    // No premature `sealed`: the run only closes once its status says so.
+    expect(events(text)).toEqual(["run", "done"]);
+    expect(ids(text)).toEqual(["cur_5"]);
+    expect(text).toContain('"reason":"sealed"');
+    expect(mocks.invoke).toHaveBeenCalledTimes(3);
+  });
+
   it("resumes from Last-Event-ID, and from ?after for a client that is not EventSource", async () => {
-    mocks.invoke.mockResolvedValue(page([], null));
+    mocks.invoke.mockResolvedValue(page([], null, "sealed"));
     await open({ "last-event-id": "cur_7" });
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({
       framesAfter: "cur_7",
@@ -158,7 +181,7 @@ describe("GET /runs/:run_id/stream", () => {
 
     vi.clearAllMocks();
     mocks.capabilityContext.mockReturnValue(CTX);
-    mocks.invoke.mockResolvedValue(page([], null));
+    mocks.invoke.mockResolvedValue(page([], null, "sealed"));
     await open({}, "?after=cur_9");
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({
       framesAfter: "cur_9",

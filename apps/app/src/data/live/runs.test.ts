@@ -542,7 +542,7 @@ describe("runs.chain", () => {
           missingBodies: 9,
           recorded: ["digest_only"],
         },
-        seal: null,
+        seals: [],
         enforcementTier: "observe",
         recordedGrade: null,
         ladder: [
@@ -565,6 +565,57 @@ describe("runs.chain", () => {
     });
   });
 
+  it("maps one seal per attempt, oldest first, not only the latest (finding 8, negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "arun_4f0a",
+        hashRule: "ledger.event_stream_digest_v1",
+        frameCount: 12,
+        firstSeq: "1",
+        lastSeq: "12",
+        merkleRoot: `sha256:${"2".repeat(64)}`,
+        checkpoints: [],
+        gaps: {
+          missingSequences: [],
+          missingFrameCount: 0,
+          missingBodies: 0,
+          recorded: [],
+        },
+        seals: [
+          {
+            sealedAt: "2026-09-11T10:01:00.000Z",
+            terminalStatus: "abandoned",
+            eventCount: 5,
+            finalRunSeq: "5",
+            finalEventDigest: `sha256:${"1".repeat(64)}`,
+            eventStreamDigest: `sha256:${"1".repeat(64)}`,
+            merkleRoot: `sha256:${"1".repeat(64)}`,
+            archiveSegmentRef: null,
+          },
+          {
+            sealedAt: "2026-09-11T10:05:00.000Z",
+            terminalStatus: "completed",
+            eventCount: 7,
+            finalRunSeq: "12",
+            finalEventDigest: `sha256:${"2".repeat(64)}`,
+            eventStreamDigest: `sha256:${"2".repeat(64)}`,
+            merkleRoot: `sha256:${"2".repeat(64)}`,
+            archiveSegmentRef: null,
+          },
+        ],
+        enforcementTier: "harness",
+        recordedGrade: "view",
+        ladder: [],
+        complete: true,
+      }),
+    );
+    const read = await runs.chain(ctx, "arun_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.seals).toHaveLength(2);
+    expect(read.value.seals[0]?.terminalStatus).toBe("abandoned");
+    expect(read.value.seals[1]?.terminalStatus).toBe("completed");
+  });
+
   it("reports a record the view refuses rather than passing it on (negative)", async () => {
     kernelRead.mockResolvedValue(
       readOk({
@@ -581,7 +632,7 @@ describe("runs.chain", () => {
           missingBodies: 0,
           recorded: [],
         },
-        seal: null,
+        seals: [],
         enforcementTier: "observe",
         recordedGrade: null,
         ladder: [],

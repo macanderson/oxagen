@@ -240,19 +240,18 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
       missingBodies: out.gaps.missingBodies,
       recorded: out.gaps.recorded,
     },
-    seal:
-      out.seal === null
-        ? null
-        : {
-            sealedAt: out.seal.sealedAt,
-            terminalStatus: out.seal.terminalStatus,
-            eventCount: out.seal.eventCount,
-            finalRunSeq: out.seal.finalRunSeq,
-            finalEventDigest: out.seal.finalEventDigest,
-            eventStreamDigest: out.seal.eventStreamDigest,
-            merkleRoot: out.seal.merkleRoot,
-            archiveSegmentRef: out.seal.archiveSegmentRef,
-          },
+    // One entry per attempt, oldest first; empty while the run is unsealed
+    // (finding 8, macanderson/oxagen#3370).
+    seals: out.seals.map((seal) => ({
+      sealedAt: seal.sealedAt,
+      terminalStatus: seal.terminalStatus,
+      eventCount: seal.eventCount,
+      finalRunSeq: seal.finalRunSeq,
+      finalEventDigest: seal.finalEventDigest,
+      eventStreamDigest: seal.eventStreamDigest,
+      merkleRoot: seal.merkleRoot,
+      archiveSegmentRef: seal.archiveSegmentRef,
+    })),
     enforcementTier: out.enforcementTier,
     recordedGrade: out.recordedGrade,
     ladder: out.ladder.map((rung) => ({

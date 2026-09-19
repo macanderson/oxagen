@@ -63,6 +63,7 @@ import {
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import {
   and,
+  asc,
   desc,
   eq,
   inArray,
@@ -382,6 +383,26 @@ export function addCompactedRollup(
   };
 }
 
+/** The columns the Chain-and-seal tab reads off a seal row (ADR-058). */
+const chainSealColumns = {
+  runId: seals.runId,
+  attemptId: seals.attemptId,
+  sealedAt: seals.sealedAt,
+  replayGrade: seals.replayGrade,
+  completenessGaps: seals.completenessGaps,
+  finalRunSeq: sql<string | null>`${seals.finalRunSeq}::text`,
+  eventCount: seals.eventCount,
+  merkleRoot: seals.merkleRoot,
+  archiveSegmentRef: seals.archiveSegmentRef,
+  enforcementTier: seals.enforcementTier,
+  // The Chain-and-seal tab reads these; nothing else does, and reading
+  // the run's own status in their place would answer the run's word for
+  // the attempt's.
+  terminalStatus: seals.terminalStatus,
+  finalEventDigest: seals.finalEventDigest,
+  eventStreamDigest: seals.eventStreamDigest,
+};
+
 /**
  * The latest attempt seal per run: when it sealed, the grade it recorded and
  * the gaps the grade was computed from (ADR-058). One row per run.
@@ -392,24 +413,7 @@ export function ledgerSealQuery(
   runIds: readonly string[],
 ) {
   return db
-    .selectDistinctOn([seals.runId], {
-      runId: seals.runId,
-      attemptId: seals.attemptId,
-      sealedAt: seals.sealedAt,
-      replayGrade: seals.replayGrade,
-      completenessGaps: seals.completenessGaps,
-      finalRunSeq: sql<string | null>`${seals.finalRunSeq}::text`,
-      eventCount: seals.eventCount,
-      merkleRoot: seals.merkleRoot,
-      archiveSegmentRef: seals.archiveSegmentRef,
-      enforcementTier: seals.enforcementTier,
-      // The Chain-and-seal tab reads these; nothing else does, and reading
-      // the run's own status in their place would answer the run's word for
-      // the attempt's.
-      terminalStatus: seals.terminalStatus,
-      finalEventDigest: seals.finalEventDigest,
-      eventStreamDigest: seals.eventStreamDigest,
-    })
+    .selectDistinctOn([seals.runId], chainSealColumns)
     .from(seals)
     .where(
       and(
@@ -419,6 +423,31 @@ export function ledgerSealQuery(
       ),
     )
     .orderBy(seals.runId, desc(seals.sealedAt));
+}
+
+/**
+ * Every attempt seal of one run, oldest first: what `readAllFrames` already
+ * walks (every attempt's frames), matched on the seal side, so the
+ * Chain-and-seal tab shows one root per attempt instead of the latest
+ * attempt's root beside a frame count that spans every attempt (finding 8,
+ * macanderson/oxagen#3370).
+ */
+export function ledgerAllSealsQuery(
+  db: QueryDb,
+  scope: RunScope,
+  runId: string,
+) {
+  return db
+    .select(chainSealColumns)
+    .from(seals)
+    .where(
+      and(
+        eq(seals.orgId, scope.orgId),
+        eq(seals.workspaceId, scope.workspaceId),
+        eq(seals.runId, runId),
+      ),
+    )
+    .orderBy(asc(seals.sealedAt));
 }
 
 const tachoColumns = {
@@ -436,6 +465,11 @@ const tachoColumns = {
     replayGrade: sessions.replayGrade,
     completenessGaps: sessions.completenessGaps,
     enforcementTier: sessions.enforcementTier,
+    // The sealed commitment (`terminalPatch`, `agent_stop`): the collector
+    // stops checkpointing once `session.sealed` is written, so the last
+    // periodic checkpoint can cover only a prefix. This is the hash rule's
+    // answer for the whole session (`run.chain.get.ts`).
+    finalHash: sessions.finalHash,
     name: sessions.name,
     summary: sessions.summary,
     summaryGeneratedAt: sessions.summaryGeneratedAt,
@@ -597,6 +631,8 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   replayGrade: string | null;
   completenessGaps: unknown;
   enforcementTier: string;
+  /** The sealed commitment for the whole session; null while open. */
+  finalHash: string | null;
 };
 
 export type TachoSessionRow = {

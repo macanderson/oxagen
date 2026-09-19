@@ -78,16 +78,18 @@ export function runChain(overrides: Partial<RunChain> = {}): RunChain {
       missingBodies: 0,
       recorded: [],
     },
-    seal: {
-      sealedAt: at(-300),
-      terminalStatus: "completed",
-      eventCount: 431,
-      finalRunSeq: "431",
-      finalEventDigest: `sha256:${"e".repeat(64)}`,
-      eventStreamDigest: `sha256:${"f".repeat(64)}`,
-      merkleRoot: `sha256:${"c".repeat(64)}`,
-      archiveSegmentRef: null,
-    },
+    seals: [
+      {
+        sealedAt: at(-300),
+        terminalStatus: "completed",
+        eventCount: 431,
+        finalRunSeq: "431",
+        finalEventDigest: `sha256:${"e".repeat(64)}`,
+        eventStreamDigest: `sha256:${"f".repeat(64)}`,
+        merkleRoot: `sha256:${"c".repeat(64)}`,
+        archiveSegmentRef: null,
+      },
+    ],
     enforcementTier: "harness",
     recordedGrade: "fork",
     ladder: [

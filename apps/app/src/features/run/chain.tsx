@@ -214,13 +214,24 @@ function Ladder({
   );
 }
 
-function Seal({ seal }: { seal: NonNullable<RunChain["seal"]> }) {
+function Seal({
+  seal,
+  attempt,
+}: {
+  seal: RunChain["seals"][number];
+  /** Which attempt this is among a retried run's seals, 1-based; undefined for the only one. */
+  attempt?: { n: number };
+}) {
   const t = useTranslations("run.chain");
   const format = useFormatter();
   const locale = useLocale();
   return (
     <div className="flex flex-col gap-2">
-      <h4 className="text-sm font-semibold">{t("sealTitle")}</h4>
+      <h4 className="text-sm font-semibold">
+        {attempt === undefined
+          ? t("sealTitle")
+          : `${t("sealTitle")}: ${t("attemptLabel", { n: attempt.n })}`}
+      </h4>
       <Facts>
         <Fact label={t("sealedAt")}>
           <time dateTime={seal.sealedAt}>
@@ -301,7 +312,7 @@ export function ChainSection({ read }: { read: Read<RunChain> }) {
             </Fact>
           </Facts>
           <Gaps gaps={read.value.gaps} complete={read.value.complete} />
-          {read.value.seal === null ? (
+          {read.value.seals.length === 0 ? (
             <p
               data-testid="chain-unsealed"
               className="max-w-prose text-sm text-muted-foreground"
@@ -309,7 +320,17 @@ export function ChainSection({ read }: { read: Read<RunChain> }) {
               {t("unsealed")}
             </p>
           ) : (
-            <Seal seal={read.value.seal} />
+            <div className="flex flex-col gap-5" data-testid="chain-seals">
+              {read.value.seals.map((seal, i) => (
+                <Seal
+                  key={`${seal.sealedAt}-${String(i)}`}
+                  seal={seal}
+                  attempt={
+                    read.value.seals.length > 1 ? { n: i + 1 } : undefined
+                  }
+                />
+              ))}
+            </div>
           )}
           <Checkpoints checkpoints={read.value.checkpoints} />
           <Ladder

@@ -85,7 +85,9 @@ const CHAIN = {
     missingBodies: 1,
     recorded: ["chain_break"],
   },
-  seal: { sealedAt: "2026-09-11T09:05:00.000Z", terminalStatus: "completed" },
+  seals: [
+    { sealedAt: "2026-09-11T09:05:00.000Z", terminalStatus: "completed" },
+  ],
   enforcementTier: "observe",
   recordedGrade: "inspect",
   ladder: [
@@ -119,11 +121,20 @@ describe("oxagen run chain", () => {
     expect(text).toContain("tacho.sha256_prev_hash_v1");
     expect(text).toContain(`Merkle root: sha256:${"a".repeat(64)}`);
     expect(text).toContain("recorded grade: inspect");
-    expect(text).toContain("✓ inspect — frames_recorded");
-    expect(text).toContain("· view — chain_break");
+    expect(text).toContain("✓ inspect: frames_recorded");
+    expect(text).toContain("· view: chain_break");
     expect(text).toContain("3 missing frames, 1 missing bodies");
-    expect(text).toContain("sequences 12–14");
+    expect(text).toContain("sequences 12 to 14");
     expect(text).toContain("1 signed checkpoint(s).");
+  });
+
+  it("never emits an em dash or en dash separator (clear-prose, negative)", async () => {
+    post.mockResolvedValue(CHAIN);
+    const { writer, out } = memoryWriter();
+    await runChain("tse_0a1b2c", {}, writer);
+    const text = out.join("\n");
+    expect(text).not.toContain("—");
+    expect(text).not.toContain("–");
   });
 
   it("says what was not recorded rather than printing a zero (negative)", async () => {

@@ -58,7 +58,7 @@ interface RunChainResult {
     missingBodies: number;
     recorded: string[];
   };
-  seal: { sealedAt: string; terminalStatus: string } | null;
+  seals: { sealedAt: string; terminalStatus: string }[];
   enforcementTier: string;
   recordedGrade: string | null;
   ladder: { grade: string; met: boolean; reason: string }[];
@@ -89,7 +89,9 @@ export async function runChain(
     out.data(result);
     return;
   }
-  writer.write(`${result.runId} — ${result.frameCount} frames, ${result.hashRule}`);
+  writer.write(
+    `${result.runId}: ${result.frameCount} frames, ${result.hashRule}`,
+  );
   writer.write(`Merkle root: ${result.merkleRoot ?? "not recorded"}`);
   writer.write(
     `Observed at: ${result.enforcementTier} · recorded grade: ${result.recordedGrade ?? "not recorded"}`,
@@ -97,7 +99,7 @@ export async function runChain(
   writer.write("");
   writer.write("Replay ladder");
   for (const rung of result.ladder) {
-    writer.write(`  ${rung.met ? "✓" : "·"} ${rung.grade} — ${rung.reason}`);
+    writer.write(`  ${rung.met ? "✓" : "·"} ${rung.grade}: ${rung.reason}`);
   }
   writer.write("");
   const { gaps } = result;
@@ -110,11 +112,13 @@ export async function runChain(
   } else {
     writer.write(
       `Gaps: ${gaps.missingFrameCount} missing frames, ${gaps.missingBodies} missing bodies${
-        gaps.recorded.length > 0 ? `, recorded: ${gaps.recorded.join(", ")}` : ""
+        gaps.recorded.length > 0
+          ? `, recorded: ${gaps.recorded.join(", ")}`
+          : ""
       }`,
     );
     for (const gap of gaps.missingSequences) {
-      writer.write(`  sequences ${gap.from}–${gap.to}`);
+      writer.write(`  sequences ${gap.from} to ${gap.to}`);
     }
   }
   if (result.checkpoints.length > 0) {

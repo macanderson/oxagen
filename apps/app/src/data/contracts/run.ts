@@ -352,7 +352,8 @@ export const RunChain = z.object({
   /** A ledger run keeps none: it seals rather than checkpointing. */
   checkpoints: z.array(ChainCheckpoint),
   gaps: ChainGaps,
-  seal: ChainSeal.nullable(),
+  /** One seal per attempt, oldest first; empty while the run is unsealed. */
+  seals: z.array(ChainSeal),
   enforcementTier: EnforcementTier,
   recordedGrade: ReplayGrade.nullable(),
   ladder: z.array(ReplayLadderRung),

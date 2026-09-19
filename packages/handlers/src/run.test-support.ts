@@ -197,6 +197,7 @@ export function tachoSession(
       replayGrade: null,
       completenessGaps: [],
       enforcementTier: "observe",
+      finalHash: `sha256:${"a".repeat(64)}`,
       name: null,
       summary: null,
       summaryGeneratedAt: null,

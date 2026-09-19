@@ -37,13 +37,13 @@ No new store: the ledger's seal rows, the wrapped session's checkpoints and the 
 | `hashRule` | `tacho.sha256_prev_hash_v1` \| `ledger.event_stream_digest_v1` | how the store chains a frame to the one before it, so a verifier recomputes with this rule and nothing else |
 | `frameCount` | integer | frames the walk read |
 | `firstSeq`, `lastSeq` | string or null | the first and last sequence read; null on a run with no frame yet |
-| `merkleRoot` | string or null | the root the seal committed to (a wrapped session's is its last checkpoint's chain head); null while the run is unsealed |
+| `merkleRoot` | string or null | the latest attempt's root, for a quick render (a wrapped session's is `tacho.sessions.final_hash`, the whole-session commitment `terminalPatch` writes at `agent_stop` — not a checkpoint's chain head, which can cover only a prefix once the collector stops checkpointing at seal); null while the run is unsealed |
 | `checkpoints` | object[] | `{ seq, chainHead, eventCount, signedAt, deviceKeyFingerprint, platformKeyId, countersignedAt, anchorRoot, anchoredAt }`. A ledger attempt commits at its seal and checkpoints nothing in between, so it answers none |
 | `gaps.missingSequences` | `{ from, to }[]` | sequences missing between the first and the last frame read, inclusive. Only the interior: a recording that starts at 7 is not missing 1 to 6 |
 | `gaps.missingFrameCount` | integer | how many sequences those runs account for |
 | `gaps.missingBodies` | integer | frames that carried content and whose bytes were not retained |
 | `gaps.recorded` | string[] | the gaps the seal recorded, from the closed vocabulary (spec §13.1). A word the store holds that the vocabulary does not name is dropped rather than passed on |
-| `seal` | object or null | `{ sealedAt, terminalStatus, eventCount, finalRunSeq, finalEventDigest, eventStreamDigest, merkleRoot, archiveSegmentRef }`; null while the run is unsealed |
+| `seals` | object[] | one entry per attempt, oldest first: `{ sealedAt, terminalStatus, eventCount, finalRunSeq, finalEventDigest, eventStreamDigest, merkleRoot, archiveSegmentRef }`. Empty while the run is unsealed. A retried ledger run carries one seal per attempt here, matching the frame count and gap analysis above, which already span every attempt |
 | `enforcementTier` | `gateway` \| `harness` \| `observe` | where the run's actions were observed from (spec §8.4) |
 | `recordedGrade` | `inspect` \| `view` \| `fork` \| `retry`, or null | the grade the seal recorded; null while the run is live or its seal predates the recorder. Never recomputed on read |
 | `ladder` | object[] | `{ grade, met, reason }` per rung |
