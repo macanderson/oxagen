@@ -313,9 +313,19 @@ export interface CurrentEnrollment {
    * `harnesses` and `enrollmentId` are the daemon's startup copy rather than
    * a pair confirmed on disk just now. A caller that gates a
    * security-relevant check on the enrollment identity (the hook-removal
-   * detector) must treat an unverified pair as "cannot tell", not as "same
-   * as before": disable the check rather than evaluate it against an
-   * identity nothing on disk currently backs.
+   * detector) must NOT disable itself on `verified: false`: a host whose
+   * enrollment cannot currently be confirmed is exactly the host a tamper
+   * detector must keep watching, and going quiet here hands an attacker the
+   * evasion of making the enrollment file unreadable and then tampering
+   * with what the detector was checking (docs/specs/tacho/spec.md section
+   * 11's threat-model table, and section 14 acceptance item 8, neither of
+   * which carries an exception for the enrollment file also being
+   * unreadable). Instead, continue the check against the last pair that
+   * *was* confirmed on disk (`verified: true`), and stamp `verified` onto
+   * whatever evidence the check produces, so a reader can tell a check that
+   * ran against a last-verified identity from one that ran against a
+   * live-confirmed one (#3398; `Detector.checkHooks()` in
+   * `packages/tacho/src/collector/detector.ts` is the reference caller).
    */
   verified: boolean;
 }
