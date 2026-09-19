@@ -16,6 +16,7 @@ import type {
   UnsealedTachoEvent,
 } from "../envelope";
 import {
+  agentIdentitySchema,
   anthropicSchema,
   contextSchema,
   hostSchema,
@@ -931,8 +932,10 @@ export class SessionRecorder {
    * Whether the envelope would refuse the given standard fields, as the
    * message the refusal carries, or undefined when they would seal cleanly.
    * Used by the metrics branch of `ingestOtlp`, which has no `seal()` call to
-   * guard it: a metric's fields go through the same schemas `seal()` would
-   * check them against before they ever reach the recorder's sticky state.
+   * guard it, and by `sealOtelDraft`'s deduped-repeat branch, which also
+   * commits with no `seal()` call in the way: both must check a standard
+   * update against the same schemas `seal()` would, before it ever reaches
+   * the recorder's sticky state.
    */
   private refusedStandardReason(update: StandardUpdate): string | undefined {
     const anthropic = anthropicSchema.safeParse(update.anthropic);
@@ -944,6 +947,13 @@ export class SessionRecorder {
     const host = hostSchema.safeParse(update.host);
     if (!host.success)
       return host.error.issues[0]?.message ?? "invalid host fields";
+    const harnessVersion = agentIdentitySchema.shape.harness_version.safeParse(
+      update.harnessVersion,
+    );
+    if (!harnessVersion.success)
+      return (
+        harnessVersion.error.issues[0]?.message ?? "invalid harness_version"
+      );
     return undefined;
   }
 
@@ -961,6 +971,14 @@ export class SessionRecorder {
         : NO_SIGHTING;
     const duplicate = sighting.attrs;
     if (duplicate === undefined) {
+      // No `seal()` call guards this branch either: a dropped repeat whose
+      // standard fields the envelope would refuse must not commit them, the
+      // same rule `refusedStandardReason` enforces for the metrics branch.
+      const refusal = this.refusedStandardReason(standardUpdate);
+      if (refusal !== undefined) {
+        this.otelRefusals.push(`${draft.kind}: ${refusal}`);
+        return undefined;
+      }
       sighting.commit();
       this.commitStandardUpdate(standardUpdate);
       return undefined;

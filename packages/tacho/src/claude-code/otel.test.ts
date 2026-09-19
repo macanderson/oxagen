@@ -774,5 +774,122 @@ describe("sealing an OTLP export", () => {
       expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
       expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
     });
+
+    it("refuses, and does not commit, a metric whose harness_version the envelope would refuse", () => {
+      // A metric's `service.version` becomes the sticky `harnessVersion`.
+      // `refusedStandardReason` originally checked only anthropic/context/
+      // host, so an over-long version committed here and refused every
+      // later log record that omitted its own `service.version`.
+      const overLongVersion = "v".repeat(513);
+      const r = recorder();
+      r.ingestOtlp({
+        resourceMetrics: [
+          {
+            resource: {
+              attributes: [
+                kv("os.type", "linux"),
+                kv("service.version", overLongVersion),
+              ],
+            },
+            scopeMetrics: [
+              {
+                metrics: [
+                  {
+                    name: "claude_code.token.usage",
+                    sum: {
+                      dataPoints: [
+                        { timeUnixNano: TS, asInt: "1", attributes: [] },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      } as never);
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("metric:"),
+      ]);
+      expect(r.metrics).toEqual([]);
+
+      // A later log record whose resource carries no `service.version` at
+      // all must not inherit the refused harness version.
+      const events = r.ingestOtlp({
+        resourceLogs: [
+          {
+            resource: { attributes: [kv("os.type", "linux")] },
+            scopeLogs: [
+              {
+                logRecords: [
+                  {
+                    timeUnixNano: TS,
+                    body: { stringValue: "claude_code.api_request" },
+                    attributes: [
+                      kv("model", "claude-opus-5"),
+                      kv("input_tokens", 42),
+                      kv("output_tokens", 7),
+                      kv("request_id", "req_after_bad_harness_version"),
+                    ],
+                    traceId: "t1",
+                    spanId: "s1",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      } as never);
+      expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+      expect(events[0]?.agent.harness_version).not.toBe(overLongVersion);
+    });
+
+    it("does not poison sticky state when a same-source repeat carries an invalid standard field", () => {
+      // The dedupe-drop branch (a repeat of an already-sealed call, same
+      // source) has no `seal()` call guarding it either, so it must run its
+      // computed standard update through the same validation before commit.
+      const r = recorder();
+      const first = r.ingestOtlp(
+        exportOf([
+          "api_request",
+          {
+            model: "claude-opus-5",
+            input_tokens: 100,
+            output_tokens: 50,
+            request_id: "req_repeat",
+          },
+        ]) as never,
+      );
+      expect(first.map((e) => e.kind)).toEqual(["llm_call"]);
+
+      const repeatWithBadField = exportOf([
+        "api_request",
+        {
+          model: "claude-opus-5",
+          input_tokens: 100,
+          output_tokens: 50,
+          request_id: "req_repeat",
+          "user.account_uuid": overLongAccountUuid,
+        },
+      ]) as never;
+      expect(r.ingestOtlp(repeatWithBadField)).toEqual([]);
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("llm_call:"),
+      ]);
+
+      const events = r.ingestOtlp(
+        exportOf([
+          "api_request",
+          {
+            model: "claude-opus-5",
+            input_tokens: 300,
+            output_tokens: 90,
+            request_id: "req_after_bad_repeat",
+          },
+        ]) as never,
+      );
+      expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+      expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
+    });
   });
 });
