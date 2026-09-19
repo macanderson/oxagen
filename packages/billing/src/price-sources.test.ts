@@ -3,6 +3,7 @@ import {
   deriveCacheWrite1h,
   fetchPublishedPrices,
   inCodeCardPrices,
+  isSameModelIdentity,
   mergePublishedPrices,
   MODELS_DEV_URL,
   OPENROUTER_MODELS_URL,
@@ -346,6 +347,78 @@ describe("mergePublishedPrices", () => {
     ).toBe(usdPerMillionToMicros(1));
   });
 
+  // The other half of that rule: leading characters are not an identity.
+  // `gpt-4` and `gpt-4o` are different models at different prices, so an
+  // override for the first must leave the second, and `gpt-4o-mini`, priced
+  // from their own sources. Dropping them dropped the only rows that could
+  // price them; once retirement closed the rows they had, the resolver's
+  // longest-prefix match handed every `gpt-4o` call to the `gpt-4` override
+  // and billed a frontier model at the older model's rate.
+  it("leaves a lower source's model that merely shares leading characters", () => {
+    const override = published({
+      model: "gpt-4",
+      provider: "openai",
+      inputPer1M: 1,
+      outputPer1M: 2,
+      source: "operator_override",
+    });
+    const merged = mergePublishedPrices([
+      [override],
+      [
+        published({
+          model: "gpt-4o",
+          provider: "openai",
+          inputPer1M: 2.5,
+          outputPer1M: 10,
+        }),
+        published({
+          model: "gpt-4o-mini",
+          provider: "openai",
+          inputPer1M: 0.15,
+          outputPer1M: 0.6,
+        }),
+        // The same identity, one version segment on: still displaced, which is
+        // what the override is for.
+        published({
+          model: "gpt-4-turbo",
+          provider: "openai",
+          inputPer1M: 10,
+          outputPer1M: 30,
+        }),
+      ],
+    ]);
+    expect(merged.prices.map((p) => p.model)).toEqual([
+      "gpt-4",
+      "gpt-4o",
+      "gpt-4o-mini",
+    ]);
+    expect(merged.counts).toMatchObject({
+      operator_override: 1,
+      in_code_card: 2,
+    });
+
+    // And each of the three then prices its own calls, at its own rate.
+    const book: PriceEntry[] = seedsFromPublishedPrices(
+      merged.prices,
+      new Date("2026-09-01T00:00:00.000Z"),
+    ).map((seed, i) => ({
+      ...seed,
+      id: `e-${i}`,
+      orgId: null,
+      source: "list" as const,
+    }));
+    const priced = (modelId: string) =>
+      resolvePriceEntry(book, {
+        orgId: "00000000-0000-4000-8000-000000000001",
+        modelId,
+        tokenClass: "input_uncached",
+        at: new Date("2026-09-02T00:00:00.000Z"),
+      })?.microsPerMillion;
+    expect(priced("gpt-4-0613")).toBe(usdPerMillionToMicros(1));
+    expect(priced("gpt-4o-2026-08-01")).toBe(usdPerMillionToMicros(2.5));
+    expect(priced("gpt-4o-mini-2026-08-01")).toBe(usdPerMillionToMicros(0.15));
+  });
+
   it("keeps a family and a specific model when the SAME source published both", () => {
     const merged = mergePublishedPrices([
       [
@@ -607,5 +680,33 @@ describe("seedsFromPublishedPrices, provenance", () => {
     ).map((s) => s.source);
     expect(sources.filter((s) => s === "override")).toHaveLength(2);
     expect(sources.filter((s) => s === "list")).toHaveLength(2);
+  });
+});
+
+// The comparison the merge displaces on. A model id is a family plus segments
+// separated by `-`, `/`, `:`, `.`, `_` or `@`; anything that continues mid
+// segment is a different model, whatever it shares at the front.
+describe("isSameModelIdentity", () => {
+  it("is the same identity at a segment boundary or not at all", () => {
+    expect(isSameModelIdentity("gpt-4", "gpt-4")).toBe(true);
+    expect(isSameModelIdentity("gpt-4-turbo", "gpt-4")).toBe(true);
+    expect(isSameModelIdentity("claude-sonnet-5", "claude-sonnet")).toBe(true);
+    expect(isSameModelIdentity("claude-sonnet-5:thinking", "claude-sonnet-5")).toBe(
+      true,
+    );
+    // A claimed name that already ends at a boundary is one.
+    expect(isSameModelIdentity("anthropic/claude-sonnet-5", "anthropic/")).toBe(
+      true,
+    );
+
+    expect(isSameModelIdentity("gpt-4o", "gpt-4")).toBe(false);
+    expect(isSameModelIdentity("gpt-4o-mini", "gpt-4")).toBe(false);
+    expect(isSameModelIdentity("claude-sonnet-50", "claude-sonnet-5")).toBe(
+      false,
+    );
+    // Shorter is never the longer one's identity: the resolver prefers the
+    // longer match, so a family row below a specific override bypasses nothing.
+    expect(isSameModelIdentity("gpt-4", "gpt-4-turbo")).toBe(false);
+    expect(isSameModelIdentity("gpt-4o", "")).toBe(false);
   });
 });

@@ -382,6 +382,49 @@ export interface MergedPrices {
 }
 
 /**
+ * Characters that end one segment of a model id: the separators every vendor
+ * uses between a family and its version, its date stamp, its size or its
+ * gateway path.
+ */
+const MODEL_ID_BOUNDARY = new Set(["-", "/", ":", ".", "_", "@"]);
+
+/**
+ * Whether `name` is the same model as the `claimed` family: the same id, or
+ * that family plus a version, date, size or path segment.
+ *
+ * The test is a segment boundary, not a raw `startsWith`. `gpt-4` and `gpt-4o`
+ * share five characters and are different models with different prices, as are
+ * `gpt-4` and `gpt-4o-mini`. Displacing on leading characters alone dropped
+ * both `gpt-4o` rows in favour of an operator override for `gpt-4`; once
+ * retirement closed the rows they used to have, the resolver prefix-matched
+ * every `gpt-4o` call to that override and billed a frontier model at the
+ * older model's rate. The operator overrode one model and silently repriced
+ * three.
+ *
+ * `claude-sonnet` and `claude-sonnet-5` are the case this exists for: the
+ * character after the family is a separator, so the second name is that
+ * family's version, and an override on the family has to own it or the
+ * resolver's longest-prefix match hands `claude-sonnet-5-20260901` back to the
+ * list row. A `claimed` name that already ends at a separator (`anthropic/`)
+ * is a boundary in itself.
+ *
+ * Exact alias relationships are settled before this: a lower source whose id
+ * or alias is a name a higher source claimed outright is dropped on the
+ * exact-name test, which is what binds the bare family and its gateway form
+ * (`claude-sonnet-5` and `anthropic/claude-sonnet-5`) to one row.
+ */
+export function isSameModelIdentity(name: string, claimed: string): boolean {
+  if (name === claimed) return true;
+  // A source that published an empty name claims nothing, least of all every
+  // id that happens to start with a separator.
+  if (claimed === "") return false;
+  if (!name.startsWith(claimed)) return false;
+  const last = claimed.at(-1);
+  if (last !== undefined && MODEL_ID_BOUNDARY.has(last)) return true;
+  return MODEL_ID_BOUNDARY.has(name.charAt(claimed.length));
+}
+
+/**
  * Fold sources into one price per model id, highest precedence first. The
  * caller passes them in precedence order (overrides, then the in-code card,
  * then catalogs) and the first mention of a model id wins outright — a
@@ -407,17 +450,20 @@ export function mergePublishedPrices(
   // list price and the negotiated rate would apply to nothing. One name per
   // model, and the row that wins carries the aliases that serve the other form.
   const claimed = new Set<string>();
-  // The names higher-precedence groups have claimed, as prefixes. The
+  // The names higher-precedence groups have claimed, as families. The
   // resolver does not match a name exactly: it takes the LONGEST name that
   // prefixes the frame's model id. So an operator override for
   // `claude-sonnet` and the card's `claude-sonnet-5` would both survive an
   // exact-name merge, and a frame for `claude-sonnet-5-20260901` would then
   // pick the longer list row and bypass the installation-wide negotiated rate
   // — silently, since both rows are "there". A lower group's price is
-  // therefore dropped when any of its names falls inside a name a higher
-  // group claimed: a higher source that names a family owns the family.
-  // Within one group both survive, since the same source published both and
-  // the longer match is the more specific price it meant.
+  // therefore dropped when any of its names is the same model identity as a
+  // name a higher group claimed: a higher source that names a family owns the
+  // family. Within one group both survive, since the same source published
+  // both and the longer match is the more specific price it meant.
+  //
+  // Same identity, not the same leading characters — see
+  // {@link isSameModelIdentity}.
   const claimedAbove: string[] = [];
   const counts: Record<PriceSourceId, number> = {
     operator_override: 0,
@@ -430,7 +476,11 @@ export function mergePublishedPrices(
     for (const price of group) {
       const names = [price.model, ...price.aliases];
       if (names.some((n) => claimed.has(n))) continue;
-      if (names.some((n) => claimedAbove.some((above) => n.startsWith(above))))
+      if (
+        names.some((n) =>
+          claimedAbove.some((above) => isSameModelIdentity(n, above)),
+        )
+      )
         continue;
       for (const name of names) {
         claimed.add(name);
