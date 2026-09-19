@@ -1,4 +1,4 @@
-# billing.subscription.read
+# get_subscription
 
 **Domain:** billing
 **Mode:** sync

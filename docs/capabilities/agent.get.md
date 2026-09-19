@@ -1,4 +1,4 @@
-# agent.get
+# get_agent
 
 **Capability:** `get_agent`
 **Domain:** agent

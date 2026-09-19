@@ -1,9 +1,9 @@
 // The Fleet page's public surface. The route imports from here; nothing else
 // reaches into the folder (eslint: `@/features/*/*` is restricted).
 //
-// `ApprovalsPanel` stays inside the folder: the Run page's Policy tab would
-// have drawn the same cards over one run's approvals (WL-35), but no approval
-// row records a run, so that tab is not drawn (#3286) and nothing outside
-// Fleet reads the panel yet. Export it again when the tab returns, so an
-// approval and its mandate bar keep reading the same on both pages.
+// `ApprovalsPanel` is exported because the Run page draws the same cards over
+// the approvals recorded on one run (#3286 gave `agent.approval_requests` its
+// `run_id`, and `list_approvals` filters on it). One component, so an approval
+// and its mandate bar read the same on Fleet and on the run it was parked in.
 export { Fleet } from "./fleet";
+export { ApprovalsPanel } from "./approvals-panel";

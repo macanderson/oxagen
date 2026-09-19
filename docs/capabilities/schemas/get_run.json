@@ -81,6 +81,31 @@
               }
             ]
           },
+          "operatorKind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "human",
+                  "agent",
+                  "service"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operatorName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -199,6 +224,130 @@
               }
             ]
           },
+          "enforcementTier": {
+            "type": "string",
+            "enum": [
+              "gateway",
+              "harness",
+              "observe"
+            ]
+          },
+          "completenessGaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "digest_only",
+                "body_missing",
+                "tool_bodies",
+                "model_calls",
+                "hooks_partial",
+                "unobserved_tail",
+                "chain_break",
+                "telemetry_gap"
+              ]
+            }
+          },
+          "canSummarize": {
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "tier": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "provider",
+                  "tier"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "machine": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "hostname": {
+                    "type": "string"
+                  },
+                  "platform": {
+                    "type": "string"
+                  },
+                  "osVersion": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "arch": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "nodeVersion": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "hostname",
+                  "platform",
+                  "osVersion",
+                  "arch",
+                  "nodeVersion"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "name": {
             "anyOf": [
               {
@@ -242,6 +391,8 @@
           "source",
           "agentKey",
           "operatorId",
+          "operatorKind",
+          "operatorName",
           "status",
           "turns",
           "steps",
@@ -252,6 +403,11 @@
           "sealedAt",
           "replayGrade",
           "verdict",
+          "enforcementTier",
+          "completenessGaps",
+          "canSummarize",
+          "model",
+          "machine",
           "name",
           "summary"
         ],

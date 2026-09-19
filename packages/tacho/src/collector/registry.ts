@@ -123,6 +123,26 @@ export interface SessionFacts {
    * `Stop` it did not.
    */
   lastHookEvent?: string;
+  /**
+   * The commit this session was first observed at in its current worktree,
+   * and the ref every later reconciliation measures from.
+   *
+   * Without it a reconciliation compares the worktree with the current
+   * `HEAD`, which answers what is uncommitted now rather than what this
+   * session changed, so an agent that committed its work before the
+   * end-of-turn `Stop` left a clean tree and recorded none of it.
+   *
+   * Set on the first git read for the session in a given `cwd`, which is the
+   * earliest this daemon knows that repository at all. Bound to the
+   * worktree: when `ensure` sees a new `cwd`, the baseline is cleared and
+   * the next read captures the new one. Persisted through `state` /
+   * `restore` so a daemon restart does not lose it mid-session.
+   *
+   * A session that commits before that first read measures from after the
+   * commit; that is a smaller window than measuring from `HEAD` every time,
+   * and it is the honest limit of a baseline nobody recorded at the start.
+   */
+  baselineCommit?: string;
 }
 
 export interface SessionRecord extends SessionFacts {
@@ -215,6 +235,26 @@ export interface RegistryOptions {
   context: ClaudeCodeContext;
   scope: string;
   now: () => number;
+}
+
+/**
+ * The map key for one harness session under one agent. Two agents can hand
+ * out the same raw `harnessSessionId`; this qualifies it so their records
+ * (and anything keyed the same way, like a transcript cursor) never collide.
+ * The format is `${agent.key} ${harnessSessionId}`, matching `agentOf`.
+ */
+export function sessionMapKey(
+  harnessSessionId: string,
+  facts: Pick<SessionFacts, "harness" | "customAgent"> = {},
+): string {
+  if (facts.customAgent !== undefined) {
+    return `custom:${facts.customAgent} ${harnessSessionId}`;
+  }
+  const named = facts.harness ?? "claude-code";
+  const harness: WrappedHarness = isWrappedHarness(named)
+    ? named
+    : "claude-code";
+  return `${RUNTIME_FOR_HARNESS[harness]}:${harness} ${harnessSessionId}`;
 }
 
 export class SessionRegistry {
@@ -332,7 +372,7 @@ export class SessionRegistry {
    * the harness gave, and that is what every payload reports.
    */
   private key(harnessSessionId: string, facts: SessionFacts): string {
-    return `${this.agentOf(facts).key} ${harnessSessionId}`;
+    return sessionMapKey(harnessSessionId, facts);
   }
 
   /**
@@ -403,10 +443,21 @@ export class SessionRegistry {
     if (existing) {
       if (facts.transcriptPath !== undefined)
         existing.transcriptPath = facts.transcriptPath;
-      if (facts.cwd !== undefined) existing.cwd = facts.cwd;
+      if (facts.cwd !== undefined) {
+        // The baseline is a commit in the previous worktree. Keeping it
+        // after a move makes reconciliation diff against a sha that may
+        // not exist here, fall back to the new HEAD, and drop work the
+        // session already committed in the new tree.
+        if (existing.cwd !== undefined && facts.cwd !== existing.cwd) {
+          delete existing.baselineCommit;
+        }
+        existing.cwd = facts.cwd;
+      }
       if (facts.pid !== undefined) existing.pid = facts.pid;
       if (facts.lastHookEvent !== undefined)
         existing.lastHookEvent = facts.lastHookEvent;
+      if (facts.baselineCommit !== undefined)
+        existing.baselineCommit = facts.baselineCommit;
       if (facts.ambient === false) existing.ambient = false;
       existing.lastSeenAt = now;
       this.noteAgent(existing, false);
@@ -597,6 +648,13 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
     ...(facts.pid !== undefined ? { pid: facts.pid } : {}),
     ...(facts.lastHookEvent !== undefined
       ? { lastHookEvent: facts.lastHookEvent }
+      : {}),
+    // Persisted with the rest. A daemon that restarts mid-session and comes
+    // back without these takes its next baseline from the `HEAD` the session's
+    // own commits have already moved, and everything committed before the
+    // restart leaves the record — which is what the baseline exists to stop.
+    ...(facts.baselineCommit !== undefined
+      ? { baselineCommit: facts.baselineCommit }
       : {}),
   };
 }

@@ -1,4 +1,4 @@
-# conversation.purge
+# purge_conversations
 
 **Domain:** conversation
 **Mode:** sync

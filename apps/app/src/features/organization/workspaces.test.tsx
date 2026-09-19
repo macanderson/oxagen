@@ -48,7 +48,7 @@ async function renderWorkspaces(
   const workspaces = vi.fn<Read>().mockResolvedValue(read);
   const source = {
     pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-    shell: { context: vi.fn() },
+    shell: { context: vi.fn(), preferences: vi.fn() },
     billing: {
       plan: vi.fn(),
       usageCredits: vi.fn(),
@@ -62,8 +62,9 @@ async function renderWorkspaces(
       frameBody: vi.fn(),
       cost: vi.fn(),
       transcript: vi.fn(),
+      chain: vi.fn(),
     },
-    approvals: { pending: vi.fn() },
+    approvals: { pending: vi.fn(), resolved: vi.fn() },
     agents: {
       list: vi.fn(),
       get: vi.fn(),
@@ -78,6 +79,8 @@ async function renderWorkspaces(
       budgets: vi.fn(),
       findings: vi.fn(),
       findingEvidence: vi.fn(),
+      priceBook: vi.fn(),
+      unpricedModels: vi.fn(),
     },
     onboarding: { state: vi.fn(), firstFrame: vi.fn() },
     org: {
@@ -87,10 +90,15 @@ async function renderWorkspaces(
       apiKeys: vi.fn(),
       modelCredential: vi.fn(),
     },
-    mandates: { list: vi.fn() },
+    mandates: { list: vi.fn(), get: vi.fn() },
     audit: { events: vi.fn(), exportEvents: vi.fn() },
     skills: { inventory: vi.fn() },
-    steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
+    steering: {
+      records: vi.fn(),
+      proposals: vi.fn(),
+      contextPr: vi.fn(),
+      freshness: vi.fn(),
+    },
     tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
   };
   const view = render(

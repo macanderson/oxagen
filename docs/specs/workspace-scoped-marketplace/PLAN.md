@@ -1,5 +1,7 @@
 # Marketplace Workspace-Scoping Implementation Plan
 
+> **Historical design:** This document predates the rev1 app rebuild (ADR-081). It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement task-by-task. Steps use checkbox (`- [ ]`) syntax. Each task is dispatched to a Sonnet worker; Opus advisor reviews between tasks.
 
 **Goal:** Re-scope the entire plugin/marketplace system from org to org+workspace, replace registry "sync" with live HTTP reads, collapse to a 5-type plugin taxonomy, fix the broken Base UI tabs, and ship workspace-level registry self-service with a single-default rule.

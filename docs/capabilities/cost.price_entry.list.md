@@ -1,4 +1,4 @@
-# cost.price_entry.list
+# list_price_entries
 
 The price book as the active organization reads it (Mission Control spec §12.2, App. A.7; ADR-060 §1): every provider list price effective at an instant and the organization's own negotiated rows, which win over the list row for the same model and token class. A cost record names the entry ids it was priced with, so a figure can always be traced to the price behind it.
 
@@ -43,4 +43,4 @@ An entry:
 
 ## Tenancy
 
-RLS on `cost.price_entries` is `org_or_global`: a tenant session reads the rows with a null `org_id` and its own; a negotiated row for another organization is never returned.
+RLS on `cost.price_entries` is the `tenant_isolation` policy, which for this table is org-or-global (`org_id IS NULL OR org_id = <the session's org>`): a tenant session reads the rows with a null `org_id` and its own; a negotiated row for another organization is never returned.

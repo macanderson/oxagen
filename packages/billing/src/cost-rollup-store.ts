@@ -349,6 +349,11 @@ function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
       costByClass: Object.fromEntries(
         Object.entries(m.costByClass).map(([k, v]) => [k, BigInt(v)]),
       ) as ModelBreakdown["costByClass"],
+      // A row written before `hasUnpriced` existed carries no such key; the
+      // only information that row has about it is whether the whole group
+      // priced, so that is the fallback (never a mixed group, since a mixed
+      // group was impossible before this PR seeded the first price book).
+      hasUnpriced: m.hasUnpriced ?? m.costMicros === null,
     })),
     tools: raw.tools,
   };
@@ -368,7 +373,55 @@ function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
 }
 
 /** Insert or replace the run's row; the row's identity is the run's public id. */
-async function upsertRunTotals(
+/**
+ * Refuses an upsert that would regress a run from fully priced back to
+ * incomplete for the frame set it already priced (#3271 residue G1).
+ *
+ * Two independent rebuilds of the same sealed run can race: `cost.run-rollup`
+ * on the run's seal, and `cost.price-book-reprice` on a backdated price. Each
+ * reads the price book fresh and writes unconditionally, so whichever writes
+ * LAST wins regardless of which read a FRESHER book — a rebuild that started
+ * before a price sync committed can still land its write after the repricer
+ * already corrected the same run, silently reverting it to blank or
+ * `estimated` with nothing left to notice or re-trigger a fix.
+ *
+ * A sealed run's frames do not change after sealing, so two rebuilds of one
+ * run always see the same `modelCalls`/`toolCalls`. That makes "more
+ * complete for the same frame count" a safe, one-directional ratchet: prices
+ * for a past instant only ever get filled in or corrected, never revoked
+ * out from under a run that already priced under them (the branch's own
+ * earlier P1 fixes — a backdated removal over a shipped window is refused,
+ * a same-instant list rewrite is refused once the instant has passed —
+ * establish that invariant). So a write that would take a fully-priced row
+ * (no unpriced model group, a real basis) back to incomplete, without the
+ * frame count changing, can only be a stale read racing a fresher one, and
+ * is refused rather than applied. Any other write — including one making an
+ * incomplete row MORE complete, which is what the repricer and a recovered
+ * catalog are for — is unaffected.
+ *
+ * Built lazily inside {@link upsertRunTotals} rather than at module scope:
+ * a module-scope `sql` fragment referencing `totals.costBasis` evaluates
+ * `totals` the moment this module loads, which throws for any caller that
+ * mocks `@oxagen/database`'s schema without a full `runTotals` table (the
+ * normal case for a handler test that never touches this write path).
+ */
+function regressesToIncomplete() {
+  return sql`(
+    ${totals.costBasis} IS NOT NULL
+    AND ${totals.costBasis} <> 'estimated'
+    AND NOT (${totals.breakdown} -> 'models' @> '[{"hasUnpriced": true}]'::jsonb)
+    AND ${totals.modelCalls} = excluded.model_calls
+    AND ${totals.toolCalls} = excluded.tool_calls
+    AND (
+      excluded.cost_basis IS NULL
+      OR excluded.cost_basis = 'estimated'
+      OR (excluded.breakdown -> 'models') @> '[{"hasUnpriced": true}]'::jsonb
+    )
+  )`;
+}
+
+/** Exported only for the write-guard's own pg-integration test. */
+export async function upsertRunTotals(
   record: RunTotalsRecord,
   rolledUpAt: Date,
 ): Promise<void> {
@@ -417,7 +470,11 @@ async function upsertRunTotals(
     tx
       .insert(totals)
       .values({ ...values, ...carried })
-      .onConflictDoUpdate({ target: totals.runId, set: values }),
+      .onConflictDoUpdate({
+        target: totals.runId,
+        set: values,
+        setWhere: sql`NOT ${regressesToIncomplete()}`,
+      }),
   );
 }
 
@@ -666,6 +723,87 @@ export async function listRunsAwaitingRollup(args: {
       )
       .slice(0, args.limit)
       .map((r) => r.publicId);
+  });
+}
+
+/** One row of {@link listRunsWithIncompleteCost}, and the cursor for the page after it. */
+export interface IncompleteCostRun {
+  runId: string;
+  /** RFC 3339, millisecond precision. */
+  startedAt: string;
+}
+
+/**
+ * Rolled-up runs whose cost is incomplete: `cost_basis` null (no frame
+ * priced at all), `estimated` (some class had no price), or a total that
+ * left a wholly unpriced frame out. Oldest first.
+ *
+ * These are the runs a newly written price can still change. The nightly
+ * sweep does not reach them: it lists runs whose totals are missing or older
+ * than their seal, and one of these has a `rolled_up_at` after its seal
+ * already. On a fresh installation runs seal before the first price-book
+ * sync, and a sync that ran with a catalog down leaves that catalog's models
+ * unpriced until it recovers, so without this their cost stayed blank for
+ * ever.
+ *
+ * The third case is why the basis alone is not enough. `rollupRun` skips a
+ * frame the book prices nothing of and whose record reports no figure: it
+ * adds no cost and no basis, so a run with one priced frame beside it keeps
+ * the priced frame's basis, `gateway_observed` or `client_attested`, over a
+ * total that is missing the other call. Reading the basis alone would leave
+ * that run out of every later recovery and understate its run and daily
+ * cost for ever. The skipped frame's model group is the durable record of
+ * it: {@link rollupRun} sets `hasUnpriced: true` on any model group holding
+ * at least one unpriced call, and jsonb containment finds those rows. A
+ * group's `costMicros` alone is not enough here, because it stays non-null
+ * whenever any OTHER call to that same model priced — a run with one priced
+ * and one unpriced call to one model reads as fully costed on that field
+ * even though it is not. This predicate checks both fields: `hasUnpriced`
+ * for a row this function's current form wrote, and `costMicros: null` for
+ * one an earlier form wrote before `hasUnpriced` existed (which can only be
+ * a wholly-unpriced group, since a mixed group was impossible before this
+ * PR seeded the first price book).
+ *
+ * `after` is the last row of the previous page. A run whose model no source
+ * prices stays incomplete after its rebuild, so a caller that re-read the
+ * head of the list would see the same rows again and never reach the rest.
+ * The cursor compares at millisecond precision because it travels as an ISO
+ * string, which drops the microseconds Postgres keeps.
+ */
+export async function listRunsWithIncompleteCost(args: {
+  limit: number;
+  after?: IncompleteCostRun;
+}): Promise<IncompleteCostRun[]> {
+  const startedMs = sql<Date>`date_trunc('milliseconds', ${totals.startedAt})`;
+  const incomplete = or(
+    isNull(totals.costBasis),
+    eq(totals.costBasis, "estimated"),
+    sql`${totals.breakdown} -> 'models' @> '[{"hasUnpriced": true}]'::jsonb`,
+    // A row rolled up by a version of this function before `hasUnpriced`
+    // existed still carries `costMicros: null` on a wholly-unpriced group
+    // (it can never carry a mixed group, since the price book this PR seeds
+    // did not exist yet), so this keeps such a row selected until its next
+    // rebuild writes the new field.
+    sql`${totals.breakdown} -> 'models' @> '[{"costMicros": null}]'::jsonb`,
+  );
+  return withSystemDb(async (tx) => {
+    const rows = await tx
+      .select({ runId: totals.runId, startedAt: totals.startedAt })
+      .from(totals)
+      .where(
+        args.after
+          ? and(
+              incomplete,
+              sql`(${startedMs}, ${totals.runId}) > (${args.after.startedAt}::timestamptz, ${args.after.runId})`,
+            )
+          : incomplete,
+      )
+      .orderBy(asc(startedMs), asc(totals.runId))
+      .limit(args.limit);
+    return rows.map((r) => ({
+      runId: r.runId,
+      startedAt: r.startedAt.toISOString(),
+    }));
   });
 }
 

@@ -93,7 +93,7 @@ export function ContextWindow() {
             className="size-2.5 rounded-full transition-colors duration-500"
             style={{
               background: governed
-                ? "var(--success, #7BC98A)"
+                ? "var(--success, #57A97C)"
                 : "var(--_ember-b, #D4AF37)",
               boxShadow: `0 0 10px ${governed ? "rgba(123,201,138,.8)" : "rgba(239,197,63,.8)"}`,
             }}
@@ -107,7 +107,7 @@ export function ContextWindow() {
             className="text-2xl font-semibold tabular-nums transition-colors duration-500"
             style={{
               color: governed
-                ? "var(--success, #7BC98A)"
+                ? "var(--success, #57A97C)"
                 : "var(--_ember-b, #D4AF37)",
             }}
           >
@@ -124,8 +124,8 @@ export function ContextWindow() {
           style={{
             width: `${used}%`,
             background: governed
-              ? "var(--success, #7BC98A)"
-              : "linear-gradient(90deg, var(--_ember-a,#977017), var(--_ember-b,#D4AF37), var(--_ember-c,#F1CE65))",
+              ? "var(--success, #57A97C)"
+              : "linear-gradient(90deg, var(--_ember-a,#8A7223), var(--_ember-b,#D4AF37), var(--_ember-c,#F1CE65))",
           }}
         />
       </div>
@@ -141,7 +141,7 @@ export function ContextWindow() {
           const bg = !lit
             ? "color-mix(in oklch, var(--foreground) 7%, transparent)"
             : governed
-              ? "var(--success, #7BC98A)"
+              ? "var(--success, #57A97C)"
               : "var(--_ember-b, #D4AF37)";
           return (
             <span

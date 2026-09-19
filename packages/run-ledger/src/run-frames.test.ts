@@ -3,7 +3,9 @@ import { NO_BODY } from "./frame-body";
 import {
   bisectFrames,
   bisectKey,
+  filterFramesByKind,
   foldTranscript,
+  frameKinds,
   ledgerFrame,
   type RunFrame,
   stepKind,
@@ -55,6 +57,7 @@ function tachoRow(
     redactions: "",
     toolName: "",
     toolStatus: "",
+    toolUseId: "",
     model: "",
     provider: "",
     policyDecision: "",
@@ -116,6 +119,7 @@ describe("run frame projection", () => {
       policy: null,
       verdict: null,
       contextRows: null,
+      callId: null,
     });
   });
 
@@ -248,25 +252,150 @@ describe("transcript fold", () => {
       "frame",
       "model_call",
       "tool_call",
-      "frame",
+      // A decision frame is its own entry at this zoom, and says so.
+      "policy",
       "frame",
       "model_call",
       "frame",
     ]);
   });
 
-  it("steps opens at model and tool calls and folds the rest into the step before", () => {
+  it("leaves non-step openings out of request and response slots", () => {
+    // turn_start, policy_decision and agent_start open an entry but are not
+    // halves of a call. Putting them in response by default labelled a turn
+    // prompt as something that came back, and at turns zoom blocked the
+    // real model response from absorbing into the same entry.
+    const folded = foldTranscript(frames, "everything");
+    const agentStart = folded[0]!;
+    const turnStart = folded[1]!;
+    const policy = folded[4]!;
+    const llm = folded[2]!;
+    expect(stepKind(agentStart.opening)).toBeNull();
+    expect(stepKind(turnStart.opening)).toBeNull();
+    expect(stepKind(policy.opening)).toBeNull();
+    expect([agentStart.request, agentStart.response]).toEqual([null, null]);
+    expect([turnStart.request, turnStart.response]).toEqual([null, null]);
+    expect([policy.request, policy.response]).toEqual([null, null]);
+    // A step half still fills its own slot when it opens the entry.
+    expect(llm.response?.seq).toBe("2");
+    expect(llm.request).toBeNull();
+  });
+
+  it("at turns zoom, absorbs the model response after an opening turn_start", () => {
+    const folded = foldTranscript(frames, "turns");
+    const turn = folded[1]!;
+    expect(turn.opening.type).toBe("turn_start");
+    expect(turn.request).toBeNull();
+    expect(turn.response?.type).toBe("llm_call");
+    expect(turn.response?.seq).toBe("2");
+  });
+
+  it("steps opens at model and tool calls, folding the rest into the step before except a policy decision, which holds for the step after", () => {
     const folded = foldTranscript(frames, "steps");
     expect(
       folded.map((f) => [f.opening.seq, f.endSeq, f.kind, f.frames]),
     ).toEqual([
       ["0", "1", "frame", 2],
       ["2", "2", "model_call", 1],
-      ["3", "5", "tool_call", 3],
-      ["6", "7", "model_call", 2],
+      // policy_decision (seq 4) holds out of this step and attaches to the
+      // model_call that opens next, so this entry's frame count drops by one.
+      ["3", "5", "tool_call", 2],
+      ["6", "7", "model_call", 3],
     ]);
     expect(folded[1]?.costMicros).toBe(5);
     expect(folded[0]?.costMicros).toBeNull();
+  });
+
+  it("attaches a pre-call policy decision to the step it governs, not the step before it", () => {
+    // hook-handler.ts emits `policy_decision` immediately before
+    // `tool_requested` on PreToolUse: the decision names the call about to
+    // run, not the one that just finished.
+    const wrapped = [
+      tachoFrame(tachoRow(0, "llm_call", { model: "m" })),
+      tachoFrame(tachoRow(1, "policy_decision", { policyDecision: "allow" })),
+      tachoFrame(tachoRow(2, "tool_requested", { toolName: "Read" })),
+      tachoFrame(
+        tachoRow(3, "tool_call", { toolName: "Read", toolStatus: "ok" }),
+      ),
+    ];
+    const folded = foldTranscript(wrapped, "steps");
+    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
+      ["0", "model_call"],
+      ["2", "tool_call"],
+    ]);
+    expect(folded[0]?.decision).toBeNull();
+    expect(folded[1]?.decision?.decision).toBe("allow");
+    expect(folded[1]?.request?.seq).toBe("2");
+    expect(folded[1]?.response?.seq).toBe("3");
+  });
+
+  it("falls back to the last step when a run ends on a pending policy decision", () => {
+    const wrapped = [
+      tachoFrame(tachoRow(0, "tool_requested", { toolName: "Read" })),
+      tachoFrame(
+        tachoRow(1, "tool_call", { toolName: "Read", toolStatus: "ok" }),
+      ),
+      tachoFrame(tachoRow(2, "policy_decision", { policyDecision: "deny" })),
+    ];
+    const folded = foldTranscript(wrapped, "steps");
+    expect(folded).toHaveLength(1);
+    expect(folded[0]?.decision?.decision).toBe("deny");
+    expect(folded[0]?.endSeq).toBe("1");
+  });
+
+  it("buffers a filtered pre-call policy for the next tool step (finding 4052307523)", () => {
+    // kinds=policy,tools drops the model response that normally closes the
+    // preceding step, so the decision meets a null current (or a model fold
+    // with response null) and must still attach to the tool it gates.
+    const unfiltered = [
+      tachoFrame(tachoRow(0, "llm_call", { model: "m" })),
+      tachoFrame(tachoRow(1, "policy_decision", { policyDecision: "allow" })),
+      tachoFrame(tachoRow(2, "tool_requested", { toolName: "Read" })),
+      tachoFrame(
+        tachoRow(3, "tool_call", { toolName: "Read", toolStatus: "ok" }),
+      ),
+    ];
+    const filtered = filterFramesByKind(unfiltered, ["policy", "tools"]);
+    expect(filtered.map((f) => f.type)).toEqual([
+      "policy_decision",
+      "tool_requested",
+      "tool_call",
+    ]);
+    const folded = foldTranscript(filtered, "steps");
+    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
+      ["2", "tool_call"],
+    ]);
+    expect(folded[0]?.decision?.decision).toBe("allow");
+    expect(folded[0]?.request?.seq).toBe("2");
+    expect(folded[0]?.response?.seq).toBe("3");
+  });
+
+  it("buffers a pre-call policy when the model response was filtered but the request remains", () => {
+    const frames = [
+      tachoFrame(tachoRow(0, "model.request", { model: "m" })),
+      tachoFrame(tachoRow(1, "model.response", { model: "m" })),
+      tachoFrame(tachoRow(2, "policy_decision", { policyDecision: "deny" })),
+      tachoFrame(tachoRow(3, "tool_requested", { toolName: "Bash" })),
+      tachoFrame(
+        tachoRow(4, "tool_call", { toolName: "Bash", toolStatus: "ok" }),
+      ),
+    ];
+    // Keep prompt so the model request survives, drop responses so the fold
+    // still looks open when the policy arrives.
+    const filtered = filterFramesByKind(frames, ["prompt", "policy", "tools"]);
+    expect(filtered.map((f) => f.type)).toEqual([
+      "model.request",
+      "policy_decision",
+      "tool_requested",
+      "tool_call",
+    ]);
+    const folded = foldTranscript(filtered, "steps");
+    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
+      ["0", "model_call"],
+      ["3", "tool_call"],
+    ]);
+    expect(folded[0]?.decision).toBeNull();
+    expect(folded[1]?.decision?.decision).toBe("deny");
   });
 
   it("turns opens at turn_start and sums the turn's cost records", () => {
@@ -327,6 +456,240 @@ describe("transcript fold", () => {
   });
 });
 
+describe("the engine's own call halves", () => {
+  it("names the tool by `tool_name`, pairs on `tool_call_id`, and phases the two halves", () => {
+    const started = ledgerFrame(
+      event(1, "tool.engine_call_started", {
+        tool_call_id: "tc_1",
+        tool_name: "read_file",
+        input_digest: `sha256:${"b".repeat(64)}`,
+      }),
+    );
+    const completed = ledgerFrame(
+      event(2, "tool.engine_call_completed", {
+        tool_call_id: "tc_1",
+        tool_name: "read_file",
+        outcome: "completed",
+        input_digest: `sha256:${"b".repeat(64)}`,
+        duration_ms: 12,
+      }),
+    );
+    expect(started.phase).toBe("request");
+    expect(completed.phase).toBe("response");
+    expect(started.summary).toBe("read_file");
+    expect(completed.summary).toBe("read_file completed");
+    expect(started.identity.callId).toBe("tc_1");
+    expect(completed.identity.tool).toBe("read_file");
+    // A submitted engine's single receipt stands for the whole exchange.
+    expect(
+      ledgerFrame(event(3, "tool.call_completed", { capability_name: "x" }))
+        .phase,
+    ).toBe("single");
+  });
+
+  it("folds an engine tool exchange into ONE step carrying both halves", () => {
+    const frames = [
+      ledgerFrame(
+        event(1, "tool.engine_call_started", {
+          tool_call_id: "tc_1",
+          tool_name: "read_file",
+          input_digest: `sha256:${"b".repeat(64)}`,
+        }),
+      ),
+      ledgerFrame(
+        event(2, "tool.engine_call_completed", {
+          tool_call_id: "tc_1",
+          tool_name: "read_file",
+          outcome: "completed",
+          input_digest: `sha256:${"b".repeat(64)}`,
+          duration_ms: 12,
+        }),
+      ),
+    ];
+    const folded = foldTranscript(frames, "steps");
+    expect(folded).toHaveLength(1);
+    expect(folded[0]?.kind).toBe("tool_call");
+    expect(folded[0]?.request?.seq).toBe("1");
+    expect(folded[0]?.response?.seq).toBe("2");
+  });
+
+  it("does not pair two halves of different calls", () => {
+    const frames = [
+      ledgerFrame(
+        event(1, "tool.engine_call_started", {
+          tool_call_id: "tc_1",
+          tool_name: "a",
+          input_digest: `sha256:${"b".repeat(64)}`,
+        }),
+      ),
+      ledgerFrame(
+        event(2, "tool.engine_call_completed", {
+          tool_call_id: "tc_2",
+          tool_name: "b",
+          outcome: "completed",
+          input_digest: `sha256:${"c".repeat(64)}`,
+          duration_ms: 1,
+        }),
+      ),
+    ];
+    const folded = foldTranscript(frames, "steps");
+    expect(folded).toHaveLength(2);
+    expect(folded[0]?.response).toBeNull();
+    expect(folded[1]?.request).toBeNull();
+  });
+
+  it("matches an overlapping call's completion to its own request, not to whichever call opened most recently (finding 5, negative)", () => {
+    // start A, start B, complete A, complete B: parallel tool calls are the
+    // ordinary case. Comparing a response only against the most recently
+    // opened step matched neither completion, splitting two calls into four
+    // entries with every response detached from its request.
+    const frames = [
+      ledgerFrame(
+        event(1, "tool.engine_call_started", {
+          tool_call_id: "tc_a",
+          tool_name: "a",
+          input_digest: `sha256:${"a".repeat(64)}`,
+        }),
+      ),
+      ledgerFrame(
+        event(2, "tool.engine_call_started", {
+          tool_call_id: "tc_b",
+          tool_name: "b",
+          input_digest: `sha256:${"b".repeat(64)}`,
+        }),
+      ),
+      ledgerFrame(
+        event(3, "tool.engine_call_completed", {
+          tool_call_id: "tc_a",
+          tool_name: "a",
+          outcome: "completed",
+          input_digest: `sha256:${"a".repeat(64)}`,
+          duration_ms: 1,
+        }),
+      ),
+      ledgerFrame(
+        event(4, "tool.engine_call_completed", {
+          tool_call_id: "tc_b",
+          tool_name: "b",
+          outcome: "completed",
+          input_digest: `sha256:${"b".repeat(64)}`,
+          duration_ms: 1,
+        }),
+      ),
+    ];
+    const folded = foldTranscript(frames, "steps");
+    expect(folded).toHaveLength(2);
+    expect(folded[0]?.request?.seq).toBe("1");
+    expect(folded[0]?.response?.seq).toBe("3");
+    expect(folded[1]?.request?.seq).toBe("2");
+    expect(folded[1]?.response?.seq).toBe("4");
+  });
+
+  it("pairs overlapping wrapped tool calls on toolUseId the same way (negative)", () => {
+    // Without callId, adjacency attaches A's result to B and leaves B's
+    // result detached. TachoFrameRow already carries toolUseId.
+    const frames = [
+      tachoFrame(
+        tachoRow(1, "tool_requested", { toolName: "a", toolUseId: "tu_a" }),
+      ),
+      tachoFrame(
+        tachoRow(2, "tool_requested", { toolName: "b", toolUseId: "tu_b" }),
+      ),
+      tachoFrame(
+        tachoRow(3, "tool_call", {
+          toolName: "a",
+          toolUseId: "tu_a",
+          toolStatus: "ok",
+        }),
+      ),
+      tachoFrame(
+        tachoRow(4, "tool_call", {
+          toolName: "b",
+          toolUseId: "tu_b",
+          toolStatus: "ok",
+        }),
+      ),
+    ];
+    expect(frames.map((f) => f.identity.callId)).toEqual([
+      "tu_a",
+      "tu_b",
+      "tu_a",
+      "tu_b",
+    ]);
+    const folded = foldTranscript(frames, "steps");
+    expect(folded).toHaveLength(2);
+    expect(folded[0]?.request?.seq).toBe("1");
+    expect(folded[0]?.response?.seq).toBe("3");
+    expect(folded[1]?.request?.seq).toBe("2");
+    expect(folded[1]?.response?.seq).toBe("4");
+  });
+
+  it("a model engine call opens a step: it used to fold into whatever came before it", () => {
+    const frames = [
+      ledgerFrame(event(1, "admission.run_admitted", { engine_name: "s" })),
+      ledgerFrame(
+        event(2, "model.engine_call_completed", {
+          engine_seq: 1,
+          model_call_id: "mc_1",
+          role: "assistant",
+          provider: "anthropic",
+          model: "haiku",
+          outcome: "completed",
+        }),
+      ),
+    ];
+    const folded = foldTranscript(frames, "steps");
+    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
+      ["1", "frame"],
+      ["2", "model_call"],
+    ]);
+    expect(folded[1]?.opening.summary).toBe("anthropic/haiku");
+  });
+});
+
+describe("frameKinds and filterFramesByKind", () => {
+  const model = ledgerFrame(
+    event(1, "model.engine_call_started", {
+      engine_seq: 1,
+      model_call_id: "mc_1",
+      role: "assistant",
+      provider: "anthropic",
+      model: "haiku",
+    }),
+  );
+  const tool = tachoFrame(
+    tachoRow(2, "tool_call", { toolName: "Read", toolStatus: "failed" }),
+  );
+  const usage = tachoFrame(
+    tachoRow(3, "llm_call", { model: "m", costUsdMicros: 9 }),
+  );
+  const policy = tachoFrame(
+    tachoRow(4, "policy_decision", { policyDecision: "deny" }),
+  );
+  const recall = ledgerFrame(
+    event(5, "context.frames_selected", { frame_count: 3 }),
+  );
+
+  it("derives every chip a frame answers to", () => {
+    expect(frameKinds(model)).toEqual(["prompt"]);
+    expect(frameKinds(tool).sort()).toEqual(["errors", "tools"]);
+    expect(frameKinds(usage).sort()).toEqual(["responses", "usage"]);
+    expect(frameKinds(policy)).toEqual(["policy"]);
+    expect(frameKinds(recall)).toEqual(["recall"]);
+  });
+
+  it("keeps everything for an empty selection, and only the chips pressed otherwise", () => {
+    const frames = [model, tool, usage, policy, recall];
+    expect(filterFramesByKind(frames, [])).toHaveLength(5);
+    expect(filterFramesByKind(frames, ["errors"]).map((f) => f.seq)).toEqual([
+      "2",
+    ]);
+    expect(
+      filterFramesByKind(frames, ["prompt", "recall"]).map((f) => f.seq),
+    ).toEqual(["1", "5"]);
+  });
+});
+
 describe("the steps zoom on a run the in-app assistant recorded", () => {
   // The assistant writes `model.engine_call_completed` and
   // `tool.engine_call_completed`, and it is the only ledger producer in the
@@ -359,7 +722,7 @@ describe("the steps zoom on a run the in-app assistant recorded", () => {
     ),
   ];
 
-  it("opens a step at each completed call and folds its intention into it", () => {
+  it("opens a step at its intention and closes it at the completion, so both halves are one entry", () => {
     expect(
       foldTranscript(assistant, "steps").map((f) => [
         f.opening.seq,
@@ -368,21 +731,31 @@ describe("the steps zoom on a run the in-app assistant recorded", () => {
         f.frames,
       ]),
     ).toEqual([
-      // The admission receipt and the write-ahead intention lead the first
-      // step; the intention is not a step of its own, which is the same
-      // reason the recorder keeps intentions off its receipts.
-      ["1", "2", "frame", 2],
-      ["3", "4", "model_call", 2],
-      ["5", "5", "tool_call", 1],
+      ["1", "1", "frame", 1],
+      ["2", "3", "model_call", 2],
+      ["4", "5", "tool_call", 2],
     ]);
   });
 
-  it("names the step kind of each completed call", () => {
+  it("puts each call's request on the same entry as its result", () => {
+    // Why the intention opens the step rather than folding into what came
+    // before it: the entry carries `request` and `response`, and the request
+    // is on the intention. Folding intentions into the preceding entry put
+    // the model call's prompt in the entry before it and the tool call's
+    // input inside the MODEL step — each call's request stranded away from
+    // the call it belongs to. An intention is still not a step of its own;
+    // it is the frame its step opens on.
+    const [, model, tool] = foldTranscript(assistant, "steps");
+    expect([model?.request?.seq, model?.response?.seq]).toEqual(["2", "3"]);
+    expect([tool?.request?.seq, tool?.response?.seq]).toEqual(["4", "5"]);
+  });
+
+  it("names the step kind of both halves of each call", () => {
     expect(assistant.map((f) => stepKind(f))).toEqual([
       null,
-      null,
       "model_call",
-      null,
+      "model_call",
+      "tool_call",
       "tool_call",
     ]);
   });

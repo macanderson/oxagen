@@ -1,4 +1,4 @@
-# connection.mappings.suggest
+# suggest_connection_mappings
 
 **Domain:** connection
 **Mode:** sync

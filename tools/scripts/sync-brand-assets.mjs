@@ -276,6 +276,15 @@ function nextSurface(publicDir, brand) {
   );
 }
 
+/**
+ * Next.js App Router file-convention favicon (`src/app/icon.svg`). When this
+ * file exists it is served at /icon and can override layout metadata icons, so
+ * it must be the same hive favicon the kit emits — never a retired mark.
+ */
+function nextAppIcon(appDir, brand) {
+  emit(`${appDir}/src/app/icon.svg`, readFileSync(svg(`${brand}-favicon.svg`)));
+}
+
 /** apps/web is a flat static site: assets sit beside index.html. */
 function staticSurface(root, brand) {
   const tileDark = svg(`${brand}-icon-tile-dark.svg`);
@@ -288,6 +297,56 @@ function staticSurface(root, brand) {
   }
   emit(`${root}/favicon.ico`, ico(icoParts));
   emit(`${root}/apple-touch-icon.png`, raster(tileDark, 180));
+  // Home-screen / installed-PWA icons — same tiles the Next surfaces wear.
+  for (const size of [192, 512]) {
+    emit(`${root}/icon-${size}.png`, raster(tileDark, size));
+  }
+  const scratch = mkdtempSync(join(tmpdir(), "oxagen-brand-web-"));
+  const maskDark = join(scratch, `maskable-${brand}-dark.svg`);
+  writeFileSync(maskDark, maskableSvg(tileDark));
+  for (const size of MASKABLE) {
+    emit(`${root}/maskable-${size}.png`, raster(maskDark, size));
+  }
+  // Kit webmanifest with paths rewritten for the flat static layout.
+  const kitManifest = JSON.parse(
+    readFileSync(join(BRAND, `icons/${brand}.webmanifest`), "utf8"),
+  );
+  emit(
+    `${root}/${brand}.webmanifest`,
+    `${JSON.stringify(
+      {
+        ...kitManifest,
+        icons: [
+          {
+            src: "/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/maskable-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "/maskable-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
   copy(`social/${brand}-og-1200x630-dark.png`, `${root}/og.png`);
   for (const b of [brand]) {
     emit(
@@ -311,6 +370,11 @@ function staticSurface(root, brand) {
     `spinners/${brand}-spinner.svg`,
     `${root}/assets/brand/${brand}-spinner.svg`,
   );
+  // The palette itself, so the static site references the kit's tokens rather
+  // than a hand-transcribed copy of them. Its own stylesheet imports this file
+  // and aliases onto it, which is what makes "byte-for-byte off the kit" true
+  // by construction instead of true until someone edits a hex.
+  copy("tokens/house-tokens.css", `${root}/assets/house-tokens.css`);
   // The static site serves its faces from /fonts/: the kit's three, beside
   // whatever else the site ships there.
   for (const f of readdirSync(join(BRAND, "fonts"))) {
@@ -359,10 +423,25 @@ function fonts() {
   );
 }
 
-/** The palette, verbatim from the kit, for anything that reads it as data. */
+/**
+ * The palette, verbatim from the kit, for anything that reads it as data.
+ *
+ * `house-tailwind.css` is the layer that turns the palette into something an
+ * app can write: the `--color-ox-*` theme entries, the shadcn/Base UI
+ * semantic names, the tracking scale, and the twelve type utilities
+ * (`text-m-*` for a page read once, `text-a-*` for a dashboard read all day).
+ * It went unvendored until 2026-09-19, so the kit's TYPE SCALE did not exist
+ * in this repo at all and every surface sized itself with Tailwind's defaults
+ * and one-off `text-[11px]` literals. It imports `house-tokens.css` from
+ * beside it, which is why `globals.css` imports this file rather than both.
+ */
 function tokens() {
   copy("tokens/house-tokens.css", "packages/ui/src/styles/house-tokens.css");
   copy("tokens/house-tokens.json", "packages/ui/src/styles/house-tokens.json");
+  copy(
+    "tokens/house-tailwind.css",
+    "packages/ui/src/styles/house-tailwind.css",
+  );
 }
 
 /**
@@ -534,6 +613,12 @@ tokens();
 marks();
 nextSurface("apps/app/public", "oxagen");
 nextSurface("apps/docs/public", "oxagen");
+// Deprecated app still boots locally and in archive deploys; keep its public
+// marks on the same kit tip as the live surfaces so a stray open does not
+// show the retired Ox lettermark or cream paper.
+nextSurface("apps/app_deprecated/public", "oxagen");
+nextAppIcon("apps/docs", "oxagen");
+nextAppIcon("apps/app_deprecated", "oxagen");
 staticSurface("apps/web", "oxagen");
 
 const version = JSON.parse(

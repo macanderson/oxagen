@@ -1,4 +1,4 @@
-# billing.gau_bucket.purchase
+# purchase_gau_bucket
 
 **Domain:** billing
 **Mode:** sync

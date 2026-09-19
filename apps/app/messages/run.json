@@ -17,11 +17,31 @@
       "started": "Started",
       "sealed": "Sealed"
     },
+    "facts": {
+      "operator": "Operator",
+      "model": "Model",
+      "machine": "Machine",
+      "noMachineOnLedger": "The evidence ledger records no host for a run.",
+      "operatorKind": {
+        "human": "A person, name not recorded",
+        "agent": "An agent, not a person",
+        "service": "A service, not a person"
+      }
+    },
+    "resolvedApprovals": {
+      "title": "Resolved",
+      "resolution": "Resolution",
+      "resolvedBy": "Resolved by",
+      "resolvedAt": "Resolved at",
+      "empty": "Nothing resolved for this run yet."
+    },
     "tabs": {
       "label": "Run sections",
       "transcript": "Transcript",
       "frames": "Frames",
-      "cost": "Cost"
+      "cost": "Cost",
+      "chain": "Chain and seal",
+      "approvals": "Approvals"
     },
     "transcript": {
       "title": "Transcript",
@@ -37,7 +57,7 @@
       "openFrame": "Read the whole body of frame {seq}",
       "empty": "This run has no frames yet. A run with no frames has cost nothing.",
       "complete": "{count} entries. This is the whole run.",
-      "cut": "{count} entries. The run has more frames than one transcript carries, so this stops short of the end.",
+      "cut": "{count} entries. The run has more frames than one read carries and the read offered no resume point, so this stops short of the end.",
       "runStart": "Run start",
       "turn": "turn {n}",
       "turnDone": "done",
@@ -71,7 +91,31 @@
         "digest_only": "digest only"
       },
       "envelope": "Frame {seq} on the Frames tab",
-      "recording": "Recording. Every frame is hash-chained to its predecessor as it arrives. This view re-reads the run every few seconds while you follow its head."
+      "recording": "Recording. Every frame is hash-chained to its predecessor as it arrives, and this view follows the run's head and reads what it records.",
+      "chipsLabel": "Filter the transcript",
+      "chip": {
+        "prompt": "Prompt",
+        "responses": "Responses",
+        "tools": "Tools",
+        "policy": "Policy",
+        "recall": "Recall",
+        "usage": "Usage",
+        "errors": "Errors"
+      },
+      "chipsClear": "Clear the filter",
+      "emptyFiltered": "No entry in this run answers to the {count} chips you pressed. Clear the filter to read the whole run.",
+      "more": "Read more",
+      "readingMore": "Reading",
+      "loadedMore": "{count} entries read so far. More lie past this page.",
+      "badCursor": "That resume point is not one this read wrote, so the next page was refused. Everything above is still the record.",
+      "pageFailed": "The next page could not be read. Everything above is still the record.",
+      "followLost": "The connection to the live head dropped. The run kept recording; read more to catch up.",
+      "followSealed": "The run sealed while you were following it. This is the whole recording.",
+      "request": "Sent",
+      "response": "Returned",
+      "decision": "Decision: {decision}, at frame {seq}",
+      "calledWith": "Called with",
+      "noHalves": "Neither half of this exchange was recorded. Its envelope is on the Frames tab."
     },
     "frames": {
       "title": "Frames",
@@ -197,8 +241,15 @@
         "refused": "The control plane refused this: {code}. Nothing was queued.",
         "invalid": "The control plane refused these values. Nothing was queued.",
         "pendingApproval": "This is waiting for approval, request {accessRequestId}.",
-        "unavailable": "The control plane answered {code}. Nothing was queued, and the run kept recording."
-      }
+        "unavailable": "The control plane answered {code}. Nothing was queued, and the run kept recording.",
+        "forkRequiresLedger": "Forking needs an evidence-ledger run. A wrapped session has no attempt to branch from.",
+        "gradeBelowFork": "This recording is graded below fork, so the cassette would have a hole in it. Nothing was minted.",
+        "seqPastSeal": "That frame is past the last one this run recorded.",
+        "gapBeforeSeq": "A frame before that point kept no body, so the replay would have a hole before the branch. Nothing was minted.",
+        "fromSeq": "The branch point is a frame sequence number of at least 1.",
+        "runB": "Name a second run to compare against, and not this one."
+      },
+      "observeReason": "This run was observed from the side. Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel."
     },
     "record": {
       "reread": "Re-read the run",
@@ -209,7 +260,8 @@
         "confirm": "Queue the summary",
         "pending": "Queueing",
         "queued": "The summary is queued. It appears on this run once the model has written it.",
-        "needsRole": "Summarizing needs an organization Owner, Admin or Member role."
+        "needsRole": "Summarizing needs an organization Owner, Admin or Member role.",
+        "needsBodies": "This recording kept digests and no bodies, so there is nothing for a model to read. Summarizing is refused."
       },
       "resummarize": {
         "open": "Summarize again"
@@ -223,6 +275,126 @@
         "queued": "The bundle is queued.",
         "needsRole": "Exporting a signed bundle needs an organization Owner or Admin role."
       }
-    }
+    },
+    "gaps": "The seal recorded these gaps in the record:",
+    "gap": {
+      "digest_only": "digests kept, bodies not retained",
+      "body_missing": "a frame carried content whose body was not retained",
+      "tool_bodies": "no tool result body was retained",
+      "model_calls": "model calls went unobserved",
+      "hooks_partial": "a hook entry is missing for part of the session",
+      "unobserved_tail": "the process ended without a terminal event",
+      "chain_break": "the hash chain does not hold end to end",
+      "telemetry_gap": "telemetry stopped for part of the run"
+    },
+    "tier": {
+      "gateway": "observed at the gateway",
+      "harness": "observed at the harness",
+      "observe": "observed from the side"
+    },
+    "chain": {
+      "title": "Chain and seal",
+      "hashRule": "Hash rule",
+      "frameCount": "Frames read",
+      "range": "Sequence range",
+      "merkleRoot": "Merkle root",
+      "tierLabel": "Enforcement tier",
+      "gradeLabel": "Replay grade",
+      "gapsTitle": "Gaps",
+      "prefix": "This walk stopped before the end of the recording, so these are the gaps of the part it read, not of the whole run.",
+      "noGaps": "The walk found no missing sequence and no missing body, and the seal recorded no gap.",
+      "missingFrames": "Missing frames",
+      "missingBodies": "Frames with no retained body",
+      "missingSequences": "Missing sequences",
+      "recordedGaps": "Gaps the seal recorded",
+      "sealTitle": "Seal",
+      "attemptLabel": "Attempt {n}",
+      "sealedAt": "Sealed",
+      "terminalStatus": "Terminal status",
+      "sealedFrames": "Frames under the seal",
+      "finalSeq": "Final sequence",
+      "finalDigest": "Final frame digest",
+      "streamDigest": "Event stream digest",
+      "archive": "Archive segment",
+      "unsealed": "This run has no seal yet. A seal is written when the run ends, and it is what an attestation signs.",
+      "checkpointsTitle": "Checkpoints",
+      "noCheckpoints": "This recording carries no checkpoint. A ledger run commits at its seal rather than along the way, so there is nothing missing here.",
+      "ladderTitle": "Replay ladder",
+      "ladderWhy": "The grade above is the one the seal recorded, and it is what this run allows. The ladder is why: each rung names what carries it or the single thing missing. A rung may read stronger than the recorded grade, and nothing here raises it.",
+      "ladderNoGrade": "This run's seal recorded no grade, so nothing here states one. The ladder says what the recording holds.",
+      "rungMet": "reached",
+      "rungUnmet": "not reached",
+      "columns": {
+        "seq": "Seq",
+        "head": "Chain head",
+        "frames": "Frames",
+        "signed": "Signed",
+        "countersigned": "Countersigned",
+        "anchor": "Anchor"
+      },
+      "tier": {
+        "gateway": "observed at the gateway",
+        "harness": "observed at the harness",
+        "observe": "observed from the side"
+      },
+      "grade": {
+        "inspect": "Inspect",
+        "view": "View",
+        "fork": "Fork",
+        "retry": "Retry"
+      },
+      "gap": {
+        "digest_only": "digests kept, bodies not retained",
+        "body_missing": "a frame carried content whose body was not retained",
+        "tool_bodies": "no tool result body was retained",
+        "model_calls": "model calls went unobserved",
+        "hooks_partial": "a hook entry is missing for part of the session",
+        "unobserved_tail": "the process ended without a terminal event",
+        "chain_break": "the hash chain does not hold end to end",
+        "telemetry_gap": "telemetry stopped for part of the run"
+      }
+    },
+    "waterfall": {
+      "title": "Run waterfall",
+      "total": "<cost></cost> over the run",
+      "basisNotRecorded": "basis not recorded",
+      "running": "<cost></cost> running total",
+      "steps": "{count} steps",
+      "step": "{label}",
+      "noCost": "this turn's cost was not recorded",
+      "empty": "This run has no turn the recording could fold, so there is nothing to lay out.",
+      "unpriced": "No turn in this run carries a cost, so the bars have no scale to sit against. The turns and their steps are listed as recorded.",
+      "cut": "The run has more turns than one read carries, so this stops short of the end."
+    },
+    "replay": {
+      "forkNeedsLedger": "Forking replays an attempt from the evidence ledger. This run was recorded by a wrapped agent, which has no attempt to branch from.",
+      "forkNoGrade": "This run's seal recorded no replay grade, so Oxagen cannot say the recording is complete enough to fork.",
+      "forkNeedsGrade": "This recording is graded {grade}. Forking needs a recording graded fork, because every body before the branch point has to be there.",
+      "fork": {
+        "open": "Fork replay",
+        "title": "Fork {run}",
+        "body": "Frames up to the one you name replay from this recording. The next model call runs live, and a tool result after it is served from the recorded cassette when its input digest matches and refused when it does not. Oxagen mints the attempt and records where it branched; the engine that admitted the run is what resumes it.",
+        "seqLabel": "Replay up to frame",
+        "seqHelp": "The last recorded frame the fork replays, as a sequence number of at least 1.",
+        "confirm": "Mint the attempt",
+        "pending": "Minting",
+        "minted": "The attempt is minted. It resumes when the engine that admitted the run picks it up."
+      },
+      "bisect": {
+        "open": "Bisect",
+        "title": "Bisect {run} against another run",
+        "body": "Both recordings are read frame by frame, and each frame is reduced to its kind and the identity of what it did. The first position whose keys differ is the divergence. Bodies are not read, so this works on any recording.",
+        "otherLabel": "The other run",
+        "otherHelp": "A run id from this workspace, such as arun_01k4qj9e or tse_7k2m9q.",
+        "confirm": "Find the divergence",
+        "pending": "Comparing",
+        "same": "The two runs agree at every frame. {aligned} frames were compared.",
+        "diverged": "The runs diverge at frame {seq}, after {aligned} frames that agreed.",
+        "keyA": "This run",
+        "keyB": "The other run",
+        "noFrame": "no frame at this position"
+      }
+    },
+    "loading": "Loading this run"
   }
 }

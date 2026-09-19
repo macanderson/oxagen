@@ -1,0 +1,193 @@
+{
+  "mandate": {
+    "eyebrow": "Mandate",
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member",
+      "billing": "Billing",
+      "compliance": "Compliance",
+      "viewer": "Viewer"
+    },
+    "loading": "Loading this mandate",
+    "grantedBy": "granted by {user}",
+    "notGranted": "not granted",
+    "status": {
+      "draft": "requested",
+      "active": "active",
+      "expired": "expired",
+      "revoked": "revoked"
+    },
+    "tiles": {
+      "label": "Remaining authority",
+      "perCall": "Per call",
+      "perCallBasis": "Read from the call by the path the tool version declares for the measure.",
+      "perPeriod": "Per period",
+      "perPeriodBasis": "Each limit resets on the window named beside it. A cap on calls is a limit of its own.",
+      "settled": "Settled",
+      "settledBasis": "This period, summed from the ledger's settlements.",
+      "remaining": "Remaining",
+      "remainingBasis": "The period limit less what is settled and what is reserved at decision time."
+    },
+    "ledger": {
+      "title": "The ledger",
+      "label": "Draws on this mandate",
+      "basis": "Reservations are taken at decision time; settlements and releases are recorded on the answer.",
+      "note": "Two concurrent calls cannot both fit under the same remaining limit: the reservation is taken before dispatch.",
+      "columns": {
+        "when": "When",
+        "call": "Call",
+        "amount": "Amount",
+        "state": "State",
+        "external": "External id",
+        "receipt": "Receipt"
+      },
+      "kind": {
+        "reserve": "reserved",
+        "settle": "settled",
+        "release": "released"
+      },
+      "notRecorded": "not recorded",
+      "callBasis": "The Call column names the measure the movement drew. The ledger records the call by its own identifier and no read carries the tool version it named, so the tool is not shown here.",
+      "receiptBasis": "A receipt frame is written by the collector on each host, not by the operator console. No read carries one yet, so no receipt opens from this table.",
+      "readBound": "The newest {shown} movements, which is the most this page reads at once. This mandate has recorded at least that many, and this page cannot tell you whether it has recorded more.",
+      "empty": "This mandate has never been drawn on",
+      "emptyBody": "Its ledger is empty, so none of the period limit has been drawn.",
+      "filteredEmpty": "No movement matches this search",
+      "filteredEmptyBody": "Clear the search or widen the state to see the movements this mandate has recorded.",
+      "search": "Search",
+      "searchHint": "Matches a measure or an external id.",
+      "state": "State",
+      "anyState": "Every state",
+      "apply": "Search",
+      "clear": "Clear the search",
+      "shown": "{shown} of {total} movements",
+      "pager": {
+        "label": "Ledger pages",
+        "newer": "Newer",
+        "older": "Older",
+        "end": "The oldest movement read"
+      },
+      "emptyBodyEffective": "Its ledger is empty, so remaining authority equals the full period limit."
+    },
+    "grant": {
+      "title": "The grant",
+      "agent": "Agent",
+      "grantedBy": "Granted by",
+      "notGranted": "not granted",
+      "requestedBy": "requested by {user}",
+      "roleAtGrant": "{role} at grant",
+      "effect": "Effect",
+      "counterparties": "Counterparties",
+      "allow": "allow",
+      "deny": "deny",
+      "anyTarget": "no target rule, so any target",
+      "noPattern": "no pattern",
+      "allowAnyTarget": "any target",
+      "anyNotDenied": "anything not denied",
+      "tools": "Tools",
+      "approval": "Approval",
+      "approvalAbove": "A person answers above {value} on {measure}.",
+      "approvalAlways": "A person always answers for {tags}.",
+      "approvalNone": "No threshold and no tagged consequence, so no call on this mandate waits for a person. Adding either one names its approvers.",
+      "approvalApprovers": "Approvers: {approvers}.",
+      "approvalConsequenceRoles": "Approvers are the org roles accountable for the consequence.",
+      "valid": "Valid",
+      "validWindow": "{from} until {to}",
+      "validWindowBasis": "The window is half-open: the mandate stops being honoured at the instant it ends, not at the end of that day."
+    },
+    "reconciliation": {
+      "title": "Reconciliation",
+      "body": "Every draw on a mandate is meant to carry a receipt, and a charge a connection reports with no receipt is money Oxagen did not govern.",
+      "notRecorded": "No read carries receipt frames yet, so this page cannot tell you whether a charge went unrecorded. The organization's audit record lists every governed action, and it cannot be filtered to one mandate: its events carry the capability, the actor and the outcome, and no mandate id.",
+      "openAudit": "Open the audit record"
+    },
+    "actions": {
+      "limits": {
+        "open": "Change limits",
+        "title": "Change the limits on {mandate}",
+        "body": "The ledger keeps its rows. The next reservation reads the new per-period limit over what this period has already drawn, so lowering a limit under authority already settled leaves the mandate over its limit rather than undoing the draw. A field left blank leaves that limit as it is; removing a limit altogether is done over the API.",
+        "measure": "Measure",
+        "measureHint": "The measure the tool version declares the limit under. Only this measure's limit changes; every other measure keeps the bound it holds.",
+        "unit": "Unit",
+        "unitHint": "What the measure counts, in its own name. Never a currency code: this form writes counts and stores the figure exactly as typed.",
+        "perCall": "Per call",
+        "perPeriod": "Per period",
+        "period": "Period",
+        "periods": {
+          "daily": "daily",
+          "weekly": "weekly",
+          "monthly": "monthly"
+        },
+        "validTo": "Valid to",
+        "validToHint": "The last day the mandate may be drawn on, in your timezone. Leave it as it is to keep the window.",
+        "confirm": "Change the limits",
+        "pending": "Changing the limits",
+        "callsPer": "Calls per {period}",
+        "periodsPer": {
+          "daily": "day",
+          "weekly": "week",
+          "monthly": "month"
+        }
+      },
+      "revoke": {
+        "open": "Revoke",
+        "title": "Revoke {mandate}",
+        "body": "The mandate ends now. Every reservation held by a call that has not dispatched is released, and those calls end unanswered. The ledger keeps every movement it has recorded.",
+        "reason": "Reason",
+        "reasonHint": "Recorded on the mandate. The audit record shows that it was revoked, not why.",
+        "confirm": "Revoke this mandate",
+        "pending": "Revoking",
+        "draft": {
+          "open": "Decline",
+          "title": "Decline {mandate}",
+          "body": "The request is declined and the mandate never takes effect. Nothing was reserved against it and no movement was recorded, so there is nothing to release. The agent can be granted a different mandate at any time.",
+          "confirm": "Decline this request",
+          "pending": "Declining"
+        }
+      },
+      "failure": {
+        "orgRoleRequired": "Your roles on this organization are not accountable for this mandate's consequences. An owner can grant a role that is, and the grant is itself a governed action in the audit record.",
+        "noRoleCoversAllTags": "No single org role is accountable for every consequence this mandate names, so nobody can change it as it stands. It has to be revoked and granted again over consequences one role answers for.",
+        "mandateNotFound": "This mandate is not recorded in this workspace.",
+        "mandateEnded": "This mandate has already ended. Nothing was changed.",
+        "validityInverted": "The last day has to fall after the day the mandate starts.",
+        "noToolMatches": "No declared tool matches this mandate's patterns, so a limit cannot be checked against a measure. Nothing was changed.",
+        "measureNotDeclared": "A tool this mandate covers declares no such measure, so a limit on it could never be read from a call. Nothing was changed.",
+        "measureUnitMismatch": "A tool this mandate covers declares that measure in another unit. Nothing was changed.",
+        "measureKindConflict": "Two tools this mandate covers declare that measure differently (one as an amount, one as a count), so there is no single figure to enforce. Nothing was changed.",
+        "periodDrawn": "This measure still has authority drawn in its current window, so the period cannot change until that draw is released or the window ends. Nothing was changed.",
+        "measureKindDrawn": "This measure still has authority drawn under its current kind, so what it counts cannot change yet. Release any open reservation and wait for the current window to close (a settlement alone does not clear this). Nothing was changed.",
+        "noPrincipal": "This request carries no acting person, so no role can be resolved for it.",
+        "agentRetired": "This mandate's agent is retired. A retired agent's identity cannot draw on new or widened authority. Nothing was changed.",
+        "timeZoneUnavailable": "Your time zone could not be read, and the last day you picked means a different instant in each zone. Nothing was changed. Try again.",
+        "timeZoneUnsupported": "Your saved time zone is not one this server can read, so the last day you picked cannot be placed in it. Nothing was changed. Pick a time zone again in your account settings.",
+        "refused": "This write was refused: {code}. Nothing was changed.",
+        "invalid": "Something in the form is not a value this write accepts. Nothing was changed.",
+        "pendingApproval": "This write is waiting for approval. Access request {accessRequestId}.",
+        "unavailable": "This write could not be answered: {code}. Nothing was changed."
+      }
+    },
+    "failure": {
+      "back": "Back to Fleet",
+      "denied": {
+        "title": "You cannot see this mandate",
+        "body": "The roles you hold on this organization are not accountable for mandates. An Owner, Admin, Billing or Compliance role reads every mandate in this workspace; a workspace Owner or Member without one of those reads the mandates of agents they created and any mandate they requested themselves; any other built-in role reads no mandate at all. On an enterprise organization, an explicit IAM grant naming this capability (a custom role, a direct grant, or an enforced allow policy) reads the same narrowed set instead of nothing. An owner can grant an accountable role, and the grant is itself a governed action in the audit record.",
+        "signedIn": "Signed in as: {role}",
+        "needed": "Needed:",
+        "decidedBy": "Decided by: the workspace’s decision rules. Deny wins over every allow."
+      },
+      "pending": {
+        "title": "Access to this mandate is waiting for approval",
+        "body": "Access request {request}"
+      },
+      "error": {
+        "title": "This mandate could not be loaded",
+        "body": "Nothing was changed. Runs kept recording while this page was down: frames are written by the collector on each host, not by the operator console.",
+        "code": "{code} · {status}",
+        "readAt": "Read at {at}",
+        "retry": "Try again"
+      }
+    }
+  }
+}

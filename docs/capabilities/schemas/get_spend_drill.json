@@ -43,7 +43,9 @@
       "kind",
       "key"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
   },
   "output": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -64,10 +66,14 @@
         "type": "object",
         "properties": {
           "from": {
-            "type": "string"
+            "type": "string",
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
           },
           "to": {
-            "type": "string"
+            "type": "string",
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
           }
         },
         "required": [
@@ -195,7 +201,9 @@
           "type": "object",
           "properties": {
             "day": {
-              "type": "string"
+              "type": "string",
+              "x-server-validated": true,
+              "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
             },
             "cost": {
               "anyOf": [

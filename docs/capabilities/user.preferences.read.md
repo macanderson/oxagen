@@ -1,4 +1,4 @@
-# user.preferences.read
+# get_user_preferences
 
 **Domain:** user
 **Mode:** sync
@@ -24,6 +24,9 @@ No fields.
 | `pendingPromptBehavior` | `"queue" \| "interrupt"` | How to handle a new prompt while a response is streaming. |
 | `defaultTextTier` | `"fast" \| "balanced" \| "precise" \| null` | User's preferred text model tier. `null` = workspace default. |
 | `defaultTextModel` | `string \| null` | Specific text model override. `null` = tier default. |
+| `timezone` | `string` | The IANA zone every date in the app renders in. `America/Los_Angeles` until the person sets one. |
+| `language` | `string` | BCP 47 tag; `en` by default. |
+| `theme` | `"system" \| "light" \| "dark"` | Interface theme; `system` follows the device. |
 
 ## Roles
 
@@ -38,6 +41,7 @@ None — read-only.
 - `GET /api/v1/{org}/{ws}/user/preferences`
 - MCP tool `user_preferences_read`
 - Agent: no approval required, risk `low`.
+- App: the organization layout reads it on every page and hands `timezone` to next-intl, so each date renders in the person's zone (`apps/app/src/data/live/shell.ts`).
 
 ## Errors
 

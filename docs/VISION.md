@@ -4,7 +4,8 @@
 > an identity, set its authority and budget, equip it with tools and skills, and
 > review what it did and what its operators spent, through a shared agent control
 > plane. Every agent operates under a mandate set by the teams accountable for it
-> and enforced on the actions routed through Oxagen.**
+> and enforced on the actions routed through Oxagen. The workforce it governs is
+> autonomous and supervised alike.**
 
 We sell to the teams that answer for the agents: the security team that decides
 what an agent may reach, the FinOps team that decides what it may spend and under
@@ -78,7 +79,7 @@ single wedge where a platform of Oxagen's exact shape can credibly be #1:
 **Workforce management for every agent an enterprise runs, whoever built it, on an agent control plane.**
 
 Workforce management is the product and the agent control plane is the category
-(ADR-102, superseding the product name in ADR-067, which in turn superseded
+(ADR-111, superseding the product name in ADR-067, which in turn superseded
 ADR-066's two names). The operator's job is the lead: define an agent's identity and
 authority, equip it with tools, skills and the business context its work requires,
 and review what it does, whether the work is a bounded task or an ongoing
@@ -88,8 +89,8 @@ answers, funds, holds or stops it. Two things separate us from the plays beside 
 The first: observability watches and reports, governance says no, and neither
 operates anything, while every operator action here is a governed action the meter
 prices. The second: they report on the agent, and Oxagen also reports on the person
-who steered it. The operator review is that second surface. As of 2026-09-19, none
-of the plays named above ships one.
+who steered it. That is the operator review. As of 2026-09-19, none of the plays
+named above ships one.
 
 Every claim states its scope (ADR-067). Enforcement applies to actions routed through
 Oxagen, and observe mode is recorded, not enforced. The tier ladder has four words,
@@ -163,7 +164,7 @@ enforce or record it:
   operator takes on it (answer a routed request, fund, hold, stop), each a governed,
   metered action. Spend lives on the fleet page beside the agent (ADR-066, ADR-067).
 - **The operator review (rate):** one page per person, read from the record and
-  never estimated (ADR-102). It shows spend by operator, agent and workspace, the
+  never estimated (ADR-111). It shows spend by operator, agent and workspace, the
   same rows the Spend page prices, cut by the person who started the run; outcome
   per dollar for bounded tasks; and prompt habits drawn from the recorded turns,
   meaning turns to completion, restarts on the same task, steering overridden by

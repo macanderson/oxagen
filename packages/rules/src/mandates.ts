@@ -35,10 +35,23 @@ import {
   type MandateApproval,
   type MandateAuthority,
   type MandateLimits,
+  type MandatePeriod,
   type MandateStatus,
   type MandateTargets,
+  type MeasureKind,
 } from "@oxagen/oxagen/mandates/schemas";
-import { and, asc, eq, gt, isNull, lte, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  isNotNull,
+  isNull,
+  lte,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { evaluateAutoApproval } from "./auto-approval";
 import {
   buildAutoApprovalSubject,
@@ -52,7 +65,11 @@ import { loadRuleSetIn } from "./rule-store";
 import {
   exceeds,
   isCallsMeasure,
+  legacyMeasureKindGuess,
+  measureKindOf,
   periodKey,
+  periodKeyRange,
+  periodKeysOverlap,
   readCallsMeasure,
   readMeasure,
   readPath,
@@ -76,6 +93,7 @@ export const MANDATE_APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
 type MandateDenyReason =
   | "no_mandate"
   | "measure_unreadable"
+  | "measure_kind_changed"
   | "target_denied"
   | "over_limit";
 
@@ -94,9 +112,55 @@ export interface MandateRecord {
   status: MandateStatus;
   validFrom: Date;
   validTo: Date;
+  /**
+   * Measures in `limits` whose `kind` was not actually stored and is instead
+   * `legacyMeasureKindGuess`'s fallback. A guess is not a fact: it must never
+   * be compared against a tool's current declaration to detect drift (a
+   * legacy row's guess can legitimately disagree with a declaration the gate
+   * has always enforced correctly, since the gate reads the declaration
+   * directly and never the guess), and an unrelated write must not use it to
+   * decide what to preserve versus refresh. Both call sites key off this set
+   * instead of `limit.kind === undefined`, which is never true once
+   * `withResolvedKinds` has run.
+   */
+  legacyKindMeasures: ReadonlySet<string>;
+}
+
+/**
+ * Every stored limit with `kind` guaranteed present (ADR-108): a row written
+ * since ADR-108 already carries it, and a row written before takes the one
+ * documented fallback, `legacyMeasureKindGuess`. This is the only place that
+ * fallback runs; every reader downstream (`readAuthority`, `mapMandates`,
+ * the mapped `mandate.limits` a get/list response carries) takes `kind` as a
+ * fact already resolved, never guessing again from `currencyOrUnit` itself.
+ * Also returns which measures took the fallback, so a caller that must tell
+ * a persisted fact from a guess (the gate's drift check, an update that must
+ * not silently refresh a kind the operator never touched) can.
+ */
+function withResolvedKinds(limits: MandateLimits): {
+  limits: MandateLimits;
+  legacyKindMeasures: ReadonlySet<string>;
+} {
+  const legacyKindMeasures = new Set<string>();
+  const resolved = Object.fromEntries(
+    Object.entries(limits).map(([measure, limit]) => {
+      if (limit.kind === undefined) legacyKindMeasures.add(measure);
+      return [
+        measure,
+        {
+          ...limit,
+          kind: limit.kind ?? legacyMeasureKindGuess(limit.currencyOrUnit),
+        },
+      ];
+    }),
+  );
+  return { limits: resolved, legacyKindMeasures };
 }
 
 export function parseMandateRow(row: typeof m.$inferSelect): MandateRecord {
+  const { limits, legacyKindMeasures } = withResolvedKinds(
+    mandateLimitsSchema.parse(row.limits),
+  );
   return {
     id: row.id,
     publicId: row.publicId,
@@ -104,7 +168,8 @@ export function parseMandateRow(row: typeof m.$inferSelect): MandateRecord {
     workspaceId: row.workspaceId,
     agentPrincipalId: row.agentPrincipalId,
     consequenceTags: row.consequenceTags,
-    limits: mandateLimitsSchema.parse(row.limits),
+    limits,
+    legacyKindMeasures,
     targets: mandateTargetsSchema.parse(row.targets),
     tools: row.tools,
     approval: mandateApprovalSchema.parse(row.approvalRules),
@@ -158,6 +223,174 @@ async function periodSums(
   return { reserved, settled, drawn: reserved + settled };
 }
 
+/**
+ * Whether this measure has already drawn authority in the window its current
+ * period names. A period change that ran while drawn would leave those ledger
+ * rows under the old `periodKey`, so `readAuthority` and `reserve` would see an
+ * empty new window and grant the full cap again.
+ */
+export async function hasDrawnInCurrentPeriod(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+  period: MandatePeriod,
+  at: Date = new Date(),
+): Promise<boolean> {
+  const sums = await periodSums(tx, mandateId, measure, periodKey(period, at));
+  return sums.drawn > 0n;
+}
+
+/**
+ * Whether this measure still has an open reservation under any period key.
+ *
+ * A call parked for approval can keep its reserve row past the old window's
+ * boundary. `hasDrawnInCurrentPeriod` only sees the key the stored period
+ * names today, so a midnight rollover would miss that row and let a period
+ * rename orphan it. Settled and released rows net to zero here; only a
+ * reserve with no matching settle or release counts.
+ */
+export async function hasOpenReservation(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+): Promise<boolean> {
+  const [row] = await tx
+    .select({
+      reserved: sql<string>`coalesce(sum(case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end), 0)::text`,
+    })
+    .from(l)
+    .where(and(eq(l.mandateId, mandateId), eq(l.measure, measure)));
+  return BigInt(row?.reserved ?? "0") > 0n;
+}
+
+/**
+ * Whether this measure has a settlement under a period key whose calendar
+ * range overlaps the destination period's current window.
+ *
+ * A daily-to-weekly rename on Tuesday leaves Monday's settle under Monday's
+ * daily key. `hasDrawnInCurrentPeriod` only queries Tuesday, and
+ * `hasOpenReservation` ignores settled rows, so without this check the
+ * rename would succeed and weekly reads would see an empty `YYYY-Www` key.
+ * The ledger stays append-only: the rename is refused, not rewritten.
+ */
+export async function hasSettlementOverlappingPeriod(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+  destPeriod: MandatePeriod,
+  at: Date = new Date(),
+): Promise<boolean> {
+  const destKey = periodKey(destPeriod, at);
+  const rows = await tx
+    .select({
+      periodKey: l.periodKey,
+      settled: sql<string>`coalesce(sum(case when ${l.kind} = 'settle' then ${l.value} else 0 end), 0)::text`,
+    })
+    .from(l)
+    .where(and(eq(l.mandateId, mandateId), eq(l.measure, measure)))
+    .groupBy(l.periodKey);
+  for (const row of rows) {
+    if (BigInt(row.settled) <= 0n) continue;
+    // An unparseable settled key is treated as overlapping: refuse rather
+    // than hide a draw the destination window cannot query.
+    if (
+      !periodKeyRange(row.periodKey) ||
+      periodKeysOverlap(row.periodKey, destKey)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The kind the most recent *stamped* ledger row for this measure carries, or
+ * null when the measure has no stamped ledger rows at all.
+ *
+ * Both callers need this to distinguish real history from none: a
+ * whole-record `limits` replacement can delete a measure entirely and a
+ * later call can re-add it (`assertKindChangeAllowed`'s `before` then
+ * carries no entry to compare), and a legacy measure's stored `limits[
+ * measure].kind` is only a guess even after real calls have stamped its
+ * ledger rows from the live declaration (`decideMandate`'s drift check).
+ * Both read the ledger's own stamp directly, since neither `before` nor a
+ * legacy stored `kind` can see it.
+ *
+ * Filtered to non-null rows: `measure_kind` is null only on a row written
+ * before the column existed, and `settle`/`release` carry a reservation's
+ * own stamp forward, so a pre-migration reservation's later null-stamped
+ * close would otherwise outrank an earlier row's real one, the most recent
+ * row by `createdAt` is not always the most recent *stamped* one.
+ */
+export async function lastLedgerKind(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+): Promise<MeasureKind | null> {
+  const [row] = await tx
+    .select({ measureKind: l.measureKind })
+    .from(l)
+    .where(
+      and(
+        eq(l.mandateId, mandateId),
+        eq(l.measure, measure),
+        isNotNull(l.measureKind),
+      ),
+    )
+    .orderBy(desc(l.createdAt))
+    .limit(1);
+  return (row?.measureKind as MeasureKind | null | undefined) ?? null;
+}
+
+/**
+ * Whether this measure has a ledger row written before the `measure_kind`
+ * column existed (`measure_kind is null`) that is still live: an open
+ * reservation, or a draw within the period key `period`/`at` names.
+ *
+ * `lastLedgerKind` returning null is ambiguous on its own: it cannot tell
+ * a measure with no ledger rows at all from one whose only rows predate the
+ * stamp. The first is safe to treat as a fresh start; the second still
+ * carries authority recorded under a kind nothing durable remembers, and a
+ * caller that let a new reservation or a kind change land anyway could sum
+ * it into `periodSums` against that unverified older row, exactly the
+ * money/count mixing ADR-108 exists to close. Both `decideMandate` and
+ * `assertKindChangeAllowed` check this before trusting a null
+ * `lastLedgerKind` result.
+ */
+export async function hasUnstampedLedgerHistory(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+  period: MandatePeriod,
+  at: Date = new Date(),
+): Promise<boolean> {
+  const key = periodKey(period, at);
+  // Mirrors `periodSums`'s own reserve/settle/release netting (a release
+  // nets against its reserve in the same `reserved` sum; only `settle` adds
+  // to `settled`), restricted to unstamped rows and, for the period figure,
+  // to this period key. A release that clears an unstamped reservation must
+  // net it back to zero here the same way it does in `periodSums`, or a
+  // legacy mandate with only released history would read as still drawn
+  // and never clear this check.
+  const [row] = await tx
+    .select({
+      openReserved: sql<string>`coalesce(sum(case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end), 0)::text`,
+      periodReserved: sql<string>`coalesce(sum(case when ${l.periodKey} = ${key} then (case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end) else 0 end), 0)::text`,
+      periodSettled: sql<string>`coalesce(sum(case when ${l.periodKey} = ${key} and ${l.kind} = 'settle' then ${l.value} else 0 end), 0)::text`,
+    })
+    .from(l)
+    .where(
+      and(
+        eq(l.mandateId, mandateId),
+        eq(l.measure, measure),
+        isNull(l.measureKind),
+      ),
+    );
+  const drawnInPeriod =
+    BigInt(row?.periodReserved ?? "0") + BigInt(row?.periodSettled ?? "0");
+  return BigInt(row?.openReserved ?? "0") > 0n || drawnInPeriod > 0n;
+}
+
 /** Remaining authority by measure, as get_mandate and list_mandates report it. */
 export async function readAuthority(
   tx: Tx,
@@ -175,6 +408,10 @@ export async function readAuthority(
     out.push({
       measure,
       currencyOrUnit: limit.currencyOrUnit,
+      // `mandate.limits` is resolved by `withResolvedKinds` in
+      // `parseMandateRow` before it reaches here, so `limit.kind` is already
+      // the fact; the fallback below is defensive, not a second guessing site.
+      kind: limit.kind ?? legacyMeasureKindGuess(limit.currencyOrUnit),
       period: limit.period,
       periodKey: key,
       perCall: limit.perCall ?? null,
@@ -195,6 +432,17 @@ interface ReserveArgs {
   toolCallId: string;
   /** measure → value to reserve; every measure the mandate limits must be present. */
   values: Record<string, string>;
+  /**
+   * measure → the kind the call currently governing this measure declares
+   * (`calls`'s built-in "count", or `measureKindOf(declaration.type)` for
+   * everything else), computed by the caller from the live tool declaration.
+   * `reserve` stamps this onto the ledger row rather than `mandate.limits[
+   * measure].kind`: for a legacy measure that kind is `legacyMeasureKindGuess`'s
+   * fallback, not a fact, and stamping the guess as the reservation's kind
+   * would turn it into a durable one the mandate's own removal of the
+   * measure could not later correct.
+   */
+  measureKinds: Record<string, MeasureKind>;
   at: Date;
 }
 
@@ -213,7 +461,7 @@ export async function reserve(
   tx: Tx,
   args: ReserveArgs,
 ): Promise<ReserveResult> {
-  const { mandate, toolCallId, values, at } = args;
+  const { mandate, toolCallId, values, measureKinds, at } = args;
   const rows: (Omit<typeof l.$inferInsert, "createdAt"> & {
     createdAt: SQL;
   })[] = [];
@@ -221,6 +469,10 @@ export async function reserve(
     const value = values[measure];
     if (value === undefined) {
       throw new Error(`reserve: no value for measure "${measure}"`);
+    }
+    const measureKind = measureKinds[measure];
+    if (measureKind === undefined) {
+      throw new Error(`reserve: no measure kind for measure "${measure}"`);
     }
     if (limit.perCall !== undefined && exceeds(value, limit.perCall)) {
       return {
@@ -257,6 +509,14 @@ export async function reserve(
       measure,
       value,
       unitOrCurrency: limit.currencyOrUnit,
+      // The kind the call's live tool declaration governs this measure
+      // under (ADR-108), stamped once here so the row survives a later
+      // whole-record `limits` replacement that removes the measure: the
+      // ledger is append-only, the mandate is not. Never `limit.kind`: for
+      // a legacy measure that is `legacyMeasureKindGuess`'s fallback, not a
+      // fact, and stamping the guess would turn it into a durable one no
+      // later mandate write could correct.
+      measureKind,
       periodKey: key,
       balanceAfter,
       // The insert time under the lock, so "last row" is well ordered across
@@ -314,6 +574,10 @@ async function closeReservations(
       measure: r.measure,
       value: r.value,
       unitOrCurrency: r.unitOrCurrency,
+      // Carried from the reservation this closes, not re-derived from the
+      // mandate's current limits: a settle or release closes what a reserve
+      // started, under the kind that reserve was stamped with.
+      measureKind: r.measureKind,
       externalEffectId,
       periodKey: r.periodKey,
       balanceAfter,
@@ -547,11 +811,16 @@ export async function decideMandate(
       };
     }
 
-    // Measures: one value per limited measure, read from the call.
+    // Measures: one value per limited measure, read from the call. Also the
+    // kind the call's live declaration governs each measure under, for
+    // `reserve` to stamp onto the ledger row (never the mandate's own
+    // `limit.kind`, a legacy guess for a pre-ADR-108 row).
     const values: Record<string, string> = {};
+    const measureKinds: Record<string, MeasureKind> = {};
     for (const measure of Object.keys(mandate.limits)) {
       if (isCallsMeasure(measure)) {
         values[measure] = readCallsMeasure().value;
+        measureKinds[measure] = "count";
         continue;
       }
       const declaration = tool.measures[measure];
@@ -563,6 +832,75 @@ export async function decideMandate(
           detail: `${tool.slug}@${tool.version} declares no measure "${measure}"`,
         };
       }
+      // ADR-108 stamps a limit's kind from the declaration matched at write
+      // time. An unpinned mandate pattern (`slug`, `slug@*`) can still match
+      // a version published after that write, and that version can declare
+      // this measure's kind differently with the same unit spelling (count
+      // to amount or back) without the mandate ever being touched again. A
+      // stored kind that disagrees with what governs this call right now is
+      // the same disagreement ADR-108 already refuses at write time when two
+      // matched tools disagree, moved to the moment it can also happen
+      // between then and now: refused here rather than enforced against a
+      // figure entered under a kind that no longer holds.
+      //
+      // `mandate.legacyKindMeasures` excludes a row written before ADR-108:
+      // its `kind` is `legacyMeasureKindGuess`'s fallback, not a fact this
+      // measure was ever actually written under, and the gate has always
+      // enforced that row correctly by reading the declaration directly
+      // (never the guess). Comparing the guess itself against the current
+      // declaration would deny a legacy mandate the fallback happens to
+      // guess wrong, even though nothing about it has drifted, since there
+      // is no earlier fact to drift from in `mandate.limits`.
+      //
+      // But `reserve` has stamped every ledger row for this measure from the
+      // live declaration since ADR-108's ledger column shipped, whether the
+      // mandate's own stored `limits[measure].kind` is a real stamp or still
+      // a legacy guess: a legacy mandate's ledger history is real history
+      // the moment it exists. So a legacy measure is not exempt outright;
+      // it is checked against its own ledger's last stamped kind instead of
+      // `mandate.limits`, with no refusal only when that history is empty
+      // (this call would be the measure's first real stamp).
+      const limit = mandate.limits[measure];
+      const storedKind = limit?.kind;
+      if (mandate.legacyKindMeasures.has(measure) && limit !== undefined) {
+        const ledgerKind = await lastLedgerKind(tx, mandate.id, measure);
+        if (ledgerKind !== null) {
+          if (ledgerKind !== measureKindOf(declaration.type)) {
+            return {
+              kind: "deny",
+              reason: "measure_kind_changed",
+              mandate,
+              detail: `${tool.slug}@${tool.version} now declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate's ledger last recorded it as ${ledgerKind}; update the mandate's limit before this call can be decided`,
+            };
+          }
+        } else if (
+          await hasUnstampedLedgerHistory(
+            tx,
+            mandate.id,
+            measure,
+            limit.period,
+            at,
+          )
+        ) {
+          return {
+            kind: "deny",
+            reason: "measure_kind_changed",
+            mandate,
+            detail: `${tool.slug}@${tool.version} declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate has ledger history from before kind tracking that is still open or drawn this period and whose own kind was never recorded; release any open reservation and wait for the current window to close (a settled row cannot be released), or revoke the mandate, before this call can be decided`,
+          };
+        }
+      } else if (
+        storedKind !== undefined &&
+        storedKind !== measureKindOf(declaration.type)
+      ) {
+        return {
+          kind: "deny",
+          reason: "measure_kind_changed",
+          mandate,
+          detail: `${tool.slug}@${tool.version} now declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate's limit was written when it was ${storedKind}; update the mandate's limit before this call can be decided`,
+        };
+      }
+      measureKinds[measure] = measureKindOf(declaration.type);
       const read = readMeasure(args.input, declaration);
       if (!read.ok || read.measure.kind !== "value") {
         return {
@@ -658,7 +996,13 @@ export async function decideMandate(
     }
 
     const toolCallId = randomUUID();
-    const reserved = await reserve(tx, { mandate, toolCallId, values, at });
+    const reserved = await reserve(tx, {
+      mandate,
+      toolCallId,
+      values,
+      measureKinds,
+      at,
+    });
     if (!reserved.ok) {
       return {
         kind: "deny",

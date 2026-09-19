@@ -307,6 +307,7 @@ describe("rollupRun", () => {
         calls: 2,
         costMicros: null,
         basis: null,
+        hasUnpriced: true,
       }),
     ]);
   });
@@ -330,6 +331,40 @@ describe("rollupRun", () => {
       ["claude-sonnet-5", 4500n, "gateway_observed"],
       ["mystery-9", null, null],
     ]);
+    expect(
+      record.breakdown.models.map((m) => [m.model, m.hasUnpriced]),
+    ).toEqual([
+      ["claude-sonnet-5", false],
+      ["mystery-9", true],
+    ]);
+  });
+
+  it("marks a model group unpriced when one of its own calls is, even though a sibling call to the same model priced (#3271 residue G2)", () => {
+    // Fresh evidence: rollupRun aggregates a model group's costMicros across
+    // every call to that model, so a group with one priced and one unpriced
+    // call to the SAME model still carries a non-null costMicros — reading
+    // as fully priced on that field alone, even though it is not. This test
+    // fails against the code before hasUnpriced existed, because that code
+    // had no field the reprice scan could read to tell the two cases apart.
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      toolCalls: [],
+      modelCalls: [
+        frame(),
+        frame({
+          tokens: tokens({ reasoning: 500 }),
+          reportedCostMicros: null,
+        }),
+      ],
+    });
+    expect(record.breakdown.models).toHaveLength(1);
+    const [group] = record.breakdown.models;
+    // The group's own cost total is non-null: one of its two calls priced.
+    expect(group!.costMicros).toBe(4500n);
+    expect(group!.calls).toBe(2);
+    // But it is not fully priced, and only this field says so.
+    expect(group!.hasUnpriced).toBe(true);
   });
 
   it("answers no cost and no basis for a run with no model frame, never a zero", () => {

@@ -1,4 +1,4 @@
-# user.preferences.set
+# set_preferences
 
 The Account dialog's Preferences tab (MC spec App. E). A partial write: only the fields sent change, and the answer is the whole set after the write, read back from the row. `get_user_preferences` reads the same set.
 
@@ -44,7 +44,7 @@ The whole set after the write, read back from the row.
 |---|---|---|
 | `locale` | string | the stored language; `en` when first written without one |
 | `theme` | enum | `system`, `light`, `dark` |
-| `timezone` | string | the stored zone; `UTC` when first written without one |
+| `timezone` | string | the stored IANA zone; `America/Los_Angeles` when first written without one |
 | `fontSize` | enum | `small`, `medium`, `large`; `medium` on first write |
 | `density` | enum | `compact`, `comfortable`, `spacious`; `comfortable` on first write |
 | `enterToSubmit` | boolean | `false` on first write |

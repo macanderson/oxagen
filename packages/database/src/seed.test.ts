@@ -7,10 +7,11 @@
  * callback with a chainable mock transaction object. The tests assert:
  *
  *  1. seedPlatform() upserts the free plan row (insert → values → onConflictDoUpdate).
- *  2. seedDev() performs the org / user / workspace / agent version inserts in order.
- *  3. seedDev() branches into the "create version" path when activeVersionId is null.
- *  4. seedDev() skips the version insert when activeVersionId is already set.
- *  5. seed() calls both seedPlatform() and seedDev().
+ *  2. seedPlatform() also seeds the gated ebook editions.
+ *  3. seedDev() performs the org / user / workspace / agent version inserts in order.
+ *  4. seedDev() branches into the "create version" path when activeVersionId is null.
+ *  5. seedDev() skips the version insert when activeVersionId is already set.
+ *  6. seed() calls both seedPlatform() and seedDev().
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -61,6 +62,7 @@ const mocks = vi.hoisted(() => {
   );
 
   const closeDatabaseMock = vi.fn().mockResolvedValue(undefined);
+  const seedBookEditionsMock = vi.fn().mockResolvedValue(undefined);
 
   return {
     limitMock,
@@ -77,11 +79,18 @@ const mocks = vi.hoisted(() => {
     mockTx,
     withSystemDbMock,
     closeDatabaseMock,
+    seedBookEditionsMock,
   };
 });
 
 vi.mock("./tenant", () => ({ withSystemDb: mocks.withSystemDbMock }));
 vi.mock("./client", () => ({ closeDatabase: mocks.closeDatabaseMock }));
+// Book HTML seed is covered in seed-book-editions.test.ts; keep these tests
+// on the plan upsert path without reading seed-assets or counting extra
+// withSystemDb calls.
+vi.mock("./seed-book-editions", () => ({
+  seedBookEditions: mocks.seedBookEditionsMock,
+}));
 
 import { seedPlatform, seedDev, seed } from "./seed";
 
@@ -114,6 +123,7 @@ function resetAllMocks() {
         cb(mocks.mockTx),
     );
   mocks.closeDatabaseMock.mockReset().mockResolvedValue(undefined);
+  mocks.seedBookEditionsMock.mockReset().mockResolvedValue(undefined);
 }
 
 // Sequence of select().from().where().limit() resolved values for seedDev():
@@ -151,6 +161,11 @@ describe("seedPlatform()", () => {
     expect(mocks.onConflictDoUpdateMock).toHaveBeenCalledOnce();
   });
 
+  it("seeds book editions after the free plan", async () => {
+    await seedPlatform();
+    expect(mocks.seedBookEditionsMock).toHaveBeenCalledOnce();
+  });
+
   it("rewrites an existing free row's GAU terms to the v1 published figures", async () => {
     await seedPlatform();
     const arg = mocks.onConflictDoUpdateMock.mock.calls[0]?.[0] as
@@ -163,6 +178,11 @@ describe("seedPlatform()", () => {
       blockSizeGau: 5_000,
       includedGauPerMonth: 5_000,
     });
+  });
+
+  it("seeds the gated ebook editions after the plan upsert", async () => {
+    await seedPlatform();
+    expect(mocks.seedBookEditionsMock).toHaveBeenCalledOnce();
   });
 });
 
@@ -278,7 +298,9 @@ describe("seed()", () => {
 
     await seed();
 
-    // withSystemDb is called once per seed function = 2 total
+    // withSystemDb is called once per seed function = 2 total (book editions
+    // are mocked out of seedPlatform for this suite).
     expect(mocks.withSystemDbMock).toHaveBeenCalledTimes(2);
+    expect(mocks.seedBookEditionsMock).toHaveBeenCalledOnce();
   });
 });

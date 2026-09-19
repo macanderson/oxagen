@@ -304,6 +304,72 @@ export function readHostFileLenient(path: string): LenientHostRead {
   };
 }
 
+/** The harness list and the enrollment id they belong to, read as one pair. */
+export interface CurrentEnrollment {
+  harnesses: string[];
+  enrollmentId: string;
+  /**
+   * False when host.json could not be read or did not validate, so
+   * `harnesses` and `enrollmentId` are the daemon's startup copy rather than
+   * a pair confirmed on disk just now. A caller that gates a
+   * security-relevant check on the enrollment identity (the hook-removal
+   * detector) must NOT disable itself on `verified: false`: a host whose
+   * enrollment cannot currently be confirmed is exactly the host a tamper
+   * detector must keep watching, and going quiet here hands an attacker the
+   * evasion of making the enrollment file unreadable and then tampering
+   * with what the detector was checking (docs/specs/tacho/spec.md section
+   * 11's threat-model table, and section 14 acceptance item 8, neither of
+   * which carries an exception for the enrollment file also being
+   * unreadable). Instead, continue the check against the last pair that
+   * *was* confirmed on disk (`verified: true`), and stamp `verified` onto
+   * whatever evidence the check produces, so a reader can tell a check that
+   * ran against a last-verified identity from one that ran against a
+   * live-confirmed one (#3398; `Detector.checkHooks()` in
+   * `packages/tacho/src/collector/detector.ts` is the reference caller).
+   */
+  verified: boolean;
+}
+
+/**
+ * The harness list host.json enrolls now, and the enrollment id that list
+ * belongs to, read together from the same on-disk snapshot on every call.
+ *
+ * The daemon's in-memory copy is the one it started with, and `reassign`
+ * replaces the enrollment under a daemon that is still up, so a harness the
+ * CLI dropped would otherwise stay "enrolled" until a restart, and the
+ * hook-presence check would keep validating hooks against the enrollment id
+ * the daemon booted with. Reading both fields out of one `readHostFileLenient`
+ * call, rather than two separate reads at two separate moments, is what
+ * keeps a live `reassign` from ever pairing the new harness list with the
+ * old enrollment id (#3398). A missing or invalid file falls back to the
+ * daemon's copy, in full, marked `verified: false`: a hand-edited host.json
+ * must not make the daemon forget which agents it wraps or which enrollment
+ * it wraps them under, but a caller that needs a *confirmed* identity, not
+ * merely a remembered one, must see that the file could not back it.
+ */
+export function currentEnrollment(
+  path: string,
+  fallback: HostFile,
+): CurrentEnrollment {
+  const read = readHostFileLenient(path).host;
+  const host = read ?? fallback;
+  return {
+    harnesses: host.harnesses,
+    enrollmentId: host.host_enrollment_id,
+    verified: read !== undefined,
+  };
+}
+
+/**
+ * The harnesses host.json enrolls now, read from disk on every call.
+ *
+ * A thin projection of {@link currentEnrollment} for a caller that wants
+ * only the harness list, with no enrollment id to keep it paired with.
+ */
+export function enrolledHarnesses(path: string, fallback: HostFile): string[] {
+  return currentEnrollment(path, fallback).harnesses;
+}
+
 export function writeHostFile(path: string, host: HostFile): void {
   writeSensitiveFileAtomic(path, `${JSON.stringify(host, null, 2)}\n`);
 }

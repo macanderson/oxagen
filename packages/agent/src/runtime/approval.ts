@@ -44,7 +44,50 @@ export interface CreateApprovalArgs {
   riskLevel: "low" | "medium" | "high";
   executionStepId?: string | null;
   toolCallId?: string | null;
+  /**
+   * The run this call was parked in, as `agent_runs.id` (#3286). The approval
+   * row records the run's PUBLIC id, because both kinds of run the Run page
+   * shows have to be representable and no one table holds both, so this is
+   * resolved to one inside the write.
+   *
+   * Omit it where no run is in scope. A null on the row means "not recorded",
+   * never "some other run".
+   */
+  runId?: string | null;
   ttlMs?: number;
+}
+
+/** `agent_runs.id` is a uuid; anything else is a caller's sentinel, not a run. */
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The public id of the run a parked call belongs to, or null.
+ *
+ * The chat gate holds the run's internal id (`ctx.agentRun.runId`) and the
+ * column records the public one, so the write resolves it — one primary-key
+ * read per parked call. A value that is not a uuid is a caller's sentinel
+ * (the tool-belt read uses one) and names no run; a uuid with no row is a run
+ * this workspace does not hold. Both record null rather than a reference the
+ * Run page would fail to resolve.
+ */
+export async function resolveRunPublicId(
+  tx: Tx,
+  args: { orgId: string; workspaceId: string; runId?: string | null },
+): Promise<string | null> {
+  if (!args.runId || !UUID.test(args.runId)) return null;
+  const [row] = await tx
+    .select({ publicId: schema.agentRuns.publicId })
+    .from(schema.agentRuns)
+    .where(
+      and(
+        eq(schema.agentRuns.id, args.runId),
+        eq(schema.agentRuns.orgId, args.orgId),
+        eq(schema.agentRuns.workspaceId, args.workspaceId),
+      ),
+    )
+    .limit(1);
+  return row?.publicId ?? null;
 }
 
 export interface ApprovalResolution {
@@ -169,6 +212,7 @@ export async function createApprovalRequest(
         riskLevel: args.riskLevel,
         executionStepId: args.executionStepId ?? null,
         toolCallId: args.toolCallId ?? null,
+        runPublicId: await resolveRunPublicId(tx, args),
         inputDigest: digest,
         expiresAt,
       })

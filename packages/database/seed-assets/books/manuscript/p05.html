@@ -1,0 +1,84 @@
+<h2 class="ch-title">Build semantic memory once</h2>
+<p class="ch-thesis">A run should start from what the last one learned instead of repeating it.</p>
+
+<p class="lede">On Monday a run spends about 40,000 tokens learning that your payments code lives in <code>billing/</code>, that <code>LedgerEntry</code> is the money-movement primitive, and that notifications go through an outbox pattern. On Tuesday a new run spends about 40,000 tokens learning the same three facts. In the traces this book draws on, that rediscovery is most of the startup cost, for knowledge that changes monthly.</p>
+
+<h3>Repositories have natural semantic structure</h3>
+<p>Any codebase that has survived contact with production organizes into domains (Payments, Authentication, Billing, Notifications, Infrastructure) whether or not the directory tree admits it. You can recover those domains automatically. Embed every file and module summary, cluster the embeddings, then cross-check the clusters against the dependency graph from part 4. Community detection over the import graph (Louvain, Leiden) finds the same boundaries from pure structure.</p>
+
+<div class="vs">
+  <div class="a">
+    <h4>◌ Clusters and graph disagree</h4>
+    <ul>
+      <li>A module imports across what the text says is a boundary</li>
+      <li>One directory holds two unrelated vocabularies</li>
+      <li>Treat it as a debt list, ranked by how many edges cross</li>
+    </ul>
+  </div>
+  <div class="b">
+    <h4>● Clusters and graph agree</h4>
+    <ul>
+      <li>Semantics and structure name the same set of files</li>
+      <li>That set is a real architectural boundary</li>
+      <li>Give it a dossier and an owner, and retrieve it as one unit</li>
+    </ul>
+  </div>
+</div>
+
+<p>This runs Conway's law backwards: the code's semantic clusters recover the team and domain boundaries that produced it. Once you infer a domain, give it a compact, versioned dossier. Entry points, core types, invariants ("money is integer cents everywhere"), owned tables, and the suites that cover it. Generate it once, refresh it incrementally on merge, and retrieve it at the start of a run by lookup rather than by exploration.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · Index once, query cheaply forever</span>
+  <p>Microsoft Research's <strong>GraphRAG</strong> shows the economics of amortized semantic indexing. An LLM pass extracts an entity graph from the corpus once, the Leiden algorithm detects semantic communities, and community summaries are pre-generated at index time. At query time, answering corpus-level questions from those summaries won 70 to 80% of head-to-head comparisons against naive RAG on comprehensiveness and diversity, while using roughly <strong>2 to 3% of the tokens per query</strong> that hierarchical source-text summarization would require, because the expensive understanding was paid for once, up front.<sup class="cite"><a href="#r10">10</a>,<a href="#r11">11</a></sup> The same trade applies to code. Indexing is a fixed cost. Rediscovery inside every run is a tax.</p>
+  <p class="src">Edge et al., arXiv:2404.16130 · Microsoft Research, 2024</p>
+</div>
+
+<h3>What a dossier looks like</h3>
+<p>A dossier is the briefing a senior engineer gives a new hire, generated from code and stamped with its commit.</p>
+
+<pre><code>domain: billing
+sha: 9f31c2
+entry_points: [billing/api.py, billing/tasks.py]
+core_types: [LedgerEntry, Invoice, RefundRequest]
+invariants:
+  - money columns are integer cents (lint: no-float-money)
+  - outbound mail goes through the outbox, not the mailer
+owned_tables: [ledger_entries, invoices, refunds]
+covering_tests: [tests/billing/, tests/contract/test_ledger.py]
+may_call: [payments, notifications]
+<span class="c"># 280 tokens. Rebuilt when any path under billing/ merges.</span></code></pre>
+
+<h3>What goes in the memory layer</h3>
+<ul class="plain">
+  <li><strong>Embeddings</strong>: file, symbol, and doc-chunk vectors for fuzzy entry ("where do we throttle webhooks?") when the prompt carries no hard anchors.</li>
+  <li><strong>Domain dossiers</strong>: the 300-token expert briefing per domain, as above.</li>
+  <li><strong>Architectural boundary map</strong>: which domains may call which, with violations flagged by a check before the model proposes one.</li>
+  <li><strong>Convention registry</strong>: error-handling idioms, naming schemes, "we use the repository pattern here", extracted once and injected only when the diff is in scope.</li>
+</ul>
+<p>This memory is infrastructure with a freshness contract, not a cache. It rebuilds incrementally from the merge queue, it carries the commit SHA it was derived from, and the same CI that validates your code invalidates it. That contract is what separates semantic memory from a stale wiki.</p>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Build the import graph and cut it into communities.</strong> Parse the repository with tree-sitter or your language's own import resolver, load the edges into networkx or python-igraph, and run Leiden. The artifact is <code>domains.json</code>, one community id per module.</li>
+    <li><strong>Cross-check the communities against embeddings.</strong> Summarize each file, embed the summaries, cluster them, and print the modules where the two methods disagree. That list is your boundary debt, and it is worth reading before you write a single dossier.</li>
+    <li><strong>Generate one dossier for your busiest domain.</strong> Fill the fields above from the index, cap it at 300 tokens, and stamp it with the commit SHA. Done looks like a file a new engineer could read in a minute and act on.</li>
+    <li><strong>Rebuild dossiers in CI on merge.</strong> Recompute only the domains whose paths changed. Done looks like the dossier SHA matching <code>HEAD</code> within one merge.</li>
+    <li><strong>Make the start of a run a lookup.</strong> Resolve the touched paths to a domain, inject that dossier, and remove the instruction that told the agent to go exploring.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>run_startup_tokens</code>: tokens consumed before the first file edit. Sum the input tokens of every request that precedes the first write. Lower is better, and the drop after step 5 is the whole return on this chapter.</li>
+    <li><code>dossier_staleness_commits</code>: merges between the dossier's stamped SHA and <code>HEAD</code> for that domain. Lower is better, with 0 to 1 as the working target.</li>
+    <li><code>domain_agreement_rate</code>: share of modules where the embedding cluster and the graph community name the same domain. Higher is better, and the remainder is a ranked debt list.</li>
+    <li><code>dossier_hit_rate</code>: share of runs that retrieved a dossier for the domain they actually edited. Higher is better, and a low number usually means your path-to-domain resolver is wrong, not that the dossiers are.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Understanding your repository is a build artifact, not a conversation. Compute it once, version it, refresh it incrementally, and let every run start from knowledge instead of archaeology.</p>
+</div>

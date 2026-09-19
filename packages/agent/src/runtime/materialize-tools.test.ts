@@ -402,6 +402,7 @@ describe("materializeTools", () => {
     await t.execute!({ x: "hello" });
     expect(invoke).toHaveBeenCalledWith("capA", { x: "hello" }, CTX, {
       surface: "agent",
+      runId: null,
     });
   });
 
@@ -532,6 +533,94 @@ describe("materializeTools", () => {
     expect(events).toHaveLength(1);
   });
 
+  it("attaches a parked approval to the run set on runIdRef AFTER materialization, not the run captured at materialize time (finding 9, negative)", async () => {
+    // The in-app assistant materializes tools before `openAssistantRun` opens
+    // the run (the belt has to exist first, to build the run's own
+    // `toolAllowlist`), so `ctx.agentRun` is unset when these closures are
+    // built. `runIdRef` is how the run, once opened, reaches a call that
+    // executes later — every `execute` closure reads `runIdRef.current` at
+    // call time, not a value captured when materializeTools ran.
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const runIdRef: { current: string | null } = { current: null };
+    const { tools } = await mt({ ...CTX, messageId: "msg_42" }, { runIdRef });
+    // The run opens only after materializeTools has already returned —
+    // exactly the order `runPreparedTurn` follows. The value is the internal
+    // UUID `createApprovalRequest` → `resolveRunPublicId` accepts.
+    runIdRef.current = "0192d4a8-7c1e-7a00-8000-0000000000a1";
+    await (
+      tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ y: 1 });
+    const call = mocks.createApprovalRequest.mock.calls.at(0)?.at(0) as
+      | { runId: string | null }
+      | undefined;
+    expect(call?.runId).toBe("0192d4a8-7c1e-7a00-8000-0000000000a1");
+  });
+
+  it("falls back to ctx.agentRun.runId when the caller passes no runIdRef (negative)", async () => {
+    mocks.createApprovalRequest.mockClear();
+    mocks.waitForApproval.mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const { tools } = await mt({ ...CTX, messageId: "msg_44" });
+    await (
+      tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
+    ).execute({ y: 1 });
+    const call = mocks.createApprovalRequest.mock.calls.at(0)?.at(0) as
+      | { runId: string | null }
+      | undefined;
+    // CTX (no agentRun, no runIdRef) carries neither, so the call is not
+    // attached to a run rather than to a wrong one.
+    expect(call?.runId).toBeNull();
+  });
+
+  it("threads runIdRef.current into invoke()'s opts.runId for a capability with no approval gate, so an auto-approval receipt (#3153) attaches to the run the assistant opened after materializing tools", async () => {
+    const runIdRef: { current: string | null } = { current: null };
+    const { tools } = await materializeTools(
+      { ...CTX, messageId: "msg_45" },
+      { runIdRef },
+    );
+    // Same ordering as the approval-gated case above: the run opens only
+    // after materializeTools has already returned.
+    runIdRef.current = "arun_live_45";
+    const capATool = tools.capA as unknown as {
+      execute: (i: unknown) => Promise<unknown>;
+    };
+    await capATool.execute({ x: "hello" });
+    expect(invoke).toHaveBeenCalledWith(
+      "capA",
+      { x: "hello" },
+      { ...CTX, messageId: "msg_45" },
+      { surface: "agent", runId: "arun_live_45" },
+    );
+  });
+
   it("denied approval throws and the handler never runs", async () => {
     mocks.createApprovalRequest.mockClear();
     mocks.waitForApproval.mockClear();
@@ -586,7 +675,7 @@ describe("materializeTools", () => {
       "fill_form",
       { formId: "workspace-general", values: { name: "Prod" } },
       CTX,
-      { surface: "agent" },
+      { surface: "agent", runId: null },
     );
     expect(result).toEqual({ filled: true });
   });
@@ -625,7 +714,7 @@ describe("materializeTools", () => {
       "generate_svg",
       { prompt: "a red circle" },
       CTX,
-      { surface: "agent" },
+      { surface: "agent", runId: null },
     );
     expect(result).toEqual({ svg: "<svg/>" });
   });

@@ -1,4 +1,4 @@
-# schema.validate.node
+# validate_schema_node
 
 Validate a node's properties against the workspace schema. Returns a conformance score, field-level errors, and the outcome that would occur in the current enforcement mode. Pure validation — no writes to the graph.
 

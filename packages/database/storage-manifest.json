@@ -961,6 +961,15 @@
       "writes": []
     },
     {
+      "domain": "privacy",
+      "name": "get_export_status",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "spend",
       "name": "get_finding_evidence",
       "reads": [],
@@ -1284,6 +1293,16 @@
     },
     {
       "domain": "run",
+      "name": "get_run_chain",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
       "name": "get_run_cost",
       "reads": [],
       "surfaces": [
@@ -1359,6 +1378,17 @@
       "name": "get_spend_drill",
       "reads": [],
       "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "get_steering_freshness",
+      "reads": [],
+      "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2035,6 +2065,17 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "list_resolved_approvals",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "router",
       "name": "list_routing_stats",
       "reads": [],
@@ -2132,6 +2173,16 @@
     {
       "domain": "tool",
       "name": "list_tool_versions",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "cost",
+      "name": "list_unpriced_models",
       "reads": [],
       "surfaces": [
         "api",
@@ -2498,6 +2549,17 @@
       "surfaces": [
         "agent",
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "cost",
+      "name": "remove_price_entry",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2917,6 +2979,17 @@
       "reads": [],
       "surfaces": [
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "cost",
+      "name": "set_price_entry",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -3425,7 +3498,7 @@
       "writes": []
     }
   ],
-  "contentHash": "a3be8e6104d744822e0a56f73284266afa7d1fbfa29a17c3ade1d1248810210c",
+  "contentHash": "a8c29f6caad2265c1bcd94a8080574de9e90707e2e69b5d67d787e53e7a190ff",
   "domains": [
     {
       "name": "agent",
@@ -3542,6 +3615,17 @@
       ]
     },
     {
+      "name": "cms",
+      "stores": [
+        "postgres"
+      ],
+      "tables": [
+        "postgres:cms.book_access_codes",
+        "postgres:cms.book_editions",
+        "postgres:cms.leads"
+      ]
+    },
+    {
       "name": "content",
       "stores": [
         "blob",
@@ -3565,6 +3649,7 @@
       "tables": [
         "postgres:cost.daily_totals",
         "postgres:cost.findings",
+        "postgres:cost.price_book_initializations",
         "postgres:cost.price_entries",
         "postgres:cost.run_totals"
       ]
@@ -3828,6 +3913,7 @@
         "auth",
         "billing",
         "chat",
+        "cms",
         "content",
         "cost",
         "environments",
@@ -3848,7 +3934,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 131
+      "tableCount": 135
     },
     {
       "domains": [
@@ -6261,6 +6347,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "integer"
+        },
+        {
+          "name": "enforcement_tier",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
@@ -7390,6 +7482,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "run_public_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "capability_name",
@@ -11256,6 +11354,351 @@
           "type": "uuid"
         },
         {
+          "name": "code",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "lead_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "book_slug",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "issue_reason",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "parent_code_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "last_edition_slug",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "consumed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "expires_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "ip",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "user_agent",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "cms",
+      "id": "postgres:cms.book_access_codes",
+      "name": "book_access_codes",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "slug",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "book_slug",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "format",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "title",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "html",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "published",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        }
+      ],
+      "domain": "cms",
+      "id": "postgres:cms.book_editions",
+      "name": "book_editions",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "email",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "first_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "job_title",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "company",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "company_size",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "company_size"
+        },
+        {
+          "name": "mobile_phone",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "country",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "state",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "city",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "address_1",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "address_2",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "referral_source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "referral_source"
+        },
+        {
+          "name": "tracking_code",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "page_path",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "message",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "marketing_consent",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        }
+      ],
+      "domain": "cms",
+      "id": "postgres:cms.leads",
+      "name": "leads",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
           "name": "org_id",
           "nullable": false,
           "primaryKey": false,
@@ -11640,6 +12083,57 @@
     {
       "columns": [
         {
+          "name": "book",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "initialized_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "completed_catalogs",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.price_book_initializations",
+      "name": "price_book_initializations",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
           "name": "id",
           "nullable": false,
           "primaryKey": true,
@@ -11739,6 +12233,12 @@
         {
           "name": "source",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "catalog",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         }
@@ -16681,6 +17181,12 @@
           "type": "uuid"
         },
         {
+          "name": "workspace_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
           "name": "scope",
           "nullable": false,
           "primaryKey": false,
@@ -18844,6 +19350,12 @@
           "type": "integer"
         },
         {
+          "name": "observed_status",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "first_seq",
           "nullable": false,
           "primaryKey": false,
@@ -19842,6 +20354,12 @@
           "type": "integer"
         },
         {
+          "name": "pushes",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
           "name": "pull_requests",
           "nullable": false,
           "primaryKey": false,
@@ -20143,6 +20661,12 @@
         {
           "name": "unit_or_currency",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "measure_kind",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         },

@@ -1,4 +1,4 @@
-# context.proposal.dismiss
+# dismiss_proposal
 
 **Name:** `dismiss_proposal`
 **Domain:** context

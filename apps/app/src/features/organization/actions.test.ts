@@ -340,6 +340,7 @@ describe("renameWorkspace", () => {
       description: null,
       avatarUrl: null,
       consequenceRoles: {},
+      steering: { autoSync: false, blockStaleRuns: false },
     });
     expect(
       await renameWorkspace("acme", "wrk_1", {
@@ -372,6 +373,7 @@ describe("archiveWorkspace", () => {
       slug: "research",
       name: "Research",
       archivedAt: "2026-09-15T10:00:00.000Z",
+      suspendedApiKeys: 0,
     });
     expect(await archiveWorkspace("acme", "wrk_1")).toEqual({
       ok: true,

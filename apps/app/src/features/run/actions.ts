@@ -14,13 +14,30 @@ import {
   STEER_TEXT_MAX,
   tachoCommandDispatch,
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import { runBisect } from "@oxagen/oxagen/contracts/run.bisect";
 import { runExport } from "@oxagen/oxagen/contracts/run.export";
+import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
-import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import {
+  runTranscriptGet,
+  TRANSCRIPT_ENTRY_DEFAULT,
+} from "@oxagen/oxagen/contracts/run.transcript.get";
+import { captureError } from "@oxagen/telemetry";
+import type { z } from "zod";
+import { moneyFromMicros } from "@/data/contracts/money";
+import {
+  RunTranscript,
+  type TranscriptKind,
+  type TranscriptZoom,
+} from "@/data/contracts/run";
+import type { Read } from "@/data/read";
+import type { ActionResult, ContractOutput } from "@/server/kernel";
+import { kernelRead, kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type QueuedCommand = { commandIds: string[] };
+
+type RunTranscriptGetOutput = ContractOutput<typeof runTranscriptGet>;
 
 /** Pause at the next boundary, or resume a run paused earlier. The reason reaches the model. */
 export async function haltRun(
@@ -100,5 +117,192 @@ export async function exportRun(
   const result = await kernelWrite(ctx, runExport, { runId });
   return result.ok
     ? { ok: true, value: { exportId: result.value.exportId } }
+    : result;
+}
+
+/**
+ * A read carried in the shape a write's answer takes. Every caller of this
+ * module is a client component, and INV-19 has every exported function of a
+ * `"use server"` module answer with an `ActionResult`, so a `Read` is carried
+ * across rather than returned: `denied` keeps the permission the page failure
+ * names, and an error keeps its code. The Workspace settings dialog does the
+ * same for its two on-demand reads; the layer matrix (INV-07) keeps
+ * `features/*` out of `data/live`, so each of the two owns its own copy.
+ *
+ * `invalid_input` becomes `invalid` rather than `unavailable`, because the
+ * only input a caller varies here is the cursor: the run, the zoom and the
+ * chips come from the page. That is what lets the view say "this resume point
+ * is not one the read wrote" instead of "something went wrong".
+ */
+function toTranscriptPage(
+  out: RunTranscriptGetOutput,
+): z.input<typeof RunTranscript> {
+  const cost = (value: RunTranscriptGetOutput["entries"][number]["cost"]) =>
+    value === null
+      ? null
+      : {
+          ...moneyFromMicros(value.micros, value.currency),
+          basis: value.basis,
+        };
+  return {
+    zoom: out.zoom,
+    kinds: out.kinds,
+    entries: out.entries.map((entry) => ({
+      seq: entry.seq,
+      endSeq: entry.endSeq,
+      at: entry.at,
+      elapsedMs: entry.elapsedMs,
+      kind: entry.kind,
+      type: entry.type,
+      label: entry.label,
+      callKey: entry.callId,
+      kinds: entry.kinds,
+      turn: entry.turn,
+      request: entry.request,
+      response: entry.response,
+      decision: entry.decision,
+      frames: entry.frames,
+      cost: cost(entry.cost),
+      cumulativeCost: cost(entry.cumulativeCost),
+    })),
+    cursor: out.cursor,
+    complete: out.complete,
+  };
+}
+
+function asActionResult<T>(read: Read<T>): ActionResult<T> {
+  if (read.ok) return read;
+  switch (read.reason) {
+    case "denied":
+      return { ok: false, reason: "denied", code: read.permission };
+    case "pending_approval":
+      return {
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: read.accessRequestId,
+      };
+    case "error":
+      return read.code === "invalid_input"
+        ? {
+            ok: false,
+            reason: "invalid",
+            code: "invalid_cursor",
+            field: "after",
+          }
+        : { ok: false, reason: "unavailable", code: read.code };
+  }
+}
+
+/**
+ * One later page of the transcript, for the player's own pagination
+ * (`get_run_transcript`).
+ *
+ * A read that must happen on demand has nowhere else to live (INV-07's
+ * `features` row): a page's reads go through a `DataSource` port and are made
+ * when the route renders, and a navigation is exactly what appending a page
+ * must not cost, because it would throw away the playhead and the scroll
+ * position. So this resolves its own viewer and reads through the kernel seam,
+ * as a write does.
+ *
+ * The mapping is the port's, written out here because the layer matrix keeps
+ * `features/*` out of `data/live`. `actions.test.ts` holds the two to the same
+ * answer for the same contract output, so the first page and a later one
+ * cannot come to disagree about one run.
+ */
+export async function readTranscriptPage(
+  org: string,
+  ws: string,
+  runId: string,
+  zoom: TranscriptZoom,
+  kinds: readonly TranscriptKind[],
+  after: string,
+): Promise<ActionResult<RunTranscript>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: runTranscriptGet,
+    input: {
+      runId,
+      zoom,
+      kinds: [...kinds],
+      limit: TRANSCRIPT_ENTRY_DEFAULT,
+      after,
+    },
+    page: "run",
+  });
+  if (!read.ok) return asActionResult(read);
+  const view = RunTranscript.safeParse(toTranscriptPage(read.value));
+  if (view.success) return { ok: true, value: view.data };
+  captureError({
+    error: view.error,
+    source: "app",
+    orgId: ctx.orgId,
+    context: "readTranscriptPage record_unmappable",
+  });
+  return { ok: false, reason: "unavailable", code: "record_unmappable" };
+}
+
+/**
+ * Fork this run from a frame (`fork_run`): frames 0 to N replay from the
+ * recording, the next model call runs live, and a tool result after N is
+ * served from the cassette when its input digest matches. Oxagen mints the
+ * attempt; the harness that admitted the run is what resumes it (ADR-043), so
+ * this answers the attempt, not a running agent.
+ */
+export async function forkRun(
+  org: string,
+  ws: string,
+  runId: string,
+  fromSeq: string,
+): Promise<ActionResult<{ attemptId: string; attemptNumber: number }>> {
+  const ctx = await requireViewer(org, ws);
+  if (!/^\d{1,19}$/.test(fromSeq) || fromSeq === "0") {
+    return { ok: false, reason: "invalid", code: "from_seq", field: "fromSeq" };
+  }
+  const result = await kernelWrite(ctx, runFork, { runId, fromSeq });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          attemptId: result.value.attemptId,
+          attemptNumber: result.value.attemptNumber,
+        },
+      }
+    : result;
+}
+
+/**
+ * The first frame at which this run and another diverge (`bisect_runs`). Both
+ * recordings are aligned frame by frame on each frame's kind and call
+ * identity; bodies are not read, so this works at grade `inspect` and above.
+ */
+export async function bisectRuns(
+  org: string,
+  ws: string,
+  runA: string,
+  runB: string,
+): Promise<
+  ActionResult<{
+    divergentSeq: string | null;
+    keyA: string | null;
+    keyB: string | null;
+    aligned: number;
+  }>
+> {
+  const ctx = await requireViewer(org, ws);
+  const other = runB.trim();
+  if (other === "" || other === runA) {
+    return { ok: false, reason: "invalid", code: "run_b", field: "runB" };
+  }
+  const result = await kernelWrite(ctx, runBisect, { runA, runB: other });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          divergentSeq: result.value.divergentSeq,
+          keyA: result.value.keyA,
+          keyB: result.value.keyB,
+          aligned: result.value.aligned,
+        },
+      }
     : result;
 }

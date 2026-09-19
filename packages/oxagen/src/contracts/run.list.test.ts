@@ -1,24 +1,94 @@
 import { describe, expect, it } from "vitest";
-import { runItemSchema, runList } from "./run.list";
+import { canSummarizeRun, runItemSchema, runList } from "./run.list";
 
 const item = {
   id: "tse_4q8r1t6v3x5z0b2d7h2k9m",
   source: "tacho",
   agentKey: "acme.core.cc-laptop",
   operatorId: null,
+  operatorKind: null,
+  operatorName: null,
   status: "sealed",
   turns: 2,
   steps: 7,
   frames: 207,
   cost: null,
+  model: null,
+  machine: null,
   taskRef: null,
   startedAt: "2026-09-08T10:06:03.000Z",
   sealedAt: "2026-09-08T10:06:30.000Z",
   replayGrade: null,
   verdict: null,
+  enforcementTier: "observe",
+  completenessGaps: [],
+  canSummarize: true,
   name: null,
   summary: null,
 };
+
+describe("list_runs run row: who ran it, on what, with which model", () => {
+  it("carries a named person, a model and a machine", () => {
+    const full = {
+      ...item,
+      operatorId: "prn_0123456789abcdefghjkmn",
+      operatorKind: "human",
+      operatorName: "Marcus Bell",
+      model: {
+        id: "claude-sonnet-5",
+        provider: "anthropic",
+        tier: "sonnet",
+      },
+      machine: {
+        hostname: "mac-studio.local",
+        platform: "darwin",
+        osVersion: "15.6",
+        arch: "arm64",
+        nodeVersion: "v24.4.0",
+      },
+    };
+    expect(runItemSchema.parse(full)).toEqual(full);
+  });
+
+  it("lets a model name a vendor without naming a class, and a machine omit what enrolment did not record", () => {
+    const partial = {
+      ...item,
+      model: { id: "gpt-5", provider: "openai", tier: null },
+      machine: {
+        hostname: "runner-14",
+        platform: "linux",
+        osVersion: null,
+        arch: null,
+        nodeVersion: null,
+      },
+    };
+    expect(runItemSchema.parse(partial)).toEqual(partial);
+  });
+
+  it("refuses a kind outside the principal CHECK and a machine with no hostname (negative)", () => {
+    expect(
+      runItemSchema.safeParse({ ...item, operatorKind: "robot" }).success,
+    ).toBe(false);
+    expect(
+      runItemSchema.safeParse({
+        ...item,
+        machine: {
+          platform: "darwin",
+          osVersion: null,
+          arch: null,
+          nodeVersion: null,
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("refuses a row that leaves the new fields out entirely (negative)", () => {
+    const { operatorKind: _k, ...withoutKind } = item;
+    expect(runItemSchema.safeParse(withoutKind).success).toBe(false);
+    const { model: _m, ...withoutModel } = item;
+    expect(runItemSchema.safeParse(withoutModel).success).toBe(false);
+  });
+});
 
 describe("list_runs contract", () => {
   it("is a console read: mutates false, noBillingGate true, scoped, default-deny", () => {
@@ -115,5 +185,58 @@ describe("list_runs verdict (ADR-064)", () => {
     ).toBe(false);
     const { verdict: _dropped, ...withoutVerdict } = item;
     expect(runItemSchema.safeParse(withoutVerdict).success).toBe(false);
+  });
+});
+
+describe("the row a caller decides from (#3285)", () => {
+  it("names the tier the run was observed at, from a closed set (negative)", () => {
+    for (const enforcementTier of ["gateway", "harness", "observe"]) {
+      expect(runItemSchema.safeParse({ ...item, enforcementTier }).success).toBe(
+        true,
+      );
+    }
+    expect(
+      runItemSchema.safeParse({ ...item, enforcementTier: "proxy" }).success,
+    ).toBe(false);
+    // The tier is how a caller knows whether a control has a connection point
+    // to reach, so it is never absent.
+    const { enforcementTier: _omit, ...without } = item;
+    expect(runItemSchema.safeParse(without).success).toBe(false);
+  });
+
+  it("publishes gaps from the closed vocabulary only (negative)", () => {
+    expect(
+      runItemSchema.safeParse({
+        ...item,
+        completenessGaps: ["digest_only", "tool_bodies"],
+      }).success,
+    ).toBe(true);
+    expect(
+      runItemSchema.safeParse({ ...item, completenessGaps: ["something_new"] })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe("canSummarizeRun", () => {
+  it("refuses a live run: the record is not yet complete", () => {
+    expect(canSummarizeRun({ status: "live", completenessGaps: [] })).toBe(
+      false,
+    );
+  });
+
+  it("refuses a digest_only recording: there are no bodies for a model to read", () => {
+    expect(
+      canSummarizeRun({ status: "sealed", completenessGaps: ["digest_only"] }),
+    ).toBe(false);
+  });
+
+  it("allows a sealed recording that kept bodies, halted or not", () => {
+    expect(canSummarizeRun({ status: "sealed", completenessGaps: [] })).toBe(
+      true,
+    );
+    expect(
+      canSummarizeRun({ status: "halted", completenessGaps: ["tool_bodies"] }),
+    ).toBe(true);
   });
 });

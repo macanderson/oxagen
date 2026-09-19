@@ -7,7 +7,13 @@
  * reduced-motion users; the button's copied state is the feedback).
  */
 
-const EMBER = ["#977017", "#D4AF37", "#F1CE65", "#7BC98A", "#FFFFFF"];
+/*
+ * The confetti paints onto a bare <canvas>, which takes no custom property,
+ * so these are the only brand hexes on this page. They are the kit's gold
+ * ramp at 2.3.0 plus its allowed-state green and its white; a gold that moves
+ * in the kit has to be carried here by hand.
+ */
+const EMBER = ["#8A7223", "#D4AF37", "#F1CE65", "#57A97C", "#FFFFFF"];
 
 interface Particle {
   x: number;

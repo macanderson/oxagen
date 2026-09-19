@@ -122,14 +122,25 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 32
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "money",
+                      "count"
+                    ]
                   }
                 },
                 "required": [
                   "period",
                   "currencyOrUnit"
                 ],
-                "additionalProperties": false
-              }
+                "additionalProperties": false,
+                "x-server-validated": true,
+                "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+              },
+              "x-server-validated": true,
+              "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
             },
             "targets": {
               "type": "object",
@@ -258,6 +269,13 @@
                   "currencyOrUnit": {
                     "type": "string"
                   },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "money",
+                      "count"
+                    ]
+                  },
                   "period": {
                     "type": "string",
                     "enum": [
@@ -309,6 +327,7 @@
                 "required": [
                   "measure",
                   "currencyOrUnit",
+                  "kind",
                   "period",
                   "periodKey",
                   "perCall",

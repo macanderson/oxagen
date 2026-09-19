@@ -7,9 +7,9 @@
  *
  * Frame bodies ship in the same batch as their events, never a later one:
  * the control plane refuses a body whose event it did not receive in the
- * same request. A batch is therefore cut at the event whose body would take
- * it past `TACHO_MAX_BATCH_BODY_BYTES`, and a bisected half carries exactly
- * the bodies of the events in it.
+ * same request. A batch is therefore cut at the event that would take the
+ * encoded request past `TACHO_MAX_REQUEST_BYTES`, and a bisected half carries
+ * exactly the bodies of the events in it.
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -21,15 +21,44 @@ import {
   type RateLimitHint,
 } from "../host/control-client";
 import { ensureDir, writeSensitiveFileAtomic } from "../host/fs";
+import { contentClassOf, retentionAllows } from "../evidence/frame-body";
+import type { RetentionMandate } from "../evidence/retention";
 import type { Wal } from "../host/wal";
 import {
   type ControlEnvelope,
   type DaemonHealth,
   TACHO_MAX_BATCH,
-  TACHO_MAX_BATCH_BODY_BYTES,
   TACHO_MAX_REQUEST_BYTES,
+  TACHO_REQUEST_ENVELOPE_BYTES,
   type TachoBody,
 } from "../wire";
+
+/**
+ * The retention clause in force, and whether it is the workspace's own answer.
+ *
+ * The two halves are one value because they are one decision and a caller
+ * that could answer them separately could answer them inconsistently. That is
+ * the shape of an earlier defect on this path, where four sites built the same
+ * request by hand and one field reached three of them.
+ */
+export interface RetentionDecision {
+  /** The classes whose content may leave this host right now. */
+  mandate: RetentionMandate;
+  /**
+   * Whether `mandate` is what the workspace decided, rather than the absence
+   * of an answer. False when the cached bundle does not verify or has outlived
+   * its signed window: `mandate` is then `NO_RETENTION` because nothing can be
+   * shown to be covered, which is not the same as the workspace having
+   * narrowed it.
+   *
+   * Both withhold. Only a proven narrowing also purges, because a purge is
+   * irreversible and an unprovable mandate is usually transient — a control
+   * plane outage lapses every cached bundle at once, and destroying the queued
+   * evidence of every session on that signal would make an outage into
+   * permanent data loss committed by the component whose job is the record.
+   */
+  proven: boolean;
+}
 
 export interface ShipperOptions {
   wal: Wal;
@@ -44,6 +73,28 @@ export interface ShipperOptions {
   onBodyRejection?: (
     rejections: Array<{ event_id_idem: string; reason: string }>,
   ) => void;
+  /**
+   * The retention clause in force right now, asked at ship time.
+   *
+   * Retention is applied when a body is appended, but a body can wait in the
+   * WAL through an outage and leave under a mandate that has since narrowed.
+   * The control plane refuses it, which protects the record and not the
+   * machine: by then the prompt or tool content has already left. So the
+   * clause is asked again here, against the mandate the last refresh
+   * established, and a body it no longer covers is never transmitted.
+   *
+   * A body the clause no longer covers is also purged from the WAL when the
+   * clause is `proven`, because withholding alone leaves the bytes on disk
+   * until the session seals and ages out.
+   *
+   * Required, and deliberately. An optional clause that a caller may omit is
+   * the same bypass in a new shape: the filter would read `undefined` and
+   * transmit every queued body, and a shipper built without it would look
+   * correct at the call site. A caller with no trustworthy mandate to offer
+   * passes `NO_RETENTION` with `proven: false`, which keeps nothing and
+   * destroys nothing, rather than passing nothing.
+   */
+  retentionInForce: () => RetentionDecision;
   log: (line: string) => void;
   now: () => number;
   minBackoffMs?: number;
@@ -84,13 +135,12 @@ function serverRequestedWaitMs(error: ControlError): number | undefined {
 }
 
 /**
- * The decoded size of a base64 string, without decoding it: four characters
- * per three bytes, less the padding. The budget names raw bytes because that
- * is what the control plane stores.
+ * The bytes a value adds to the request as JSON. The route's limit counts
+ * the encoded request, so a body is measured as its base64 text, not as the
+ * raw bytes it decodes to.
  */
-function base64ByteLength(encoded: string): number {
-  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
-  return (encoded.length / 4) * 3 - padding;
+function wireByteLength(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value), "utf8");
 }
 
 export class Shipper {
@@ -234,36 +284,24 @@ export class Shipper {
   }
 
   /**
-   * Cut the batch where it would cross either budget: the body bytes
-   * (`TACHO_MAX_BATCH_BODY_BYTES`, before base64) or the request itself on the
-   * wire (`TACHO_MAX_REQUEST_BYTES`, the route's ceiling, counting each
-   * event's JSON and each body's base64). The first event always ships,
-   * whatever it weighs: a single body is already capped at
-   * `TACHO_MAX_BODY_BYTES` by the recorder, and a batch that could never
-   * contain its head would wedge the queue.
+   * Cut the batch where the encoded request would cross the route's limit.
+   * Events count as well as bodies, since 200 events carry their own weight.
+   * The first event always ships, whatever it weighs: a single body is
+   * already capped at `TACHO_MAX_BODY_BYTES` by the recorder, and an event
+   * the route still refuses comes back as a 413, which `shipBatch` handles.
    */
-  private fitBodyBudget(
+  private fitRequestBudget(
     batch: TachoEvent[],
     bodies: Map<string, TachoBody>,
   ): TachoEvent[] {
-    // The request's own envelope (schema, host id, daemon health) is small;
-    // this leaves room for it.
-    const wireCeiling = TACHO_MAX_REQUEST_BYTES - 64 * 1024;
-    let bodyBytes = 0;
-    let wireBytes = 0;
+    const budget = TACHO_MAX_REQUEST_BYTES - TACHO_REQUEST_ENVELOPE_BYTES;
+    let total = 0;
     for (let index = 0; index < batch.length; index += 1) {
       const event = batch[index] as TachoEvent;
-      wireBytes += Buffer.byteLength(JSON.stringify(event));
       const body = bodies.get(event.event_id_idem);
-      if (body !== undefined) {
-        bodyBytes += base64ByteLength(body.bytes_base64);
-        wireBytes += body.bytes_base64.length + body.content_type.length + 96;
-      }
-      if (
-        index > 0 &&
-        (bodyBytes > TACHO_MAX_BATCH_BODY_BYTES || wireBytes > wireCeiling)
-      )
-        return batch.slice(0, index);
+      total += wireByteLength(event) + 1;
+      if (body !== undefined) total += wireByteLength(body) + 1;
+      if (total > budget && index > 0) return batch.slice(0, index);
     }
     return batch;
   }
@@ -278,13 +316,65 @@ export class Shipper {
     const { own, quarantined } = this.setAsideForeignEvents(batch);
     if (own.length === 0)
       return { shipped: 0, quarantined, reachable: this.reachable };
+    // Filtered against the mandate as it stands now, not as it stood when the
+    // body was appended. A narrowing between those two moments is exactly the
+    // case this guards: the body is dropped here rather than sent and refused
+    // after it has already left the machine.
+    //
+    // This filter answers for the wire. The bytes on disk go below, and only
+    // under a proven mandate. Bodies outside a drain's reach, whose events
+    // already shipped, are swept by `Wal.purgeBodiesOutsideMandate`, which the
+    // daemon calls when a replacement bundle verifies and narrows the clause.
+    //
+    // The class comes from the body's own event rather than from the body,
+    // because the WAL stores bodies as bytes and does not persist a class.
+    // `contentClassOf` is the one table that maps a frame kind to a class, so
+    // asking it here cannot disagree with what the append path asked.
+    const retention = this.options.retentionInForce();
+    const eventOf = new Map(
+      own.map((event) => [event.event_id_idem, event] as const),
+    );
+    const allowed: TachoBody[] = [];
+    const withdrawn: TachoEvent[] = [];
+    for (const body of this.options.wal.bodiesFor(own)) {
+      const event = eventOf.get(body.event_id_idem);
+      const contentClass =
+        event === undefined ? undefined : contentClassOf(event.kind);
+      // A body whose event is not in this batch, or whose kind names no
+      // class, is not shipped: an unclassifiable body cannot be shown to
+      // be covered, and the boundary fails closed.
+      if (
+        contentClass !== undefined &&
+        retentionAllows(retention.mandate, contentClass)
+      ) {
+        allowed.push(body);
+        continue;
+      }
+      if (event !== undefined) withdrawn.push(event);
+    }
+    // Leaving the body out of the request protects the network boundary and
+    // nothing else: `markShipped` advances a cursor, and `Wal.compact` frees
+    // body bytes only once a sealed session has aged out, so an unsealed
+    // session would keep the withdrawn content on disk indefinitely. The
+    // narrowed mandate reaches the disk here, as the spec requires.
+    //
+    // Only a proven mandate purges. An unverifiable or lapsed bundle also
+    // withholds, but keeps: that condition is usually transient and a purge
+    // is not. A control plane outage lapses every cached bundle at once, so
+    // purging on it would destroy the queued evidence of every session on
+    // this host.
+    if (retention.proven && withdrawn.length > 0) {
+      const dropped = this.options.wal.dropBodies(withdrawn);
+      if (dropped > 0)
+        this.options.log(
+          `retention: dropped ${String(dropped)} body(ies) the mandate no longer covers`,
+        );
+    }
     const bodies = new Map(
-      this.options.wal
-        .bodiesFor(own)
-        .map((body) => [body.event_id_idem, body] as const),
+      allowed.map((body) => [body.event_id_idem, body] as const),
     );
     const result = await this.shipBatch(
-      this.fitBodyBudget(own, bodies),
+      this.fitRequestBudget(own, bodies),
       bodies,
     );
     return { ...result, quarantined: result.quarantined + quarantined };
@@ -322,45 +412,36 @@ export class Shipper {
         return { shipped: 0, quarantined: 0, reachable: false };
       }
       if (error instanceof ControlError && error.status === 413) {
-        // Too large for the route. Retrying the same bytes would be refused
-        // for ever and hold every later event behind it, so split the batch;
-        // one event still too large ships without its body, which the
-        // control plane records as a `body_missing` gap.
-        if (batch.length === 1) {
-          const only = batch[0] as TachoEvent;
-          if (!bodies.has(only.event_id_idem)) {
-            this.quarantine(only, error.body.slice(0, 512));
-            this.succeed();
-            return { shipped: 0, quarantined: 1, reachable: true };
-          }
+        // The request was too large, which retrying cannot change. Bisect
+        // until it fits. A lone event that is still too large ships without
+        // its body, so the event and its chain survive, and is quarantined
+        // only if the event alone is refused.
+        const head = batch[0] as TachoEvent;
+        if (batch.length === 1 && bodies.has(head.event_id_idem)) {
           this.options.log(
-            `ingest refused ${only.event_id_idem} as too large (413); shipping it without its body`,
+            `shipping ${head.session_uuid}#${head.seq} without its body: request too large`,
           );
-          const withoutBody = new Map(bodies);
-          withoutBody.delete(only.event_id_idem);
-          return this.shipBatch(batch, withoutBody);
+          return this.shipBatch(batch, new Map());
         }
-        const middle = Math.ceil(batch.length / 2);
-        const leftHalf = batch.slice(0, middle);
-        const left = await this.shipBatch(leftHalf, bodies);
-        // A later half that ships would markShipped past the earlier seqs,
-        // so those events vanish from the WAL without reaching the plane.
-        // Do not send higher sequences until every left event has shipped
-        // or been quarantined.
-        if (left.shipped + left.quarantined < leftHalf.length) return left;
-        const right = await this.shipBatch(batch.slice(middle), bodies);
-        return {
-          shipped: left.shipped + right.shipped,
-          quarantined: left.quarantined + right.quarantined,
-          reachable: left.reachable && right.reachable,
-        };
       }
       if (
         error instanceof ControlError &&
-        (error.status === 400 || error.status === 422)
+        (error.status === 400 || error.status === 413 || error.status === 422)
       ) {
-        // The control plane refused the batch as malformed. Bisect to the
-        // event it objects to; a single refused event is quarantined.
+        // The control plane refused the batch: malformed (400, 422), or too
+        // large for one request (413). Bisect to the event it objects to; a
+        // single refused event is quarantined.
+        //
+        // 413 belongs here and not with the retryable refusals below. The
+        // ingest route caps a request at `TACHO_MAX_REQUEST_BYTES`, and a
+        // retry can never make a batch smaller, so keeping it means offering
+        // the same oversized request on every drain for ever. Because the
+        // WAL head never advances past it, every later event on that host
+        // queues behind it and the evidence pipeline stops permanently,
+        // while the host still reports itself healthy. Bisection halves the
+        // batch until the request fits, and an event that exceeds the limit
+        // on its own is quarantined rather than retried, which is the same
+        // answer this path already gives a malformed event.
         if (batch.length === 1) {
           this.quarantine(batch[0] as TachoEvent, error.body.slice(0, 512));
           this.succeed();

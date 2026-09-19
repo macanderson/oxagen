@@ -9,13 +9,23 @@
 // row can carry. `@oxagen/compliance` is a leaf package with no store and no
 // kernel; §2's layer matrix admits it for this file alone.
 import { EMITTED_SECURITY_EVENT_TYPES } from "@oxagen/compliance";
+import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
 import {
   AUDIT_PAGE_SIZE,
   type AuditExportFormat,
   type AuditFilters,
   AuditOutcome,
   type AuditQuery,
+  type AuditWindow,
 } from "@/data/contracts/audit";
+import type { DataSource } from "@/data/ports";
+import type { OrgCtx } from "@/server/viewer";
+import {
+  isCalendarDay,
+  startOfNextZonedDay,
+  startOfZonedDay,
+  supportsTimeZone,
+} from "@/shared/calendar-day";
 import { firstParam } from "@/shared/safe-path";
 
 /** The event types the filter offers, in the order the platform declares them. */
@@ -25,7 +35,6 @@ export const AUDIT_EVENT_TYPES: readonly string[] =
 /** The outcomes the filter offers (the column's CHECK constraint). */
 export const AUDIT_OUTCOMES = AuditOutcome.options;
 
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * The largest offset the page hands the contract. The record is paged, not
  * scrolled, and PostgreSQL takes OFFSET as a bigint: a hand-edited
@@ -47,17 +56,12 @@ function value(params: Params, key: string, ok: (raw: string) => boolean) {
 }
 
 /**
- * A calendar day, or null. The shape is not enough: `2026-99-99` matches the
- * regex and makes an Invalid Date, and `2026-02-31` silently becomes 3 March,
- * so the value has to round-trip through UTC as the same day it claims to be.
+ * A calendar day, or null. This check moved to `@/shared/calendar-day`, beside
+ * the conversions that depend on it, when `changeMandateLimits` turned out to
+ * have only the pattern and to accept `2027-02-31` as three extra days of a
+ * mandate's authority. One implementation, two callers.
  */
-function isDay(raw: string): boolean {
-  if (!DAY.test(raw)) return false;
-  const parsed = new Date(`${raw}T00:00:00.000Z`);
-  return (
-    !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(raw)
-  );
-}
+const isDay = isCalendarDay;
 
 /** A calendar day the reader typed, or null; `from` after `to` is not a range, so both go. */
 function range(params: Params): Pick<AuditFilters, "from" | "to"> {
@@ -114,6 +118,45 @@ export function auditQueryParams(
     to: query.to ?? undefined,
     offset: offset > 0 ? String(offset) : undefined,
     format: over.format,
+  };
+}
+
+/**
+ * The reader's days as the instants the record is queried and exported over.
+ *
+ * The days come off the query string, and a day is a pair of instants only once
+ * a zone is known: Sep 18 in Los Angeles is not Sep 18 in Tokyo. The zone is the
+ * viewer's own preference, so this is the lane's job and not the port's — the
+ * live layer has no viewer to ask (ARCHITECTURE.md §2). Both bounds are resolved
+ * here and handed down as `since` and `until`, so the page and its export query
+ * exactly the same window.
+ *
+ * The preference read is made only when a day is actually set: an unfiltered
+ * record needs no zone, and no page should pay for a read whose answer it would
+ * not use. A refused or failed read falls back to the default zone, as the shell
+ * does for the clock it draws — the record is worth more than the bound is
+ * precise. So is a stored zone this runtime cannot format in: the pages print in
+ * the default zone for that person, and a filter that disagreed with what they
+ * can see would be worse than one that matches it.
+ */
+export async function auditWindow(
+  ctx: OrgCtx,
+  source: Pick<DataSource, "shell">,
+  filters: AuditFilters,
+): Promise<AuditWindow> {
+  const { from, to, ...rest } = filters;
+  if (from === null && to === null) {
+    return { ...rest, since: null, until: null };
+  }
+  const preferences = await source.shell.preferences(ctx);
+  const stored = preferences.ok
+    ? preferences.value.timeZone
+    : DEFAULT_TIME_ZONE;
+  const timeZone = supportsTimeZone(stored) ? stored : DEFAULT_TIME_ZONE;
+  return {
+    ...rest,
+    since: from === null ? null : startOfZonedDay(from, timeZone),
+    until: to === null ? null : startOfNextZonedDay(to, timeZone),
   };
 }
 

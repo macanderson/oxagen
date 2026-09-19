@@ -2,13 +2,20 @@
 // is, who ran it, where it stands, and what it cost, from the one row
 // `get_run` returns.
 //
+// The badges under the identity state the recorded values and nothing
+// stronger (spec §8.4): the enforcement tier says where the run's actions were
+// observed from, the replay grade is the one the seal wrote, and the gaps the
+// seal recorded are named rather than folded into a softer word. A run
+// observed from the side says so, because it is the difference between a
+// record of what an agent did and a record of what Oxagen let it do.
+//
 // The generated name is the headline when `summarize_run` wrote one, with the
 // run id under it; a run with no name is headed by its id, because a
 // placeholder headline would read as a title the record does not have. The
 // generated summary sits under the identity, labelled, so the model's sentence
 // is never mistaken for the recording.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
-import type { RunRow } from "@/data/contracts/runs";
+import { useLocale, useTranslations } from "next-intl";
+import type { RunMachine, RunModel, RunRow } from "@/data/contracts/runs";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
 import { eyebrow, mono } from "@/ui/control-styles";
@@ -19,7 +26,107 @@ import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { NoValue } from "./parts";
 import { RecordActions } from "./record-actions";
+import { ReplayActions } from "./replay-actions";
 import { RunControls } from "./run-controls";
+import { useFormatter } from "@/ui/formatter";
+
+/**
+ * A named fact about the run that is a word rather than a number, with the
+ * detail it carries set under it. It is deliberately not a {@link Figure}: the
+ * figures row is tabular numerals, and a hostname rendered in them reads as a
+ * measurement.
+ */
+function Fact({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: React.ReactNode;
+  /** The qualifier under the value; left out when nothing qualifies it. */
+  detail?: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="truncate text-sm font-medium">{value}</span>
+      {detail === undefined ? null : (
+        <span className="truncate text-xs text-muted-foreground">{detail}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The model id as the record holds it, with the vendor that served it and the
+ * capability class it belongs to under it. A half the record could not name is
+ * left out rather than filled: `anthropic` alone is the whole qualifier when
+ * the id names no class.
+ */
+function ModelFact({ label, model }: { label: string; model: RunModel }) {
+  const parts = [model.provider, model.tier].filter(
+    (part): part is string => part !== null,
+  );
+  return (
+    <Fact
+      label={label}
+      value={<span className={`${mono} break-all`}>{model.slug}</span>}
+      detail={parts.length === 0 ? undefined : parts.join(" · ")}
+    />
+  );
+}
+
+/**
+ * The machine the run ran on: its hostname, with the operating system, the
+ * architecture and the Node version the host enrolled with under it. Each part
+ * the enrolment did not record is left out, so the line never pads itself to a
+ * fixed shape.
+ */
+function MachineFact({
+  label,
+  machine,
+}: {
+  label: string;
+  machine: RunMachine;
+}) {
+  const os =
+    machine.osVersion === null
+      ? machine.platform
+      : `${machine.platform} ${machine.osVersion}`;
+  const parts = [os, machine.arch, machine.nodeVersion].filter(
+    (part): part is string => part !== null,
+  );
+  return (
+    <Fact
+      label={label}
+      value={<span className={`${mono} break-all`}>{machine.hostname}</span>}
+      detail={parts.join(" · ")}
+    />
+  );
+}
+
+/**
+ * Who ran the run, and the honest reason when there is no name to print.
+ *
+ * A name is only ever the person's own, so a run started by an agent or a
+ * service says so instead of borrowing the name of whoever created it. A
+ * person the record holds no name for is named as a person without one, which
+ * is a different fact from "not recorded" and reads as one. The principal id
+ * stays under whichever of those the row carries, because it is the identifier
+ * the rest of the record is keyed on.
+ */
+function operatorFact(
+  run: RunRow,
+  kindLabel: (kind: NonNullable<RunRow["operatorKind"]>) => string,
+): { value: React.ReactNode; detail?: React.ReactNode } {
+  const detail =
+    run.operatorId === null ? undefined : (
+      <span className={`${mono} break-all`}>{run.operatorId}</span>
+    );
+  if (run.operatorName !== null) return { value: run.operatorName, detail };
+  if (run.operatorKind === null) return { value: <NoValue />, detail };
+  return { value: kindLabel(run.operatorKind), detail };
+}
 
 function Figure({
   label,
@@ -64,6 +171,7 @@ export function RunHeader({
   const locale = useLocale();
   const when = (at: string) =>
     format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "short" });
+  const operator = operatorFact(run, (kind) => t(`facts.operatorKind.${kind}`));
   return (
     <header className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -85,6 +193,12 @@ export function RunHeader({
           )}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <StatusBadge status={run.status} />
+            <span
+              data-testid="run-tier"
+              className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
+            >
+              {t(`tier.${run.enforcementTier}`)}
+            </span>
             {run.replayGrade === null ? null : (
               <ReplayGradeBadge grade={run.replayGrade} />
             )}
@@ -92,6 +206,15 @@ export function RunHeader({
               {t(`source.${run.source}`)}
             </span>
           </div>
+          {run.completenessGaps.length === 0 ? null : (
+            <p
+              data-testid="run-gaps"
+              className="max-w-prose text-xs text-muted-foreground"
+            >
+              {t("gaps")}{" "}
+              {run.completenessGaps.map((gap) => t(`gap.${gap}`)).join(", ")}
+            </p>
+          )}
           {run.taskRef === null ? null : (
             <p className="text-sm">{run.taskRef}</p>
           )}
@@ -115,7 +238,7 @@ export function RunHeader({
           <AgentCard
             agentKey={run.agentKey}
             notRecorded={t("notRecorded")}
-            sub={run.operatorId === null ? t("notRecorded") : run.operatorId}
+            sub={run.operatorName ?? run.operatorId ?? t("notRecorded")}
           />
           <RunControls
             org={org}
@@ -123,6 +246,7 @@ export function RunHeader({
             runId={run.id}
             status={run.status}
             source={run.source}
+            enforcementTier={run.enforcementTier}
             orgRole={orgRole}
             wsRole={wsRole}
           />
@@ -132,9 +256,39 @@ export function RunHeader({
             runId={run.id}
             sealed={run.status !== "live"}
             hasSummary={run.summary !== null}
+            summarizable={run.canSummarize}
             orgRole={orgRole}
           />
+          {run.status === "live" ? null : (
+            <ReplayActions org={org} ws={ws} run={run} />
+          )}
         </div>
+      </div>
+      <div
+        data-testid="run-facts"
+        className="grid gap-x-8 gap-y-3 rounded-lg border border-border px-4 py-3 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        <Fact
+          label={t("facts.operator")}
+          value={operator.value}
+          detail={operator.detail}
+        />
+        {run.model === null ? (
+          <Fact label={t("facts.model")} value={<NoValue />} />
+        ) : (
+          <ModelFact label={t("facts.model")} model={run.model} />
+        )}
+        {run.machine === null ? (
+          <Fact
+            label={t("facts.machine")}
+            value={<NoValue />}
+            detail={
+              run.source === "ledger" ? t("facts.noMachineOnLedger") : undefined
+            }
+          />
+        ) : (
+          <MachineFact label={t("facts.machine")} machine={run.machine} />
+        )}
       </div>
       <div className="flex flex-wrap gap-x-8 gap-y-3 rounded-lg border border-border px-4 py-3">
         <Figure label={t("figures.cost")}>

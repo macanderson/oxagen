@@ -71,6 +71,8 @@
               "additionalProperties": {
                 "type": "string"
               },
+              "x-server-validated": true,
+              "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload.",
               "default": {}
             },
             "allowTargets": {
@@ -83,6 +85,8 @@
                   "maxLength": 256
                 }
               },
+              "x-server-validated": true,
+              "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload.",
               "default": {}
             },
             "standingWindowMs": {
@@ -106,7 +110,9 @@
                     "timezone": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 64
+                      "maxLength": 64,
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "days": {
                       "type": "array",
@@ -129,7 +135,9 @@
                     "start",
                     "end"
                   ],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 {
                   "type": "null"

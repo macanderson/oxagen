@@ -1,4 +1,4 @@
-# command.menu.search
+# search_command_menu
 
 **Domain:** command
 **Mode:** sync

@@ -13,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     id: "/",
     name: "Oxagen",
     short_name: "Oxagen",
-    description: "Governed context infrastructure for enterprise agents.",
+    description: "Your agents are a workforce now. Manage them like one.",
     lang: "en",
     dir: "ltr",
     start_url: "/",
@@ -21,8 +21,8 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     display_override: ["standalone", "minimal-ui"],
     orientation: "any",
-    background_color: "#10100F",
-    theme_color: "#10100F",
+    background_color: "#09090B",
+    theme_color: "#09090B",
     categories: ["productivity", "developer", "business"],
     icons: [
       {

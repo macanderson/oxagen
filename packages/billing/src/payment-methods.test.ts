@@ -88,6 +88,10 @@ const dbMocks = {
     subscriptions: {
       findFirst: vi.fn().mockResolvedValue(undefined),
     },
+    // readRecordedCustomerId reads the settings column before a subscription.
+    orgBillingSettings: {
+      findFirst: vi.fn().mockResolvedValue(undefined),
+    },
   },
 };
 

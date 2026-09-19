@@ -1,33 +1,37 @@
 ---
 title: Wrap an agent
-description: "What wrapping means, how Claude Code, Codex, and Stella get wrapped in one enrollment, and how to wrap a custom agent by calling tacho hook around its steps."
+description: "What wrapping means, how Claude Code, Codex, Cursor, and Stella get wrapped in one enrollment, and how to wrap a custom agent by calling tacho hook around its steps."
 ---
 
 Wrapping an agent puts its runs under a mandate: the access it used, the budget it spent, and a record of every step, all attributed to the workspace it ran for. For the capabilities it hands the agent, Oxagen checks the access and budget clauses on the server. Tacho, the wrapper this page covers, is how a run's steps become that record.
 
-What wrapping does today is narrower than a mandate, and this page says so. A wrapped run is on the `harness` tier: its steps are recorded, an operator can pause or stop it, and what the hooks deliver is client-attested and fail-open, because the hook runs in a process you own and can be removed. Nothing at this tier is enforced against the person at the keyboard. Token and cost figures for Claude Code come from Claude Code's own telemetry, so they are self-reported. Codex and Stella export none, so their spend does not appear. A model proxy that meters every harness the same way is in build, and a sandboxed tier for CI and managed machines comes after it.
+Hook-based records are client-attested. The process owner can remove the hooks, so the hook tier does not enforce against that person. Observe mode records activity without enforcing it.
 
-Three harnesses wrap by installing hooks into files the harness already reads: Claude Code, Codex, and Stella. Any other agent wraps by calling `tacho hook` around its own steps. Both paths produce the same kind of session on the control plane, and both show up the same way in Oxagen and in the Wrapped agents panel.
+The collector also has a loopback model proxy and an MCP gateway. Their controls apply to calls actually routed through them. A configured base URL alone does not establish that a run reached the gateway tier. Inspect the run's recorded tier and attribution before treating its cost or decisions as gateway-observed evidence.
 
-## Wrap Claude Code, Codex, or Stella
+Supported harness adapters include Claude Code, Codex, Cursor, and Stella. A custom agent can call `tacho hook` around its own steps. The table below describes all four hook adapters.
 
-From the app, tick the harness in the Wrappers panel and press **Apply wrappers**. From the terminal, name it on `enroll` or `reassign`:
+## Wrap Claude Code, Codex, Cursor, or Stella
+
+Name the harness on `enroll` or `reassign`:
 
 ```bash
-tacho enroll --harness claude-code,codex,stella
+tacho enroll --harness claude-code,codex,cursor,stella
 ```
 
-`enroll` merges Tacho's hook entries into each harness's own configuration without touching an entry it did not write, and never removes a harness on a re-apply; `reassign --harness <list>` with no `--workspace` is the one way to drop one. See [Desktop app](/docs/cli/desktop) for the panel and [Account setup](/docs/cli/account-setup) for `enroll` from a terminal with no app installed.
+`enroll` merges Tacho's hook entries into each harness's own configuration without touching an entry it did not write, and never removes a harness on a re-apply; `reassign --harness <list>` with no `--workspace` is the one way to drop one. See [Account setup](/docs/cli/account-setup) for CLI authentication. You can also use `oxagen agent enroll` with the one-time token issued during agent registration.
 
-| | Claude Code | Codex CLI | Stella |
-| --- | --- | --- | --- |
-| Hook file | `~/.claude/settings.json` (`CLAUDE_CONFIG_DIR`) | `~/.codex/hooks.json` (`CODEX_HOME`) | `~/.stella/stella.toml`, or `~/.stella/settings.json` when only that exists (`STELLA_HOME`) |
-| How the entry is written | merged into the JSON hook block | merged into the JSON hook block | a marker-delimited block, `# >>> tacho enrollment tch_… >>>` to `# <<< … <<<`, so your own comments and settings around it survive |
-| Events wrapped | SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop as blocking command hooks; PostToolUse, SubagentStart, SubagentStop, PreCompact, PostCompact, SessionEnd, Interrupt as telemetry | same shape as Claude Code; no PermissionRequest as its own event, no OTel export | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, PreCompact, SubagentStart, SubagentStop. Stella has no SessionEnd, PermissionRequest, PostCompact, or Interrupt hook |
-| Hook command | `tacho hook --enrollment tch_…` | `tacho hook --enrollment tch_… --harness codex` | `tacho hook --enrollment tch_… --harness stella` |
-| Session boundary | one hooked Claude Code session | one hooked Codex session | keyed on the Stella process; the session closes when the process exits, since Stella sends no session id and no SessionEnd |
-| Session label | `agent.harness = claude-code`, `runtime = claude-code` | `agent.harness = codex`, `runtime = codex` | `agent.harness = stella`, `runtime = stella` |
-| Verify it | `tacho verify --harness claude-code` | `tacho verify --harness codex` | `tacho verify --harness stella` runs `stella run "<prompt>"` |
+| | Claude Code | Codex CLI | Stella | Cursor |
+| --- | --- | --- | --- | --- |
+| Hook file | `~/.claude/settings.json` (`CLAUDE_CONFIG_DIR`) | `~/.codex/hooks.json` (`CODEX_HOME`) | `~/.stella/stella.toml`, or `~/.stella/settings.json` when only that exists (`STELLA_HOME`) | `~/.cursor/hooks.json`. When `CURSOR_CONFIG_DIR` or Linux/BSD `XDG_CONFIG_HOME` changes the config directory, enrollment writes both locations |
+| How the entry is written | merged into the JSON hook block | merged into the JSON hook block | a marker-delimited block, `# >>> tacho enrollment tch_… >>>` to `# <<< … <<<`, so your own comments and settings around it survive | Version 1 JSON with flat hook entries, merged by enrollment ID |
+| Events wrapped | SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop as blocking command hooks; PostToolUse, SubagentStart, SubagentStop, PreCompact, PostCompact, SessionEnd, Interrupt as telemetry | same shape as Claude Code; no PermissionRequest as its own event, no OTel export | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, PreCompact, SubagentStart, SubagentStop. Stella has no SessionEnd, PermissionRequest, PostCompact, or Interrupt hook | `sessionStart`, `sessionEnd`, `beforeSubmitPrompt`, `preToolUse`, `postToolUse`, `postToolUseFailure`, `subagentStart`, `subagentStop`, `preCompact`, and `stop` |
+| Hook command | `tacho hook --enrollment tch_…` | `tacho hook --enrollment tch_… --harness codex` | `tacho hook --enrollment tch_… --harness stella` | `tacho hook --enrollment tch_… --harness cursor` |
+| Session boundary | one hooked Claude Code session | one hooked Codex session | keyed on the Stella process; the session closes when the process exits, since Stella sends no session id and no SessionEnd | Cursor's `conversation_id` identifies the run across turns |
+| Session label | `agent.harness = claude-code`, `runtime = claude-code` | `agent.harness = codex`, `runtime = codex` | `agent.harness = stella`, `runtime = stella` | `agent.harness = cursor`, `runtime = cursor` |
+| Verify it | `tacho verify --harness claude-code` | `tacho verify --harness codex` | `tacho verify --harness stella` runs `stella run "<prompt>"` | `tacho verify --harness cursor` runs Cursor CLI with `-p` |
+
+Cursor uses native camelCase hook events. Enrollment does not import Claude Code hooks or add an MCP server entry. At the veto points (`beforeSubmitPrompt`, `preToolUse`, and `subagentStart`), the writer sets `failClosed: true`. Telemetry-only hooks use `failClosed: false`. The adapter turns an approval request into a denial because Cursor does not enforce `ask` at `preToolUse`. `sessionStart` can supply context but cannot veto. These checks remain client-attested and depend on the installed hooks.
 
 Stella itself is not required before you enroll: `enroll --harness stella` only writes the hook entry. Install Stella when you are ready for it to run:
 
@@ -43,7 +47,7 @@ Any agent you run yourself, in a script, a CI job, or your own loop, wraps by pi
 tacho hook --agent <name>
 ```
 
-`<name>` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and becomes the session's harness label. It cannot be a built-in harness or runtime name (`claude-code`, `codex`, `stella`, `claude-agent-sdk`, `custom`, `proxy`): `tacho hook` refuses those, so a custom agent is never filed as a built-in one. The machine still has to be enrolled first (`tacho enroll`) so `tacho hook` can read `~/.config/oxagen/tacho/host.json` itself; your agent never sees a credential.
+`<name>` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and becomes the session's harness label. It cannot be a built-in harness or runtime name (`claude-code`, `codex`, `cursor`, `stella`, `claude-desktop`, `claude-agent-sdk`, `custom`, `proxy`): `tacho hook` refuses those, so a custom agent is never filed as a built-in one. The machine still has to be enrolled first (`tacho enroll`) so `tacho hook` can read `~/.config/oxagen/tacho/host.json` itself; your agent never sees a credential.
 
 For a complete wrapped agent with tests, see [oxagenai/oxagen-wrapped-agents](https://github.com/oxagenai/oxagen-wrapped-agents). Its Stripe refund agent sends every step through `tacho hook --agent stripe-refunds`, fails closed when `tacho` does not answer, and shows an operator pause denying the next refund before it reaches Stripe.
 
@@ -65,7 +69,7 @@ Skip a call and that step is invisible to Oxagen. A `PreToolUse` you skip is a t
 The payload is the same JSON shape Claude Code sends on stdin. Fields you don't have, omit; unrecognized fields are kept, not dropped.
 
 | Field | Type | Carries |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | `session_id` | string | your agent's own id for this run |
 | `hook_event_name` | string | one of the six events above |
 | `cwd` | string, optional | the working directory the step ran in |
@@ -81,7 +85,7 @@ The payload is the same JSON shape Claude Code sends on stdin. Fields you don't 
 `tacho hook` always exits `0` and prints one JSON document on stdout. Read it before you act.
 
 | Event | Field | Meaning |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | `PreToolUse` | `hookSpecificOutput.permissionDecision` | `allow`, `deny`, or `ask`, with `permissionDecisionReason` |
 | `UserPromptSubmit` | `decision` | `"block"` stops the prompt from reaching the agent |
 | `SessionStart` | `continue` / `additionalContext` | `continue: false` stops the run before it starts; `additionalContext` is text to fold into the system prompt |

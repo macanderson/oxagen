@@ -1,4 +1,4 @@
-# context.pr.get
+# get_context_pr
 
 **Name:** `get_context_pr`
 **Domain:** context

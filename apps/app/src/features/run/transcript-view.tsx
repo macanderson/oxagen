@@ -14,10 +14,22 @@
 // Everything: the turns and their steps), not a different read, so a change
 // of level keeps the position and rewrites only the query value.
 //
-// A live run re-reads itself every few seconds while the viewer follows its
-// head and the tab is visible. Scrubbing back stops following, and "go live"
-// resumes it; a sealed or halted run is never re-read.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+// A live run follows its own head over the SSE route
+// (`GET /v1/:org/:ws/runs/:run_id/stream`, reached same-origin through the
+// `/api/v1/*` rewrite). The stream carries frames, and the transcript carries
+// entries the contract derives from them, so a frame landing is the signal to
+// read the tail rather than something to render: deriving an entry here would
+// put a second, weaker copy of the contract's derivation on the page.
+// Scrubbing back stops following, and "go live" resumes it; a sealed or halted
+// run is never followed.
+//
+// A run longer than one read is paged rather than truncated. The read answers
+// a cursor, "Read more" asks for the next page, and playback reads ahead of
+// the playhead so it does not stall at a page boundary. Entries are appended,
+// never replaced, so the scroll position and the playhead stay where they are.
+// A cursor this capability did not write is refused, and the view says so
+// instead of starting the transcript again.
+import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
   useCallback,
@@ -29,20 +41,26 @@ import {
 import type { Money as MoneyValue } from "@/data/contracts/money";
 import {
   type RunTranscript,
+  TRANSCRIPT_ENTRY_DEFAULT,
   TRANSCRIPT_ZOOMS,
+  type TranscriptBody,
+  type TranscriptDecision,
   type TranscriptEntry,
+  type TranscriptKind,
   type TranscriptZoom,
 } from "@/data/contracts/run";
 import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatClock, formatCount } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
+import type { ActionResult } from "@/server/kernel";
+import { readTranscriptPage } from "./actions";
+import { kindsParam } from "./transcript";
 import {
   buildTranscript,
-  costAt,
-  elapsedAt,
   type Frames,
   frameAt,
   frameCost,
@@ -55,25 +73,37 @@ import {
   type TranscriptStep,
   type TranscriptTurn,
 } from "./transcript-model";
+import { useRunStream } from "./use-run-stream";
 
 type Place = { org: string; ws: string; runId: string };
 
-const SPEEDS = [1, 1.5, 2, 4] as const;
-/** How often a followed live run re-reads itself. */
-const LIVE_REFRESH_MS = 5000;
+/** Why a later page did not arrive, in the shape the action answers with. */
+type PageFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
+const SPEEDS = [1, 1.5, 2, 4] as const;
+/** How close to the end the playhead gets before the next page is read ahead of it. */
+const PREFETCH_WITHIN = 5;
+
+/*
+ * A step's kind is a STATE, and the house rule is that the gold never encodes
+ * one: it is identity, and at most one action per screen. So `control` — a
+ * frame Oxagen itself wrote, a steer or a pause — is told apart by SHAPE, the
+ * square dot among round ones, which is also the only difference that survives
+ * greyscale and colour blindness. It used to take the gold, which put the
+ * brand metal inside the same axis as info, success and destructive.
+ */
 const DOT: Record<StepNode, string> = {
   model: "border-info",
   tool: "border-muted-foreground",
   policy: "border-success",
-  control: "border-brand rounded-[2px]",
+  control: "border-foreground rounded-[2px]",
   deny: "border-destructive bg-destructive",
 };
 const NAME: Record<StepNode, string> = {
   model: "text-info",
   tool: "text-foreground",
   policy: "text-foreground",
-  control: "text-brand",
+  control: "text-foreground",
   deny: "text-destructive",
 };
 
@@ -111,6 +141,70 @@ function Chip({
   );
 }
 
+/** The decision a rule or a person made about the call this frame records. */
+function Decision({ decision }: { decision: TranscriptDecision }) {
+  const t = useTranslations("run.transcript");
+  return (
+    <p
+      data-testid="entry-decision"
+      className="m-0 text-xs text-muted-foreground"
+    >
+      {t("decision", { decision: decision.decision, seq: decision.seq })}
+    </p>
+  );
+}
+
+/**
+ * One half of an exchange: what went out, or what came back. The label says
+ * which, so a reader never has to work out whether a body is an input or a
+ * result, and a half whose bytes were not retained says so rather than
+ * drawing an empty box.
+ */
+function FrameHalf({
+  body,
+  label,
+  seq,
+  org,
+  ws,
+  runId,
+}: { body: TranscriptBody; label: string; seq: string } & Place) {
+  const t = useTranslations("run.transcript");
+  return (
+    <div
+      data-testid="transcript-half"
+      data-half={label}
+      className="flex flex-col gap-1.5"
+    >
+      <span className="text-[10.5px] font-medium text-muted-foreground">
+        {label}
+      </span>
+      {body.text === null ? (
+        <p className="m-0 text-xs text-muted-foreground">
+          {t(body.fidelity === "digest_only" ? "digestOnly" : "noBody")}
+        </p>
+      ) : (
+        <pre className="m-0 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-card p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground">
+          {body.text}
+        </pre>
+      )}
+      {body.truncated ? (
+        <p
+          data-testid="entry-truncated"
+          className="m-0 text-xs text-muted-foreground"
+        >
+          {t("truncated")}{" "}
+          <SafeLink
+            to={routes.run(org, ws, runId, { tab: "frames", body: seq })}
+            className={linkText}
+          >
+            {t("openFrame", { seq })}
+          </SafeLink>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function FrameDetail({
   frame,
   org,
@@ -119,6 +213,26 @@ function FrameDetail({
 }: { frame: TranscriptEntry } & Place) {
   const t = useTranslations("run.transcript");
   const format = useFormatter();
+  const place = { org, ws, runId };
+  // The halves are read by name, never positionally. At `everything` a frame
+  // carries one of them; at a folded zoom a tool step carries its input in
+  // `request` and its result in `response`, and both are drawn. Picking one of
+  // the two would put a tool's input where its result belongs, and the page
+  // would look no different for it.
+  const { request, response } = frame;
+  const both = request !== null && response !== null;
+  // A tool was called with its input and returned its result; every other kind
+  // sent and received. The words differ because the actions do.
+  const sent = frame.kind === "tool_call" ? t("calledWith") : t("request");
+  // The header names one fidelity, and the one a reader is here for is the
+  // result's: a step whose input was kept and whose result was not is a step
+  // with no result to read. Where no result was recorded the outgoing half is
+  // the only half, so it is the one named. This is a summary and never the
+  // only place the fidelity appears. Each half below states its own, so it
+  // is a deliberate choice of which to headline, not a pick between two
+  // bodies. The bodies themselves are read by name.
+  const headline = response ?? request;
+  const neither = request === null && response === null;
   return (
     <div
       data-testid="transcript-frame"
@@ -132,7 +246,7 @@ function FrameDetail({
           {t("frameHead", {
             seq: frame.seq,
             time: format.dateTime(new Date(frame.at), { timeStyle: "medium" }),
-            fidelity: t(`fidelity.${frame.fidelity}`),
+            fidelity: t(`fidelity.${headline?.fidelity ?? "digest_only"}`),
           })}
         </span>
       </div>
@@ -142,32 +256,37 @@ function FrameDetail({
             {frame.label}
           </p>
         ) : null}
-        {frame.text === null ? (
-          <p className="m-0 text-xs text-muted-foreground">
-            {t(frame.fidelity === "digest_only" ? "digestOnly" : "noBody")}
-          </p>
-        ) : (
-          <pre className="m-0 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-card p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground">
-            {frame.text}
-          </pre>
+        {frame.decision === null ? null : (
+          <Decision decision={frame.decision} />
         )}
-        {frame.truncated ? (
+        {neither ? (
           <p
-            data-testid="entry-truncated"
+            data-testid="entry-no-halves"
             className="m-0 text-xs text-muted-foreground"
           >
-            {t("truncated")}{" "}
-            <SafeLink
-              to={routes.run(org, ws, runId, {
-                tab: "frames",
-                body: frame.seq,
-              })}
-              className={linkText}
-            >
-              {t("openFrame", { seq: frame.seq })}
-            </SafeLink>
+            {t("noHalves")}
           </p>
         ) : (
+          <>
+            {request === null ? null : (
+              <FrameHalf
+                body={request}
+                label={both ? sent : t("request")}
+                seq={request.seq}
+                {...place}
+              />
+            )}
+            {response === null ? null : (
+              <FrameHalf
+                body={response}
+                label={t("response")}
+                seq={response.seq}
+                {...place}
+              />
+            )}
+          </>
+        )}
+        {headline?.truncated === true ? null : (
           <SafeLink
             to={routes.run(org, ws, runId, { tab: "frames", body: frame.seq })}
             className={`${linkText} self-start text-[11px]`}
@@ -345,7 +464,9 @@ function TurnBlock({
             ▶
           </span>
           <span className="text-[13px] font-semibold text-foreground">
-            <span aria-hidden="true" className="text-brand">
+            {/* A turn marker is structure, not identity and not an action, so
+                it does not spend the screen's one gold. */}
+            <span aria-hidden="true" className="text-muted-foreground">
               ▍
             </span>
             {turn.turn === null ? t("runStart") : t("turn", { n: turn.turn })}
@@ -393,7 +514,11 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
   const locale = useLocale();
   const head = entries.length - 1;
   const here = frameAt(entries, pos);
-  const cost: MoneyValue | null = costAt(entries, pos);
+  // Elapsed and cumulative cost come from the read, not from this page: the
+  // contract measures both from the run's start, so a transcript that was cut
+  // short still reports what the run had spent and how far into it this frame
+  // sits.
+  const cost: MoneyValue | null = here.cumulativeCost;
   return (
     <span
       data-testid="transport-readout"
@@ -404,8 +529,8 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
       </b>{" "}
       {t("of", { seq: frameAt(entries, head).seq })}
       {" · "}
-      {formatClock(elapsedAt(entries, pos) / 1000, locale)} /{" "}
-      {formatClock(elapsedAt(entries, head) / 1000, locale)}
+      {formatClock(here.elapsedMs / 1000, locale)} /{" "}
+      {formatClock(frameAt(entries, head).elapsedMs / 1000, locale)}
       {cost === null ? null : (
         <>
           {" · "}
@@ -420,7 +545,8 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
 
 export function TranscriptView({
   transcript,
-  entries,
+  entries: first,
+  kinds,
   zoom: initialZoom,
   status,
   replayGrade,
@@ -428,9 +554,12 @@ export function TranscriptView({
   ws,
   runId,
 }: {
-  transcript: Pick<RunTranscript, "complete">;
-  /** The transcript's frames, at least one. */
+  /** `cursor` is set when entries lie past this read: more can be paged in. */
+  transcript: Pick<RunTranscript, "complete" | "cursor">;
+  /** The first page of the transcript's frames, at least one. */
   entries: Frames;
+  /** The chips the URL pressed; a later page is read through the same filter. */
+  kinds: readonly TranscriptKind[];
   /** The level the URL asked for: which disclosures start open. */
   zoom: TranscriptZoom;
   status: RunStatus;
@@ -440,6 +569,26 @@ export function TranscriptView({
   const locale = useLocale();
   const navigate = useNavigate();
   const place = useMemo(() => ({ org, ws, runId }), [org, ws, runId]);
+
+  // The entries and the cursor as the last read left them. A ref as well as
+  // state, because an append needs the new length before React has committed
+  // the state that carries it, and this is the only place that appends.
+  const heldRef = useRef<Frames>(first);
+  const cursorRef = useRef<string | null>(transcript.cursor);
+  const readingRef = useRef(false);
+  // A signal that arrived mid-read: set when a caller finds readingRef
+  // already true, so the request in flight cannot see it. The finally
+  // block below checks it and runs one more tail read once that request
+  // settles, so a frame landing during an active read is never dropped.
+  const pendingReadRef = useRef(false);
+  // Latest loadMore, so the finally block can request a follow-up without
+  // closing over the useCallback identity (React Compiler refuses that).
+  const loadMoreRef = useRef<() => Promise<void>>(async () => {});
+  const [entries, setEntries] = useState<Frames>(first);
+  const [cursor, setCursor] = useState<string | null>(transcript.cursor);
+  const [complete, setComplete] = useState(transcript.complete);
+  const [reading, setReading] = useState(false);
+  const [pageFailure, setPageFailure] = useState<PageFailure | null>(null);
   const head = entries.length - 1;
   const turns = useMemo(() => buildTranscript(entries), [entries]);
   const live = status === "live";
@@ -480,16 +629,120 @@ export function TranscriptView({
     [turns],
   );
 
-  // A followed live run re-reads itself while the tab is visible.
+  /**
+   * Read the page past the cursor and append it. Nothing already on screen is
+   * replaced, so the scroll position and the playhead survive the read.
+   *
+   * A coalesced stream signal is only "there is more to read", not a page
+   * count. When a page comes back full (entry count equals the request
+   * limit) and still carries a resume cursor, this drains the next page in
+   * the same call so a long live replay does not stall hundreds of entries
+   * behind the head until another frame lands.
+   */
+  const readPending = () => pendingReadRef.current;
+
+  const loadMore = useCallback(async (): Promise<void> => {
+    // A read already in flight cannot see a frame that lands while it runs,
+    // so record the signal and loop below for a follow-up read once that
+    // request settles, rather than dropping it or calling this function
+    // recursively (which React Compiler cannot memoize safely).
+    if (readingRef.current) {
+      pendingReadRef.current = true;
+      return;
+    }
+    readingRef.current = true;
+    setReading(true);
+    // True when the last page was full and still has a cursor: keep reading
+    // in this same loadMore rather than waiting for another stream signal.
+    // Declared without an initializer on purpose: every iteration clears it
+    // first (a stale `true` would spin forever on empty pages), so an
+    // initializer here would be written and never read.
+    let drainMore: boolean;
+    try {
+      do {
+        pendingReadRef.current = false;
+        drainMore = false;
+        // A sealed run stops when the page answers no cursor. A live run
+        // must keep a resume cursor from the handler so SSE can ask for
+        // the next page.
+        if (cursorRef.current === null) return;
+        const read = await readTranscriptPage(
+          org,
+          ws,
+          runId,
+          "everything",
+          kinds,
+          cursorRef.current,
+        );
+        if (!read.ok) {
+          setPageFailure(read);
+          return;
+        }
+        setPageFailure(null);
+        const pageEntries = read.value.entries;
+        cursorRef.current = read.value.cursor;
+        setCursor(read.value.cursor);
+        setComplete(read.value.complete);
+        if (pageEntries.length === 0) {
+          // Nothing new: stop draining. A mid-read signal still schedules
+          // one follow-up via pendingReadRef / the finally block.
+          continue;
+        }
+        const next: Frames = [...heldRef.current, ...pageEntries];
+        heldRef.current = next;
+        setEntries(next);
+        // Full page with a resume cursor means more history is waiting.
+        // Drain it now. A short page or a null cursor ends the drain.
+        drainMore =
+          pageEntries.length === TRANSCRIPT_ENTRY_DEFAULT &&
+          cursorRef.current !== null;
+        // Read through a function rather than the ref directly: the ref can
+        // flip true from the early-return branch above while this `await`
+        // is in flight, but TS's flow analysis cannot see that concurrent
+        // write and would otherwise narrow the property to always `false`.
+      } while (readPending() || drainMore);
+    } catch {
+      setPageFailure({
+        ok: false,
+        reason: "unavailable",
+        code: "unanswered",
+      });
+    } finally {
+      readingRef.current = false;
+      setReading(false);
+      if (pendingReadRef.current) {
+        pendingReadRef.current = false;
+        void loadMoreRef.current();
+      }
+    }
+  }, [kinds, org, runId, ws]);
   useEffect(() => {
-    if (!live || !following) return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") navigate.refresh();
-    }, LIVE_REFRESH_MS);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [live, following, navigate]);
+    loadMoreRef.current = loadMore;
+  }, [loadMore]);
+
+  // A followed live run reads its tail when the stream says a frame landed.
+  const stream = useRunStream({
+    url: `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(
+      ws,
+    )}/runs/${encodeURIComponent(runId)}/stream`,
+    enabled: live && following,
+    onFrames: () => {
+      void loadMore();
+    },
+  });
+
+  // The seal changes the header, the badges and the record actions, none of
+  // which this component owns, so the page is re-read once when it happens.
+  useEffect(() => {
+    if (stream === "sealed") navigate.refresh();
+  }, [stream, navigate]);
+
+  // Read ahead of the playhead, so playback does not stall at a page boundary.
+  useEffect(() => {
+    if (!isPlaying || cursor === null || reading) return;
+    if (pos < head - PREFETCH_WITHIN) return;
+    void loadMore();
+  }, [isPlaying, pos, head, cursor, reading, loadMore]);
 
   // Playback walks the frames at their recorded pace.
   useEffect(() => {
@@ -541,7 +794,11 @@ export function TranscriptView({
     window.history.replaceState(
       null,
       "",
-      routes.run(org, ws, runId, { tab: "transcript", zoom: level }),
+      routes.run(org, ws, runId, {
+        tab: "transcript",
+        zoom: level,
+        kinds: kindsParam(kinds),
+      }),
     );
   };
 
@@ -733,11 +990,43 @@ export function TranscriptView({
           aria-hidden="true"
           className={`size-1.5 rounded-full ${live ? "animate-pulse bg-success" : "bg-muted-foreground"}`}
         />
-        {live
-          ? t("recording")
-          : transcript.complete
-            ? t("complete", { count: formatCount(entries.length, locale) })
-            : t("cut", { count: formatCount(entries.length, locale) })}
+        <span data-testid="transcript-count">
+          {live
+            ? stream === "lost"
+              ? t("followLost")
+              : t("recording")
+            : stream === "sealed"
+              ? t("followSealed")
+              : cursor !== null
+                ? t("loadedMore", {
+                    count: formatCount(entries.length, locale),
+                  })
+                : complete
+                  ? t("complete", {
+                      count: formatCount(entries.length, locale),
+                    })
+                  : t("cut", { count: formatCount(entries.length, locale) })}
+        </span>
+        {cursor === null ? null : (
+          <button
+            type="button"
+            data-testid="transcript-more"
+            disabled={reading}
+            onClick={() => {
+              void loadMore();
+            }}
+            className={segButton}
+          >
+            {reading ? t("readingMore") : t("more")}
+          </button>
+        )}
+        {pageFailure === null ? null : (
+          <span data-testid="transcript-page-failed" className="basis-full">
+            {pageFailure.reason === "invalid"
+              ? t("badCursor")
+              : t("pageFailed")}
+          </span>
+        )}
       </div>
     </section>
   );

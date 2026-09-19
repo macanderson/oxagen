@@ -12,13 +12,12 @@ import type {
   IncidentPage,
   Toolbelt,
 } from "./contracts/agents";
-import type { ApprovalItem } from "./contracts/approvals";
+import type { ApprovalItem, ResolvedApprovalItem } from "./contracts/approvals";
 import type {
   AuditExport,
-  AuditExportFormat,
-  AuditFilters,
+  AuditExportQuery,
   AuditPage,
-  AuditQuery,
+  AuditPageQuery,
 } from "./contracts/audit";
 import type {
   ContractRate,
@@ -27,7 +26,7 @@ import type {
   PlanCard,
   UsageCredits,
 } from "./contracts/billing";
-import type { MandateList } from "./contracts/mandates";
+import type { MandateDetail, MandateList } from "./contracts/mandates";
 import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
   ApiKey,
@@ -37,22 +36,26 @@ import type {
   WorkspaceList,
 } from "./contracts/org";
 import type {
+  RunChain,
   RunCost,
   RunDetail,
   RunFrameBody,
   RunTranscript,
+  TranscriptKind,
   TranscriptZoom,
 } from "./contracts/run";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
   ShellContext,
+  ViewerPreferences,
   WorkspaceChoice,
 } from "./contracts/shell";
 import type { SkillInventory } from "./contracts/skills";
 import type {
   DayRange,
   FleetSpend,
+  PriceBook,
   SpendBudgets,
   SpendDrill,
   SpendDrillKind,
@@ -61,12 +64,14 @@ import type {
   SpendGroupKind,
   SpendReport,
   SpendWaste,
+  UnpricedModels,
 } from "./contracts/spend";
 import type {
   ContextPr,
   ProposalPage,
   RecordKind,
   RecordPage,
+  SteeringFreshness,
 } from "./contracts/steering";
 import type {
   CredentialGrantPage,
@@ -90,8 +95,17 @@ export interface DataSource {
       orgSlug: string,
     ): Promise<Read<WorkspaceChoice[]>>;
   };
-  /** list_orgs + list_workspaces; caller: features/shell/source.ts. */
-  shell: { context(ctx: OrgCtx): Promise<Read<ShellContext>> };
+  shell: {
+    /** list_orgs + list_workspaces; caller: features/shell/source.ts. */
+    context(ctx: OrgCtx): Promise<Read<ShellContext>>;
+    /**
+     * get_user_preferences, user-global: the zone every date under the
+     * organization layout renders in, and the zone the Audit day filters are
+     * resolved against; callers: features/shell/source.ts,
+     * features/shell/viewer-clock.tsx and features/audit/filters.ts.
+     */
+    preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
+  };
   /**
    * The Billing page's five noBillingGate reads, each Owner, Admin or Billing
    * (checked in its handler); caller: features/billing/billing.tsx.
@@ -123,7 +137,9 @@ export interface DataSource {
    * and `transcript` is `get_run_transcript` at one zoom level, each read by
    * its own tab, so a tab nobody opened makes no read. `frameBody` is
    * `get_run_frame_body`, one frame's bytes on demand (§3.5), read only when
-   * the Frames tab has a frame open, caller features/run/run.tsx.
+   * the Frames tab has a frame open, caller features/run/run.tsx. `chain` is
+   * `get_run_chain`, read only when the Chain and seal tab is open, because it
+   * walks the recording to find its gaps.
    */
   runs: {
     list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<RunPage>>;
@@ -138,11 +154,18 @@ export interface DataSource {
       seq: string,
     ): Promise<Read<RunFrameBody>>;
     cost(ctx: WsCtx, runId: string): Promise<Read<RunCost>>;
+    /**
+     * `get_run_transcript` at one zoom level, narrowed to the chips pressed
+     * and paged on the cursor the last page carried. An empty `kinds` keeps
+     * every frame: no chip pressed is not the same as every chip pressed off.
+     */
     transcript(
       ctx: WsCtx,
       runId: string,
       zoom: TranscriptZoom,
+      q?: { kinds?: TranscriptKind[]; after?: string | null },
     ): Promise<Read<RunTranscript>>;
+    chain(ctx: WsCtx, runId: string): Promise<Read<RunChain>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {
@@ -150,6 +173,15 @@ export interface DataSource {
       ctx: WsCtx,
       q: { runId: string | null },
     ): Promise<Read<ApprovalItem[]>>;
+    /**
+     * list_resolved_approvals, narrowed to one run: the Run page's Approvals
+     * tab reads back a resolved decision, including one a decision rule
+     * auto-approved with no person, that `pending` never shows (#3153).
+     */
+    resolved(
+      ctx: WsCtx,
+      q: { runId: string },
+    ): Promise<Read<ResolvedApprovalItem[]>>;
   };
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:
@@ -179,6 +211,13 @@ export interface DataSource {
    */
   mandates: {
     list(ctx: WsCtx, q: { agentId: string | null }): Promise<Read<MandateList>>;
+    /**
+     * One mandate with its ledger (`get_mandate`): the mandate page. Caller:
+     * features/mandate/mandate.tsx. `mandateId` is the public id the URL names,
+     * and the read answers `not_found` for a mandate this workspace has not
+     * recorded, which the page turns into a 404 rather than a page error.
+     */
+    get(ctx: WsCtx, mandateId: string): Promise<Read<MandateDetail>>;
   };
   /**
    * The cost rollup (#2962), every read noBillingGate; callers:
@@ -212,6 +251,16 @@ export interface DataSource {
       ctx: WsCtx,
       findingId: string,
     ): Promise<Read<SpendFindingEvidence>>;
+    /**
+     * list_price_entries at the read instant: every provider list price and
+     * this organization's negotiated rows, the book the Pricing tab shows.
+     */
+    priceBook(ctx: WsCtx): Promise<Read<PriceBook>>;
+    /**
+     * list_unpriced_models over its default window: the models the book
+     * cannot price, which is why those runs come back with no cost.
+     */
+    unpricedModels(ctx: WsCtx): Promise<Read<UnpricedModels>>;
   };
   /**
    * The onboarding gate and the register flow (#2967, ADR-065).
@@ -262,16 +311,15 @@ export interface DataSource {
   /**
    * The organization's audit record (#3097), both noBillingGate reads for an
    * org Owner or Admin (checked in the handlers); callers:
-   * features/audit/audit.tsx and features/audit/export.ts.
+   * features/audit/audit.tsx and features/audit/export.ts. Both take a window
+   * whose bounds are instants: the reader's calendar days are resolved in the
+   * viewer's zone by the lane, since no port implementation has a viewer.
    */
   audit: {
-    /** query_audit_log, one page at `offset` */
-    events(ctx: OrgCtx, q: AuditQuery): Promise<Read<AuditPage>>;
-    /** export_audit_events: the signed file over the same filters */
-    exportEvents(
-      ctx: OrgCtx,
-      q: AuditFilters & { format: AuditExportFormat },
-    ): Promise<Read<AuditExport>>;
+    /** query_audit_log, one page at `offset`; the day filters arrive resolved (AuditWindow) */
+    events(ctx: OrgCtx, q: AuditPageQuery): Promise<Read<AuditPage>>;
+    /** export_audit_events: the signed file over the same window */
+    exportEvents(ctx: OrgCtx, q: AuditExportQuery): Promise<Read<AuditExport>>;
   };
   /**
    * list_skills, one page by name over its default window (noBillingGate;
@@ -298,6 +346,8 @@ export interface DataSource {
     proposals(ctx: WsCtx, q: { offset: number }): Promise<Read<ProposalPage>>;
     /** get_context_pr: one proposal's state machine, checks and what merge will do */
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
+    /** get_steering_freshness: what is published, where, and the two gates */
+    freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
   };
   /**
    * The Tools page's three noBillingGate reads on the workspace (#2958), each

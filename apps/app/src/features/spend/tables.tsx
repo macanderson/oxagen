@@ -27,17 +27,31 @@ const cell = "px-4 py-2 text-left align-top";
 export function Panel({
   id,
   title,
+  note,
+  action,
   children,
 }: {
   id: string;
   title: string;
+  /** A line under the heading saying what the panel covers. */
+  note?: string;
+  /** A control that belongs to the panel as a whole, beside its heading. */
+  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section aria-labelledby={id} className={`${panel} overflow-x-auto`}>
-      <h2 id={id} className="px-4 pt-4 pb-2 text-sm font-semibold">
-        {title}
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-4 pb-2">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2 id={id} className="text-sm font-semibold">
+            {title}
+          </h2>
+          {note === undefined ? null : (
+            <p className="text-xs text-muted-foreground">{note}</p>
+          )}
+        </div>
+        {action}
+      </div>
       {children}
     </section>
   );

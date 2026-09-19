@@ -5,13 +5,15 @@
  * the log. Kept apart from daemon.test.ts, whose fake control plane accepts
  * events and never looks at bodies.
  */
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { request } from "node:http";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { digestBytes, digestJcs } from "../digest";
 import type { TachoEvent } from "../envelope";
 import type { FetchLike } from "../host/control-client";
 import { writeSensitiveFileAtomic } from "../host/fs";
-import { writeHostFile } from "../host/host-file";
+import { readHostFile, writeHostFile } from "../host/host-file";
 import { mergeTachoSettings } from "../host/settings-writer";
 import {
   bundleSigner,
@@ -32,9 +34,24 @@ interface Batch {
 const MCP_RESULT = { content: [{ type: "text", text: "42 nodes" }] };
 const MCP_ARGUMENTS = { q: "MATCH (n) RETURN count(n)", limit: 10 };
 
+/** What the fake control plane answers a bundle poll with. */
+interface BundleAnswer {
+  ok: boolean;
+  status: number;
+  payload: unknown;
+}
+
+/** The default: the etag in force is still the current one. */
+const BUNDLE_UNCHANGED: BundleAnswer = {
+  ok: true,
+  status: 200,
+  payload: { not_modified: true, etag: "etag-3", bundle: null },
+};
+
 /** A control plane that records every batch and refuses the bodies it is told to. */
 function plane(
   refuse: (body: TachoBody) => string | undefined = () => undefined,
+  bundleAnswer: () => BundleAnswer = () => BUNDLE_UNCHANGED,
 ) {
   const batches: Batch[] = [];
   const fetch: FetchLike = async (url, init) => {
@@ -69,11 +86,11 @@ function plane(
       };
     }
     if (url.endsWith("/bundle")) {
+      const answer = bundleAnswer();
       return {
-        ok: true,
-        status: 200,
-        text: async () =>
-          JSON.stringify({ not_modified: true, etag: "etag-3", bundle: null }),
+        ok: answer.ok,
+        status: answer.status,
+        text: async () => JSON.stringify(answer.payload),
       };
     }
     if (url.endsWith("/mcp")) {
@@ -128,7 +145,11 @@ describe("tachod and frame bodies", () => {
     for (const handle of handles.splice(0)) await handle.stop();
   });
 
-  async function boot(fetch: FetchLike, retention: PolicyBundle["retention"]) {
+  async function boot(
+    fetch: FetchLike,
+    retention: PolicyBundle["retention"],
+    now?: () => number,
+  ) {
     const paths = scratchPaths();
     const signer = bundleSigner();
     const bundle = signer.sign(unsignedBundle({ retention }));
@@ -157,9 +178,10 @@ describe("tachod and frame bodies", () => {
       port: 0,
       transcriptRoots: [paths.root],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
+      ...(now !== undefined ? { now } : {}),
     });
     handles.push(handle);
-    return { handle, host, log };
+    return { handle, host, log, signer, paths };
   }
 
   const session = "sess-bodies-1";
@@ -324,5 +346,507 @@ describe("tachod and frame bodies", () => {
     ).toBe(true);
     // The events were accepted regardless: nothing is left to ship.
     expect(handle.wal.stats().unshipped).toBe(0);
+  });
+
+  it("does not transmit a queued body once the mandate has narrowed", async () => {
+    // The leak: a body reaches the WAL under `content_exact`, the workspace
+    // narrows to `digest_only` while the control plane is out of reach, and
+    // the drain sends what is queued. The control plane refusing it is too
+    // late — the prompt has already left the machine, which is the one thing
+    // the retention boundary exists to prevent.
+    // A holder rather than a `let`: `signer` exists only after
+    // `boot(fetch, ...)` and `fetch` closes over this, so the narrowed bundle
+    // cannot be built at the declaration. `prefer-const` fires on a bare
+    // `let` assigned once and its fixer would collapse the two and break the
+    // closure; an `= undefined` initializer silences it but lands between two
+    // rules that disagree, since `no-undef-init` forbids exactly that. The
+    // object is const and the mutation is explicit, so neither rule applies.
+    const narrowed: { bundle?: PolicyBundle } = {};
+    const { fetch, batches } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, signer } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runSession(handle.port as number, host.local_token);
+    // Queued, not shipped: the bodies are sitting in the WAL.
+    expect(handle.wal.stats().unshipped).toBeGreaterThan(0);
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.tick();
+    expect(batches.flatMap((b) => b.bodies ?? [])).toEqual([]);
+    // The events still ship, digests and all: only the bytes stayed home.
+    expect(
+      batches
+        .flatMap((b) => b.events)
+        .some(
+          (e) => e.kind === "turn_start" && e.content?.digest !== undefined,
+        ),
+    ).toBe(true);
+    expect(handle.wal.stats().unshipped).toBe(0);
+  });
+
+  it("withholds a queued body when the mandate can no longer be established", async () => {
+    // Narrowing is not the only way the answer changes. A cached mandate that
+    // has outlived its signed window, with a control plane that cannot
+    // confirm it, is authority for nothing: sending the body then would be
+    // sending it under a mandate nobody can prove, so the bytes stay home
+    // until one can be.
+    const clock = { at: Date.parse("2026-09-15T00:00:00.000Z") };
+    const { fetch, batches } = plane(
+      () => undefined,
+      () => ({ ok: false, status: 503, payload: { error: "unavailable" } }),
+    );
+    const { handle, host } = await boot(
+      fetch,
+      { mode: "content_exact", classes: ["model_call", "tool_call"] },
+      () => clock.at,
+    );
+    await runSession(handle.port as number, host.local_token);
+    expect(handle.wal.stats().unshipped).toBeGreaterThan(0);
+    // Past the signed window, and the poll that would renew it fails.
+    clock.at = Date.parse("2027-10-01T00:00:00.000Z");
+    await handle.tick();
+    expect(batches.flatMap((b) => b.bodies ?? [])).toEqual([]);
+    expect(batches.flatMap((b) => b.events).length).toBeGreaterThan(0);
+    expect(handle.wal.stats().unshipped).toBe(0);
+  });
+
+  /**
+   * The body file of the one agent session this WAL holds. The WAL files a
+   * session under its tacho `session_uuid`, not under the harness id the hook
+   * posts, and the daemon's own chain is a session too, so the agent's is the
+   * one with a body file beside it.
+   */
+  function bodyFileOf(walDir: string, handle: DaemonHandle): string {
+    const found = handle.wal
+      .sessions()
+      .map((uuid) => join(walDir, `${uuid}.bodies.jsonl`))
+      .filter((path) => existsSync(path));
+    expect(found.length).toBe(1);
+    return found[0] as string;
+  }
+
+  /** Every hook of `runSession` but the one that seals: this session stays live. */
+  async function runLiveSession(port: number, token: string) {
+    expect(
+      await post(port, token, {
+        session_id: session,
+        hook_event_name: "SessionStart",
+        cwd: "/repo",
+      }),
+    ).toBe(200);
+    expect(
+      await post(port, token, {
+        session_id: session,
+        hook_event_name: "UserPromptSubmit",
+        prompt: "Read README.md, then stop.",
+      }),
+    ).toBe(200);
+    expect(
+      await post(port, token, {
+        session_id: session,
+        hook_event_name: "PreToolUse",
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/README.md" },
+        tool_use_id: "toolu_1",
+      }),
+    ).toBe(200);
+  }
+
+  const PROMPT_BASE64 = Buffer.from("Read README.md, then stop.").toString(
+    "base64",
+  );
+
+  it("completes a narrowing sweep that failed, on the next confirmation", async () => {
+    // The debt outlives the attempt. `applyControlFacts` writes the new etag
+    // before the sweep runs, so once it is written every later poll answers
+    // `not_modified` and the narrowing is never seen again. A sweep that threw
+    // — a transient filesystem error, or the process dying mid-write — would
+    // otherwise leave the excluded bytes on disk for ever, with nothing left
+    // to notice them.
+    const narrowed: { bundle?: PolicyBundle; delivered?: boolean } = {};
+    const { fetch } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined || narrowed.delivered === true
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, log, signer, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runLiveSession(handle.port as number, host.local_token);
+    const bodyPath = bodyFileOf(paths.wal, handle);
+    await handle.tick();
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+
+    // The sweep fails exactly once, the way a transient EIO would.
+    const real = handle.wal.purgeBodiesOutsideMandate.bind(handle.wal);
+    let failed = false;
+    handle.wal.purgeBodiesOutsideMandate = (retention) => {
+      if (!failed) {
+        failed = true;
+        throw new Error("EIO: simulated");
+      }
+      return real(retention);
+    };
+
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.refreshBundle();
+    narrowed.delivered = true;
+
+    // The mandate took effect and the bytes did not go: this is the state the
+    // finding is about, and it is reached through the logged catch.
+    expect(failed).toBe(true);
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+    expect(
+      log.some((line) =>
+        line.startsWith("failed to erase bodies the narrowed mandate"),
+      ),
+    ).toBe(true);
+    // The debt is on disk, not only in memory, so a restart still owes it.
+    expect(existsSync(join(paths.wal, "body-purge-owed"))).toBe(true);
+
+    // The next poll is a plain confirmation — the branch that used to return
+    // without ever looking again.
+    await handle.refreshBundle();
+
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(PROMPT_BASE64);
+    expect(existsSync(join(paths.wal, "body-purge-owed"))).toBe(false);
+    expect(
+      log.some((line) => line.startsWith("completed an owed body purge")),
+    ).toBe(true);
+  });
+
+  it("sweeps bodies the drain can no longer reach when the mandate narrows, on a session that never seals", async () => {
+    // The finding, in the case the drain cannot answer. Dropping a body as it
+    // is withheld from a batch reaches only a body whose event is still
+    // unshipped. Once the event has shipped the cursor is past it, so nothing
+    // looks at that body again, and `Wal.compact` frees the file only when its
+    // session is sealed, fully shipped, and past the retention window. A live
+    // or abandoned session therefore kept the raw prompt with no bound at all.
+    const narrowed: { bundle?: PolicyBundle } = {};
+    const { fetch, batches } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, log, signer, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runLiveSession(handle.port as number, host.local_token);
+    const bodyPath = bodyFileOf(paths.wal, handle);
+    // Ship everything under the mandate that authorised it. The bodies stay on
+    // disk afterwards, and no later batch names their events.
+    await handle.tick();
+    expect(handle.wal.stats().unshipped).toBe(0);
+    expect(batches.flatMap((b) => b.bodies ?? []).length).toBeGreaterThan(0);
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+    // Nothing sealed this session, so compaction would never remove the bytes.
+    expect(handle.wal.compact(Date.now() + 365 * 24 * 60 * 60_000, 0)).toEqual(
+      [],
+    );
+
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    // The poll is what carries a narrowing to this host.
+    await handle.refreshBundle();
+    await handle.tick();
+
+    // Gone from disk: either the line went, or the file went with it.
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(PROMPT_BASE64);
+    expect(log.some((line) => line.startsWith("mandate narrowed ("))).toBe(
+      true,
+    );
+    // The chain is untouched: the events shipped with their digests, and the
+    // session still reads and still seals.
+    expect(
+      batches
+        .flatMap((b) => b.events)
+        .some(
+          (e) => e.kind === "turn_start" && e.content?.digest !== undefined,
+        ),
+    ).toBe(true);
+    expect(handle.wal.stats().unshipped).toBe(0);
+    expect(
+      await post(handle.port as number, host.local_token, {
+        session_id: session,
+        hook_event_name: "SessionEnd",
+        reason: "other",
+      }),
+    ).toBe(200);
+    await handle.tick();
+    expect(
+      batches.flatMap((b) => b.events).some((e) => e.kind === "agent_stop"),
+    ).toBe(true);
+  });
+
+  it("records the narrowing before the etag is committed, and settles it after a restart", async () => {
+    // Two windows the test above leaves open. The debt is recorded after
+    // `applyControlFacts` has written the new etag, so a process that exits in
+    // between records nothing and no later poll can tell the clause narrowed.
+    // And the retry runs only on a poll, so a host that restarts into an
+    // unreachable control plane holds the content until one answers.
+    const narrowed: { bundle?: PolicyBundle; delivered?: boolean } = {};
+    const { fetch } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined || narrowed.delivered === true
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, log, signer, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runLiveSession(handle.port as number, host.local_token);
+    const bodyPath = bodyFileOf(paths.wal, handle);
+    await handle.tick();
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+
+    // A transient filesystem error, standing in for anything that makes the
+    // sweep fail once the narrowing has been accepted. It reads the etag on
+    // disk as it fails, which is how the ordering is asserted below.
+    let etagWhenSwept: string | undefined;
+    const sweep = handle.wal.purgeBodiesOutsideMandate.bind(handle.wal);
+    handle.wal.purgeBodiesOutsideMandate = () => {
+      etagWhenSwept = readHostFile(paths.hostFile)?.bundle.etag;
+      throw new Error("EIO: the disk said no");
+    };
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.refreshBundle();
+    handle.wal.purgeBodiesOutsideMandate = sweep;
+    // The old etag: the debt was recorded and the sweep tried before the
+    // replacement was cached, so an exit anywhere in here leaves the debt.
+    expect(etagWhenSwept).toBe("etag-3");
+    expect(readHostFile(paths.hostFile)?.bundle.etag).toBe("etag-4");
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+    const owedPath = join(paths.wal, "body-purge-owed");
+    expect(existsSync(owedPath)).toBe(true);
+    // The debt names the clause to enforce, not just that one is owed.
+    expect(
+      (
+        JSON.parse(readFileSync(owedPath, "utf8")) as {
+          retention: { mode: string };
+        }
+      ).retention.mode,
+    ).toBe("digest_only");
+
+    // A restart settles it without waiting for a poll, which is what a host
+    // that comes back to an unreachable control plane depends on.
+    await handle.stop();
+    handles.splice(handles.indexOf(handle), 1);
+    const restartLog: string[] = [];
+    const restarted = await startDaemon({
+      paths,
+      fetch: async () => {
+        throw new Error("the control plane is unreachable");
+      },
+      exec: () => ({ status: 0, stdout: "", stderr: "" }),
+      log: (line) => restartLog.push(line),
+      port: 0,
+      listen: false,
+      transcriptRoots: [paths.root],
+      timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
+    });
+    handles.push(restarted);
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(PROMPT_BASE64);
+    expect(existsSync(owedPath)).toBe(false);
+    expect(
+      restartLog.some((line) =>
+        line.startsWith("completed an owed body purge"),
+      ),
+    ).toBe(true);
+    expect(log.some((line) => line.startsWith("mandate narrowed ("))).toBe(
+      false,
+    );
+  });
+
+  // A silent debt-write failure plus a failed sweep used to commit the new
+  // etag with nothing on disk to retry. The next poll answered not_modified
+  // and the excluded bodies stayed forever.
+  it("refuses the etag commit when the purge debt cannot be written (negative)", async () => {
+    const narrowed: { bundle?: PolicyBundle; delivered?: boolean } = {};
+    const { fetch } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined || narrowed.delivered === true
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, log, signer, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runLiveSession(handle.port as number, host.local_token);
+    const bodyPath = bodyFileOf(paths.wal, handle);
+    await handle.tick();
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+
+    // The debt marker cannot land: its path is a directory, so `writeFileSync`
+    // throws EISDIR. Not `chmod`, which root ignores — this container runs as
+    // uid 0 and the first version of this test passed the write straight
+    // through, recorded the debt, swept, and committed etag-4.
+    const owedPath = join(paths.wal, "body-purge-owed");
+    mkdirSync(owedPath);
+    const sweep = handle.wal.purgeBodiesOutsideMandate.bind(handle.wal);
+    handle.wal.purgeBodiesOutsideMandate = () => {
+      throw new Error("EROFS: read-only file system");
+    };
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.refreshBundle();
+
+    // The replacement never cached: without a debt, committing it would leave
+    // excluded bodies with no retry path.
+    expect(readHostFile(paths.hostFile)?.bundle.etag).toBe("etag-3");
+    // Nothing wrote a debt: the path is still the directory that failed it.
+    expect(statSync(owedPath).isDirectory()).toBe(true);
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+    expect(
+      log.some((line) =>
+        line.startsWith("refusing to cache a narrowed bundle"),
+      ),
+    ).toBe(true);
+
+    // Writable again: the next poll still carries the narrowing (old etag),
+    // records the debt, sweeps, and commits.
+    rmSync(owedPath, { recursive: true });
+    handle.wal.purgeBodiesOutsideMandate = sweep;
+    await handle.refreshBundle();
+    narrowed.delivered = true;
+    expect(readHostFile(paths.hostFile)?.bundle.etag).toBe("etag-4");
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(PROMPT_BASE64);
+    expect(existsSync(join(paths.wal, "body-purge-owed"))).toBe(false);
+  });
+
+  it("keeps queued bodies through a mandate it cannot establish, and ships them once it can", async () => {
+    // Withholding and erasing are different triggers, and this is why. A
+    // cached mandate that has outlived its signed window, with a control plane
+    // that cannot confirm it, is authority for nothing, so the shipper sends
+    // nothing (the test above). It is not a narrowing: one poll can confirm
+    // the same clause again, and the bytes have to still be there when it
+    // does.
+    const clock = { at: Date.parse("2026-09-15T00:00:00.000Z") };
+    const unavailable: BundleAnswer = {
+      ok: false,
+      status: 503,
+      payload: { error: "unavailable" },
+    };
+    const answer = { current: unavailable };
+    const { fetch, batches } = plane(
+      () => undefined,
+      () => answer.current,
+    );
+    const { handle, host, log, paths } = await boot(
+      fetch,
+      { mode: "content_exact", classes: ["model_call", "tool_call"] },
+      () => clock.at,
+    );
+    await runLiveSession(handle.port as number, host.local_token);
+    const walBodyPath = bodyFileOf(paths.wal, handle);
+
+    // Past the signed window, and the poll that would renew it fails.
+    clock.at = Date.parse("2027-10-01T00:00:00.000Z");
+    await handle.refreshBundle();
+    expect(readFileSync(walBodyPath, "utf8")).toContain(PROMPT_BASE64);
+    expect(log.some((line) => line.startsWith("mandate narrowed ("))).toBe(
+      false,
+    );
+
+    // The lapse passes: one poll confirms the same clause, and the bodies it
+    // covers are still there to ship.
+    answer.current = BUNDLE_UNCHANGED;
+    await handle.tick();
+    expect(
+      batches
+        .flatMap((b) => b.bodies ?? [])
+        .map((b) => Buffer.from(b.bytes_base64, "base64").toString("utf8")),
+    ).toContain("Read README.md, then stop.");
   });
 });

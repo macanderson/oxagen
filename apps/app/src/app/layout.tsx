@@ -38,10 +38,10 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     icons: {
       icon: [
-        { url: "/favicon/favicon.svg", type: "image/svg+xml" },
-        { url: "/favicon/favicon.ico", sizes: "any" },
+        { url: "/favicon/favicon.svg", type: "image/svg+xml", sizes: "any" },
         { url: "/favicon/favicon-32.png", sizes: "32x32", type: "image/png" },
         { url: "/favicon/favicon-16.png", sizes: "16x16", type: "image/png" },
+        { url: "/favicon/favicon.ico", sizes: "16x16 32x32 48x48" },
       ],
       apple: [
         {
@@ -57,6 +57,10 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#09090B" },
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+  ],
 };
 
 export default async function RootLayout({
@@ -66,7 +70,7 @@ export default async function RootLayout({
 }) {
   return (
     <html lang={await getLocale()} dir="ltr" suppressHydrationWarning>
-      <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
+      <body className="min-h-dvh bg-app-canvas font-sans text-foreground antialiased">
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>
     </html>

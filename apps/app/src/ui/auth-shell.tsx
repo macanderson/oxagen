@@ -1,6 +1,7 @@
 // The frame every sign-in and organization-creation screen sits in (mockup `obShell` @
 // mc-baseline-w1): the brand on the top bar, a faint gold wash, and one centred
 // column.
+import { OxagenWordmark } from "@oxagen/ui";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
@@ -11,10 +12,9 @@ async function Brandmark() {
     <Link
       href="/"
       aria-label={t("home")}
-      className="inline-flex items-center gap-2 rounded-md text-lg font-semibold tracking-tight text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+      className="inline-flex items-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
     >
-      <span aria-hidden className="size-5 rounded-[5px] bg-brand" />
-      <span aria-hidden>{t("name")}</span>
+      <OxagenWordmark className="h-6" />
     </Link>
   );
 }

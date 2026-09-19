@@ -181,6 +181,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "export_data": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-514c860f-account-dialog-w11",
+      "entry": "Privacy and data in the user menu opens the Account dialog's Privacy tab; “Export my activity” and “Export the organization” queue export_data (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "testid": "account-export-user",
+      "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
+    },
     "export_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
@@ -229,6 +238,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_export_status": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Account dialog › Privacy: a queued export is polled with get_export_status until it is ready, then the bundle is fetched from /[org]/account/export/[exportId], which streams the private object after checking the viewer (features/shell/account-dialog.tsx, features/shell/export-download.ts)",
+      "testid": "account-export-download",
+      "proof": "apps/app/src/features/shell/export-download.test.ts",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-01GYhmZx-account-dialog-w11"
+    },
     "get_finding_evidence": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
@@ -262,6 +280,14 @@
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
     },
+    "get_mandate": {
+      "route": "/[org]/[ws]/mandates/[mandate]",
+      "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
+      "entry": "/[org]/[ws]/mandates/[mandate] — the rev1 surface that invokes get_mandate (data/live/mandates.ts, data/live/mappers/mandates.ts)",
+      "proof": "apps/app/src/features/mandate/mandate.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
+    },
     "get_model_credential": {
       "route": "/[org]/model-funding",
       "page": "apps/app/src/app/[org]/model-funding/page.tsx",
@@ -278,6 +304,30 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_run_chain": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=chain — the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/chain.tsx)",
+      "proof": "apps/app/src/features/run/chain.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
+    },
+    "fork_run": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Fork replay on a sealed ledger run graded fork calls fork_run from the dialog; a wrapped session or a weaker grade draws the control disabled with the reason (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "proof": "apps/app/src/features/run/replay.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
+    },
+    "bisect_runs": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Bisect compares this run with another and names the first frame at which they diverge (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "proof": "apps/app/src/features/run/replay.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
+    },
     "get_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
@@ -289,10 +339,10 @@
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Cost tab reads get_run_cost when open (data/live/runs.ts, features/run/cost.tsx)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=cost — the Cost tab reads get_run_cost for the rollup, under the run waterfall (data/live/runs.ts, features/run/cost.tsx)",
+      "proof": "apps/app/src/features/run/waterfall.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedBy": "session-replay-ui"
     },
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -305,10 +355,10 @@
     "get_run_transcript": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Transcript tab reads get_run_transcript at everything and groups it into turns and steps, with the zoom the URL names choosing what starts open (data/live/runs.ts, features/run/transcript.tsx, features/run/transcript-view.tsx)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=transcript — the Transcript tab reads get_run_transcript through the chips the URL pressed, groups it into turns and steps under a transport, and pages the cursor as the playhead moves; the Cost tab reads the run's own per-turn ledger for the waterfall (data/live/runs.ts, features/run/transcript.tsx, features/run/transcript-view.tsx, features/run/waterfall.tsx)",
+      "proof": "apps/app/src/features/run/transcript.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedBy": "session-replay-ui"
     },
     "get_spend": {
       "route": "/[org]/[ws]/spend",
@@ -341,6 +391,15 @@
       "proof": "apps/app/src/features/billing/billing.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "get_user_preferences": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-514c860f-account-dialog-w11",
+      "entry": "Preferences in the user menu on every organization page opens the Account dialog's Preferences tab, which reads get_user_preferences on open (features/shell/account-dialog.tsx, features/shell/account-actions.ts); every organization and workspace page also reads it through the shell port so <ViewerClock> and the chrome hand the stored zone to next-intl, and each date on the page renders in it (features/shell/viewer-clock.tsx, features/shell/shell-chrome.tsx)",
+      "testid": "open-preferences",
+      "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
     "import_tools": {
       "route": "/[org]/[ws]/tools",
@@ -378,10 +437,10 @@
     "list_approvals": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/page.tsx",
-      "entry": "/[org]/[ws] — the rev1 surface that invokes list_approvals (data/live/approvals.ts, data/live/mappers/approvals.ts, data/live/mappers/mappers.type-test.ts)",
-      "proof": "apps/app/src/features/fleet/fleet.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "entry": "/[org]/[ws] — the Fleet approvals panel invokes list_approvals, and /[org]/[ws]/runs/[run]?tab=approvals reads it narrowed to one run (data/live/approvals.ts, features/fleet/approvals-panel.tsx, features/run/run.tsx)",
+      "proof": "apps/app/src/features/run/run.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
     },
     "list_credential_grants": {
       "route": "/[org]/[ws]/tools",
@@ -473,6 +532,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "list_price_entries": {
+      "route": "/[org]/[ws]/spend?tab=pricing",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "Spend › Pricing › The price book — the table of list and negotiated rows the tab is built on (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
+      "proof": "apps/app/src/features/spend/pricing.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session-cost-price-book-autoseed"
+    },
     "list_proposals": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
@@ -488,6 +555,14 @@
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_resolved_approvals": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=approvals: the Resolved section reads list_resolved_approvals narrowed to the run, showing the rule that auto-approved a call with no person (features/run/resolved-approvals.tsx, features/run/run.tsx, data/live/approvals.ts)",
+      "proof": "apps/app/src/features/run/run.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT"
     },
     "list_repositories": {
       "route": "/[org]/[ws]",
@@ -522,6 +597,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "list_unpriced_models": {
+      "route": "/[org]/[ws]/spend?tab=pricing",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "Spend › Pricing › Models the price book cannot price — the table that explains a run with no cost (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
+      "proof": "apps/app/src/features/spend/pricing.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session-cost-price-book-autoseed"
+    },
     "list_waste": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
@@ -553,14 +636,6 @@
       "proof": "apps/app/src/features/steering/context-pr-panel.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
-    },
-    "start_subscription_upgrade": {
-      "route": "/[org]/billing",
-      "page": "apps/app/src/app/[org]/billing/page.tsx",
-      "entry": "/[org]/billing — Change plan, the page's one gold action (features/billing/change-plan.tsx, features/billing/actions.ts)",
-      "proof": "apps/app/src/features/billing/change-plan.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-9de6756e-billing-layout"
     },
     "purchase_credits": {
       "route": "/[org]/billing",
@@ -610,6 +685,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "remove_price_entry": {
+      "route": "/[org]/[ws]/spend?tab=pricing",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "Spend › Pricing › “Remove” on a negotiated row — ends the rate so the model falls back to the list price (features/spend/remove-rate-dialog.tsx, features/spend/actions.ts)",
+      "testid": "spend-remove-rate-open",
+      "proof": "apps/app/src/features/spend/price-actions.test.ts",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session-cost-price-book-autoseed"
+    },
     "request_mandate": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
@@ -633,6 +717,14 @@
       "proof": "apps/app/src/features/organization/key-row.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "revoke_mandate": {
+      "route": "/[org]/[ws]/mandates/[mandate]",
+      "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
+      "entry": "/[org]/[ws]/mandates/[mandate] — the Revoke dialog in the mandate header (features/mandate/mandate-actions.tsx → features/mandate/actions.ts)",
+      "proof": "apps/app/src/features/mandate/actions.test.ts",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
     },
     "rotate_agent_credential": {
       "route": "/[org]/[ws]/agents/[agent]",
@@ -674,6 +766,24 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-343b879e-byok"
     },
+    "set_preferences": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-514c860f-account-dialog-w11",
+      "entry": "Account dialog › Preferences › Save writes locale, time zone and theme through set_preferences (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "testid": "account-preferences-save",
+      "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
+    },
+    "set_price_entry": {
+      "route": "/[org]/[ws]/spend?tab=pricing",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "Spend › Pricing › “Set a negotiated rate” — the rate-card dialog, one set_price_entry call per token class (features/spend/price-dialog.tsx, features/spend/actions.ts)",
+      "testid": "spend-price-open",
+      "proof": "apps/app/src/features/spend/price-actions.test.ts",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session-cost-price-book-autoseed"
+    },
     "set_role_grants": {
       "route": "/[org]/roles",
       "page": "apps/app/src/app/[org]/roles/page.tsx",
@@ -697,6 +807,14 @@
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "start_subscription_upgrade": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — Change plan, the page's one gold action (features/billing/change-plan.tsx, features/billing/actions.ts)",
+      "proof": "apps/app/src/features/billing/change-plan.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-9de6756e-billing-layout"
     },
     "summarize_run": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -723,14 +841,22 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-m0-workspace-repositories"
     },
+    "update_mandate_limits": {
+      "route": "/[org]/[ws]/mandates/[mandate]",
+      "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
+      "entry": "/[org]/[ws]/mandates/[mandate] — the Change limits dialog in the mandate header (features/mandate/mandate-actions.tsx → features/mandate/actions.ts)",
+      "proof": "apps/app/src/features/mandate/actions.test.ts",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
+    },
     "update_profile": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Account in the user menu on every organization page — the shell's Account dialog, which invokes update_profile (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "entry": "Account in the user menu on every organization page: the shell's Account dialog's Profile tab and its Avatar editor both invoke update_profile (features/shell/account-dialog.tsx, features/shell/avatar-dialog.tsx, features/shell/account-actions.ts)",
       "testid": "open-account",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session-7172f7a7-account-dialog"
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-514c860f-account-dialog-w11"
     },
     "update_workspace_settings": {
       "route": "/[org]",

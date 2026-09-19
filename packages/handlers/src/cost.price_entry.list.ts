@@ -2,12 +2,21 @@
 //
 // `list_price_entries` (ADR-060 §1): the list catalog and the organization's
 // own negotiated rows, effective at `at`.
+//
+// The role gate runs in the handler rather than resting on the contract's
+// `defaultRoles`, for the same reason `cost.unpriced_model.list.ts` gates:
+// the kernel's IAM check allows every capability for a non-enterprise
+// organization (INV-29, apps/app/ARCHITECTURE.md §3.2), so the contract
+// naming only Owner, Admin, Billing and Member is decorative unless the
+// handler asserts it. This read names negotiated rates, which is the same
+// commercial detail `set_price_entry` and `remove_price_entry` already gate.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   costPriceEntryList,
   type CostPriceEntryListOutput,
 } from "@oxagen/oxagen/contracts/cost.price_entry.list";
 import { listPriceEntries, type PriceEntry } from "@oxagen/billing";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 
 export type PriceEntryListDeps = {
   listPriceEntries: (args: {
@@ -21,6 +30,12 @@ export function createPriceEntryListHandler(
   deps: PriceEntryListDeps,
 ): CapabilityHandler<typeof costPriceEntryList> {
   return async (input, ctx): Promise<CostPriceEntryListOutput> => {
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin", "Billing", "Member"] },
+    );
+
     const at = input.at === undefined ? deps.now() : new Date(input.at);
     const entries = await deps.listPriceEntries({ at, orgId: ctx.orgId });
     return {

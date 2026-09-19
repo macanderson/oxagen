@@ -7,7 +7,7 @@
 // nothing either — the gate is a banner over Fleet, and Fleet's own sections
 // report their own failures (§3.6).
 import "server-only";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { OnboardingGate as Gate } from "@/data/contracts/onboarding";
 import type { DataSource } from "@/data/ports";
@@ -18,6 +18,7 @@ import { SafeLink } from "@/ui/navigation";
 import { Rail, type RailStep } from "./rail";
 import { BindRepository } from "./ui/bind-repository";
 import { gateRail, type GateStep } from "./steps";
+import { useFormatter } from "@/ui/formatter";
 
 function Banner({
   testId,
@@ -35,7 +36,7 @@ function Banner({
   return (
     <section
       data-testid={testId}
-      className={`${panel} flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:gap-4`}
+      className={`rounded-xl border border-border bg-banner text-card-foreground shadow-sm flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:gap-4`}
     >
       <span className="inline-flex flex-none items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
         {badge}

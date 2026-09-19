@@ -1,7 +1,7 @@
 {
   "name": "update_mandate_limits",
   "domain": "mandate",
-  "description": "Change an active mandate's limits, targets, approval rule or validity end. Omitted fields are unchanged; the ledger and remaining authority carry forward.",
+  "description": "Change an active mandate's limits, targets, approval rule or validity end. Send `limits` to replace the whole limits record, or `limitChanges` to change named measures and leave the rest; never both. Omitted fields are unchanged; the ledger and remaining authority carry forward.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -50,14 +50,57 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 32
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "money",
+                "count"
+              ]
             }
           },
           "required": [
             "period",
             "currencyOrUnit"
           ],
-          "additionalProperties": false
-        }
+          "additionalProperties": false,
+          "x-server-validated": true,
+          "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+        },
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "limitChanges": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "perCall": {
+              "type": "string"
+            },
+            "perPeriod": {
+              "type": "string"
+            },
+            "period": {
+              "type": "string",
+              "enum": [
+                "daily",
+                "weekly",
+                "monthly"
+              ]
+            },
+            "currencyOrUnit": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            }
+          },
+          "additionalProperties": false,
+          "x-server-validated": true,
+          "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+        },
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
       },
       "targets": {
         "type": "object",
@@ -120,7 +163,9 @@
     "required": [
       "mandateId"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
   },
   "output": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -194,14 +239,25 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 32
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "money",
+                "count"
+              ]
             }
           },
           "required": [
             "period",
             "currencyOrUnit"
           ],
-          "additionalProperties": false
-        }
+          "additionalProperties": false,
+          "x-server-validated": true,
+          "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+        },
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
       },
       "targets": {
         "type": "object",
@@ -330,6 +386,13 @@
             "currencyOrUnit": {
               "type": "string"
             },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "money",
+                "count"
+              ]
+            },
             "period": {
               "type": "string",
               "enum": [
@@ -381,6 +444,7 @@
           "required": [
             "measure",
             "currencyOrUnit",
+            "kind",
             "period",
             "periodKey",
             "perCall",

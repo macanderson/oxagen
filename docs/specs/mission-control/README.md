@@ -1,6 +1,6 @@
 # Oxagen Mission Control
 
-> The product name Mission Control was retired on 2026-09-19 by [ADR-102](../../adr/ADR-102-workforce-management-leads-mission-control-is-retired.md); this folder keeps its name as a path, and the documents in it keep their text.
+> The product name Mission Control was retired on 2026-09-19 by [ADR-111](../../adr/ADR-111-workforce-management-leads-mission-control-is-retired.md); this folder keeps its name as a path, and the documents in it keep their text.
 
 The specification and implementation plan for the `apps/app` rebuild (the
 Mission Control app), carried in the repo so they survive the mockups
@@ -35,4 +35,7 @@ Sources and copies:
 - Oxagen Desktop (the installer app) is specified separately in `docs/specs/oxagen-desktop/`.
 - `docs/mission-control/PLAN.md`, `TOOL-MATRIX.md`, and `TRACEABILITY.md` are the
   build-time decision log and traceability over this spec; they do not restate it.
+- `docs/mission-control/GAP-INVENTORY.md` is the 2026-09-19 page-by-page gap
+  inventory of `apps/app` against the canonical roadmap §14. Prefer it over
+  `PLAN.md` / `TRACEABILITY.md` for what is built today.
 - Build tracking: integration branch `app-rebuild`, PR #2894.

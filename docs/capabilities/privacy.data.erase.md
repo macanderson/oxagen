@@ -1,4 +1,4 @@
-# privacy.data.erase
+# erase_data
 
 **Domain:** privacy
 **Mode:** async
@@ -31,7 +31,7 @@ A `privacy/erasure.execute` Inngest event is emitted — subscribe to this via w
 
 ## Grace period
 
-Default: 30 days (`PRIVACY_ERASURE_GRACE_DAYS=30`). Set to `0` in test environments for immediate erasure. Contact `privacy@oxagen.ai` within the grace period to cancel.
+Default: 30 days (`PRIVACY_ERASURE_GRACE_DAYS=30`). Set to `0` in test environments for immediate erasure. Contact `privacy@oxagen.sh` within the grace period to cancel.
 
 ## Roles
 

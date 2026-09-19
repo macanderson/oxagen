@@ -31,6 +31,8 @@ vi.mock("./actions", () => ({
   exportStatementAction: vi.fn(),
   recordFindingFixAction: vi.fn(),
   dismissFindingAction: vi.fn(),
+  setPriceEntryAction: vi.fn(),
+  removePriceEntryAction: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -93,9 +95,11 @@ const waste = vi.fn<DataSource["spend"]["waste"]>();
 const budgets = vi.fn<DataSource["spend"]["budgets"]>();
 const findings = vi.fn<DataSource["spend"]["findings"]>();
 const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
+const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
+const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const source: DataSource = {
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context: vi.fn() },
+  shell: { context: vi.fn(), preferences: vi.fn() },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
@@ -109,8 +113,9 @@ const source: DataSource = {
     frameBody: vi.fn(),
     cost: vi.fn(),
     transcript: vi.fn(),
+    chain: vi.fn(),
   },
-  approvals: { pending: vi.fn() },
+  approvals: { pending: vi.fn(), resolved: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -125,6 +130,8 @@ const source: DataSource = {
     budgets,
     findings,
     findingEvidence,
+    priceBook,
+    unpricedModels,
   },
   onboarding: { state: vi.fn(), firstFrame: vi.fn() },
   org: {
@@ -134,10 +141,15 @@ const source: DataSource = {
     apiKeys: vi.fn(),
     modelCredential: vi.fn(),
   },
-  mandates: { list: vi.fn() },
+  mandates: { list: vi.fn(), get: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
   skills: { inventory: vi.fn() },
-  steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
+  steering: {
+    records: vi.fn(),
+    proposals: vi.fn(),
+    contextPr: vi.fn(),
+    freshness: vi.fn(),
+  },
   tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
 };
 
@@ -157,6 +169,8 @@ beforeEach(() => {
   budgets.mockReset();
   findings.mockReset();
   findingEvidence.mockReset();
+  priceBook.mockReset();
+  unpricedModels.mockReset();
 });
 
 afterEach(async () => {

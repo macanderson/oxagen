@@ -21,7 +21,9 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     id: "arun_7k2m9q",
     source: "ledger",
     agentKey: "acme.core.release-bot",
-    operatorId: "usr_marcusbell",
+    operatorId: "prn_marcusbell",
+    operatorKind: "human",
+    operatorName: "Marcus Bell",
     status: "live",
     turns: 34,
     steps: 271,
@@ -31,6 +33,8 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
       currency: "USD",
       basis: "gateway_observed",
     },
+    model: null,
+    machine: null,
     taskRef: "ENG-4121 cut the 3.2 release",
     name: "Cut the 3.2 release branch",
     summary: {
@@ -39,6 +43,9 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
       model: "z-ai/glm-flash-latest",
     },
     replayGrade: "fork",
+    enforcementTier: "harness",
+    completenessGaps: [],
+    canSummarize: false,
     startedAt: at(-3600),
     sealedAt: null,
     ...overrides,
@@ -89,7 +96,7 @@ export function fleetSource(reads: FleetReads) {
   const refuse = () => Promise.reject(new Error("not a Fleet read"));
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     runs: {
       list: (...args) => {
         calls.runs.push(args);
@@ -98,6 +105,7 @@ export function fleetSource(reads: FleetReads) {
       get: refuse,
       frameBody: refuse,
       cost: refuse,
+      chain: refuse,
       transcript: refuse,
     },
     approvals: {
@@ -105,6 +113,9 @@ export function fleetSource(reads: FleetReads) {
         calls.approvals.push(args);
         return Promise.resolve(reads.approvals);
       },
+      // Fleet reads only the pending approvals; the resolved ledger is a Run
+      // page read (#3153).
+      resolved: refuse,
     },
     agents: {
       list: refuse,
@@ -127,6 +138,8 @@ export function fleetSource(reads: FleetReads) {
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,
+      priceBook: refuse,
+      unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {
@@ -143,10 +156,16 @@ export function fleetSource(reads: FleetReads) {
           ? Promise.reject(new Error("mandates.list was not expected"))
           : Promise.resolve(reads.mandates);
       },
+      get: refuse,
     },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    steering: {
+      records: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+    },
     tools: { versions: refuse, grants: refuse, killSwitches: refuse },
   };
   return { source, calls };

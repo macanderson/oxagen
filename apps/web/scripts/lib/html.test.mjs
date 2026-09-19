@@ -16,6 +16,8 @@ import {
   rfc822,
   siteFooter,
   siteHeader,
+  THEME_HEAD,
+  THEME_SWITCH,
   urls,
 } from "./html.mjs";
 
@@ -135,6 +137,87 @@ describe("chrome", () => {
     );
     expect(footer).toContain("Beta &amp; co");
     expect(footer).toContain(`© ${new Date().getUTCFullYear()} Oxagen`);
+  });
+
+  it("puts the System / Light / Dark control in the footer, System first", () => {
+    const footer = siteFooter({ wordmark, pillars });
+    expect(footer).toContain(THEME_SWITCH);
+    const order = [...THEME_SWITCH.matchAll(/data-theme-choice="(\w+)"/g)].map(
+      (m) => m[1],
+    );
+    expect(order).toEqual(["system", "light", "dark"]);
+    // One tab stop: only the checked choice is reachable before script runs.
+    expect(THEME_SWITCH.match(/tabindex="-1"/g)).toHaveLength(2);
+  });
+
+  it("stamps the stored theme before the stylesheet loads", () => {
+    const html = layout({
+      title: "T",
+      description: "D",
+      path: "/blog/",
+      image: "/x.png",
+      body: "",
+      wordmark,
+      pillars,
+    });
+    expect(html).toContain('<meta name="color-scheme" content="light dark">');
+    expect(html.indexOf(THEME_HEAD)).toBeGreaterThan(-1);
+    expect(html.indexOf(THEME_HEAD)).toBeLessThan(
+      html.indexOf('<link rel="stylesheet" href="/assets/oxagen.css">'),
+    );
+  });
+
+  // Runs the head script against a stub document: `stored` is what
+  // localStorage holds (or a throw), `osLight` the OS preference.
+  function runHead({ stored, osLight }) {
+    const root = {
+      attrs: {},
+      classList: { add() {} },
+      setAttribute(k, v) {
+        this.attrs[k] = v;
+      },
+    };
+    const scheme = { content: "light dark" };
+    // One theme-color tag per OS preference, as the head declares them. Their
+    // starting values are what an untouched pair looks like.
+    const colors = [
+      { media: "(prefers-color-scheme: light)", content: "#FFFFFF" },
+      { media: "(prefers-color-scheme: dark)", content: "#09090B" },
+    ];
+    const document = {
+      documentElement: root,
+      querySelector: () => scheme,
+      querySelectorAll: () => colors,
+    };
+    const localStorage = {
+      getItem() {
+        if (stored instanceof Error) throw stored;
+        return stored;
+      },
+    };
+    const matchMedia = () => ({ matches: osLight });
+    const body = THEME_HEAD.replace(/^<script>|<\/script>$/g, "");
+    new Function("document", "localStorage", "matchMedia", body)(
+      document,
+      localStorage,
+      matchMedia,
+    );
+    return { theme: root.attrs["data-theme"], scheme, colors };
+  }
+
+  it("head script paints the browser chrome in a pinned theme, not the OS's", () => {
+    const pinned = runHead({ stored: "dark", osLight: true });
+    expect(pinned.theme).toBe("dark");
+    expect(pinned.scheme.content).toBe("dark");
+    expect(pinned.colors.map((m) => m.content)).toEqual(["#09090B", "#09090B"]);
+    // Nothing pinned: the pair is left exactly as declared, so the browser keeps
+    // choosing between them and a later OS change still moves the chrome. Writing
+    // the resolved colour into both would read the same at load and then stick.
+    const system = runHead({ stored: null, osLight: true });
+    expect(system.theme).toBe("light");
+    expect(system.colors.map((m) => m.content)).toEqual(["#FFFFFF", "#09090B"]);
+    const blocked = runHead({ stored: new Error("blocked"), osLight: false });
+    expect(blocked.theme).toBe("dark");
   });
 
   it("layout emits canonical, OG, feed link, and JSON-LD with escaped </script>", () => {

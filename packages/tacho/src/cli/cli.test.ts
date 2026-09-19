@@ -35,7 +35,8 @@ import { minimalSession } from "../test-helpers";
 import { TACHO_TIER_SUMMARY } from "../wire";
 import type { EnrollmentResponse } from "../wire";
 import { CODEX_HOOK_EVENTS, codexHookPresence } from "../host/codex-writer";
-import { CURSOR_HOOK_EVENTS, cursorHookPresence } from "../host/cursor-writer";
+import { CURSOR_HOOK_EVENTS } from "../claude-code/cursor-adapter";
+import { cursorHookPresence } from "../host/cursor-writer";
 import {
   readStellaHooksFile,
   renderStellaTomlBlock,
@@ -267,21 +268,15 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
         paths.codexHooks,
         JSON.stringify(document, null, 2),
       ),
-    readCursorHooks: () => readJsonFileIfExists(paths.cursorHooks),
-    writeCursorHooks: (document) =>
-      writeSensitiveFileAtomic(
-        paths.cursorHooks,
-        JSON.stringify(document, null, 2),
-      ),
+    readCursorHooks: (path) => readJsonFileIfExists(path),
+    writeCursorHooks: (path, document) =>
+      writeSensitiveFileAtomic(path, JSON.stringify(document, null, 2)),
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
     writeStellaHooks: (file) =>
       writeSensitiveFileAtomic(file.path, file.text ?? ""),
     claude: () => ({ path: "/usr/local/bin/claude", version: "2.1.263" }),
     codex: () => ({ path: "/usr/local/bin/codex", version: "0.104.0" }),
-    cursor: () => ({
-      path: "/usr/local/bin/cursor-agent",
-      version: "2026.09.16",
-    }),
+    cursor: () => ({ path: "/usr/local/bin/agent", version: "2026.09.10" }),
     stella: () => ({ path: "/usr/local/bin/stella", version: "0.9.423" }),
     claudeDesktop: () => ({
       installed: true,
@@ -687,7 +682,9 @@ describe("enroll → status → unenroll", () => {
     expect(commands.length).toBeGreaterThan(0);
     expect(
       commands.every((command) =>
-        command.startsWith("/Applications/Oxagen.app/Contents/MacOS/tacho-hook"),
+        command.startsWith(
+          "/Applications/Oxagen.app/Contents/MacOS/tacho-hook",
+        ),
       ),
     ).toBe(true);
     expect(
@@ -1403,9 +1400,9 @@ describe("harnesses and reassign", () => {
     // One line naming the choices, not a ZodError's JSON issues array: both
     // CLIs print the message verbatim.
     expect(parseHarnesses("stella,codex")).toEqual(["stella", "codex"]);
-    expect(parseHarnesses("cursor,codex")).toEqual(["cursor", "codex"]);
-    expect(() => parseHarnesses("vscode")).toThrow(
-      'unknown harness "vscode"; expected one of claude-code, codex, cursor, stella, claude-desktop',
+    expect(parseHarnesses("cursor")).toEqual(["cursor"]);
+    expect(() => parseHarnesses("windsurf")).toThrow(
+      'unknown harness "windsurf"; expected one of claude-code, codex, cursor, stella, claude-desktop',
     );
     expect(() => parseHarnesses("claude_code")).toThrow(
       /unknown harness "claude_code"/,
@@ -1509,7 +1506,11 @@ describe("harnesses and reassign", () => {
 
   it("enrolls Cursor next to Claude Code, and unenroll strips it back to the user's own hooks", async () => {
     const d = deps();
-    d.writeCursorHooks({
+    // scratchPaths sets CURSOR_CONFIG_DIR, so Oxagen writes both the resolved
+    // and the fallback file (see the "cursor" describe block below for the
+    // full two-file assertions); this test only exercises the primary one.
+    const [primary] = d.paths.cursorHooks as [string, string];
+    d.writeCursorHooks(primary, {
       version: 1,
       hooks: { preToolUse: [{ command: "./mine.sh" }] },
     });
@@ -1529,10 +1530,10 @@ describe("harnesses and reassign", () => {
     });
     expect(readHostFile(d.paths.hostFile)).toMatchObject({
       harnesses: ["claude-code", "cursor"],
-      cursor_version: "2026.09.16",
-      cursor_execpath: "/usr/local/bin/cursor-agent",
+      cursor_version: "2026.09.10",
+      cursor_execpath: "/usr/local/bin/agent",
     });
-    const cursor = d.readCursorHooks() as {
+    const cursor = d.readCursorHooks(primary) as {
       version: number;
       hooks: Record<string, Array<{ command: string }>>;
     };
@@ -1547,8 +1548,8 @@ describe("harnesses and reassign", () => {
     expect(cursorHookPresence(cursor, TEST_ENROLLMENT).complete).toBe(true);
 
     const report = await status({ json: true }, d);
-    expect(report.cursorHooks?.complete).toBe(true);
-    expect(report.host?.cursor_version).toBe("2026.09.16");
+    expect(report.cursorHooks?.every((entry) => entry.complete)).toBe(true);
+    expect(report.host?.cursor_version).toBe("2026.09.10");
     expect(d.lines.join("\n")).toContain("Cursor");
 
     const found = detect({ json: true }, d);
@@ -1558,7 +1559,7 @@ describe("harnesses and reassign", () => {
     });
 
     await unenroll({ token: "tok" }, d);
-    expect(d.readCursorHooks()).toEqual({
+    expect(d.readCursorHooks(primary)).toEqual({
       version: 1,
       hooks: { preToolUse: [{ command: "./mine.sh" }] },
     });
@@ -2224,8 +2225,8 @@ describe("export and verify", () => {
           harness: "cursor",
           label: "Cursor",
           installed: true,
-          path: "/usr/local/bin/cursor-agent",
-          version: "2026.09.16",
+          path: "/usr/local/bin/agent",
+          version: "2026.09.10",
           enrolled: false,
         },
         {
@@ -2823,5 +2824,111 @@ describe("stella", () => {
     expect((await verify({ harness: "stella" }, noStella)).detail).toBe(
       "`stella` is not on PATH",
     );
+  });
+});
+
+/**
+ * Cursor end to end through the CLI. The shape of `hooks.json`, the fail-open
+ * default and the `~/.cursor` path were verified 2026-09-18 against
+ * https://cursor.com/docs/agent/hooks (fetched that day).
+ */
+describe("cursor", () => {
+  const WHERE = {
+    token: "tok",
+    org: "acme",
+    workspace: "core",
+    apiUrl: "https://api.test",
+  };
+
+  it("writes hooks, reports them, and unenroll takes them back out", async () => {
+    const d = deps({ claude: () => ({}) });
+    // scratchPaths sets CURSOR_CONFIG_DIR, so two files are written: nothing
+    // documents whether the hooks loader follows that variable, and betting
+    // on one would leave a machine reported as covered whose hooks nothing
+    // runs.
+    expect(d.paths.cursorHooks).toHaveLength(2);
+    const foreign = {
+      version: 1,
+      hooks: {
+        preToolUse: [{ type: "command", command: "/usr/local/bin/audit.sh" }],
+      },
+    };
+    const [primary, fallback] = d.paths.cursorHooks as [string, string];
+    writeSensitiveFileAtomic(primary, JSON.stringify(foreign), 0o644);
+
+    const result = await enroll({ ...WHERE, harnesses: ["cursor"] }, d);
+    expect(result.ok).toBe(true);
+    expect(result.warnings.join("\n")).not.toContain("claude");
+    expect(result.warnings.join("\n")).toContain("written to both");
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      harnesses: ["cursor"],
+      cursor_version: "2026.09.10",
+      cursor_execpath: "/usr/local/bin/agent",
+    });
+
+    for (const path of [primary, fallback]) {
+      const document = JSON.parse(readFileSync(path, "utf8")) as {
+        version: number;
+        hooks: Record<string, Array<Record<string, unknown>>>;
+      };
+      expect(document.version).toBe(1);
+      expect(Object.keys(document.hooks).sort()).toEqual(
+        [...CURSOR_HOOK_EVENTS].sort(),
+      );
+      // The veto points fail closed: Cursor proceeds by default when a hook
+      // crashes or times out, so without this a dead collector means allow.
+      expect(document.hooks["preToolUse"]?.at(-1)).toMatchObject({
+        command: `node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness cursor`,
+        failClosed: true,
+      });
+      expect(document.hooks["beforeSubmitPrompt"]?.[0]).toMatchObject({
+        failClosed: true,
+      });
+      expect(document.hooks["postToolUse"]?.[0]).toMatchObject({
+        failClosed: false,
+      });
+    }
+    // The operator's own hook is still there, ahead of ours.
+    const merged = JSON.parse(readFileSync(primary, "utf8")) as {
+      hooks: Record<string, Array<Record<string, unknown>>>;
+    };
+    expect(merged.hooks["preToolUse"]?.[0]).toEqual({
+      type: "command",
+      command: "/usr/local/bin/audit.sh",
+    });
+    expect(d.lines.join("\n")).toContain(`Cursor: ${primary}`);
+    expect(d.lines.join("\n")).toContain("agent 2026.09.10 at /usr/local/bin/agent");
+
+    const report = await status({ json: true }, d);
+    expect(report.host?.cursor_version).toBe("2026.09.10");
+    expect(report.cursorHooks).toHaveLength(2);
+    expect(report.cursorHooks?.[0]).toMatchObject({
+      path: primary,
+      complete: true,
+      missing: [],
+      failOpenEnforcement: [],
+    });
+    d.lines.length = 0;
+    await status({}, d);
+    expect(d.lines.join("\n")).toContain("Cursor      complete: 10 present");
+
+    await unenroll({ token: "tok" }, d);
+    // Ours is gone; the operator's survives, and the file we created for the
+    // fallback path no longer carries an enrollment.
+    expect(JSON.parse(readFileSync(primary, "utf8"))).toEqual(foreign);
+    expect(readFileSync(fallback, "utf8")).not.toContain("--enrollment");
+    expect(d.lines.join("\n")).toContain(`removed from ${primary} too`);
+  });
+
+  it("refuses to enroll with a relative path in the hook command", async () => {
+    // Cursor runs a user hook from ~/.cursor/, so a relative command would
+    // never be found and every tool call would fail to spawn it.
+    const d = deps({ claude: () => ({}) });
+    d.runtime = { ...d.runtime, hookCommand: "node bin/tacho-hook.mjs" };
+    const result = await enroll({ ...WHERE, harnesses: ["cursor"] }, d);
+    expect(result.ok).toBe(false);
+    expect(d.errors.join("\n")).toContain("relative path");
+    // Nothing was written, so a refusal leaves the machine as it was.
+    expect(existsSync(d.paths.cursorHooks[0] as string)).toBe(false);
   });
 });

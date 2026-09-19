@@ -13,7 +13,9 @@ export function Money({
 }) {
   const locale = useLocale();
   return (
-    <span data-testid="money" className="tabular-nums">
+    // The kit gives numbers in tables to Monaspace Neon, whose figures are
+    // one width and whose texture healing keeps a column of them even.
+    <span data-testid="money" className="font-mono tabular-nums">
       {formatMoney(value, { locale, precision })}
     </span>
   );

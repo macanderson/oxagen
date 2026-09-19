@@ -27,7 +27,7 @@ const orgs = vi.fn();
 const workspaces = vi.fn();
 const source = {
   pretenant: { orgs, workspaces },
-  shell: { context: vi.fn() },
+  shell: { context: vi.fn(), preferences: vi.fn() },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
@@ -41,8 +41,9 @@ const source = {
     frameBody: vi.fn(),
     cost: vi.fn(),
     transcript: vi.fn(),
+    chain: vi.fn(),
   },
-  approvals: { pending: vi.fn() },
+  approvals: { pending: vi.fn(), resolved: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -57,6 +58,8 @@ const source = {
     budgets: vi.fn(),
     findings: vi.fn(),
     findingEvidence: vi.fn(),
+    priceBook: vi.fn(),
+    unpricedModels: vi.fn(),
   },
   onboarding: { state: vi.fn(), firstFrame: vi.fn() },
   org: {
@@ -66,10 +69,15 @@ const source = {
     apiKeys: vi.fn(),
     modelCredential: vi.fn(),
   },
-  mandates: { list: vi.fn() },
+  mandates: { list: vi.fn(), get: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
   skills: { inventory: vi.fn() },
-  steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
+  steering: {
+    records: vi.fn(),
+    proposals: vi.fn(),
+    contextPr: vi.fn(),
+    freshness: vi.fn(),
+  },
   tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
 };
 

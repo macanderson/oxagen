@@ -1,4 +1,4 @@
-# environment.create
+# create_environment
 
 **Domain:** environment
 **Mode:** sync
@@ -9,12 +9,11 @@
 
 ## Intent
 
-Create a workspace environment (e.g. `production`, `development`, `preview`)
-for scoping secrets and sandbox config. Each workspace is seeded with a default
-environment at creation; additional environments let the vault hold per-environment
-value overrides and let sandboxes resolve to environment-specific config. A newly
-created environment is active but is **not** the default — promote it explicitly
-via `environment.set_default`. Owner/Admin only.
+Create a workspace environment such as `production`, `development`, or
+`preview` to scope secret values. Additional environments let the vault hold
+per-environment value overrides. A new environment is active and non-default.
+Use `set_default_environment` to make it the default. Only org Owners and
+Admins can create environments.
 
 ## Input
 
@@ -50,10 +49,10 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `environment.create`
+Tool name: `create_environment`
 
 ## Errors
 
-- `validation_error` — input failed Zod parse (empty `name`/`slug`).
-- `unauthorized` — caller is not org Owner/Admin.
-- `conflict` — an environment with the same `slug` already exists in the workspace.
+- `validation_error`: input failed Zod parse (empty `name`/`slug`).
+- `unauthorized`: caller is not org Owner/Admin.
+- `conflict`: an environment with the same `slug` already exists in the workspace.

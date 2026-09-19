@@ -52,12 +52,14 @@ function inventory(over: Partial<SkillInventory> = {}): SkillInventory {
         name: "release-notes",
         sessions: 2,
         harnesses: ["claude-code", "codex"],
+        harnessCount: 2,
         lastSeenAt: "2026-09-12T09:00:00.000Z",
       },
       {
         name: "triage",
         sessions: 1,
         harnesses: ["claude-code"],
+        harnessCount: 1,
         lastSeenAt: "2026-09-10T09:00:00.000Z",
       },
     ],
@@ -69,7 +71,7 @@ function inventory(over: Partial<SkillInventory> = {}): SkillInventory {
 const read = vi.fn<DataSource["skills"]["inventory"]>();
 const source: DataSource = {
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context: vi.fn() },
+  shell: { context: vi.fn(), preferences: vi.fn() },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
@@ -83,8 +85,9 @@ const source: DataSource = {
     frameBody: vi.fn(),
     cost: vi.fn(),
     transcript: vi.fn(),
+    chain: vi.fn(),
   },
-  approvals: { pending: vi.fn() },
+  approvals: { pending: vi.fn(), resolved: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -99,6 +102,8 @@ const source: DataSource = {
     budgets: vi.fn(),
     findings: vi.fn(),
     findingEvidence: vi.fn(),
+    priceBook: vi.fn(),
+    unpricedModels: vi.fn(),
   },
   onboarding: { state: vi.fn(), firstFrame: vi.fn() },
   org: {
@@ -109,9 +114,14 @@ const source: DataSource = {
     modelCredential: vi.fn(),
   },
   skills: { inventory: read },
-  mandates: { list: vi.fn() },
+  mandates: { list: vi.fn(), get: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
-  steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
+  steering: {
+    records: vi.fn(),
+    proposals: vi.fn(),
+    contextPr: vi.fn(),
+    freshness: vi.fn(),
+  },
   tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
 };
 
@@ -224,7 +234,7 @@ describe("Skills › empty", () => {
       screen.getByText("2 sessions reported no inventory."),
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("0 sessions reported their");
-    expect(screen.getByText("oxagen tacho enroll").tagName).toBe("CODE");
+    expect(screen.getByText("oxagen agent enroll").tagName).toBe("CODE");
   });
 
   it("renders the empty state when sessions reported inventories that named no skill", async () => {

@@ -182,6 +182,21 @@ export interface MaterializeOptions {
   approvalMode?: "wait" | "park";
   /** Seam for tests; defaults to the Postgres-backed gate. */
   killSwitchGate?: KillSwitchGate;
+  /**
+   * A mutable box the caller fills in AFTER materialization, once the run
+   * this turn opened is known. `runPreparedTurn` calls `materializeTools`
+   * before `openAssistantRun` (the belt has to exist to build the run's
+   * `toolAllowlist`), so `ctx.agentRun` is not yet attached when these
+   * closures are built and a value read from it here would be permanently
+   * null. Every tool's `execute` reads `runIdRef.current` at CALL time
+   * instead — by then the caller has set it to the opened run's public id —
+   * so a parked approval attaches to the run whose Policy tab a person is
+   * actually looking at (finding 9, macanderson/oxagen#3370). A caller with
+   * no such run (a direct API/MCP call, or an automation whose run was
+   * already open when it materialized tools) omits this, and the read falls
+   * back to `ctx.agentRun.runId` as before.
+   */
+  runIdRef?: { current: string | null };
 }
 
 /**
@@ -541,6 +556,14 @@ export async function materializeTools(
                     orgId: ctx.orgId,
                     workspaceId: ctx.workspaceId,
                     messageId: ctx.messageId!,
+                    // The run the call was parked in (#3286), so the Run
+                    // page's Policy tab can list its own approvals. Read at
+                    // call time, not from the `agentRun` captured when these
+                    // closures were built: for the in-app assistant that
+                    // happens before `openAssistantRun` opens the run, so
+                    // `ctx.agentRun` is still unset then (finding 9,
+                    // macanderson/oxagen#3370).
+                    runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
                     capabilityName: cap.name,
                     inputPreview: input,
                     // Digest the VALIDATED input, because that is what the
@@ -588,6 +611,12 @@ export async function materializeTools(
             }
             const result = await invoke(cap.name, input, ctx, {
               surface: "agent",
+              // Read fresh at call time, same reasoning as the manual-approval
+              // runId above: the in-app assistant opens its run only after
+              // materializing tools, so ctx.agentRun is unset when these
+              // closures are built (finding 9, #3370). Without this, an
+              // auto-approved call's receipt (#3153) attaches to no run.
+              runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
             });
             // every tool invocation lands one row in ClickHouse
             // `tool_invocations` with surface + provider. Failure-isolated.
@@ -1033,6 +1062,7 @@ export async function materializeTools(
                         orgId: ctx.orgId,
                         workspaceId: ctx.workspaceId,
                         messageId: ctx.messageId!,
+                        runId: callAgentRun?.runId ?? null,
                         capabilityName: capturedKey,
                         inputPreview: input,
                         riskLevel: "medium",

@@ -1,28 +1,5 @@
-# Spec Inventory
+# Retired generated inventory
 
-Behavioral specs mined from existing code by the `spec-miner` agent (flat OpenSpec `### Requirement:` / `### Invariant:` blocks). Auto-extracted 2026-06-20 at commit `2f628504`. Each file is a baseline for future OpenSpec deltas.
+The June 2026 code-mined inventory was removed after the runtime excision and the rev1 app rebuild invalidated its routes, handlers, and behavior claims. Git history retains the snapshot.
 
-## packages/ai
-- [ai-text-generation](ai-text-generation.md) — `streamText`/`generateObject`/`embed` wrappers; metering, duration, surface tagging, prompt hashing to ClickHouse.
-- [ai-models](ai-models.md) — white-labeled text tiers, model catalog & effective-default resolution (`modelIdOf`).
-
-## packages/inngest-functions
-- [inngest-ingestion](inngest-ingestion.md) — GitHub sync/parse, ingestion pipeline dual-write, OAuth refresh, semantic-edge inference.
-- [inngest-billing-privacy-playbooks](inngest-billing-privacy-playbooks.md) — usage rollup, dunning, Stripe sync, GDPR erasure/export, audit rollover, playbook runs.
-
-## packages/handlers
-- [handlers-agent-chat](handlers-agent-chat.md) — agent execution recording, chat send, conversation lifecycle.
-- [handlers-iam-org-workspace](handlers-iam-org-workspace.md) — org/workspace lifecycle, membership, roles, invitations, IAM provisioning, user prefs.
-- [handlers-billing-apikeys](handlers-billing-apikeys.md) — credits/subscription, API-key create/rotate/revoke.
-- [handlers-connections-integrations](handlers-connections-integrations.md) — connector/integration/repo lifecycle, mappings, sync (Postgres+Neo4j dual-write).
-- [handlers-graph-ontology](handlers-graph-ontology.md) — Neo4j node/edge/ingest/cypher, ontology queries, semantic-edge approval.
-- [handlers-plugins](handlers-plugins.md) — marketplace browse, org/workspace install & enablement, registry, credentials, schema, entitlements.
-- [handlers-privacy-audit-web](handlers-privacy-audit-web.md) — GDPR export/erase, audit-log query, notifications, prompt settings.
-
-## apps/app
-- [app-auth-onboarding](app-auth-onboarding.md) — Better Auth login/signup/reset/verify flows, org onboarding.
-- [app-api-routes](app-api-routes.md) — `/api/v1` route handlers: chat SSE stream, assets, stripe checkout, avatar upload, plugin catalog, MCP OAuth.
-- [app-server-actions](app-server-actions.md) — `"use server"` actions with explicit IAM/tenancy gates over `invoke()`.
-- [app-routing-proxy](app-routing-proxy.md) — `proxy.ts` edge interceptor, org/workspace slug resolution, route guarding, sidebar/active-tab.
-- [app-lib-domain](app-lib-domain.md) — audit export/filter/query, billing/plan formatting, compliance controls, enterprise/seat gating.
-- [app-chat-stream-ui](app-chat-stream-ui.md) — `use-tool-stream.ts` SSE consumer state machine, generative-UI component registry.
+Use the [source map](../../CODEMAPS/architecture.md), [capability index](../../capabilities/_index.md), and [app architecture](../../../apps/app/ARCHITECTURE.md) for maintained entry points. Inspect the implementation and its tests when a change needs a behavioral baseline.

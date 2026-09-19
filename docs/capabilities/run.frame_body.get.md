@@ -1,4 +1,4 @@
-# run.frame_body.get
+# get_run_frame_body
 
 The redacted body of one frame of a run (Mission Control spec §8.2, §8.4 `view`; ADR-058). `get_run` carries every frame's body reference and never its bytes; this capability reads one body on demand, inside the tenant scope, from the organisation's evidence store, and checks the bytes against the recorded digest before answering.
 

@@ -1,4 +1,4 @@
-# shell.nav_counts.get
+# get_nav_counts
 
 The sidebar's counts for a workspace (MC spec App. E): Fleet shows pending approvals, Steering shows open proposals, Audit shows open critical incidents. A count is null when its store does not exist, and a null renders as no badge.
 

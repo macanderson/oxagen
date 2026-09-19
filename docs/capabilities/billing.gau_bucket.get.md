@@ -1,4 +1,4 @@
-# billing.gau_bucket.get
+# get_gau_bucket
 
 **Capability:** `get_gau_bucket`
 **Domain:** billing

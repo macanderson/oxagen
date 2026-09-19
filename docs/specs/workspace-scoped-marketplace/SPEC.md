@@ -1,5 +1,7 @@
 # Marketplace / Plugins — Workspace Scoping + Registry Simplification
 
+> **Historical design:** This document predates the rev1 app rebuild (ADR-081). It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
+
 **Date:** 2026-06-17
 **Status:** DECISIONS RESOLVED (§7) — awaiting user approval of spec before implementation plan
 **Author:** Claude (Opus 4.8) with Mac Anderson

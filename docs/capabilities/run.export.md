@@ -1,4 +1,4 @@
-# run.export
+# export_run
 
 The signed, offline-verifiable evidence bundle for one sealed run (Mission Control spec §13.4 "Exports produce a verifiable bundle: segments, attestations, key ids, and a verifier script"; App. E; ADR-058). The capability queues the job and answers its id; the bundle is built by the durable function `evidence.run-export` and listed under Audit › exports (`evidence.run_exports`).
 

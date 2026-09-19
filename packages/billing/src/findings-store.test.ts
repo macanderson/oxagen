@@ -88,6 +88,7 @@ function pricedRun(): RunTotalsRecord {
             reasoning: 0n,
           },
           basis: "client_attested",
+          hasUnpriced: false,
         },
       ],
       tools: [],

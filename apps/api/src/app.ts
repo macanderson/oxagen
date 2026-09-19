@@ -71,6 +71,7 @@ import { agentMemoryEvidenceAttachRoute } from "./routes/v1/agent.memory_evidenc
 import { agentMemoryCitationsListRoute } from "./routes/v1/agent.memory_citation.list";
 import { agentMemoryCitationStatsRoute } from "./routes/v1/agent.memory_citation.stats";
 import { agentApprovalListRoute } from "./routes/v1/agent.approval.list";
+import { agentApprovalListResolvedRoute } from "./routes/v1/agent.approval.list_resolved";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
@@ -192,6 +193,7 @@ import { contextRecordPromoteRoute } from "./routes/v1/context.record.promote";
 import { contextRecordsListRoute } from "./routes/v1/context.records.list";
 import { contextRecordsGetRoute } from "./routes/v1/context.records.get";
 import { contextRecordsAppendRoute } from "./routes/v1/context.records.append";
+import { contextSteeringFreshnessRoute } from "./routes/v1/context.steering.freshness";
 import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
 import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
 import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismiss";
@@ -245,6 +247,7 @@ import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
 import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
+import { cmsRoute } from "./routes/v1/cms";
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
@@ -272,6 +275,8 @@ import { runListRoute } from "./routes/v1/run.list";
 import { runGetRoute } from "./routes/v1/run.get";
 import { runFrameBodyGetRoute } from "./routes/v1/run.frame_body.get";
 import { runTranscriptGetRoute } from "./routes/v1/run.transcript.get";
+import { runChainGetRoute } from "./routes/v1/run.chain.get";
+import { runStreamRoute } from "./routes/v1/run.stream";
 import { runBisectRoute } from "./routes/v1/run.bisect";
 import { runForkRoute } from "./routes/v1/run.fork";
 import { runExportRoute } from "./routes/v1/run.export";
@@ -298,6 +303,9 @@ import { runCostGetRoute } from "./routes/v1/run.cost";
 import { runProofGetRoute } from "./routes/v1/run.proof.get";
 import { evidenceDisclosureGrainSetRoute } from "./routes/v1/evidence.disclosure_grain.set";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
+import { costPriceEntryRemoveRoute } from "./routes/v1/cost.price_entry.remove";
+import { costPriceEntrySetRoute } from "./routes/v1/cost.price_entry.set";
+import { costUnpricedModelListRoute } from "./routes/v1/cost.unpriced_model.list";
 
 export type AppEnv = {
   Variables: {
@@ -343,6 +351,12 @@ app.route("/v1/auth/cli", authCliTokenRoute);
 // limit inside the route are the security boundary. Mounted BEFORE the
 // auth-gated /v1 groups for the same reason as /v1/auth/cli above.
 app.route("/v1/telemetry", telemetryUsageRoute);
+
+// Public marketing lead gate for oxagen.sh (demo form + ebook gate). No
+// session: Zod allowlist + per-IP rate limit inside the route are the
+// boundary. Mounted before the auth-gated /v1 groups so a visitor never
+// gets a 401 Missing credentials.
+app.route("/v1/cms", cmsRoute);
 
 // Shared pre-authentication ceilings for credential stuffing on Stella intake.
 // Register both on the concrete root path before the auth-gated subrouter:
@@ -587,6 +601,10 @@ orgScoped.route("/runs", runListRoute);
 orgScoped.route("/runs/get", runGetRoute);
 orgScoped.route("/runs/frame-body", runFrameBodyGetRoute);
 orgScoped.route("/runs/transcript", runTranscriptGetRoute);
+orgScoped.route("/runs/chain", runChainGetRoute);
+// One run's frames, live. GET, so EventSource can open it and resume from
+// Last-Event-ID; the read underneath is get_run, gates and all.
+orgScoped.route("/runs/:run_id/stream", runStreamRoute);
 orgScoped.route("/runs/bisect", runBisectRoute);
 orgScoped.route("/runs/fork", runForkRoute);
 orgScoped.route("/runs/export", runExportRoute);
@@ -610,6 +628,9 @@ orgScoped.route("/runs/cost", runCostGetRoute);
 orgScoped.route("/runs/proof", runProofGetRoute);
 orgScoped.route("/evidence/disclosure-grain", evidenceDisclosureGrainSetRoute);
 orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
+orgScoped.route("/cost/price-entries/set", costPriceEntrySetRoute);
+orgScoped.route("/cost/price-entries/remove", costPriceEntryRemoveRoute);
+orgScoped.route("/cost/unpriced-models", costUnpricedModelListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
 orgScoped.route("/billing/auto-topup", billingAutoTopupSetRoute);
@@ -697,6 +718,7 @@ orgScoped.route("/agent/memory/citations/list", agentMemoryCitationsListRoute);
 orgScoped.route("/agent/memory/citations/stats", agentMemoryCitationStatsRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/list", agentApprovalListRoute);
+orgScoped.route("/agent/approvals/resolved", agentApprovalListResolvedRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 // Agent run-trace span tree: one execution plus its steps and tool calls. The
@@ -879,6 +901,7 @@ orgScoped.route("/context/record/promote", contextRecordPromoteRoute);
 orgScoped.route("/context/records", contextRecordsListRoute);
 orgScoped.route("/context/records/get", contextRecordsGetRoute);
 orgScoped.route("/context/records/append", contextRecordsAppendRoute);
+orgScoped.route("/context/steering/freshness", contextSteeringFreshnessRoute);
 orgScoped.route("/context/proposals", contextProposalListRoute);
 orgScoped.route("/context/proposals/create", contextProposalCreateRoute);
 orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);

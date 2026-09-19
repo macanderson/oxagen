@@ -1,4 +1,4 @@
-# secret.key.list
+# list_secret_keys
 
 **Domain:** secret
 **Mode:** sync
@@ -53,7 +53,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `secret.key.list`
+Tool name: `list_secret_keys`
 
 ## Errors
 

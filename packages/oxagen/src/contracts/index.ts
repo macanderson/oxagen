@@ -15,6 +15,7 @@ import { apiKeyRevoke } from "./api.key.revoke";
 import { assetUpload } from "./asset.upload";
 import { authCliAuthorize } from "./auth.cli.authorize";
 import { agentApprovalList } from "./agent.approval.list";
+import { agentApprovalListResolved } from "./agent.approval.list_resolved";
 import { agentList } from "./agent.list";
 import { agentGet } from "./agent.get";
 import { agentRegister } from "./agent.register";
@@ -91,6 +92,9 @@ import { spendWasteList } from "./spend.waste";
 import { skillList } from "./skill.list";
 import { spendStatementExport } from "./spend.statement.export";
 import { costPriceEntryList } from "./cost.price_entry.list";
+import { costUnpricedModelList } from "./cost.unpriced_model.list";
+import { costPriceEntrySet } from "./cost.price_entry.set";
+import { costPriceEntryRemove } from "./cost.price_entry.remove";
 import { findingList } from "./finding.list";
 import { findingEvidenceGet } from "./finding.evidence.get";
 import { findingFixRecord } from "./finding.fix.record";
@@ -98,6 +102,7 @@ import { findingDismiss } from "./finding.dismiss";
 import { runGet } from "./run.get";
 import { runFrameBodyGet } from "./run.frame_body.get";
 import { runTranscriptGet } from "./run.transcript.get";
+import { runChainGet } from "./run.chain.get";
 import { runExport } from "./run.export";
 import { runBisect } from "./run.bisect";
 import { runFork } from "./run.fork";
@@ -234,6 +239,7 @@ import { contextProposalDismiss } from "./context.proposal.dismiss";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
+import { contextSteeringFreshness } from "./context.steering.freshness";
 import { connectionList } from "./connection.list";
 import { connectionCreate } from "./connection.create";
 import { connectionGet } from "./connection.get";
@@ -243,6 +249,7 @@ import { connectionMappingsSuggest } from "./connection.mappings.suggest";
 import { connectionMappingsGet } from "./connection.mappings.get";
 import { connectionMappingsSet } from "./connection.mappings.set";
 import { privacyDataExport } from "./privacy.data.export";
+import { privacyDataExportStatus } from "./privacy.data.export.status";
 import { privacyDataErase } from "./privacy.data.erase";
 import { graphNodeLabelsGet } from "./graph.node_label.get";
 import { knowledgeNodeRefSchema } from "./knowledge.node-ref";
@@ -529,6 +536,7 @@ export {
   authCliAuthorize,
   assetUpload,
   agentApprovalList,
+  agentApprovalListResolved,
   agentList,
   agentGet,
   agentRegister,
@@ -623,6 +631,7 @@ export {
   runGet,
   runFrameBodyGet,
   runTranscriptGet,
+  runChainGet,
   runExport,
   runBisect,
   runFork,
@@ -644,6 +653,9 @@ export {
   skillList,
   spendStatementExport,
   costPriceEntryList,
+  costUnpricedModelList,
+  costPriceEntrySet,
+  costPriceEntryRemove,
   findingList,
   findingEvidenceGet,
   findingFixRecord,
@@ -737,6 +749,7 @@ export {
   contextRecordPromote,
   contextRecordsList,
   contextRecordsGet,
+  contextSteeringFreshness,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -753,6 +766,7 @@ export {
   connectionMappingsGet,
   connectionMappingsSet,
   privacyDataExport,
+  privacyDataExportStatus,
   privacyDataErase,
   graphNodeLabelsGet,
   knowledgeNodeRefSchema,
@@ -866,6 +880,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   authCliAuthorize,
   assetUpload,
   agentApprovalList,
+  agentApprovalListResolved,
   agentList,
   agentGet,
   agentRegister,
@@ -957,6 +972,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runGet,
   runFrameBodyGet,
   runTranscriptGet,
+  runChainGet,
   runExport,
   runBisect,
   runFork,
@@ -978,6 +994,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   skillList,
   spendStatementExport,
   costPriceEntryList,
+  costUnpricedModelList,
+  costPriceEntrySet,
+  costPriceEntryRemove,
   findingList,
   findingEvidenceGet,
   findingFixRecord,
@@ -1070,6 +1089,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextRecordPromote,
   contextRecordsList,
   contextRecordsGet,
+  contextSteeringFreshness,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1089,6 +1109,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   connectionMappingsGet,
   connectionMappingsSet,
   privacyDataExport,
+  privacyDataExportStatus,
   privacyDataErase,
   graphNodeLabelsGet,
   graphNodeGet,

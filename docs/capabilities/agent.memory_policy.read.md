@@ -1,4 +1,4 @@
-# agent.memory.policy.read
+# get_memory_policy
 
 **Domain:** agent
 **Mode:** sync

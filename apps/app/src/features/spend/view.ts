@@ -8,7 +8,11 @@ import { type DayRange, SpendDrillKind } from "@/data/contracts/spend";
 import { firstParam } from "@/shared/safe-path";
 import { isFindingId } from "./forms";
 
-/** The tabs in the mockup's order: the page leads with Findings. */
+/**
+ * The tabs in the mockup's order: the page leads with Findings, and Pricing
+ * closes it — the book every figure above was priced against, and the models
+ * it cannot price, which is why some of those figures read "not recorded".
+ */
 export const SPEND_TABS = [
   "findings",
   "operator",
@@ -16,6 +20,7 @@ export const SPEND_TABS = [
   "tool",
   "waste",
   "budgets",
+  "pricing",
 ] as const;
 export type SpendTab = (typeof SPEND_TABS)[number];
 

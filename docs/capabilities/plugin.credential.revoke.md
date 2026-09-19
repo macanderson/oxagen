@@ -1,4 +1,4 @@
-# plugin.credential.revoke
+# revoke_plugin_credential
 
 **Domain:** plugin
 **Mode:** sync

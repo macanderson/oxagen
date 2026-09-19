@@ -87,8 +87,11 @@ export interface StatusReport {
   hooks?: ReturnType<typeof tachoHookPresence>;
   /** Present when the host enrolled Codex. */
   codexHooks?: ReturnType<typeof codexHookPresence>;
-  /** Present when the host enrolled Cursor. */
-  cursorHooks?: ReturnType<typeof cursorHookPresence>;
+  /**
+   * Present when the host enrolled Cursor: one entry per hooks file written,
+   * because a moved config directory means there are two.
+   */
+  cursorHooks?: Array<{ path: string } & ReturnType<typeof cursorHookPresence>>;
   /** Present when the host enrolled Stella. */
   stellaHooks?: ReturnType<typeof stellaHookPresence>;
   /**
@@ -197,7 +200,13 @@ export async function status(
     ? codexHookPresence(guarded(deps.readCodexHooks), host.host_enrollment_id)
     : undefined;
   const cursorHooks = host.harnesses.includes("cursor")
-    ? cursorHookPresence(guarded(deps.readCursorHooks), host.host_enrollment_id)
+    ? deps.paths.cursorHooks.map((path) => ({
+        path,
+        ...cursorHookPresence(
+          guarded(() => deps.readCursorHooks(path)),
+          host.host_enrollment_id,
+        ),
+      }))
     : undefined;
   const stellaHooks = host.harnesses.includes("stella")
     ? guarded(() =>
@@ -305,10 +314,18 @@ export async function status(
     deps.out(
       `Gateway     model proxy ${gateway.listening ? `listening on 127.0.0.1:${gateway.port}` : "NOT LISTENING"}, ${gateway.calls_observed} model call${gateway.calls_observed === 1 ? "" : "s"} observed since the collector started`,
     );
-  for (const entry of modelBaseUrls ?? [])
+  for (const entry of modelBaseUrls ?? []) {
     deps.out(
       `            ${entry.harness}: ${entry.ours ? (entry.shadowedBy !== undefined ? `base URL set, but ${entry.shadowedBy.file} overrides it, so calls are not routed` : "model calls are pointed at the proxy") : "model calls are not pointed at the proxy (run `tacho enroll` to set the base URL)"}`,
     );
+    // Behind a non-Anthropic base URL Claude Code inlines its whole MCP tool
+    // catalog unless this key keeps tool search on; a big catalog then
+    // overflows the context before the first prompt.
+    if (entry.ours && entry.toolSearch?.enabled === false)
+      deps.out(
+        `            ${entry.harness}: env.ENABLE_TOOL_SEARCH is ${entry.toolSearch.current === null ? "not set" : JSON.stringify(entry.toolSearch.current)}, so every request carries the whole MCP tool catalog and a large one overflows the context (run \`tacho enroll\` to set it)`,
+      );
+  }
   // The tier is what runs earned, not what is installed (ADR-095). `contained`
   // is the fourth word and is not available yet.
   for (const harness of host.harnesses)
@@ -374,12 +391,20 @@ export async function status(
     if (codexHooks.missing.length > 0)
       deps.out(`            missing: ${codexHooks.missing.join(", ")}`);
   }
-  if (cursorHooks !== undefined) {
+  for (const entry of cursorHooks ?? []) {
     deps.out(
-      `Cursor      ${cursorHooks.complete ? "complete" : "INCOMPLETE"}: ${cursorHooks.present.length} present, ${cursorHooks.missing.length} missing`,
+      `Cursor      ${entry.complete ? "complete" : "INCOMPLETE"}: ${entry.present.length} present, ${entry.missing.length} missing (${entry.path})`,
     );
-    if (cursorHooks.missing.length > 0)
-      deps.out(`            missing: ${cursorHooks.missing.join(", ")}`);
+    if (entry.missing.length > 0)
+      deps.out(`            missing: ${entry.missing.join(", ")}`);
+    // A veto hook without failClosed records and then stops denying the
+    // moment the collector cannot answer, because Cursor proceeds by default
+    // when a hook fails. That is a mandate that does not hold, so it is named
+    // rather than counted as installed.
+    if (entry.failOpenEnforcement.length > 0)
+      deps.out(
+        `            fails open at ${entry.failOpenEnforcement.join(", ")}: Cursor allows the action when the hook cannot answer; re-enroll to restore failClosed`,
+      );
   }
   if (stellaHooks !== undefined) {
     deps.out(

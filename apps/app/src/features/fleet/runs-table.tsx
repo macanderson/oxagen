@@ -1,7 +1,8 @@
 // The runs table: one list_runs page, newest first, with links to the next
 // page and back to the newest. A value the store did not record reads "not
 // recorded". The empty state tells a new workspace how its first run arrives.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useFormatter } from "@/ui/formatter";
 import type { RunPage } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
@@ -101,10 +102,22 @@ function RunsPageView({
               />
             </td>
             <td className={cell}>
-              {run.operatorId === null ? (
-                notRecorded
+              {run.operatorName === null ? (
+                run.operatorId === null ? (
+                  notRecorded
+                ) : (
+                  // No name to print: the principal id is the identifier the
+                  // rest of the record is keyed on, so it stands in its own
+                  // right rather than as a stand-in for a name.
+                  <span className={mono}>{run.operatorId}</span>
+                )
               ) : (
-                <span className={mono}>{run.operatorId}</span>
+                <span className="flex flex-col">
+                  <span>{run.operatorName}</span>
+                  <span className={`${mono} text-xs text-muted-foreground`}>
+                    {run.operatorId}
+                  </span>
+                </span>
               )}
             </td>
             <td className={cell}>

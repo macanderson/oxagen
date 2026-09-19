@@ -1,91 +1,31 @@
 ---
 title: Oxagen docs
-description: Oxagen governs and operates the autonomous agents an enterprise runs. It is the agent control plane and agent fleet management, with one mandate per agent, checked on the actions routed through Oxagen.
+description: "Set agent identity, authority, budget, tools, and skills, then inspect recorded work."
 ---
 
-Oxagen governs and operates the autonomous agents your organization runs. It is your organization's agent control plane, and your operator's agent fleet management. Every agent operates under a mandate: its access, its budget, its tools, and its rules, set by the teams accountable for it and checked on the actions routed through Oxagen. Security writes the access clause. When a task needs a system, the agent asks, a rule you wrote answers, and the record keeps the answer.
+Give each agent an identity and a mandate: its authority, budget, tools, skills, and rules. Oxagen is workforce management for autonomous agents. It checks actions routed through the control plane and keeps the record. Your harness runs the agent.
 
-## Where you are
+## Start with one agent
 
-Your team runs coding agents in terminals today. Each one runs on a token somebody pasted in, acts as whoever installed it, and reports done when it decides it is done. Afterward, nobody can say what it read, what it changed, or what it cost.
+[Create an organization and workspace](/docs/getting-started), register an agent, and enroll the machine that runs it. Open Fleet to inspect the recorded work. [Wrap an agent](/docs/cli/wrap-an-agent) explains what hooks record and where enforcement applies.
 
-## What Oxagen does
+## Set its authority and equipment
 
-Oxagen sits beside the agents you already run. It does not run them and it does not replace them. Claude Code, Codex, SDK agents, and agents you wrote yourself keep working the way they work today.
+[Roles](/docs/governance/rbac) determine which capabilities a principal may call. [Agent roles](/docs/governance/agent-roles) bound the agent's requests. Use the mandate, Tools, Steering, and Skills pages to manage its equipment and instructions.
 
-### Wrap
+For mediated connections, Oxagen holds the downstream credential and uses it on the agent's behalf. The agent's own authentication is separate. Observe mode records activity without enforcing it.
 
-`oxagen tacho enroll` installs hooks in Claude Code and Codex on one machine. From then on, Oxagen records every run on that machine as a hash-chained sequence of frames and ships it to your workspace: what the agent was told, every tool call, every model call, and every decision. The hooks answer in under 50 milliseconds and keep answering if the collector is down. See [the Oxagen app](/docs/cli/desktop) and [the CLI](/docs/cli).
+## Inspect cost and evidence
 
-### Govern
+[Spend budgets](/docs/cli/budget) put period limits on governed consumption. [Billing](/docs/billing) explains credits and model funding. [Audit logging](/docs/security/audit-logging) describes the security record and its limits.
 
-Every agent has an identity, a role, and a budget, and holds no standing grant to anything else. Every capability, whether a model call, a tool call, or a memory write, passes one `invoke()` boundary. The boundary checks identity, role, budget, and entitlement before the handler runs, then writes the audit record. The answer is one of three: allowed, denied, or routed to a person. There is no second path, so a new surface cannot skip the boundary by accident. See [governance and RBAC](/docs/governance/overview).
+[Workspace memory](/docs/agent/memory) and the [knowledge graph](/docs/knowledge) supply scoped context. Agents must request that context through the supported capabilities.
 
-<Mermaid chart={`
-flowchart TD
-  S["REST API · MCP server · in-app agent"] --> R[Look up capability contract]
-  R --> V[Surface allowed? Input valid?]
-  V --> G["IAM → billing → budget → entitlement → decision rules"]:::accent
-  G -->|refused| D[Refused + security event]
-  G -->|allowed| H[Handler runs in tenant scope]
-  H --> O[Output validated against contract]
-  O --> A[capability.invoke_allowed + trace]
-`} />
+## Choose an interface
 
-*The order `invoke()` runs in. Every gate sits before the handler, so a denied call never touches data, and both answers leave an audit record.*
+- [CLI](/docs/cli): inspect runs, budgets, memory, environments, and secrets.
+- [REST API](/docs/api/overview): call versioned capability routes.
+- [MCP](/docs/mcp/overview): expose the capabilities declared for MCP to a client.
+- [Architecture atlas](/docs/architecture): inspect the generated engineering map.
 
-### Record
-
-Oxagen saves every run next to the data it touched: who asked, what the agent read, what it changed, and what it cost. Two audit stores hold the record. Postgres keeps it for seven years. ClickHouse keeps a chain hash on every row as tamper evidence. See [audit logging](/docs/security/audit-logging).
-
-### Spend
-
-Oxagen prices every model call and tool call by token class and attributes it to an operator, an agent, a run, a turn, and a step. Hard ceilings per organization and per workspace stop a run between steps, never mid-tool. See [billing](/docs/billing) and [budgets](/docs/cli/budget).
-
-### Ground
-
-A typed knowledge graph hands an agent your company's facts and rules at run time, scoped to what the caller may see, with a citation on every answer. See [the knowledge graph](/docs/knowledge).
-
-### Remember
-
-Oxagen writes what a run learned back as memory the next run reads. Each memory carries a count of how often it fired and what it cost. See [agent memory](/docs/agent/memory).
-
-## One capability model, three surfaces
-
-The contract registry declares every capability once. Oxagen exposes it the same way on the REST API (`/v1/…`), the MCP server (streamable HTTP at `/mcp`), and the in-app agent. Querying the audit log, running a compliance check, or writing agent memory leaves the same audit record whichever surface the call came from.
-
-<Mermaid chart={`
-flowchart LR
-  API["REST API<br/>api.oxagen.sh/v1"] --> K
-  MCP["MCP server<br/>mcp.oxagen.sh/mcp"] --> K
-  APP["In-app agent<br/>app.oxagen.sh"] --> K
-  REG[(Contract registry)] -.-> K
-  K["invoke() kernel"]:::accent --> PG[("Postgres<br/>security.security_events")]
-  K --> CH[("ClickHouse<br/>audit_events")]
-`} />
-
-## Built for the security review
-
-### Tenant isolation with row-level security
-
-Every row in every tenant-scoped table carries `org_id` and `workspace_id`. Postgres enforces row-level security itself, not through application predicates a developer might forget. The `oxagen_app` role has no `BYPASSRLS` privilege. A query without an active tenant scope returns zero rows.
-
-The same rule holds in Neo4j (a scoped query guard), ClickHouse (org-scoped inserts and selects), and blob storage (access-controlled asset routes). See [tenant isolation](/docs/security/tenant-isolation-rls).
-
-### SOC 2 controls
-
-The Trust Service Criteria map to properties of the architecture:
-
-- **CC6 (access control):** role-based IAM with org roles (Owner, Admin, Compliance, and Billing) and workspace roles (Owner, Member, and Viewer), resolved per capability at the `invoke()` boundary. It also covers recorded access requests for capabilities that need a person's approval, member access reviews, and forced sign-out of any login.
-- **CC7 (monitoring):** two independent audit stores covering 54 typed event kinds from auth, billing, and capability calls.
-- **CC8 (change management):** versioned migrations, expand-then-contract schema changes, and CI-gated deploys.
-- **CC9 (risk mitigation):** Oxagen governs agents and does not run them, so there is no first-party agent runtime to compromise. A capability with a high blast radius waits for a person's approval before it runs.
-
-See [the SOC 2 controls mapping](/docs/security/soc2).
-
-## Where to start
-
-- [Getting started](/docs/getting-started): sign up, create your organization and workspace, and wrap one machine.
-- [The CLI](/docs/cli): query the graph, cap spend, read a run, and manage your Oxagen API keys from the terminal.
-- [Security overview](/docs/security/overview): the full controls picture for your security team.
-- [Enterprise use cases](/docs/enterprise/use-cases): what a CIO uses Oxagen for.
+A contract declares which surfaces expose a capability. Those surfaces share the `invoke()` boundary for authorization, billing, entitlement, and audit. See [Capabilities](/docs/api/capabilities) for the contract and route conventions.

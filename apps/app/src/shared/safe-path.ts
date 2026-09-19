@@ -71,6 +71,17 @@ export const routes = {
   root: (): SafePath => ROOT,
   login: (next?: SafePath): SafePath =>
     withQuery(mint("/login"), { next: nextParam(next) }),
+  /**
+   * /login carrying a Better Auth OAuth `error` query value. Used when the
+   * proxy lifts `/?error=` onto the login page, and as `errorCallbackURL` for
+   * social sign-in so a failed Google/GitHub attempt is visible instead of a
+   * blank form.
+   */
+  loginWithOAuthError: (error: string, next?: SafePath): SafePath =>
+    withQuery(mint("/login"), {
+      next: nextParam(next),
+      error: error.trim() === "" ? undefined : error,
+    }),
   signup: (next?: SafePath): SafePath =>
     withQuery(mint("/signup"), { next: nextParam(next) }),
   verify: (q: { email: string; next?: SafePath }): SafePath =>
@@ -133,6 +144,33 @@ export const routes = {
   agentSource: (org: string, ws: string, agent: string): SafePath =>
     pathOf(org, ws, "agents", agent, "source"),
   /**
+   * One mandate (#2957), at the flat route ARCHITECTURE.md §1.2 states:
+   * `/{org}/{ws}/mandates/{mandate}`.
+   *
+   * Flat rather than under the agent, although the mockup's route nests it. A
+   * mandate's public id identifies it inside the workspace on its own, and
+   * `get_mandate` takes that id alone — so an agent segment above it would be a
+   * second name for the same record that nothing checks, and a link carrying the
+   * wrong agent would have opened the right mandate anyway. The agent is reached
+   * from the record instead: the page's header links to the agent the mandate was
+   * granted to.
+   *
+   * `q` searches the ledger, `state` narrows it to one movement kind and
+   * `offset` opens a later page of it. All three are query values, not routes,
+   * for the reason every other filter and page here is.
+   */
+  mandate: (
+    org: string,
+    ws: string,
+    mandate: string,
+    q?: { search?: string; state?: string; offset?: string },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "mandates", mandate), {
+      q: q?.search,
+      state: q?.state,
+      offset: q?.offset,
+    }),
+  /**
    * One step of Register an agent (#2967, ADR-065 decision 1). `agent` carries
    * the identity `register_agent` minted from the name step to the wrap and
    * run steps, so a reload lands back on the same registration.
@@ -166,6 +204,13 @@ export const routes = {
     org: string,
     q: Readonly<Record<string, string | undefined>> = {},
   ): SafePath => withQuery(pathOf(org, "audit"), q),
+  /**
+   * The authenticated download of a queued data export. The archive is a
+   * private object, so this route streams the bytes rather than the tab
+   * linking at storage.
+   */
+  accountExport: (org: string, exportId: string): SafePath =>
+    pathOf(org, "account", "export", exportId),
   /** The signed export of Audit's events over the same query values. */
   auditExport: (
     org: string,
@@ -173,19 +218,26 @@ export const routes = {
   ): SafePath => withQuery(pathOf(org, "audit", "export"), q),
   /**
    * A run opened from a list (a run id is a public id, never a raw row id).
-   * `tab` picks the section, `zoom` the transcript's level and `frames` a
-   * later page of the frames; all three are query values, so the run keeps one
-   * route (§1.2).
+   * `tab` picks the section, `zoom` the transcript's level, `kinds` the chips
+   * it is filtered by (comma-separated) and `frames` a later page of the
+   * frames; each is a query value, so the run keeps one route (§1.2).
    */
   run: (
     org: string,
     ws: string,
     run: string,
-    q?: { tab?: string; zoom?: string; frames?: string; body?: string },
+    q?: {
+      tab?: string;
+      zoom?: string;
+      kinds?: string;
+      frames?: string;
+      body?: string;
+    },
   ): SafePath =>
     withQuery(pathOf(org, ws, "runs", run), {
       tab: q?.tab,
       zoom: q?.zoom,
+      kinds: q?.kinds,
       frames: q?.frames,
       body: q?.body,
     }),

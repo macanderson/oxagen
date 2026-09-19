@@ -1,77 +1,29 @@
 ---
-title: Plugins overview
-description: "How Oxagen plugins add tools an agent can request: plugin types, workspace scoping, install, connections, and entitlements."
+title: Plugins
+description: "Workspace plugins supply external tools and connector capabilities."
 ---
 
-## What are plugins?
+Equip a workspace with the external tools or connectors its agents need. A plugin installation belongs to that workspace. Installation, authentication, and authorization are separate decisions.
 
-A plugin adds tools that an agent in a workspace can request. A plugin can bring external tools (MCP servers, integrations), first-party capability packs, agent skills, or knowledge retrieval sources. Installing a plugin puts its tools in the workspace's catalog. It hands no agent a key: each call still passes identity, role, and the workspace's rules, and the credential stays in Oxagen.
+## Discover and install
 
-Every plugin is **workspace-scoped**. You install a plugin into one workspace, and it is available only there. Installing it in one workspace has no effect on other workspaces in the same org.
+Browse the [plugin catalog](/docs/plugins/marketplace) with `browse_plugin_catalog`. Inspect a result with `get_catalog_plugin` before calling `install_plugin`.
 
-## Plugin types
+| Type | Purpose |
+|---|---|
+| `mcp_server` | Tools served by an external MCP endpoint |
+| `integration` | Connections to third-party systems |
+| `agent_capability` | Capability packs registered in the plugin catalog |
+| `agent_skill` | Catalog entries for agent skills |
+| `knowledge_source` | Catalog entries for context sources |
 
-The platform supports five plugin types.
+A catalog type does not imply a built-in pack ships for it. The former media and document packs are retired.
 
-| Type | Where you find it | What it contributes |
-|---|---|---|
-| `mcp_server` | Marketplace → Agent Tools → MCP Servers | Tools served over the MCP protocol from an external endpoint. |
-| `integration` | Marketplace → Integrations | Connectors to third-party platforms (APIs, SaaS services). |
-| `agent_capability` | Marketplace → Agent Tools → Capabilities | First-party Oxagen capability packs, called inside Oxagen with no external endpoint. No built-in packs ship today: the media and document packs left with the agent runtime (ADR-043). Customer packs register through the plugin catalog. |
-| `agent_skill` | Plugin catalog (`browse_plugin_catalog`) | Reusable prompt or workflow skills an agent can call by name. |
-| `knowledge_source` | Plugin catalog (`browse_plugin_catalog`) | External retrieval sources an agent can query for context. |
+## Connect and govern
 
-## Installing a plugin
+For a mediated connection, Oxagen encrypts and holds the downstream credential. An agent requests a tool, and the governed tool path decides whether it may run. Installing a plugin does not override the agent's mandate, IAM role, consent, or approval requirements.
 
-Open **Marketplace** in the workspace sidebar. **Agent Tools** lists MCP servers and capability packs. **Integrations** lists data connectors.
-
-A plugin is enabled as soon as it installs. For the types that reach an external system (`mcp_server`, `integration`), you also complete a **connection** step: Oxagen takes the credential and holds it for the workspace.
-
-The install runs in this order:
-
-<Mermaid chart={`
-flowchart TD
-  S[Install from marketplace] --> T{{Plugin type}}
-  T -->|agent_capability| M[Look up manifest in the Oxagen plugin registry]
-  M -->|unknown or hidden| X[Install fails]
-  M --> U[Save listing, auth: none]
-  T -->|other types| R[Resolve endpoint from the workspace's enabled registries]
-  R -->|no match| X
-  R --> A[Auth kind from registry metadata: secret or none]
-  A --> P{{mcp_server or integration with auth none?}}
-  P -->|yes| O[Probe endpoint: upgrade to oauth if protected]:::accent
-  P -->|no| U2[Save listing, enabled]
-  O --> U2
-  U --> E[Audit event: plugin.installed]
-  U2 --> E
-  E --> C{{Auth kind}}
-  C -->|none| READY[Tools available to agents]
-  C -->|oauth or secret| CONNECT[Connect step] --> READY
-`} />
-
-Registry metadata cannot declare OAuth, so Oxagen probes the live endpoint (the RFC 9728 well-known document or a `401` challenge) and marks the plugin `oauth` when the endpoint is protected. Without that probe, an OAuth-protected server would install and never prompt you to connect it. Installing the same plugin again returns the existing listing instead of creating a duplicate.
-
-[Plugin marketplace](/docs/plugins/marketplace) has the full install guide.
-
-## The connection step (MCP servers and integrations)
-
-When an installed MCP server needs authentication, its row under **Tools → MCP Servers** shows an action:
-
-1. For **OAuth**: **Authenticate** sends you to the provider's authorization page. You approve Oxagen there, and the row returns as **Connected**.
-2. For **API key**: **Enter API key** opens a dialog where you paste the key. Oxagen encrypts it at rest, and the UI never shows it again.
-
-The credential belongs to the workspace, not to an agent. Oxagen uses it on the agent's behalf when a request is allowed, and the agent never sees it.
-
-Until the connection step is done, the plugin is installed, but its tools are not in any agent's tool list.
-
-## Registries
-
-**MCP server registries** fill the marketplace catalog. A registry is an HTTP endpoint that implements the MCP Registry OpenAPI spec. Oxagen seeds every new workspace with the official MCP registry. Add your own under **Settings → MCP Registries**.
-
-See [MCP server registries](/docs/plugins/registries).
-
-## Governance and audit
-
-Oxagen records every plugin install, connection, enable, and disable in the security audit log (`security.security_events` and ClickHouse `audit_events`).
-
-See [Plugin governance](/docs/governance/plugins-governance).
+- [Workspace plugins](/docs/plugins/workspace-plugins): authentication and enable or disable.
+- [Plugin governance](/docs/governance/plugins-governance): role requirements and audit events.
+- [MCP server registries](/docs/plugins/registries): catalog sources.
+- [External MCP servers](/docs/mcp/external-servers): supported runtime configuration.

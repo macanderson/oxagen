@@ -1,4 +1,4 @@
-# agent.execution.record
+# record_execution
 
 **Domain:** agent
 **Mode:** sync

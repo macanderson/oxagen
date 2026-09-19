@@ -1,4 +1,4 @@
-# context.pr.open
+# open_context_pr
 
 **Name:** `open_context_pr`
 **Domain:** context

@@ -16,7 +16,8 @@
       "agent": "By agent",
       "tool": "By tool",
       "waste": "Wasted spend",
-      "budgets": "Budgets"
+      "budgets": "Budgets",
+      "pricing": "Pricing"
     },
     "actions": {
       "exportReport": "Export report",
@@ -185,6 +186,124 @@
         "threshold_80": "past 80%",
         "threshold_95": "past 95%",
         "exceeded": "over the ceiling"
+      }
+    },
+    "pricing": {
+      "class": {
+        "input_uncached": "Input",
+        "cache_read": "Cached input read",
+        "cache_write_5m": "Cache write, 5 minutes",
+        "cache_write_1h": "Cache write, 1 hour",
+        "output": "Output",
+        "reasoning": "Reasoning",
+        "server_tool_request": "Server tool request",
+        "embedding_input": "Embedding input",
+        "rerank": "Rerank",
+        "image": "Image",
+        "video_second": "Video second"
+      },
+      "per": {
+        "token": "per 1M tokens",
+        "request": "per 1M requests",
+        "image": "per 1M images",
+        "second": "per 1M seconds"
+      },
+      "source": {
+        "list": "List price",
+        "negotiated": "Your negotiated rate",
+        "override": "Operator override"
+      },
+      "unpriced": {
+        "title": "Models the price book cannot price",
+        "note": "Models this workspace has run since {since} that no price covers. This is why those runs come back with no cost.",
+        "none": "Every model this workspace has run since {since} is priced.",
+        "columns": {
+          "model": "Model",
+          "provider": "Vendor",
+          "calls": "Calls",
+          "tokens": "Tokens",
+          "missing": "Classes with no price",
+          "recordedAs": "What the rollup recorded",
+          "action": "Price it"
+        },
+        "noProvider": "vendor not recorded",
+        "noCost": "No cost at all",
+        "estimated": "Estimated",
+        "setRate": "Set a rate"
+      },
+      "book": {
+        "title": "The price book",
+        "note": "Every provider list price in effect on {at}, and the rates this organization has negotiated, which beat the list price for the same model and class.",
+        "empty": "The price book holds nothing yet. Until it does, no run in this organization can be priced.",
+        "columns": {
+          "model": "Model",
+          "provider": "Vendor",
+          "tokenClass": "Token class",
+          "rate": "Rate",
+          "region": "Region",
+          "source": "Priced by",
+          "effective": "In effect",
+          "action": "Change"
+        },
+        "open": "still in effect",
+        "until": "until {day}",
+        "anyRegion": "any region",
+        "platformPriced": "The platform sets this one"
+      },
+      "dialog": {
+        "open": "Set a negotiated rate",
+        "title": "Set a negotiated rate",
+        "body": "Fill in the classes your contract names. Each one is written as its own effective-dated row, in the order below, under the one date you give. A rate you set beats the provider list price for that model and class from that date on; the row it supersedes is closed, never overwritten, so a run priced earlier keeps the rate it was priced with.",
+        "provider": "Vendor",
+        "model": "Model",
+        "aliases": "Other names for this model",
+        "aliasesHint": "Separate them with commas. Leave it empty to keep the names already stored — an empty list would replace them.",
+        "effectiveFrom": "In effect from",
+        "effectiveFromHint": "A UTC day, tomorrow or later. Leave it empty to start now. A rate cannot start in the past: runs already priced keep the rate they were priced with.",
+        "rates": "Rates, in US dollars per one million units",
+        "ratesHint": "Type the figure the way your contract reads it: 2.40 is $2.40 per million. Leave a class empty to leave it as it is.",
+        "showAllClasses": "Show every token class",
+        "submit": "Set these rates",
+        "pending": "Writing the rates",
+        "errors": {
+          "providerInvalid": "Enter the vendor’s name, up to 128 characters.",
+          "modelInvalid": "Enter the model id, up to 256 characters.",
+          "regionInvalid": "A region is at most 64 characters.",
+          "aliasesInvalid": "Enter up to 32 names, each at most 256 characters.",
+          "effectiveFromInvalid": "Enter a day as YYYY-MM-DD, or leave it empty to start now.",
+          "tokenClassInvalid": "That is not a token class the price book prices.",
+          "rateInvalid": "Enter US dollars per one million units, with at most six decimal places.",
+          "ratesEmpty": "Fill in at least one class. Nothing was written."
+        },
+        "partial": {
+          "written": "In effect now: {classes}. Setting a class again is safe — it supersedes its own row.",
+          "noneWritten": "Nothing was written. The price book is unchanged.",
+          "notWritten": "Not written: {classes}. Those classes are still priced as they were."
+        }
+      },
+      "remove": {
+        "open": "Remove",
+        "label": "Remove the negotiated rate for {model}, {class}",
+        "title": "Fall back to the list price",
+        "body": "Ending your negotiated rate for {model}, {class} means every call from now on is priced at the provider’s list price instead. Nothing is deleted.",
+        "kept": "The row is closed at this instant and kept, so a run priced before now still names the rate it was priced with. You can negotiate the class again at any time.",
+        "submit": "End this rate, use the list price",
+        "pending": "Ending the rate",
+        "unpricedTitle": "Rate ended — now unpriced",
+        "unpriced": "Your negotiated rate for {model}, {class} is ended. No list or override price covers this model and class, so calls from now on are UNPRICED, not priced at the list rate, until you set a new rate or a catalog publishes one.",
+        "unpricedClose": "Close",
+        "confirmUnpricedTitle": "This class would become unpriced",
+        "confirmUnpriced": "No list or override price covers {model}, {class}. Ending your negotiated rate now, rather than setting a new one first, leaves every call from now on UNPRICED, not priced at the list rate, until you set one.",
+        "confirmUnpricedSubmit": "End the rate anyway, leave it unpriced",
+        "confirmUnpricedCancel": "Keep the current rate"
+      },
+      "failure": {
+        "orgRoleRequired": "Your organization role cannot change what this organization is billed at. An organization owner, admin or billing member sets a negotiated rate.",
+        "noPrincipal": "The request carried no signed-in user. Sign in and try again.",
+        "refused": "The price book refused the change: {code}.",
+        "invalid": "The price book refused the figure as invalid: {code}.",
+        "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
+        "unavailable": "The change could not be confirmed: {code}. Open this tab again to see what the book holds."
       }
     },
     "drill": {

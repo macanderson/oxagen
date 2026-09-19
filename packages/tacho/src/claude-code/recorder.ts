@@ -15,7 +15,13 @@ import type {
   TachoKind,
   UnsealedTachoEvent,
 } from "../envelope";
-import { withoutAddressMembers } from "../envelope";
+import {
+  agentIdentitySchema,
+  anthropicSchema,
+  contextSchema,
+  hostSchema,
+  withoutAddressMembers,
+} from "../envelope";
 import {
   contentClassOf,
   type DraftContent,
@@ -49,6 +55,29 @@ import { normalizeTranscriptLine, type TranscriptTotals } from "./transcript";
 type Context = NonNullable<TachoEvent["context"]>;
 type Host = NonNullable<TachoEvent["host"]>;
 type Anthropic = NonNullable<TachoEvent["anthropic"]>;
+
+/**
+ * The next value of every sticky field `absorbStandard` used to write
+ * straight onto the recorder, computed but not yet assigned. Building this
+ * ahead of `seal()` lets a refused row leave `this.anthropic`, `this.context`,
+ * `this.host` and `this.harnessVersion` exactly as they were: the caller
+ * assigns it only once the row the update carries has cleared validation.
+ */
+interface StandardUpdate {
+  anthropic: Anthropic;
+  context: Context;
+  host: Host;
+  harnessVersion: string | undefined;
+}
+
+/** A sighting's attrs (undefined: a repeat not to seal) and its commit. */
+interface LlmCallSightingAttrs {
+  attrs: Record<string, string> | undefined;
+  commit: () => void;
+}
+
+/** What a row that is not an `llm_call` takes part in: nothing. */
+const NO_SIGHTING: LlmCallSightingAttrs = { attrs: {}, commit: () => {} };
 
 export interface RecorderOptions {
   context: ClaudeCodeContext;
@@ -127,6 +156,57 @@ function compact<T extends Record<string, unknown>>(value: T): T {
   return out as T;
 }
 
+/**
+ * Seal an event, keeping any body member its kind does not declare as an
+ * attribute rather than refusing the event.
+ *
+ * A harness adds attributes before this package learns their names: Claude
+ * Code began sending `plugin.name` and `plugin_id_hash` on its MCP connection
+ * records, and the strict body schema refused every such record, and with it
+ * the whole OTLP export it arrived in. The envelope stays strict about its
+ * typed members; an unknown one is kept verbatim in `attrs` under
+ * `body.<key>`, the same way `hooks.ts` and `otel.ts` keep what they do not
+ * promote. Any other refusal still throws.
+ */
+function sealWithUnknownBodyKeysAsAttrs(
+  unsealed: UnsealedTachoEvent,
+  cursor: ChainCursor,
+): ReturnType<typeof sealEvent> {
+  try {
+    return sealEvent(unsealed, cursor);
+  } catch (error) {
+    const issues = (error as { issues?: unknown }).issues;
+    if (!Array.isArray(issues)) throw error;
+    const unknown = new Set<string>();
+    for (const issue of issues as Array<{
+      code?: string;
+      path?: unknown[];
+      keys?: string[];
+    }>) {
+      if (
+        issue.code === "unrecognized_keys" &&
+        issue.path?.length === 1 &&
+        issue.path[0] === "body"
+      )
+        for (const key of issue.keys ?? []) unknown.add(key);
+    }
+    if (unknown.size === 0) throw error;
+    const body = { ...(unsealed.body as Record<string, unknown>) };
+    const attrs: Record<string, string> = { ...(unsealed.attrs ?? {}) };
+    for (const key of unknown) {
+      const value = body[key];
+      delete body[key];
+      if (value !== undefined)
+        attrs[`body.${key}`] =
+          typeof value === "string" ? value : JSON.stringify(value);
+    }
+    return sealEvent(
+      { ...unsealed, body, attrs } as UnsealedTachoEvent,
+      cursor,
+    );
+  }
+}
+
 export class SessionRecorder {
   readonly sessionUuid: string;
   readonly rootSessionUuid: string;
@@ -143,6 +223,7 @@ export class SessionRecorder {
    * event; they wait here for the daemon to write them next to it.
    */
   private pendingBodies: FrameBody[] = [];
+  private readonly otelRefusals: string[] = [];
   private context: Context = {};
   private host: Host = {};
   private anthropic: Anthropic = {};
@@ -271,6 +352,16 @@ export class SessionRecorder {
     for (const link of this.children.values()) link.recorder.relabel(context);
   }
 
+  /**
+   * Record context facts the collector observed rather than the harness
+   * reported, such as the git head the worktree is on. They merge into the
+   * context block the same way a hook's own facts do, so the next frame this
+   * recorder seals carries them and every frame after it does too.
+   */
+  noteContext(facts: Partial<Context>): void {
+    this.absorbContext(facts as Record<string, unknown>);
+  }
+
   /** The chain head after the last sealed event. */
   get chainCursor(): ChainCursor {
     return this.cursor;
@@ -328,12 +419,12 @@ export class SessionRecorder {
     // A proxy frame is the first sighting of its call by construction (it
     // is sealed as the response ends); noting it is what lets the transcript
     // and OTel sightings that follow be stamped as its duplicates.
-    const duplicate =
+    const sighting =
       kind === "llm_call"
-        ? (this.llmCallDuplicateAttrs(body, fields.source ?? "collector") ??
-          {})
-        : {};
-    return this.seal(kind, body, {
+        ? this.llmCallSighting(body, fields.source ?? "collector")
+        : NO_SIGHTING;
+    const duplicate = sighting.attrs ?? {};
+    const event = this.seal(kind, body, {
       ts: fields.ts ?? this.now(),
       source: fields.source ?? "collector",
       ...(fields.hook_event_name !== undefined
@@ -344,6 +435,8 @@ export class SessionRecorder {
       ...(fields.content !== undefined ? { content: fields.content } : {}),
       turn: {},
     });
+    sighting.commit();
+    return event;
   }
 
   get hasStarted(): boolean {
@@ -448,7 +541,19 @@ export class SessionRecorder {
       raw_source_digest?: `sha256:${string}`;
       turn?: { prompt_id?: string; turn_id?: string };
     },
+    /**
+     * A not-yet-committed `StandardUpdate` to build this one envelope from,
+     * in place of the recorder's own sticky `anthropic`/`context`/`host`/
+     * `harnessVersion`. The caller (`sealOtelDraft`) commits it onto the
+     * recorder only after this call returns, so a throw here never leaves
+     * the sticky fields holding a value the envelope refused.
+     */
+    standard?: StandardUpdate,
   ): TachoEvent {
+    const anthropic = standard?.anthropic ?? this.anthropic;
+    const context = standard?.context ?? this.context;
+    const host = standard?.host ?? this.host;
+    const harnessVersion = standard?.harnessVersion ?? this.harnessVersion;
     const parent = this.options.parent;
     // Redacted and digested here, before the seal, so the digest the chain
     // hash covers is the digest of the bytes that ship. A frame with bytes
@@ -484,7 +589,7 @@ export class SessionRecorder {
       harness_event_sequence: fields.harness_event_sequence,
       agent: compact({
         ...this.options.context.agent,
-        harness_version: this.harnessVersion,
+        harness_version: harnessVersion,
       }),
       subagent: parent
         ? compact({
@@ -502,13 +607,10 @@ export class SessionRecorder {
               turn_id: fields.turn?.turn_id,
             })
           : undefined,
-      context:
-        Object.keys(this.context).length > 0 ? { ...this.context } : undefined,
-      host: Object.keys(this.host).length > 0 ? { ...this.host } : undefined,
+      context: Object.keys(context).length > 0 ? { ...context } : undefined,
+      host: Object.keys(host).length > 0 ? { ...host } : undefined,
       anthropic:
-        Object.keys(this.anthropic).length > 0
-          ? { ...this.anthropic }
-          : undefined,
+        Object.keys(anthropic).length > 0 ? { ...anthropic } : undefined,
       span: fields.span,
       attrs,
       content,
@@ -516,7 +618,7 @@ export class SessionRecorder {
       kind,
       body,
     }) as unknown as UnsealedTachoEvent;
-    const sealed = sealEvent(unsealed, this.cursor);
+    const sealed = sealWithUnknownBodyKeysAsAttrs(unsealed, this.cursor);
     this.cursor = sealed.next;
     this.events.push(sealed.event);
     const contentClass = contentClassOf(kind);
@@ -549,17 +651,20 @@ export class SessionRecorder {
   /**
    * The attrs an `llm_call` carries when another source already sealed the
    * same call, or undefined when this sighting is a repeat from the same
-   * source and must not be sealed at all. See `llm-call-dedupe.ts`.
+   * source and must not be sealed at all; and the ledger registration to
+   * commit once the row has sealed. A row the envelope refuses never
+   * commits, so the next sighting of the call is not stamped a duplicate of
+   * a row the chain does not hold. See `llm-call-dedupe.ts`.
    */
-  private llmCallDuplicateAttrs(
+  private llmCallSighting(
     body: Record<string, unknown>,
     source: string,
-  ): Record<string, string> | undefined {
-    const verdict = this.llmCalls.note(body, source);
-    if (verdict.kind === "repeat") return undefined;
+  ): LlmCallSightingAttrs {
+    const { verdict, commit } = this.llmCalls.judge(body, source);
+    if (verdict.kind === "repeat") return { attrs: undefined, commit };
     if (verdict.kind === "duplicate")
-      return { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of };
-    return {};
+      return { attrs: { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of }, commit };
+    return { attrs: {}, commit };
   }
 
   /** Ingest one hook payload with the hook process environment. */
@@ -722,7 +827,17 @@ export class SessionRecorder {
         metric.standard.session_id !== this.harnessSessionId
       )
         continue;
-      this.absorbStandard(metric.standard);
+      // No `seal()` guards a metric, so its standard fields are checked
+      // against the same schemas `seal()` would refuse them against before
+      // they ever reach the sticky state: a metric with an out-of-bounds
+      // field must not poison it either.
+      const standardUpdate = this.computeStandardUpdate(metric.standard);
+      const refusal = this.refusedStandardReason(standardUpdate);
+      if (refusal !== undefined) {
+        this.otelRefusals.push(`metric: ${refusal}`);
+        continue;
+      }
+      this.commitStandardUpdate(standardUpdate);
       this.metrics.push(metric);
     }
     for (const draft of drafts) {
@@ -733,10 +848,25 @@ export class SessionRecorder {
         continue;
       const target = this.routeOtel(draft);
       out.push(...this.pendingChildGenesis.splice(0));
-      const sealed = target.sealOtelDraft(draft);
-      if (sealed !== undefined) out.push(sealed);
+      // One record the envelope refuses must not cost the rest of the export.
+      // The events already sealed in this loop have advanced the chain; had
+      // the throw escaped, they would never reach the WAL and the control
+      // plane would see a sequence gap on every chain the export touched.
+      try {
+        const sealed = target.sealOtelDraft(draft);
+        if (sealed !== undefined) out.push(sealed);
+      } catch (error) {
+        this.otelRefusals.push(
+          `${draft.kind}: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}`,
+        );
+      }
     }
     return out;
+  }
+
+  /** OTel records this recorder could not seal, drained by the daemon's log. */
+  takeOtelRefusals(): string[] {
+    return this.otelRefusals.splice(0);
   }
 
   private routeOtel(draft: OtelDraft): SessionRecorder {
@@ -756,51 +886,131 @@ export class SessionRecorder {
     return this;
   }
 
-  private absorbStandard(standard: OtelDraft["standard"]): void {
-    this.anthropic = compact({
+  /**
+   * The sticky standard state a record's `standard` block would produce,
+   * computed against the recorder's CURRENT `anthropic`/`context`/`host`/
+   * `harnessVersion` without writing to any of them. Pure so a caller can
+   * validate or seal against the result before deciding whether the update
+   * is ever committed.
+   */
+  private computeStandardUpdate(
+    standard: OtelDraft["standard"],
+  ): StandardUpdate {
+    const anthropic = compact({
       ...this.anthropic,
       ...standard.anthropic,
     }) as Anthropic;
-    this.absorbContext(compact({ ...standard.context, model: undefined }));
-    this.absorbHost(
-      compact({
+    const context = compact({
+      ...this.context,
+      ...compact({ ...standard.context, model: undefined }),
+    }) as Context;
+    const host = compact({
+      ...this.host,
+      ...compact({
         os_type: standard.resource.os_type,
         os_version: standard.resource.os_version,
         host_arch: standard.resource.host_arch,
       }),
-    );
+    }) as Host;
+    let harnessVersion = this.harnessVersion;
+    if (harnessVersion === undefined)
+      harnessVersion = harnessVersionFromExecPath(host.claude_execpath);
     if (standard.resource.harness_version !== undefined)
-      this.harnessVersion = standard.resource.harness_version;
+      harnessVersion = standard.resource.harness_version;
+    return { anthropic, context, host, harnessVersion };
+  }
+
+  /** Assign a previously computed `StandardUpdate` onto the recorder's sticky state. */
+  private commitStandardUpdate(update: StandardUpdate): void {
+    this.anthropic = update.anthropic;
+    this.context = update.context;
+    this.host = update.host;
+    this.harnessVersion = update.harnessVersion;
+  }
+
+  /**
+   * Whether the envelope would refuse the given standard fields, as the
+   * message the refusal carries, or undefined when they would seal cleanly.
+   * Used by the metrics branch of `ingestOtlp`, which has no `seal()` call to
+   * guard it, and by `sealOtelDraft`'s deduped-repeat branch, which also
+   * commits with no `seal()` call in the way: both must check a standard
+   * update against the same schemas `seal()` would, before it ever reaches
+   * the recorder's sticky state.
+   */
+  private refusedStandardReason(update: StandardUpdate): string | undefined {
+    const anthropic = anthropicSchema.safeParse(update.anthropic);
+    if (!anthropic.success)
+      return anthropic.error.issues[0]?.message ?? "invalid anthropic fields";
+    const context = contextSchema.safeParse(update.context);
+    if (!context.success)
+      return context.error.issues[0]?.message ?? "invalid context fields";
+    const host = hostSchema.safeParse(update.host);
+    if (!host.success)
+      return host.error.issues[0]?.message ?? "invalid host fields";
+    const harnessVersion = agentIdentitySchema.shape.harness_version.safeParse(
+      update.harnessVersion,
+    );
+    if (!harnessVersion.success)
+      return (
+        harnessVersion.error.issues[0]?.message ?? "invalid harness_version"
+      );
+    return undefined;
   }
 
   private sealOtelDraft(draft: OtelDraft): TachoEvent | undefined {
-    this.absorbStandard(draft.standard);
+    // Computed, not yet assigned: a row the envelope refuses must leave the
+    // recorder's `anthropic`/context/host/harnessVersion exactly as they
+    // were, so the next record does not inherit a value nothing sealed.
+    const standardUpdate = this.computeStandardUpdate(draft.standard);
     // Only the log record takes part: the control plane counts tokens from
     // `otel_log`, never from a span, so a span sealed first must not turn the
     // log record that follows into the duplicate.
-    const duplicate =
+    const sighting =
       draft.kind === "llm_call" && draft.source === "otel_log"
-        ? this.llmCallDuplicateAttrs(draft.body, draft.source)
-        : {};
-    if (duplicate === undefined) return undefined;
-    return this.seal(draft.kind, draft.body, {
-      ts: draft.ts,
-      source: draft.source,
-      otel_event_name: draft.otel_event_name,
-      ...(draft.standard.harness_event_sequence !== undefined
-        ? { harness_event_sequence: draft.standard.harness_event_sequence }
-        : {}),
-      attrs: { ...draft.attrs, ...duplicate },
-      ...(draft.span !== undefined ? { span: draft.span } : {}),
-      ...(draft.content_digest !== undefined
-        ? { content_digest: draft.content_digest }
-        : {}),
-      raw_source_digest: draft.raw_source_digest,
-      turn:
-        draft.standard.prompt_id !== undefined
-          ? { prompt_id: draft.standard.prompt_id }
-          : {},
-    });
+        ? this.llmCallSighting(draft.body, draft.source)
+        : NO_SIGHTING;
+    const duplicate = sighting.attrs;
+    if (duplicate === undefined) {
+      // No `seal()` call guards this branch either: a dropped repeat whose
+      // standard fields the envelope would refuse must not commit them, the
+      // same rule `refusedStandardReason` enforces for the metrics branch.
+      const refusal = this.refusedStandardReason(standardUpdate);
+      if (refusal !== undefined) {
+        this.otelRefusals.push(`${draft.kind}: ${refusal}`);
+        return undefined;
+      }
+      sighting.commit();
+      this.commitStandardUpdate(standardUpdate);
+      return undefined;
+    }
+    const event = this.seal(
+      draft.kind,
+      draft.body,
+      {
+        ts: draft.ts,
+        source: draft.source,
+        otel_event_name: draft.otel_event_name,
+        ...(draft.standard.harness_event_sequence !== undefined
+          ? { harness_event_sequence: draft.standard.harness_event_sequence }
+          : {}),
+        attrs: { ...draft.attrs, ...duplicate },
+        ...(draft.span !== undefined ? { span: draft.span } : {}),
+        ...(draft.content_digest !== undefined
+          ? { content_digest: draft.content_digest }
+          : {}),
+        raw_source_digest: draft.raw_source_digest,
+        turn:
+          draft.standard.prompt_id !== undefined
+            ? { prompt_id: draft.standard.prompt_id }
+            : {},
+      },
+      standardUpdate,
+    );
+    // Reached only when `seal()` above did not throw: the row is sealed, so
+    // the sticky state its `standard` block computed is safe to commit.
+    sighting.commit();
+    this.commitStandardUpdate(standardUpdate);
+    return event;
   }
 
   /** Ingest one transcript line (parent transcript or a subagent's). */
@@ -820,10 +1030,11 @@ export class SessionRecorder {
     for (const draft of drafts) {
       this.absorbContext(draft.context);
       let body = draft.body;
-      let duplicate =
+      const sighting =
         draft.kind === "llm_call"
-          ? this.llmCallDuplicateAttrs(draft.body, "transcript")
-          : {};
+          ? this.llmCallSighting(draft.body, "transcript")
+          : NO_SIGHTING;
+      let duplicate = sighting.attrs;
       if (duplicate === undefined) {
         // A later content block of a message the chain already holds: its
         // text still ships as a body, its usage does not count again.
@@ -840,6 +1051,7 @@ export class SessionRecorder {
           turn: draft.turn ?? {},
         }),
       );
+      sighting.commit();
     }
     return out;
   }

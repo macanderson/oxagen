@@ -25,7 +25,12 @@ const DEFAULT_PROMPT = "Reply with exactly the word OK and nothing else.";
 const BINARY: Record<WrappedHarness, string> = {
   "claude-code": "claude",
   codex: "codex",
-  cursor: "cursor-agent",
+  // Cursor's CLI binary is `agent` (verified 2026-09-18 against
+  // https://cursor.com/docs/cli/installation, fetched that day); the
+  // installer also links `cursor-agent`, which `cursorFacts` probes first.
+  // This is only the name the messages use, and `agent` is the one Cursor's
+  // own docs use; what is actually spawned is the path the probe found.
+  cursor: "agent",
   stella: "stella",
 };
 
@@ -43,9 +48,9 @@ const DEFAULT_TIMEOUT_MS: Record<WrappedHarness, number> = {
 
 /**
  * One headless turn per harness. Claude Code prints a JSON result carrying
- * its session id; Codex CLI (`codex exec`), Cursor (`cursor-agent -p`) and
- * Stella (`stella run`) are matched as a chain the daemon did not have before
- * the turn ran, carrying the harness label. Cursor's JSON result does carry a
+ * its session id; Codex CLI (`codex exec`), Cursor (`agent -p`) and Stella
+ * (`stella run`) are matched as a chain the daemon did not have before the
+ * turn ran, carrying the harness label. Cursor's JSON result does carry a
  * `session_id`, but its hooks name the session by `conversation_id`, and
  * nothing documents the two as the same value, so it is not parsed.
  */
@@ -60,6 +65,11 @@ function headlessTurn(
     };
   }
   if (harness === "cursor") {
+    // `-p` (`--print`) runs one non-interactive turn (verified 2026-09-18
+    // against https://cursor.com/docs/cli/reference/parameters, fetched that
+    // day). The output is prose, so the session is matched the way Codex's
+    // and Stella's are: a chain the daemon did not have before the turn ran,
+    // carrying the harness label.
     return { args: ["-p", prompt], parsesSession: false };
   }
   if (harness === "stella") {
@@ -97,7 +107,7 @@ function factsFor(harness: TachoHarness, deps: CliDeps) {
 
 function configPathFor(harness: TachoHarness, deps: CliDeps): string {
   if (harness === "codex") return deps.paths.codexHooks;
-  if (harness === "cursor") return deps.paths.cursorHooks;
+  if (harness === "cursor") return deps.paths.cursorHooks.join(" or ");
   if (harness === "stella") return deps.readStellaHooks().path;
   return deps.paths.claudeSettings;
 }

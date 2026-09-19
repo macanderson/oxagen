@@ -1,4 +1,4 @@
-# plugin.credential.reauth
+# reauth_plugin_credential
 
 **Domain:** plugin
 **Mode:** sync

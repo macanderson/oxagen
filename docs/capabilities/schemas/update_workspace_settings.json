@@ -35,7 +35,9 @@
       "slug": {
         "type": "string",
         "minLength": 2,
-        "maxLength": 40
+        "maxLength": 40,
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
       },
       "description": {
         "anyOf": [
@@ -52,7 +54,9 @@
         "anyOf": [
           {
             "type": "string",
-            "maxLength": 512
+            "maxLength": 512,
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
           },
           {
             "type": "null"
@@ -73,6 +77,20 @@
             ]
           }
         }
+      },
+      "steering": {
+        "type": "object",
+        "properties": {
+          "autoSync": {
+            "type": "boolean",
+            "description": "Pull .oxagen/ forward from the production branch without being asked, when the checkout is behind it"
+          },
+          "blockStaleRuns": {
+            "type": "boolean",
+            "description": "Refuse to run a prompt while .oxagen/ is behind the production branch"
+          }
+        },
+        "additionalProperties": false
       }
     },
     "additionalProperties": false
@@ -121,6 +139,24 @@
             ]
           }
         }
+      },
+      "steering": {
+        "type": "object",
+        "properties": {
+          "autoSync": {
+            "type": "boolean",
+            "description": "Pull .oxagen/ forward from the production branch without being asked, when the checkout is behind it"
+          },
+          "blockStaleRuns": {
+            "type": "boolean",
+            "description": "Refuse to run a prompt while .oxagen/ is behind the production branch"
+          }
+        },
+        "required": [
+          "autoSync",
+          "blockStaleRuns"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
@@ -128,7 +164,8 @@
       "slug",
       "description",
       "avatarUrl",
-      "consequenceRoles"
+      "consequenceRoles",
+      "steering"
     ],
     "additionalProperties": false
   }

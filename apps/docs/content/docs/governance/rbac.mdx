@@ -46,7 +46,7 @@ flowchart TD
 
 What the chart shows and leaves out:
 
-- **The resolver runs for Enterprise organizations.** On Free, Build, and Scale, the IAM layer allows a human or API-key call without consulting grants, and the audit record names `tier_gate` as the deciding rule. Surfaces that must stay Owner- or Admin-only on those tiers carry their own checks (see [Gate functions](#gate-functions)). Agent principals skip the tier gate, and the resolver decides them on every plan.
+- **The resolver runs for Enterprise organizations.** On Free, Build, and Scale, the IAM layer allows a human or API-key call without consulting grants, and the audit record names `tier_gate` as the deciding rule. Surfaces that must stay Owner- or Admin-only on those tiers carry their own checks (see the operation's handler and current app authorization checks). Agent principals skip the tier gate, and the resolver decides them on every plan.
 - **An Oxagen API key acts as the person who created it.** If the resolver cannot find that person in the org, it denies the call outright rather than falling through to the contract default.
 - **Across roles, deny wins.** A principal in several roles with conflicting grants for one capability gets deny over require-approval over allow. The resolver decides a role grant on its effect alone. It does not evaluate conditions such as time windows or IP ranges.
 - **Owner is a floor, not an override.** The Owner rule applies only to the system-provisioned org Owner role (`isSystemDefault=true`), and only when no role grant decided. An explicit deny on one of the principal's roles still binds an Owner. A user-created role named "Owner" gets nothing from this rule.
@@ -94,7 +94,7 @@ This is what makes agent work auditable. Every action leads back to the person w
 
 ### Roles and grants
 
-**Governance → Policies** lists every role in the org and the capability grants each one carries. The list is read-only. There is no in-app editor for roles, custom roles, or grants yet, and changes are made by provisioning. Change a member's org role from **Organization → Members**.
+**Organization → Roles** lists roles and their permissions. Owners and Admins can create custom roles, replace their permission sets, and delete them. Built-in roles are read-only. The page reports whether the organization tier enforces the grants. Change membership on the organization page.
 
 ### Approval requests
 
@@ -102,18 +102,8 @@ When the deciding grant's effect is require approval, the kernel refuses the cal
 
 ### Access reviews
 
-**Organization → Access → Reviews** lists every member with their role and last activity. **Confirm** records `access.member_access_confirmed`. **Revoke** removes the member and records `org.member_removed` and `access.review_completed`. Use the page as the evidence for a quarterly access review.
-
-## Gate functions
-
-`apps/app` exposes five app-layer guard functions for sensitive server paths. They are **not** part of the `@oxagen/iam` kernel. They query `org_users.role` directly and bypass the full IAM resolver chain. Each takes `(orgId: string, userId: string)` and calls `notFound()` on failure. They return 404 rather than 403 so a probe cannot learn that the resource exists.
-
-- `assertOrgMember(orgId, userId)`: confirms the principal is a member of the org.
-- `assertBillingManager(orgId, userId)`: confirms the principal holds the Owner, Admin, or Billing role.
-- `assertMcpManager(orgId, userId)`: confirms the principal holds the Owner or Admin role for plugin governance.
-- `assertWorkspaceMember(workspaceId, userId)`: confirms the principal is a member of the given workspace.
-- `assertSecurityManager(orgId, userId)`: confirms the principal holds the Owner or Admin role for audit evidence export.
+Review members on the organization page and inspect membership events through `query_audit_log`. The former Access Reviews screen is not part of the current app.
 
 ## SSO and directory sync
 
-SSO (SAML 2.0 or OIDC) and SCIM 2.0 directory sync are not available. Contact support@oxagen.ai if your organization requires SSO or automated provisioning.
+SSO (SAML 2.0 or OIDC) and SCIM 2.0 directory sync are not available. Contact success@oxagen.sh if your organization requires SSO or automated provisioning.

@@ -27,6 +27,7 @@ describe("toSkillInventory", () => {
           name: "release-notes",
           sessions: 2,
           harnesses: ["claude-code", "codex"],
+          harnessCount: 2,
           firstSeenAt: "2026-09-10T09:00:00.000Z",
           lastSeenAt: "2026-09-12T09:00:00.000Z",
         },
@@ -43,11 +44,41 @@ describe("toSkillInventory", () => {
           name: "release-notes",
           sessions: 2,
           harnesses: ["claude-code", "codex"],
+          harnessCount: 2,
           lastSeenAt: "2026-09-12T09:00:00.000Z",
         },
       ],
       nextCursor: "c2",
     });
+  });
+
+  it("keeps a session with an empty harness label, and a skill's true harness count past its displayed list, whole (#3103)", () => {
+    const view = map({
+      window,
+      sessions: 1,
+      reportedSessions: 1,
+      notReportedSessions: 0,
+      skills: [
+        {
+          name: "quiet-harness",
+          sessions: 1,
+          harnesses: ["", "claude-code"],
+          harnessCount: 5,
+          firstSeenAt: "2026-09-10T09:00:00.000Z",
+          lastSeenAt: "2026-09-10T09:00:00.000Z",
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(view.skills).toEqual([
+      {
+        name: "quiet-harness",
+        sessions: 1,
+        harnesses: ["", "claude-code"],
+        harnessCount: 5,
+        lastSeenAt: "2026-09-10T09:00:00.000Z",
+      },
+    ]);
   });
 
   it("keeps a null reported count null when no session reported an inventory, never a zero", () => {

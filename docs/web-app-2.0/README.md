@@ -1,5 +1,7 @@
 # Oxagen Web App 2.0 — Information Architecture
 
+> **Historical design:** This document predates the rev1 app rebuild (ADR-081). It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
+
 This directory is the **recommended information architecture** for `apps/app`. It is a
 design document, not code. Each leaf `spec.md` describes one page of the recommended
 Next.js route tree in enough detail for a coding agent to build it without re-researching:

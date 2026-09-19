@@ -1,4 +1,4 @@
-# repo.resume
+# resume_repo
 
 Resume automatic syncing for a paused repository connection.
 

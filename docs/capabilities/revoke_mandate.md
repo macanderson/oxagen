@@ -3,7 +3,7 @@
 **Domain:** mandate
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent (requires approval)
+**Surfaces:** api, mcp, agent
 **Sensitivity:** high
 **Metering:** none (`noBillingGate`)
 
@@ -24,6 +24,14 @@ draft is revoked the same way: that is how a request is declined.
 ## Output
 
 The mandate, status `revoked`.
+
+## App surface
+
+The Revoke dialog in the mandate page's header, `/{org}/{ws}/mandates/{mandate}`, which collects the reason. The control is not
+offered on a mandate that has already ended, since this capability refuses any
+status but `active` or `draft`. On a draft the same control reads Decline, and
+the mandate page is the only place in the app that offers it: the agent's
+Mandates section links the row and carries no decline control of its own.
 
 ## Roles
 

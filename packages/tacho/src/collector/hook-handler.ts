@@ -24,6 +24,7 @@ import {
 } from "../wire";
 import {
   type Evaluation,
+  type EvaluationInput,
   evaluatePreToolUse,
   type MatchContext,
 } from "../host/bundle";
@@ -35,6 +36,12 @@ export interface PolicyView {
   hostStatus: PolicyBundle["host_status"];
   denyGeneration: DenyGeneration;
   controlReachable: boolean;
+  /**
+   * When the control plane last confirmed this mandate's etag, as epoch ms.
+   * Freshness is measured from here rather than from `expires_at`; see
+   * `isStale` in host/bundle.ts for why the two are not the same thing.
+   */
+  mandateConfirmedAt?: number;
 }
 
 export interface HookHandlerDeps {
@@ -197,20 +204,20 @@ function invocationToolUseId(
  * Claude Code takes `additionalContext` at SessionStart and at
  * UserPromptSubmit; Stella reads only SessionStart stdout as prompt text and
  * answers every other event with a decision document that has nowhere to put
- * prose (`stellaAnswer`). Draining at Stella's UserPromptSubmit would seal
- * `message_delivered` and tell the fleet the command applied while Stella
- * never saw a word, so the message stays queued for a boundary that carries
- * it. Cursor is the same at this boundary: its `beforeSubmitPrompt` answer is
- * `{"continue": bool}` and has no field for context (`cursorAnswer`).
+ * prose (`stellaAnswer`). Cursor is the same shape for a different reason:
+ * `additional_context` is a field of its sessionStart answer alone, and its
+ * beforeSubmitPrompt answer carries only `continue` and a `user_message`
+ * shown to the person, not to the agent. Draining at either harness's
+ * UserPromptSubmit would seal `message_delivered` and tell the fleet the
+ * command applied while the agent never saw a word, so the message stays
+ * queued for a boundary that carries it.
  */
 function deliversMessages(
   harness: TachoHarness | undefined,
   hookEventName: string,
 ): boolean {
-  return (
-    (harness !== "stella" && harness !== "cursor") ||
-    hookEventName === "SessionStart"
-  );
+  if (harness !== "stella" && harness !== "cursor") return true;
+  return hookEventName === "SessionStart";
 }
 
 /**
@@ -300,6 +307,47 @@ export async function handleHookEvent(
   // route sealed is in `events` by now, so every body is pending on the
   // recorder, and taking them here is what keeps the two lists paired.
   return { ...outcome, bodies: outcome.record?.recorder.takeBodies() ?? [] };
+}
+
+/**
+ * The `evaluatePreToolUse` request for one view of the policy.
+ *
+ * Both paths that evaluate a tool go through here, and so does each path's
+ * second attempt after a refresh: `PreToolUse` for the agent's own call, and
+ * `SubagentStart` for the subagent Cursor is about to launch. Building the
+ * request by hand at each of the four sites is what let `mandateConfirmedAt`
+ * reach the parent's evaluation and not the subagent's — past the bundle's
+ * signed lifetime the subagent then measured freshness from `issued_at`, and
+ * in enforce mode that denied every subagent launch on a host whose mandate
+ * the daemon had been confirming by `not_modified` the whole time. One
+ * builder, reading the view it is handed, is what stops the parent and the
+ * subagent drifting apart again.
+ */
+function evaluationRequestFor(
+  view: PolicyView,
+  toolName: string,
+  toolInput: Record<string, unknown> | undefined,
+  record: SessionRecord,
+  deps: HookHandlerDeps,
+): EvaluationInput {
+  return {
+    bundle: view.bundle,
+    bundleVerified: view.verified,
+    toolName,
+    ...(toolInput !== undefined ? { toolInput } : {}),
+    hostStatus: view.hostStatus,
+    session: record.control,
+    latestDenyGeneration: view.denyGeneration,
+    controlReachable: view.controlReachable,
+    ...(view.mandateConfirmedAt !== undefined
+      ? { mandateConfirmedAt: view.mandateConfirmedAt }
+      : {}),
+    now: deps.now(),
+    context: {
+      ...deps.match,
+      ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
+    },
+  };
 }
 
 async function routeHook(
@@ -460,39 +508,15 @@ async function routeHook(
       let currentView = view;
       let evaluation =
         replay?.evaluation ??
-        evaluatePreToolUse({
-          bundle: currentView.bundle,
-          bundleVerified: currentView.verified,
-          toolName,
-          ...(toolInput !== undefined ? { toolInput } : {}),
-          hostStatus: currentView.hostStatus,
-          session: record.control,
-          latestDenyGeneration: currentView.denyGeneration,
-          controlReachable: currentView.controlReachable,
-          now: deps.now(),
-          context: {
-            ...deps.match,
-            ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
-          },
-        });
+        evaluatePreToolUse(
+          evaluationRequestFor(currentView, toolName, toolInput, record, deps),
+        );
       if (evaluation.decision === "defer" && deps.refreshBundle) {
         await deps.refreshBundle();
         currentView = deps.policy();
-        evaluation = evaluatePreToolUse({
-          bundle: currentView.bundle,
-          bundleVerified: currentView.verified,
-          toolName,
-          ...(toolInput !== undefined ? { toolInput } : {}),
-          hostStatus: currentView.hostStatus,
-          session: record.control,
-          latestDenyGeneration: currentView.denyGeneration,
-          controlReachable: currentView.controlReachable,
-          now: deps.now(),
-          context: {
-            ...deps.match,
-            ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
-          },
-        });
+        evaluation = evaluatePreToolUse(
+          evaluationRequestFor(currentView, toolName, toolInput, record, deps),
+        );
       }
       if (evaluation.decision === "defer") {
         // No way to refresh: the stale bundle fails closed on non-read-only tools.
@@ -578,39 +602,15 @@ async function routeHook(
       let currentView = view;
       let evaluation =
         replay?.evaluation ??
-        evaluatePreToolUse({
-          bundle: currentView.bundle,
-          bundleVerified: currentView.verified,
-          toolName: "Task",
-          ...(toolInput !== undefined ? { toolInput } : {}),
-          hostStatus: currentView.hostStatus,
-          session: record.control,
-          latestDenyGeneration: currentView.denyGeneration,
-          controlReachable: currentView.controlReachable,
-          now: deps.now(),
-          context: {
-            ...deps.match,
-            ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
-          },
-        });
+        evaluatePreToolUse(
+          evaluationRequestFor(currentView, "Task", toolInput, record, deps),
+        );
       if (evaluation.decision === "defer" && deps.refreshBundle) {
         await deps.refreshBundle();
         currentView = deps.policy();
-        evaluation = evaluatePreToolUse({
-          bundle: currentView.bundle,
-          bundleVerified: currentView.verified,
-          toolName: "Task",
-          ...(toolInput !== undefined ? { toolInput } : {}),
-          hostStatus: currentView.hostStatus,
-          session: record.control,
-          latestDenyGeneration: currentView.denyGeneration,
-          controlReachable: currentView.controlReachable,
-          now: deps.now(),
-          context: {
-            ...deps.match,
-            ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
-          },
-        });
+        evaluation = evaluatePreToolUse(
+          evaluationRequestFor(currentView, "Task", toolInput, record, deps),
+        );
       }
       if (evaluation.decision === "defer") {
         evaluation = {

@@ -253,6 +253,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(alpha.agentKey).toBe(
         `${tenant.orgNamespace}.${tenant.workspaceNamespace}.alpha`,
       );
+      // The registering user, through the agent's OWN delegated principal —
+      // which is `kind = 'agent'`, so the operator seam's `kind = 'human'`
+      // filter would match nothing and blank this field for every agent
+      // (discussion_r4051925928). This assertion predates that defect and did
+      // not catch it, because the block is skipped without DATABASE_URL;
+      // `_agent-identity.join.test.ts` asserts the same property off the
+      // rendered SQL so it holds on every run.
       expect(alpha.operatorId).toBe(tenant.userPublicId);
       expect(alpha.status).toBe("enrolled");
       expect(alpha.credentials).toBe(1);

@@ -1,0 +1,92 @@
+<h2 class="ch-title">Bounded tasks and ongoing work</h2>
+<p class="ch-thesis">Some work has an endpoint. Other work continues. Manage each in its own way.</p>
+
+<p class="lede">You operate two kinds of agent and they tend to get one kind of management. The first fixes a bug, runs a migration, or writes a report. It starts, works, and stops. The second triages an inbox, watches a queue, or keeps dependencies current. It has no last step. Ask "is it done?" of the first and the question has an answer. Ask it of the second and the honest reply is that the question does not apply.</p>
+
+<h3>Tell the two apart first</h3>
+<div class="tablewrap"><table>
+  <thead><tr><th></th><th>Bounded task</th><th>Ongoing responsibility</th></tr></thead>
+  <tbody>
+    <tr><td>Shape</td><td>Has a start and an end state you can describe</td><td>Runs until someone stops it</td></tr>
+    <tr><td>Examples</td><td>Fix issue 4821, migrate a table, draft the quarterly report</td><td>Triage refunds, keep dependencies patched, answer tier-1 tickets</td></tr>
+    <tr><td>The question</td><td>Did the checks hold?</td><td>Is it inside its authority and budget, and what is it waiting on?</td></tr>
+    <tr><td>Managed through</td><td>Completion criteria set before the work starts</td><td>Authority, budget, and review points</td></tr>
+    <tr><td>Reviewed</td><td>At the end of the run</td><td>On a schedule, and when a threshold trips</td></tr>
+  </tbody>
+</table></div>
+<p>The common mistake runs in one direction: inventing a finish line for ongoing work so that it fits a task tracker. An inbox agent with a "done" state will report done. That tells you nothing about the inbox.</p>
+
+<h3>Bounded tasks: define completion before the work starts</h3>
+<p>Part 10 made tests the ground truth of behavior and had the agent write the failing test first. Generalize that. Before a bounded run begins, write down the checks that decide completion, and fix them so the run cannot revise them.</p>
+<ul class="plain">
+  <li><strong>A command that must pass.</strong> <code>pytest tests/test_billing.py</code> exits 0.</li>
+  <li><strong>A file or a diff condition.</strong> The migration exists. No file outside <code>billing/**</code> changed.</li>
+  <li><strong>A human decision.</strong> The release owner approves the pull request.</li>
+</ul>
+<p>Fixing the checks first matters for a plain reason. An agent that judges its own work can stop early or skip verification. The Berkeley taxonomy names this family of failures: premature termination, and no or incomplete verification, both recorded across the frameworks they studied.<sup class="cite"><a href="#r5">5</a></sup> A check the run cannot edit removes the agent's opinion from the verdict. The verdict becomes a function of recorded results, and another person can recompute it from the record (part 19).</p>
+<pre><code># done/issue-4821.yaml     written before the run, hashed when it opens
+task: "Fix DecimalConversionError on POST /api/v2/refunds"
+checks:
+  - run:   "pytest tests/test_billing.py::test_refund -x"
+  - run:   "ruff check billing/"
+  - diff:  { only_paths: ["billing/**", "tests/**"] }
+  - human: { role: release-owner, question: "Safe to ship in 2026.09?" }
+on_fail: { retries: 3, then: route_to_operator }</code></pre>
+
+<div class="counter">
+  <span class="tag">Counterweight · What a passing verdict means</span>
+  <p>A passing verdict means the specified checks held. It does not establish that every requirement was captured or that every action was correct. Your team decides whether those checks are enough for the task, and a thin set of checks passes thin work. When checks fail, the useful record is not just "failed". It is the reasons, and whether the agent continued, waited for a person, or reached its retry limit.</p>
+</div>
+
+<h3>Ongoing work: authority, budget, and review points</h3>
+<p>An ongoing agent is managed the way you manage a standing responsibility held by a person. You do not ask whether they are done. You look at what they are allowed to do, what they have spent, what they are waiting on, and what they did since you last looked.</p>
+<ul class="plain">
+  <li><strong>Authority.</strong> The mandate from part 15, reviewed on a date, not only when something goes wrong.</li>
+  <li><strong>Budget.</strong> The monthly limit and the per-run ceiling from part 17, with the <code>at_limit</code> action stated.</li>
+  <li><strong>Open requests.</strong> The routed requests from part 16 that a person has not yet answered. This is the list an operator reads first each morning.</li>
+  <li><strong>Review points.</strong> A schedule (weekly for a new agent, monthly once it is stable) and a few thresholds that trigger a review early.</li>
+</ul>
+<div class="tablewrap"><table>
+  <thead><tr><th>Review trigger</th><th>Reading</th><th>Usual cause</th></tr></thead>
+  <tbody>
+    <tr><td>Denials rise week over week</td><td><code>requests_by_answer</code></td><td>A tool or a task changed and the rules did not</td></tr>
+    <tr><td>Run cost p99 leaves its band</td><td><code>cost_per_run_p99</code></td><td>A loop, often on a failing check or a stale index</td></tr>
+    <tr><td>Routed requests wait longer</td><td><code>time_to_answer_p95</code></td><td>The named approver changed roles, or the rule routes too much</td></tr>
+    <tr><td>Tool use ratio falls</td><td><code>tool_use_ratio</code></td><td>The work drifted away from the equipment</td></tr>
+    <tr><td>The operator changes</td><td>Inventory</td><td>Nobody has re-read the mandate since</td></tr>
+  </tbody>
+</table></div>
+
+<h3>The operator's week</h3>
+<p>Put together, the operating job is small and regular. Daily, answer what is waiting. Weekly, read the spend and the denials for each agent, and review the runs that tripped a threshold. Monthly, re-read each mandate with its three owners, retire the agents nobody can justify, and turn repeated approvals into narrower rules. The field kit has this as a one-page checklist. None of it requires reading transcripts, which is the test of whether parts 14 to 19 are in place.</p>
+
+<div class="fits">
+  <span class="tag">Where Oxagen fits</span>
+  <p>Oxagen is where that week happens. Every agent enrolled in Oxagen is on the Fleet page with its mandate, its open requests, its spend, and its last run. An operator answers routed requests from the Access page, and an ongoing agent shows its authority, its open requests, and its spend this month with no finish line. Oxagen treats completion checks as an optional control for bounded tasks. They are not the definition of the product, and ongoing work does not need them.</p>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Sort your agents into the two columns.</strong> Use the inventory from part 14. Anything you cannot place is doing both jobs and should be split.</li>
+    <li><strong>Write completion checks for one bounded task type.</strong> Start with the one that reaches review most often. Three checks are enough: a command, a diff condition, and a human decision if the change ships.</li>
+    <li><strong>Fix the checks before the run.</strong> Hash the file when the run opens and record the digest as the first row. Reject a run whose checks changed midway.</li>
+    <li><strong>Set two review triggers for one ongoing agent.</strong> Pick from the table. Send the alert to the operator by name.</li>
+    <li><strong>Put the monthly mandate review on a calendar.</strong> Thirty minutes, three owners, one agent at a time.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>checks_held_first_attempt</code>: bounded runs whose checks held without a retry, over all bounded runs. This is <code>first_attempt_rate</code> from part 13, against criteria the run could not edit.</li>
+    <li><code>runs_closed_without_checks</code>: bounded runs that ended with no completion criteria at all. Each is a verdict by assertion.</li>
+    <li><code>open_requests_age</code>: the oldest unanswered routed request, per operator.</li>
+    <li><code>days_since_mandate_review</code>: per agent. Over 90 is a review that is due.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Define completion when the work has an endpoint, and fix the checks before the run starts. When the work continues, do not invent a finish line. Manage its authority, its requests, and its spend on a schedule.</p>
+</div>

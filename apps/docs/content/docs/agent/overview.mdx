@@ -48,7 +48,7 @@ The engine sees tool results. It never sees a credential. A denied approval fail
 
 ## What the agent can request
 
-The contract registry defines the agent's tools. Any capability declared with `surfaces: ['agent']` is a tool the agent can request in a conversation, filtered by:
+The contract registry defines the agent's tools. A capability whose `surfaces` includes `agent` can be considered for the tool list, filtered by:
 
 1. The tool policy for the turn.
 2. Whether the current principal (you, or an agent acting for you) holds the grant.
@@ -57,7 +57,7 @@ The agent picks tools from that list to answer your request. A rule answers each
 
 ## Delegated context
 
-When you chat, the agent acts in delegated context, with your effective grants for that conversation and never more. The audit record names both: you, and the agent acting for you.
+A delegated turn combines the agent's grants with those of its initiating person. The audit record names both: you, and the agent acting for you.
 
 This is the chain of custody. An auditor reading the audit log can follow any agent action back to the person who started it, or to the identity configured for an automated trigger.
 

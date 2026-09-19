@@ -403,7 +403,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   BETTER_AUTH_TRUSTED_ORIGINS: {
     group: "Better Auth",
     description:
-      "Space-separated origins allowed cross-origin access to the auth API.",
+      "Comma-separated origins allowed cross-origin access to the auth API.",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
@@ -461,20 +461,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GOOGLE_LOGIN_CLIENT_ID: {
     group: "OAuth providers",
     description:
-      "Google LOGIN OAuth client id (social sign-in; minimal scopes).",
+      "Google LOGIN OAuth client id (social sign-in; minimal scopes). Checklist: docs/specs/social-login-oauth-apps.md.",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
-    requiredIn: [],
+    requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
   GOOGLE_LOGIN_CLIENT_SECRET: {
     group: "OAuth providers",
-    description: "Google LOGIN OAuth client secret.",
+    description:
+      "Google LOGIN OAuth client secret. Checklist: docs/specs/social-login-oauth-apps.md.",
     secret: true,
     clientExposed: false,
     services: ["api", "app"],
-    requiredIn: [],
+    requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
   GOOGLE_DATA_CLIENT_ID: {
@@ -502,20 +503,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_LOGIN_CLIENT_ID: {
     group: "OAuth providers",
     description:
-      "GitHub LOGIN OAuth client id (social sign-in; minimal scopes).",
+      "GitHub LOGIN OAuth App client id (social sign-in; minimal scopes). Not the GitHub App. Checklist: docs/specs/social-login-oauth-apps.md.",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
-    requiredIn: [],
+    requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
   GITHUB_LOGIN_CLIENT_SECRET: {
     group: "OAuth providers",
-    description: "GitHub LOGIN OAuth client secret.",
+    description:
+      "GitHub LOGIN OAuth App client secret. Checklist: docs/specs/social-login-oauth-apps.md.",
     secret: true,
     clientExposed: false,
     services: ["api", "app"],
-    requiredIn: [],
+    requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
   MCP_OAUTH_PREREGISTERED_CLIENTS: {
@@ -869,6 +871,41 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     staticValue: { "*": "250" },
   },
 
+  // ── Model price overrides (negotiated provider rates) ──
+  // An installation with no negotiated rates sets NEITHER of these and never
+  // thinks about pricing: the hourly cost.price-book-sync job fills the price
+  // book from Oxagen's in-code rate card and the published catalogs. An
+  // installation that HAS negotiated rates with a model provider states them
+  // here once, in USD per one million tokens, and they beat every published
+  // rate for every run. See packages/billing/src/price-overrides.ts.
+  OXAGEN_PRICE_OVERRIDES: {
+    group: "Billing",
+    description:
+      "Negotiated model rates as inline JSON, in USD per one million tokens: " +
+      '{"claude-sonnet-5":{"inputPer1M":2.40,"outputPer1M":12.00,"cachedInputPer1M":0.24,"cacheWrite5mPer1M":3.00}}. ' +
+      "Leave unset unless you have negotiated rates with a model provider.",
+    // Contract terms. The env manager maps this flag straight to Vercel's
+    // `plain` vs `encrypted`, so `false` would leave negotiated rates readable
+    // to anyone with project-environment access and unmasked in build logs.
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_PRICE_OVERRIDES_FILE: {
+    group: "Billing",
+    description:
+      "Path to a JSON file of negotiated model rates, same shape as " +
+      "OXAGEN_PRICE_OVERRIDES. Wins over the inline value when both are set, " +
+      "so a mounted secret does not need the variable cleared.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   // ── Inngest (set on app.inngest.com → Keys) ─────────────────────────────────
   INNGEST_EVENT_KEY: {
     group: "Inngest",
@@ -977,6 +1014,34 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "and read back by the hook and the `tacho mcp-stdio` shim. Never set by hand and never " +
       "a deployment value: it is minted per machine at enrollment and lives in host.json.",
     secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
+  CURSOR_CONFIG_DIR: {
+    group: "Inngest",
+    description:
+      "Overrides where the Tacho host writes Cursor's `hooks.json` and `mcp.json`. Read on " +
+      "the operator's machine, not the server, and never a deployment value: it exists " +
+      "because Cursor can be installed against a non-default config directory, and enrolling " +
+      "the wrong one leaves the session unwrapped and silently unrecorded.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
+  XDG_CONFIG_HOME: {
+    group: "Inngest",
+    description:
+      "The XDG base directory the Tacho host falls back to when locating Cursor's config on " +
+      "Linux, after CURSOR_CONFIG_DIR and before ~/.cursor. Set by the operator's own " +
+      "environment rather than by Oxagen, and ignored on macOS and Windows, which do not " +
+      "follow the XDG layout.",
+    secret: false,
     clientExposed: false,
     services: [],
     requiredIn: [],
@@ -1599,6 +1664,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_STEERING_FRESHNESS: {
+    group: "CLI",
+    description:
+      "Set to 0, off, false or no to suspend the steering-freshness gates " +
+      "(`oxagen steering gate`) for this shell only: no auto-sync and no " +
+      "refusal on stale steering. The escape hatch exists so a gate cannot " +
+      "wedge someone when a remote is unreachable, and it is deliberately " +
+      "environment-only so it cannot be committed and cannot outlive the " +
+      "shell that set it. Never set on a deployed service.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_API_TOKEN: {
     group: "CLI",
     description:
@@ -1801,13 +1881,13 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Operator scripts",
     description:
       "Container image the packaged node bundle's run manifest names. " +
-      "Defaults to node:22-alpine.",
+      "Defaults to node:24.21.0-alpine.",
     secret: false,
     clientExposed: false,
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "node:22-alpine",
+    placeholder: "node:24.21.0-alpine",
   },
   NPM_TOKEN: {
     group: "Operator scripts",
@@ -1880,6 +1960,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "clickhouse,neo4j",
+  },
+  DB_LINT_BASE_REF: {
+    group: "Operator scripts",
+    description:
+      "The ref `pnpm db:lint-migrations` compares new Atlas migrations against for its " +
+      "git-aware ordering check (#3387): a migration added since the merge base with this " +
+      "ref must sort after every migration already there. Defaults to origin/main.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "origin/main",
+  },
+  DB_LINT_HEAD_REF: {
+    group: "Operator scripts",
+    description:
+      "The ref `pnpm db:lint-migrations` treats as the branch's own tip for its git-aware " +
+      "ordering check (#3387). CI's pull_request checkout puts HEAD on GitHub's synthetic " +
+      "merge commit, not the PR branch itself, which collapses the merge-base fail/warn " +
+      "distinction into one tier; the pipeline sets this to " +
+      "github.event.pull_request.head.sha to compare against the real PR head. Defaults to " +
+      "HEAD, which is correct everywhere else (a push checkout, a local branch).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "HEAD",
   },
   PGSUPERUSER: {
     group: "Operator scripts",
@@ -2060,6 +2169,28 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "1",
+  },
+  STALE_MERGE_BASE_REF: {
+    group: "Operator scripts",
+    description:
+      "Ref the stale-merge-base check (#3237) treats as main's current tip. Defaults to origin/main.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "origin/main",
+  },
+  STALE_MERGE_BRANCH_REF: {
+    group: "Operator scripts",
+    description:
+      "Ref the stale-merge-base check (#3237) treats as the branch under review. Defaults to HEAD.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "HEAD",
   },
 
   // ── Infrastructure (read by infra/ scripts and provisioned Lambdas) ────────

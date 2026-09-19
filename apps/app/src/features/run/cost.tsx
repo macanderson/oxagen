@@ -8,15 +8,26 @@
 // Every money figure carries the basis that says who observed it (INV-10), and
 // the price entries the frames were priced with are named, so a figure can be
 // traced to the prices that produced it.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
-import type { RunCost, RunCostRollup, TokenCounts } from "@/data/contracts/run";
+//
+// Above the rollup sits the waterfall (spec §12.9), which is not read from the
+// rollup at all: it is the run's own per-turn ledger, so a turn's cost on this
+// tab is the same figure the Transcript tab prints against that turn.
+import { useLocale, useTranslations } from "next-intl";
+import type {
+  RunCost,
+  RunCostRollup,
+  RunTranscript,
+  TokenCounts,
+} from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { Fact, Facts, NoValue, Panel } from "./parts";
+import { Waterfall } from "./waterfall";
 
 const TOKEN_CLASSES = [
   "inputUncached",
@@ -165,22 +176,38 @@ function Rollup({ rollup }: { rollup: RunCostRollup }) {
   );
 }
 
-export function CostSection({ read }: { read: Read<RunCost> }) {
+export function CostSection({
+  read,
+  turns,
+  steps,
+}: {
+  read: Read<RunCost>;
+  /** The transcript at the `turns` zoom: the waterfall's bars. */
+  turns: Read<RunTranscript>;
+  /** The transcript at the `steps` zoom: what sits inside each bar. */
+  steps: Read<RunTranscript>;
+}) {
   const t = useTranslations("run.cost");
+  const waterfall = useTranslations("run.waterfall");
   return (
-    <Panel title={t("title")}>
-      {!read.ok ? (
-        <ReadFailure read={read} section={t("title")} />
-      ) : read.value.rollup === null ? (
-        <p
-          data-testid="cost-not-rolled-up"
-          className="max-w-prose text-sm text-muted-foreground"
-        >
-          {t("notRolledUp")}
-        </p>
-      ) : (
-        <Rollup rollup={read.value.rollup} />
-      )}
-    </Panel>
+    <div className="flex flex-col gap-4">
+      <Panel title={waterfall("title")}>
+        <Waterfall turns={turns} steps={steps} />
+      </Panel>
+      <Panel title={t("title")}>
+        {!read.ok ? (
+          <ReadFailure read={read} section={t("title")} />
+        ) : read.value.rollup === null ? (
+          <p
+            data-testid="cost-not-rolled-up"
+            className="max-w-prose text-sm text-muted-foreground"
+          >
+            {t("notRolledUp")}
+          </p>
+        ) : (
+          <Rollup rollup={read.value.rollup} />
+        )}
+      </Panel>
+    </div>
   );
 }

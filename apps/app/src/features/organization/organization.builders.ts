@@ -109,7 +109,7 @@ export function orgSource(reads: OrgReads): {
     };
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -123,8 +123,9 @@ export function orgSource(reads: OrgReads): {
       frameBody: refuse,
       cost: refuse,
       transcript: refuse,
+      chain: refuse,
     },
-    approvals: { pending: refuse },
+    approvals: { pending: refuse, resolved: refuse },
     agents: {
       list: refuse,
       get: refuse,
@@ -139,6 +140,8 @@ export function orgSource(reads: OrgReads): {
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,
+      priceBook: refuse,
+      unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {
@@ -148,10 +151,15 @@ export function orgSource(reads: OrgReads): {
       apiKeys: answer(reads.apiKeys, "apiKeys"),
       modelCredential: answer(reads.modelCredential, "modelCredential"),
     },
-    mandates: { list: refuse },
+    mandates: { list: refuse, get: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    steering: {
+      records: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+    },
     tools: { versions: refuse, grants: refuse, killSwitches: refuse },
   };
   return { source, calls };

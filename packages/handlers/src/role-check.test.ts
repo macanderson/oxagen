@@ -48,6 +48,13 @@ const ROLE_CHECKED_CONTRACTS = [
   "get_auto_eligibility",
   "update_workspace_settings",
   "set_spend_budget",
+  "set_price_entry",
+  "remove_price_entry",
+  // Reads of the same commercial detail set/remove already gate (#3271
+  // residue): the contract's Owner/Admin/Billing/Member roles were decorative
+  // on a non-enterprise organization until the handler asserted them too.
+  "list_price_entries",
+  "list_unpriced_models",
   "append_record",
   "propose_record",
   "dismiss_proposal",

@@ -19,6 +19,7 @@ export function toSkillInventory(
       name: skill.name,
       sessions: skill.sessions,
       harnesses: skill.harnesses,
+      harnessCount: skill.harnessCount,
       lastSeenAt: skill.lastSeenAt,
     })),
     nextCursor: out.nextCursor,

@@ -3,13 +3,20 @@
 // that answers the Run page's reads with what a test hands it. Importable from
 // tests only (`testOnlyTarget` in src/test/arch/layers.ts).
 import type {
+  RunChain,
   RunCost,
   RunDetail,
   RunFrame,
   RunFrameBody,
   RunTranscript,
+  TranscriptBody,
   TranscriptEntry,
+  TranscriptZoom,
 } from "@/data/contracts/run";
+import type {
+  ApprovalItem,
+  ResolvedApprovalItem,
+} from "@/data/contracts/approvals";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
@@ -25,12 +32,26 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     id: "tse_7k2m9q",
     source: "tacho",
     agentKey: "acme.core.release-bot",
-    operatorId: "usr_marcusbell",
+    operatorId: "prn_marcusbell",
+    operatorKind: "human",
+    operatorName: "Marcus Bell",
     status: "sealed",
     turns: 12,
     steps: 96,
     frames: 431,
     cost: { micros: "4131265", currency: "USD", basis: "gateway_observed" },
+    model: {
+      slug: "claude-sonnet-5",
+      provider: "anthropic",
+      tier: "sonnet",
+    },
+    machine: {
+      hostname: "mac-studio.local",
+      platform: "darwin",
+      osVersion: "15.6",
+      arch: "arm64",
+      nodeVersion: "v24.4.0",
+    },
     taskRef: "ENG-4121 cut the 3.2 release",
     name: "Cut the 3.2 release branch",
     summary: {
@@ -39,8 +60,62 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
       model: "z-ai/glm-flash-latest",
     },
     replayGrade: "fork",
+    enforcementTier: "harness",
+    completenessGaps: [],
+    canSummarize: true,
     startedAt: at(-3600),
     sealedAt: at(-300),
+    ...overrides,
+  };
+}
+
+export function runChain(overrides: Partial<RunChain> = {}): RunChain {
+  return {
+    hashRule: "tacho.sha256_prev_hash_v1",
+    frameCount: 431,
+    firstSeq: "1",
+    lastSeq: "431",
+    merkleRoot: `sha256:${"c".repeat(64)}`,
+    checkpoints: [
+      {
+        seq: "200",
+        chainHead: `sha256:${"d".repeat(64)}`,
+        eventCount: 200,
+        signedAt: at(-1800),
+        deviceKeyFingerprint: "ed25519:2f:91:aa",
+        platformKey: "pk_01k4qj9e",
+        countersignedAt: at(-1790),
+        anchorRoot: null,
+        anchoredAt: null,
+      },
+    ],
+    gaps: {
+      missingSequences: [],
+      missingFrameCount: 0,
+      missingBodies: 0,
+      recorded: [],
+    },
+    seals: [
+      {
+        sealedAt: at(-300),
+        terminalStatus: "completed",
+        eventCount: 431,
+        finalRunSeq: "431",
+        finalEventDigest: `sha256:${"e".repeat(64)}`,
+        eventStreamDigest: `sha256:${"f".repeat(64)}`,
+        merkleRoot: `sha256:${"c".repeat(64)}`,
+        archiveSegmentRef: null,
+      },
+    ],
+    enforcementTier: "harness",
+    recordedGrade: "fork",
+    ladder: [
+      { grade: "inspect", met: true, reason: "frames_recorded" },
+      { grade: "view", met: true, reason: "bodies_retained" },
+      { grade: "fork", met: true, reason: "tool_cassette_complete" },
+      { grade: "retry", met: false, reason: "harness_not_reproducible" },
+    ],
+    complete: true,
     ...overrides,
   };
 }
@@ -88,6 +163,23 @@ export function runFrameBody(
   };
 }
 
+/** One half of the exchange, with its body retained and readable. */
+export function transcriptBody(
+  overrides: Partial<TranscriptBody> = {},
+): TranscriptBody {
+  return {
+    seq: "11",
+    type: "model.call_completed",
+    digest: `sha256:${"a".repeat(64)}`,
+    bytesRef: "evb:v1:k:abc",
+    redactions: [],
+    fidelity: "full",
+    text: "Cutting release/3.2 from main.",
+    truncated: false,
+    ...overrides,
+  };
+}
+
 export function transcriptEntry(
   overrides: Partial<TranscriptEntry> = {},
 ): TranscriptEntry {
@@ -95,15 +187,23 @@ export function transcriptEntry(
     seq: "11",
     endSeq: "14",
     at: at(-3000),
+    elapsedMs: 3000,
     kind: "model_call",
     type: "model.call_completed",
     label: "claude-opus-5",
-    text: "Cutting release/3.2 from main.",
-    truncated: false,
-    fidelity: "full",
+    callKey: null,
+    kinds: ["responses"],
+    request: null,
+    response: transcriptBody(),
+    decision: null,
     frames: 4,
     turn: 1,
     cost: { micros: "18240", currency: "USD", basis: "gateway_observed" },
+    cumulativeCost: {
+      micros: "18240",
+      currency: "USD",
+      basis: "gateway_observed",
+    },
     ...overrides,
   };
 }
@@ -117,59 +217,184 @@ export function transcriptEntry(
 export function mockupTranscript(
   overrides: Partial<RunTranscript> = {},
 ): RunTranscript {
-  const frame = (
-    seq: number,
-    type: string,
-    kind: TranscriptEntry["kind"],
-    label: string,
-    turn: number | null,
-    over: Partial<TranscriptEntry> = {},
-  ): TranscriptEntry =>
-    transcriptEntry({
-      seq: String(seq),
-      endSeq: String(seq),
-      at: at(-3600 + seq * 2),
-      kind,
-      type,
-      label,
-      turn,
-      frames: 1,
-      text: null,
-      fidelity: "full",
-      cost: null,
-      ...over,
+  /**
+   * One frame of the run, at `everything`. A frame carries one half of an
+   * exchange: the phase it was recorded in decides whether its body is what
+   * went out or what came back.
+   */
+  type Spec = {
+    seq: number;
+    type: string;
+    kind: TranscriptEntry["kind"];
+    label: string;
+    turn: number | null;
+    text?: string;
+    fidelity?: TranscriptBody["fidelity"];
+    costMicros?: string;
+    decision?: string;
+  };
+  const REQUEST_TYPES = new Set([
+    "model.request",
+    "model.engine_call_started",
+    "tool_requested",
+    "tool.engine_call_started",
+  ]);
+  const specs: Spec[] = [
+    {
+      seq: 0,
+      type: "agent_start",
+      kind: "frame",
+      label: "agent_start",
+      turn: null,
+    },
+    {
+      seq: 1,
+      type: "context.assembled",
+      kind: "frame",
+      label: "context.assembled",
+      turn: null,
+    },
+    {
+      seq: 2,
+      type: "turn_start",
+      kind: "frame",
+      label: "turn_start",
+      turn: 1,
+      text: "Cut the 2026.9.2 release candidate.",
+    },
+    {
+      seq: 3,
+      type: "model.request",
+      kind: "model_call",
+      label: "anthropic/claude-fable-5-1",
+      turn: 1,
+    },
+    {
+      seq: 4,
+      type: "model.response",
+      kind: "model_call",
+      label: "anthropic/claude-fable-5-1",
+      turn: 1,
+      text: "I will list the open pull requests first.",
+      costMicros: "380000",
+    },
+    {
+      seq: 5,
+      type: "tool_requested",
+      kind: "tool_call",
+      label: "list_pull_requests",
+      turn: 1,
+    },
+    {
+      seq: 6,
+      type: "policy_decision",
+      kind: "frame",
+      label: "policy allow",
+      turn: 1,
+      decision: "allow",
+    },
+    {
+      seq: 7,
+      type: "tool_call",
+      kind: "tool_call",
+      label: "list_pull_requests ok",
+      turn: 1,
+      text: '{"open":34}',
+    },
+    {
+      seq: 8,
+      type: "turn_end",
+      kind: "frame",
+      label: "turn_end",
+      turn: 1,
+      text: "Both failures predate the release scope.",
+    },
+    { seq: 9, type: "turn_start", kind: "frame", label: "turn_start", turn: 2 },
+    {
+      seq: 10,
+      type: "llm_call",
+      kind: "model_call",
+      label: "anthropic/claude-fable-5-1",
+      turn: 2,
+      costMicros: "520000",
+      fidelity: "digest_only",
+    },
+    {
+      seq: 11,
+      type: "tool_requested",
+      kind: "tool_call",
+      label: "create_tag",
+      turn: 2,
+    },
+    {
+      seq: 12,
+      type: "policy_decision",
+      kind: "frame",
+      label: "policy deny",
+      turn: 2,
+      decision: "deny",
+    },
+  ];
+  // The run's own prefix sum, exactly as `get_run_transcript` computes it:
+  // an entry's cumulative cost is what the run had spent by then.
+  let running: bigint | null = null;
+  const entries = specs.map((spec) => {
+    if (spec.costMicros !== undefined) {
+      running = (running ?? 0n) + BigInt(spec.costMicros);
+    }
+    const fidelity = spec.fidelity ?? "full";
+    const body = transcriptBody({
+      seq: String(spec.seq),
+      type: spec.type,
+      fidelity,
+      text: fidelity === "digest_only" ? null : (spec.text ?? null),
+      bytesRef: fidelity === "digest_only" ? null : "evb:v1:k:abc",
     });
-  const cost = (micros: string) =>
-    ({ micros, currency: "USD", basis: "gateway_observed" }) as const;
+    const request = REQUEST_TYPES.has(spec.type);
+    return transcriptEntry({
+      seq: String(spec.seq),
+      endSeq: String(spec.seq),
+      at: at(-3600 + spec.seq * 2),
+      elapsedMs: spec.seq * 2000,
+      kind: spec.kind,
+      type: spec.type,
+      label: spec.label,
+      turn: spec.turn,
+      frames: 1,
+      request: request ? body : null,
+      response: request ? null : body,
+      decision:
+        spec.decision === undefined
+          ? null
+          : {
+              seq: String(spec.seq),
+              decision: spec.decision,
+              type: spec.type,
+              at: at(-3600 + spec.seq * 2),
+            },
+      cost:
+        spec.costMicros === undefined
+          ? null
+          : {
+              micros: spec.costMicros,
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+      cumulativeCost:
+        running === null
+          ? null
+          : {
+              micros: String(running),
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+    });
+  });
   return {
     zoom: "everything",
-    entries: [
-      frame(0, "agent_start", "frame", "agent_start", null),
-      frame(1, "context.assembled", "frame", "context.assembled", null),
-      frame(2, "turn_start", "frame", "turn_start", 1, {
-        text: "Cut the 2026.9.2 release candidate.",
-      }),
-      frame(3, "model.request", "model_call", "anthropic/claude-fable-5-1", 1),
-      frame(4, "model.response", "model_call", "anthropic/claude-fable-5-1", 1, {
-        text: "I will list the open pull requests first.",
-        cost: cost("380000"),
-      }),
-      frame(5, "tool_requested", "tool_call", "list_pull_requests", 1),
-      frame(6, "policy_decision", "frame", "policy allow", 1),
-      frame(7, "tool_call", "tool_call", "list_pull_requests ok", 1, {
-        text: '{"open":34}',
-      }),
-      frame(8, "turn_end", "frame", "turn_end", 1, {
-        text: "Both failures predate the release scope.",
-      }),
-      frame(9, "turn_start", "frame", "turn_start", 2),
-      frame(10, "llm_call", "model_call", "anthropic/claude-fable-5-1", 2, {
-        cost: cost("520000"),
-        fidelity: "digest_only",
-      }),
-      frame(11, "tool_requested", "tool_call", "create_tag", 2),
-      frame(12, "policy_decision", "frame", "policy deny", 2),
-    ],
+    kinds: [],
+    entries,
+    cursor: null,
     complete: true,
     ...overrides,
   };
@@ -180,7 +405,9 @@ export function runTranscript(
 ): RunTranscript {
   return {
     zoom: "steps",
+    kinds: [],
     entries: [transcriptEntry()],
+    cursor: null,
     complete: true,
     ...overrides,
   };
@@ -239,8 +466,21 @@ type RunReads = {
   cost?: Read<RunCost>;
   /** Only read when the Frames tab has a frame body open; refused when absent. */
   frameBody?: Read<RunFrameBody>;
-  /** Only read when the Transcript tab is open; refused when absent. */
-  transcript?: Read<RunTranscript>;
+  /**
+   * Only read when the Transcript tab is open, or when the Cost tab reads the
+   * run's per-turn ledger for the waterfall. A function answers per zoom level,
+   * which is how a Cost-tab test hands one transcript for `turns` and another
+   * for `steps`.
+   */
+  transcript?:
+    | Read<RunTranscript>
+    | ((zoom: TranscriptZoom) => Read<RunTranscript>);
+  /** Only read when the Chain and seal tab is open; refused when absent. */
+  chain?: Read<RunChain>;
+  /** Only read when the Approvals tab is open; refused when absent. */
+  approvals?: Read<ApprovalItem[]>;
+  /** Only read when the Approvals tab is open; refused when absent (#3153). */
+  resolvedApprovals?: Read<ResolvedApprovalItem[]>;
 };
 
 /** A DataSource answering the Run page's reads; `calls` records their arguments. */
@@ -250,14 +490,17 @@ export function runSource(reads: RunReads) {
     frameBody: unknown[][];
     cost: unknown[][];
     transcript: unknown[][];
-    /** The Run page reads no approvals: the store records no run on one. */
     approvals: unknown[][];
+    resolvedApprovals: unknown[][];
+    chain: unknown[][];
   } = {
     get: [],
     frameBody: [],
     cost: [],
     transcript: [],
     approvals: [],
+    resolvedApprovals: [],
+    chain: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -273,15 +516,28 @@ export function runSource(reads: RunReads) {
   };
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     runs: {
       list: refuse,
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
       cost: answer("cost", reads.cost),
-      transcript: answer("transcript", reads.transcript),
+      transcript: (ctx, runId, zoom, q) => {
+        calls.transcript.push([ctx, runId, zoom, { kinds: q?.kinds ?? [] }]);
+        const asked = reads.transcript;
+        if (asked === undefined) {
+          return Promise.reject(new Error("transcript was not expected"));
+        }
+        return Promise.resolve(
+          typeof asked === "function" ? asked(zoom) : asked,
+        );
+      },
+      chain: answer("chain", reads.chain),
     },
-    approvals: { pending: answer("approvals", undefined) },
+    approvals: {
+      pending: answer("approvals", reads.approvals),
+      resolved: answer("resolvedApprovals", reads.resolvedApprovals),
+    },
     agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
     billing: {
       plan: refuse,
@@ -298,6 +554,8 @@ export function runSource(reads: RunReads) {
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,
+      priceBook: refuse,
+      unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {
@@ -307,10 +565,15 @@ export function runSource(reads: RunReads) {
       apiKeys: refuse,
       modelCredential: refuse,
     },
-    mandates: { list: refuse },
+    mandates: { list: refuse, get: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    steering: {
+      records: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+    },
     tools: { versions: refuse, grants: refuse, killSwitches: refuse },
   };
   return { source, calls };

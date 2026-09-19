@@ -1,4 +1,4 @@
-# kill_switch.list
+# list_kill_switches
 
 **Capability:** `list_kill_switches`
 **Domain:** kill_switch
@@ -24,7 +24,7 @@ The Tools page's kill switches (MC spec §6.11): every switch reaching this work
 | Field | Type | Description |
 |---|---|---|
 | `denyGeneration` | object | `{ org, workspace }` |
-| `switches` | object[] | `{ id (emd_…), target: { kind, id }, scope: org \| workspace, on, reason, flippedBy, flippedAt, clearedAt, clearedBy }` |
+| `switches` | object[] | `{ id (emd_…), target: { kind, id }, scope: org \| workspace, on, reason, flippedBy, flippedAt, clearedAt, clearedBy }`; `flippedBy` and `clearedBy` are `usr_…` public ids, the same ones `list_members` and the audit log print, resolved from the row's raw user id |
 
 ## Roles
 

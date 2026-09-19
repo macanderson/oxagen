@@ -1,4 +1,4 @@
-# org.member.add
+# add_org_member
 
 **Domain:** organization
 **Mode:** sync

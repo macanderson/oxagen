@@ -95,6 +95,35 @@ export function siteHeader({ wordmark, current }) {
 </div>`;
 }
 
+// The footer's theme control and the head script that applies the stored
+// choice before first paint. index.html and products/oxagen/index.html carry
+// copies of both; change all three together. oxagen.js wires the buttons.
+export const THEME_SWITCH = `<div class="theme-switch" role="radiogroup" aria-label="Theme">
+          <button type="button" role="radio" aria-checked="true" data-theme-choice="system" aria-label="System" title="System"><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
+          <button type="button" role="radio" aria-checked="false" tabindex="-1" data-theme-choice="light" aria-label="Light" title="Light"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+          <button type="button" role="radio" aria-checked="false" tabindex="-1" data-theme-choice="dark" aria-label="Dark" title="Dark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+        </div>`;
+
+export const THEME_HEAD = `<script>
+/* Stamp the theme before first paint: a pinned choice from the footer's
+   control, else the OS. oxagen.js keeps it current after load. */
+(function (d) {
+  d.classList.add("js");
+  var c = null;
+  try { c = localStorage.getItem("theme"); } catch (e) {}
+  var t = c === "light" || c === "dark" ? c
+    : matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  d.setAttribute("data-theme", t);
+  var m = document.querySelector('meta[name="color-scheme"]');
+  if (m) m.content = t;
+  if (c === t) {
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (x) {
+      x.content = t === "light" ? "#FFFFFF" : "#09090B";
+    });
+  }
+})(document.documentElement);
+</script>`;
+
 /** @param {{ wordmark: string, pillars: Array<{slug: string, name: string}> }} o */
 export function siteFooter({ wordmark, pillars }) {
   return `<footer>
@@ -102,7 +131,7 @@ export function siteFooter({ wordmark, pillars }) {
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="/" aria-label="Oxagen home">${wordmark}</a>
-        <p>Can you explain your AI bill?<br>Neither can your provider.</p>
+        <p>See which agent spent what,<br>and on whose behalf.</p>
       </div>
       <nav class="foot-col" aria-label="Product">
         <h4>Product</h4>
@@ -128,10 +157,24 @@ ${pillars.map((p) => `          <li><a href="${urls.pillar(p.slug)}">${esc(p.nam
           <li><a class="ext" href="https://github.com/oxagenai" target="_blank" rel="noopener">GitHub</a></li>
         </ul>
       </nav>
+      <div class="foot-col">
+        <h4>Contact</h4>
+        <address>
+          Oxagen, Inc.<br>
+          2261 Market Street STE 87168<br>
+          San Francisco, CA 94114<br>
+          <a href="mailto:hello@oxagen.sh">hello@oxagen.sh</a><br>
+          <a href="mailto:success@oxagen.sh">success@oxagen.sh</a><br>
+          <a href="tel:+13102137912">+1 (310) 213-7912</a>
+        </address>
+      </div>
     </div>
     <div class="foot-base">
       <span>© ${new Date().getUTCFullYear()} Oxagen, Inc. All rights reserved.</span>
-      <span class="mono">agent control plane · <a href="/#field-manual">read the manual</a></span>
+      <div class="foot-end">
+        <span class="mono">agent control plane · <a href="/#field-manual">read the manual</a></span>
+        ${THEME_SWITCH}
+      </div>
     </div>
   </div>
 </footer>`;
@@ -158,8 +201,9 @@ export function layout(o) {
 <title>${esc(o.title)}</title>
 <meta name="description" content="${esc(o.description)}">
 <link rel="canonical" href="${esc(url)}">
-<meta name="theme-color" content="#09090B">
-<meta name="color-scheme" content="dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090B">
+<meta name="color-scheme" content="light dark">
 <meta property="og:type" content="${o.type ?? "website"}">
 <meta property="og:url" content="${esc(url)}">
 <meta property="og:site_name" content="Oxagen">
@@ -175,15 +219,16 @@ export function layout(o) {
 <meta name="twitter:description" content="${esc(o.description)}">
 <meta name="twitter:image" content="${esc(image)}">
 <link rel="alternate" type="application/rss+xml" title="${esc(BLOG_TITLE)}" href="${urls.feed()}">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/oxagen.webmanifest">
 <link rel="preload" href="/fonts/space-grotesk-latin-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
 ${o.ldjson ? `<script type="application/ld+json">\n${JSON.stringify(o.ldjson, null, 2).replace(/</g, "\\u003c")}\n</script>` : ""}
-<script>document.documentElement.classList.add("js")</script>
+${THEME_HEAD}
 <link rel="stylesheet" href="/assets/oxagen.css">
 <link rel="stylesheet" href="/assets/blog.css">
 ${o.extraHead ?? ""}

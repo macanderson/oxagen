@@ -44,6 +44,16 @@ describe("parseSpendView", () => {
     });
   });
 
+  it("opens the pricing tab, which carries neither a drill nor a finding", () => {
+    expect(parseSpendView({ tab: "pricing", drill: "prn_marcusbell" })).toEqual(
+      {
+        tab: "pricing",
+        drill: null,
+        finding: null,
+      },
+    );
+  });
+
   it("opens one finding's evidence on the findings tab", () => {
     expect(
       parseSpendView({ tab: "findings", finding: "fnd_01k5rtgh" }),

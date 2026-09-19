@@ -19,7 +19,8 @@ import {
 import { isCurrencyCode } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
-import { requireViewer } from "@/server/viewer";
+import { requireViewer, viewerTimeZone } from "@/server/viewer";
+import { endOfZonedDay, startOfZonedDay } from "@/shared/calendar-day";
 
 /** Retires the current key and mints a replacement; the secret is returned once and never again. */
 export async function rotateAgentCredential(
@@ -305,15 +306,32 @@ export async function requestMandate(
 
   if (!DATE.test(draft.validFrom)) return refuse("validFrom");
   if (!DATE.test(draft.validTo)) return refuse("validTo");
-  // The dates a person picks are days, and the authority runs through the last
-  // of them: a mandate valid to 2026-12-31 expires as that day ends, not as it
-  // begins. The window is inclusive at both ends, so a single-day mandate is
-  // a day rather than nothing.
-  const validFrom = `${draft.validFrom}T00:00:00.000Z`;
-  const validTo = `${draft.validTo}T23:59:59.999Z`;
-  if (Date.parse(validTo) <= Date.parse(validFrom)) return refuse("validTo");
 
   const ctx = await requireViewer(org, ws);
+  // The dates a person picks are days on their clock. Convert through the
+  // saved zone so a Los Angeles Sep 20 starts at that local midnight and a
+  // Tokyo validTo runs through that local day's last millisecond.
+  //
+  // The zone is read here, in the `"use server"` module that resolved the
+  // viewer, and not down in `data/live` — a port implementation has no viewer
+  // and no business asking who is looking (ARCHITECTURE.md §2). An on-demand
+  // read from an action goes through the kernel seam exactly as its write does
+  // (ADR-089), like the Workspace settings dialog's.
+  //
+  // A zone that cannot be established refuses; it does not fall back. The pages
+  // do fall back to Pacific, because a date drawn in the wrong zone is a
+  // cosmetic error a reader can see. A validity boundary written in the wrong
+  // zone is not: for an operator in Tokyo, Pacific moves the end of their day 17
+  // hours later, and nothing afterwards says the zone was guessed
+  // (`server/viewer.ts` → `viewerTimeZone`).
+  const zone = await viewerTimeZone(ctx, "agents");
+  if (!zone.ok) return zone;
+  const validFrom = startOfZonedDay(draft.validFrom, zone.timeZone);
+  const validTo = endOfZonedDay(draft.validTo, zone.timeZone);
+  if (validFrom === null) return refuse("validFrom");
+  if (validTo === null) return refuse("validTo");
+  if (Date.parse(validTo) <= Date.parse(validFrom)) return refuse("validTo");
+
   const result = await kernelWrite(ctx, mandateRequest, {
     agentId: draft.agentId,
     consequenceTags,

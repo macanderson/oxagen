@@ -55,7 +55,9 @@ export const userPreferencesSet = registerCapability({
     "Set the calling user's account preferences — locale, theme, timezone, appearance, input behaviour and default text model — as a partial write, and return the whole set after it.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  // `app`: the Account dialog's Preferences tab writes through it
+  // (apps/app/src/features/shell/account-actions.ts).
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   mutates: true,
   noBillingGate: true,

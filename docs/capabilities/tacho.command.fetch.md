@@ -1,4 +1,4 @@
-# tacho.command.fetch
+# fetch_commands
 
 The idle-host control poll (`docs/specs/tacho/spec.md` section 7.4; Mission Control spec Appendix E "control channel; headless"): the collector acknowledges the commands it took and applied, in the §7.4 status vocabulary, and receives the queued ones together with the same control envelope every ingest carries. A host with active sessions never needs this; a host between sessions polls it at the bundle interval.
 

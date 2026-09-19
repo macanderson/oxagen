@@ -459,6 +459,14 @@ describe("the prepared turn", () => {
       executionStepId: "msg-user",
     });
     expect(materializeOpts).toMatchObject({ approvalMode: "park" });
+    // finding 9 (macanderson/oxagen#3370): materializeTools runs before
+    // openAssistantRun opens the run, so a tool call parked mid-turn reads
+    // the run from a mutable ref rather than from `ctx.agentRun`, which is
+    // unset at materialize time. By now the turn has finished, so the ref
+    // already carries the run openAssistantRun opened.
+    expect(materializeOpts.runIdRef).toEqual({
+      current: "run-uuid",
+    });
     // The belt owns `search_tools` and `load_tools` inside a turn. Their
     // capability contracts declare the same names, and `modelToolsFor` layers
     // the governed definition over the meta-tool for anything pinned or

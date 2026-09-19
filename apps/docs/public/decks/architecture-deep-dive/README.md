@@ -1,31 +1,7 @@
-# Architecture deep-dive deck
+# Architecture deep dive deck
 
-Self-contained HTML slide deck for the **office of the CIO**: the engineering
-tour behind the Oxagen platform. It covers capability contracts and surface
-parity, envelope encryption at rest, vendor-neutral BYOK, SOC 2 tenant
-isolation, the ClickHouse to Stripe metering loop, the run record, plugins and
-skills, and the governed coding CLI.
+Historical presentation source. Its product claims and demo flow predate the current Oxagen app. Do not use it as a current feature, security, pricing, or setup reference.
 
-Served by `apps/docs` at the clean URL **`/decks/architecture-deep-dive`**
-(rewrite in `apps/docs/next.config.mjs`). Statically hosted, no build step.
+`index.html` holds the slides. `script-data.js` holds presenter notes. Keep their slide order aligned when editing. Review the rendered deck and its claims against the current code and house brand before presenting it again.
 
-- **Files:** `index.html` (deck), `script-data.js` (private presenter script).
-- **Branding:** shares the exact design system, embedded brand fonts, and deck
-  engine as `decks/first-call-enterprise`. The `<style>` block, hexfield
-  background, navbar, and navigation JS are reused verbatim so the two decks
-  stay pixel-consistent. Only the `<section class="slide">` content differs.
-- **Navigate:** arrow keys, dots, swipe. Deep-link a slide with `#<n>`.
-- **Presenter:** press **S** for a private teleprompter window (stays off
-  screenshare, syncs to the deck via `BroadcastChannel`).
-- **⌘P / Ctrl+P** prints a PDF: one A4-landscape page per slide, ink-friendly.
-
-## Regenerating
-
-Edit the `<section class="slide">` blocks in `index.html` and the matching
-entry in `script-data.js` (one presenter note per slide, in order). The shared
-branding shell (head, `<style>`, fonts, engine) is copied from
-`decks/first-call-enterprise/index.html`. Keep it in sync if the brand system
-changes there.
-
-> The deck cites internal architecture (crypto, RLS, metering). Review before
-> attaching this project to a public domain.
+For current engineering documentation, use the generated architecture atlas and the capability contracts. For setup, use `apps/docs/content/docs/getting-started.mdx`.

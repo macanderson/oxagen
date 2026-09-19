@@ -24,6 +24,7 @@ type Messages = {
     agents: string;
     agent: string;
     agentSource: string;
+    mandate: string;
     tools: string;
     skills: string;
     steering: string;
@@ -353,6 +354,8 @@ type Messages = {
         branchIsDefault: string;
         definitionSchema: string;
         definitionSlug: string;
+        timeZoneUnavailable: string;
+        timeZoneUnsupported: string;
         refused: string;
         invalid: string;
         pendingApproval: string;
@@ -360,6 +363,7 @@ type Messages = {
         noToolMatches: string;
         measureNotDeclared: string;
         measureUnitMismatch: string;
+        measureKindConflict: string;
       };
     };
     source: {
@@ -596,6 +600,8 @@ type Messages = {
       alreadyRegistered: string;
       codeWrong: string;
       linkExpired: string;
+      oauthCancelled: string;
+      oauthFailed: string;
       unavailable: string;
       unknown: string;
     };
@@ -1055,6 +1061,197 @@ type Messages = {
         body: string;
         enroll: string;
         command: string;
+      };
+    };
+  };
+  mandate: {
+    eyebrow: string;
+    roles: {
+      owner: string;
+      admin: string;
+      member: string;
+      billing: string;
+      compliance: string;
+      viewer: string;
+    };
+    loading: string;
+    grantedBy: string;
+    notGranted: string;
+    status: {
+      draft: string;
+      active: string;
+      expired: string;
+      revoked: string;
+    };
+    tiles: {
+      label: string;
+      perCall: string;
+      perCallBasis: string;
+      perPeriod: string;
+      perPeriodBasis: string;
+      settled: string;
+      settledBasis: string;
+      remaining: string;
+      remainingBasis: string;
+    };
+    ledger: {
+      title: string;
+      label: string;
+      basis: string;
+      note: string;
+      columns: {
+        when: string;
+        call: string;
+        amount: string;
+        state: string;
+        external: string;
+        receipt: string;
+      };
+      kind: {
+        reserve: string;
+        settle: string;
+        release: string;
+      };
+      notRecorded: string;
+      callBasis: string;
+      receiptBasis: string;
+      readBound: string;
+      empty: string;
+      emptyBody: string;
+      filteredEmpty: string;
+      filteredEmptyBody: string;
+      search: string;
+      searchHint: string;
+      state: string;
+      anyState: string;
+      apply: string;
+      clear: string;
+      shown: string;
+      pager: {
+        label: string;
+        newer: string;
+        older: string;
+        end: string;
+      };
+      emptyBodyEffective: string;
+    };
+    grant: {
+      title: string;
+      agent: string;
+      grantedBy: string;
+      notGranted: string;
+      requestedBy: string;
+      roleAtGrant: string;
+      effect: string;
+      counterparties: string;
+      allow: string;
+      deny: string;
+      anyTarget: string;
+      noPattern: string;
+      allowAnyTarget: string;
+      anyNotDenied: string;
+      tools: string;
+      approval: string;
+      approvalAbove: string;
+      approvalAlways: string;
+      approvalNone: string;
+      approvalApprovers: string;
+      approvalConsequenceRoles: string;
+      valid: string;
+      validWindow: string;
+      validWindowBasis: string;
+    };
+    reconciliation: {
+      title: string;
+      body: string;
+      notRecorded: string;
+      openAudit: string;
+    };
+    actions: {
+      limits: {
+        open: string;
+        title: string;
+        body: string;
+        measure: string;
+        measureHint: string;
+        unit: string;
+        unitHint: string;
+        perCall: string;
+        perPeriod: string;
+        period: string;
+        periods: {
+          daily: string;
+          weekly: string;
+          monthly: string;
+        };
+        validTo: string;
+        validToHint: string;
+        confirm: string;
+        pending: string;
+        callsPer: string;
+        periodsPer: {
+          daily: string;
+          weekly: string;
+          monthly: string;
+        };
+      };
+      revoke: {
+        open: string;
+        title: string;
+        body: string;
+        reason: string;
+        reasonHint: string;
+        confirm: string;
+        pending: string;
+        draft: {
+          open: string;
+          title: string;
+          body: string;
+          confirm: string;
+          pending: string;
+        };
+      };
+      failure: {
+        orgRoleRequired: string;
+        noRoleCoversAllTags: string;
+        mandateNotFound: string;
+        mandateEnded: string;
+        validityInverted: string;
+        noToolMatches: string;
+        measureNotDeclared: string;
+        measureUnitMismatch: string;
+        measureKindConflict: string;
+        periodDrawn: string;
+        measureKindDrawn: string;
+        noPrincipal: string;
+        agentRetired: string;
+        timeZoneUnavailable: string;
+        timeZoneUnsupported: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
+    failure: {
+      back: string;
+      denied: {
+        title: string;
+        body: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        body: string;
+        code: string;
+        readAt: string;
+        retry: string;
       };
     };
   };
@@ -1655,11 +1852,31 @@ type Messages = {
       started: string;
       sealed: string;
     };
+    facts: {
+      operator: string;
+      model: string;
+      machine: string;
+      noMachineOnLedger: string;
+      operatorKind: {
+        human: string;
+        agent: string;
+        service: string;
+      };
+    };
+    resolvedApprovals: {
+      title: string;
+      resolution: string;
+      resolvedBy: string;
+      resolvedAt: string;
+      empty: string;
+    };
     tabs: {
       label: string;
       transcript: string;
       frames: string;
       cost: string;
+      chain: string;
+      approvals: string;
     };
     transcript: {
       title: string;
@@ -1710,6 +1927,30 @@ type Messages = {
       };
       envelope: string;
       recording: string;
+      chipsLabel: string;
+      chip: {
+        prompt: string;
+        responses: string;
+        tools: string;
+        policy: string;
+        recall: string;
+        usage: string;
+        errors: string;
+      };
+      chipsClear: string;
+      emptyFiltered: string;
+      more: string;
+      readingMore: string;
+      loadedMore: string;
+      badCursor: string;
+      pageFailed: string;
+      followLost: string;
+      followSealed: string;
+      request: string;
+      response: string;
+      decision: string;
+      calledWith: string;
+      noHalves: string;
     };
     frames: {
       title: string;
@@ -1836,7 +2077,14 @@ type Messages = {
         invalid: string;
         pendingApproval: string;
         unavailable: string;
+        forkRequiresLedger: string;
+        gradeBelowFork: string;
+        seqPastSeal: string;
+        gapBeforeSeq: string;
+        fromSeq: string;
+        runB: string;
       };
+      observeReason: string;
     };
     record: {
       reread: string;
@@ -1848,6 +2096,7 @@ type Messages = {
         pending: string;
         queued: string;
         needsRole: string;
+        needsBodies: string;
       };
       resummarize: {
         open: string;
@@ -1862,6 +2111,126 @@ type Messages = {
         needsRole: string;
       };
     };
+    gaps: string;
+    gap: {
+      digest_only: string;
+      body_missing: string;
+      tool_bodies: string;
+      model_calls: string;
+      hooks_partial: string;
+      unobserved_tail: string;
+      chain_break: string;
+      telemetry_gap: string;
+    };
+    tier: {
+      gateway: string;
+      harness: string;
+      observe: string;
+    };
+    chain: {
+      title: string;
+      hashRule: string;
+      frameCount: string;
+      range: string;
+      merkleRoot: string;
+      tierLabel: string;
+      gradeLabel: string;
+      gapsTitle: string;
+      prefix: string;
+      noGaps: string;
+      missingFrames: string;
+      missingBodies: string;
+      missingSequences: string;
+      recordedGaps: string;
+      sealTitle: string;
+      attemptLabel: string;
+      sealedAt: string;
+      terminalStatus: string;
+      sealedFrames: string;
+      finalSeq: string;
+      finalDigest: string;
+      streamDigest: string;
+      archive: string;
+      unsealed: string;
+      checkpointsTitle: string;
+      noCheckpoints: string;
+      ladderTitle: string;
+      ladderWhy: string;
+      ladderNoGrade: string;
+      rungMet: string;
+      rungUnmet: string;
+      columns: {
+        seq: string;
+        head: string;
+        frames: string;
+        signed: string;
+        countersigned: string;
+        anchor: string;
+      };
+      tier: {
+        gateway: string;
+        harness: string;
+        observe: string;
+      };
+      grade: {
+        inspect: string;
+        view: string;
+        fork: string;
+        retry: string;
+      };
+      gap: {
+        digest_only: string;
+        body_missing: string;
+        tool_bodies: string;
+        model_calls: string;
+        hooks_partial: string;
+        unobserved_tail: string;
+        chain_break: string;
+        telemetry_gap: string;
+      };
+    };
+    waterfall: {
+      title: string;
+      total: string;
+      basisNotRecorded: string;
+      running: string;
+      steps: string;
+      step: string;
+      noCost: string;
+      empty: string;
+      unpriced: string;
+      cut: string;
+    };
+    replay: {
+      forkNeedsLedger: string;
+      forkNoGrade: string;
+      forkNeedsGrade: string;
+      fork: {
+        open: string;
+        title: string;
+        body: string;
+        seqLabel: string;
+        seqHelp: string;
+        confirm: string;
+        pending: string;
+        minted: string;
+      };
+      bisect: {
+        open: string;
+        title: string;
+        body: string;
+        otherLabel: string;
+        otherHelp: string;
+        confirm: string;
+        pending: string;
+        same: string;
+        diverged: string;
+        keyA: string;
+        keyB: string;
+        noFrame: string;
+      };
+    };
+    loading: string;
   };
   shell: {
     skipToContent: string;
@@ -1904,9 +2273,15 @@ type Messages = {
       userMenu: string;
     };
     userMenu: {
+      profile: string;
+      preferences: string;
+      security: string;
+      privacy: string;
       switchTheme: string;
       themeNow: string;
-      account: string;
+      signOut: string;
+      signingOut: string;
+      signOutFailed: string;
     };
     commands: {
       title: string;
@@ -1936,18 +2311,104 @@ type Messages = {
     };
     account: {
       title: string;
+      tabs: {
+        profile: string;
+        preferences: string;
+        security: string;
+        privacy: string;
+      };
       save: string;
       saving: string;
       saved: string;
       displayName: string;
-      avatar: string;
-      avatarHint: string;
       email: string;
       emailHint: string;
+      verified: string;
+      unverified: string;
+      editAvatar: string;
+      roles: string;
+      principal: string;
+      rolesHint: string;
       invalid: string;
       denied: string;
       failed: string;
-      avatarPlaceholder: string;
+      preferences: {
+        loading: string;
+        denied: string;
+        failed: string;
+        locale: string;
+        localeName: string;
+        localeHint: string;
+        timezone: string;
+        timezoneHint: string;
+        theme: string;
+        themes: {
+          system: string;
+          dark: string;
+          light: string;
+        };
+        preview: string;
+        previewDate: string;
+        previewNumber: string;
+        previewMoney: string;
+        save: string;
+        saving: string;
+        saved: string;
+        invalid: string;
+      };
+      security: {
+        signIn: string;
+        email: string;
+        verified: string;
+        unverified: string;
+        twoFactor: string;
+        twoFactorOn: string;
+        twoFactorOff: string;
+        authenticator: string;
+        authenticatorOn: string;
+        authenticatorOff: string;
+        setUp: string;
+        regenerate: string;
+        password: string;
+        issue: string;
+        issuing: string;
+        cancel: string;
+        codesRefused: string;
+        codesUncertain: string;
+        codesIssued: string;
+        codesSaved: string;
+        codesHeld: string;
+        sessions: string;
+        sessionsLoading: string;
+        sessionsFailed: string;
+        thisDevice: string;
+        unknownDevice: string;
+        unknownAddress: string;
+        now: string;
+        revoke: string;
+        revoking: string;
+        revoked: string;
+        sessionsHint: string;
+        codesBlockedByOther: string;
+        codesBlockedElsewhere: string;
+      };
+      privacy: {
+        export: string;
+        exportHint: string;
+        exportMine: string;
+        exportOrg: string;
+        exporting: string;
+        queued: string;
+        ready: string;
+        download: string;
+        expired: string;
+        denied: string;
+        deniedOrg: string;
+        failed: string;
+        erasure: string;
+        erasureHint: string;
+      };
+      orgRole: string;
     };
     assistant: {
       label: string;
@@ -1974,6 +2435,48 @@ type Messages = {
         parked: string;
         unavailable: string;
       };
+    };
+    avatar: {
+      title: string;
+      cancel: string;
+      save: string;
+      saving: string;
+      kind: string;
+      kinds: {
+        icon: string;
+        initials: string;
+        photo: string;
+      };
+      icon: string;
+      iconHint: string;
+      letters: string;
+      lettersHint: string;
+      typeface: string;
+      fonts: {
+        sans: string;
+        serif: string;
+        mono: string;
+      };
+      photo: string;
+      photoHint: string;
+      tone: string;
+      tones: {
+        solid: string;
+        soft: string;
+        line: string;
+      };
+      toneHint: string;
+      describeIcon: string;
+      describeInitials: string;
+      describePhoto: string;
+      describePhotoNone: string;
+      note: string;
+      noPhoto: string;
+      noLetters: string;
+      invalid: string;
+      denied: string;
+      failed: string;
+      photoPlaceholder: string;
     };
   };
   skills: {
@@ -2034,6 +2537,7 @@ type Messages = {
       tool: string;
       waste: string;
       budgets: string;
+      pricing: string;
     };
     actions: {
       exportReport: string;
@@ -2204,6 +2708,124 @@ type Messages = {
         exceeded: string;
       };
     };
+    pricing: {
+      class: {
+        input_uncached: string;
+        cache_read: string;
+        cache_write_5m: string;
+        cache_write_1h: string;
+        output: string;
+        reasoning: string;
+        server_tool_request: string;
+        embedding_input: string;
+        rerank: string;
+        image: string;
+        video_second: string;
+      };
+      per: {
+        token: string;
+        request: string;
+        image: string;
+        second: string;
+      };
+      source: {
+        list: string;
+        negotiated: string;
+        override: string;
+      };
+      unpriced: {
+        title: string;
+        note: string;
+        none: string;
+        columns: {
+          model: string;
+          provider: string;
+          calls: string;
+          tokens: string;
+          missing: string;
+          recordedAs: string;
+          action: string;
+        };
+        noProvider: string;
+        noCost: string;
+        estimated: string;
+        setRate: string;
+      };
+      book: {
+        title: string;
+        note: string;
+        empty: string;
+        columns: {
+          model: string;
+          provider: string;
+          tokenClass: string;
+          rate: string;
+          region: string;
+          source: string;
+          effective: string;
+          action: string;
+        };
+        open: string;
+        until: string;
+        anyRegion: string;
+        platformPriced: string;
+      };
+      dialog: {
+        open: string;
+        title: string;
+        body: string;
+        provider: string;
+        model: string;
+        aliases: string;
+        aliasesHint: string;
+        effectiveFrom: string;
+        effectiveFromHint: string;
+        rates: string;
+        ratesHint: string;
+        showAllClasses: string;
+        submit: string;
+        pending: string;
+        errors: {
+          providerInvalid: string;
+          modelInvalid: string;
+          regionInvalid: string;
+          aliasesInvalid: string;
+          effectiveFromInvalid: string;
+          tokenClassInvalid: string;
+          rateInvalid: string;
+          ratesEmpty: string;
+        };
+        partial: {
+          written: string;
+          noneWritten: string;
+          notWritten: string;
+        };
+      };
+      remove: {
+        open: string;
+        label: string;
+        title: string;
+        body: string;
+        kept: string;
+        submit: string;
+        pending: string;
+        unpricedTitle: string;
+        unpriced: string;
+        unpricedClose: string;
+        confirmUnpricedTitle: string;
+        confirmUnpriced: string;
+        confirmUnpricedSubmit: string;
+        confirmUnpricedCancel: string;
+      };
+      failure: {
+        orgRoleRequired: string;
+        noPrincipal: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
     drill: {
       title: {
         operator: string;
@@ -2298,6 +2920,19 @@ type Messages = {
       range: string;
       previous: string;
       next: string;
+    };
+    freshness: {
+      title: string;
+      lead: string;
+      version: string;
+      repository: string;
+      published: string;
+      unbound: string;
+      gatesLegend: string;
+      autoSync: string;
+      autoSyncHint: string;
+      blockStaleRuns: string;
+      blockStaleRunsHint: string;
     };
     status: {
       proposed: string;
@@ -2442,6 +3077,7 @@ type Messages = {
         headMoved: string;
         baseMoved: string;
         githubRefused: string;
+        mergeTimeUnknown: string;
         refused: string;
         invalid: string;
         pendingApproval: string;
@@ -2681,6 +3317,8 @@ type Messages = {
           agent: string;
           operator: string;
         };
+        targetOperatorPlaceholder: string;
+        targetOperatorEmpty: string;
         blastTitle: string;
         blastBody: string;
         restoreTitle: string;
@@ -2768,7 +3406,6 @@ type Messages = {
   };
   ui: {
     brand: {
-      name: string;
       home: string;
     };
     dialog: {

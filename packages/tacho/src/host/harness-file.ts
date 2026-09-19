@@ -67,6 +67,21 @@ interface Receipt {
   backup?: string;
   /** Parent directories Tacho created for it, outermost first. */
   created_dirs: string[];
+  /**
+   * SHA-256 of the bytes Tacho last wrote here, so `settle` can tell its own
+   * leftovers from something the user typed. Absent on a receipt written
+   * before this field existed, and on one taken by a `write` that then
+   * failed; both fall back to the blankness test alone, which is what those
+   * receipts have always had.
+   */
+  last_written?: string;
+  /**
+   * Whether that write said the document holds nothing but scaffolding this
+   * writer itself added. Only a teardown passes it, and only when the strip
+   * left nothing of the user's behind, so `settle` never reads a hook they
+   * added while enrolled as our own residue.
+   */
+  vestigial?: boolean;
 }
 
 interface ReceiptsDocument {
@@ -122,6 +137,11 @@ function writeAtomic(path: string, data: string | Buffer, mode: number): void {
 }
 
 /** Blank: nothing, whitespace, or a JSON document with nothing in it. */
+/** SHA-256 of a file's text, as `settle` compares it against the receipt. */
+function digestOf(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
 function isBlank(text: string): boolean {
   if (text.trim() === "") return true;
   try {
@@ -208,8 +228,19 @@ export class HarnessFiles {
     return undefined;
   }
 
-  /** Write `text`, taking a receipt the first time this path is touched. */
-  write(path: string, text: string): void {
+  /**
+   * Write `text`, taking a receipt the first time this path is touched.
+   *
+   * `vestigial` is the writer saying that what it is about to write holds
+   * nothing but the scaffolding it had to add itself — Cursor's `version`
+   * is the one instance — so `settle` may take the whole file back. It
+   * defaults to false, and every ordinary write leaves it false, because a
+   * teardown writes through here too: the stripped document is the bytes
+   * Tacho last wrote, and a hook the user added while enrolled survives
+   * inside it. Deleting on the digest alone would take that hook with the
+   * file.
+   */
+  write(path: string, text: string, vestigial = false): void {
     const problem = this.writeProblem(path);
     if (problem !== undefined) throw new HarnessFileError(path, problem);
     const target = realTarget(path);
@@ -225,6 +256,12 @@ export class HarnessFiles {
     // 0600 while enrolled: every one of these files carries the loopback
     // bearer. `settle` puts the user's own mode back.
     writeAtomic(target, text, 0o600);
+    const receipt = receipts.files[path];
+    if (receipt !== undefined) {
+      receipt.last_written = digestOf(text);
+      receipt.vestigial = vestigial;
+      this.save(receipts);
+    }
   }
 
   /**
@@ -259,7 +296,27 @@ export class HarnessFiles {
     if (current === undefined) {
       result = "missing";
     } else if (!receipt.existed) {
-      if (isBlank(current)) {
+      // A file Tacho created. Blank is the obvious case, but not the only
+      // one: a strip leaves behind whatever scaffolding the merge had to add
+      // to make the file valid in the first place, and Cursor's `version` is
+      // exactly that — `mergeCursorHooks` writes it because the schema
+      // requires a positive integer, and `stripCursorHooks` cannot drop it
+      // without also emptying a file the user may have had. So a document of
+      // nothing but our own scaffolding read as a user edit, and `.cursor`
+      // and its `hooks.json` survived `--purge`.
+      //
+      // The writer says whether what it left is scaffolding and nothing
+      // else, which is the one thing it knows and this seam does not, and
+      // the digest then confirms nobody has touched the file since. Both are
+      // needed. The digest alone is not enough because a teardown writes
+      // through here too, so the stripped document — a hook the user added
+      // while enrolled included — is by definition the bytes Tacho last
+      // wrote. The flag alone is not enough because the file can still be
+      // edited between the strip and the settle.
+      const oursAlone =
+        receipt.vestigial === true &&
+        digestOf(current) === receipt.last_written;
+      if (isBlank(current) || oursAlone) {
         unlinkSync(target);
         result = "deleted";
       } else {

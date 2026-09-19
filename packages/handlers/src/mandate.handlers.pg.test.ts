@@ -25,10 +25,14 @@
  *   revoke  — releases the parked reservation, expires the parked approval,
  *             records the reason and emits mandate.revoked; a second revoke
  *             → mandate_ended; a draft is declined the same way
+ *   retire  — grant and request take the agent row lock retire_agent holds,
+ *             so one in flight makes them wait and then refuse; a draft a
+ *             concurrent grant rebinds to another agent is not revoked
  *   limits  — validTo before validFrom → validity_inverted; a change over an
  *             undeclared measure is refused; a change records and emits, and
  *             a per_period changed inside the period reports remaining
- *             against what the period already drew
+ *             against what the period already drew; two limitChanges to two
+ *             measures both survive, merged under the row lock (ADR-102)
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -87,7 +91,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
   async () => {
     const { schema, withSystemDb } = await import("@oxagen/database");
     const { runInTenantScope } = await import("@oxagen/tenancy");
-    const { eq, inArray } = await import("drizzle-orm");
+    const { and, eq, inArray } = await import("drizzle-orm");
     const { SPEC_MANDATE_BODY } = await import(
       "@oxagen/oxagen/mandates/schemas.sample"
     );
@@ -102,6 +106,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const { mandateLimitsUpdateHandler } = await import(
       "./mandate.limits.update"
     );
+    const { agentRetireHandler } = await import("./agent.retire");
 
     const tag = Date.now().toString(36).slice(-6);
     const orgId = randomUUID();
@@ -110,10 +115,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const complianceUserId = randomUUID();
     const operatorUserId = randomUUID();
     const otherOperatorUserId = randomUUID();
+    const ownerUserId = randomUUID();
     const invoiceBotPrincipal = randomUUID();
     const otherBotPrincipal = randomUUID();
+    const retiringBotPrincipal = randomUUID();
     let invoiceBotId = "";
     let otherBotId = "";
+    let retiringBotId = "";
     let billingPublicId = "";
 
     const ctx = (userId: string | null): CapabilityContext => ({
@@ -156,6 +164,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         org: null,
         workspace: "Member",
       });
+      doubles.roles.set(ownerUserId, { org: "Owner", workspace: null });
       await withSystemDb(async (tx) => {
         const [billing] = await tx
           .insert(schema.users)
@@ -199,6 +208,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
           })
           .returning({ publicId: schema.agents.publicId });
         otherBotId = other!.publicId;
+        const [retiring] = await tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "retiring-bot",
+            name: "Retiring bot",
+            agentType: "custom",
+            principalId: retiringBotPrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId });
+        retiringBotId = retiring!.publicId;
         const toolId = randomUUID();
         const versionId = randomUUID();
         await tx.insert(schema.tools).values({
@@ -623,6 +645,49 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(forbidden("no_principal"));
     });
 
+    // #3138 (ADR-107): request_mandate and list_mandates now admit the same
+    // roles, so IAM lets a non-accountable reader reach the handler; this
+    // pins what readerFilter's creator-narrowing does with that admission:
+    // a reader who created nothing reads nothing, not the whole ledger.
+    it("list: a reader with no accountable role who created no agent reads nothing", async () => {
+      const bystanderUserId = randomUUID();
+      doubles.roles.set(bystanderUserId, { org: null, workspace: "Member" });
+      const bystander = await inScope(() =>
+        mandateListHandler({ limit: 50 }, ctx(bystanderUserId)),
+      );
+      expect(bystander.items).toEqual([]);
+    });
+
+    // #3440: readerFilter's workspace leg must run its own assertOrgRole
+    // check against Owner/Member, not treat every signed-in user the org
+    // leg refused as a narrowed reader. This matters beyond enterprise
+    // orgs: checkIAM allows every capability unconditionally on a
+    // non-enterprise tier, so this handler-level check is the only gate a
+    // Free/Build/Scale org actually runs, and a workspace Viewer (or an
+    // Owner/Member demoted after creating an agent) must not pass it.
+    it("list/get: a workspace Viewer is refused, not treated as a narrowed reader", async () => {
+      const viewerUserId = randomUUID();
+      doubles.roles.set(viewerUserId, { org: null, workspace: "Viewer" });
+      await expect(
+        inScope(() => mandateListHandler({ limit: 50 }, ctx(viewerUserId))),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
+      const m = await grant(billingUserId, body());
+      await expect(
+        inScope(() =>
+          mandateGetHandler(
+            { mandateId: m.id, ledgerLimit: 100 },
+            ctx(viewerUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
     it("get: the operator of another agent is refused; the office reads the ledger newest first; an unknown id is not found", async () => {
       const m = await grant(billingUserId, body());
       await seedReservation(m.id, "150000000", randomUUID());
@@ -673,6 +738,136 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ),
         ),
       ).rejects.toSatisfy(notFound);
+    });
+
+    // #3440 (ADR-107 widened): request_mandate admits a workspace Owner or
+    // Member to request a mandate for ANY agent, not only one they created,
+    // so readerFilter's creator-only narrowing let a requester create a
+    // draft they could never read back for an agent someone else operates.
+    // list_mandates and get_mandate now also admit a mandate the caller
+    // requested themselves, whichever agent it names.
+    it("list/get: a requester who does not operate the agent still reads the draft they requested", async () => {
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({ ...body(), agentId: otherBotId }),
+          ctx(operatorUserId),
+        ),
+      );
+      expect(draft.agentId).toBe(otherBotId);
+
+      // operatorUserId created invoiceBotId, not otherBotId, so only the
+      // requestedBy match admits them here.
+      const asRequester = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: otherBotId },
+          ctx(operatorUserId),
+        ),
+      );
+      expect(asRequester.items.map((m) => m.id)).toContain(draft.id);
+
+      const getAsRequester = await inScope(() =>
+        mandateGetHandler(
+          { mandateId: draft.id, ledgerLimit: 100 },
+          ctx(operatorUserId),
+        ),
+      );
+      expect(getAsRequester.mandate.id).toBe(draft.id);
+
+      // otherOperatorUserId created otherBotId, so the creator path still
+      // admits them independently of who requested this particular draft.
+      const asCreator = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: otherBotId },
+          ctx(otherOperatorUserId),
+        ),
+      );
+      expect(asCreator.items.map((m) => m.id)).toContain(draft.id);
+
+      // A bystander who neither created the agent nor requested the draft
+      // reads neither the list row nor the record.
+      const bystanderUserId = randomUUID();
+      doubles.roles.set(bystanderUserId, { org: null, workspace: "Member" });
+      const asBystander = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: otherBotId },
+          ctx(bystanderUserId),
+        ),
+      );
+      expect(asBystander.items.map((m) => m.id)).not.toContain(draft.id);
+      await expect(
+        inScope(() =>
+          mandateGetHandler(
+            { mandateId: draft.id, ledgerLimit: 100 },
+            ctx(bystanderUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
+    });
+
+    it("list/get: a requester's grant does not survive the agent's soft-delete", async () => {
+      const softDeletedAgentPrincipal = randomUUID();
+      const [softDeletedAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            // Agent slugs are capped at 18 characters for the 32-char
+            // agentKey budget (agent.enforce_agent_slug_length()).
+            slug: `del-bot-${randomUUID().slice(0, 8)}`,
+            name: "Soft-deleted bot",
+            agentType: "custom",
+            principalId: softDeletedAgentPrincipal,
+            createdById: otherOperatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({
+            ...body(),
+            agentId: softDeletedAgent!.publicId,
+          }),
+          ctx(operatorUserId),
+        ),
+      );
+
+      // Before the soft-delete, the requester grant works the same as the
+      // still-live case above.
+      const beforeDelete = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: softDeletedAgent!.publicId },
+          ctx(operatorUserId),
+        ),
+      );
+      expect(beforeDelete.items.map((m) => m.id)).toContain(draft.id);
+
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.agents)
+          .set({ deletedAt: new Date() })
+          .where(eq(schema.agents.publicId, softDeletedAgent!.publicId)),
+      );
+
+      // Once the agent is soft-deleted, neither list nor get admits the
+      // requester through the requester grant: a row that hasn't been purged
+      // yet is not the same as a live agent, and the requester's visibility
+      // must not outlive the agent it was requested for. Listed with no
+      // `agentId` filter, since that filter alone already excludes a
+      // soft-deleted agent's mandates (line ~33 above) and would pass even
+      // without the fix this test protects.
+      const afterDelete = await inScope(() =>
+        mandateListHandler({ limit: 500 }, ctx(operatorUserId)),
+      );
+      expect(afterDelete.items.map((m) => m.id)).not.toContain(draft.id);
+      await expect(
+        inScope(() =>
+          mandateGetHandler(
+            { mandateId: draft.id, ledgerLimit: 100 },
+            ctx(operatorUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
     });
 
     // ── revoke, limits ─────────────────────────────────────────────────────────
@@ -813,6 +1008,27 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(forbidden("org_role_required"));
       expect(doubles.events).toEqual([]);
 
+      // Renaming the window while 150 is reserved would orphan that draw under
+      // the old periodKey and make the new daily balance read as unused.
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limits: {
+                amount: {
+                  perCall: "100000000",
+                  perPeriod: "500000000",
+                  period: "daily",
+                  currencyOrUnit: "USD",
+                },
+              },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("period_drawn"));
+
       // The same monthly period the 150 was drawn in: the new ceiling
       // applies to it, so remaining is 500 − 150.
       const out = await inScope(() =>
@@ -838,6 +1054,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           perPeriod: "500000000",
           period: "monthly",
           currencyOrUnit: "USD",
+          // Stamped from the declared `amount` measure (ADR-108), not
+          // supplied by this request.
+          kind: "money",
         },
       });
       expect(out.validTo).toBe("2027-01-31T00:00:00.000Z");
@@ -870,6 +1089,785 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ),
         ),
       ).rejects.toSatisfy(conflict("mandate_ended"));
+    });
+
+    // The lost update ADR-102 closes, against the real row. Two operators
+    // change two different measures on one mandate. Each sends only what it
+    // changed, the handler merges it over the record its own lock returned, and
+    // both changes stand — where a read-merge-replace round trip would have let
+    // the second write restore the amount cap the first one lowered.
+    it("limits: two changes to different measures both survive, and an unnamed field is kept", async () => {
+      const m = await grant(billingUserId, body());
+      const lower = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perPeriod: "500000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      // Second depth: the per-call bound, the window and the currency were not
+      // named, so they stand. Dropping any of them is unbounded authority for
+      // that sublimit.
+      expect(lower.limits.amount).toEqual({
+        perCall: "250000000",
+        perPeriod: "500000000",
+        period: "monthly",
+        currencyOrUnit: "USD",
+        kind: "money",
+      });
+      const capped = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          { mandateId: m.id, limitChanges: { calls: { perPeriod: "40" } } },
+          ctx(billingUserId),
+        ),
+      );
+      expect(capped.limits).toEqual({
+        // Still 500, not the 2,000 the record held when the calls change was
+        // composed.
+        amount: {
+          perCall: "250000000",
+          perPeriod: "500000000",
+          period: "monthly",
+          currencyOrUnit: "USD",
+          kind: "money",
+        },
+        // First depth for the calls cap, and its window is kept: the change
+        // named a figure and said nothing about the period. The built-in
+        // measure is always `count` (ADR-108).
+        calls: {
+          perPeriod: "40",
+          period: "daily",
+          currencyOrUnit: "calls",
+          kind: "count",
+        },
+      });
+      // The declared-measure and unit checks run on the merged record, so a
+      // change is refused exactly as a replacement is.
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limitChanges: { amount: { currencyOrUnit: "EUR" } },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("measure_unit_mismatch"));
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    it("list: a narrowed reader with no live agent to narrow by reads nothing, never every mandate in the workspace", async () => {
+      const m = await grant(billingUserId, body());
+      const bystanderUserId = randomUUID();
+      doubles.roles.set(bystanderUserId, { org: null, workspace: "Member" });
+      // Every agent in the workspace soft-deleted at once: `createdByOperator`
+      // and `livePrincipalIds` both resolve empty, the exact state that made
+      // `or(undefined, undefined)` collapse `readerScope` to `undefined` and
+      // fall through the surrounding `and(...)` to an unfiltered read.
+      // Restored in `finally` since `invoiceBotId`/`otherBotId` are shared
+      // fixtures every other test in this file depends on being live.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.agents)
+          .set({ deletedAt: new Date() })
+          .where(eq(schema.agents.workspaceId, workspaceId)),
+      );
+      try {
+        const asBystander = await inScope(() =>
+          mandateListHandler({ limit: 500 }, ctx(bystanderUserId)),
+        );
+        expect(asBystander.items).toEqual([]);
+      } finally {
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.agents)
+            .set({ deletedAt: null })
+            .where(eq(schema.agents.workspaceId, workspaceId)),
+        );
+      }
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    // #3130 (ADR-108 §4): a measure's kind is only re-derived from the
+    // active declaration when the operator actually touches that measure's
+    // limit. An update that names only validTo, targets or approval must
+    // leave every measure's stored kind exactly as it was, or a mandate the
+    // gate had started refusing under measure_kind_changed would silently
+    // start passing again (or worse, a money limit would silently become a
+    // count limit) without anyone looking at its figures.
+    it("limits: a validTo-only change never re-derives a measure's kind", async () => {
+      const m = await grant(billingUserId, body());
+      expect(m.limits.amount).toMatchObject({ kind: "money" });
+      // Simulate the state after a tool republish changed `amount`'s kind:
+      // the stored limit disagrees with what a fresh stamp would produce
+      // (the fixture's active declaration still says "amount"/money), which
+      // is exactly the state a real drift leaves behind.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: { ...m.limits.amount, kind: "count" },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      const untouched = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            validTo: "2026-12-30T23:59:59.000Z",
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(untouched.limits.amount).toMatchObject({ kind: "count" });
+      // Touching the measure explicitly is still how an operator confirms
+      // the new kind and re-derives it.
+      const touched = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perCall: "300000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(touched.limits.amount).toMatchObject({ kind: "money" });
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    it("list: an enterprise org's custom role reaches the handler without a workspace Owner/Member fallback", async () => {
+      // A separate org, so resolveOrgTierDetailed reads its own row rather
+      // than the shared fixture's (which has none, and so resolves
+      // `established: false` and always takes the workspace-role branch).
+      // This stands in for a custom `role_grants` entry that admitted the
+      // caller through checkIAM's real resolver without either an
+      // accountable org role or a built-in workspace Owner/Member role: the
+      // mocked `assertOrgRole` refuses both legs for this user exactly as a
+      // custom-role-only grant would refuse them under the real resolver,
+      // and readerFilter must still let the call through rather than
+      // refusing a caller the kernel already admitted (#3440 follow-on).
+      const enterpriseOrgId = randomUUID();
+      const enterpriseWorkspaceId = randomUUID();
+      const customRoleUserId = randomUUID();
+      doubles.roles.set(customRoleUserId, {
+        org: "CustomAuditor",
+        workspace: null,
+      });
+      await withSystemDb((tx) =>
+        tx.insert(schema.organizations).values({
+          id: enterpriseOrgId,
+          name: "Enterprise Co",
+          slug: `enterprise-${tag}`,
+          namespace: `ent${tag}`.slice(0, 6),
+          planType: "enterprise",
+          status: "active",
+        }),
+      );
+      await withSystemDb((tx) =>
+        tx.insert(schema.workspaces).values({
+          id: enterpriseWorkspaceId,
+          orgId: enterpriseOrgId,
+          name: "Enterprise Workspace",
+          slug: `entws-${tag}`,
+          namespace: `entw${tag}`.slice(0, 6),
+        }),
+      );
+      const enterpriseCtx: CapabilityContext = {
+        orgId: enterpriseOrgId,
+        workspaceId: enterpriseWorkspaceId,
+        userId: customRoleUserId,
+        apiKeyId: null,
+        requestId: `req_${tag}_ent`,
+        surface: "api",
+        messageId: null,
+      };
+      await expect(
+        runInTenantScope(
+          { orgId: enterpriseOrgId, workspaceId: enterpriseWorkspaceId },
+          () => mandateListHandler({ limit: 50 }, enterpriseCtx),
+        ),
+      ).resolves.toMatchObject({ items: [] });
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.workspaces)
+          .where(eq(schema.workspaces.id, enterpriseWorkspaceId)),
+      );
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.organizations)
+          .where(eq(schema.organizations.id, enterpriseOrgId)),
+      );
+    });
+
+    it("list: an agent-run call never runs the human workspace-role fallback", async () => {
+      // Mirrors the enterprise custom-grant case above, but for an agent
+      // principal on the shared fixture org's non-enterprise tier.
+      // checkIAM never gives an agent principal the tier_gate bypass
+      // (packages/iam/src/check-iam.ts): an agent run resolves the full
+      // delegation-ceiling resolver at every tier, before the tier check
+      // is even consulted, so an agent explicitly authorized for this
+      // capability already cleared the kernel the same way an enterprise
+      // custom grant does. readerFilter's workspace-role fallback exists
+      // only to close the gap the tier_gate bypass leaves for human/
+      // service calls; running it for an agent-run call would refuse an
+      // agent the kernel already admitted (#3440 follow-on finding).
+      const agentUserId = randomUUID();
+      doubles.roles.set(agentUserId, { org: null, workspace: null });
+      const agentCtx = {
+        ...ctx(agentUserId),
+        agentRun: { principalKind: "agent" },
+      } as unknown as CapabilityContext;
+      await expect(
+        inScope(() => mandateListHandler({ limit: 50 }, agentCtx)),
+      ).resolves.toMatchObject({ items: [] });
+    });
+
+    it("limits: a kind change is refused while the ledger still holds authority drawn under the old kind", async () => {
+      const m = await grant(billingUserId, body());
+      const toolCallId = randomUUID();
+      await seedReservation(m.id, "150000000", toolCallId);
+      // Same drift simulation as the validTo-only test above: the stored
+      // limit now disagrees with what a fresh stamp of the active
+      // declaration would produce, which is what touching the measure would
+      // change it back to. The reservation just seeded is a live "amount"
+      // row filed under the "count" kind this update would move away from.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: { ...m.limits.amount, kind: "count" },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limitChanges: { amount: { perCall: "300000000" } },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("measure_kind_drawn"));
+
+      // Releasing the reservation nets the ledger's "amount" row to zero, so
+      // periodSums and hasOpenReservation both read no live draw under the
+      // old kind, and the same explicit change now succeeds.
+      const [row] = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      // `hasDrawnInCurrentPeriod` sums by the current monthly key, the same
+      // one `seedReservation` filed the reservation under: a release under
+      // any other key would leave that sum still seeing the reservation as
+      // drawn, refusing the change below all over again.
+      const releasedAt = new Date();
+      const monthly = `${releasedAt.getUTCFullYear()}-${String(releasedAt.getUTCMonth() + 1).padStart(2, "0")}`;
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values({
+          orgId,
+          workspaceId,
+          mandateId: row!.id,
+          toolCallId,
+          kind: "release",
+          measure: "amount",
+          value: "150000000",
+          unitOrCurrency: "USD",
+          periodKey: monthly,
+          balanceAfter: "2000000000",
+        }),
+      );
+      const freed = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perCall: "300000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(freed.limits.amount).toMatchObject({ kind: "money" });
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.mandateLedger)
+          .where(
+            and(
+              eq(schema.mandateLedger.mandateId, row!.id),
+              eq(schema.mandateLedger.measure, "amount"),
+            ),
+          ),
+      );
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    it("limits: a kind change is never refused for a legacy measure with no stored kind, once its unstamped reservation clears", async () => {
+      const m = await grant(billingUserId, body());
+      const toolCallId = randomUUID();
+      await seedReservation(m.id, "150000000", toolCallId);
+      // Strip the stored kind entirely, the pre-ADR-108 shape: a stored
+      // `limits.amount` with no `kind` key at all, not merely a wrong one.
+      // `parseMandateRow` resolves this via `legacyMeasureKindGuess`, and
+      // `locked.legacyKindMeasures` records that the resolved kind is a
+      // guess, not a fact this reservation was ever drawn against.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: {
+                perCall: m.limits.amount!.perCall,
+                perPeriod: m.limits.amount!.perPeriod,
+                period: m.limits.amount!.period,
+                currencyOrUnit: m.limits.amount!.currencyOrUnit,
+              },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      // `seedReservation`'s row carries no `measureKind` (the pre-ADR-108
+      // shape), so `hasUnstampedLedgerHistory` still sees it as live and
+      // unverified authority until it is released: the guess being wrong
+      // does not excuse a genuinely open reservation from that check.
+      const [row] = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values({
+          orgId,
+          workspaceId,
+          mandateId: row!.id,
+          toolCallId,
+          kind: "release",
+          measure: "amount",
+          value: "150000000",
+          unitOrCurrency: "USD",
+          periodKey: `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, "0")}`,
+          balanceAfter: "2000000000",
+        }),
+      );
+      const touched = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perCall: "300000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(touched.limits.amount).toMatchObject({ kind: "money" });
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    it("limits: a kind change is refused for a legacy measure whose unstamped reservation is still open", async () => {
+      const m = await grant(billingUserId, body());
+      await seedReservation(m.id, "150000000", randomUUID());
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: {
+                perCall: m.limits.amount!.perCall,
+                perPeriod: m.limits.amount!.perPeriod,
+                period: m.limits.amount!.period,
+                currencyOrUnit: m.limits.amount!.currencyOrUnit,
+              },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      let thrown: unknown;
+      try {
+        await inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limitChanges: { amount: { perCall: "300000000" } },
+            },
+            ctx(billingUserId),
+          ),
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(
+        isHandlerError(thrown) && thrown.reason === "measure_kind_drawn",
+      ).toBe(true);
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    // ── retirement (ADR-106, #3124) ────────────────────────────────────────────
+    // A mandate does not survive its agent's retirement: request_mandate,
+    // grant_mandate and update_mandate_limits refuse to create or widen
+    // authority against a retired identity, while list_mandates, get_mandate
+    // and revoke_mandate (proven above against invoiceBotId/otherBotId, which
+    // never retire) stay unchanged. retire_agent revokes what is live the
+    // same way it revokes credentials and host enrollments.
+    const retiredAgent = (e: unknown) =>
+      isHandlerError(e) &&
+      e.code === "conflict" &&
+      e.reason === "agent_retired";
+
+    it("retire_agent revokes every active and draft mandate bound to the agent, and request/grant/limits refuse it afterward", async () => {
+      const active = await grant(billingUserId, {
+        ...body(),
+        agentId: retiringBotId,
+      });
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({ ...body(), agentId: retiringBotId }),
+          ctx(operatorUserId),
+        ),
+      );
+      expect(active.status).toBe("active");
+      expect(draft.status).toBe("draft");
+
+      const out = await inScope(() =>
+        agentRetireHandler(
+          { agentId: retiringBotId, reason: "retirement test" },
+          ctx(ownerUserId),
+        ),
+      );
+      expect(out.revokedMandates).toBe(2);
+
+      const rows = await withSystemDb((tx) =>
+        tx
+          .select({
+            publicId: schema.mandates.publicId,
+            status: schema.mandates.status,
+            revokedReason: schema.mandates.revokedReason,
+          })
+          .from(schema.mandates)
+          .where(inArray(schema.mandates.publicId, [active.id, draft.id])),
+      );
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row.status).toBe("revoked");
+        expect(row.revokedReason).toBe("retirement test");
+      }
+
+      // list_mandates and get_mandate keep reading the retired agent's
+      // mandates; revoke_mandate on an already-revoked row is unchanged
+      // (mandate_ended), not a new agent_retired refusal.
+      const listed = await inScope(() =>
+        mandateListHandler(
+          { agentId: retiringBotId, limit: 10 },
+          ctx(billingUserId),
+        ),
+      );
+      expect(listed.items.map((m) => m.id).sort()).toEqual(
+        [active.id, draft.id].sort(),
+      );
+      const got = await inScope(() =>
+        mandateGetHandler(
+          { mandateId: active.id, ledgerLimit: 100 },
+          ctx(billingUserId),
+        ),
+      );
+      expect(got.mandate.id).toBe(active.id);
+      await expect(
+        inScope(() =>
+          mandateRevokeHandler(
+            { mandateId: active.id, reason: "again" },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("mandate_ended"));
+
+      // Creating or widening authority against the retired identity refuses.
+      await expect(
+        inScope(() =>
+          mandateRequestHandler(
+            mandateGrant.input.parse({ ...body(), agentId: retiringBotId }),
+            ctx(operatorUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(retiredAgent);
+      await expect(
+        grant(billingUserId, { ...body(), agentId: retiringBotId }),
+      ).rejects.toSatisfy(retiredAgent);
+    });
+
+    it("grant_mandate refuses to activate a draft whose agent retired after the request was made", async () => {
+      const secondBotPrincipal = randomUUID();
+      const [secondAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "second-retiree-bot",
+            name: "Second retiring bot",
+            agentType: "custom",
+            principalId: secondBotPrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const secondAgentId = secondAgent!.publicId;
+
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({ ...body(), agentId: secondAgentId }),
+          ctx(operatorUserId),
+        ),
+      );
+      await inScope(() =>
+        agentRetireHandler(
+          { agentId: secondAgentId, reason: "retired mid-draft" },
+          ctx(ownerUserId),
+        ),
+      );
+      await expect(
+        grant(billingUserId, {
+          ...body(),
+          agentId: secondAgentId,
+          requestId: draft.id,
+        }),
+      ).rejects.toSatisfy(retiredAgent);
+    });
+
+    it("grant and request wait on a retirement in flight, then refuse the agent it archived", async () => {
+      // The race the row lock closes: without it, a grant reads the agent as
+      // active, retirement commits around it and finishes its mandate scan,
+      // and the grant then inserts an active mandate against a retired agent.
+      // This transaction stands in for retire_agent between its FOR UPDATE
+      // and its commit. If either handler stops locking the agent row, it
+      // finishes while the lock is held and the "still pending" check fails.
+      const racePrincipal = randomUUID();
+      const [raceAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "racing-retiree-bot",
+            name: "Racing retiring bot",
+            agentType: "custom",
+            principalId: racePrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const raceAgentId = raceAgent!.publicId;
+
+      let granted: Promise<unknown> = Promise.resolve();
+      let requested: Promise<unknown> = Promise.resolve();
+      let settled = 0;
+      await withSystemDb(async (tx) => {
+        await tx
+          .select({ id: schema.agents.id })
+          .from(schema.agents)
+          .where(eq(schema.agents.publicId, raceAgentId))
+          .for("update");
+        granted = grant(billingUserId, { ...body(), agentId: raceAgentId });
+        requested = inScope(() =>
+          mandateRequestHandler(
+            mandateGrant.input.parse({ ...body(), agentId: raceAgentId }),
+            ctx(operatorUserId),
+          ),
+        );
+        // Observe both without letting an early rejection go unhandled.
+        for (const p of [granted, requested]) {
+          p.then(
+            () => settled++,
+            () => settled++,
+          );
+        }
+        await new Promise((r) => setTimeout(r, 300));
+        expect(settled).toBe(0);
+        await tx
+          .update(schema.agents)
+          .set({ status: "archived" })
+          .where(eq(schema.agents.publicId, raceAgentId));
+      });
+
+      await expect(granted).rejects.toSatisfy(retiredAgent);
+      await expect(requested).rejects.toSatisfy(retiredAgent);
+      const [race] = await withSystemDb((tx) =>
+        tx
+          .select({ principalId: schema.agents.principalId })
+          .from(schema.agents)
+          .where(eq(schema.agents.publicId, raceAgentId)),
+      );
+      const rows = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.agentPrincipalId, race!.principalId!)),
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it("retire_agent leaves alone a draft that a concurrent grant rebound to another agent", async () => {
+      // The race the re-read under the row lock closes: retire_agent selects
+      // the retiring agent's live mandates, then locks each one. If a grant
+      // activates one of those drafts for a different agent in between, the
+      // locked row is active but no longer the retiring agent's, and
+      // retirement must not revoke it. This transaction stands in for that
+      // grant between its mandate row lock and its commit.
+      const fromPrincipal = randomUUID();
+      const toPrincipal = randomUUID();
+      const [fromAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "rebound-from-bot",
+            name: "Rebound from bot",
+            agentType: "custom",
+            principalId: fromPrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const fromAgentId = fromAgent!.publicId;
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({ ...body(), agentId: fromAgentId }),
+          ctx(operatorUserId),
+        ),
+      );
+
+      let retired: Promise<{ revokedMandates: number }> | undefined;
+      let settled = false;
+      await withSystemDb(async (tx) => {
+        await tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, draft.id))
+          .for("update");
+        retired = inScope(() =>
+          agentRetireHandler(
+            { agentId: fromAgentId, reason: "retired during a rebind" },
+            ctx(ownerUserId),
+          ),
+        );
+        retired.then(
+          () => {
+            settled = true;
+          },
+          () => {
+            settled = true;
+          },
+        );
+        await new Promise((r) => setTimeout(r, 300));
+        // retire_agent is parked on the mandate row lock this holds.
+        expect(settled).toBe(false);
+        await tx
+          .update(schema.mandates)
+          .set({
+            agentPrincipalId: toPrincipal,
+            status: "active",
+            grantedBy: billingUserId,
+            roleAtGrant: "Billing",
+          })
+          .where(eq(schema.mandates.publicId, draft.id));
+      });
+
+      const out = await retired!;
+      expect(out.revokedMandates).toBe(0);
+      const [row] = await withSystemDb((tx) =>
+        tx
+          .select({
+            status: schema.mandates.status,
+            agentPrincipalId: schema.mandates.agentPrincipalId,
+          })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, draft.id)),
+      );
+      expect(row).toEqual({ status: "active", agentPrincipalId: toPrincipal });
+    });
+
+    it("update_mandate_limits refuses to widen a mandate whose agent retired after it was granted", async () => {
+      const thirdBotPrincipal = randomUUID();
+      const [thirdAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "third-retiring-bot",
+            name: "Third retiring bot",
+            agentType: "custom",
+            principalId: thirdBotPrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const thirdAgentId = thirdAgent!.publicId;
+
+      const m = await grant(billingUserId, {
+        ...body(),
+        agentId: thirdAgentId,
+      });
+      // Flip the agent's status directly rather than through retire_agent:
+      // that handler already revokes every live mandate as part of
+      // retirement (proven above), so going through it here would only ever
+      // exercise mandate_ended and never reach update_mandate_limits' own
+      // check. This isolates that check for the state it defends —
+      // an active mandate whose agent is archived by any means.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.agents)
+          .set({ status: "archived" })
+          .where(eq(schema.agents.publicId, thirdAgentId)),
+      );
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limitChanges: { amount: { perPeriod: "1" } },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(retiredAgent);
     });
   },
 );

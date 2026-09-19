@@ -126,6 +126,21 @@ export const measureDeclarationsSchema = z.record(
 );
 export type MeasureDeclarations = z.infer<typeof measureDeclarationsSchema>;
 
+/**
+ * Whether a measure's figures are money or a count (ADR-108). A stored limit
+ * and the authority read from it carry this fact directly: it is worked out
+ * once, from the tool's declared `type` (`amount` → `money`, `count` →
+ * `count`), at the moment a mandate's limits are written, by
+ * `assertToolsDeclareMeasures` (`packages/handlers/src/_mandate.ts`). No
+ * reader downstream of that write infers it from `currencyOrUnit`: a
+ * three-letter unit such as `GAU` is not a currency, and a tool may
+ * legitimately declare a **count** denominated in a currency code (`{ type:
+ * "count", unit: "USD" }`), which a guess from the unit string alone gets
+ * wrong every time.
+ */
+export const measureKindSchema = z.enum(["money", "count"]);
+export type MeasureKind = z.infer<typeof measureKindSchema>;
+
 // ── The mandate shape (§6.9 part 3) ───────────────────────────────────────
 
 const MANDATE_PERIODS = ["daily", "weekly", "monthly"] as const;
@@ -139,6 +154,16 @@ const mandateLimitSchema = z
     period: mandatePeriodSchema,
     /** A currency code for an amount, a unit name for a count. */
     currencyOrUnit: z.string().min(1).max(32),
+    /**
+     * Money or a count (ADR-108), stamped by the handler from the declaration
+     * it already validated, never client-supplied and never re-derived from
+     * `currencyOrUnit` downstream. Optional only because a limit written
+     * before ADR-108 has no such field in its stored jsonb; every write since
+     * carries it. A reader that finds it absent takes the documented legacy
+     * fallback (`legacyMeasureKindGuess`, `packages/rules`), not a fresh
+     * guess of its own.
+     */
+    kind: measureKindSchema.optional(),
   })
   .strict()
   .refine(
@@ -153,6 +178,45 @@ export const mandateLimitsSchema = z
     "a mandate names at least one limit",
   );
 export type MandateLimits = z.infer<typeof mandateLimitsSchema>;
+
+/**
+ * One measure's bound as a **change** rather than a record: every field is
+ * optional and an absent field means "leave what is stored". A bound is
+ * replaced field by field, so clearing a per-call cap while keeping the
+ * per-period one is not expressible here and is not meant to be — deleting a
+ * bound is what `mandateLimitsSchema` replacement is for (ADR-102).
+ */
+const mandateLimitChangeSchema = z
+  .object({
+    perCall: measureValueSchema.optional(),
+    perPeriod: measureValueSchema.optional(),
+    period: mandatePeriodSchema.optional(),
+    currencyOrUnit: z.string().min(1).max(32).optional(),
+  })
+  .strict()
+  .refine(
+    (c) =>
+      c.perCall !== undefined ||
+      c.perPeriod !== undefined ||
+      c.period !== undefined ||
+      c.currencyOrUnit !== undefined,
+    "a limit change names at least one field",
+  );
+
+/**
+ * measure → the fields to change on that measure's bound, leaving every other
+ * measure and every unnamed field as stored (ADR-102). `update_mandate_limits`
+ * merges this under the row lock it already takes, which is the only place the
+ * merge is safe: a caller that read the record, merged, and sent the whole
+ * record back could restore a bound another operator lowered in between.
+ */
+export const mandateLimitChangesSchema = z
+  .record(measureNameSchema, mandateLimitChangeSchema)
+  .refine(
+    (changes) => Object.keys(changes).length > 0,
+    "a limit change names at least one measure",
+  );
+export type MandateLimitChanges = z.infer<typeof mandateLimitChangesSchema>;
 
 const mandateTargetSchema = z
   .object({
@@ -255,6 +319,8 @@ const mandateAuthoritySchema = z
   .object({
     measure: measureNameSchema,
     currencyOrUnit: z.string(),
+    /** Money or a count (ADR-108); always present, `readAuthority` resolves the legacy fallback before this leaves the handler. */
+    kind: measureKindSchema,
     period: mandatePeriodSchema,
     periodKey: z.string(),
     perCall: measureValueSchema.nullable(),
@@ -277,6 +343,13 @@ export const mandateLedgerRowSchema = z
     measure: measureNameSchema,
     value: measureValueSchema,
     unitOrCurrency: z.string(),
+    // ADR-108: the mandate limit's kind at the instant this row was
+    // written, stamped once and never re-derived, so the row still answers
+    // this even after a later whole-record `limits` replacement removes
+    // the measure. Null only for a row written before the column existed;
+    // a reader without it falls back to the mandate's current authority for
+    // the measure, then to `legacyMeasureKindGuess`.
+    measureKind: measureKindSchema.nullable(),
     externalEffectId: z.string().nullable(),
     periodKey: z.string(),
     balanceAfter: measureValueSchema,

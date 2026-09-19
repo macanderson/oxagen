@@ -123,7 +123,7 @@ Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
 Colors, radius, and state come from CSS variables in
 `src/styles/globals.css` (the value layer) mapped to Tailwind utilities via the
 `@theme inline` block. **Reskin by editing tokens, not component class strings.**
-See [`THEME.md`](./THEME.md) for the full token reference.
+Token values live in `src/styles/house-tokens.css`, vendored from the house kit; [`THEME.md`](./THEME.md) says which file answers which question and carries the rules a value cannot state.
 
 ## Scripts
 

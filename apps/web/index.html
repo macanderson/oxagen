@@ -4,26 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Oxagen: the agent control plane</title>
-<meta name="description" content="Can you explain your AI bill? Oxagen governs and operates the autonomous agents you run. One mandate per agent, checked on the calls routed through Oxagen, and every model call priced by token class and attributed to the person, the agent, the run, the turn, and the step.">
+<meta name="description" content="Workforce management for autonomous agents. Oxagen governs the agents you run, autonomous and supervised alike, and does not run them. One mandate per agent, checked on the calls routed through Oxagen, and every model call routed through it priced by token class and attributed to the person, the agent, the run, the turn, and the step.">
 <link rel="canonical" href="https://oxagen.sh/">
-<meta name="theme-color" content="#09090B">
-<meta name="color-scheme" content="dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090B">
+<meta name="color-scheme" content="light dark">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://oxagen.sh/">
 <meta property="og:site_name" content="Oxagen">
-<meta property="og:title" content="Can you explain your AI bill? Neither can your provider.">
-<meta property="og:description" content="Oxagen governs and operates the autonomous agents you run. One mandate per agent, set by security, FinOps, and engineering, checked on the calls routed through Oxagen. One fleet, on one page, with what each agent asked for, spent, and did.">
+<meta property="og:title" content="Your agents are a workforce now. Manage them like one.">
+<meta property="og:description" content="Oxagen governs the agents you run, autonomous and supervised alike, and does not run them. One mandate per agent, set by security, FinOps, and engineering, checked on the calls routed through Oxagen. One fleet, on one page, with what each agent asked for, spent, and did.">
 <meta property="og:image" content="https://oxagen.sh/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@oxagenai">
-<meta name="twitter:title" content="Can you explain your AI bill? Neither can your provider.">
+<meta name="twitter:title" content="Your agents are a workforce now. Manage them like one.">
 <meta name="twitter:description" content="One mandate per agent, checked on the calls routed through Oxagen. One fleet, on one page, with what each agent asked for, spent, and did.">
 <meta name="twitter:image" content="https://oxagen.sh/og.png">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/oxagen.webmanifest">
 <link rel="preload" href="/fonts/space-grotesk-latin-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
 <script type="application/ld+json">
@@ -33,7 +35,8 @@
   "name": "Oxagen, Inc.",
   "url": "https://oxagen.sh",
   "logo": "https://oxagen.sh/assets/brand/oxagen-wordmark.svg",
-  "email": "success@oxagen.ai",
+  "email": "hello@oxagen.sh",
+  "telephone": "+1-310-213-7912",
   "address": {
     "@type": "PostalAddress",
     "streetAddress": "2261 Market Street STE 87168",
@@ -50,7 +53,25 @@
   ]
 }
 </script>
-<script>document.documentElement.classList.add("js")</script>
+<script>
+/* Stamp the theme before first paint: a pinned choice from the footer's
+   control, else the OS. oxagen.js keeps it current after load. */
+(function (d) {
+  d.classList.add("js");
+  var c = null;
+  try { c = localStorage.getItem("theme"); } catch (e) {}
+  var t = c === "light" || c === "dark" ? c
+    : matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  d.setAttribute("data-theme", t);
+  var m = document.querySelector('meta[name="color-scheme"]');
+  if (m) m.content = t;
+  if (c === t) {
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (x) {
+      x.content = t === "light" ? "#FFFFFF" : "#09090B";
+    });
+  }
+})(document.documentElement);
+</script>
 <link rel="stylesheet" href="/assets/oxagen.css">
 <style>
 /* ---- page-specific: hero, the four promises, and one figure per promise ---- */
@@ -255,10 +276,11 @@
   <section class="hero tex tex-hex" id="top">
     <div class="wrap hero-in">
       <div class="hero-copy">
-        <p class="eyebrow">The agent control plane</p>
-        <h1>Can you explain your AI bill?<br><span class="gold">Neither can your provider.</span></h1>
+        <p class="eyebrow">Workforce management for autonomous agents</p>
+        <h1>Your agents are a workforce now.<br><span class="gold">Manage them like one.</span></h1>
         <p class="hero-sub">
-          Oxagen governs and operates the autonomous agents you run. <strong>One mandate per
+          Oxagen governs the agents you run, autonomous and supervised alike. It does not run
+          them. <strong>One mandate per
           agent</strong>, set by security, FinOps, and engineering, checked on the calls routed
           through Oxagen.
           <strong>One fleet, on one page</strong>, with what each agent asked for, spent, and did.
@@ -332,8 +354,8 @@
         <a class="card reveal" href="#spend">
           <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg></div>
           <h3>Budget and rules</h3>
-          <p class="tag">Stop wasting money on AI.</p>
-          <p>FinOps sets it. Every model call is priced by token class, attributed to the person,
+          <p class="tag">See which agent spent what, and on whose behalf.</p>
+          <p>FinOps sets it. Every model call routed through Oxagen is priced by token class, attributed to the person,
           the agent, the run, the turn, and the step, and reconciled to the cent against the
           provider's bill. Findings ranked by the money at stake name what to fix and who can
           fix it.</p>
@@ -342,10 +364,10 @@
         <a class="card reveal reveal-d1" href="#learn">
           <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/></svg></div>
           <h3>Equipment</h3>
-          <p class="tag">Never re-explain yourself to AI ever again.</p>
+          <p class="tag">Give agents the business context their work requires.</p>
           <p>Engineering sets it. Every agent starts a job with a knowledge graph built from
-          your own sources and steering that lives in your repo. Taught once, known by every
-          agent you run.</p>
+          your own sources and steering that lives in your repo. Recorded once, and drawn on by
+          every agent whose mandate covers it.</p>
           <span class="h-go">Watch a change land <span class="arr">→</span></span>
         </a>
       </div>
@@ -364,7 +386,7 @@
         <ul>
           <li>The request carries who started the task, which agent is asking, which tool it wants, and which data it would reach.</li>
           <li>A rule the owning team wrote answers it: allowed, denied, or routed to a named person. Allowed and denied requests settle inside the same call. Routed requests wait for the person, and the run waits with them.</li>
-          <li>The credential stays in Oxagen, and the agent never sees it. There is nothing for the agent to leak.</li>
+          <li>For a mediated connection, the credential stays in Oxagen. Oxagen uses it on the agent's behalf, and the agent does not receive it. The agent's own identity is separate.</li>
           <li>A tool that is not in the agent's mandate cannot be seen or found. Rules are deterministic and versioned, and every answer leaves a signed row in the record.</li>
           <li>Stopping an agent denies its next request and closes the connections behind it. Halting does not ask the agent to cooperate.</li>
         </ul>
@@ -435,9 +457,9 @@
     <div class="wrap split">
       <div class="dg-copy reveal">
         <p class="eyebrow">Budget and rules</p>
-        <h2>Every dollar attributed, reconciled to the cent</h2>
+        <h2>Every dollar routed through Oxagen, reconciled to the cent</h2>
         <p class="lede">Your AI bill is a number with no story. Oxagen writes a cost record on
-        every model call, by token class, and hangs it on the frame.</p>
+        every model call routed through it, by token class, and hangs it on the frame.</p>
         <ul>
           <li>Spend rolls up from step to turn to run to agent to operator, so a team lead's number is the sum of their agents' runs.</li>
           <li>The reconciler matches your records against provider statements and opens an exception for any variance over one cent.</li>
@@ -465,7 +487,7 @@
     <div class="wrap split split-flip">
       <div class="dg-copy reveal reveal-d1">
         <p class="eyebrow">Equipment</p>
-        <h2>Never re-explain yourself to AI ever again</h2>
+        <h2>Give agents the business context their work requires</h2>
         <p class="lede">Most agents start every run knowing nothing about your company and end
         it having learned nothing you kept.</p>
         <ul>
@@ -568,9 +590,9 @@
     <div class="wrap manual-grid">
       <div class="book-scene reveal" aria-hidden="true">
         <div class="book">
-          <span class="book-kicker">A field manual in 14 parts</span>
+          <span class="book-kicker">A field manual in 21 parts</span>
           <span class="book-title">Engineering <span class="gold">Deterministic</span> AI&nbsp;Coding&nbsp;Agents</span>
-          <span class="book-sub">Systems that ask the model to think the least, and get the most from every model that exists.</span>
+          <span class="book-sub">Build the system around the model. Then operate the agents you run.</span>
           <svg class="book-hex" viewBox="0 0 260 120">
             <defs><polygon id="hxb" points="22,13 0,26 -22,13 -22,-13 0,-26 22,-13"/></defs>
             <use class="hx" href="#hxb" x="36" y="86"/>
@@ -590,18 +612,18 @@
       </div>
 
       <div class="manual-copy">
-        <span class="free-tag reveal">Free ebook · read online or download</span>
-        <h2 class="reveal">The field manual behind the product</h2>
+        <span class="free-tag reveal">Free ebook · read online, flip through it, or print it</span>
+        <h2 class="reveal">A field manual for building and operating coding agents</h2>
         <p class="reveal reveal-d1">
-          Why is the same model brilliant in one team's hands and useless in another's?
-          The founder's answer, in 14 parts: the next leap in AI coding is not a bigger
-          model. It is a better system around the model. This is the playbook Oxagen is
-          built by.
+          Why does the same model work well for one team and poorly for another? The
+          first thirteen parts answer with the system around the model, and cite the
+          published evidence. The next seven cover what comes after the agents work:
+          who each one is, what it may do, what it spent, and what it did.
         </p>
         <ul class="manual-points reveal reveal-d1">
-          <li>Why agents that search and guess burn time, money, and trust</li>
-          <li>How to hand a model exactly the context it needs, every time</li>
-          <li>What to measure so results are repeatable, not lucky</li>
+          <li>How to hand a model the context a task needs, and nothing else</li>
+          <li>How to set an agent's identity, authority, budget, and tools in one mandate</li>
+          <li>What to do this week and what to measure, at the end of every part</li>
         </ul>
 
         <p class="manual-cta reveal reveal-d1">
@@ -711,7 +733,7 @@
         <a class="brand" href="#top" aria-label="Oxagen home">
       <svg viewBox="0 0 453.868 93.246" role="img" aria-label="oxagen"><path d="M33.9083 68.758Q24.1657 68.758 16.4786 64.7737Q8.79142 60.7894 4.39571 53.2965Q0 45.8035 0 35.3862V33.3718Q0 22.9544 4.39571 15.4615Q8.79142 7.96854 16.4786 3.98427Q24.1657 0 33.9083 0Q43.6509 0 51.3381 3.98427Q59.0252 7.96854 63.4209 15.4615Q67.8166 22.9544 67.8166 33.3718V35.3862Q67.8166 45.8035 63.4209 53.2965Q59.0252 60.7894 51.3381 64.7737Q43.6509 68.758 33.9083 68.758ZM33.9083 55.3486Q42.1895 55.3486 47.4689 50.0198Q52.7484 44.691 52.7484 35.0142V33.7437Q52.7484 24.067 47.5233 18.7382Q42.2981 13.4094 33.9083 13.4094Q25.6502 13.4094 20.3592 18.7382Q15.0683 24.067 15.0683 33.7437V35.0142Q15.0683 44.691 20.3592 50.0198Q25.6502 55.3486 33.9083 55.3486Z M176.569 68.758Q169.637 68.758 164.119 66.3453Q158.601 63.9327 155.387 59.2935Q152.173 54.6542 152.173 48.0088Q152.173 41.3403 155.387 36.8558Q158.601 32.3712 164.27 30.1017Q169.94 27.8323 177.174 27.8323H196.047V23.8925Q196.047 18.7316 192.874 15.5274Q189.701 12.3232 182.99 12.3232Q176.411 12.3232 173.049 15.3842Q169.686 18.4452 168.627 23.3593L154.691 18.7315Q156.27 13.6133 159.748 9.39702Q163.225 5.18071 169.049 2.59035Q174.874 0 183.208 0Q195.972 0 203.326 6.42816Q210.681 12.8563 210.681 24.9392V50.4707Q210.681 54.4204 214.368 54.4204H219.795V66.9148H209.197Q204.464 66.9148 201.442 64.5334Q198.42 62.1521 198.42 58.1563V57.8864H196.126Q195.392 59.6967 193.399 62.2985Q191.406 64.9004 187.388 66.8292Q183.369 68.758 176.569 68.758ZM179.05 56.4348Q186.581 56.4348 191.314 52.1592Q196.047 47.8837 196.047 40.6031V39.2405H178.175Q173.175 39.2405 170.208 41.3881Q167.241 43.5358 167.241 47.5513Q167.241 51.5668 170.34 54.0008Q173.439 56.4348 179.05 56.4348Z M227.767 34.6423V32.6279Q227.767 22.3817 231.86 15.0863Q235.953 7.79081 242.768 3.8954Q249.582 0 257.706 0Q266.935 0 271.762 3.33256Q276.589 6.66512 278.81 10.4107H281.042V1.8432H295.801V79.33Q295.801 85.6989 292.104 89.4725Q288.408 93.2462 282.079 93.2462H238.369V80.0541H277.023Q280.779 80.0541 280.779 76.1043V57.2775H278.547Q277.161 59.5683 274.665 61.8904Q272.168 64.2125 268.057 65.7414Q263.946 67.2702 257.706 67.2702Q249.582 67.2702 242.756 63.3748Q235.93 59.4794 231.848 52.1724Q227.767 44.8655 227.767 34.6423ZM261.938 54.0781Q270.151 54.0781 275.573 48.8612Q280.996 43.6443 280.996 34.2704V32.9999Q280.996 23.4943 275.627 18.3432Q270.259 13.1921 261.938 13.1921Q253.749 13.1921 248.315 18.3432Q242.881 23.4943 242.881 32.9999V34.2704Q242.881 43.6443 248.315 48.8612Q253.749 54.0781 261.938 54.0781Z M344.764 68.758Q334.998 68.758 327.583 64.6108Q320.167 60.4636 316.031 52.9048Q311.896 45.346 311.896 35.1689V33.589Q311.896 23.3889 315.977 15.8416Q320.059 8.2944 327.397 4.1472Q334.735 0 344.385 0Q353.881 0 360.956 4.1867Q368.031 8.37341 371.981 15.8515Q375.931 23.3297 375.931 33.2895V38.6974H327.181Q327.468 46.3334 332.587 50.9496Q337.707 55.5658 345.198 55.5658Q352.522 55.5658 356.101 52.3534Q359.681 49.141 361.553 45.0629L373.985 51.4813Q372.119 55.0656 368.63 59.1042Q365.141 63.1428 359.394 65.9504Q353.648 68.758 344.764 68.758ZM327.313 27.2892H360.622Q360.095 20.7986 355.7 16.9954Q351.304 13.1921 344.277 13.1921Q337.055 13.1921 332.691 16.9954Q328.327 20.7986 327.313 27.2892Z M391.548 66.9148V1.8432H406.353V10.9769H408.585Q410.303 7.25429 414.832 3.99908Q419.361 0.743866 428.435 0.743866Q435.956 0.743866 441.695 4.12911Q447.434 7.51435 450.651 13.5903Q453.868 19.6663 453.868 27.9442V66.9148H438.8V29.1226Q438.8 21.1969 434.891 17.3492Q430.983 13.5015 423.9 13.5015Q415.872 13.5015 411.244 18.8237Q406.617 24.146 406.617 33.9445V66.9148Z" fill="currentColor"/><path d="M73.9979 66.9148 98.2261 34.0696 74.3764 1.8432H91.9626L107.9 24.3499H110.131L126.068 1.8432H143.654L119.805 34.0696L144.033 66.9148H126.206L110.131 44.0065H107.9L91.8244 66.9148Z" fill="#D4AF37"/></svg>
     </a>
-        <p>Can you explain your AI bill?<br>Neither can your provider.</p>
+        <p>See which agent spent what,<br>and on whose behalf.</p>
         <div class="socials">
           <a href="https://x.com/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on X">
             <svg viewBox="0 0 24 24"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-6.4L6.4 22H3.3l7.3-8.3L1.6 2H8l4.4 5.9L18.9 2zm-1.1 18.2h1.7L7.1 3.7H5.3l12.5 16.5z"/></svg>
@@ -753,14 +775,23 @@
           Oxagen, Inc.<br>
           2261 Market Street STE 87168<br>
           San Francisco, CA 94114<br>
-          <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>
+          <a href="mailto:hello@oxagen.sh">hello@oxagen.sh</a><br>
+          <a href="mailto:success@oxagen.sh">success@oxagen.sh</a><br>
+          <a href="tel:+13102137912">+1 (310) 213-7912</a>
         </address>
       </div>
     </div>
 
     <div class="foot-base">
       <span>© 2026 Oxagen, Inc. All rights reserved.</span>
-      <span class="mono">agent control plane · <a href="#field-manual">read the manual</a></span>
+      <div class="foot-end">
+        <span class="mono">agent control plane · <a href="#field-manual">read the manual</a></span>
+        <div class="theme-switch" role="radiogroup" aria-label="Theme">
+          <button type="button" role="radio" aria-checked="true" data-theme-choice="system" aria-label="System" title="System"><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
+          <button type="button" role="radio" aria-checked="false" tabindex="-1" data-theme-choice="light" aria-label="Light" title="Light"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+          <button type="button" role="radio" aria-checked="false" tabindex="-1" data-theme-choice="dark" aria-label="Dark" title="Dark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+        </div>
+      </div>
     </div>
   </div>
 </footer>

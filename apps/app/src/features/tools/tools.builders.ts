@@ -19,7 +19,8 @@ import {
   ToolVersionPage as ToolVersionPageShape,
 } from "@/data/contracts/tools";
 import type { MandateList } from "@/data/contracts/mandates";
-import type { Read } from "@/data/read";
+import type { MemberList } from "@/data/contracts/org";
+import { readOk, type Read } from "@/data/read";
 import {
   credentialGrantListOutput,
   killSwitchListOutput,
@@ -59,6 +60,8 @@ type ToolsReads = {
   /** The Mandates tab's read (#2957); built by `@/test/mandate-views`, which
    * three features share because no feature may reach into another's folder. */
   mandates?: Read<MandateList>;
+  /** The switches tab's operator picker (#3147). */
+  members?: Read<MemberList>;
 };
 
 /** A DataSource answering the Tools reads it was handed; `calls` records each read's arguments. */
@@ -68,6 +71,7 @@ export function toolsSource(reads: ToolsReads) {
     grants: [],
     killSwitches: [],
     mandates: [],
+    members: [],
   };
   const refuse = () => Promise.reject(new Error("not a Tools read"));
   const answer =
@@ -80,7 +84,7 @@ export function toolsSource(reads: ToolsReads) {
     };
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -94,8 +98,9 @@ export function toolsSource(reads: ToolsReads) {
       frameBody: refuse,
       cost: refuse,
       transcript: refuse,
+      chain: refuse,
     },
-    approvals: { pending: refuse },
+    approvals: { pending: refuse, resolved: refuse },
     agents: {
       list: refuse,
       get: refuse,
@@ -110,9 +115,12 @@ export function toolsSource(reads: ToolsReads) {
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,
+      priceBook: refuse,
+      unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {
+      // Defaulted below the object literal, once `source` exists to reassign.
       members: refuse,
       roles: refuse,
       workspaces: refuse,
@@ -121,13 +129,28 @@ export function toolsSource(reads: ToolsReads) {
     },
     skills: { inventory: refuse },
     audit: { events: refuse, exportEvents: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    steering: {
+      records: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+    },
     tools: {
       versions: answer(reads.versions, "versions"),
       grants: answer(reads.grants, "grants"),
       killSwitches: answer(reads.killSwitches, "killSwitches"),
     },
-    mandates: { list: answer(reads.mandates, "mandates") },
+    mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
   };
+  // The switches tab reads the org roster on every load, for the operator
+  // level's picker (#3147): the same as the switch board itself, which every
+  // test in this file already supplies. Defaulting to an empty roster here,
+  // rather than making every switches-tab test supply one, matches how
+  // little most of them care what it answers; a test that does overrides
+  // `reads.members`.
+  source.org.members = answer(
+    reads.members ?? readOk({ members: [], invitations: [] }),
+    "members",
+  );
   return { source, calls };
 }

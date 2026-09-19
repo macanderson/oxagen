@@ -1,5 +1,6 @@
 // Typed Steering values for the Steering component tests (ARCHITECTURE.md §5):
 // a published record, a proposal, a Context PR in each state of its machine,
+// the freshness panel's read,
 // and a DataSource that answers the three Steering reads with what a test
 // hands it. Importable from tests only.
 import type { DataSource } from "@/data/ports";
@@ -9,6 +10,7 @@ import type {
   ProposalPage,
   ProposalStatus,
   RecordPage,
+  SteeringFreshness,
 } from "@/data/contracts/steering";
 import { type Read, readOk } from "@/data/read";
 
@@ -159,7 +161,23 @@ export type SteeringReads = {
   records: Read<RecordPage>;
   proposals: Read<ProposalPage>;
   contextPr: Read<ContextPr>;
+  freshness: Read<SteeringFreshness>;
 };
+
+/** The freshness panel's read: a bound repository, one publication, both gates off. */
+export function steeringFreshness(
+  overrides: Partial<SteeringFreshness> = {},
+): SteeringFreshness {
+  return {
+    version: 12,
+    headCommit: "9a41c0e7bd2311f4c0a1b2c3d4e5f60718293a4b",
+    publishedAt: "2026-09-01T10:00:00.000Z",
+    repository: "acme/platform",
+    defaultBranch: "main",
+    gates: { autoSync: false, blockStaleRuns: false },
+    ...overrides,
+  };
+}
 
 /** A DataSource answering the three Steering reads; `calls` records their arguments. */
 export function steeringSource(overrides: Partial<SteeringReads> = {}) {
@@ -167,25 +185,28 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     records: readOk({ records: [publishedRecord()], total: 1 }),
     proposals: readOk({ proposals: [proposal()], total: 1 }),
     contextPr: readOk(contextPr("checks_passed")),
+    freshness: readOk(steeringFreshness()),
     ...overrides,
   };
   const calls: Record<keyof SteeringReads, unknown[][]> = {
     records: [],
     proposals: [],
     contextPr: [],
+    freshness: [],
   };
   const refuse = () => Promise.reject(new Error("not a Steering read"));
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     runs: {
       list: refuse,
       get: refuse,
       frameBody: refuse,
       cost: refuse,
       transcript: refuse,
+      chain: refuse,
     },
-    approvals: { pending: refuse },
+    approvals: { pending: refuse, resolved: refuse },
     agents: {
       list: refuse,
       get: refuse,
@@ -207,6 +228,8 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,
+      priceBook: refuse,
+      unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {
@@ -216,7 +239,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       apiKeys: refuse,
       modelCredential: refuse,
     },
-    mandates: { list: refuse },
+    mandates: { list: refuse, get: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: {
@@ -231,6 +254,10 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       contextPr: (...args) => {
         calls.contextPr.push(args);
         return Promise.resolve(reads.contextPr);
+      },
+      freshness: (...args) => {
+        calls.freshness.push(args);
+        return Promise.resolve(reads.freshness);
       },
     },
     tools: { versions: refuse, grants: refuse, killSwitches: refuse },

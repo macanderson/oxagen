@@ -1,5 +1,5 @@
 {
-  "generatedCount": 322,
+  "generatedCount": 329,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1053,6 +1053,16 @@
       "consumes": []
     },
     {
+      "name": "get_export_status",
+      "domain": "privacy",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_finding_evidence",
       "domain": "spend",
       "surfaces": [
@@ -1409,6 +1419,17 @@
       "consumes": []
     },
     {
+      "name": "get_run_chain",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_run_cost",
       "domain": "run",
       "surfaces": [
@@ -1493,6 +1514,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_steering_freshness",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2236,6 +2269,18 @@
       "consumes": []
     },
     {
+      "name": "list_resolved_approvals",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_routing_stats",
       "domain": "router",
       "surfaces": [
@@ -2342,6 +2387,17 @@
     {
       "name": "list_tool_versions",
       "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_unpriced_models",
+      "domain": "cost",
       "surfaces": [
         "api",
         "mcp"
@@ -2742,6 +2798,18 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "remove_price_entry",
+      "domain": "cost",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -3205,6 +3273,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_price_entry",
+      "domain": "cost",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

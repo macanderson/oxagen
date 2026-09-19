@@ -9,12 +9,12 @@ Oxagen gives you self-service controls for the two GDPR rights with the most ope
 
 | Right | Article | Scope | Surface |
 |---|---|---|---|
-| Data portability | Art. 20 | User and org | Account → Privacy, Org Settings → Privacy, in-app agent |
-| Right to erasure | Art. 17 | User and org | Account → Privacy, Org Settings → Privacy, in-app agent |
+| Data portability | Art. 20 | User and org | Authenticated API |
+| Right to erasure | Art. 17 | User and org | Authenticated API |
 
-You can exercise both rights without contacting support.
+The current app has no Privacy settings page. The API behavior below is the implemented workflow. Contact privacy@oxagen.sh for requests that require completion beyond these handlers.
 
-Both requests belong to a person. The handlers reject any call that carries no signed-in person. The REST routes below work when you are signed in to the app, but not with an `ox_…` API key, because an API key carries org and workspace scope and no person. The MCP server authenticates with API keys only, so the `export_data` and `erase_data` MCP tools are registered but reject every call.
+Both handlers require a resolved person. A plain API key resolves without one and is rejected. A browser session or a CLI-session key can carry the resolved person. See [Authentication](/docs/api/authentication). Authorization and scope checks still apply.
 
 ## Data export (Article 20)
 
@@ -30,7 +30,9 @@ An export produces a ZIP archive with:
 
 Oxagen reads every file except `user-profile.json` on its own. If one of those reads fails, Oxagen logs it and skips it, and a partial export still ships.
 
-Oxagen assembles exports in the background. The request returns at once with `status: "queued"`. Poll `GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId` as the job moves through `processing` to `ready` (or `failed`). When the export is `ready`, the response includes a `downloadUrl`. Oxagen stores the archive as a private object and serves it only through an authenticated path, never a public URL. You can poll only your own exports.
+Oxagen assembles exports in the background. The request returns at once with `status: "queued"`. Poll `GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId` as the job moves through `processing` to `ready` (or `failed`). You can poll only your own exports, and only in the organization that governed them.
+
+The status read returns no URL. Oxagen stores the archive as a private object, so there is no address a browser or a client could fetch on its own. When the status says `ready`, fetch the archive from `GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId/download`, which checks who you are and streams the bytes. It answers 409 while the archive is still being written or after the job failed.
 
 ### API
 
@@ -45,7 +47,23 @@ Content-Type: application/json
 { "exportId": "…", "status": "queued" }
 ```
 
-An org-scope export sends `{ "scope": "org", "orgId": "<uuid>" }` and requires the Owner or Admin role on that org.
+An org-scope export sends `{ "scope": "org", "orgId": "<uuid>" }` and requires the Owner or Admin role on that org. The `orgId` must be the organization the request is made in.
+
+Poll, then fetch:
+
+```http
+GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId
+```
+
+```json
+{ "exportId": "…", "status": "ready", "ready": true, "storageKey": "…", "completedAt": "…" }
+```
+
+```http
+GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId/download
+```
+
+The download responds with the ZIP, `Content-Disposition: attachment`, and `Cache-Control: private, no-store`.
 
 ### Capability
 
@@ -103,7 +121,7 @@ Oxagen does not tell a data subject that erasure is complete while data remains.
 
 ### Grace period
 
-The default grace period is 30 days (`PRIVACY_ERASURE_GRACE_DAYS=30`). Set it to `0` for immediate erasure in test environments. A missing or unparseable value falls back to 30. The grace period lets you cancel an accidental request: contact `privacy@oxagen.ai` before it ends.
+The default grace period is 30 days (`PRIVACY_ERASURE_GRACE_DAYS=30`). Set it to `0` for immediate erasure in test environments. A missing or unparseable value falls back to 30. The grace period lets you cancel an accidental request: contact `privacy@oxagen.sh` before it ends.
 
 ### API
 

@@ -1,4 +1,4 @@
-# org.list
+# list_orgs
 
 **Domain:** organization
 **Mode:** sync

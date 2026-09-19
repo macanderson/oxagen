@@ -3,6 +3,22 @@ export * as schema from "./schema/index";
 // Plugin type discriminator — a named export (not just under the `schema`
 // namespace) so the agent runtime + handlers can import the union type directly.
 export { PLUGIN_TYPES, type PluginType } from "./schema/plugin";
+// cms value sets + types — named exports (not just under `schema`) so the API
+// lead-gate routes can import the enums without pulling the whole schema bag.
+export {
+  BOOK_SLUG,
+  EDITION_SLUGS,
+  DEFAULT_EDITION_SLUG,
+  COMPANY_SIZES,
+  REFERRAL_SOURCES,
+  CODE_ISSUE_REASONS,
+  CODE_STATUSES,
+  type EditionSlug,
+  type CompanySize,
+  type ReferralSource,
+  type CodeIssueReason,
+  type CodeStatus,
+} from "./schema/cms";
 export * as relations from "./relations";
 export * from "./types";
 export {
@@ -41,6 +57,7 @@ export {
   hidesWitnessRuns,
   notWitnessRun,
 } from "./proof";
+export { agentCreatorUserJoin, operatorUserJoin } from "./relations";
 export {
   deriveNamespace,
   normalizeNamespaceSeed,
@@ -62,5 +79,7 @@ export { CONTEXT_VERSION_CLASSIFICATION_COLUMN } from "./schema/agent";
 export {
   GATEWAY_CHAIN_COLUMN,
   HOST_GATEWAY_COLUMN,
+  SESSION_FILE_OBSERVED_STATUS_COLUMN,
   SESSION_GATEWAY_COLUMN,
+  SESSION_PUSHES_COLUMN,
 } from "./schema/tacho";

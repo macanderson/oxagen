@@ -15,8 +15,11 @@ import type { AppEnv } from "../../app";
  * rejects anything but an API key before the body is read.
  */
 /**
- * The host's own ceiling (`TACHO_MAX_REQUEST_BYTES`): a batch carries frame
- * bodies as base64, and the shipper cuts batches against this same number.
+ * The request ceiling the host's shipper packs batches against, imported
+ * rather than restated so the two cannot drift. Bodies ride base64-encoded, so
+ * when this route hardcoded 1 MiB it refused any batch holding more than about
+ * 750 KiB of bodies, including a single body at the 1 MiB cap, which wedged the
+ * host's write-ahead log behind a request it could not shrink.
  */
 const MAX_BODY_BYTES = TACHO_MAX_REQUEST_BYTES;
 

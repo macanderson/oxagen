@@ -3,6 +3,7 @@
 // active mandate on an invoice agent — a monthly amount in USD with a
 // reservation held against it, and the built-in calls measure beside it. Test
 // support only: src/test is never in a production bundle.
+import type { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
 import type { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -19,6 +20,9 @@ export function authorityOutput(
   return {
     measure: "amount",
     currencyOrUnit: "USD",
+    // ADR-108: the fact `assertToolsDeclareMeasures` stamped at write time,
+    // never guessed from `currencyOrUnit` here or in the mapper.
+    kind: "money",
     period: "monthly",
     periodKey: "2026-09",
     perCall: "250000000",
@@ -37,6 +41,7 @@ export function callsAuthorityOutput(
   return {
     measure: "calls",
     currencyOrUnit: "calls",
+    kind: "count",
     period: "daily",
     periodKey: "2026-09-16",
     perCall: null,
@@ -65,6 +70,7 @@ export function mandateOutput(
         perPeriod: "2000000000",
         period: "monthly",
         currencyOrUnit: "USD",
+        kind: "money",
       },
     },
     targets: {},
@@ -88,4 +94,43 @@ export function mandateListOutput(
   items: MandateOutput[] = [mandateOutput()],
 ): MandatesOutput {
   return { items };
+}
+
+type MandateGetOutput = ContractOutput<typeof mandateGet>;
+type LedgerOutput = MandateGetOutput["ledger"][number];
+
+/**
+ * One ledger row as `get_mandate` answers it. `id` and `toolCallId` are raw
+ * uuids in the contract, which is why the view model drops both
+ * (`MandateLedgerRow`); they are here because the mapper's input carries them and
+ * a fixture that left them out would not be the shape under test.
+ */
+export function ledgerOutput(
+  overrides: Partial<LedgerOutput> = {},
+): LedgerOutput {
+  return {
+    id: "0199a0d4-0000-7000-8000-000000000001",
+    toolCallId: "0199a0d4-0000-7000-8000-0000000000a1",
+    kind: "settle",
+    measure: "amount",
+    value: "884600000",
+    unitOrCurrency: "USD",
+    // Null by default so every existing fixture keeps reading its kind from
+    // `authority` (ADR-108's second-tier fallback), the same as a row
+    // written before this column existed. A test of the column itself
+    // overrides it explicitly.
+    measureKind: null,
+    externalEffectId: "pi_3QaL8f2Xk",
+    periodKey: "2026-09",
+    balanceAfter: "884600000",
+    at: "2026-09-04T08:40:19.000Z",
+    ...overrides,
+  };
+}
+
+export function mandateGetOutput(
+  ledger: LedgerOutput[] = [ledgerOutput()],
+  mandate: MandateOutput = mandateOutput(),
+): MandateGetOutput {
+  return { mandate, ledger };
 }

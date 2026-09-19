@@ -1,4 +1,4 @@
-# agent.suspend
+# suspend_agent
 
 **Capability:** `suspend_agent`
 **Domain:** agent

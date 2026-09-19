@@ -4,7 +4,7 @@
 // covers and what each side cost. Every figure is the findings job's. The one
 // thing computed here is a finding's share of the listed total, divided
 // through the micros seam and printed as a ratio (INV-09, INV-10).
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { ratioOfMicros } from "@/data/contracts/money";
 import type {
   SpendFinding,
@@ -18,6 +18,7 @@ import { SafeLink } from "@/ui/navigation";
 import {
   CostFigure,
   CountFigure,
+  Instant,
   MoneyFigure,
   NotRecordedValue,
   RatioFigure,
@@ -46,15 +47,6 @@ function sharesOf(
 ): (number | null)[] {
   return findings.map((finding) =>
     total === null ? null : ratioOfMicros(finding.saving, total),
-  );
-}
-
-function Instant({ iso }: { iso: string }) {
-  const format = useFormatter();
-  return (
-    <time dateTime={iso}>
-      {format.dateTime(new Date(iso), { dateStyle: "medium" })}
-    </time>
   );
 }
 

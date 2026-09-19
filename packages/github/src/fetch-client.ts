@@ -141,6 +141,7 @@ interface GHPullDetail {
   base: { ref: string };
   head: { ref: string; sha: string | null };
   merge_commit_sha?: string | null;
+  merged_at?: string | null;
   additions?: number;
   deletions?: number;
   changed_files?: number;
@@ -654,6 +655,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       headRef: data.head.ref,
       headSha: data.head.sha,
       mergeCommitSha: data.merge_commit_sha ?? null,
+      mergedAt: data.merged_at ?? null,
       additions: data.additions ?? 0,
       deletions: data.deletions ?? 0,
       changedFiles: data.changed_files ?? 0,

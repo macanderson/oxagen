@@ -1,4 +1,4 @@
-# iam.role.grants.set
+# set_role_grants
 
 `set_role_grants`: replace a custom IAM role's grants with a permission set from the catalogue (ADR-063). Every grant the role carried is removed and one `allow` grant per capability the permissions name is written, in one transaction, so a holder's next authorization sees the new set and nothing in between. Built-in roles are read-only: duplicating one through `create_role` is the path to a custom one.
 

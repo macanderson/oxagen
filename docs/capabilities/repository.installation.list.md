@@ -1,4 +1,4 @@
-# repository.installation.list
+# list_installation_repositories
 
 The repositories the workspace's GitHub App installation can see, so a person can pick which one becomes the main repo (MC spec §10.1; #2967).
 

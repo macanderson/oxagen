@@ -196,7 +196,7 @@
         "empty": {
           "title": "No host is enrolled under this agent",
           "body": "Enroll the host it runs on, from the repository it works in:",
-          "command": "oxagen tacho enroll"
+          "command": "oxagen agent enroll"
         }
       },
       "incidents": {
@@ -302,13 +302,16 @@
         "branchIsDefault": "That branch is the repository's default branch. Choose another branch.",
         "definitionSchema": "The file's schema line is missing or names another schema. Nothing was committed.",
         "definitionSlug": "The file's slug does not match this agent's slug. Nothing was committed.",
+        "timeZoneUnavailable": "Your time zone could not be read, and the days you picked mean different instants in each zone. No mandate was requested. Try again.",
+        "timeZoneUnsupported": "Your saved time zone is not one this server can read, so the days you picked cannot be placed in it. No mandate was requested. Pick a time zone again in your account settings.",
         "refused": "The change was refused: {code}. Nothing was changed.",
         "invalid": "The request was refused as invalid. Nothing was changed.",
         "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
         "unavailable": "The change could not be made: {code}. Nothing was changed.",
         "noToolMatches": "No declared tool with a consequence tag matches those patterns in this workspace, so the mandate would cover nothing.",
         "measureNotDeclared": "A tool version those patterns match declares no such measure, so the limit could not be read from a call. A financial tool whose schema does not expose an amount cannot be given a mandate.",
-        "measureUnitMismatch": "A covered tool declares that measure in a different unit. The gate reads a call in the unit the tool declares, so a limit denominated in anything else would be enforced as a figure nobody entered. Name the unit the tool declares."
+        "measureUnitMismatch": "A covered tool declares that measure in a different unit. The gate reads a call in the unit the tool declares, so a limit denominated in anything else would be enforced as a figure nobody entered. Name the unit the tool declares.",
+        "measureKindConflict": "Two tools your patterns cover declare that measure differently (one as an amount, one as a count), so there is no single figure to enforce. Narrow the patterns so they cover tools that agree on what the measure counts."
       }
     },
     "source": {
@@ -414,7 +417,7 @@
       "truncated": "The newest {shown} mandates recorded for this agent. There are at least that many, and older ones are not listed here.",
       "noneEffective": "No mandate recorded for this agent is in effect, so it cannot carry a consequence. The rows below are a request awaiting a decision, or history.",
       "noneListedTitle": "No mandate listed",
-      "partial": "You see the mandates of the agents you created. This list is not every mandate recorded for this agent.",
+      "partial": "You see the mandates of the agents you created and any mandate you requested yourself. This list is not every mandate recorded for this agent.",
       "noneListed": "No mandate listed here is in effect. The list above is not complete, so that is not a statement that the agent holds no authority.",
       "noneListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate recorded in the workspace. Ask one of them whether this agent holds authority, or read the Tools ledger with that role.",
       "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates recorded for it stay listed.",

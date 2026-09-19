@@ -1,0 +1,501 @@
+/**
+ * Core logic for the public ebook lead gate (POST /v1/cms/*).
+ *
+ * Enforcement lives here, not in the routes: leads are upserted, single-use
+ * access codes are minted/rotated, and codes are redeemed under a row lock so
+ * "the same link can't be used twice" holds even under concurrent opens.
+ *
+ * Every DB touch goes through withSystemDb — cms.* tables are non-tenant and
+ * carry bypass-only RLS, so this audited system bypass is the sole access path.
+ */
+
+import {
+  schema,
+  withSystemDb,
+  type Tx,
+  BOOK_SLUG,
+  EDITION_SLUGS,
+  type EditionSlug,
+  type CompanySize,
+  type ReferralSource,
+  type CodeIssueReason,
+} from "@oxagen/database";
+import { and, eq, ne, sql } from "drizzle-orm";
+import { isProductionRuntime } from "@oxagen/config/env";
+
+const { leads, bookEditions, bookAccessCodes } = schema;
+
+// Crockford base32 (no I/L/O/U — unambiguous), 26 chars ≈ 130 bits of entropy.
+// URL-safe and case-insensitive (the column is citext), so a link survives a
+// mail client lowercasing it.
+const CROCKFORD = "0123456789abcdefghjkmnpqrstvwxyz";
+export function generateAccessCode(length = 26): string {
+  const bytes = new Uint8Array(length);
+  globalThis.crypto.getRandomValues(bytes);
+  let out = "";
+  for (const b of bytes) out += CROCKFORD[b % 32];
+  return out;
+}
+
+/** True when `slug` is a known edition. Narrows to EditionSlug. */
+export function isEditionSlug(slug: string): slug is EditionSlug {
+  return (EDITION_SLUGS as readonly string[]).includes(slug);
+}
+
+/** Marketing website origin used to build the emailed reader link. */
+export function resolveMarketingUrl(): string {
+  const configured = process.env.MARKETING_URL?.replace(/\/$/, "");
+  if (configured) return configured;
+  return isProductionRuntime() ? "https://oxagen.sh" : "http://localhost:8080";
+}
+
+/** The single-use reader URL emailed to a lead. */
+export function readerUrl(edition: EditionSlug, code: string): string {
+  return `${resolveMarketingUrl()}/read?e=${encodeURIComponent(edition)}&c=${encodeURIComponent(code)}`;
+}
+
+export interface LeadInput {
+  email: string;
+  firstName: string;
+  lastName: string;
+  jobTitle?: string | null;
+  company?: string | null;
+  companySize?: CompanySize | null;
+  mobilePhone?: string | null;
+  country?: string | null;
+  state?: string | null;
+  city?: string | null;
+  address1?: string | null;
+  address2?: string | null;
+  referralSource?: ReferralSource | null;
+  trackingCode?: string | null;
+  source?: string | null;
+  pagePath?: string | null;
+  message?: string | null;
+  marketingConsent?: boolean;
+}
+
+export interface LeadRow {
+  id: string;
+  email: string;
+}
+
+/**
+ * Upsert a lead by email (the natural key). Re-submitting updates the profile
+ * with any newly-supplied non-null fields rather than creating a duplicate.
+ * Runs inside the caller's tx so lead upsert + code mint share one transaction.
+ */
+async function upsertLeadTx(tx: Tx, input: LeadInput): Promise<LeadRow> {
+  // Only overwrite columns the caller actually provided (COALESCE keeps prior
+  // values when a later submission omits a field).
+  const [row] = await tx
+    .insert(leads)
+    .values({
+      email: input.email,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      jobTitle: input.jobTitle ?? null,
+      company: input.company ?? null,
+      companySize: input.companySize ?? null,
+      mobilePhone: input.mobilePhone ?? null,
+      country: input.country ?? null,
+      state: input.state ?? null,
+      city: input.city ?? null,
+      address1: input.address1 ?? null,
+      address2: input.address2 ?? null,
+      referralSource: input.referralSource ?? null,
+      trackingCode: input.trackingCode ?? null,
+      source: input.source ?? null,
+      pagePath: input.pagePath ?? null,
+      message: input.message ?? null,
+      marketingConsent: input.marketingConsent ?? true,
+    })
+    .onConflictDoUpdate({
+      target: leads.email,
+      set: {
+        firstName: input.firstName,
+        lastName: input.lastName,
+        jobTitle: sql`COALESCE(${input.jobTitle ?? null}, ${leads.jobTitle})`,
+        company: sql`COALESCE(${input.company ?? null}, ${leads.company})`,
+        companySize: sql`COALESCE(${input.companySize ?? null}::cms.company_size, ${leads.companySize})`,
+        mobilePhone: sql`COALESCE(${input.mobilePhone ?? null}, ${leads.mobilePhone})`,
+        country: sql`COALESCE(${input.country ?? null}, ${leads.country})`,
+        state: sql`COALESCE(${input.state ?? null}, ${leads.state})`,
+        city: sql`COALESCE(${input.city ?? null}, ${leads.city})`,
+        address1: sql`COALESCE(${input.address1 ?? null}, ${leads.address1})`,
+        address2: sql`COALESCE(${input.address2 ?? null}, ${leads.address2})`,
+        referralSource: sql`COALESCE(${input.referralSource ?? null}::cms.referral_source, ${leads.referralSource})`,
+        trackingCode: sql`COALESCE(${input.trackingCode ?? null}, ${leads.trackingCode})`,
+        source: sql`COALESCE(${input.source ?? null}, ${leads.source})`,
+        pagePath: sql`COALESCE(${input.pagePath ?? null}, ${leads.pagePath})`,
+        message: sql`COALESCE(${input.message ?? null}, ${leads.message})`,
+        // Only overwrite consent when the caller sent an explicit boolean —
+        // omitting the field must not revive or clear a prior choice.
+        ...(typeof input.marketingConsent === "boolean"
+          ? { marketingConsent: input.marketingConsent }
+          : {}),
+        updatedAt: sql`now()`,
+      },
+    })
+    .returning({ id: leads.id, email: leads.email });
+  // An INSERT … ON CONFLICT DO UPDATE … RETURNING always yields exactly one
+  // row; the guard is only here to satisfy the type narrowing.
+  if (!row) throw new Error("lead upsert returned no row");
+  return row;
+}
+
+interface MintOpts {
+  reason: CodeIssueReason;
+  parentCodeId?: string | null;
+  editionSlug?: EditionSlug | null;
+  ip?: string | null;
+  userAgent?: string | null;
+}
+
+interface PendingMint {
+  code: string;
+  codeId: string;
+}
+
+/**
+ * Mint a fresh active code for a lead WITHOUT revoking its prior active code
+ * yet. Runs inside the caller's tx.
+ *
+ * The prior code stays live until `finalizeCodeDelivery` decides which of the
+ * two to revoke: this is what lets a caller that emails the new code keep the
+ * old one usable until delivery is confirmed, rather than committing the
+ * rotation up front and stranding the lead on a transient SMTP failure. A
+ * caller with no external delivery step (redemption, which returns the new
+ * code straight back over the same connection) finalizes with `delivered:
+ * true` immediately, in the same request, so it still ends with exactly one
+ * active code.
+ */
+async function mintCodeTx(
+  tx: Tx,
+  leadId: string,
+  opts: MintOpts,
+): Promise<PendingMint> {
+  // Lock the lead so concurrent mints serialize: both must not read the same
+  // "prior active" row and each mint their own successor, which would leave
+  // two active codes with neither aware of the other.
+  const [lead] = await tx
+    .select({ id: leads.id })
+    .from(leads)
+    .where(eq(leads.id, leadId))
+    .for("update")
+    .limit(1);
+  if (!lead) throw new Error("lead not found for code mint");
+
+  const [prior] = await tx
+    .select({ id: bookAccessCodes.id })
+    .from(bookAccessCodes)
+    .where(
+      and(
+        eq(bookAccessCodes.leadId, leadId),
+        eq(bookAccessCodes.status, "active"),
+      ),
+    )
+    .limit(1);
+
+  const code = generateAccessCode();
+  const [inserted] = await tx
+    .insert(bookAccessCodes)
+    .values({
+      code,
+      leadId,
+      bookSlug: BOOK_SLUG,
+      status: "active",
+      issueReason: opts.reason,
+      parentCodeId: opts.parentCodeId ?? prior?.id ?? null,
+      lastEditionSlug: opts.editionSlug ?? null,
+      ip: opts.ip ?? null,
+      userAgent: opts.userAgent ?? null,
+    })
+    .returning({ id: bookAccessCodes.id });
+  // An INSERT … RETURNING always yields exactly one row.
+  if (!inserted) throw new Error("code insert returned no row");
+
+  return { code, codeId: inserted.id };
+}
+
+/**
+ * Revoke every active code the lead holds except `keepCodeId`. The caller
+ * must hold the lead lock. Revoking all of them, rather than the one "prior"
+ * code a mint saw, is what keeps overlapping mints from ending with two live
+ * links: each mint releases the lead lock before its email goes out, so a
+ * second mint can see the same prior code and neither would know about the
+ * other's.
+ */
+async function revokeOtherActiveCodesTx(
+  tx: Tx,
+  leadId: string,
+  keepCodeId: string,
+): Promise<void> {
+  await tx
+    .update(bookAccessCodes)
+    .set({ status: "revoked", updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(bookAccessCodes.leadId, leadId),
+        eq(bookAccessCodes.status, "active"),
+        ne(bookAccessCodes.id, keepCodeId),
+      ),
+    );
+}
+
+/**
+ * Resolve a pending mint once its fate is known.
+ *
+ * Delivered: the new code becomes the lead's only live link, and every other
+ * active code is revoked. Not delivered: only the new code is revoked, so the
+ * reader's last working link (if any) stays active.
+ *
+ * Runs under the lead lock, and a delivered finalize whose code is no longer
+ * active does nothing. With two overlapping sends, the later finalize wins and
+ * exactly one code stays active; a finalize for a code that a competing
+ * finalize already revoked cannot revoke the winner.
+ *
+ * Its own transaction: this always runs strictly after the mint's tx has
+ * committed (only then is "delivered" known), so it cannot be folded into it.
+ */
+export async function finalizeCodeDelivery(
+  leadId: string,
+  newCodeId: string,
+  delivered: boolean,
+): Promise<void> {
+  await withSystemDb(async (tx) => {
+    await tx
+      .select({ id: leads.id })
+      .from(leads)
+      .where(eq(leads.id, leadId))
+      .for("update")
+      .limit(1);
+    if (!delivered) {
+      await tx
+        .update(bookAccessCodes)
+        .set({ status: "revoked", updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(bookAccessCodes.id, newCodeId),
+            eq(bookAccessCodes.status, "active"),
+          ),
+        );
+      return;
+    }
+    const [mine] = await tx
+      .select({ status: bookAccessCodes.status })
+      .from(bookAccessCodes)
+      .where(eq(bookAccessCodes.id, newCodeId))
+      .limit(1);
+    if (mine?.status !== "active") return;
+    await revokeOtherActiveCodesTx(tx, leadId, newCodeId);
+  });
+}
+
+/**
+ * Capture a lead and mint their first/refreshed access code, returning the
+ * single-use reader URL to email. Lead upsert + code mint are one transaction.
+ */
+export async function captureLeadAndIssueCode(
+  input: LeadInput,
+  edition: EditionSlug,
+  reason: "signup" | "resend",
+  ctx: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<{
+  readUrl: string;
+  leadId: string;
+  codeId: string;
+}> {
+  return withSystemDb(async (tx) => {
+    const lead = await upsertLeadTx(tx, input);
+    const minted = await mintCodeTx(tx, lead.id, {
+      reason,
+      editionSlug: edition,
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+    return {
+      readUrl: readerUrl(edition, minted.code),
+      leadId: lead.id,
+      codeId: minted.codeId,
+    };
+  });
+}
+
+/**
+ * Capture/refresh a lead WITHOUT minting a book code — used by submissions
+ * that aren't requesting the book (e.g. the homepage "Get a demo" form).
+ */
+export async function captureLead(input: LeadInput): Promise<LeadRow> {
+  return withSystemDb((tx) => upsertLeadTx(tx, input));
+}
+
+/** Look up an existing lead by email (for the resend flow). */
+export async function findLeadByEmail(email: string): Promise<LeadRow | null> {
+  return withSystemDb(async (tx) => {
+    const [row] = await tx
+      .select({ id: leads.id, email: leads.email })
+      .from(leads)
+      .where(eq(leads.email, email))
+      .limit(1);
+    return row ?? null;
+  });
+}
+
+/** Issue a fresh code for a known lead (resend). */
+export async function issueCodeForLead(
+  leadId: string,
+  edition: EditionSlug,
+  ctx: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<{
+  readUrl: string;
+  codeId: string;
+}> {
+  return withSystemDb(async (tx) => {
+    const minted = await mintCodeTx(tx, leadId, {
+      reason: "resend",
+      editionSlug: edition,
+      ip: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+    return {
+      readUrl: readerUrl(edition, minted.code),
+      codeId: minted.codeId,
+    };
+  });
+}
+
+export type RedeemResult =
+  | {
+      ok: true;
+      html: string;
+      newCode: string;
+      editions: { slug: string; title: string; format: string }[];
+    }
+  | {
+      ok: false;
+      reason: "invalid" | "consumed" | "expired" | "unknown_edition";
+    };
+
+/**
+ * Validate → consume → rotate a code, returning the book HTML for `edition`.
+ *
+ * The code row is locked FOR UPDATE so a concurrent second open of the same
+ * link sees it already consumed — that row lock is what enforces single-use.
+ */
+export async function redeemAndRotate(
+  editionSlug: string,
+  code: string,
+  ctx: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<RedeemResult> {
+  if (!isEditionSlug(editionSlug))
+    return { ok: false, reason: "unknown_edition" };
+
+  return withSystemDb(async (tx): Promise<RedeemResult> => {
+    const [edition] = await tx
+      .select({
+        html: bookEditions.html,
+        title: bookEditions.title,
+      })
+      .from(bookEditions)
+      .where(
+        and(
+          eq(bookEditions.slug, editionSlug),
+          eq(bookEditions.published, true),
+        ),
+      )
+      .limit(1);
+    if (!edition) return { ok: false, reason: "unknown_edition" };
+
+    // Lock order is lead, then code, everywhere. mintCodeTx locks the lead
+    // before it touches any code row, so locking the code first here would
+    // deadlock against a concurrent resend for the same lead. Resolve the
+    // lead without a lock, take the lead lock, then lock and re-read the code.
+    const [target] = await tx
+      .select({ leadId: bookAccessCodes.leadId })
+      .from(bookAccessCodes)
+      .where(eq(bookAccessCodes.code, code))
+      .limit(1);
+    if (!target) return { ok: false, reason: "invalid" };
+
+    await tx
+      .select({ id: leads.id })
+      .from(leads)
+      .where(eq(leads.id, target.leadId))
+      .for("update")
+      .limit(1);
+
+    // Lock the code row so concurrent redemptions of the same code serialize.
+    const [codeRow] = await tx
+      .select({
+        id: bookAccessCodes.id,
+        leadId: bookAccessCodes.leadId,
+        status: bookAccessCodes.status,
+        expiresAt: bookAccessCodes.expiresAt,
+      })
+      .from(bookAccessCodes)
+      .where(eq(bookAccessCodes.code, code))
+      .for("update")
+      .limit(1);
+
+    if (!codeRow) return { ok: false, reason: "invalid" };
+    if (codeRow.status !== "active") {
+      return {
+        ok: false,
+        reason: codeRow.status === "consumed" ? "consumed" : "invalid",
+      };
+    }
+    if (codeRow.expiresAt && codeRow.expiresAt.getTime() < Date.now()) {
+      return { ok: false, reason: "expired" };
+    }
+
+    // Consume the presented code, then mint the rotated successor.
+    await tx
+      .update(bookAccessCodes)
+      .set({
+        status: "consumed",
+        consumedAt: sql`now()`,
+        lastEditionSlug: editionSlug,
+        ip: ctx.ip ?? sql`${bookAccessCodes.ip}`,
+        userAgent: ctx.userAgent ?? sql`${bookAccessCodes.userAgent}`,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(bookAccessCodes.id, codeRow.id));
+
+    // No external delivery step here — the new code goes straight back over
+    // this same response — so the rotation is settled in this transaction
+    // rather than through finalizeCodeDelivery.
+    const { code: newCode, codeId: newCodeId } = await mintCodeTx(
+      tx,
+      codeRow.leadId,
+      {
+        reason: "rotation",
+        parentCodeId: codeRow.id,
+        editionSlug: editionSlug as EditionSlug,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+      },
+    );
+    // A resend or signup for this lead may still be awaiting its email, with
+    // its code active beside this one. This redemption is the reader acting
+    // now, so its successor is the one live link; the pending finalize will
+    // then find its own code revoked and leave this one alone.
+    await revokeOtherActiveCodesTx(tx, codeRow.leadId, newCodeId);
+
+    const editionList = await tx
+      .select({
+        slug: bookEditions.slug,
+        title: bookEditions.title,
+        format: bookEditions.format,
+      })
+      .from(bookEditions)
+      .where(eq(bookEditions.published, true));
+
+    return {
+      ok: true,
+      html: edition.html,
+      newCode,
+      editions: editionList,
+    };
+  });
+}

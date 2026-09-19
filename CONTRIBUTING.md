@@ -1,10 +1,10 @@
 # Contributing
 
-Oxagen is workforce management for autonomous agents, on a shared agent control plane (ADR-102): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
+Oxagen is workforce management for autonomous agents, on the shared agent control plane their operators work in (ADR-111): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
 
 ## Prerequisites
 
-- Node.js 24+ (`node -v`)
+- Node.js 24.21.0 or later (`node -v`; `.node-version` holds the pin, so `nvm use` or `fnm use` picks it up)
 - pnpm 11+ (`npm i -g pnpm`) — the repo pins `pnpm@11.7.0` via `packageManager`
 - Docker (for local Postgres :5433, Neo4j :7687, ClickHouse :8123)
 
@@ -25,7 +25,7 @@ pnpm dev                     # starts Docker + migrations + all apps
 2. **Cut a branch and push it immediately:** `git switch -c <type>/<slug> && git push -u origin <type>/<slug>`. Use a `git worktree` for any large body of work: `git worktree add ../oxagen-<slug> -b <branch>`.
 3. **Commit frequently, push regularly.** Small increments at every meaningful step. A pushed work-in-progress branch beats a perfect change sitting on your disk.
 4. **Open a PR against `main`** — a draft early on is fine. The PR is where CI runs the full gate and where the work gets reviewed and merged.
-5. **Before marking the PR ready:** run `pnpm gate` locally, push, and confirm CI green (`gh run watch`).
+5. **Before marking the PR ready:** push the final commit and inspect its CI results (`gh pr checks`).
 
 Other rules:
 
@@ -35,13 +35,19 @@ Other rules:
 
 ## Before Marking a PR Ready
 
-**The gate must pass:**
+CI runs the build, lint, typecheck, coverage, and test gates. Do not run those suites on the shared development machine. The local exception is one test file for code the task changed or created, run in isolation. Lightweight source, link, contract, and prose checks still apply.
 
-```bash
-pnpm gate     # lint + typecheck + tests + build + manifest + contracts + env + db
-```
+Push the final commit and inspect `gh pr checks`. Report pending checks as pending. See `CLAUDE.md` for verification artifacts and the local execution policy.
 
-If `gate` fails on any step, fix it before requesting review. The CI gate is identical, plus the Vision Gate.
+### Stale merge base (#3237)
+
+A squash merge applies your branch's diff against its MERGE BASE (where it split from `main`), not against `main`'s current tip. A branch cut before a later PR's fix landed can carry the old copy of any file that fix touched, and if the merge resolves without a textual conflict, GitHub merges the old copy over the newer one silently. This happened on 2026-09-17: a squash merge deleted another PR's fix and its regression test with every check green, and broke `oxagen login` in production for eight hours (issue #3237, ADR-110).
+
+`pipeline.yml`'s `checks` job runs `tools/scripts/check-stale-merge-base.mjs` as an advisory step: when your branch is behind `main`, it names every file changed on both sides since the merge base and flags any whose copy is missing content `main` added there since. It never blocks the merge, so treat a flag as a reason to `git rebase origin/main` (or merge `main` in) before merging, not as a failure to work around.
+
+Flipping GitHub's "require branches to be up to date before merging" setting (`strict_required_status_checks_policy` on the `main` ruleset) closes the gap completely, but it is a live repository setting with a real merge-speed cost across every session working this tree, so it is a maintainer decision, not something a PR changes. ADR-110 has the full reasoning and how to make that change if you are the maintainer deciding to.
+
+Separately, `pnpm check:contracts` asserts that `packages/iam/src/machine-key-scope.ts` (the file the 2026-09-17 incident actually broke) branches on every scope `purpose` value a live API key can carry, so that file cannot lose a purpose branch again regardless of how it happens.
 
 ## Adding a Feature
 
@@ -71,7 +77,7 @@ Vision-alignment requirements for every new capability:
 
 - **Metered** — it dispatches through `invoke()` so usage events land in ClickHouse. No unmetered side doors.
 - **Governed** — IAM + entitlement gates apply; no `"just this once"` untyped/ungated paths.
-- **Grounded** — if it surfaces agent output where graph grounding applies, the output cites nodes/edges (see the citation components in `apps/app/src/components/knowledge/graph/`).
+- **Grounded** — if it surfaces agent output where graph grounding applies, the output cites nodes/edges (resolve authorized human labels server-side and keep raw identifiers in inspectable details).
 - **Vendor-neutral** — model access through `@oxagen/ai` and `modelIdOf()`; never import `generateText`/`streamText`/`generateObject` directly from `ai` in a handler or route, and never hard-code a model slug.
 
 ### New Postgres Schema
@@ -103,7 +109,7 @@ Never create migration files manually — always use `atlas migrate diff`. Migra
 
 Both of the first two shipped and passed CI for months before Aurora rejected them (#1333). The `rds-compatibility` job now applies the whole directory from empty as a role with those limits, so it is caught on the pull request rather than on a real cluster — `tools/scripts/rds-sim-check.sh`. It does **not** check extension availability; that still needs a real cluster (#1341).
 
-**Target check before any mutation script:** echo the DB URL first; local = `localhost:5433`. `tsx --env-file=.env.local` does **not** override a shell-exported `DATABASE_URL` — `unset DATABASE_URL` to force local targeting. **Verify with a `SELECT` after migration** — don't trust logs alone.
+**Target check before any mutation script:** confirm the host and database name without printing credentials; local = `localhost:5433`. `tsx --env-file=.env.local` does **not** override a shell-exported `DATABASE_URL` — `unset DATABASE_URL` to force local targeting. **Verify with a `SELECT` after migration** — don't trust logs alone.
 
 ### New Inngest Function
 
@@ -123,10 +129,10 @@ Register in `packages/ingestion/src/connectors/types.ts`. Connectors dual-write:
 
 - **New code requires new tests.** Handlers, utilities, routes — all need unit tests.
 - **Coverage thresholds are ratchets** — only increase, capped at 90, never decrease.
-- **E2E tests** for any new user-facing flow in `apps/app/e2e/`. Use Playwright fixtures from `e2e/helpers/`.
-- **Screenshots required** for UI changes: e2e tests must capture key success states.
+- **E2E has exactly three specs:** `login`, `pay`, and `page-load` in `apps/app/e2e/`. Use component and action tests for other flows, following `apps/app/ARCHITECTURE.md` §6.3.
+- **UI changes need runtime evidence:** a relevant component test or a screenshot of the working page. E2E retains traces on failure.
 - Threshold headroom rule: bump only when `floor(new_coverage - 2.5) > current_threshold`.
-- Run the **narrowest** command that proves your change (`pnpm --filter <pkg> test:unit <file>`), not a whole-repo suite — the full gate runs in CI.
+- Run the **narrowest** command that proves your change (`pnpm --filter <pkg> test:unit <file>`), in isolation. Do not run a package-wide or repository-wide suite locally.
 
 ## Coding Standards
 
@@ -137,8 +143,8 @@ Register in `packages/ingestion/src/connectors/types.ts`. Connectors dual-write:
 - **All LLM calls through `@oxagen/ai`** — never import the `ai` SDK directly in handlers or routes; the re-exports emit metering, duration tracking, and prompt hashing to ClickHouse
 - **No cross-domain FKs inside schema builders** — use Drizzle relations in `src/relations.ts`
 - **Storage boundaries are hard law**: Postgres = transactional state, Neo4j = graph, ClickHouse = append-only events, blob storage = binaries. See `AGENTS.md` and `docs/adr/`.
-- **UI imports**: never import `@oxagen/ui/components/*` directly in app code — use the app's local re-export layer (`@/components/ui/<name>`). Enforced by ESLint.
-- **Never display raw node/edge UUIDs in the UI** — cite by human label with an inspectable popover (`NodeRef` and friends).
+- **UI imports**: use `@/ui/<name>` in `apps/app`. Its components are original implementations. Use `@/components/ui/<name>` in `apps/docs` and `apps/app_deprecated`, where ESLint enforces the re-export layer. Do not import `@oxagen/ui/components/*` directly in app code.
+- **Never display raw node/edge UUIDs in the UI** — cite by human label with an inspectable popover.
 
 ## Dependency Management
 
@@ -168,7 +174,7 @@ pnpm release:minor    # new features
 pnpm release:major    # breaking changes
 ```
 
-This bumps all package versions, deploys to Vercel, publishes the CLI to npm, and generates release notes.
+This bumps package versions, generates release notes, creates a git tag, optionally publishes to npm, and synchronizes the legacy Vercel version value unless `--no-vercel` is set. Production deploys through the AWS workflows. See `tools/scripts/release.ts` for flags and README.md Deployment for the deployment paths.
 
 ## Security
 

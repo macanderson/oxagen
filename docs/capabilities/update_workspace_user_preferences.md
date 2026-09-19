@@ -3,7 +3,7 @@
 **Domain:** user
 **Mode:** sync
 **Scope:** user + workspace
-**Surfaces:** api (app-only)
+**Surfaces:** api
 **Risk level:** low
 
 ## Intent

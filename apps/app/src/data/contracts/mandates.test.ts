@@ -10,6 +10,7 @@ import {
   blindSpotOf,
   CONSEQUENCE_OTHER_MAX,
   CONSEQUENCE_TAG,
+  isChangeable,
   isEffective,
   isUpcoming,
   MAX_CONSEQUENCE_TAGS,
@@ -63,6 +64,50 @@ describe("isEffective", () => {
     const at = Date.parse(from);
     expect(isEffective(row({ validFrom: from }), new Date(at))).toBe(true);
     expect(isEffective(row({ validFrom: from }), new Date(at - 1))).toBe(false);
+  });
+});
+
+describe("isChangeable", () => {
+  const at = new Date("2026-09-16T12:00:00.000Z");
+  const row = (over: Parameters<typeof mandateRow>[0]) => mandateRow(over);
+
+  it("is an active mandate whose validTo has not elapsed", () => {
+    expect(isChangeable(row({}), at)).toBe(true);
+  });
+
+  it.each([["draft"], ["revoked"], ["expired"]] as const)(
+    "%s cannot be changed, since the handler takes an active mandate alone (negative)",
+    (status) => {
+      expect(isChangeable(row({ status }), at)).toBe(false);
+    },
+  );
+
+  // The difference from `isEffective`, and the whole reason this exists. A
+  // granted mandate whose window has not opened is the one an operator most
+  // needs to correct, and `update_mandate_limits` accepts it: the handler tests
+  // active status and an unelapsed validTo, never validFrom. Gating the app's
+  // only limit-change control on `isEffective` hid it for exactly these rows.
+  it("is true before validFrom, where isEffective is false", () => {
+    const upcoming = row({
+      validFrom: "2026-09-17T00:00:00.000Z",
+      validTo: "2026-12-31T00:00:00.000Z",
+    });
+    expect(isChangeable(upcoming, at)).toBe(true);
+    expect(isEffective(upcoming, at)).toBe(false);
+  });
+
+  // The bound it does share with enforcement, at the instant itself: the
+  // handler refuses on `validTo <= now`, so the last changeable instant is the
+  // millisecond before. A pair a second either side would pass under an
+  // inclusive comparison too, which is how the same defect shipped in
+  // `isEffective`.
+  it("is false at validTo itself, and true the millisecond before", () => {
+    const to = "2026-09-16T23:59:59.999Z";
+    const instant = Date.parse(to);
+    expect(isChangeable(row({ validTo: to }), new Date(instant))).toBe(false);
+    expect(isChangeable(row({ validTo: to }), new Date(instant - 1))).toBe(
+      true,
+    );
   });
 });
 

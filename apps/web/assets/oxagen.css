@@ -1,9 +1,12 @@
+@import "./house-tokens.css";
+
 /* ==========================================================================
    oxagen.sh — shared shell
-   Palette: the Oxagen house brand system, byte-for-byte, so this site and the
-   app (@oxagen/ui) are one surface. The generated source of these values is
-   tokens/house-tokens.css in macanderson/oxagen-house-brand.
-   Two layers: --st-* primitives hold every hex, --<name> semantics alias them.
+   Palette: the Oxagen house brand system, so this site and the app
+   (@oxagen/ui) are one surface. house-tokens.css above is the kit's own
+   generated file, vendored here by tools/scripts/sync-brand-assets.mjs.
+   Three layers: the kit's --ox-* table holds every hex, --st-* primitives
+   name the ones this site uses, and --<name> semantics alias those.
    Repoint an alias to reskin; never re-hex, and never hardcode a palette value
    in a rule or a page.
    Gold is identity and action only — never a state. States are pass/fail.
@@ -17,34 +20,46 @@
 
 :root {
   /* ── LAYER 1 · PRIMITIVES ────────────────────────────────────────────────
-     The house table, byte-for-byte off tokens/house-tokens.css, so the site,
-     the app and the terminal all name the same colours the same way. This is
-     the ONLY place a hex appears.
-     The light-mode paper ramp (--st-paper*) is deliberately omitted: this site
-     is dark-only, and a paper ramp here would be tokens nothing can consume. */
-  --st-void: #000000; /* below the canvas */
-  --st-bg: #09090B; /* the canvas */
-  --st-panel: #18181B; /* panels, cards, code blocks */
-  --st-hl: #27272A; /* selected and hover rows */
-  --st-border: #27272A; /* hairlines, dividers */
-  --st-rule: #3F3F46; /* section rules, boundaries */
-  --st-gold: #D4AF37; /* the brand metal: actions, active, money, the mark */
-  --st-gold-bright: #F1CE65; /* tiny live indicators only */
-  --st-gold-ink: #977017; /* gold as TEXT where the metal itself is illegible */
-  --st-paper-text: #FFFFFF; /* primary text in dark */
-  --st-text: #e8e8ec; /* cooler alternate ink */
-  --st-silver-type: #bfc1cc; /* types, tertiary labels */
-  --st-silver: #A1A1AA; /* secondary emphasis */
-  --st-muted: #A1A1AA; /* secondary text */
-  --st-dim: #52525B; /* hints, captions, line numbers */
-  --st-green: #74c991; /* pass, additive */
-  --st-green-ink: #006933;
-  --st-red: #e0687a; /* fail, destructive */
-  --st-red-ink: #96213c;
-  --st-amber: #e78d54; /* warning — never the gold, which is not a state */
-  --st-amber-ink: #8a3f00;
-  --st-diff-add: #10201a;
-  --st-diff-del: #241019;
+     The stops this site uses, each a reference into the kit's own --ox-* table
+     in house-tokens.css. No hex is written here: a colour that moves in the
+     kit moves here on the next sync.
+     These are the values on ink. The block after this one repoints them to
+     the paper ramp when the page is light, so a browser without light-dark()
+     keeps the dark site. Two diff washes have no kit stop, and they are named
+     as such. */
+  --st-void: var(--ox-void); /* below the canvas */
+  --st-bg: var(--ox-ink); /* the canvas */
+  --st-panel: var(--ox-panel); /* panels, cards, code blocks */
+  --st-hl: var(--ox-hl); /* selected and hover rows */
+  --st-border: var(--ox-border); /* hairlines, dividers */
+  --st-rule: var(--ox-rule); /* section rules, boundaries */
+  --st-gold: var(--ox-gold); /* the brand metal: actions, active, money, the mark */
+  --st-gold-bright: var(--ox-gold-bright); /* tiny live indicators only */
+  --st-gold-ink: var(--ox-gold-deep); /* gold as TEXT where the metal itself is illegible */
+  --st-paper-text: var(--ox-text); /* primary text in dark */
+  --st-text: var(--ox-text-body); /* body ink */
+  --st-silver-type: var(--ox-muted); /* types, tertiary labels */
+  --st-silver: var(--ox-muted); /* secondary emphasis */
+  --st-muted: var(--ox-muted); /* secondary text */
+  --st-dim: var(--ox-dim); /* hints, captions, line numbers */
+  --st-green: var(--ox-st-allowed); /* pass, additive */
+  --st-green-ink: var(--ox-st-allowed-ink);
+  --st-red: var(--ox-st-failed); /* fail, destructive */
+  --st-red-ink: var(--ox-st-failed-ink);
+  /* The kit ships two stops per state and both are MARKS: the bare name is the
+     mark on ink, the -ink suffix the mark on paper. A mark needs 3:1, so
+     neither is promised as a text colour. #C0453C as words on the #18181B
+     panel is 3.77:1, under the 4.5:1 body floor, so on ink this is the failed
+     state lightened until it clears it, the same derived stop @oxagen/ui
+     carries for --error-ink. On paper the -ink stop, #992F28, is 7.9:1 on
+     white and serves as words unchanged (see THEMES below). */
+  --st-red-type: oklch(0.7 0.16 25); /* failed as TEXT on ink: 6.6:1 canvas, 6.3:1 panel */
+  --st-amber: var(--ox-st-denied); /* warning — never the gold, which is not a state */
+  --st-amber-ink: var(--ox-st-denied-ink);
+  /* The two diff washes the kit has no stop for: its allowed and failed states
+     laid over the canvas at low strength, so they move with the ramp. */
+  --st-diff-add: color-mix(in srgb, var(--ox-st-allowed) 12%, var(--ox-ink));
+  --st-diff-del: color-mix(in srgb, var(--ox-st-failed) 12%, var(--ox-ink));
 
   /* ── LAYER 2 · SEMANTIC ──────────────────────────────────────────────────
      The names the rest of this stylesheet and every page actually consume.
@@ -63,7 +78,8 @@
   --muted: var(--st-muted);
   --faint: var(--st-dim);
   --pass: var(--st-green);
-  --fail: var(--st-red);
+  --fail: var(--st-red); /* the MARK: dots, borders, washes */
+  --fail-ink: var(--st-red-type); /* failed as words, the way --gold-ink is gold as words */
   --warn: var(--st-amber);
   --add-bg: var(--st-diff-add);
   --del-bg: var(--st-diff-del);
@@ -83,9 +99,9 @@
      one gradient the house allows, laid the way @oxagen/ui lays it
      (--brand-gradient / .lp-grad-text on docs.oxagen.sh). Headline accents
      and the primary button take it; a mark is always one colour. ---- */
-  --ember-a: var(--st-gold-ink);
-  --ember-b: var(--st-gold);
-  --ember-c: var(--st-gold-bright);
+  --ember-a: var(--ox-gold-deep);
+  --ember-b: var(--ox-gold);
+  --ember-c: var(--ox-gold-bright);
   --grad-ember: linear-gradient(
     100deg,
     var(--ember-a) 0%,
@@ -120,6 +136,65 @@
     color-mix(in srgb, var(--ember-c) 14%, transparent) 40%,
     transparent 70%
   );
+}
+
+/* ── THEMES ────────────────────────────────────────────────────────────────
+   The page follows the OS until the footer's theme control pins it. The head
+   script writes the resolved theme to <html data-theme>, so a pinned choice
+   wins over the OS, and a page without script follows the OS on its own.
+   Each primitive above is repointed with light-dark(): the first value is
+   the kit's stop on paper, the second its stop on ink. The tokens stay
+   unregistered, so a subtree that sets its own color-scheme (the terminal)
+   resolves them again for itself. Gold as words on paper is the deep shade,
+   because the metal is 2.1:1 on white. The sheen keeps the metal: it is a
+   fill, and --ember-* read the kit directly. */
+:root {
+  color-scheme: light dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+@supports (color: light-dark(white, black)) {
+  :root {
+    --st-void: light-dark(var(--ox-paper-void), var(--ox-void));
+    --st-bg: light-dark(var(--ox-paper), var(--ox-ink));
+    --st-panel: light-dark(var(--ox-paper-panel), var(--ox-panel));
+    --st-hl: light-dark(var(--ox-paper-hl), var(--ox-hl));
+    --st-border: light-dark(var(--ox-paper-border), var(--ox-border));
+    --st-rule: light-dark(var(--ox-paper-rule), var(--ox-rule));
+    --st-gold: light-dark(var(--ox-gold-deep), var(--ox-gold));
+    --st-gold-bright: light-dark(var(--ox-gold), var(--ox-gold-bright));
+    --st-paper-text: light-dark(var(--ox-text-ink), var(--ox-text));
+    --st-text: light-dark(var(--ox-text-ink-body), var(--ox-text-body));
+    --st-silver-type: light-dark(var(--ox-muted-ink), var(--ox-muted));
+    --st-silver: light-dark(var(--ox-muted-ink), var(--ox-muted));
+    --st-muted: light-dark(var(--ox-muted-ink), var(--ox-muted));
+    --st-dim: light-dark(var(--ox-dim-ink), var(--ox-dim));
+    --st-green: light-dark(var(--ox-st-allowed-ink), var(--ox-st-allowed));
+    --st-red: light-dark(var(--ox-st-failed-ink), var(--ox-st-failed));
+    --st-red-type: light-dark(var(--ox-st-failed-ink), oklch(0.7 0.16 25));
+    --st-amber: light-dark(var(--ox-st-denied-ink), var(--ox-st-denied));
+    --st-diff-add: color-mix(in srgb, var(--st-green) 12%, var(--st-bg));
+    --st-diff-del: color-mix(in srgb, var(--st-red) 12%, var(--st-bg));
+  }
+}
+/* The hex field is an image, so light-dark() cannot reach inside it: on paper
+   the outlines are drawn in ink instead of paper. The paper field is held
+   once and taken by a pinned light theme, and by a page without script whose
+   OS is light (no data-theme is stamped then). */
+:root[data-theme="light"] {
+  --tex-hex: var(--tex-hex-paper);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --tex-hex: var(--tex-hex-paper);
+  }
+}
+:root {
+  --tex-hex-paper: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 600' preserveAspectRatio='xMidYMid slice'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%238B5E1A'/><stop offset='.5' stop-color='%23D6962C'/><stop offset='1' stop-color='%23F1C364'/></linearGradient></defs><g fill='none' stroke='%2309090B' stroke-opacity='.10' stroke-width='1'><polygon points='90.0 80.0 116.0 95.0 116.0 125.0 90.0 140.0 64.0 125.0 64.0 95.0'/><polygon points='150.0 180.0 176.0 195.0 176.0 225.0 150.0 240.0 124.0 225.0 124.0 195.0'/><polygon points='90.0 280.0 116.0 295.0 116.0 325.0 90.0 340.0 64.0 325.0 64.0 295.0'/><polygon points='210.0 80.0 236.0 95.0 236.0 125.0 210.0 140.0 184.0 125.0 184.0 95.0'/><polygon points='210.0 280.0 236.0 295.0 236.0 325.0 210.0 340.0 184.0 325.0 184.0 295.0'/><polygon points='270.0 180.0 296.0 195.0 296.0 225.0 270.0 240.0 244.0 225.0 244.0 195.0'/><polygon points='270.0 380.0 296.0 395.0 296.0 425.0 270.0 440.0 244.0 425.0 244.0 395.0'/><polygon points='330.0 80.0 356.0 95.0 356.0 125.0 330.0 140.0 304.0 125.0 304.0 95.0'/><polygon points='1110.0 98.0 1137.7 114.0 1137.7 146.0 1110.0 162.0 1082.3 146.0 1082.3 114.0'/><polygon points='1110.0 298.0 1137.7 314.0 1137.7 346.0 1110.0 362.0 1082.3 346.0 1082.3 314.0'/><polygon points='990.0 98.0 1017.7 114.0 1017.7 146.0 990.0 162.0 962.3 146.0 962.3 114.0'/><polygon points='930.0 198.0 957.7 214.0 957.7 246.0 930.0 262.0 902.3 246.0 902.3 214.0'/><polygon points='930.0 398.0 957.7 414.0 957.7 446.0 930.0 462.0 902.3 446.0 902.3 414.0'/><polygon points='1050.0 398.0 1077.7 414.0 1077.7 446.0 1050.0 462.0 1022.3 446.0 1022.3 414.0'/><polygon points='600.0 18.0 619.1 29.0 619.1 51.0 600.0 62.0 580.9 51.0 580.9 29.0'/><polygon points='540.0 518.0 559.1 529.0 559.1 551.0 540.0 562.0 520.9 551.0 520.9 529.0'/></g><g fill='url(%23g)' opacity='.45'><polygon points='1050.0 198.0 1077.7 214.0 1077.7 246.0 1050.0 262.0 1022.3 246.0 1022.3 214.0'/><polygon points='990.0 298.0 1017.7 314.0 1017.7 346.0 990.0 362.0 962.3 346.0 962.3 314.0'/><polygon points='660.0 518.0 679.1 529.0 679.1 551.0 660.0 562.0 640.9 551.0 640.9 529.0'/></g></svg>");
 }
 
 /* The house faces, self-hosted from /fonts/ (vendored by
@@ -421,7 +496,7 @@ h2 .gold,
 .btn-primary {
   background-color: var(--gold);
   background-image: var(--grad-ember);
-  color: var(--ground);
+  color: var(--ox-ink); /* ink on the metal in both themes */
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 .btn-primary:hover {
@@ -734,7 +809,11 @@ figcaption b {
 }
 
 /* ============ terminal (typed, no image) ============ */
+/* A terminal is dark in both themes, the way a real one is: it sets its own
+   color-scheme, so every token inside it resolves to its value on ink. */
 .term {
+  color-scheme: dark;
+  color: var(--ink);
   background: var(--ground);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--r-lg);
@@ -778,7 +857,7 @@ figcaption b {
   color: var(--pass);
 }
 .t-bad {
-  color: var(--fail);
+  color: var(--fail-ink);
 }
 
 /* ============ cards ============ */
@@ -990,7 +1069,7 @@ figcaption b {
   min-height: 1.5em;
 }
 .form-status.err {
-  color: var(--fail);
+  color: var(--fail-ink);
 }
 .form-status a {
   color: var(--gold);
@@ -1032,19 +1111,31 @@ footer {
   background: var(--panel);
   padding: 60px 0 36px;
 }
+/* The brand block, then one column per link group, side by side. Each group
+   gets its own column however many a page carries (three on the home page,
+   four on the blog), because the brand sets the first track and every group
+   after it lands in an implicit one. Below 860px the brand takes its own row
+   above the groups. */
 .foot-grid {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
+  grid-template-columns: minmax(0, 1.4fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 38px;
 }
 @media (max-width: 860px) {
   .foot-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-flow: row;
+    gap: 32px 24px;
+  }
+  .foot-brand {
+    grid-column: 1 / -1;
   }
 }
 @media (max-width: 560px) {
   .foot-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 .foot-brand p {
@@ -1127,6 +1218,69 @@ footer {
 }
 .foot-base a {
   color: var(--gold);
+}
+.foot-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ============ theme control ============
+   Three icon buttons in one pill, the way vercel.com's footer carries it:
+   System, Light, Dark. The chosen one sits on a raised chip; the others are
+   muted until hovered. It is a radio group, so one tab stop reaches it and
+   the arrow keys move the choice (oxagen.js). */
+.theme-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--ground);
+}
+.theme-switch button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.14s,
+    background-color 0.14s;
+}
+.theme-switch button:hover {
+  color: var(--ink);
+}
+.theme-switch button[aria-checked="true"] {
+  background: var(--raised);
+  color: var(--ink);
+}
+.theme-switch svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Without script the buttons could not do anything, and the page already
+   follows the OS, so the control is not drawn. */
+html:not(.js) .theme-switch {
+  display: none;
+}
+/* Nothing fades while the theme swaps (oxagen.js adds this for one frame). */
+.theme-swap,
+.theme-swap *,
+.theme-swap *::before,
+.theme-swap *::after {
+  transition: none !important;
 }
 
 /* ============ diagrams ============

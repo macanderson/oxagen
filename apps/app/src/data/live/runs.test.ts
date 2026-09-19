@@ -1,6 +1,7 @@
 // The runs port: one list_runs page through the kernel seam at the asked
 // cursor, mapped into the Fleet view, with a refusal passed through and an
 // unmappable record reported once.
+import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
@@ -34,20 +35,54 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
+// The contract names the vendor string `id`; the view names it `slug`, so the
+// two spellings are held apart here rather than shared.
+const wireModel = {
+  id: "claude-opus-5",
+  provider: "anthropic",
+  tier: "frontier",
+};
+const viewModel = {
+  slug: "claude-opus-5",
+  provider: "anthropic",
+  tier: "frontier",
+};
+
+const machine = {
+  hostname: "tycho",
+  platform: "darwin",
+  osVersion: "25.6.0",
+  arch: "arm64",
+  nodeVersion: "24.4.0",
+};
+
 const run = {
   id: "tse_4f0a",
   source: "tacho",
   agentKey: null,
   operatorId: null,
+  // Nullable but required, all four: `RunRow` names each of them, so a
+  // fixture omitting one maps to `undefined`, `RunPage.safeParse` rejects the
+  // whole page, and a happy-path read asserts a 502 (`record_unmappable`).
+  //
+  // All four are populated rather than null, because a real value also proves
+  // the mapping carries it through rather than merely tolerating the field.
+  operatorKind: "human",
+  operatorName: "Ada Lovelace",
   status: "live",
   turns: null,
   steps: 3,
   frames: 9,
   cost: null,
+  model: wireModel,
+  machine,
   taskRef: null,
   name: null,
   summary: null,
   replayGrade: null,
+  enforcementTier: "observe",
+  completenessGaps: ["digest_only"],
+  canSummarize: false,
   startedAt: "2026-09-15T08:55:00.000Z",
   sealedAt: null,
 };
@@ -69,15 +104,22 @@ describe("runs.list", () => {
             source: "tacho",
             agentKey: null,
             operatorId: null,
+            operatorKind: "human",
+            operatorName: "Ada Lovelace",
             status: "live",
             turns: null,
             steps: 3,
             frames: 9,
             cost: null,
+            model: viewModel,
+            machine,
             taskRef: null,
             name: null,
             summary: null,
             replayGrade: null,
+            enforcementTier: "observe",
+            completenessGaps: ["digest_only"],
+            canSummarize: false,
             startedAt: "2026-09-15T08:55:00.000Z",
             sealedAt: null,
           },
@@ -393,28 +435,253 @@ describe("runs.transcript", () => {
             seq: "1",
             endSeq: "4",
             at: "2026-09-15T08:56:00.000Z",
+            elapsedMs: 4000,
             kind: "turn",
             type: "llm_call",
             label: "claude-opus-5",
-            text: null,
-            truncated: false,
-            fidelity: "digest_only",
+            callId: null,
+            kinds: ["responses"],
+            request: null,
+            response: {
+              seq: "1",
+              type: "llm_call",
+              digest: `sha256:${"a".repeat(64)}`,
+              bytesRef: null,
+              redactions: [],
+              fidelity: "digest_only",
+              text: null,
+              truncated: false,
+            },
+            decision: null,
             frames: 4,
             turn: 2,
             cost: null,
+            cumulativeCost: null,
           },
         ],
+        kinds: [],
+        cursor: null,
         complete: false,
       }),
     );
     const read = await runs.transcript(ctx, "tse_4f0a", "turns");
     expect(read.ok && read.value.complete).toBe(false);
-    expect(read.ok && read.value.entries[0]?.fidelity).toBe("digest_only");
+    expect(read.ok && read.value.entries[0]?.response?.fidelity).toBe(
+      "digest_only",
+    );
     expect(read.ok && read.value.entries[0]?.turn).toBe(2);
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runTranscriptGet,
-      input: { runId: "tse_4f0a", zoom: "turns" },
+      input: { runId: "tse_4f0a", zoom: "turns", kinds: [], limit: 200 },
       page: "run",
     });
+  });
+
+  it("passes the chips pressed and the cursor, and omits a cursor it was not given", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        zoom: "steps",
+        kinds: ["tools"],
+        entries: [],
+        cursor: null,
+        complete: true,
+      }),
+    );
+    await runs.transcript(ctx, "tse_4f0a", "steps", {
+      kinds: ["tools"],
+      after: "cur_7",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runTranscriptGet,
+      input: {
+        runId: "tse_4f0a",
+        zoom: "steps",
+        kinds: ["tools"],
+        limit: 200,
+        after: "cur_7",
+      },
+      page: "run",
+    });
+
+    kernelRead.mockClear();
+    await runs.transcript(ctx, "tse_4f0a", "steps", { after: null });
+    // The contract refuses a cursor it did not write, so "read from the start"
+    // omits the key rather than sending a null it would reject.
+    expect(kernelRead.mock.calls[0]?.[1]).toMatchObject({
+      input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },
+    });
+    expect(kernelRead.mock.calls[0]?.[1]).not.toHaveProperty("input.after");
+  });
+});
+
+describe("runs.transcript", () => {
+  it("carries the chips and the resume point the caller asked for", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        zoom: "steps",
+        kinds: ["tools", "errors"],
+        entries: [],
+        cursor: "e:41",
+        complete: false,
+      }),
+    );
+    await runs.transcript(ctx, "tse_4f0a", "steps", {
+      kinds: ["tools", "errors"],
+      after: "e:20",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runTranscriptGet,
+      input: {
+        runId: "tse_4f0a",
+        zoom: "steps",
+        kinds: ["tools", "errors"],
+        limit: 200,
+        after: "e:20",
+      },
+      page: "run",
+    });
+  });
+
+  it("omits `after` entirely when the caller has no resume point (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        zoom: "steps",
+        kinds: [],
+        entries: [],
+        cursor: null,
+        complete: true,
+      }),
+    );
+    await runs.transcript(ctx, "tse_4f0a", "steps", { kinds: [], after: null });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runTranscriptGet,
+      input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },
+      page: "run",
+    });
+  });
+});
+
+describe("runs.chain", () => {
+  it("reads get_run_chain for the run and maps the ladder, the gaps and the seal", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        hashRule: "tacho.sha256_prev_hash_v1",
+        frameCount: 9,
+        firstSeq: "1",
+        lastSeq: "9",
+        merkleRoot: null,
+        checkpoints: [],
+        gaps: {
+          missingSequences: [{ from: "4", to: "5" }],
+          missingFrameCount: 2,
+          missingBodies: 9,
+          recorded: ["digest_only"],
+        },
+        seals: [],
+        enforcementTier: "observe",
+        recordedGrade: null,
+        ladder: [
+          { grade: "inspect", met: true, reason: "frames_recorded" },
+          { grade: "view", met: false, reason: "no_retained_bodies" },
+        ],
+        complete: true,
+      }),
+    );
+    const read = await runs.chain(ctx, "tse_4f0a");
+    expect(read.ok && read.value.gaps.missingSequences).toEqual([
+      { from: "4", to: "5" },
+    ]);
+    expect(read.ok && read.value.recordedGrade).toBeNull();
+    expect(read.ok && read.value.ladder).toHaveLength(2);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runChainGet,
+      input: { runId: "tse_4f0a" },
+      page: "run",
+    });
+  });
+
+  it("maps one seal per attempt, oldest first, not only the latest (finding 8, negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "arun_4f0a",
+        hashRule: "ledger.event_stream_digest_v1",
+        frameCount: 12,
+        firstSeq: "1",
+        lastSeq: "12",
+        merkleRoot: `sha256:${"2".repeat(64)}`,
+        checkpoints: [],
+        gaps: {
+          missingSequences: [],
+          missingFrameCount: 0,
+          missingBodies: 0,
+          recorded: [],
+        },
+        seals: [
+          {
+            sealedAt: "2026-09-11T10:01:00.000Z",
+            terminalStatus: "abandoned",
+            eventCount: 5,
+            finalRunSeq: "5",
+            finalEventDigest: `sha256:${"1".repeat(64)}`,
+            eventStreamDigest: `sha256:${"1".repeat(64)}`,
+            merkleRoot: `sha256:${"1".repeat(64)}`,
+            archiveSegmentRef: null,
+          },
+          {
+            sealedAt: "2026-09-11T10:05:00.000Z",
+            terminalStatus: "completed",
+            eventCount: 7,
+            finalRunSeq: "12",
+            finalEventDigest: `sha256:${"2".repeat(64)}`,
+            eventStreamDigest: `sha256:${"2".repeat(64)}`,
+            merkleRoot: `sha256:${"2".repeat(64)}`,
+            archiveSegmentRef: null,
+          },
+        ],
+        enforcementTier: "harness",
+        recordedGrade: "view",
+        ladder: [],
+        complete: true,
+      }),
+    );
+    const read = await runs.chain(ctx, "arun_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.seals).toHaveLength(2);
+    expect(read.value.seals[0]?.terminalStatus).toBe("abandoned");
+    expect(read.value.seals[1]?.terminalStatus).toBe("completed");
+  });
+
+  it("reports a record the view refuses rather than passing it on (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        hashRule: "tacho.sha256_prev_hash_v1",
+        frameCount: -1,
+        firstSeq: null,
+        lastSeq: null,
+        merkleRoot: null,
+        checkpoints: [],
+        gaps: {
+          missingSequences: [],
+          missingFrameCount: 0,
+          missingBodies: 0,
+          recorded: [],
+        },
+        seals: [],
+        enforcementTier: "observe",
+        recordedGrade: null,
+        ladder: [],
+        complete: true,
+      }),
+    );
+    const read = await runs.chain(ctx, "tse_4f0a");
+    expect(read).toEqual({
+      ok: false,
+      reason: "error",
+      code: "record_unmappable",
+      status: 502,
+    });
+    expect(captureError).toHaveBeenCalledTimes(1);
   });
 });

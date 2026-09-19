@@ -55,7 +55,7 @@
 // an operator requested a mandate, which is the moment the agent still has
 // none. The rows stay in the table, because the request and the history are
 // what the office reads; only the claim about authority is theirs to make.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { AgentStatus } from "@/data/contracts/agents";
 import type { OrgRole } from "@/data/contracts/common";
 import {
@@ -65,11 +65,14 @@ import {
   type MandateList,
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
-import { mono, panel } from "@/ui/control-styles";
+import { routes } from "@/shared/safe-path";
+import { linkText, mono, panel } from "@/ui/control-styles";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { MandateScope } from "@/ui/mandate-scope";
+import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { RequestMandate } from "./mandate-request";
+import { useFormatter } from "@/ui/formatter";
 
 type Place = { org: string; ws: string; agentId: string; agentSlug: string };
 
@@ -214,9 +217,22 @@ export function MandatesSection({
                             className="border-t border-border align-top"
                           >
                             <td className="px-3 py-2">
-                              <span className={`${mono} break-all`}>
+                              {/* The id is the link to the mandate's own page
+                                  (#2957): its ledger, its grant and its two
+                                  governed writes. It was plain text here while
+                                  that page did not exist, which left the
+                                  accountable office a table it could not open a
+                                  row of. */}
+                              <SafeLink
+                                to={routes.mandate(
+                                  place.org,
+                                  place.ws,
+                                  mandate.id,
+                                )}
+                                className={`${mono} ${linkText} break-all`}
+                              >
                                 {mandate.id}
-                              </span>
+                              </SafeLink>
                             </td>
                             <td className="px-3 py-2">
                               {mandate.consequenceTags.join(", ")}

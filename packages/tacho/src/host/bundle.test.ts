@@ -239,6 +239,56 @@ describe("PreToolUse evaluation", () => {
     });
   });
 
+  it("keeps a confirmed mandate fresh past its own expires_at", () => {
+    // The defect this covers, and it is a live one in enforce mode. The etag
+    // covers policy content only, so an unchanged mandate answers
+    // `not_modified` on every poll and the host keeps the bundle it has.
+    // `expires_at` is inside the signature and cannot be renewed locally. So
+    // judging freshness by `expires_at` declares a healthy host stale 24
+    // hours after the last policy edit, and it stays stale until someone
+    // edits the policy again: every mutating tool call denied, fleet wide.
+    const issued = Date.parse("2026-09-10T00:00:00.000Z");
+    const expires = Date.parse("2026-09-11T00:00:00.000Z");
+    const dayOld = {
+      ...base,
+      bundle: signer.sign(
+        unsignedBundle({
+          issued_at: new Date(issued).toISOString(),
+          expires_at: new Date(expires).toISOString(),
+        }),
+      ),
+      // Two days after it was issued, so `expires_at` is well past.
+      now: issued + 2 * 24 * 60 * 60_000,
+    };
+    // Allowed by rule, and not read-only, so the freshness gate is what
+    // decides it rather than a permission miss.
+    const write = { toolName: "Bash", toolInput: { command: "git status" } };
+
+    // Confirmed an hour ago: the mandate is current, whatever the clock says
+    // about a timestamp the host cannot renew.
+    expect(
+      evaluatePreToolUse({
+        ...dayOld,
+        ...write,
+        mandateConfirmedAt: dayOld.now - 60 * 60_000,
+      }).decision,
+    ).toBe("allow");
+
+    // Not confirmed for longer than the bundle's own signed window: stale,
+    // which is what the window is for.
+    expect(
+      evaluatePreToolUse({
+        ...dayOld,
+        ...write,
+        mandateConfirmedAt: dayOld.now - 25 * 60 * 60_000,
+      }),
+    ).toMatchObject({ decision: "defer", reason_code: "bundle_stale" });
+
+    // No confirmation recorded reads exactly as it did before, measuring
+    // from `issued_at`, so a caller that predates this changes nothing.
+    expect(evaluatePreToolUse({ ...dayOld, ...write }).decision).toBe("defer");
+  });
+
   it("treats a newer deny generation or an expired bundle as stale", () => {
     const stale = { ...base, latestDenyGeneration: { org: 2, workspace: 1 } };
     expect(evaluatePreToolUse({ ...stale, toolName: "Read" })).toMatchObject({
@@ -400,5 +450,70 @@ describe("PreToolUse evaluation", () => {
         hostStatus: "paused",
       }).decision,
     ).toBe("deny");
+  });
+});
+
+/**
+ * A mandate is written once and enforced on every harness. Cursor spells the
+ * shell tool `Shell` where Claude Code spells it `Bash` (verified 2026-09-18
+ * against https://cursor.com/docs/agent/hooks, fetched that day), and a rule
+ * that did not reach across the two spellings would not apply to Cursor at
+ * all while the record still said allow.
+ */
+describe("a rule written for Bash reaches Cursor's Shell", () => {
+  const signer = bundleSigner();
+  const bundle = signer.sign(unsignedBundle());
+  const base = {
+    bundle,
+    bundleVerified: true,
+    hostStatus: "active" as const,
+    latestDenyGeneration: { org: 1, workspace: 1 },
+    controlReachable: true,
+    now: NOW,
+    context: { cwd: "/repo" },
+  };
+
+  it("denies a Shell push under the bundle's Bash(git push*) rule", () => {
+    const denied = evaluatePreToolUse({
+      ...base,
+      toolName: "Shell",
+      toolInput: { command: "git push origin main" },
+    });
+    expect(denied.decision).toBe("deny");
+    expect(denied.rule).toBe("Bash(git push*)");
+    // And the same call under Claude Code's spelling, unchanged.
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Bash",
+        toolInput: { command: "git push origin main" },
+      }).decision,
+    ).toBe("deny");
+  });
+
+  it("asks for a Shell rm under the bundle's Bash(rm *) rule", () => {
+    // Cursor does not enforce an ask at preToolUse, so the adapter degrades
+    // it to a deny. The evaluation still has to reach the rule, or there
+    // would be nothing to degrade.
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Shell",
+        toolInput: { command: "rm -rf /repo" },
+      }).decision,
+    ).toBe("ask");
+  });
+
+  it("takes the declared tool facts from the Bash entry", () => {
+    // `bundle.tools` is keyed by Claude Code's names, so a Shell call would
+    // otherwise be graded from the classifier's default rather than from the
+    // grade the workspace set for its shell.
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Shell",
+        toolInput: { command: "git status" },
+      }),
+    ).toMatchObject({ risk_grade: "high", read_only: false });
   });
 });

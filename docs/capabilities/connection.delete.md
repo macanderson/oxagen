@@ -1,4 +1,4 @@
-# connection.delete
+# delete_connection
 
 **Domain:** connection
 **Mode:** async

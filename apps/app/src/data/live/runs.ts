@@ -4,20 +4,29 @@
 // page load is refused for lack of GAUs, and each is mapped into its view
 // model at the boundary.
 //
+// `get_run_chain` is its own read because it walks the recording: it belongs
+// to the Chain and seal tab and is made only when that tab is open, so the
+// long poll on `get_run` never pays for a gap walk nobody asked for.
+//
 // `get_run` is called with `waitMs: 0`: the page renders one frames page per
 // request, and the long poll the contract offers belongs to the stream, not to
 // a server render that would hold the response open for it (§3.5). It asks
 // for `FRAME_PAGE` frames by name, because the mapper needs the size it asked
 // for to tell a full page from the end of the recording.
 import "server-only";
+import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
-import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import {
+  runTranscriptGet,
+  TRANSCRIPT_ENTRY_DEFAULT,
+} from "@oxagen/oxagen/contracts/run.transcript.get";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
+  RunChain,
   RunCost,
   RunDetail,
   RunFrameBody,
@@ -28,6 +37,7 @@ import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
+  toRunChain,
   toRunCost,
   toRunDetail,
   toRunFrameBody,
@@ -111,10 +121,18 @@ export const runs: DataSource["runs"] = {
     if (!read.ok) return read;
     return view(ctx.orgId, RunCost, toRunCost(read.value), "runs.cost");
   },
-  async transcript(ctx, runId, zoom) {
+  async transcript(ctx, runId, zoom, q) {
     const read = await kernelRead(ctx, {
       contract: runTranscriptGet,
-      input: { runId, zoom },
+      input: {
+        runId,
+        zoom,
+        kinds: q?.kinds ?? [],
+        limit: TRANSCRIPT_ENTRY_DEFAULT,
+        // Omitted rather than null: the contract refuses a cursor it did not
+        // write, and `undefined` is what "read from the start" means there.
+        ...(q?.after ? { after: q.after } : {}),
+      },
       page: "run",
     });
     if (!read.ok) return read;
@@ -124,5 +142,14 @@ export const runs: DataSource["runs"] = {
       toRunTranscript(read.value),
       "runs.transcript",
     );
+  },
+  async chain(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runChainGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(ctx.orgId, RunChain, toRunChain(read.value), "runs.chain");
   },
 };

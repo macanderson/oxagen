@@ -1,4 +1,4 @@
-# billing.invoice.list
+# list_invoices
 
 **Capability:** `list_invoices`
 **Domain:** billing

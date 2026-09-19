@@ -1,4 +1,4 @@
-# conversation.delete
+# delete_conversation
 
 **Domain:** conversation
 **Mode:** sync
@@ -37,8 +37,8 @@ For a reversible alternative, use `conversation.archive`.
 ## Surfaces
 
 - **API:** `POST /v1/:org/:workspace/conversations/delete`
-- **MCP:** `conversation.delete` tool (destructive, non-idempotent)
-- **Agent:** invoked via `invoke("conversation.delete", ...)` — **approval required before dispatch**
+- **MCP:** `delete_conversation` tool (destructive, non-idempotent)
+- **Agent:** invoked via `invoke("delete_conversation", ...)` — **approval required before dispatch**
 
 ## Side effects
 

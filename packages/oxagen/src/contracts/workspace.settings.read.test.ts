@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { workspaceSettingsRead } from "./workspace.settings.read";
 import { getCapability } from "../registry";
 
+/**
+ * The two steering-freshness gates. Required on the output, not optional: a
+ * handler always knows what the workspace applies, and an absent object would
+ * be indistinguishable from "both off" at every reader.
+ */
+const STEERING = { autoSync: false, blockStaleRuns: false };
+
 describe("workspace.settings.read capability", () => {
   it("parses an empty input", () => {
     expect(workspaceSettingsRead.input.parse({})).toEqual({});
@@ -16,6 +23,7 @@ describe("workspace.settings.read capability", () => {
       description: null,
       avatarUrl: null,
       consequenceRoles: {},
+      steering: STEERING,
     });
     expect(out.description).toBeNull();
     expect(out.avatarUrl).toBeNull();
@@ -28,6 +36,7 @@ describe("workspace.settings.read capability", () => {
       description: null,
       avatarUrl: null,
       consequenceRoles: { moves_money: ["Owner", "Billing"] },
+      steering: STEERING,
     });
     expect(out.consequenceRoles.moves_money).toEqual(["Owner", "Billing"]);
     expect(
@@ -37,6 +46,7 @@ describe("workspace.settings.read capability", () => {
         description: null,
         avatarUrl: null,
         consequenceRoles: { moves_money: ["Viewer"] },
+        steering: STEERING,
       }).success,
     ).toBe(false);
     expect(
@@ -46,6 +56,7 @@ describe("workspace.settings.read capability", () => {
         description: null,
         avatarUrl: null,
         consequenceRoles: { moves_money: [] },
+        steering: STEERING,
       }).success,
     ).toBe(false);
   });
@@ -57,6 +68,7 @@ describe("workspace.settings.read capability", () => {
       description: null,
       avatarUrl: "https://cdn.example.com/w.png",
       consequenceRoles: {},
+      steering: STEERING,
     });
     expect(out.avatarUrl).toBe("https://cdn.example.com/w.png");
   });

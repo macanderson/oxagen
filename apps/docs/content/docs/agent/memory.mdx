@@ -51,16 +51,9 @@ Each written memory includes:
 
 ## Viewing and managing memories
 
-**Workspace → Knowledge → Memory** shows every workspace memory. You have the full lifecycle on that page:
+Use `oxagen memory list`, `show`, `edit`, `salience`, and `rm` to manage workspace memories. Use `candidates`, `promote`, `demote`, and `dismiss` for the promotion queue. [Memory from the CLI](/docs/cli/memory) documents the flags.
 
-- Browse and filter memories by class, kind, confidence, and text
-- Create, edit, and delete individual memories
-- Promote a memory up the ladder, demote it back down, or change its lifecycle status (`ACTIVE` / `SUPERSEDED` / `RETRACTED` / `ARCHIVED`)
-- Dismiss promotion suggestions you don't want to see again
-- See which agent or person created each memory, and when
-- Attach evidence and review agent-proposed memories before accepting them
-
-Memories are scoped to the workspace. They are not shared across workspaces, and other organizations cannot see them.
+Memories are scoped to the workspace. They are not shared across workspaces.
 
 ## The promotion lifecycle
 
@@ -77,22 +70,11 @@ stateDiagram-v2
 
 *Promotion moves a memory up the ladder, and FACT needs a person's confirmation. Demotion is the audited inverse. Dismissal removes a candidate from the queue without changing its class.*
 
-Observations that keep proving useful surface as **promotion candidates**, a queue on the Memory page ranked by citation pressure. For each candidate you can:
-
-- **Promote** it to RULE or FACT. A written rationale is *optional*. The human gate for FACT is the confirmation checkbox, which locks enforcement at 100 and records you as the confirmer. When you want a rationale on record, the promote dialog offers a short list of drafted reasons, built from the memory's lesson and its citation history by a low-cost model. Pick one, or choose "Write my own…".
-- **Dismiss** the suggestion. The memory stays active and recallable, but it leaves the candidate queue, and the next-highest-signal observation takes its slot. An Undo toast restores it immediately, and `restore: true` on the capability reverses it later.
-- **Demote** a RULE or FACT that no longer deserves its standing (from its detail sheet). Demotion is the audited inverse of promotion. It only moves down. Demoting to OBSERVATION clears enforcement, and leaving FACT clears the human confirmation. The same optional-rationale picker applies.
-
-Oxagen records every promotion and demotion as an auditable event node in the graph, so you can reconstruct a memory's class history.
+Use `oxagen memory candidates` to inspect promotion candidates. Promotion to FACT requires human confirmation. `oxagen memory promote`, `demote`, and `dismiss` record the lifecycle changes described in [Memory from the CLI](/docs/cli/memory).
 
 ## Citation analytics
 
-**Workspace → Knowledge → Citations** shows how memories and graph nodes get used. Every time an agent's answer is grounded by a recall or an `@`-mention, Oxagen records a citation with an *influence* level (`DECISIVE` / `CONTRIBUTING` / `CONSIDERED` / `IGNORED`). For rules, the citation also carries a *compliance* outcome (`COMPLIED` / `DISCRETION` / `VIOLATION`). The dashboard aggregates these over a 7, 30, or 90-day window:
-
-- **Most cited**: the memories carrying the most weight.
-- **Least useful**: recalled repeatedly but never influential. These are the first candidates to demote or retire.
-- **Most violated rules**: where agents break promoted rules. Tighten enforcement or demote the rule.
-- **Top cited nodes**: the graph entities agents lean on most.
+Run `oxagen memory citations --days 30` to inspect influence and compliance judgments attached to citations. These recorded judgments are evidence about context use, not a guarantee that an agent followed a rule. See [Citations](/docs/knowledge/citations).
 
 ## Memory in the knowledge graph
 

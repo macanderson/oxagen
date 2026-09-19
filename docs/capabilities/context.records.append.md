@@ -1,4 +1,4 @@
-# context.records.append
+# append_record
 
 **Name:** `append_record`
 **Domain:** context

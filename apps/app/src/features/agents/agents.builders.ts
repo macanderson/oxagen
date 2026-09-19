@@ -229,7 +229,7 @@ export function agentsSource(reads: AgentReads) {
     };
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -243,15 +243,16 @@ export function agentsSource(reads: AgentReads) {
       frameBody: refuse,
       cost: refuse,
       transcript: refuse,
+      chain: refuse,
     },
-    approvals: { pending: refuse },
+    approvals: { pending: refuse, resolved: refuse },
     agents: {
       list: answer(reads.list, "list"),
       get: answer(reads.get, "get"),
       toolbelt: answer(reads.toolbelt, "toolbelt"),
       incidents: answer(reads.incidents, "incidents"),
     },
-    mandates: { list: answer(reads.mandates, "mandates") },
+    mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
     spend: {
       byGroup: refuse,
       fleet: refuse,
@@ -260,6 +261,8 @@ export function agentsSource(reads: AgentReads) {
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,
+      priceBook: refuse,
+      unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {
@@ -271,7 +274,12 @@ export function agentsSource(reads: AgentReads) {
     },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    steering: {
+      records: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+    },
     tools: { versions: refuse, grants: refuse, killSwitches: refuse },
   };
   return { source, calls };

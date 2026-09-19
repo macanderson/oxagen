@@ -436,6 +436,7 @@ export const tachoSessions = tachoSchema.table(
     commandsRun: integer("commands_run").notNull().default(0),
     networkCalls: integer("network_calls").notNull().default(0),
     commits: integer("commits").notNull().default(0),
+    pushes: integer("pushes").notNull().default(0),
     pullRequests: integer("pull_requests").notNull().default(0),
     subagentStats: jsonb("subagent_stats"),
     permissionDenials: jsonb("permission_denials"),
@@ -614,6 +615,14 @@ export const tachoSessionFiles = tachoSchema.table(
       .default(0),
     linesAdded: integer("lines_added").notNull().default(0),
     linesRemoved: integer("lines_removed").notNull().default(0),
+    /**
+     * What git said about this path at the last reconciliation: added,
+     * modified, deleted or renamed. Null means no reconciliation covered it,
+     * which is not the same as git finding it unchanged. The counters above
+     * count tool calls; this states a condition, so it is assigned and never
+     * incremented.
+     */
+    observedStatus: text("observed_status"),
     firstSeq: bigint("first_seq", { mode: "number" }).notNull(),
     lastSeq: bigint("last_seq", { mode: "number" }).notNull(),
     digestBefore: text("digest_before"),
@@ -884,6 +893,29 @@ export const SESSION_GATEWAY_COLUMN = {
   schema: "tacho",
   table: "sessions",
   column: "gateway_observed_at",
+} as const;
+
+/**
+ * What the run pushed, counted on the session row.
+ *
+ * Probed for the same reason the gateway columns are: production applies
+ * migrations by hand from the app node while `deploy-node` ships on merge
+ * without waiting, so between the two this code is live and the column is
+ * not. Naming it in an UPDATE raises 42703 and takes the whole batch with
+ * it — and unlike the gateway tier, this one is on the path every batch
+ * walks, so the window would stop ingestion outright rather than degrade it.
+ */
+export const SESSION_PUSHES_COLUMN = {
+  schema: "tacho",
+  table: "sessions",
+  column: "pushes",
+} as const;
+
+/** What git observed about one path, on the file row. Same window, same rule. */
+export const SESSION_FILE_OBSERVED_STATUS_COLUMN = {
+  schema: "tacho",
+  table: "session_files",
+  column: "observed_status",
 } as const;
 
 /**

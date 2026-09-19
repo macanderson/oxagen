@@ -42,6 +42,12 @@ const SCAN = [
   },
   { dir: "apps/docs/content", ext: [".mdx", ".md"], skip: [] },
   { dir: "apps/docs/src/app/(home)", ext: [".tsx"], skip: [] },
+  // The published sales decks and the narration a presenter reads aloud. These
+  // were outside the scan while the retired-line entries were added to the avoid
+  // list, so the one surface that had carried a retired headline into a customer
+  // meeting was the one surface the new check could not see. `.js` is here for
+  // `script-data.js`, which holds the spoken script.
+  { dir: "apps/docs/public/decks", ext: [".html", ".js"], skip: [] },
 ];
 
 // Words that mean nothing, intensifiers, emotional and fear sells, category
@@ -114,16 +120,28 @@ export const AVOID = [
   "it's no secret",
   "we believe",
   "we're on a mission",
-  // Retired as Oxagen's product name on 2026-09-19 (ADR-102): GitHub now
-  // ships a control-plane product called Mission Control. Say Oxagen for the
-  // app and the operator console in prose. A citation of a document by its
-  // title ("Mission Control spec", "Mission Control mockup") names a file,
-  // not the product, and is allowed by CITED_AFTER below.
+  // Retired lines from the positioning registry
+  // (.claude/skills/oxagen-branding/references/positioning.md, "Retired").
+  // Each one came back once after it was retired, so the scanner holds it.
+  "never re-explain",
+  "fewer tokens, same answers",
+  "stop wasting money",
+  "explain your ai bill",
+  "mission control for your autonomous agents",
+  // Retired as the product name on 2026-09-19 (ADR-111): GitHub now ships a
+  // control-plane product called Mission Control. Say Oxagen for the app and
+  // the operator console in prose. A citation of a document by its title
+  // ("Mission Control spec", "Mission Control mockup") names a file, not the
+  // product, and is allowed by CITED_AFTER below.
   "mission control",
+  // Unqualified key-custody claims. positioning.md limits custody to mediated
+  // connections; the agent still holds its own identity. These phrases came
+  // back on the product page meta and Twitter description, so the scanner holds
+  // them rather than a reviewer.
+  "the agent never sees the key",
+  "the key never moves",
+  "nothing for the agent to leak",
 ];
-
-/** The words that turn a retired product name into a document citation. */
-const CITED_AFTER = /^\s+(spec|mockup)\b/i;
 
 const AVOID_RE = new RegExp(
   "(?<![\\w-])(" +
@@ -132,10 +150,22 @@ const AVOID_RE = new RegExp(
   "gi",
 );
 
+/** The words that turn a retired product name into a document citation. */
+const CITED_AFTER = /^\s+(spec|mockup)\b/i;
+
 /** Strip the parts of a file that are not prose, keeping line count intact. */
 export function proseOf(text, ext) {
   const blank = (m) => m.replace(/[^\n]/g, " ");
   let s = text;
+  if (ext === ".js") {
+    // A deck's narration file (`script-data.js`) holds the spoken script in
+    // exported data, so this cannot borrow the .tsx branch: that one blanks
+    // `export` lines as module plumbing, which is exactly where the words are.
+    // Comments go, because this script's contract is the words a reader sees
+    // (see the header), and the data stays.
+    s = s.replace(/\/\*[\s\S]*?\*\//g, blank).replace(/\/\/[^\n]*/g, blank);
+    return s;
+  }
   if (ext === ".html" || ext === ".tsx") {
     s = s.replace(/<(script|style|svg|pre|code)\b[\s\S]*?<\/\1>/gi, blank);
     s = s.replace(/<!--[\s\S]*?-->/g, blank);
@@ -206,7 +236,7 @@ function main() {
   const args = process.argv.slice(2);
   const list = args.includes("--list");
   const paths = args.filter((a) => !a.startsWith("--"));
-  const ALL_EXT = [".html", ".mdx", ".md", ".yaml", ".tsx"];
+  const ALL_EXT = [".html", ".mdx", ".md", ".yaml", ".tsx", ".js"];
   const files = paths.length
     ? paths.flatMap((p) => {
         const full = join(ROOT, p);

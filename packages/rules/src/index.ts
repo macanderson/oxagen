@@ -62,6 +62,11 @@ export {
 // use it; the decision-time check reaches the kernel through bootstrap.
 export {
   expireApproval,
+  hasDrawnInCurrentPeriod,
+  hasOpenReservation,
+  hasSettlementOverlappingPeriod,
+  hasUnstampedLedgerHistory,
+  lastLedgerKind,
   lockMandate,
   parseMandateRow,
   readAuthority,
@@ -69,7 +74,14 @@ export {
   releaseParked,
   type MandateRecord,
 } from "./mandates";
-export { toolMatches } from "./mandates/measures";
+export {
+  legacyMeasureKindGuess,
+  measureKindOf,
+  periodKey,
+  periodKeyRange,
+  periodKeysOverlap,
+  toolMatches,
+} from "./mandates/measures";
 export {
   bootstrapDecisionRulesRuntime,
   clearDecisionRulesCache,

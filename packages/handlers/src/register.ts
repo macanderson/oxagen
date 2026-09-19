@@ -416,6 +416,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .privacyDataExportHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_export_status",
+    async () =>
+      (await import("./privacy.data.export.status"))
+        .privacyDataExportStatusHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "erase_data",
     async () =>
       (await import("./privacy.data.erase"))
@@ -694,6 +700,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.records.append"))
         .appendRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_steering_freshness",
+    async () =>
+      (await import("./context.steering.freshness"))
+        .getSteeringFreshnessHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "propose_record",
@@ -1095,6 +1107,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .runTranscriptGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_run_chain",
+    async () =>
+      (await import("./run.chain.get"))
+        .runChainGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "bisect_runs",
     async () =>
       (await import("./run.bisect")).runBisectHandler as CapabilityHandlerFn,
@@ -1213,6 +1231,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./cost.price_entry.list"))
         .priceEntryListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_unpriced_models",
+    async () =>
+      (await import("./cost.unpriced_model.list"))
+        .unpricedModelListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_price_entry",
+    async () =>
+      (await import("./cost.price_entry.set"))
+        .priceEntrySetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "remove_price_entry",
+    async () =>
+      (await import("./cost.price_entry.remove"))
+        .priceEntryRemoveHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_tacho_hosts",

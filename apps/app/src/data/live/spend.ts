@@ -1,10 +1,13 @@
 // The spend port on the kernel (ARCHITECTURE.md §3.3): the cost rollup at one
 // level (get_spend), Fleet's spend tiles (get_spend at the model level), one key's drill (get_spend_drill), wasted spend by cause
-// (list_waste) and the configured ceilings (get_spend_budget), all
-// noBillingGate reads. A refusal passes through as the kernel classified it;
+// (list_waste), the configured ceilings (get_spend_budget), the price book
+// (list_price_entries) and the models it cannot price
+// (list_unpriced_models), all noBillingGate reads. A refusal passes through as the kernel classified it;
 // an answer the view model refuses is reported once as record_unmappable.
 import "server-only";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
+import { costUnpricedModelList } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
@@ -14,24 +17,28 @@ import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
   FleetSpend,
+  PriceBook,
   SpendBudgets,
   SpendDrill,
   SpendFindingEvidence,
   SpendFindings,
   SpendReport,
   SpendWaste,
+  UnpricedModels,
 } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
   toFleetSpend,
+  toPriceBook,
   toSpendBudgets,
   toSpendDrill,
   toSpendFindingEvidence,
   toSpendFindings,
   toSpendReport,
   toSpendWaste,
+  toUnpricedModels,
 } from "./mappers/spend";
 
 function toView<O, V extends z.ZodType>(
@@ -130,6 +137,32 @@ export const spend: DataSource["spend"] = {
     return toView(read, SpendFindingEvidence, toSpendFindingEvidence, {
       orgId: ctx.orgId,
       method: "findingEvidence",
+    });
+  },
+  async priceBook(ctx) {
+    // No `at`: the book as it stands now is the one a person is about to
+    // change, and the contract resolves the read instant itself.
+    const read = await kernelRead(ctx, {
+      contract: costPriceEntryList,
+      input: {},
+      page: "spend",
+    });
+    return toView(read, PriceBook, toPriceBook, {
+      orgId: ctx.orgId,
+      method: "priceBook",
+    });
+  },
+  async unpricedModels(ctx) {
+    // No `since`: the contract's own window (30 days) is the span the tab
+    // reports, and it answers the one it used.
+    const read = await kernelRead(ctx, {
+      contract: costUnpricedModelList,
+      input: {},
+      page: "spend",
+    });
+    return toView(read, UnpricedModels, toUnpricedModels, {
+      orgId: ctx.orgId,
+      method: "unpricedModels",
     });
   },
 };
