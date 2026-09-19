@@ -276,10 +276,21 @@ function nextSurface(publicDir, brand) {
   );
 }
 
+/**
+ * Next.js App Router file-convention favicon (`src/app/icon.svg`). When this
+ * file exists it is served at /icon and can override layout metadata icons, so
+ * it must be the same hive favicon the kit emits — never a retired mark.
+ */
+function nextAppIcon(appDir, brand) {
+  emit(
+    `${appDir}/src/app/icon.svg`,
+    readFileSync(svg(`${brand}-favicon.svg`)),
+  );
+}
+
 /** apps/web is a flat static site: assets sit beside index.html. */
 function staticSurface(root, brand) {
   const tileDark = svg(`${brand}-icon-tile-dark.svg`);
-  const tileLight = svg(`${brand}-icon-tile-light.svg`);
   emit(`${root}/favicon.svg`, readFileSync(svg(`${brand}-favicon.svg`)));
   const icoParts = [];
   for (const size of [16, 32, 48]) {
@@ -339,9 +350,6 @@ function staticSurface(root, brand) {
       2,
     )}\n`,
   );
-  // Silence unused-light warning: light tiles stay available for a future
-  // light-scheme webmanifest without a second kit checkout.
-  void tileLight;
   copy(`social/${brand}-og-1200x630-dark.png`, `${root}/og.png`);
   for (const b of [brand]) {
     emit(
@@ -588,6 +596,12 @@ tokens();
 marks();
 nextSurface("apps/app/public", "oxagen");
 nextSurface("apps/docs/public", "oxagen");
+// Deprecated app still boots locally and in archive deploys; keep its public
+// marks on the same kit tip as the live surfaces so a stray open does not
+// show the retired Ox lettermark or cream paper.
+nextSurface("apps/app_deprecated/public", "oxagen");
+nextAppIcon("apps/docs", "oxagen");
+nextAppIcon("apps/app_deprecated", "oxagen");
 staticSurface("apps/web", "oxagen");
 
 const version = JSON.parse(
