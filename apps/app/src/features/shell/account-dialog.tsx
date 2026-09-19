@@ -17,7 +17,14 @@
 // src/ui/phone.css).
 import { KeyRound, Lock } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useEffect, useId, useState } from "react";
+import {
+  type KeyboardEvent,
+  type SyntheticEvent,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { routes } from "@/shared/safe-path";
 import { Avatar } from "@/ui/avatar";
 import { buttonPrimary, inputBase, panel } from "@/ui/control-styles";
@@ -68,6 +75,39 @@ export function AccountDialog({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account");
   const { accountOpen, setAccountOpen, accountTab, setAccountTab } =
     useShellState();
+
+  // The ARIA tabs pattern, because `role="tab"` is a promise about the
+  // keyboard. A screen-reader user told a control is a tab expects Left and
+  // Right to move between them and Home and End to reach the ends, and expects
+  // one Tab press to leave the strip rather than four. Without this the role
+  // describes something the widget does not do, which is worse than no role.
+  //
+  // Selection follows focus (automatic activation), which APG prefers where a
+  // panel is cheap to render. These four are: each is a form over data the
+  // dialog already holds.
+  const tabRefs = useRef(new Map<AccountTab, HTMLButtonElement | null>());
+  const onTabKeyDown = (event: KeyboardEvent, index: number) => {
+    const last = ACCOUNT_TABS.length - 1;
+    const target =
+      event.key === "ArrowRight"
+        ? (index + 1) % ACCOUNT_TABS.length
+        : event.key === "ArrowLeft"
+          ? (index + last) % ACCOUNT_TABS.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? last
+              : null;
+    if (target === null) return;
+    const next = ACCOUNT_TABS[target];
+    if (!next) return;
+    // Left and Right are the tablist's, not the page's: without this the
+    // horizontally scrolling strip also scrolls under the arrow key.
+    event.preventDefault();
+    setAccountTab(next);
+    tabRefs.current.get(next)?.focus();
+  };
+
   return (
     <SheetDialog
       open={accountOpen}
@@ -81,18 +121,27 @@ export function AccountDialog({ data }: { data: ShellData }) {
           aria-label={t("title")}
           className="-mb-px flex gap-0.5 overflow-x-auto border-b border-border"
         >
-          {ACCOUNT_TABS.map((tab) => (
+          {ACCOUNT_TABS.map((tab, index) => (
             <button
               key={tab}
+              ref={(node) => {
+                tabRefs.current.set(tab, node);
+              }}
               type="button"
               role="tab"
               id={`account-tab-${tab}`}
               data-testid={`account-tab-${tab}`}
               aria-selected={accountTab === tab}
               aria-controls={`account-panel-${tab}`}
+              // Roving: the strip is one stop in the page's Tab order, and Tab
+              // from it goes to the panel rather than to the next tab.
+              tabIndex={accountTab === tab ? 0 : -1}
               className={tabClass}
               onClick={() => {
                 setAccountTab(tab);
+              }}
+              onKeyDown={(event) => {
+                onTabKeyDown(event, index);
               }}
             >
               {t(`tabs.${tab}`)}

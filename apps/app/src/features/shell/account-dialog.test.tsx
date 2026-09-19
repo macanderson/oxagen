@@ -242,6 +242,54 @@ describe("the tabs", () => {
     expect(within(dialog).getByTestId("account-export-user")).toBeTruthy();
     expect(within(dialog).queryByTestId("account-display-name")).toBeNull();
   });
+
+  // `role="tab"` is a promise about the keyboard, and one that has to be kept
+  // in code: the role is what tells a screen-reader user to press Left and
+  // Right, so a tablist that ignores them describes a widget that does not
+  // exist.
+  it("moves selection with Left, Right, Home and End", async () => {
+    const { user, dialog } = await openDialog();
+    const at = (name: string) =>
+      within(dialog).getByTestId(`account-tab-${name}`);
+    at("profile").focus();
+
+    await user.keyboard("{ArrowRight}");
+    expect(at("preferences")).toHaveAttribute("aria-selected", "true");
+    expect(at("preferences")).toHaveFocus();
+
+    await user.keyboard("{End}");
+    expect(at("privacy")).toHaveAttribute("aria-selected", "true");
+
+    await user.keyboard("{Home}");
+    expect(at("profile")).toHaveAttribute("aria-selected", "true");
+
+    // Left from the first wraps to the last, so the strip has no dead end.
+    await user.keyboard("{ArrowLeft}");
+    expect(at("privacy")).toHaveAttribute("aria-selected", "true");
+  });
+
+  // Roving tabIndex: four tabs are one stop in the page's Tab order, not four,
+  // so Tab reaches the panel rather than walking the strip.
+  it("keeps only the selected tab in the Tab order", async () => {
+    const { dialog } = await openDialog("security");
+    const tabs = within(dialog).getAllByRole("tab");
+    expect(tabs.map((t) => t.getAttribute("tabindex"))).toEqual([
+      "-1",
+      "-1",
+      "0",
+      "-1",
+    ]);
+  });
+
+  it("leaves other keys to the browser (negative)", async () => {
+    const { user, dialog } = await openDialog();
+    within(dialog).getByTestId("account-tab-profile").focus();
+    await user.keyboard("{ArrowDown}");
+    expect(within(dialog).getByTestId("account-tab-profile")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
 });
 
 describe("Profile", () => {
