@@ -62,6 +62,7 @@ export {
 // use it; the decision-time check reaches the kernel through bootstrap.
 export {
   expireApproval,
+  hasDrawnInCurrentPeriod,
   lockMandate,
   parseMandateRow,
   readAuthority,

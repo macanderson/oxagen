@@ -27,10 +27,11 @@ const doubles = vi.hoisted(() => ({
   written: [] as MandateLimits[],
   lockCalls: 0,
   /**
-   * Whether `hasDrawnInCurrentPeriod` answers drawn. False by default so the
-   * merge cases stay about the merge; a period-rename case stubs true here.
+   * What `readAuthority` answers under the lock. Empty (undrawn) by default
+   * so the merge cases stay about the merge; a period-rename case stubs
+   * reserved or settled here.
    */
-  drawn: false,
+  authority: [] as { measure: string; reserved: string; settled: string }[],
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -95,8 +96,8 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
     };
   },
   // Undrawn by default so the existing merge cases still write. A case that
-  // renames a drawn window stubs true here.
-  hasDrawnInCurrentPeriod: async () => doubles.drawn,
+  // renames a drawn window stubs a non-zero reserved or settled sum here.
+  readAuthority: async () => doubles.authority,
 }));
 
 vi.mock("./_mandate", async (importOriginal) => ({
@@ -166,7 +167,7 @@ beforeEach(() => {
   doubles.locked.status = "active";
   doubles.locked.limits = { amount: AMOUNT, calls: CALLS };
   doubles.stale = { amount: AMOUNT, calls: CALLS };
-  doubles.drawn = false;
+  doubles.authority = [];
 });
 
 describe("update_mandate_limits, limitChanges", () => {

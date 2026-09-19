@@ -35,6 +35,7 @@ import {
   type MandateApproval,
   type MandateAuthority,
   type MandateLimits,
+  type MandatePeriod,
   type MandateStatus,
   type MandateTargets,
 } from "@oxagen/oxagen/mandates/schemas";
@@ -156,6 +157,28 @@ async function periodSums(
   const reserved = BigInt(row?.reserved ?? "0");
   const settled = BigInt(row?.settled ?? "0");
   return { reserved, settled, drawn: reserved + settled };
+}
+
+/**
+ * Whether this measure has already drawn authority in the window its current
+ * period names. A period change that ran while drawn would leave those ledger
+ * rows under the old `periodKey`, so `readAuthority` and `reserve` would see an
+ * empty new window and grant the full cap again.
+ */
+export async function hasDrawnInCurrentPeriod(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+  period: MandatePeriod,
+  at: Date = new Date(),
+): Promise<boolean> {
+  const sums = await periodSums(
+    tx,
+    mandateId,
+    measure,
+    periodKey(period, at),
+  );
+  return sums.drawn > 0n;
 }
 
 /** Remaining authority by measure, as get_mandate and list_mandates report it. */
