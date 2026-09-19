@@ -531,10 +531,11 @@ describe("api.key.create handler — archived workspace", () => {
     vi.clearAllMocks();
   });
 
-  // An archived workspace is wound down. Its existing keys keep authenticating
-  // (`resolveApiKey` never consults archival) and the Organization › API keys
-  // page lists them so they can be revoked. Minting a new one there is fresh
-  // machine access introduced after the workspace was closed.
+  // An archived workspace is wound down. Its existing keys stop authenticating
+  // (ADR-104) without being revoked, and the Organization › API keys page
+  // lists them so an operator can revoke one for good. Minting a new one there
+  // is a credential that is dead on arrival and alive again the moment the
+  // workspace is restored.
   it("refuses to mint a key into an archived workspace, and inserts nothing (negative)", async () => {
     const archivedAt = new Date("2026-09-01T00:00:00.000Z");
     const insertTx = makeInsertTx([INSERTED_ROW], {

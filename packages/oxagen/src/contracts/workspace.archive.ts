@@ -13,12 +13,18 @@ import { registerCapability } from "../registry";
  * count) and one that is not in the org (`not_found`). The kernel does not
  * refuse runs in an archived workspace. Recorded as the `workspace.archived`
  * security event.
+ *
+ * Machine credentials stop at the door. Under ADR-104 an API key bound to an
+ * archived workspace no longer authenticates on any surface: `resolveApiKey`
+ * refuses it. No key row is changed, so nothing is destroyed and restoring the
+ * workspace restores the keys. `suspendedApiKeys` reports how many live keys
+ * the call just took out of service.
  */
 export const workspaceArchive = registerCapability({
   name: "archive_workspace",
   domain: "workspace",
   description:
-    "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Refused when already archived or while an agent is registered in it; deregister or move those agents first.",
+    "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Its API keys stop authenticating into it while it stays archived; no key is revoked, and restoring the workspace restores them. Refused when already archived or while an agent is registered in it; deregister or move those agents first.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -44,6 +50,13 @@ export const workspaceArchive = registerCapability({
     slug: z.string(),
     name: z.string(),
     archivedAt: z.string().describe("ISO-8601"),
+    suspendedApiKeys: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe(
+        "Live API keys in the workspace that stop authenticating while it is archived. None is revoked.",
+      ),
   }),
 });
 

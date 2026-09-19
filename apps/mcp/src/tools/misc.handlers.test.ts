@@ -393,10 +393,11 @@ describe("the role editor and archive_workspace tools", () => {
       slug: "data",
       name: "Data",
       archivedAt: "2026-09-15T00:00:00.000Z",
+      suspendedApiKeys: 0,
     });
     await expect(
       handler_workspaceArchive({ workspaceId: "wrk_1" }),
-    ).resolves.toMatchObject({ id: "wrk_1" });
+    ).resolves.toMatchObject({ id: "wrk_1", suspendedApiKeys: 0 });
     mocks.invoke.mockResolvedValueOnce({
       id: "wrk_1",
       slug: "data",

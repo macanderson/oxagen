@@ -17,6 +17,10 @@ const { tenant, db, emitted } = vi.hoisted(() => ({
     agentCount: 0,
     /** The agent count's WHERE, rendered with its params. */
     agentQueries: [] as Array<{ sql: string; params: unknown[] }>,
+    /** How many live API keys the count answers. */
+    liveApiKeyCount: 0,
+    /** The live-key count's WHERE, rendered with its params. */
+    apiKeyQueries: [] as Array<{ sql: string; params: unknown[] }>,
     /** The workspace id of the tenant scope each transaction opened in. */
     scopes: [] as Array<string | undefined>,
     /** The tenant scope the write ran in. */
@@ -34,9 +38,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const { getScope } = await import("@oxagen/tenancy");
   const dialect = new PgDialect();
-  const rowsFor = (table: unknown): unknown[] => {
-    if (table === real.schema.apiKeys)
+  // `auth.api_keys` is read twice with different projections: the role gate
+  // asks who created the calling key, and the archival asks how many live keys
+  // the workspace holds. The selected fields tell them apart.
+  const rowsFor = (table: unknown, fields?: Record<string, unknown>): unknown[] => {
+    if (table === real.schema.apiKeys) {
+      if (fields && "n" in fields) return [{ n: db.liveApiKeyCount }];
       return tenant.keyCreator ? [{ createdById: tenant.keyCreator }] : [];
+    }
     if (table === real.schema.principals)
       return tenant.principalId ? [{ id: tenant.principalId }] : [];
     if (table === real.schema.principalRoleAssignments)
@@ -47,16 +56,18 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     throw new Error("unexpected table");
   };
   const fakeDb = {
-    select: () => ({
+    select: (fields?: Record<string, unknown>) => ({
       from: (table: unknown) => {
         const chain = {
           innerJoin: () => chain,
           where: (cond: SQL) => {
             if (table === real.schema.agents)
               db.agentQueries.push(dialect.sqlToQuery(cond));
-            return Object.assign(Promise.resolve(rowsFor(table)), chain);
+            if (table === real.schema.apiKeys && fields && "n" in fields)
+              db.apiKeyQueries.push(dialect.sqlToQuery(cond));
+            return Object.assign(Promise.resolve(rowsFor(table, fields)), chain);
           },
-          limit: () => Promise.resolve(rowsFor(table)),
+          limit: () => Promise.resolve(rowsFor(table, fields)),
         };
         return chain;
       },
@@ -137,6 +148,8 @@ beforeEach(() => {
   db.workspace = { ...ACTIVE };
   db.agentCount = 0;
   db.agentQueries.length = 0;
+  db.liveApiKeyCount = 0;
+  db.apiKeyQueries.length = 0;
   db.scopes.length = 0;
   db.writeScope = undefined;
   db.updates.length = 0;
@@ -284,5 +297,54 @@ describe("archive_workspace", () => {
     expect(String(err.message)).toContain("2026-09-01");
     expect(db.updates).toHaveLength(0);
     expect(emitted).toHaveLength(0);
+  });
+
+  // ADR-104: archival suspends the workspace's API keys and reports how many.
+
+  it("reports no suspended keys for a workspace that holds none", async () => {
+    const out = await run();
+    expect(out.suspendedApiKeys).toBe(0);
+  });
+
+  it("reports the workspace's live keys, which stop authenticating, and revokes none of them", async () => {
+    db.liveApiKeyCount = 3;
+    const out = await run();
+    expect(out.suspendedApiKeys).toBe(3);
+    // One write, and it is the workspace row. No key row is touched.
+    expect(db.updates).toHaveLength(1);
+    expect(Object.keys(db.updates[0]!)).toEqual([
+      "archivedAt",
+      "archivedByUserId",
+      "updatedAt",
+      "updatedById",
+    ]);
+  });
+
+  it("counts only keys that could still authenticate, in the workspace's tenant scope", async () => {
+    // A revoked (soft-deleted) or already-expired key is dead already, so it
+    // is not something this call took out of service.
+    await run();
+    expect(db.apiKeyQueries).toHaveLength(1);
+    const { sql, params } = db.apiKeyQueries[0]!;
+    expect(sql).toMatch(/"api_keys"\."org_id" = \$1/);
+    expect(sql).toMatch(/"api_keys"\."workspace_id" = \$2/);
+    expect(sql).toMatch(/"api_keys"\."deleted_at" is null/);
+    expect(sql).toMatch(/"api_keys"\."expires_at" is null/);
+    expect(sql).toMatch(/"api_keys"\."expires_at" > \$3/);
+    expect(params.slice(0, 2)).toEqual([ctx.orgId, ACTIVE.id]);
+    // The same instant the row is stamped with, so the count is the set of
+    // keys live at the moment of archival.
+    expect(String(params[2])).toBe(
+      (db.updates[0]!.archivedAt as Date).toISOString(),
+    );
+  });
+
+  it("counts no keys when the archival is refused (negative)", async () => {
+    db.agentCount = 1;
+    db.liveApiKeyCount = 5;
+    await expect(refusal(run())).resolves.toMatchObject({
+      reason: "workspace_has_agents",
+    });
+    expect(db.apiKeyQueries).toHaveLength(0);
   });
 });
