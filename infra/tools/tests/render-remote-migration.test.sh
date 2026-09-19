@@ -101,6 +101,14 @@ DIRTY=$(render_remote_migration \
   "test-bucket" "clus.example.rds.amazonaws.com" "5432" "oxagen" "oxagen" "1" "1")
 contains "$DIRTY" "atlas migrate apply --env ci --allow-dirty" "apply: --allow-dirty is opt-in"
 
+lacks "$APPLY" "--exec-order" "apply: linear by default"
+NON_LINEAR=$(render_remote_migration \
+  "test-bucket" "clus.example.rds.amazonaws.com" "5432" "oxagen" "oxagen" "1" "0" "1")
+contains "$NON_LINEAR" "atlas migrate apply --env ci --exec-order non-linear" "apply: non-linear order is opt-in"
+DRY_NON_LINEAR=$(render_remote_migration \
+  "test-bucket" "clus.example.rds.amazonaws.com" "5432" "oxagen" "oxagen" "0" "0" "1")
+lacks "$DRY_NON_LINEAR" "atlas migrate apply" "dry run: non-linear still applies nothing"
+
 # An empty argument renders a script that fails on the wrong thing.
 if render_remote_migration "" "h" "5432" "d" "u" "0" "0" >/dev/null 2>&1; then
   fail "empty bucket should be refused"
