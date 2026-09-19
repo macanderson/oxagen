@@ -293,7 +293,7 @@ const bannerStyles = {
   } satisfies React.CSSProperties,
   inner: {
     background: "#262624",
-    color: "#F2EEE5",
+    color: "#FFFFFF",
     borderRadius: "16px 16px 12px 12px",
     boxShadow: "0 -2px 16px rgba(0,0,0,0.4)",
     padding: "14px 16px 14px 20px",
@@ -317,7 +317,7 @@ const bannerStyles = {
   } satisfies React.CSSProperties,
   installBtn: {
     background: "#D6962C",
-    color: "#10100F",
+    color: "#09090B",
     border: "none",
     borderRadius: 8,
     padding: "12px 16px",
@@ -331,7 +331,7 @@ const bannerStyles = {
   dismissBtn: {
     background: "transparent",
     border: "none",
-    color: "#F2EEE5",
+    color: "#FFFFFF",
     cursor: "pointer",
     fontSize: 20,
     lineHeight: 1,

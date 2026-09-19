@@ -1365,6 +1365,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "get_steering_freshness",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_subscription",
       "reads": [],
@@ -3457,7 +3468,7 @@
       "writes": []
     }
   ],
-  "contentHash": "4c5d01269bde0efc7c63dec25ffc8827f4596aff3953c0bbb1fb43bd5de18f6f",
+  "contentHash": "d2a1aaa7044d7c177c7142b0862780474786108f560f1976de44f35961a656ea",
   "domains": [
     {
       "name": "agent",

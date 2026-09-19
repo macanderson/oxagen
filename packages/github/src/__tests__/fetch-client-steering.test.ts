@@ -163,6 +163,7 @@ describe("getPullRequest", () => {
           state: "closed",
           merged: true,
           merge_commit_sha: "7d2e91a",
+          merged_at: "2026-09-15T09:16:40Z",
           user: null,
           created_at: "a",
           updated_at: "b",
@@ -181,6 +182,7 @@ describe("getPullRequest", () => {
     expect(pr).toMatchObject({
       merged: true,
       mergeCommitSha: "7d2e91a",
+      mergedAt: "2026-09-15T09:16:40Z",
       headSha: "abc123",
     });
   });

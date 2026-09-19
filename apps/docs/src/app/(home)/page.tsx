@@ -10,7 +10,7 @@ import { HexField } from "@/components/ui/hex-field";
 export const metadata: Metadata = {
   title: "Oxagen docs: the agent control plane",
   description:
-    "Oxagen governs and operates the autonomous agents an enterprise runs: one mandate per agent, enforced on every call, and one fleet on one page. Docs for the CLI, the REST API, the MCP server, and Mission Control.",
+    "Mission Control for your autonomous agents: one mandate per agent, checked on the actions routed through Oxagen, and one fleet on one page. Docs for the CLI, the REST API, the MCP server, and Mission Control.",
 };
 
 /* What the control plane holds, mirrored from docs.oxagen.sh/docs. */
@@ -114,11 +114,12 @@ export default function HomePage(): ReactNode {
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Oxagen governs and operates the autonomous agents you run. Each
+              Oxagen is Mission Control for the autonomous agents you run. Each
               agent works under one mandate, set by security, FinOps, and
-              engineering, and enforced on every call. Every run is on the
-              record with its cost. These docs cover the CLI, the REST API, the
-              MCP server, and Mission Control, all behind one audited{" "}
+              engineering, and checked on every call routed through Oxagen.
+              Every run is on the record with its cost. These docs cover the
+              CLI, the REST API, the MCP server, and Mission Control, all
+              behind one audited{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
@@ -287,8 +288,8 @@ export default function HomePage(): ReactNode {
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center px-6 py-24 text-center">
           <OxagenIcon className="size-12" />
           <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Can you explain your AI bill?{" "}
-            <span className="lp-grad-text">Neither can your provider</span>.
+            See which agent{" "}
+            <span className="lp-grad-text">spent what, and on whose behalf</span>.
           </h2>
           <p className="mt-4 max-w-xl text-base text-muted-foreground">
             Install the CLI and wrap one machine, or read the getting-started

@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Oxagen",
-    "description": "Mission Control for the agents your team runs: govern, ground, explain, meter and rate every run."
+    "description": "Mission Control for your autonomous agents."
   },
   "pages": {
     "login": "Log in",

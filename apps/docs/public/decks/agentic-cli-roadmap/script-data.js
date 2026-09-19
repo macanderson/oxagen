@@ -38,10 +38,10 @@ window.OX_SCRIPT = [
   },
   {
     title: "09 · Why it matters",
-    say: "So why does this matter beyond the CLI? Because it completes the accountability chain: identity, scope, permitted action, verified outcome, audit record. Once every fix is checked by executed tests and mutation witnesses, the metering loop can bill on verified outcomes instead of tokens burned. The slide asks the question every buyer has: can you explain your AI bill? Neither can your provider. Oxagen can, because it owns the loop from observed work to Stripe.",
+    say: "So why does this matter beyond the CLI? Because it completes the accountability chain: identity, scope, permitted action, verified outcome, audit record. Once every fix is checked by executed tests and mutation witnesses, the metering loop can bill on verified outcomes instead of tokens burned. The slide makes the promise every buyer needs: see which agent spent what, and on whose behalf. Oxagen can, because it owns the loop from observed work to Stripe.",
   },
   {
     title: "10 · Close",
-    say: "The close. Verified, instant, compounding, priced. Four phases, one direction: a coding agent whose claims are checked by running them, whose speed comes from prediction, whose memory outlives the run, and whose accuracy carries a guarantee. Stop wasting money on AI. That is the roadmap, and it is the moat.",
+    say: "The close. Verified, instant, compounding, priced. Four phases, one direction: a coding agent whose claims are checked by running them, whose speed comes from prediction, whose memory outlives the run, and whose accuracy carries a guarantee. See which agent spent what, and on whose behalf. That is the roadmap, and it is the moat.",
   },
 ];

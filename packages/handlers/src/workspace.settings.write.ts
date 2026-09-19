@@ -4,7 +4,7 @@ import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.setti
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { getPrincipalAttribution, runInTenantScope } from "@oxagen/tenancy";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { mapWorkspaceSettingsRow } from "./workspace.settings.read";
 import { logger } from "./logger";
 
@@ -99,6 +99,8 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
         avatarUrl: true,
         description: true,
         consequenceRoles: true,
+        // Carried so the no-op path can still report the steering gates.
+        settings: true,
         archivedAt: true,
       },
     }),
@@ -141,6 +143,22 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
         // The consequence-role overrides replace as a whole (ADR-059 decision 1).
         if (input.consequenceRoles !== undefined)
           updates.consequenceRoles = input.consequenceRoles;
+        // The two steering-freshness gates live in the shared `settings`
+        // JSONB bag, so they MERGE rather than replace, twice over:
+        // `jsonb ||` at the top level keeps whatever else the bag holds, and
+        // the nested `||` keeps the gate this call did not name. A plain set
+        // here would silently clear every other key in the bag, which is
+        // exactly the clobber that moved `description` and `promptConfig`
+        // out into columns of their own (audit §1.7).
+        if (input.steering !== undefined) {
+          updates.settings = sql`
+            COALESCE(${schema.workspaces.settings}, '{}'::jsonb)
+            || jsonb_build_object(
+                 'steering',
+                 COALESCE(${schema.workspaces.settings} -> 'steering', '{}'::jsonb)
+                   || ${JSON.stringify(input.steering)}::jsonb
+               )`;
+        }
 
         if (Object.keys(updates).length === 0) {
           return existing;
@@ -185,6 +203,7 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
             avatarUrl: true,
             description: true,
             consequenceRoles: true,
+            settings: true,
           },
         });
       }),

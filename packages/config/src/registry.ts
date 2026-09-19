@@ -1634,6 +1634,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_STEERING_FRESHNESS: {
+    group: "CLI",
+    description:
+      "Set to 0, off, false or no to suspend the steering-freshness gates " +
+      "(`oxagen steering gate`) for this shell only: no auto-sync and no " +
+      "refusal on stale steering. The escape hatch exists so a gate cannot " +
+      "wedge someone when a remote is unreachable, and it is deliberately " +
+      "environment-only so it cannot be committed and cannot outlive the " +
+      "shell that set it. Never set on a deployed service.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_API_TOKEN: {
     group: "CLI",
     description:

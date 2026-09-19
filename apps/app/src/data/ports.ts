@@ -69,6 +69,7 @@ import type {
   ProposalPage,
   RecordKind,
   RecordPage,
+  SteeringFreshness,
 } from "./contracts/steering";
 import type {
   CredentialGrantPage,
@@ -310,6 +311,8 @@ export interface DataSource {
     proposals(ctx: WsCtx, q: { offset: number }): Promise<Read<ProposalPage>>;
     /** get_context_pr: one proposal's state machine, checks and what merge will do */
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
+    /** get_steering_freshness: what is published, where, and the two gates */
+    freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
   };
   /**
    * The Tools page's three noBillingGate reads on the workspace (#2958), each
