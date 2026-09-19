@@ -34,12 +34,16 @@
 import type { z } from "zod";
 import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
+import {
+  DEFAULT_TIME_ZONE,
+  userPreferencesRead,
+} from "@oxagen/oxagen/contracts/user.preferences.read";
 import { MEASURE_VALUE } from "@/data/contracts/mandates";
 import { isCurrencyCode } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
-import { endOfLocalDay, isUsableOffset } from "./validity";
+import { endOfZonedDay, supportsTimeZone } from "@/shared/calendar-day";
 
 /**
  * What the dialog had in the editable fields when it opened, as it rendered
@@ -78,15 +82,6 @@ export type LimitsDraft = {
   callsPerDay: string;
   /** The last day the mandate may be drawn on (`YYYY-MM-DD`); blank keeps the window. */
   validTo: string;
-  /**
-   * `getTimezoneOffset()` for the *start of the day after* `validTo`, taken in
-   * the operator's browser. It arrives as its own field rather than being
-   * inferred here because a server action has no access to the caller's zone,
-   * and because the offset that matters is the one in force on that date, not
-   * today's: a window ending after a DST change is an hour out otherwise.
-   * Ignored when `validTo` is blank.
-   */
-  validToOffsetMinutes: number;
   /** What the dialog prefilled into the fields above, so an untouched one can be told from an edit. */
   baseline: LimitsBaseline;
 };
@@ -101,7 +96,7 @@ type MandateLimitChanges = NonNullable<
   z.input<typeof mandateLimitsUpdate.input>["limitChanges"]
 >;
 
-/** The day a date input gives; `endOfLocalDay` turns it into an instant. */
+/** The day a date input gives; `endOfZonedDay` turns it into an instant. */
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -116,6 +111,34 @@ const RESERVED_MEASURE = "calls";
 
 function refuse(field: keyof LimitsDraft): ActionResult<never> {
   return { ok: false, reason: "invalid", code: "invalid_input", field };
+}
+
+/**
+ * A way to turn a day the operator picked into the instant their day ends, in
+ * the zone this app draws every date in.
+ *
+ * The zone comes from the viewer's own preference through the kernel seam, the
+ * way the grant path reads it, and falls back to Pacific both when the read
+ * fails and when the stored name is one this runtime cannot format in — because
+ * the dates on screen fall back the same way, and a window that disagreed with
+ * the dates beside it would be worse than one in the wrong zone.
+ *
+ * Returns a function rather than an instant so the caller reads the preference
+ * once and only when a day was actually submitted.
+ */
+async function endOfPickedDay(
+  ctx: Awaited<ReturnType<typeof requireViewer>>,
+): Promise<(day: string) => string | null> {
+  const preferences = await kernelRead(ctx, {
+    contract: userPreferencesRead,
+    input: {},
+    page: "mandates",
+  });
+  const stored = preferences.ok
+    ? preferences.value.timezone
+    : DEFAULT_TIME_ZONE;
+  const timeZone = supportsTimeZone(stored) ? stored : DEFAULT_TIME_ZONE;
+  return (day) => endOfZonedDay(day, timeZone);
 }
 
 /**
@@ -216,12 +239,6 @@ export async function changeMandateLimits(
   }
 
   if (validTo !== "" && !DATE.test(validTo)) return refuse("validTo");
-  // The offset decides an authority boundary, so it is validated like one
-  // rather than trusted because it came from our own form: a server action is
-  // reachable by anyone holding a session.
-  const offsetMinutes = draft.validToOffsetMinutes;
-  if (validTo !== "" && !isUsableOffset(offsetMinutes))
-    return refuse("validTo");
 
   /**
    * Whether this submission is editing the bound the dialog prefilled or has
@@ -292,7 +309,20 @@ export async function changeMandateLimits(
 
   const ctx = await requireViewer(org, ws);
 
-  // One call, carrying only what changed. The handler merges it over the stored
+  // The day the operator picked is a day in the zone this app draws dates in,
+  // not a day in UTC. Resolved through the same seam the grant path uses
+  // (`features/agents/actions.ts`), for the same reason it gives: the window
+  // written has to agree with the dates on screen. This used to append
+  // `T23:59:59.999Z` to the picked day, which is the right instant only for an
+  // operator already on UTC — at UTC+9 it granted nine hours nobody asked for.
+  //
+  // Only read when there is a day to place in a zone, so a limit-only change
+  // still makes exactly one kernel call.
+  const zoned = validTo === "" ? null : await endOfPickedDay(ctx);
+  const validToInstant = zoned === null ? null : zoned(validTo);
+  if (validTo !== "" && validToInstant === null) return refuse("validTo");
+
+  // One write, carrying only what changed. The handler merges it over the stored
   // record under the lock it already takes, at both depths: every measure this
   // submission did not name keeps its bound, and each named measure keeps every
   // field this submission did not carry, its other sublimit and its window
@@ -304,11 +334,8 @@ export async function changeMandateLimits(
     // no measure, and a change to the window alone is a legal change.
     ...(Object.keys(limitChanges).length === 0 ? {} : { limitChanges }),
     // The last day a mandate may be drawn on runs through the end of that day,
-    // in the operator's own calendar, which is the instant the day after it
-    // begins for them. See `endOfLocalDay`.
-    ...(validTo === ""
-      ? {}
-      : { validTo: endOfLocalDay(validTo, offsetMinutes) }),
+    // in the operator's own calendar rather than UTC's.
+    ...(validToInstant === null ? {} : { validTo: validToInstant }),
   });
   return result.ok
     ? {

@@ -23,7 +23,6 @@ import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { changeMandateLimits, revokeMandate } from "./actions";
-import { offsetAfter } from "./validity";
 
 const PERIODS = ["daily", "weekly", "monthly"] as const;
 
@@ -152,7 +151,6 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
         period: period(form, "period"),
         callsPerDay: text(form, "callsPerDay"),
         validTo: text(form, "validTo"),
-        validToOffsetMinutes: offsetAfter(text(form, "validTo")),
         // Read from the form rather than from `defaults` in this closure, so what
         // the action compares against is the string that seeded the field the
         // operator saw, not one recomputed from a prop that may have moved on.

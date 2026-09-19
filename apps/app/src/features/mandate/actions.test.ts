@@ -83,8 +83,27 @@ const denied = (name: string) =>
  * (ADR-102). The stub answers that write, or refuses it, so a test asserting the
  * call's input is asserting what the form said and nothing about a merge.
  */
-function kernelAnswers(options: { write?: unknown; writeThrows?: Error }) {
-  invoke.mockImplementation(() => {
+/**
+ * The kernel answers by capability, because a submission carrying a day now
+ * reads the viewer's zone before it writes: the day on a date input is a day in
+ * the zone this app draws dates in, not in UTC. `timezone` defaults to the
+ * app's own default so a test that says nothing about zones gets the behaviour
+ * a signed-in operator gets.
+ */
+function kernelAnswers(options: {
+  write?: unknown;
+  writeThrows?: Error;
+  timezone?: string;
+  preferencesThrows?: Error;
+}) {
+  invoke.mockImplementation((name: string) => {
+    if (name === "get_user_preferences") {
+      return options.preferencesThrows !== undefined
+        ? Promise.reject(options.preferencesThrows)
+        : Promise.resolve({
+            timezone: options.timezone ?? "America/Los_Angeles",
+          });
+    }
     if (options.writeThrows !== undefined)
       return Promise.reject(options.writeThrows);
     return Promise.resolve(options.write ?? mandateOutput());
@@ -139,7 +158,6 @@ const untouched = {
   mandateId: MANDATE_ID,
   ...PREFILLED,
   validTo: "",
-  validToOffsetMinutes: 0,
   baseline: PREFILLED,
 };
 
@@ -157,7 +175,6 @@ describe("changeMandateLimits", () => {
     period: "monthly" as const,
     callsPerDay: "40",
     validTo: "2026-12-31",
-    validToOffsetMinutes: 0,
     baseline: NO_PREFILL,
   };
 
@@ -183,7 +200,8 @@ describe("changeMandateLimits", () => {
       },
       // The last day runs through its end, so a window to 2026-12-31 expires
       // as that day ends rather than as it begins.
-      validTo: "2027-01-01T00:00:00.000Z",
+      // The end of the operator's 31 December in Pacific time, not in UTC.
+      validTo: "2027-01-01T07:59:59.999Z",
     });
   });
 
@@ -192,18 +210,68 @@ describe("changeMandateLimits", () => {
   // was a snapshot nobody held a lock on: two operators editing different bounds
   // each sent a complete record, and the later write restored the bound the
   // earlier one had lowered. One call carries no snapshot to be stale.
-  it("makes exactly one kernel call, and never reads the mandate", async () => {
+  it("writes once and never reads the mandate", async () => {
     kernelAnswers({});
     await changeMandateLimits("a-intel", "core-platform", draft);
-    expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith(
       "update_mandate_limits",
       expect.objectContaining({ mandateId: MANDATE_ID }),
       expect.objectContaining(TENANT),
     );
+    // The mandate is what must not be read: that read was the stale snapshot.
+    // The viewer's zone is not a snapshot of anything this write changes, and it
+    // is only read when a day was submitted, as the case below shows.
     expect(
       invoke.mock.calls.filter(([name]) => name === "get_mandate"),
     ).toHaveLength(0);
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(1);
+  });
+
+  it("makes exactly one kernel call when no day was submitted", async () => {
+    kernelAnswers({});
+    // Nothing to place in a zone, so the preference is not read at all and a
+    // limit-only change costs one call, as it did before zones came into it.
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      callsPerDay: "90",
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      limitChanges: { calls: { perPeriod: "90", currencyOrUnit: "calls" } },
+    });
+  });
+
+  it("reads the viewer's zone and ends the day in it, not in UTC", async () => {
+    kernelAnswers({ timezone: "Asia/Tokyo" });
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      validTo: "2027-01-31",
+    });
+    // The same day as the Pacific cases above, resolved in a different zone: the
+    // instant differs, which is the whole point. Appending a fixed UTC time
+    // would have produced one answer for every operator on earth.
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      validTo: "2027-01-31T14:59:59.999Z",
+    });
+  });
+
+  it("falls back to the app's default zone when the preference cannot be read", async () => {
+    kernelAnswers({ preferencesThrows: new Error("preferences unreachable") });
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      validTo: "2027-01-31",
+    });
+    // Pacific, the same fallback the pages draw dates in. A window that
+    // disagreed with the dates beside it would be worse than one in a zone the
+    // operator did not choose.
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      validTo: "2027-02-01T07:59:59.999Z",
+    });
   });
 
   // A blank box means "leave this bound as it is", which is what the dialog
@@ -220,7 +288,6 @@ describe("changeMandateLimits", () => {
       period: "weekly",
       callsPerDay: "",
       validTo: "",
-      validToOffsetMinutes: 0,
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
@@ -245,7 +312,6 @@ describe("changeMandateLimits", () => {
       perPeriod: "1000",
       callsPerDay: "",
       validTo: "",
-      validToOffsetMinutes: 0,
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
@@ -271,14 +337,11 @@ describe("changeMandateLimits", () => {
       period: "monthly",
       callsPerDay: "",
       validTo: "2027-01-31",
-      // An operator on UTC+9, so the boundary is theirs and not UTC's.
-      validToOffsetMinutes: -540,
       baseline: NO_PREFILL,
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
-      // UTC+9: the end of the operator's 31 January, not of UTC's.
-      validTo: "2027-01-31T15:00:00.000Z",
+      validTo: "2027-02-01T07:59:59.999Z",
     });
   });
 
@@ -293,7 +356,6 @@ describe("changeMandateLimits", () => {
       period: "monthly",
       callsPerDay: "500",
       validTo: "",
-      validToOffsetMinutes: 0,
       baseline: NO_PREFILL,
     });
     expect(written()).toEqual({
@@ -316,13 +378,20 @@ describe("changeMandateLimits", () => {
     await changeMandateLimits("a-intel", "core-platform", {
       ...untouched,
       validTo: "2027-03-31",
-      validToOffsetMinutes: 0,
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
-      validTo: "2027-04-01T00:00:00.000Z",
+      // March, so Pacific is on daylight time and the instant is an hour earlier.
+      validTo: "2027-04-01T06:59:59.999Z",
     });
-    expect(invoke).toHaveBeenCalledTimes(1);
+    // One write, and no read of the mandate: the zone read is the only other
+    // call, and it is not a snapshot of any bound this write could restore.
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(1);
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "get_mandate"),
+    ).toHaveLength(0);
   });
 
   it("names only the calls measure when only the calls cap moved", async () => {
@@ -487,7 +556,6 @@ describe("changeMandateLimits", () => {
         period: "monthly",
         callsPerDay: "",
         validTo: "",
-        validToOffsetMinutes: 0,
         baseline: NO_PREFILL,
       }),
     ).toEqual({
@@ -526,7 +594,6 @@ describe("changeMandateLimits", () => {
       await changeMandateLimits("a-intel", "core-platform", {
         ...draft,
         validTo: "next year",
-        validToOffsetMinutes: 0,
       }),
     ).toEqual({
       ok: false,
@@ -537,44 +604,7 @@ describe("changeMandateLimits", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  // The offset moves an authority boundary by up to a day, so it is checked
-  // like any other submitted value. A server action is reachable by anyone
-  // holding a session, and this one is not sent by the dialog alone.
-  it.each([
-    ["past the widest real offset", 900],
-    ["not a whole minute", 90.5],
-    ["not a number at all", Number.NaN],
-  ])("refuses an offset that is %s (negative)", async (_why, offset) => {
-    expect(
-      await changeMandateLimits("a-intel", "core-platform", {
-        ...draft,
-        validTo: "2027-06-30",
-        validToOffsetMinutes: offset,
-      }),
-    ).toEqual({
-      ok: false,
-      reason: "invalid",
-      code: "invalid_input",
-      field: "validTo",
-    });
-    expect(invoke).not.toHaveBeenCalled();
-  });
 
-  it("ignores the offset when no date was submitted", async () => {
-    kernelAnswers({});
-    // Nothing to place in a zone, so a junk offset is not a reason to refuse a
-    // submission that only changes a limit.
-    await changeMandateLimits("a-intel", "core-platform", {
-      ...untouched,
-      callsPerDay: "90",
-      validTo: "",
-      validToOffsetMinutes: Number.NaN,
-    });
-    expect(written()).toEqual({
-      mandateId: MANDATE_ID,
-      limitChanges: { calls: { perPeriod: "90", currencyOrUnit: "calls" } },
-    });
-  });
 
   // The handler's own gate: a caller whose roles are not accountable for the
   // mandate's consequences is refused before any row is touched, and the app
