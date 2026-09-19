@@ -20,9 +20,21 @@
  * @oxagen/tacho folds session totals by, so the rollup and the fold cannot
  * price a call a different number of times. Those
  * sources carry cache writes as one `cache_creation_tokens` figure (the
- * 5m/1h split and thinking tokens are transcript columns, docs/specs/tacho/
- * data-model.md §2.7), so a wrapped run's cache writes are priced as 5m
- * writes, the same rule the ledger branch applies to `cache_write_tokens`.
+ * 5m/1h split is a transcript column, docs/specs/tacho/data-model.md §2.7),
+ * so a wrapped run's cache writes are priced as 5m writes, the same rule the
+ * ledger branch applies to `cache_write_tokens`.
+ *
+ * Reasoning is the one class a wrapped call reports that the gateway does
+ * not. Both vendors count thinking INSIDE the output figure they publish.
+ * Anthropic states it as `usage.output_tokens_details.thinking_tokens` and
+ * OpenAI as `output_tokens_details.reasoning_tokens`, and the tacho
+ * transcript and collector sources record either one under `thinking_tokens`.
+ * So the read below subtracts it from `output_tokens` and carries it as the
+ * frame's `reasoning` class, the way the ledger branch subtracts cache reads
+ * and writes from an inclusive `input_tokens`. Left in `output`, every
+ * thinking token is priced at the output rate, which is wrong for any model
+ * whose published reasoning rate differs from its output rate. `token_usage`
+ * has no thinking column at all, so a gateway frame's `reasoning` stays zero.
  *
  * The findings job reads a workspace's tool calls with their digests and
  * result tokens through the same client (`readTachoToolCallObservations`).
@@ -149,7 +161,8 @@ export async function readModelCallFrames(args: {
         coalesce(input_tokens, 0)          AS input_uncached,
         coalesce(cache_read_tokens, 0)     AS cache_read,
         coalesce(cache_creation_tokens, 0) AS cache_write_5m,
-        coalesce(output_tokens, 0)         AS output,
+        toInt64(greatest(0, toInt64(coalesce(output_tokens, 0)) - toInt64(coalesce(thinking_tokens, 0)))) AS output,
+        coalesce(thinking_tokens, 0)       AS reasoning,
         cost_usd_micros                    AS cost_micros
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID}
@@ -177,6 +190,7 @@ export async function readModelCallFrames(args: {
     cache_read: string;
     cache_write_5m: string;
     output: string;
+    reasoning: string;
     cost_micros: string | null;
   };
   const rows = (await result.json()) as Row[];
@@ -189,7 +203,7 @@ export async function readModelCallFrames(args: {
     cacheWrite5m: Number(r.cache_write_5m),
     cacheWrite1h: 0,
     output: Number(r.output),
-    reasoning: 0,
+    reasoning: Number(r.reasoning),
     reportedCostMicros: r.cost_micros,
     basis: "client_attested",
   }));
@@ -372,6 +386,12 @@ const OBSERVED_MODEL_LIMIT = 500;
  * input total (fresh + cache reads + cache writes, see schema.sql), so its
  * classes are split the way {@link readModelCallFrames} splits them; the
  * tacho sources carry each class separately and are simply added.
+ * `thinking_tokens` is left out of that sum on purpose: the vendors count
+ * thinking inside `output_tokens`, so adding it would count those tokens
+ * twice and rank a reasoning model above models that need pricing more.
+ * {@link readModelCallFrames} splits the two because they are priced at
+ * different rates; a ranking only needs the total, which `output_tokens`
+ * already carries.
  *
  * Throws on a degraded store: a short list read off half the frames would
  * say a model is priced when nobody has priced it.

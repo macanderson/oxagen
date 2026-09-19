@@ -43,10 +43,9 @@ beforeEach(() => queryMock.mockReset());
 
 describe("readModelCallFrames", () => {
   it("reads a wrapped run's token-bearing sources and prices OTel cache creation as 5m writes", async () => {
-    // The OTel log, collector and hook sources carry `cache_creation_tokens`;
-    // the 5m/1h split and thinking tokens exist only on transcript rows, which
-    // the query leaves out, so a wrapped run's cache writes come from the one
-    // column those sources populate.
+    // The OTel log, collector and hook sources carry `cache_creation_tokens`
+    // and no 5m/1h split, which is a transcript column, so a wrapped run's
+    // cache writes come from the one column every admitted source populates.
     answer([
       {
         at: "2026-09-14T10:00:00.000Z",
@@ -56,6 +55,7 @@ describe("readModelCallFrames", () => {
         cache_read: "200",
         cache_write_5m: "300",
         output: "50",
+        reasoning: "0",
         cost_micros: "4125",
       },
       {
@@ -66,6 +66,7 @@ describe("readModelCallFrames", () => {
         cache_read: "0",
         cache_write_5m: "0",
         output: "5",
+        reasoning: "0",
         cost_micros: null,
       },
     ]);
@@ -81,7 +82,7 @@ describe("readModelCallFrames", () => {
       "coalesce(cache_creation_tokens, 0) AS cache_write_5m",
     );
     expect(query).not.toMatch(
-      /cache_creation_5m_tokens|cache_creation_1h_tokens|thinking_tokens/,
+      /cache_creation_5m_tokens|cache_creation_1h_tokens/,
     );
     expect(selectedColumns(query)).toEqual([
       "at",
@@ -89,6 +90,7 @@ describe("readModelCallFrames", () => {
       "cache_read",
       "cache_write_5m",
       "output",
+      "reasoning",
       "cost_micros",
     ]);
     expect(query_params).toEqual({
@@ -143,6 +145,43 @@ describe("readModelCallFrames", () => {
     ]);
   });
 
+  // Both vendors count thinking inside the output figure they publish, and
+  // the book prices reasoning under its own class. Left in `output`, every
+  // thinking token is charged at the output rate, which is wrong for any
+  // model whose published reasoning rate differs from its output rate.
+  it("splits a wrapped call's thinking tokens out of the inclusive output figure", async () => {
+    answer([
+      {
+        at: "2026-09-14T10:00:00.000Z",
+        model: "claude-sonnet-5",
+        provider: "firstParty",
+        input_uncached: "1000",
+        cache_read: "0",
+        cache_write_5m: "0",
+        // The query has done the subtraction: a call that reported 900
+        // output tokens of which 400 were thinking leaves 500 to price at
+        // the output rate and 400 at the reasoning rate.
+        output: "500",
+        reasoning: "400",
+        cost_micros: null,
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      run: { kind: "tacho", rootSessionUuid: RUN },
+    });
+
+    const { query } = lastQuery();
+    // The same `greatest(0, …)` idiom the ledger branch uses on an inclusive
+    // `input_tokens`: a source that reports more thinking than output must
+    // not drive the output class negative.
+    expect(query).toContain(
+      "toInt64(greatest(0, toInt64(coalesce(output_tokens, 0)) - toInt64(coalesce(thinking_tokens, 0))))",
+    );
+    expect(query).toMatch(/coalesce\(thinking_tokens, 0\)\s+AS reasoning/);
+    expect(frames[0]).toMatchObject({ output: 500, reasoning: 400 });
+  });
+
   it("reads a ledger run's gateway-metered rows as gateway_observed", async () => {
     answer([
       {
@@ -163,6 +202,9 @@ describe("readModelCallFrames", () => {
     const { query, query_params } = lastQuery();
     expect(query).toContain("FROM token_usage");
     expect(query).toContain("cache_write_tokens   AS cache_write_5m");
+    // `token_usage` has no thinking column, so a gateway frame's reasoning
+    // is zero from the mapping rather than from a read.
+    expect(query).not.toContain("thinking_tokens");
     expect(query_params).toEqual({ orgId: ORG, runId: RUN });
     expect(frames).toEqual([
       {

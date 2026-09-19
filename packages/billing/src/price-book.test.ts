@@ -859,10 +859,15 @@ describe("the negotiated write path", () => {
       effectiveFrom: T1,
     });
     const locks = fake.log.filter((l) => l.op === "lock").map((l) => l.sql);
-    // The class lock, then the one name this write answers to.
+    // The class lock, then the one identity this write answers to. The lock
+    // is keyed on the identity rather than the spelling, so a write for
+    // `vendor/foo` and a write for `foo` take the same second lock and
+    // serialise even though they share no name.
     expect(locks).toHaveLength(2);
     expect(locks[0]).toContain("price_entry_class:");
-    expect(locks[1]).toContain("vendor/foo|output|");
+    expect(locks[1]).toContain("price_entry:");
+    expect(locks[1]).toContain("foo|output|");
+    expect(locks[1]).not.toContain("vendor/foo|output|");
 
     // Once the first rate is ended, the overlapping name is free.
     await closeNegotiatedPriceEntry({ ...SET, model: "foo", at: T2 });
@@ -874,6 +879,96 @@ describe("the negotiated write path", () => {
         effectiveFrom: T2,
       }),
     ).resolves.toMatchObject({ closed: null });
+  });
+
+  // `resolvePriceEntry` tries the id as given and then the bare family behind
+  // a `creator/` prefix, so a row spelled `foo` prices a frame that reports
+  // `vendor/foo`. Two rows under the two spellings are therefore one model
+  // carrying two contracted rates, and which one a frame gets is decided by
+  // the spelling the harness happened to record. Comparing the names as
+  // written never saw it, because the two rows share no name.
+  it("refuses a second negotiated row for the same model under a gateway prefix (negative)", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      model: "foo",
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        model: "vendor/foo",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "price_entry_alias_conflict",
+    });
+    expect(fake.rows).toHaveLength(1);
+  });
+
+  // The other direction, and between two gateways. Neither row is the bare
+  // family, so a check that only stripped the incoming name would still let
+  // the second one in.
+  it("refuses a bare-family row under a live prefixed one, and a second gateway's spelling (negative)", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      model: "vendor/foo",
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        model: "foo",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).rejects.toMatchObject({ reason: "price_entry_alias_conflict" });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        model: "gateway/foo",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).rejects.toMatchObject({ reason: "price_entry_alias_conflict" });
+    expect(fake.rows).toHaveLength(1);
+
+    // Ending the live rate frees the identity for either spelling.
+    await closeNegotiatedPriceEntry({ ...SET, model: "vendor/foo", at: T2 });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        model: "foo",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).resolves.toMatchObject({ closed: null });
+  });
+
+  // The family is spelled EXACTLY, never matched by the resolver's prefix
+  // rule, so two models that merely share a stem stay two rates. Normalising
+  // with `startsWith` here would refuse `gpt-4` for an unrelated `gpt-4o`.
+  it("leaves two models that only share a stem as separate negotiated rates", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      provider: "openai",
+      model: "openai/gpt-4o",
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        provider: "openai",
+        model: "gpt-4",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).resolves.toMatchObject({ closed: null });
+    expect(fake.rows).toHaveLength(2);
   });
 
   // With no row at the instant there is nothing to compare, so the shipped-

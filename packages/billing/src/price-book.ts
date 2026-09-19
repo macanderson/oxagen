@@ -302,6 +302,27 @@ export function resolvePriceEntry(
   return null;
 }
 
+/**
+ * The name a price row is compared under when two rows are asked whether they
+ * price the same model: the bare family behind a `creator/` prefix, or the
+ * name itself when it carries none.
+ *
+ * `vendor/foo` and `foo` are one identity because {@link resolvePriceEntry}
+ * falls back to the family when the id as given matches nothing, so a row
+ * under either spelling can price a frame that reports the other. Two rows
+ * that normalise to one identity are therefore one model priced twice, and a
+ * frame takes whichever spelling it happened to report.
+ *
+ * The test is the family spelled EXACTLY, never the resolver's prefix rule.
+ * Loose is wrong here for the reason {@link syncPriceBook}'s displacement
+ * check states: `gpt-4` prefixes `gpt-4o`, and `openai/gpt-4o` and `gpt-4`
+ * are two models that merely share a stem.
+ */
+function resolverIdentity(name: string): string {
+  const slash = name.indexOf("/");
+  return slash >= 0 ? name.slice(slash + 1) : name;
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 type Row = typeof schema.priceEntries.$inferSelect;
@@ -1162,12 +1183,14 @@ async function readKeyRows(
  * must not be written concurrently either. Keyed WITH the org, so two
  * organisations correcting the same model never wait on each other.
  *
- * One lock per NAME the row answers to — its model and every alias — taken
- * in sorted order so two writers never wait on each other's second lock. The
- * resolver treats a model and its aliases as one identity, so a write for
- * `vendor/foo` and a write for `foo` with alias `vendor/foo` are writes to the
- * same thing and must serialise; keyed on the model string alone they would
- * not.
+ * One lock per IDENTITY the row answers to, meaning
+ * {@link resolverIdentity} over its model and every alias, taken in sorted
+ * order so two writers never wait on each other's second lock. The resolver
+ * treats a model, its aliases and
+ * the bare family behind a `creator/` prefix as one identity, so a write for
+ * `vendor/foo` and a write for `foo` are writes to the same thing and must
+ * serialise; keyed on the model string alone they would not, and neither
+ * would a write keyed on the raw names when the two spellings share no name.
  */
 /**
  * The coarse lock every negotiated write in an org and class takes before it
@@ -1190,7 +1213,8 @@ async function lockNegotiatedKey(
   names: readonly string[] = [key.model],
 ): Promise<void> {
   const region = key.region ?? null;
-  for (const name of [...new Set(names)].sort()) {
+  const identities = new Set(names.map(resolverIdentity));
+  for (const name of [...identities].sort()) {
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${`price_entry:${key.orgId}:${name}|${key.tokenClass}|${region ?? ""}`}::text, 0))`,
     );
@@ -1216,12 +1240,14 @@ async function lockNegotiatedKey(
  * it would leave two rows open for one key, and it would reprice runs that
  * already settled.
  *
- * Identity is the model AND its aliases, because that is how the resolver
- * reads a row: an organization that has negotiated `foo` with alias
- * `vendor/foo` and then negotiates `vendor/foo` as a model would hold two
- * live rows for one thing, and a frame would be priced by whichever spelling
- * it happened to report. A write whose names overlap a live row under a
- * different model is refused until that rate is ended.
+ * Identity is the model, its aliases AND the bare family behind a `creator/`
+ * prefix, because that is how the resolver reads a row: an organization that
+ * has negotiated `foo` and then negotiates `vendor/foo` as a model would hold
+ * two live rows for one thing, and a frame would be priced by whichever
+ * spelling it happened to report. A write whose identities overlap a live row
+ * under a different model is refused until that rate is ended. Two models
+ * that merely share a stem stay distinct: the family is spelled exactly, so
+ * `openai/gpt-4o` and `gpt-4` are two rates, not one.
  *
  * `source` is always `negotiated` and `org_id` is always the organization's:
  * `price_entries_org_source_check` is `(source = 'list') = (org_id IS NULL)`,
@@ -1270,6 +1296,11 @@ export async function setNegotiatedPriceEntry(
     const ownChain = await readKeyRows(tx, args, { includeList: false });
     const effectiveAliases = modelAliases ?? ownChain[0]?.modelAliases ?? [];
     const names = new Set([args.model, ...effectiveAliases]);
+    // The identities those names answer to, which is what the locks and the
+    // overlap check below are both about. A name and its bare family are one
+    // identity ({@link resolverIdentity}), so a row spelled `vendor/foo` and
+    // a row spelled `foo` collide even though they share no name.
+    const identities = new Set([...names].map(resolverIdentity));
     await lockNegotiatedKey(tx, args, [...names]);
     // The write instant is read here, under the locks, and not before
     // `withTenantDb`. The lock wait is unbounded: another negotiated write
@@ -1289,19 +1320,28 @@ export async function setNegotiatedPriceEntry(
 
     // One identity per negotiated class. The resolver matches a frame against
     // a row's model AND its aliases, so a live row under a different model
-    // string that shares a name with this write is the same thing priced
-    // twice — and a frame would take whichever spelling it reported.
+    // string that answers to one of this write's identities is the same thing
+    // priced twice, and a frame would take whichever spelling it reported.
+    //
+    // The comparison is on identities rather than on the raw names, because
+    // the resolver reaches a row two ways. `vendor/foo` and `foo` share no
+    // name, but a frame reporting `vendor/foo` resolves the `foo` row on the
+    // family fallback, so an organization holding both rows prices one model
+    // at two contracted rates, chosen by the spelling the frame happened to
+    // carry. Comparing the spellings as written let the second row in.
     const overlapping = everyModel.find(
       (r) =>
         r.model !== args.model &&
         live(r) &&
-        [r.model, ...r.modelAliases].some((name) => names.has(name)),
+        [r.model, ...r.modelAliases].some((name) =>
+          identities.has(resolverIdentity(name)),
+        ),
     );
     if (overlapping)
       throw new HandlerError({
         code: "conflict",
         reason: "price_entry_alias_conflict",
-        message: `${args.model} ${args.tokenClass} shares a name with the negotiated row for ${overlapping.model} (aliases ${JSON.stringify(overlapping.modelAliases)}, effective from ${overlapping.effectiveFrom.toISOString()}); the resolver treats a model and its aliases as one identity, so end that rate before setting this one`,
+        message: `${args.model} ${args.tokenClass} resolves to the same model as the negotiated row for ${overlapping.model} (aliases ${JSON.stringify(overlapping.modelAliases)}, effective from ${overlapping.effectiveFrom.toISOString()}); the resolver treats a model, its aliases and the bare family behind a \`creator/\` prefix as one identity, so end that rate before setting this one`,
       });
     const everyProvider = everyModel.filter((r) => r.model === args.model);
 
