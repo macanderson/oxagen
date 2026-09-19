@@ -216,8 +216,10 @@ export async function assertToolsDeclareMeasures(
 /**
  * Who may read: an accountable org role reads every mandate; any other
  * acting user (the signed-in user, or the API key's creator) reads the
- * mandates of agents they created. Returns null
- * for the office, or the user id to filter agents by.
+ * mandates of agents they created, and the mandates they requested
+ * themselves for any agent (list_mandates, get_mandate). Returns null for
+ * the office, or the user id callers narrow both `agents.createdById` and
+ * `mandates.requestedBy` against.
  */
 export async function readerFilter(
   ctx: CheckedContext,

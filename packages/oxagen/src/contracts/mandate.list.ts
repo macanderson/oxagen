@@ -13,12 +13,15 @@ import {
 // Readable by an accountable org role (Owner, Admin, Billing, Compliance),
 // who see every mandate in the workspace. `defaultRoles` otherwise matches
 // `request_mandate`'s real grants (workspace Owner, Member): anyone who may
-// ask for a mandate may read the mandates of agents they created, so the
-// requester of a draft can read the draft they just made. ADR-107: the two
-// capabilities disagreed (`request_mandate` admitted a workspace Member this
-// contract refused outright), and `readerFilter`
-// (`packages/handlers/src/_mandate.ts`) already narrows that reader to their
-// own agents; it was dead code until these roles matched it. There is no org
+// ask for a mandate may read the mandates of agents they created, and the
+// mandates they requested themselves for any agent, so the requester of a
+// draft can always read the draft they just made even for an agent someone
+// else created. ADR-107: the two capabilities disagreed (`request_mandate`
+// admitted a workspace Member this contract refused outright), and
+// `readerFilter` (`packages/handlers/src/_mandate.ts`) already narrows that
+// reader by agent-creator; it was dead code until these roles matched it,
+// and was widened again to also admit a mandate's own requester once that
+// narrowing surfaced the request-then-cannot-read-back gap. There is no org
 // "Member" role in this system (`tools/scripts/seed-iam-defaults.ts`'s
 // `ORG_ROLES` is Owner/Admin/Compliance/Billing only), so this contract
 // grants none: the org branch stays the four accountable roles, unnarrowed.

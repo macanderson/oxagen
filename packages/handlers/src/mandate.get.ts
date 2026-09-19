@@ -35,12 +35,19 @@ export const mandateGetHandler: CapabilityHandler<typeof mandateGet> = async (
           ),
         )
         .limit(1);
-      if (agent?.createdById !== operatorId) {
+      // A non-accountable reader reads a mandate for an agent they created,
+      // or a mandate they requested themselves for any agent (ADR-107): the
+      // two are independent grants of visibility, not one narrowed by the
+      // other. `request_mandate` admits a workspace Owner or Member to
+      // request a mandate for any agent, not only one they created, so
+      // narrowing only by the agent's creator would let a requester create
+      // a draft they can never read back.
+      if (agent?.createdById !== operatorId && row.requestedBy !== operatorId) {
         throw new HandlerError({
           code: "forbidden",
           reason: "org_role_required",
           message:
-            "Mandates are readable by the accountable office and the agent's operator",
+            "Mandates are readable by the accountable office, the agent's operator, and whoever requested them",
         });
       }
     }

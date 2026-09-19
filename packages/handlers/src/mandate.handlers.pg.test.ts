@@ -689,6 +689,70 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(notFound);
     });
 
+    // #3440 (ADR-107 widened): request_mandate admits a workspace Owner or
+    // Member to request a mandate for ANY agent, not only one they created,
+    // so readerFilter's creator-only narrowing let a requester create a
+    // draft they could never read back for an agent someone else operates.
+    // list_mandates and get_mandate now also admit a mandate the caller
+    // requested themselves, whichever agent it names.
+    it("list/get: a requester who does not operate the agent still reads the draft they requested", async () => {
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({ ...body(), agentId: otherBotId }),
+          ctx(operatorUserId),
+        ),
+      );
+      expect(draft.agentId).toBe(otherBotId);
+
+      // operatorUserId created invoiceBotId, not otherBotId, so only the
+      // requestedBy match admits them here.
+      const asRequester = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: otherBotId },
+          ctx(operatorUserId),
+        ),
+      );
+      expect(asRequester.items.map((m) => m.id)).toContain(draft.id);
+
+      const getAsRequester = await inScope(() =>
+        mandateGetHandler(
+          { mandateId: draft.id, ledgerLimit: 100 },
+          ctx(operatorUserId),
+        ),
+      );
+      expect(getAsRequester.mandate.id).toBe(draft.id);
+
+      // otherOperatorUserId created otherBotId, so the creator path still
+      // admits them independently of who requested this particular draft.
+      const asCreator = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: otherBotId },
+          ctx(otherOperatorUserId),
+        ),
+      );
+      expect(asCreator.items.map((m) => m.id)).toContain(draft.id);
+
+      // A bystander who neither created the agent nor requested the draft
+      // reads neither the list row nor the record.
+      const bystanderUserId = randomUUID();
+      doubles.roles.set(bystanderUserId, { org: null, workspace: "Member" });
+      const asBystander = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: otherBotId },
+          ctx(bystanderUserId),
+        ),
+      );
+      expect(asBystander.items.map((m) => m.id)).not.toContain(draft.id);
+      await expect(
+        inScope(() =>
+          mandateGetHandler(
+            { mandateId: draft.id, ledgerLimit: 100 },
+            ctx(bystanderUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
+    });
+
     // ── revoke, limits ─────────────────────────────────────────────────────────
 
     it("revoke: releases what parked calls hold, expires the parked approval, records the reason and emits; a second revoke is a conflict", async () => {
