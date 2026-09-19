@@ -1,7 +1,10 @@
 // set_approval_rules — write the workspace's auto-approval rules (MC spec
 // §6.9 part 2, App. E; ADR-070). Create and edit are the same write: the
 // caller sends the whole set and it replaces the stored clause atomically, so
-// two rules can never disagree about which one a call matched first.
+// two rules can never disagree about which one a call matched first. A rule
+// sent back exactly as stored keeps its stamp; only new and changed rules are
+// re-checked and re-stamped. `replaces` makes the write conditional on the set
+// the caller read, for a caller editing one rule of it.
 //
 // `agent.requiresApproval: true`: an agent that asks to widen the conditions
 // under which its own calls skip a person waits for one. `noBillingGate: true`:
@@ -56,6 +59,12 @@ export const approvalRuleSet = registerCapability({
             seen.add(rule.id);
           }
         }),
+      // The rules as the caller read them, when it built `rules` by editing
+      // that read. The write is refused as `conflict` / `rule_set_changed`
+      // unless the stored rules are still exactly these, so an edit to one
+      // rule cannot write back a rule another person deleted or switched off
+      // in between. Omit it to replace the set whatever it holds now.
+      replaces: z.array(approvalRuleBodySchema).max(256).optional(),
     })
     .strict(),
   output: z

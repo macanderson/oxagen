@@ -278,8 +278,10 @@ function bodyOf(rule: StoredRule | ApprovalRuleDraft) {
  * `set_approval_rules` replaces the whole set, so this reads the set as it is
  * now and splices the one rule into it, rather than trusting the copy the page
  * rendered. A page loaded before another person's edit would otherwise write
- * that edit away. What is left is the gap between this read and this write;
- * the handler's lock serialises the writes themselves.
+ * that edit away. The gap between this read and the write is closed by
+ * sending the read back as `replaces`: the handler compares it with the
+ * stored set under its lock and refuses the write if they differ. Rules this
+ * save does not change keep their stamp on the server.
  *
  * A rule's id is its audit citation (`policy:<id>`), so an edit keeps it and
  * a create refuses an id already in use rather than overwriting that rule.
@@ -315,7 +317,13 @@ export async function saveApprovalRule(
     mode === "create"
       ? [...stored.map(bodyOf), body]
       : stored.map((rule) => (rule.id === body.id ? body : bodyOf(rule)));
-  const result = await kernelWrite(ctx, approvalRuleSet, { rules });
+  // `replaces` makes the write conditional on the set read above: if another
+  // person deleted, switched off or edited a rule in between, the handler
+  // refuses it as `rule_set_changed` instead of writing their change away.
+  const result = await kernelWrite(ctx, approvalRuleSet, {
+    rules,
+    replaces: stored.map(bodyOf),
+  });
   return result.ok ? { ok: true, value: { ruleId: body.id } } : result;
 }
 
