@@ -19,7 +19,9 @@
  *     reserve is over_limit and remaining reads 0; raised → the room opens
  *   - the check: no covering mandate → no_mandate; a target outside the allow
  *     list → target_denied; a measure the version does not declare →
- *     measure_unreadable; a value over human_above parks the call with a
+ *     measure_unreadable; a measure whose currently declared kind disagrees
+ *     with the kind its limit was stamped with → measure_kind_changed; a
+ *     value over human_above parks the call with a
  *     reservation held and an approval row carrying mandate_id, tool_call_id,
  *     rule_ids and input_digest; the same call after approval proceeds on
  *     the held reservation and marks the approval used, once; the settlement
@@ -54,7 +56,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       reserve,
       settle,
     } = await import("./mandates");
-    const { periodKey } = await import("./mandates/measures");
+    const { legacyMeasureKindGuess, periodKey } = await import(
+      "./mandates/measures"
+    );
 
     const orgId = randomUUID();
     const workspaceId = randomUUID();
@@ -130,6 +134,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where(eq(schema.mandates.id, id));
         return parseMandateRow(row!);
       });
+
+    /**
+     * `reserve`'s `measureKinds` as `decideMandate` would build them from the
+     * live tool declaration. These fixtures' "amount" measure is always
+     * declared money (the tool row seeded in `beforeAll`), so the mandate's
+     * own resolved `limit.kind` (real or legacy-guessed) is the same value
+     * the declaration would give here. `parseMandateRow` always resolves
+     * `kind` (ADR-108); the `??` fallback here only satisfies the type
+     * checker against `MandateLimit`'s optional field, mirroring the same
+     * pattern `mandates.ts` itself uses at its own defensive fallback sites.
+     */
+    const kindsOf = (mandate: Awaited<ReturnType<typeof loadMandate>>) =>
+      Object.fromEntries(
+        Object.entries(mandate.limits).map(([measure, limit]) => [
+          measure,
+          limit.kind ?? legacyMeasureKindGuess(limit.currencyOrUnit),
+        ]),
+      );
 
     const notificationsForOrg = () =>
       withSystemDb((tx) =>
@@ -284,6 +306,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             mandate,
             toolCallId: randomUUID(),
             values: { amount: "250000001" },
+            measureKinds: kindsOf(mandate),
             at: NOW,
           });
         }),
@@ -303,6 +326,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               mandate,
               toolCallId: randomUUID(),
               values: { amount: "250000000" },
+              measureKinds: kindsOf(mandate),
               at: NOW,
             });
           }),
@@ -316,6 +340,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             mandate,
             toolCallId: randomUUID(),
             values: { amount: "1" },
+            measureKinds: kindsOf(mandate),
             at: NOW,
           });
         }),
@@ -357,6 +382,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
                 mandate,
                 toolCallId: randomUUID(),
                 values: { amount: "100000000" },
+                measureKinds: kindsOf(mandate),
                 at: NOW,
               });
             }),
@@ -390,6 +416,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               mandate,
               toolCallId,
               values: { amount: "250000000" },
+              measureKinds: kindsOf(mandate),
               at: NOW,
             });
           }
@@ -431,6 +458,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(settleRow.externalEffectId).toBe("pi_3Q");
       expect(settleRow.value).toBe("250000000");
       expect(rows.filter((r) => r.kind === "release")).toHaveLength(1);
+      // Every row `reserve` and `closeReservations` wrote carries the
+      // mandate's resolved kind for "amount" (ADR-108): the reserve stamps
+      // it from `mandate.limits`, and settle/release carry the reserve row's
+      // own stamp forward rather than re-deriving it, so all four rows agree.
+      expect(rows.every((r) => r.measureKind === "money")).toBe(true);
       const [authority] = await inScope(() =>
         withTenantDb((tx) => readAuthority(tx, mandate, NOW)),
       );
@@ -453,6 +485,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             mandate,
             toolCallId: randomUUID(),
             values: { amount: "250000000" },
+            measureKinds: kindsOf(mandate),
             at: NOW,
           });
         }),
@@ -464,6 +497,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             mandate,
             toolCallId: randomUUID(),
             values: { amount: "250000000" },
+            measureKinds: kindsOf(mandate),
             at: NEXT_MONTH,
           });
           return readAuthority(tx, mandate, NEXT_MONTH);
@@ -500,6 +534,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               mandate,
               toolCallId: randomUUID(),
               values: { amount: "1000000" },
+              measureKinds: kindsOf(mandate),
               at: NOW,
             });
           }),
@@ -548,6 +583,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               mandate,
               toolCallId: randomUUID(),
               values: { amount: value },
+              measureKinds: kindsOf(mandate),
               at: NOW,
             });
           }),
@@ -649,6 +685,193 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .update(schema.mandates)
           .set({ status: "revoked" })
           .where(eq(schema.mandates.id, undeclared)),
+      );
+    });
+
+    // #3130 (ADR-108): an unpinned mandate pattern can still match a tool
+    // version published after the mandate's limit was written. If that
+    // version now declares the same measure with a different kind (count
+    // vs. amount) under the same unit spelling, enforcing against a figure
+    // entered under the old kind would be nonsense; this refuses the call
+    // instead, the same way two matched tools disagreeing at write time
+    // already refuses (measure_kind_conflict).
+    it("denies a call whose measure's declared kind no longer matches the kind its limit was stamped with", async () => {
+      const agent = randomUUID();
+      const stale = await insertMandate(agent, {
+        limits: {
+          amount: {
+            perCall: "250000000",
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "USD",
+            kind: "count",
+          },
+        },
+      });
+      const out = await decide(
+        checkArgs(agent, { amount: { value: "10" }, vendor: "vendor:aws" }),
+      );
+      expect(out).toMatchObject({
+        kind: "deny",
+        reason: "measure_kind_changed",
+      });
+      expect(await ledgerOf(stale)).toHaveLength(0);
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({ status: "revoked" })
+          .where(eq(schema.mandates.id, stale)),
+      );
+    });
+
+    // A legacy row's kind is `legacyMeasureKindGuess`'s fallback, not a
+    // fact: the gate has always enforced it correctly by reading the
+    // declaration directly, so the drift check above must never compare a
+    // guess to the current declaration. Here the guess (from a non-currency
+    // unit, "widgets") disagrees with the declared "amount"/money kind on
+    // purpose, and the call still proceeds.
+    it("does not deny a legacy row whose guessed kind disagrees with the declaration", async () => {
+      const agent = randomUUID();
+      const legacy = await insertMandate(agent, {
+        limits: {
+          amount: {
+            perCall: "250000000",
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "widgets",
+            // No `kind`: parseMandateRow guesses "count" from "widgets" (not
+            // an ISO currency code), which disagrees with the tool's
+            // declared "amount" (money).
+          },
+        },
+      });
+      const out = await decide(
+        checkArgs(agent, { amount: { value: "10" }, vendor: "vendor:aws" }),
+      );
+      expect(out.kind).not.toBe("deny");
+      // The reservation the proceeding call wrote must carry the live
+      // declaration's kind ("money"), not the legacy row's guess ("count"
+      // from "widgets"). Stamping the guess would make it a durable ledger
+      // fact a later mandate write could never correct.
+      const rows = await ledgerOf(legacy);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.measureKind).toBe("money");
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({ status: "revoked" })
+          .where(eq(schema.mandates.id, legacy)),
+      );
+    });
+
+    // A legacy limit's guess is not a fact to drift-check against, but the
+    // ledger's own history is: once a real call stamps a legacy measure's
+    // ledger row from the live declaration, that row is a fact the same way
+    // a post-ADR-108 mandate's stored kind is, and a later declaration
+    // change must be caught the same way.
+    it("denies a legacy row whose own ledger history disagrees with the current declaration", async () => {
+      const agent = randomUUID();
+      const legacy = await insertMandate(agent, {
+        limits: {
+          amount: {
+            perCall: "250000000",
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "widgets",
+            // No `kind`; legacyKindMeasures marks this measure as guessed.
+          },
+        },
+      });
+      // Stands in for an earlier real call this mandate made while the tool
+      // still declared "amount" as a count: the ledger's own stamp, not the
+      // stored limit's guess, is what this call's declaration ("amount",
+      // money) must now agree with.
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values({
+          orgId,
+          workspaceId,
+          mandateId: legacy,
+          toolCallId: randomUUID(),
+          kind: "settle",
+          measure: "amount",
+          value: "10",
+          unitOrCurrency: "widgets",
+          measureKind: "count",
+          periodKey: "2026-08",
+          balanceAfter: "0",
+        }),
+      );
+      const out = await decide(
+        checkArgs(agent, { amount: { value: "10" }, vendor: "vendor:aws" }),
+      );
+      expect(out).toMatchObject({
+        kind: "deny",
+        reason: "measure_kind_changed",
+      });
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.mandateLedger)
+          .where(eq(schema.mandateLedger.mandateId, legacy)),
+      );
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({ status: "revoked" })
+          .where(eq(schema.mandates.id, legacy)),
+      );
+    });
+
+    // A legacy measure can have real ledger movements from before the
+    // `measure_kind` column existed: `lastLedgerKind` returns null for
+    // those, the same as a measure with no history at all, but an open
+    // reservation among them is still live authority nothing has verified
+    // the kind of. Letting this call proceed would stamp a new "money" row
+    // into the same period sum as that unverified older row.
+    it("denies a legacy row whose unstamped ledger history is still open this period", async () => {
+      const agent = randomUUID();
+      const legacy = await insertMandate(agent, {
+        limits: {
+          amount: {
+            perCall: "250000000",
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "widgets",
+            // No `kind`; legacyKindMeasures marks this measure as guessed.
+          },
+        },
+      });
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values({
+          orgId,
+          workspaceId,
+          mandateId: legacy,
+          toolCallId: randomUUID(),
+          kind: "reserve",
+          measure: "amount",
+          value: "10",
+          unitOrCurrency: "widgets",
+          measureKind: null,
+          periodKey: "2026-09",
+          balanceAfter: "10",
+        }),
+      );
+      const out = await decide(
+        checkArgs(agent, { amount: { value: "10" }, vendor: "vendor:aws" }),
+      );
+      expect(out).toMatchObject({
+        kind: "deny",
+        reason: "measure_kind_changed",
+      });
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.mandateLedger)
+          .where(eq(schema.mandateLedger.mandateId, legacy)),
+      );
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({ status: "revoked" })
+          .where(eq(schema.mandates.id, legacy)),
       );
     });
 

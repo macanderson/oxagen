@@ -27,13 +27,17 @@ authority by measure from the ledger.
 
 The mandate shape (spec §6.9 part 3): `agentId` (`agt_…`), `consequenceTags`,
 `limits` (measure → `{ perCall?, perPeriod?, period: daily | weekly | monthly,
-currencyOrUnit }`, integer strings: micros for a currency, whole units
+currencyOrUnit, kind? }`, integer strings: micros for a currency, whole units
 otherwise), `targets` (measure → `{ allow, deny }` globs over a text measure),
 `tools` (globs over `slug@version` or `slug`), `approval` (`{ humanAbove,
 alwaysHumanFor, approvers }`), `purpose`, `validFrom`, `validTo`. Every read
 returns the row plus `authority`: per limited measure the period key, the
 settled and reserved values this period and `remaining`: `perPeriod` less
 those two, floored at zero, the figure the gate reserves against.
+
+`authority[].kind` (`money` or `count`, ADR-108) is always present and
+resolved, the same as `get_mandate`; see that doc for the fallback a
+pre-ADR-108 row takes.
 
 ## Readers
 
@@ -49,4 +53,5 @@ created.
 
 ## SPEC references
 
-- §6.9 part 3 (the ledger the accountable office reads), App. E; ADR-059
+- §6.9 part 3 (the ledger the accountable office reads), App. E; ADR-059;
+  ADR-108 (the measure kind on `limits` and `authority`)

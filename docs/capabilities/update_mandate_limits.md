@@ -23,7 +23,7 @@ refuses it.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `mandateId` | `string` | `mnd_…` |
-| `limits` | `MandateLimits?` | Replaces the limits as a whole. The only way to delete a measure's bound. Mutually exclusive with `limitChanges`. |
+| `limits` | `MandateLimits?` | Replaces the limits as a whole. The only way to delete a measure's bound. Mutually exclusive with `limitChanges`. `kind` is never taken from this field: the handler re-derives every measure's `kind` from the current tool declarations and persists that, not the caller's (ADR-108). |
 | `limitChanges` | `MandateLimitChanges?` | Change these measures, leave the rest. Measure → a partial bound (`perCall`, `perPeriod`, `period`, `currencyOrUnit`, each optional, at least one present). Mutually exclusive with `limits`. |
 | `targets` | `MandateTargets?` | Replaces the targets as a whole. |
 | `approval` | `MandateApproval?` | Replaces the approval rule. |
@@ -63,6 +63,26 @@ window still binds what is already drawn.
 `limits` replacement keeps exactly the semantics it always had, for the same
 reason: a caller that holds the whole record is stating the whole record, and
 it is the only way to delete a bound.
+
+Every write here, a `limits` replacement or a `limitChanges` merge, re-runs
+`assertToolsDeclareMeasures` on the resulting record to validate it (unit,
+declared-measure and matched-tool-agreement checks run over the whole merged
+record regardless of which field changed), but only a measure the caller
+actually names in `limits` or `limitChanges` has its `kind` re-derived from
+the tool's current declaration (ADR-108 §4). A measure this call does not
+name keeps its stored `kind` exactly as it was, whether that came from an
+earlier real stamp or `legacyMeasureKindGuess`'s fallback. A request that
+changes only `validTo`, `targets` or `approval` therefore never touches any
+measure's `kind`: it does not clear a `measure_kind_changed` refusal the gate
+has already started giving that mandate, and it cannot silently flip a
+measure between money and a count. A legacy measure (one whose stored `kind`
+was never a real stamp) is the one exception: refreshing it on any write is
+the same attrition ADR-108 §3 already documents, not a change to a fact
+anyone relied on. A `kind` change on a measure the operator does name is
+itself refused (`measure_kind_drawn`) while the ledger still holds a
+reservation or a movement drawn in the current window under the old kind,
+the same as a period rename is refused while a draw would go invisible under
+the new key.
 
 **Send only the fields you changed.** The merge applies every field a change
 carries, because that is the only reading a change has: it cannot tell an edit
@@ -111,12 +131,14 @@ The consequence roles of every tag on the mandate, as `grant_mandate`.
 | `not_found` | `mandate_not_found` | Not in this workspace. |
 | `conflict` | `mandate_ended` | Only an active mandate changes. |
 | `conflict` | `validity_inverted` | `validTo` at or before `validFrom`. |
-| `conflict` | `no_tool_matches`, `measure_not_declared`, `measure_unit_mismatch` | Denied by construction, the same checks `grant_mandate` runs, against the merged record. |
+| `conflict` | `no_tool_matches`, `measure_not_declared`, `measure_unit_mismatch`, `measure_kind_conflict` | Denied by construction, the same checks `grant_mandate` runs, against the merged record, including that matched tools agree on what a limited measure counts (ADR-108). |
 | `conflict` | `limit_incomplete` | A change would leave a bound with no figure or no unit. |
 | `conflict` | `period_drawn` | A measure's period cannot change while that measure still has reserved or settled authority in the current window. Ledger rows keep the old `periodKey`; renaming the window would hide the draw from `readAuthority` and `reserve`. |
+| `conflict` | `measure_kind_drawn` | A measure's `kind` cannot change while that measure still has authority drawn in the current window or an open reservation under it (ADR-108 §4). `readAuthority` sums a period's rows regardless of which kind they were stamped under; letting an old-kind row sum with a new-kind reservation would corrupt the remaining figure. |
 | `conflict` | `agent_retired` | The mandate's agent is retired (`status: archived`): its principal is suspended and can never draw on a widened limit (ADR-106). In practice `retire_agent` already revoked this mandate, so `mandate_ended` is the more common refusal; this covers an agent archived by another path while a mandate stayed live. |
 
 ## SPEC references
 
 - §6.9 part 3 (Change limits), App. E; ADR-059; ADR-102 (`limitChanges` merges
-  under the row lock)
+  under the row lock); ADR-108 (the measure kind is stamped and re-derived on
+  every write)

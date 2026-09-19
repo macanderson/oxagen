@@ -3487,7 +3487,7 @@
       "writes": []
     }
   ],
-  "contentHash": "ae7ff6d151822aa2ecf37cd35da648282ebc15462c9d850b4b7f10aea5c44563",
+  "contentHash": "8331577bb07a76c0979bd55b28febe23db75985cdd7edac2ef6ecbd8c7aa8d99",
   "domains": [
     {
       "name": "agent",
@@ -20650,6 +20650,12 @@
         {
           "name": "unit_or_currency",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "measure_kind",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         },

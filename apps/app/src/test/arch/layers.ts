@@ -288,6 +288,13 @@ const PLATFORM_NAMED_ROWS: Readonly<
     "@oxagen/database/security": ["makeSecurityEventInserter"],
     "@oxagen/database": ["assertRlsConnectionSafe"],
   },
+  // ADR-108: the mandate detail mapper falls back to the same single-location
+  // legacy-kind guess parseMandateRow uses, for the one case that function
+  // cannot cover (a ledger row drawing a measure the mandate's current
+  // limits no longer list). Named-only, matching every other seam here.
+  "src/data/live/mappers/mandates.ts": {
+    "@oxagen/rules": ["legacyMeasureKindGuess"],
+  },
 };
 
 /** The base row, "everything else under src/": contract declarations, and one telemetry export. */

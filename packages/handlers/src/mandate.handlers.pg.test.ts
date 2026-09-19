@@ -91,7 +91,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
   async () => {
     const { schema, withSystemDb } = await import("@oxagen/database");
     const { runInTenantScope } = await import("@oxagen/tenancy");
-    const { eq, inArray } = await import("drizzle-orm");
+    const { and, eq, inArray } = await import("drizzle-orm");
     const { SPEC_MANDATE_BODY } = await import(
       "@oxagen/oxagen/mandates/schemas.sample"
     );
@@ -881,6 +881,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           perPeriod: "500000000",
           period: "monthly",
           currencyOrUnit: "USD",
+          // Stamped from the declared `amount` measure (ADR-108), not
+          // supplied by this request.
+          kind: "money",
         },
       });
       expect(out.validTo).toBe("2027-01-31T00:00:00.000Z");
@@ -939,6 +942,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         perPeriod: "500000000",
         period: "monthly",
         currencyOrUnit: "USD",
+        kind: "money",
       });
       const capped = await inScope(() =>
         mandateLimitsUpdateHandler(
@@ -954,10 +958,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
           perPeriod: "500000000",
           period: "monthly",
           currencyOrUnit: "USD",
+          kind: "money",
         },
         // First depth for the calls cap, and its window is kept: the change
-        // named a figure and said nothing about the period.
-        calls: { perPeriod: "40", period: "daily", currencyOrUnit: "calls" },
+        // named a figure and said nothing about the period. The built-in
+        // measure is always `count` (ADR-108).
+        calls: {
+          perPeriod: "40",
+          period: "daily",
+          currencyOrUnit: "calls",
+          kind: "count",
+        },
       });
       // The declared-measure and unit checks run on the merged record, so a
       // change is refused exactly as a replacement is.
@@ -980,7 +991,258 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
-    // ── retirement (ADR-106, #3124) ─────────────────────────────────────────────
+    // #3130 (ADR-108 §4): a measure's kind is only re-derived from the
+    // active declaration when the operator actually touches that measure's
+    // limit. An update that names only validTo, targets or approval must
+    // leave every measure's stored kind exactly as it was, or a mandate the
+    // gate had started refusing under measure_kind_changed would silently
+    // start passing again (or worse, a money limit would silently become a
+    // count limit) without anyone looking at its figures.
+    it("limits: a validTo-only change never re-derives a measure's kind", async () => {
+      const m = await grant(billingUserId, body());
+      expect(m.limits.amount).toMatchObject({ kind: "money" });
+      // Simulate the state after a tool republish changed `amount`'s kind:
+      // the stored limit disagrees with what a fresh stamp would produce
+      // (the fixture's active declaration still says "amount"/money), which
+      // is exactly the state a real drift leaves behind.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: { ...m.limits.amount, kind: "count" },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      const untouched = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            validTo: "2026-12-30T23:59:59.000Z",
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(untouched.limits.amount).toMatchObject({ kind: "count" });
+      // Touching the measure explicitly is still how an operator confirms
+      // the new kind and re-derives it.
+      const touched = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perCall: "300000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(touched.limits.amount).toMatchObject({ kind: "money" });
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    it("limits: a kind change is refused while the ledger still holds authority drawn under the old kind", async () => {
+      const m = await grant(billingUserId, body());
+      const toolCallId = randomUUID();
+      await seedReservation(m.id, "150000000", toolCallId);
+      // Same drift simulation as the validTo-only test above: the stored
+      // limit now disagrees with what a fresh stamp of the active
+      // declaration would produce, which is what touching the measure would
+      // change it back to. The reservation just seeded is a live "amount"
+      // row filed under the "count" kind this update would move away from.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: { ...m.limits.amount, kind: "count" },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limitChanges: { amount: { perCall: "300000000" } },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("measure_kind_drawn"));
+
+      // Releasing the reservation nets the ledger's "amount" row to zero, so
+      // periodSums and hasOpenReservation both read no live draw under the
+      // old kind, and the same explicit change now succeeds.
+      const [row] = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      // `hasDrawnInCurrentPeriod` sums by the current monthly key, the same
+      // one `seedReservation` filed the reservation under: a release under
+      // any other key would leave that sum still seeing the reservation as
+      // drawn, refusing the change below all over again.
+      const releasedAt = new Date();
+      const monthly = `${releasedAt.getUTCFullYear()}-${String(releasedAt.getUTCMonth() + 1).padStart(2, "0")}`;
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values({
+          orgId,
+          workspaceId,
+          mandateId: row!.id,
+          toolCallId,
+          kind: "release",
+          measure: "amount",
+          value: "150000000",
+          unitOrCurrency: "USD",
+          periodKey: monthly,
+          balanceAfter: "2000000000",
+        }),
+      );
+      const freed = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perCall: "300000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(freed.limits.amount).toMatchObject({ kind: "money" });
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.mandateLedger)
+          .where(
+            and(
+              eq(schema.mandateLedger.mandateId, row!.id),
+              eq(schema.mandateLedger.measure, "amount"),
+            ),
+          ),
+      );
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    it("limits: a kind change is never refused for a legacy measure with no stored kind, once its unstamped reservation clears", async () => {
+      const m = await grant(billingUserId, body());
+      const toolCallId = randomUUID();
+      await seedReservation(m.id, "150000000", toolCallId);
+      // Strip the stored kind entirely, the pre-ADR-108 shape: a stored
+      // `limits.amount` with no `kind` key at all, not merely a wrong one.
+      // `parseMandateRow` resolves this via `legacyMeasureKindGuess`, and
+      // `locked.legacyKindMeasures` records that the resolved kind is a
+      // guess, not a fact this reservation was ever drawn against.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: {
+                perCall: m.limits.amount!.perCall,
+                perPeriod: m.limits.amount!.perPeriod,
+                period: m.limits.amount!.period,
+                currencyOrUnit: m.limits.amount!.currencyOrUnit,
+              },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      // `seedReservation`'s row carries no `measureKind` (the pre-ADR-108
+      // shape), so `hasUnstampedLedgerHistory` still sees it as live and
+      // unverified authority until it is released: the guess being wrong
+      // does not excuse a genuinely open reservation from that check.
+      const [row] = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values({
+          orgId,
+          workspaceId,
+          mandateId: row!.id,
+          toolCallId,
+          kind: "release",
+          measure: "amount",
+          value: "150000000",
+          unitOrCurrency: "USD",
+          periodKey: `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, "0")}`,
+          balanceAfter: "2000000000",
+        }),
+      );
+      const touched = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perCall: "300000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(touched.limits.amount).toMatchObject({ kind: "money" });
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    it("limits: a kind change is refused for a legacy measure whose unstamped reservation is still open", async () => {
+      const m = await grant(billingUserId, body());
+      await seedReservation(m.id, "150000000", randomUUID());
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: {
+                perCall: m.limits.amount!.perCall,
+                perPeriod: m.limits.amount!.perPeriod,
+                period: m.limits.amount!.period,
+                currencyOrUnit: m.limits.amount!.currencyOrUnit,
+              },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      let thrown: unknown;
+      try {
+        await inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limitChanges: { amount: { perCall: "300000000" } },
+            },
+            ctx(billingUserId),
+          ),
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(
+        isHandlerError(thrown) && thrown.reason === "measure_kind_drawn",
+      ).toBe(true);
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    // ── retirement (ADR-106, #3124) ────────────────────────────────────────────
     // A mandate does not survive its agent's retirement: request_mandate,
     // grant_mandate and update_mandate_limits refuse to create or widen
     // authority against a retired identity, while list_mandates, get_mandate

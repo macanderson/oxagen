@@ -53,11 +53,11 @@ export const mandateGrantHandler: CapabilityHandler<
     // Covers both a fresh grant and activating an existing draft: the draft
     // may have been requested before its agent retired (#3124).
     assertAgentActive(agent);
-    await assertToolsDeclareMeasures(tx, workspaceId, input);
+    const limits = await assertToolsDeclareMeasures(tx, workspaceId, input);
     const body = {
       agentPrincipalId: agent.principalId,
       consequenceTags: input.consequenceTags,
-      limits: input.limits,
+      limits,
       targets: input.targets,
       tools: input.tools,
       approvalRules: input.approval,
