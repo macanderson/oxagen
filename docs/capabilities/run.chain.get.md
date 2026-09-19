@@ -1,4 +1,4 @@
-# run.chain.get
+# get_run_chain
 
 What makes one run's record tamper-evident, and what it is missing (Mission Control spec §8.3, §8.4; the Run page's Chain-and-seal tab). It answers the rule the chain was built under, the Merkle root the seal committed to, the signed checkpoints along the way, the gaps the read can see, the seal itself, and the replay-grade ladder with the reason each rung is or is not reached.
 

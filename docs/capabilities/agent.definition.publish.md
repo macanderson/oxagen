@@ -1,4 +1,4 @@
-# agent.definition.publish
+# publish_agent_def
 
 **Domain:** agent
 **Mode:** sync

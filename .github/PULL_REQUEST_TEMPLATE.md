@@ -35,14 +35,14 @@ Closes #
 
 ## Checklist
 
-- [ ] `pnpm gate` passes locally (lint, typecheck, tests, build, manifest, contracts, env, db)
+- [ ] CI passes for the final commit (lint, typecheck, tests, build, and integrity checks)
 - [ ] New/changed logic has unit tests; coverage ratchets hold
 - [ ] New capability ships the full parity stack: contract → API route → MCP tool → CLI → `docs/capabilities/` (`pnpm check:manifest` clean)
-- [ ] User-facing changes have E2E tests with screenshots (`apps/app/e2e/`)
+- [ ] UI changes have component/action tests or runtime evidence; E2E stays limited to login, pay, and page-load
 - [ ] LLM calls go through `@oxagen/ai`; no hard-coded model slugs; DB access via tenancy helpers (no raw `db()`)
 - [ ] Dep changes: added to the importing package's `package.json` + `pnpm i --no-frozen-lockfile` run
 - [ ] Env var changes: registry + `.env.example` updated, `pnpm env:check` passes
-- [ ] Migrations (if any) generated via Atlas, in `packages/database/migrations/`, verified with a post-apply query
+- [ ] Migrations (if any) generated via Atlas, in `packages/database/atlas/migrations/`, verified with a post-apply query
 
 ## Verification
 

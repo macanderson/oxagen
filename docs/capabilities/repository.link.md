@@ -1,4 +1,4 @@
-# repository.link
+# link_repository
 
 Link a GitHub repository to the workspace as a linked repository (MC spec §10.1; the §17 M0 acceptance test "a second repo can be linked and unlinked"; ADR-099).
 

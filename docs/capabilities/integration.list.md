@@ -1,4 +1,4 @@
-# integration.list
+# list_integrations
 
 Browse installed plugin instances with status, config summary, and sync metrics.
 

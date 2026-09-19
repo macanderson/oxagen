@@ -1,4 +1,4 @@
-# agent.register
+# register_agent
 
 **Capability:** `register_agent`
 **Domain:** agent

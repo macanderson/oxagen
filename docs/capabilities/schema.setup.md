@@ -1,4 +1,4 @@
-# schema.setup
+# setup_schema
 
 Interactive LLM-assisted registry setup wizard — orchestrates `schema.recommend` → `schema.chat` Q&A → `schema.label.upsert` / `schema.relationship.upsert` → `schema.toggle` under one interactive flow.
 

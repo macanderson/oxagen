@@ -21,40 +21,22 @@ Client connections to Oxagen services use TLS 1.2 or higher, terminated by Caddy
 
 ## Data residency
 
-Oxagen runs in AWS `us-east-1` (US East):
-
-| Service | Region |
-|---|---|
-| Application host (API, app, MCP server, docs) | AWS `us-east-1` |
-| Postgres (Aurora PostgreSQL) | AWS `us-east-1` |
-| Neo4j and ClickHouse (on the application host) | AWS `us-east-1` |
-| Blob storage | US region |
-
-Customer data does not leave the United States in normal operation. If a workspace connects an external MCP server, that server's own data handling policies govern the data sent to it. Oxagen does not control or log the payloads sent to external servers.
+The repository's AWS deployment targets `us-east-1`. That location alone does not establish residency for every processor. Model providers, Blob storage, and external connections have their own processing locations and terms. Review the configured providers for your deployment.
 
 ## Data classification
 
-Oxagen handles four categories of customer data:
+- **Identity:** profiles and authentication records in Postgres. Telemetry can also carry identifiers and attribution.
+- **Operational records:** conversations, agent runs, tool calls, memories, and uploads across the four stores.
+- **Telemetry:** usage, timing, audit decisions, and recorded run events. Recorded content depends on the event and capture configuration.
+- **Billing:** credit and subscription records. Stripe handles card details, while Oxagen stores its identifiers.
 
-- **Identity data:** account profiles, email addresses, and authentication credentials. Stored in Postgres `auth.*` tables. Never written to ClickHouse. Never included in agent prompts.
-- **Operational data:** conversations, agent runs, memories, tool calls, and file uploads. Stored in Postgres with tenant-scoped RLS, and in Neo4j for graph relationships.
-- **Telemetry:** token usage, run latency, tool call counts, and audit events. Stored in ClickHouse (append-only). Never contains message content.
-- **Billing data:** subscription status, credit balances, and payment method tokens. Stripe manages it. Oxagen stores only Stripe-issued identifiers, not raw card data.
+Avoid placing secrets in prompts or tool payloads. Credential custody for mediated connections does not prevent a person or external tool from supplying a secret as content.
 
-## Retention
+## Retention and privacy requests
 
-| Data type | Retention policy |
-|---|---|
-| Security audit events (Postgres) | 7 years, monthly RANGE partitions |
-| Audit events (ClickHouse) | 7-year TTL |
-| Conversations and messages | Kept until the person or org deletes them. Soft-delete with a 30-day recovery window. |
-| Token usage telemetry | Kept for the life of the organization, and exportable |
-| Credit ledger | Permanent (append-only financial record) |
-| Binary assets | Kept until deleted. Hard-delete is immediate. |
+Security audit records use the retention policies documented in [Audit logging](/docs/security/audit-logging). Other stores and record types have their own deletion paths. Do not infer a common recovery window from a soft-delete field.
 
-You can export all of your personal data (conversations, profile, and audit events scoped to your account) from **Account → Privacy → Export data**. Oxagen generates the export as a signed download link, valid for 7 days.
-
-You can request account deletion from **Account → Privacy → Delete personal data**. Oxagen keeps a 30-day soft-delete window. On hard-delete, Oxagen removes PII and anonymizes audit events to `<deleted-user>`, keeping a stable hash for referential integrity.
+[Privacy requests](/docs/privacy/gdpr-rights) describes asynchronous exports, authenticated downloads, and the incomplete erasure cascade. An export may be partial when a component read fails. An erasure request does not currently remove all personal data across the stores.
 
 ## Sub-processors
 
@@ -71,12 +53,10 @@ DPAs are available on request for all primary sub-processors. Contact privacy@ox
 
 ## Model providers and AI inference
 
-All model inference routes through a model gateway (OpenRouter or the Vercel AI Gateway). The Oxagen codebase holds no direct Anthropic or OpenAI keys, because the gateway handles provider authentication. An organization can store its own gateway key instead. See [Model governance](/docs/governance/byok-and-models).
+Oxagen can fund inference through its model gateway or an organization-provided credential. Supported funding sources include OpenRouter, Vercel AI Gateway, OpenAI, Anthropic, and configured OpenAI-compatible endpoints. See [Model funding](/docs/governance/byok-and-models).
 
-An inference request contains your message and the agent's system prompt. It does not contain passwords, API keys, raw payment data, or other secrets. The model providers' data handling policies apply to the content of inference requests.
-
-Model training opt-out is on by default for every account (see **Account → Privacy → Consent settings**).
+Requests can contain prompts, messages, recalled context, and tool results. The configured model provider's terms govern that content. Do not treat an application preference as proof of the provider's training or retention policy.
 
 ## Data processing agreements
 
-Oxagen offers a Data Processing Agreement (DPA) for customers subject to GDPR, HIPAA, or other regulatory requirements. Contact hello@oxagen.sh to start a DPA.
+Contact privacy@oxagen.sh for the current processing terms and available agreement. Confirm the scope against your deployment and its connected providers.

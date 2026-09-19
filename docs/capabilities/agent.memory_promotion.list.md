@@ -1,4 +1,4 @@
-# agent.memory.promotion.candidates
+# list_memory_promotions
 
 **Domain:** agent
 **Mode:** sync

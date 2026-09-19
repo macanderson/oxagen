@@ -1,4 +1,4 @@
-# agent.tool.list
+# list_agent_tools
 
 **Domain:** agent
 **Mode:** sync

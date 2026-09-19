@@ -1,4 +1,4 @@
-# budget.policy.read
+# get_user_budget
 
 **Domain:** user
 **Mode:** sync

@@ -1,4 +1,4 @@
-# tacho.command.list
+# list_commands
 
 The delivery report for one run (Mission Control spec §7.4, §7.6): every command addressed to it, newest first, with its status in the closed nine-word vocabulary, the mode that was requested and the mode that was achieved, and `appliedAtSeq`, the frame that proves an `applied`. `applied` is the only success status; interfaces group `cancelled`, `expired` and `failed` as undelivered.
 

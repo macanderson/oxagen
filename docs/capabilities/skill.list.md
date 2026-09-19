@@ -1,4 +1,4 @@
-# skill.list
+# list_skills
 
 The skills this workspace's harness sessions reported when they started, over a window of session start times (#3098). The record is `tacho.sessions.skills_available`, the name list a wrapped harness reports at session start and `ingest_tacho_events` writes. Oxagen does not run, resolve or author a skill ([ADR-043](../adr/ADR-043-runtime-excision.md)): this read says which skills the harness had. The record holds names only, so no version, digest, source, token cost or decision is returned.
 

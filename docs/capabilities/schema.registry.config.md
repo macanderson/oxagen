@@ -1,4 +1,4 @@
-# schema.registry.config
+# get_registry_config
 
 Set `enforcement_mode` and `conformance_floor` for the workspace schema registry.
 

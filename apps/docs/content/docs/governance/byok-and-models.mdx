@@ -3,21 +3,11 @@ title: Model governance
 description: Which models each plan offers, how workspace model defaults work, and who pays for tokens.
 ---
 
-## Model access by plan
+## Model availability
 
-Oxagen routes all model inference through a model gateway (OpenRouter or the Vercel AI Gateway). The Oxagen codebase holds no direct provider API keys, because the gateway handles provider authentication. By default your organisation runs on Oxagen's gateway key. You can bring your own model key instead. See [Bring your own key](#bring-your-own-key-byok) below.
+Use the configured model catalog and your organization's plan to determine available text models. Model IDs and plan entitlements change with the deployed registry. Oxagen no longer exposes image or video generation capabilities.
 
-Available models depend on your subscription tier:
-
-| Model | Free | Build | Scale | Enterprise |
-|---|---|---|---|---|
-| Claude Haiku 4.5 | Yes | Yes | Yes | Yes |
-| Claude Sonnet 4.6 | Yes | Yes | Yes | Yes |
-| Claude Opus 4.8 | none | Yes | Yes | Yes |
-| Image generation (gpt-image-1, flux-2-max) | none | Yes | Yes | Yes |
-| Video generation (veo-3.0) | none | none | Yes | Yes |
-
-Every model call is metered in credits at the per-token rate in the billing pricing table. See the [full cost table](/docs/enterprise/use-cases#metered-spend) for per-model credit rates.
+The organization can fund model calls with Oxagen's key or a stored provider credential. See [Bring your own key](#bring-your-own-key-byok).
 
 ## Workspace model defaults
 
@@ -25,9 +15,7 @@ A workspace Owner or Admin sets the workspace's default text tier and default te
 
 **To configure workspace model defaults:**
 
-1. Go to **Workspace settings → Agent Defaults**.
-2. Set the default text tier, the default text model, or both.
-3. Save.
+Call `update_model_settings` with the default text tier, default text model, or both. Read the current values with `get_model_settings`.
 
 Tier and model resolve on two separate chains, workspace first, then person. A chat turn then prefers a model over a tier:
 
@@ -176,11 +164,11 @@ The audit log records every set and clear. The key itself never appears there.
 
 ## Restricting model access per workspace
 
-There is no per-workspace model allowlist yet, and no setting blocks a model the subscription tier allows. The closest control is the workspace default. A workspace Owner or Admin sets the default text tier and model at **Workspace settings → Agent Defaults** (`update_model_settings`). The default chooses a model but does not forbid others.
+There is no per-workspace model allowlist yet, and no setting blocks a model the subscription tier allows. The closest control is the workspace default. A workspace Owner or Admin sets the default text tier and model through `update_model_settings`. The default chooses a model but does not forbid others.
 
 ## Model governance and org-enforced policies
 
-Org-enforced policies on model access are not available. The IAM resolver has no live policy tier, and there is no policy editor, so an org cannot pin a capability to a particular model or stop a workspace from choosing a different one. What an org controls today is the subscription tier, which decides the models on offer, and who pays for tokens (see [Bring your own key](#bring-your-own-key-byok)).
+Org-enforced policies on model access are not available. The IAM resolver has no live policy tier, and role editing does not add that policy tier, so an org cannot pin a capability to a particular model or stop a workspace from choosing a different one. What an org controls today is the subscription tier, which decides the models on offer, and who pays for tokens (see [Bring your own key](#bring-your-own-key-byok)).
 
 ## Model handle stability
 

@@ -1,4 +1,4 @@
-# schema.version.diff
+# diff_schema_versions
 
 Structural diff of two schema versions: added/removed/changed schemas, labels, relationship types, and properties. Useful for audit and release review before pinning.
 

@@ -1,4 +1,4 @@
-# spend.waste
+# list_waste
 
 Spend the frames show bought nothing, by cause, with the runs that prove it (Mission Control spec §12.8; ADR-060). Each cause is a pattern read off the `cost.run_totals` rows of the active workspace, never a guess.
 

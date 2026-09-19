@@ -57,26 +57,8 @@ See [Credentials](/docs/mcp/credentials) for where the credential is held and ho
 
 Both contributor types produce `ContributedRawTool` entries, and every entry passes the same IAM gate and ClickHouse telemetry before the model sees it. Tools from DB-backed servers also go through first-use consent and approval. Tools from file-based servers skip the consent card: the settings file is the trust anchor, because whoever can write it already controls the process.
 
-## Quick start
+## Configure a server
 
-Add an external MCP server with one command per server:
+Register a workspace server with `register_mcp_server`, or configure the runtime host's files as [File-based configuration](/docs/mcp/file-config) describes. Files belong to the process that materializes tools. Creating a file on your laptop does not configure the hosted workspace.
 
-<Callout type="warn">
-  The `oxagen mcp` commands below are retired in the Oxagen CLI. Each one prints a retirement notice that points to the `stella` CLI and exits non-zero. Write the same entries into the settings files by hand, as [File-based configuration](/docs/mcp/file-config) shows.
-</Callout>
-
-```bash
-# Add GitHub MCP with a static auth header
-oxagen mcp add github --url https://api.githubcopilot.com/mcp/ --auth header --header "Authorization=Bearer ${GITHUB_TOKEN}"
-
-# Add a bearer-token server
-oxagen mcp add linear --url https://mcp.linear.app/sse --transport sse --auth bearer --env-token LINEAR_MCP_TOKEN
-
-# Add a local stdio server
-oxagen mcp add filesystem --transport stdio --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg ./src
-
-# Check connectivity
-oxagen mcp check
-```
-
-See [CLI reference](/docs/mcp/cli-reference) for the full command set.
+The `oxagen mcp` command group is retired. It prints a retirement notice and makes no configuration change.

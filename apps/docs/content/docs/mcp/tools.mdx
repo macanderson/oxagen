@@ -11,87 +11,9 @@ Capability names are verb-first snake_case: an imperative verb, then the thing i
 
 ## Available tools
 
-Every capability that lists `mcp` in its `surfaces` array becomes a tool. The tables below cover the common ones. The [capabilities reference](/docs/api/capabilities) is the fuller list, and the governance catalog in the app (**Organization → Governance → Capabilities**) is generated from the live registry.
+Ask the connected server for `tools/list` to read the available names and input schemas. A contract's `surfaces` field determines exposure, and authorization still applies when a tool is called.
 
-Your MCP client can also ask the server. Call `tools/list` after connecting, and the server returns every tool on the MCP surface with its input schema. The server does not filter that list per key: a rule answers each tool call when the call is made. The list is always current, and this page is not.
-
-### Agent
-
-| Tool                     | Description                                          |
-| ------------------------ | ---------------------------------------------------- |
-| `list_agent_tools`       | List the tools in the current workspace              |
-| `list_agent_defs`        | List agent definitions in the workspace              |
-| `deploy_agent`           | Set an agent's deployment posture                    |
-| `bind_agent_environment` | Bind an agent to an environment                      |
-| `list_mcp_servers`       | List registered external MCP servers                 |
-| `register_mcp_server`    | Register an external MCP server                      |
-| `resolve_approval`       | Approve or deny a tool call routed to a person       |
-| `resolve_mcp_consent`    | Allow or deny the first use of an MCP tool           |
-| `recall_memory`          | Recall memories from the workspace knowledge graph   |
-| `write_memory`           | Write a new memory to the workspace knowledge graph  |
-| `list_executions`        | List past agent runs                                 |
-| `get_execution_trace`    | Read the record of one agent run                     |
-
-### Chat and conversations
-
-| Tool                   | Description                                           |
-| ---------------------- | ----------------------------------------------------- |
-| `send_message`         | Send a message to a conversation                      |
-| `list_conversations`   | List conversations in the workspace                   |
-| `archive_conversation` | Archive a conversation                                |
-| `rename_conversation`  | Rename a conversation                                 |
-| `delete_conversation`  | Delete a conversation                                 |
-| `purge_conversations`  | Permanently purge a conversation and all its messages |
-
-### Knowledge and assets
-
-| Tool           | Description                                  |
-| -------------- | -------------------------------------------- |
-| `upload_asset` | Upload a binary asset (image, PDF, document) |
-
-### Organization and workspace
-
-| Tool                    | Description                           |
-| ----------------------- | ------------------------------------- |
-| `create_org`            | Create a new organization             |
-| `add_org_member`        | Add a member to the organization      |
-| `remove_org_member`     | Remove a member from the organization |
-| `change_member_role`    | Change a member's role                |
-| `accept_member_invite`  | Accept a pending invitation           |
-| `decline_member_invite` | Decline a pending invitation          |
-| `create_workspace`      | Create a new workspace                |
-| `get_model_settings`    | Read workspace model configuration    |
-| `update_model_settings` | Write workspace model configuration   |
-
-### Billing
-
-| Tool               | Description                                  |
-| ------------------ | -------------------------------------------- |
-| `get_subscription` | Read current subscription and credit balance |
-
-### Notifications and preferences
-
-| Tool                      | Description                |
-| ------------------------- | -------------------------- |
-| `list_notifications`      | List notifications         |
-| `mark_notification`       | Mark notifications as read |
-| `get_user_preferences`    | Read your preferences      |
-| `set_preferences`         | Update your preferences    |
-
-### Plugins
-
-| Tool                     | Description                       |
-| ------------------------ | --------------------------------- |
-| `browse_plugin_catalog`  | Browse the plugin marketplace     |
-| `get_catalog_plugin`     | Get details for a specific plugin |
-| `list_plugins`           | List org-installed plugins        |
-| `list_plugin_registries` | List configured plugin registries |
-
-### System
-
-| Tool                       | Description                                       |
-| -------------------------- | ------------------------------------------------- |
-| `get_install_instructions` | Get workspace context and connection verification |
+See [Capabilities](/docs/api/capabilities) for the registry and route conventions. Machine-purpose keys can be narrower than the server catalog. See [Authentication](/docs/api/authentication).
 
 ## Parity model
 

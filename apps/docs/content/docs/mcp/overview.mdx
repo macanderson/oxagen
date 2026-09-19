@@ -17,7 +17,7 @@ The kernel answers a tool call when the call is made, not when the client fetche
 
 ## Connect a client
 
-The server speaks streamable HTTP, so any client that accepts a remote MCP URL and a custom header can connect. Replace the key placeholder with an Oxagen API key from **Organization → Developer → Tokens**. The key identifies you and your workspace to Oxagen. It is not a credential for any system an agent reaches.
+The server speaks streamable HTTP, so any client that accepts a remote MCP URL and a custom header can connect. Replace the key placeholder with an Oxagen API key from **Organization → API keys**. The key identifies you and your workspace to Oxagen. It is not a credential for any system an agent reaches.
 
 ```bash tab="Claude Code"
 claude mcp add --transport http oxagen https://mcp.oxagen.sh/mcp \
@@ -57,7 +57,7 @@ The MCP server accepts an Oxagen API key and nothing else. The key sets three th
 
 - The organization every call belongs to
 - The workspace every call runs in
-- Whose IAM grants answer each call: the person who created the key
+- The authenticated principal and key purpose that govern the call
 
 The URL carries no org or workspace segment. The key carries the scope.
 
@@ -99,6 +99,6 @@ The MCP tool list mirrors the REST API capability list. A capability that declar
 
 See [Tools](/docs/mcp/tools) for the current tool list and any known parity gaps.
 
-## Unified install
+## Client configuration
 
-The unified install page at **Organization → Developer → MCP** writes a copy-ready snippet for every supported MCP client, filled in with your API key.
+Use the client snippets on [Connecting to MCP](/docs/mcp/connecting) with a workspace-scoped key from **Organization → API keys**.

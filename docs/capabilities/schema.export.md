@@ -1,4 +1,4 @@
-# schema.export
+# export_schema
 
 Build a ZIP of a schema version (grouped by schema) via the `archive.create` plumbing and return an access-controlled download URL.
 

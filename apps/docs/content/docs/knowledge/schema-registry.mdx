@@ -5,7 +5,7 @@ description: "Define and enforce the workspace ontology: node labels, properties
 
 The **schema registry** defines what your knowledge graph may contain: the node labels (entity types), their typed properties, and the relationship types between them. Extraction, ingestion, and validation all read the pinned schema version, so the graph stays consistent whichever source or agent writes to it.
 
-Manage it in **Workspace → Knowledge → Ontology**.
+Read it with `get_schema_registry` or `list_schemas`. Manage versions with `create_schema_version` and `pin_schema_version` through API or MCP. The current app has no Ontology page.
 
 ## Concepts
 
@@ -22,7 +22,7 @@ Manage it in **Workspace → Knowledge → Ontology**.
 You do not have to write a schema by hand:
 
 1. **Recommend**. Oxagen reads your existing graph (node counts, observed labels, sampled entities) and proposes a starter schema or additions to it.
-2. **Refine in chat**. A builder takes plain-language instructions ("split Contact into Lead and Customer", "add a renewal_date to Contract") and returns proposed changes to the draft.
+2. **Refine**. `run_schema_chat` takes plain-language instructions ("split Contact into Lead and Customer", "add a renewal_date to Contract") and returns proposed changes to the draft.
 3. **Activate**. The draft becomes the pinned version.
 
 ## Enforcement

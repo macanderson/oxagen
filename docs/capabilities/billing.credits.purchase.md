@@ -1,4 +1,4 @@
-# billing.credits.purchase
+# purchase_credits
 
 **Domain:** billing
 **Mode:** sync

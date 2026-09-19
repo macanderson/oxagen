@@ -1,30 +1,7 @@
-# First-call enterprise deck
+# First call enterprise deck
 
-A self-contained HTML sales deck + presenter script for enterprise first calls.
-Published at **https://docs.oxagen.sh/decks/first-call-enterprise**.
+Historical presentation source. Its product claims and demo flow predate the current Mission Control app. Do not use it as a current feature, security, pricing, or setup reference.
 
-## Files
+`index.html` holds the slides. `script-data.js` holds presenter notes. Keep their slide order aligned when editing. Review the rendered deck and its claims against the current code and house brand before presenting it again.
 
-| File | Purpose |
-|---|---|
-| `index.html` | The deck. 13 slides, brand-matched to the web app (`apps/web/index.html`): `#09090B` bg, ember gradient, embedded Space Grotesk font, hex-motif chrome. Keyboard/dot/swipe nav, `⌘P` → PDF. |
-| `script.html` | Standalone, printable master narration: every slide's script **plus** the full live-demo walkthrough. Openable on a second screen. Served at `/decks/first-call-enterprise/script`. |
-| `script-data.js` | **Single source of truth** for all narration + demo steps (`window.OX_SCRIPT`). Both `index.html` and `script.html` load it. Edit narration here and both update. |
-
-## Presenting (off-screenshare teleprompter)
-
-1. Open the deck and press **`S`** → a **private Presenter window** pops out, synced to the deck over `BroadcastChannel`. It shows the current slide's narration, a running timer, next-slide preview, and, on the demo slide, the numbered live-demo steps.
-2. **Share only the deck window/tab** on your call (not the whole screen). The Presenter window is a separate window, so it never appears in the recording.
-3. Advance with `→`/`←`, the on-screen arrows, or the Presenter's Next/Prev buttons (which drive the deck).
-4. At slide 12 (**DEMO**) you leave the deck to drive the product. The Presenter/script continues through every demo step, then you return to slide 13 (**Thank you**).
-
-## Editing
-
-- **Narration / demo steps:** edit `script-data.js` (`window.OX_SCRIPT`) only.
-- **Slide content / layout:** edit `index.html`.
-- **Founder photo:** the About slide shows `founder-headshot.jpg` inside `.founder .avatar`. Replace that file to change the photo.
-- The Space Grotesk `@font-face` block is embedded as base64. Keep it in sync with the house brand font if it changes.
-
-## URL routing
-
-`apps/docs/next.config.mjs` rewrites the clean paths (`/decks/first-call-enterprise`, `/.../script`) to the folder's HTML files so they resolve in `next dev`/`next start`. On Vercel the directory `index.html` also resolves at the clean path automatically. The Fumadocs catch-all is scoped to `/docs/*`, so `/decks/*` is never intercepted.
+For current engineering documentation, use the generated architecture atlas and the capability contracts. For setup, use `apps/docs/content/docs/getting-started.mdx`.

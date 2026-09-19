@@ -1,4 +1,4 @@
-# spend.drill
+# get_spend_drill
 
 One operator, agent or tool over a trailing window: the Spend drill page (Mission Control spec §12.9; ADR-060). Reads the `cost.run_totals` rows the key attributes to in the active workspace and answers the daily series, the averages per call and per run, the key's share of the workspace's spend over the window, and the tools those runs called.
 

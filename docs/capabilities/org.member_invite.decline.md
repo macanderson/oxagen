@@ -1,4 +1,4 @@
-# org.member.invite.decline
+# decline_member_invite
 
 **Domain:** organization
 **Mode:** sync

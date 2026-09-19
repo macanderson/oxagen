@@ -1,4 +1,4 @@
-# org.settings.write
+# update_org_settings
 
 **Domain:** organization
 **Mode:** sync

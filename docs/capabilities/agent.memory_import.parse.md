@@ -1,4 +1,4 @@
-# agent.memory.import.parse
+# parse_memory_import
 
 **Domain:** agent
 **Mode:** sync (batch)

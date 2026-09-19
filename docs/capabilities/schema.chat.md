@@ -1,4 +1,4 @@
-# schema.chat
+# run_schema_chat
 
 AI iterative schema builder turn — takes a conversation and the current draft, and returns an assistant message plus proposed mutation tool calls. The inner Q&A loop of the schema setup wizard.
 

@@ -1,4 +1,4 @@
-# tool.version.list
+# list_tool_versions
 
 **Capability:** `list_tool_versions`
 **Domain:** tool
