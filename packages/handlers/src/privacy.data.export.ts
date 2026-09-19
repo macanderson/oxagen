@@ -11,19 +11,6 @@ import { eventClient } from "./event-client";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
 
-/**
- * The real workspace that governed this queue, or null when none did.
- *
- * The org-only sentinel is not a workspace: storing it would make the
- * download recheck treat a sentinel as a place a deny can be written, which
- * it cannot. Null is the honest record for an org-only mount and for a
- * caller who named no workspace at all.
- */
-function governedWorkspaceId(workspaceId: string | undefined): string | null {
-  if (!workspaceId || workspaceId === ORG_ONLY_WORKSPACE_ID) return null;
-  return workspaceId;
-}
-
 // CSPRNG-backed, matching the idMixin public-id default (@oxagen/database
 // schema/_mixins.ts) rather than hand-rolling a weaker Math.random() generator.
 function generatePublicId(prefix: string): string {
@@ -116,10 +103,6 @@ export const privacyDataExportHandler: CapabilityHandler<
   }
 
   const orgId = input.scope === "org" ? (input.orgId ?? ctx.orgId) : ctx.orgId;
-  // Bound at queue time so `get_export_status` can recheck `export_data` in
-  // the same workspace that authorized the archive, even when the download
-  // arrives under a different workspace slug in the same organization.
-  const workspaceId = governedWorkspaceId(ctx.workspaceId);
 
   const [row] = await withSystemDb((tx) =>
     tx
@@ -128,7 +111,14 @@ export const privacyDataExportHandler: CapabilityHandler<
         publicId: generatePublicId("prexp"),
         userId: ctx.userId!,
         orgId,
-        workspaceId,
+        // The workspace whose `export_data` policy just governed this queue.
+        // `get_export_status` asks that policy again before it hands over an
+        // organization archive, wherever the download is requested from. The
+        // org-only sentinel is no workspace, so it is stored as none.
+        workspaceId:
+          ctx.workspaceId && ctx.workspaceId !== ORG_ONLY_WORKSPACE_ID
+            ? ctx.workspaceId
+            : null,
         scope: input.scope,
         status: "queued",
       })

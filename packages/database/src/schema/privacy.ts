@@ -40,12 +40,11 @@ export const privacyExportRequests = privacySchema.table(
     /** Org context — always set; for user-scope exports this is their primary org. */
     orgId: uuid("org_id").notNull(),
     /**
-     * The workspace that governed the queue, when one was named.
-     *
-     * `get_export_status` rechecks `export_data` against this workspace, not
-     * the download request's current one, so a deny written where the archive
-     * was authorized still binds when the same id is polled elsewhere in the
-     * organization. Null for pre-column rows and for org-only mounts.
+     * The workspace whose `export_data` policy governed the queue. Null for a
+     * request made in no workspace and for rows written before this column.
+     * `get_export_status` re-asks that workspace's policy before it releases an
+     * organization archive, so a deny written there after the queue holds even
+     * when the download is requested through another workspace.
      */
     workspaceId: uuid("workspace_id"),
     scope: privacyRequestScopeEnum("scope").notNull(),

@@ -11,16 +11,14 @@
 //
 // get_export_status: where one of the calling person's own exports has got to.
 //
-// `privacy.privacy_export_requests` is a person-keyed table and is not under
-// RLS, so withSystemDb is the executor, same as the write beside it. The acting
-// user id comes from the capability context principal and is part of the match,
-// never from input: the contract carries no user id, so there is no way to ask
-// after anyone else's bundle. An id that exists but belongs to someone else is
-// `not_found`, not `forbidden`. A refusal that distinguished the two would
-// answer whether a stranger's export id is real. The row also carries the
-// workspace that governed the queue (nullable for older rows), so the
-// `export_data` recheck below can bind to that workspace rather than the
-// download request's current one.
+// `privacy.privacy_export_requests` is a person-keyed table with no
+// workspace_id and is not under RLS, so withSystemDb is the executor, same as
+// the write beside it. The acting user id comes from the capability context
+// principal and is part of the match, never from input: the contract carries
+// no user id, so there is no way to ask after anyone else's bundle. An id that
+// exists but belongs to someone else is `not_found`, not `forbidden`. A
+// refusal that distinguished the two would answer whether a stranger's export
+// id is real.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
@@ -67,10 +65,10 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
       .select({
         id: schema.privacyExportRequests.id,
         scope: schema.privacyExportRequests.scope,
+        workspaceId: schema.privacyExportRequests.workspaceId,
         status: schema.privacyExportRequests.status,
         exportUrl: schema.privacyExportRequests.exportUrl,
         completedAt: schema.privacyExportRequests.completedAt,
-        workspaceId: schema.privacyExportRequests.workspaceId,
       })
       .from(schema.privacyExportRequests)
       .where(
@@ -136,25 +134,27 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
     // above remains the authorization; this observes the revocation it cannot
     // see.
     //
-    // The workspace that governed the queue is the one asked, not the
-    // download's current `ctx.workspaceId`. A deny written in workspace A must
-    // still bind when the same archive is polled through workspace B: the
-    // request row stores that origin, and falling back to the download's
-    // workspace would make A's revocation invisible. A null origin (older
-    // rows, org-only mounts) rechecks at org scope, which is the honest
-    // reading when no workspace ever governed the queue.
-    await assertCapabilityNotRevoked(
-      privacyDataExport,
-      {
-        ...ctx,
-        workspaceId: row.workspaceId ?? undefined,
-      },
-      {
-        reason: "org_export_not_permitted",
-        message:
-          "An organization export can no longer be read: the export_data policy for this organization no longer permits it",
-      },
-    );
+    // And it is asked in the workspace that queued the export, not only in the
+    // one the download arrives through. The download route is mounted under
+    // any workspace slug, so a deny written in the queuing workspace A would
+    // otherwise be stepped around by downloading through workspace B, whose
+    // policy never governed the export. So the queuing workspace is asked first
+    // and the calling scope second, and either one refusing refuses the read.
+    // A row with no recorded workspace (queued in no workspace, or written
+    // before the column existed) is asked in the calling scope alone.
+    const revoked = {
+      reason: "org_export_not_permitted",
+      message:
+        "An organization export can no longer be read: the export_data policy for this organization no longer permits it",
+    };
+    if (row.workspaceId && row.workspaceId !== ctx.workspaceId) {
+      await assertCapabilityNotRevoked(
+        privacyDataExport,
+        { ...ctx, workspaceId: row.workspaceId },
+        revoked,
+      );
+    }
+    await assertCapabilityNotRevoked(privacyDataExport, ctx, revoked);
   }
 
   // export_url holds the storage KEY, not a browser URL: the archive is a
