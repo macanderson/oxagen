@@ -256,7 +256,7 @@ describe("decidePublication", () => {
       stdout: JSON.stringify({ Contents: [{ Key: "k" }] }),
     });
     expect(got.action).toBe("stop");
-    expect(got).toMatchObject({ code: 1 });
+    expect(got).toMatchObject({ code: 1, reason: "published" });
     if (got.action !== "stop") throw new Error("unreachable");
     expect(got.message).toContain("already published");
     expect(got.message).toContain("--allow-overwrite");
@@ -290,6 +290,7 @@ describe("decidePublication", () => {
   it("stops when aws never ran", () => {
     const got = decide({ status: null, spawnFailed: true });
     expect(got.action).toBe("stop");
+    expect(got).toMatchObject({ reason: "unknown" });
     if (got.action !== "stop") throw new Error("unreachable");
     expect(got.message).toContain("could not be run");
   });

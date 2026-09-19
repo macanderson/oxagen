@@ -371,7 +371,13 @@ export interface PublicationProbe {
 export type PublicationDecision =
   | { action: "publish" }
   | { action: "overwrite"; message: string }
-  | { action: "stop"; code: number; message: string };
+  | {
+      action: "stop";
+      code: number;
+      message: string;
+      /** `published`: the version is there. `unknown`: the probe could not say. */
+      reason: "published" | "unknown";
+    };
 
 /**
  * How many objects the probe found, or `null` when its output cannot be read.
@@ -430,6 +436,7 @@ export function decidePublication(
 ): PublicationDecision {
   const unknown = (why: string): PublicationDecision => ({
     action: "stop",
+    reason: "unknown",
     code: 1,
     message:
       `✖ ${why}, so whether ${options.version} is already published is\n` +
@@ -447,6 +454,7 @@ export function decidePublication(
   if (!options.allowOverwrite)
     return {
       action: "stop",
+      reason: "published",
       code: 1,
       message:
         `✖ ${options.version} is already published at ${options.prefix}/.\n` +

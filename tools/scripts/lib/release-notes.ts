@@ -158,7 +158,7 @@ export function fallbackNotes(h: NotesHistory): ReleaseNotes {
         .trim(),
     )
     .filter((l) => l.length > 0)
-    .map((l) => sanitizeLine(l));
+    .map((l) => escapeMdx(sanitizeLine(l)));
   // The mechanical fixes above cannot rewrite a subject that carries a word
   // from the avoid list ("robust", "observability"), and a page that fails
   // the gate would block the release PR, which is what the fallback exists
@@ -182,6 +182,17 @@ export function fallbackNotes(h: NotesHistory): ReleaseNotes {
     ...(omitted > 0 ? ["", `And ${omitted} more, in the commit log.`] : []),
   ].join("\n");
   return { summary, body };
+}
+
+/**
+ * A commit subject is prose to Markdown and to MDX alike, except that MDX
+ * reads `<img>` as JSX and `{value}` as an expression, and a subject such as
+ * `replace <img> with <Image>` would fail the docs build. A backslash before
+ * each of those characters is an escape in both, so the same text serves the
+ * changelog and the page.
+ */
+export function escapeMdx(line: string): string {
+  return line.replace(/[\\<>{}]/g, (c) => `\\${c}`);
 }
 
 /** Make one line pass the scanner's mechanical rules. */

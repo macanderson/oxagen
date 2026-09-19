@@ -5,6 +5,7 @@
  *   node scripts/publish-downloads.mjs --run <actions run id>   [--version 2.1.1] [--dry-run]
  *   node scripts/publish-downloads.mjs --dir <folder of installers> [--version 2.1.1] [--dry-run]
  *   node scripts/publish-downloads.mjs --page-only                [--version 2.1.1] [--dry-run]
+ *   node scripts/publish-downloads.mjs --dir <folder> --resume    (CI: a re-run after a partial failure)
  *
  * With --run it fetches every artifact of a `.github/workflows/desktop.yml`
  * run; with --dir it takes installers already on disk. Either way it keeps
@@ -18,6 +19,13 @@
  * `.github/workflows/desktop.yml` runs this with --dir after every tagged
  * build, so a `desktop-v*` tag is enough to update https://downloads.oxagen.sh/;
  * the invocations above are for a build made some other way.
+ *
+ * --resume is for a re-run of the workflow's publish job after something
+ * downstream of the upload failed: when the version is already published,
+ * the installers on disk are hashed and compared with the published
+ * SHA256SUMS.txt, and an identical set means the upload is done, so the page
+ * is redrawn from the bucket and the job carries on. A different set is still
+ * refused: that is a new build under an old version's URLs.
  *
  * --page-only rewrites the listing page (and its fonts) for a version that is
  * already published, from what the bucket holds: the object sizes from a
@@ -74,6 +82,7 @@ const allowOverwrite = argv.includes("--allow-overwrite");
 const runId = flag("--run");
 const fromDir = flag("--dir");
 const pageOnly = argv.includes("--page-only");
+const resume = argv.includes("--resume");
 const repo = flag("--repo") ?? "macanderson/oxagen";
 const bucket = flag("--bucket") ?? "oxagen-downloads-916294258235";
 const host = flag("--host") ?? "downloads.oxagen.sh";
@@ -86,7 +95,7 @@ const sources = [runId !== undefined, fromDir !== undefined, pageOnly].filter(
 ).length;
 if (sources !== 1) {
   console.error(
-    "usage: publish-downloads.mjs (--run <id> | --dir <folder> | --page-only) [--version x.y.z] [--bucket name] [--host name] [--allow-overwrite] [--dry-run]",
+    "usage: publish-downloads.mjs (--run <id> | --dir <folder> | --page-only) [--version x.y.z] [--bucket name] [--host name] [--allow-overwrite] [--resume] [--dry-run]",
   );
   process.exit(2);
 }
@@ -238,8 +247,32 @@ function invalidate(paths) {
   ]);
 }
 
-// --page-only: the version is already there; describe it from the bucket.
-if (pageOnly) {
+/** The published SHA256SUMS.txt, as file name → digest. */
+function readPublishedDigests() {
+  const sumsText = sh(
+    "aws",
+    ["s3", "cp", `${prefix}/SHA256SUMS.txt`, "-", "--only-show-errors"],
+    { capture: true },
+  );
+  return new Map(
+    sumsText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "")
+      .map((line) => {
+        const [sha256, ...rest] = line.split(/\s+/);
+        return [rest.join(" ").replace(/^\*/, ""), sha256];
+      }),
+  );
+}
+
+/**
+ * Redraw the page for a version that is already in the bucket, from the
+ * bucket: sizes from a listing of its prefix, digests from its
+ * SHA256SUMS.txt, the published date from that file. Returns the digests by
+ * file name so a caller can compare them with a build on disk.
+ */
+async function redrawFromBucket({ probeCliRelease }) {
   const listing = JSON.parse(
     sh(
       "aws",
@@ -264,21 +297,7 @@ if (pageOnly) {
     );
     process.exit(1);
   }
-  const sumsText = sh(
-    "aws",
-    ["s3", "cp", `${prefix}/SHA256SUMS.txt`, "-", "--only-show-errors"],
-    { capture: true },
-  );
-  const digests = new Map(
-    sumsText
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line !== "")
-      .map((line) => {
-        const [sha256, ...rest] = line.split(/\s+/);
-        return [rest.join(" ").replace(/^\*/, ""), sha256];
-      }),
-  );
+  const digests = readPublishedDigests();
   const published = [];
   for (const object of objects) {
     const name = String(object.Key).split("/").pop();
@@ -306,18 +325,20 @@ if (pageOnly) {
     String(sumsObject?.LastModified ?? "").slice(0, 10) ||
     new Date().toISOString().slice(0, 10);
   // A version published before the release workflow existed has no
-  // desktop-v release with the bare binaries; do not link one that 404s.
-  const releaseUrl = `https://github.com/${repo}/releases/tag/desktop-v${version}`;
-  const cliRelease = await fetch(releaseUrl, {
-    method: "HEAD",
-    redirect: "manual",
-  })
-    .then((r) => r.status === 200)
-    .catch(() => false);
-  if (!cliRelease)
-    console.warn(
-      `! ${releaseUrl} does not exist; the page omits the bare-binary link`,
-    );
+  // desktop-v release with the bare binaries; do not link one that 404s. A
+  // resumed publish skips the probe: its release is a draft at this point
+  // (which HEAD reports as absent) and the job publishes it moments later.
+  let cliRelease = true;
+  if (probeCliRelease) {
+    const releaseUrl = `https://github.com/${repo}/releases/tag/desktop-v${version}`;
+    cliRelease = await fetch(releaseUrl, { method: "HEAD", redirect: "manual" })
+      .then((r) => r.status === 200)
+      .catch(() => false);
+    if (!cliRelease)
+      console.warn(
+        `! ${releaseUrl} does not exist; the page omits the bare-binary link`,
+      );
+  }
   const dir = mkdtempSync(join(tmpdir(), "oxagen-downloads-page-"));
   publishPage(dir, sortInstallers(published), publishedAt, cliRelease);
   invalidate(["/", "/index.html", "/fonts/*"]);
@@ -325,6 +346,12 @@ if (pageOnly) {
     console.log(`${entry.file}  ${entry.bytes} bytes  ${entry.sha256}`);
   console.log(`https://${host}/`);
   rmSync(dir, { recursive: true, force: true });
+  return digests;
+}
+
+// --page-only: the version is already there; describe it from the bucket.
+if (pageOnly) {
+  await redrawFromBucket({ probeCliRelease: true });
   process.exit(0);
 }
 
@@ -376,10 +403,18 @@ const decision = decidePublication(probe, { version, prefix, allowOverwrite });
 // --dry-run performs no writes, so it is told what the real run would have
 // decided and then shown the plan anyway; only a real publish stops. See
 // reportPublicationDecision, which is the one place that distinction is made.
-const report = reportPublicationDecision(decision, { dryRun });
-if (report.message !== null)
-  (report.level === "error" ? console.error : console.warn)(report.message);
-if (report.exitCode !== null) process.exit(report.exitCode);
+const resuming =
+  resume && decision.action === "stop" && decision.reason === "published";
+if (resuming) {
+  console.warn(
+    `! ${version} is already published; --resume will compare the build on disk with it`,
+  );
+} else {
+  const report = reportPublicationDecision(decision, { dryRun });
+  if (report.message !== null)
+    (report.level === "error" ? console.error : console.warn)(report.message);
+  if (report.exitCode !== null) process.exit(report.exitCode);
+}
 
 // 1. Collect the build outputs.
 const work = mkdtempSync(join(tmpdir(), "oxagen-downloads-"));
@@ -456,6 +491,35 @@ for (const installer of installers) {
 }
 const sums = join(work, "SHA256SUMS.txt");
 writeFileSync(sums, sha256SumsText(entries));
+
+// A re-run after the upload succeeded: the same files under the same URLs is
+// a finished upload, so redraw the page and let the job's later steps run.
+// Anything else is a different build asking for an old version's immutable
+// URLs, which is what the refusal above exists to stop.
+if (resuming) {
+  const published = readPublishedDigests();
+  const differs = entries.filter((e) => published.get(e.file) !== e.sha256);
+  const missing = [...published.keys()].filter(
+    (file) => !entries.some((e) => e.file === file),
+  );
+  if (differs.length > 0 || missing.length > 0) {
+    console.error(
+      `✖ the build on disk is not the ${version} that is published:\n` +
+        [
+          ...differs.map((e) => `  ${e.file} has a different digest`),
+          ...missing.map((f) => `  ${f} is published but not on disk`),
+        ].join("\n") +
+        "\n  Ship the fix as a new version.",
+    );
+    process.exit(1);
+  }
+  await redrawFromBucket({ probeCliRelease: false });
+  console.log(
+    `${version} is already published with these exact files; page redrawn, nothing else to upload.`,
+  );
+  rmSync(work, { recursive: true, force: true });
+  process.exit(0);
+}
 
 // 4. Reserve the version, then upload. Versioned paths are immutable (a fix
 // ships as a new version, enforced above), so they cache for a year.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   changelogEntry,
   compareSemverDesc,
+  escapeMdx,
   fallbackNotes,
   loadSkills,
   parseNotes,
@@ -135,6 +136,21 @@ describe("fallbackNotes", () => {
       "## What changed\n\n- fix: a thing\n\nAnd 2 more, in the commit log.",
     );
     expect(notes.summary).toContain("carries 3 changes");
+    expect(proseHits(notes)).toEqual([]);
+  });
+
+  it("escapes what MDX would read as JSX or an expression", () => {
+    expect(escapeMdx("replace <img> with <Image> in {layout}")).toBe(
+      "replace \\<img\\> with \\<Image\\> in \\{layout\\}",
+    );
+    expect(escapeMdx("a \\ b")).toBe("a \\\\ b");
+    const notes = fallbackNotes({
+      ...HISTORY,
+      log: "- fix(app): replace <img> with <Image> (abc1234)",
+    });
+    expect(notes.body).toContain(
+      "- fix(app): replace \\<img\\> with \\<Image\\>",
+    );
     expect(proseHits(notes)).toEqual([]);
   });
 

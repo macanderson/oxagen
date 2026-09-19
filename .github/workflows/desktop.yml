@@ -284,13 +284,16 @@ jobs:
       # `--dir` walks the download recursively, keeps only the installers whose
       # name carries this version, and refuses a version that is already
       # published (those URLs are immutable; a fix ships as a new version).
-      # The script needs no dependencies: it imports src/downloads.ts through
-      # Node's type stripping.
+      # `--resume` is for a re-run of this job after a later step failed: the
+      # same files already published means the upload is done, so the page is
+      # redrawn and the steps below run again (each is idempotent). The script
+      # needs no dependencies: it imports src/downloads.ts through Node's type
+      # stripping.
       - name: Publish the installers and the page to downloads.oxagen.sh
         env:
           VERSION: ${{ github.ref_name }}
         run: |
-          node apps/desktop/scripts/publish-downloads.mjs --dir installers --version "${VERSION#desktop-v}"
+          node apps/desktop/scripts/publish-downloads.mjs --dir installers --version "${VERSION#desktop-v}" --resume
 
       - name: Confirm the page serves this version
         env:
