@@ -12,6 +12,7 @@ import { withSystemDb, withTenantDb, schema } from "@oxagen/database";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { ensureStripeCustomer } from "./customers";
+import { readRecordedCustomerId } from "./recorded-customer";
 import { logger } from "./logger";
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -53,14 +54,10 @@ export function isLastPaymentMethodError(
 
 /** Resolve or create a Stripe customer id for the org. */
 async function resolveCustomerId(orgId: string): Promise<string> {
-  // Prefer the customer id already recorded on a subscription row (fastest path).
-  const sub = await withTenantDb((tx) =>
-    tx.query.subscriptions.findFirst({
-      where: eq(schema.subscriptions.orgId, orgId),
-      columns: { stripeCustomerId: true },
-    }),
-  );
-  if (sub?.stripeCustomerId) return sub.stripeCustomerId;
+  // Prefer the recorded id (settings column first, then a subscription row):
+  // no Stripe round trip on the common path.
+  const recorded = await readRecordedCustomerId(orgId);
+  if (recorded) return recorded;
   // Fall back to ensureStripeCustomer which may create the customer.
   return ensureStripeCustomer(orgId);
 }

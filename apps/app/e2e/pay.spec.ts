@@ -10,8 +10,10 @@
 // accepted the session and is showing it. Completing a payment would need a card
 // and would leave a charge behind on every CI run.
 //
-// STRIPE_E2E is "0" on a fork pull request, which has no test key (WL-48). The
-// spec skips rather than fails there, because a missing secret is not a defect
+// STRIPE_E2E is "0" only on a fork pull request, which GitHub gives no
+// secrets (WL-48). Every trusted run fails in the workflow's "Stripe test key
+// present" step before reaching here when the key is missing. The spec skips
+// rather than fails on a fork, because a missing secret there is not a defect
 // in the code under test.
 import { expect, test } from "@playwright/test";
 import billingCatalog from "../messages/billing.json" with { type: "json" };
