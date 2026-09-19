@@ -18,11 +18,23 @@ function messages(): Messages {
   return cached;
 }
 
-// The zone is the default, not the viewer's: this config is read while the
-// static shell prerenders (Cache Components), where a person's preference is
-// request data it may not touch. Under the organization layout the viewer's
-// own zone replaces it (features/shell/viewer-clock.tsx, ui/formatter.ts);
-// outside it (sign-in, the invitation page) dates read in Pacific time.
+/**
+ * This config carries no request data, and cannot.
+ *
+ * The root layout awaits `getTranslations`, so every route in the app resolves
+ * this config, static ones included. Reading `cookies()` here therefore made
+ * the whole app unprerenderable: under Cache Components a request read outside
+ * `<Suspense>` does not throw, it aborts the prerender, and the build failed on
+ * the first static route it reached (`/_not-found`). A try/catch cannot rescue
+ * that, because nothing is thrown to catch.
+ *
+ * So the zone stays out of here. Under `[org]`, which is the application,
+ * `<ViewerClock>` reads the viewer's preference inside the layout's own
+ * `<Suspense>`: client components get it through the provider it renders, and
+ * server components through `@/ui/formatter`, which formats in the zone the
+ * clock writes to a per-request slot. Outside `[org]` (the invitation page),
+ * dates read in Pacific time, this default (#3368).
+ */
 export default getRequestConfig(() => ({
   locale: DEFAULT_LOCALE,
   messages: messages(),
