@@ -2,21 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<script>
-/* Lead gate: the manual is free behind the form on oxagen.sh/#field-manual.
-   Marketing gate only (fails open on storage errors), not access control. */
-(function () {
-  var KEY = "ox_fm_unlocked";
-  try {
-    if (new URLSearchParams(location.search).get("unlocked") === "1") {
-      try { localStorage.setItem(KEY, "1"); } catch (_) {}
-      return;
-    }
-    if (localStorage.getItem(KEY) === "1") { return; }
-    location.replace("/#field-manual");
-  } catch (_) { /* fail open */ }
-}());
-</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{HEAD_TITLE}}</title>
 <meta name="author" content="Mac Anderson">
@@ -383,6 +368,7 @@ main th{font-family:var(--sans);font-weight:600;font-size:.8rem;background:var(-
 }
 
 
+td .blank{display:block;min-width:2.5em;height:1.4em}
 </style>
 </head>
 <body>
