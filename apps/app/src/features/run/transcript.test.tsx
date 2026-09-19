@@ -23,6 +23,7 @@ import type { RunTranscript, TranscriptKind } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
+import type { ActionResult } from "@/server/kernel";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -331,10 +332,10 @@ describe("following a live run", () => {
 
     // readTranscriptPage never resolves until the test tells it to, so the
     // second frame is guaranteed to land while the first read is in flight.
-    const pending: Array<(read: Read<RunTranscript>) => void> = [];
+    const pending: Array<(read: ActionResult<RunTranscript>) => void> = [];
     readTranscriptPage.mockImplementation(
       () =>
-        new Promise<Read<RunTranscript>>((resolve) => {
+        new Promise<ActionResult<RunTranscript>>((resolve) => {
           pending.push(resolve);
         }),
     );
@@ -365,9 +366,10 @@ describe("following a live run", () => {
       const resolveFirst = pending[0];
       if (resolveFirst === undefined) throw new Error("no pending read");
       await act(async () => {
-        resolveFirst(
-          readOk({ ...mockupTranscript(), cursor: "next", complete: false }),
-        );
+        resolveFirst({
+          ok: true,
+          value: { ...mockupTranscript(), cursor: "next", complete: false },
+        });
         // Flush the microtask queue: the promise's own continuation, the
         // state updates it triggers, and the follow-up loadMore's call into
         // readTranscriptPage each resolve as a separate microtask hop. Fake
