@@ -1,16 +1,18 @@
 // The agent writes through the real kernel seam: the viewer resolution and the
-// kernel's invoke() are the only fakes, so each case shows what the person gets
-// back and whether the capability ran — ok, invalid (refused before the kernel)
-// and denied for every action (INV-19). request_mandate converts the amounts a
-// person typed into micros and refuses a figure that is not a plain decimal
-// before anything reaches the kernel.
+// kernel's invoke() are the only fakes for writes, so each case shows what the
+// person gets back and whether the capability ran — ok, invalid (refused before
+// the kernel) and denied for every action (INV-19). request_mandate converts
+// the amounts a person typed into micros and refuses a figure that is not a
+// plain decimal before anything reaches the kernel. Its day bounds also need
+// the viewer's zone, so get_user_preferences is faked at kernelRead (ADR-089)
+// rather than through the live shell port Architecture §2 refuses from features.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MANDATE_ID, mandateOutput } from "@/test/mandate-outputs";
 
-const { invoke, requireViewer, preferences } = vi.hoisted(() => ({
+const { invoke, requireViewer, kernelRead } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
   requireViewer: vi.fn(),
-  preferences: vi.fn(),
+  kernelRead: vi.fn(),
 }));
 vi.mock("@oxagen/oxagen", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/oxagen")>()),
@@ -25,9 +27,10 @@ vi.mock("@/server/viewer", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/viewer")>()),
   requireViewer,
 }));
-vi.mock("@/data/live/shell", () => ({
-  shell: { preferences },
-}));
+vi.mock("@/server/kernel", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/kernel")>();
+  return { ...actual, kernelRead };
+});
 
 const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
@@ -67,8 +70,8 @@ beforeEach(() => {
   invoke.mockReset();
   requireViewer.mockReset();
   requireViewer.mockResolvedValue(ctx);
-  preferences.mockReset();
-  preferences.mockResolvedValue({ ok: true, value: { timeZone: "UTC" } });
+  kernelRead.mockReset();
+  kernelRead.mockResolvedValue({ ok: true, value: { timezone: "UTC" } });
 });
 
 describe("rotateAgentCredential", () => {
@@ -460,9 +463,9 @@ describe("requestMandate", () => {
   });
 
   it("bounds the mandate days in the viewer's zone, not UTC", async () => {
-    preferences.mockResolvedValue({
+    kernelRead.mockResolvedValue({
       ok: true,
-      value: { timeZone: "America/Los_Angeles" },
+      value: { timezone: "America/Los_Angeles" },
     });
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
     await requestMandate("acme", "core-platform", {

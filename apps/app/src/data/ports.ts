@@ -97,7 +97,9 @@ export interface DataSource {
     /**
      * get_user_preferences, user-global: the zone every date under the
      * organization layout renders in; callers: features/shell/source.ts and
-     * features/shell/viewer-clock.tsx.
+     * features/shell/viewer-clock.tsx. request_mandate reads the same
+     * preference through kernelRead (ADR-089) rather than this port, because
+     * Architecture §2 refuses a feature edge into data/live.
      */
     preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
   };

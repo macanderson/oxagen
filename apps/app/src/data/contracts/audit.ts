@@ -16,7 +16,7 @@ export type AuditOutcome = z.infer<typeof AuditOutcome>;
 /** Events on one page of the record. */
 export const AUDIT_PAGE_SIZE = 50;
 
-/** The filters a reader sets in the URL, each null when unset; `from` and `to` are UTC days, both inclusive. */
+/** The filters a reader sets in the URL, each null when unset; `from` and `to` are calendar days in the viewer's zone, both inclusive. */
 export type AuditFilters = {
   eventType: string | null;
   outcome: AuditOutcome | null;

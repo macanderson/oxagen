@@ -19,16 +19,17 @@ import {
   type AuditFilters,
   AuditPage,
 } from "@/data/contracts/audit";
-import type { DataSource } from "@/data/ports";
-import { type Read, readError, readOk } from "@/data/read";
-import { kernelRead } from "@/server/kernel";
-import type { OrgCtx } from "@/server/viewer";
 import {
   startOfNextZonedDay,
   startOfZonedDay,
-} from "@/shared/calendar-day";
+} from "@/data/contracts/calendar-day";
+import type { DataSource } from "@/data/ports";
+import { type Read, readError, readOk } from "@/data/read";
+import { kernelRead } from "@/server/kernel";
 import { toAuditExport, toAuditPage } from "./mappers/audit";
 import { shell } from "./shell";
+
+type AuditCtx = Parameters<DataSource["audit"]["events"]>[0];
 
 function toView<O, V extends z.ZodType>(
   read: Read<O>,
@@ -48,7 +49,7 @@ function toView<O, V extends z.ZodType>(
   return readError("record_unmappable", 502);
 }
 
-async function viewerZone(ctx: OrgCtx): Promise<string> {
+async function viewerZone(ctx: AuditCtx): Promise<string> {
   const preferences = await shell.preferences(ctx);
   return preferences.ok ? preferences.value.timeZone : DEFAULT_TIME_ZONE;
 }

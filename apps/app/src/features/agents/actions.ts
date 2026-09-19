@@ -11,18 +11,20 @@ import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
-import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
+import {
+  DEFAULT_TIME_ZONE,
+  userPreferencesRead,
+} from "@oxagen/oxagen/contracts/user.preferences.read";
+import { endOfZonedDay, startOfZonedDay } from "@/data/contracts/calendar-day";
 import {
   CONSEQUENCE_TAG,
   MAX_CONSEQUENCE_TAGS,
   MEASURE_VALUE,
 } from "@/data/contracts/mandates";
 import { isCurrencyCode } from "@/data/contracts/money";
-import { shell } from "@/data/live/shell";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
-import { endOfZonedDay, startOfZonedDay } from "@/shared/calendar-day";
 
 /** Retires the current key and mints a replacement; the secret is returned once and never again. */
 export async function rotateAgentCredential(
@@ -312,11 +314,17 @@ export async function requestMandate(
   const ctx = await requireViewer(org, ws);
   // The dates a person picks are days on their clock. Convert through the
   // saved zone so a Los Angeles Sep 20 starts at that local midnight and a
-  // Tokyo validTo runs through that local day's last millisecond. A failed
-  // preference read falls back to Pacific time, the same default the pages use.
-  const preferences = await shell.preferences(ctx);
+  // Tokyo validTo runs through that local day's last millisecond. Read through
+  // the kernel seam (ADR-089): a "use server" action may call kernelRead, and
+  // Architecture §2 refuses a feature edge into data/live. A failed preference
+  // read falls back to Pacific time, the same default the pages use.
+  const preferences = await kernelRead(ctx, {
+    contract: userPreferencesRead,
+    input: {},
+    page: "agents",
+  });
   const timeZone = preferences.ok
-    ? preferences.value.timeZone
+    ? preferences.value.timezone
     : DEFAULT_TIME_ZONE;
   const validFrom = startOfZonedDay(draft.validFrom, timeZone);
   const validTo = endOfZonedDay(draft.validTo, timeZone);

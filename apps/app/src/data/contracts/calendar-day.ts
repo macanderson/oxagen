@@ -4,7 +4,10 @@
 // `YYYY-MM-DD`. The app prints every date in the viewer's zone, so the day
 // those controls name is that zone's day, not UTC's. This module is the one
 // place that turns a day-plus-zone into the inclusive start and exclusive end
-// instants the contracts store and query.
+// instants the contracts store and query. It lives under `data/contracts`
+// (vocabulary) so both the live adapters and the feature actions may import
+// it: Architecture §2 refuses `data/live` → `shared` and admits vocabulary
+// from both.
 import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
