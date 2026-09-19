@@ -34,8 +34,15 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
-const model = {
+// The contract names the vendor string `id`; the view names it `slug`, so the
+// two spellings are held apart here rather than shared.
+const wireModel = {
   id: "claude-opus-5",
+  provider: "anthropic",
+  tier: "frontier",
+};
+const viewModel = {
+  slug: "claude-opus-5",
   provider: "anthropic",
   tier: "frontier",
 };
@@ -66,7 +73,7 @@ const run = {
   steps: 3,
   frames: 9,
   cost: null,
-  model,
+  model: wireModel,
   machine,
   taskRef: null,
   name: null,
@@ -100,7 +107,7 @@ describe("runs.list", () => {
             steps: 3,
             frames: 9,
             cost: null,
-            model,
+            model: viewModel,
             machine,
             taskRef: null,
             name: null,
