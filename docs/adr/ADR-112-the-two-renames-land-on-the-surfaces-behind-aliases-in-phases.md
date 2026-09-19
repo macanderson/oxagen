@@ -195,10 +195,15 @@ request.**
    **`docs/` is not the documentation surface. `apps/docs` is.** The first four
    drafts of this measurement scanned `docs/` alone, which is the internal
    corpus. The site a customer reads is `apps/docs`, and it carries the word in
-   7 more files across 63 occurrences: `content/docs/cli/wrap-an-agent.mdx`
-   (34), `cli/desktop.mdx` (21), `getting-started.mdx` (3), `cli/commands.mdx`
-   (2), `index.mdx`, `architecture.mdx`, and `src/app/(home)/page.tsx`. All 7
-   carry prose, so the scope is 45 prose files of 126, not 38 of 119.
+   7 more files across 84 occurrences on 63 matching lines:
+   `content/docs/cli/wrap-an-agent.mdx` (34 lines), `cli/desktop.mdx` (21),
+   `getting-started.mdx` (3), `cli/commands.mdx` (2), `index.mdx`,
+   `architecture.mdx`, and `src/app/(home)/page.tsx`. All 7 carry prose, so the
+   scope is 45 prose files of 126, not 38 of 119. The per-file figures are
+   matching lines, from `git grep -ic`; the 84 is occurrences, from
+   `git grep -io ... | wc -l`. A record whose whole point is that the occurrence
+   is the unit of work should not quote a line count as an occurrence count,
+   which an earlier draft did.
 
    Those 7 are the most urgent files in the whole phase, and not because of the
    noun. `getting-started.mdx` and `wrap-an-agent.mdx` instruct a reader to run
@@ -264,7 +269,7 @@ request.**
    customer-facing name in this record, so the routes are mounted under both
    spellings. Renaming them without that alias breaks every enrolled host at
    the moment of deploy, which is the failure this whole record is arranged to
-   avoid. Aliasing them is blocked on nothing, so the server may accept both
+   avoid. No other phase blocks the aliasing, so the server may accept both
    before any host ships the new binary name; the route filenames stay as they
    are under decision 1.
 
@@ -309,17 +314,49 @@ request.**
    | `/tacho/sessions/get` | `/agent/sessions/get` |
    | `/tacho/incidents` | `/agent/incidents` |
 
-   Each of the five with a capability document needs that document's `## Surface`
-   block updated in the same phase, or the published path and the served path
-   disagree.
+   All seven have a capability document, and each one's `## Surface` block moves
+   in the same phase or the published path and the served path disagree. An
+   earlier draft of this paragraph said five, missing
+   `tacho.enrollment_token.create.md`, which publishes
+   `/tacho/enrollment-tokens`, and `tacho.incident.list.md`, which publishes
+   `/tacho/incidents` in a third spelling again,
+   `POST /api/v1/{org}/{ws}/tacho/incidents`. Two documents left behind would
+   keep directing clients at a path the phase is retiring.
+
+   **The aliases carry the pre-auth ceilings or they are a hole.** This is the
+   part of phase 4 that is not a rename. `apps/api/src/app.ts` registers two
+   credential-stuffing ceilings, `tacho-preauth-ip` and
+   `tacho-preauth-credential`, whose matchers are the literal `/v1/tacho/*`, and
+   the comment above them says why they sit where they sit: registered below the
+   mount they run after authentication, so every bad credential is rejected by
+   auth first and counted against nothing. Mounting `/v1/agent/*` without
+   equivalent matchers, in the same position relative to the mount, gives an
+   attacker an unmetered door to the same authentication path. The unauthenticated
+   `/v1/tacho/enroll` route depends on its own registration order for the same
+   reason. So phase 4 ships the matchers and the ordering with the aliases, and a
+   route test that asserts an invalid credential on a new path counts against both
+   buckets. An alias that answers but does not count is worse than no alias.
 
    The organization-scoped group already carries `/agent/tools`,
    `/agent/memory/*`, `/agent/roles/*` and more, so these join a namespace that
    exists rather than opening one. Check each target for a collision before
    mounting it anyway: the `status` and `unenroll` collision that phase 1b hit
    was the same mistake one layer up.
-5. The envelope: `oxagen.frame/1.0` accepted alongside the current name, with
-   the collector reading both for one release.
+5. The envelope: `oxagen.frame/1.0` accepted alongside `tacho/1.0`. **The old
+   literal is not retired on a release count, and may never be retired.** An
+   earlier draft said "for one release", which this codebase has already learned
+   is the wrong shape. `packages/tacho/src/envelope.ts` carries the finding, about
+   the legacy `user_email` member: the wire version gives an installed collector
+   no signal to upgrade on, the schema is `.strict()` inside a request validator
+   that rejects the WHOLE batch, so one event from an un-upgraded host takes its
+   batch-mates down with it, and a sealed WAL entry already carrying the old value
+   can never be rewritten or sent. That member is therefore still accepted and
+   discarded rather than removed. An envelope version is the same problem with a
+   wider blast radius, because every event carries it. So the collector reads both
+   indefinitely, and dropping `tacho/1.0` needs host telemetry showing no enrolled
+   host still sends it, not a release counter. Retiring it on a fixed schedule
+   would silently discard the runs of every host that missed the window, which is
+   evidence a customer cannot reconstruct.
 6. `capability` to `agent tool` on the surfaces: UI strings, error messages,
    CLI output, `docs/capabilities/`, and the two rule files. The registry
    symbol and the contract files keep their names under decision 1.
