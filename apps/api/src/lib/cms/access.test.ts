@@ -22,7 +22,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import {
   generateAccessCode,
@@ -37,7 +37,7 @@ import {
   redeemAndRotate,
 } from "./access";
 
-const { bookAccessCodes } = schema;
+const { bookAccessCodes, leads } = schema;
 
 /**
  * A fake drizzle tx: every builder method (`from`, `where`, `limit`, `for`,
@@ -141,7 +141,6 @@ describe("captureLeadAndIssueCode", () => {
     );
     expect(out.leadId).toBe("lead_1");
     expect(out.codeId).toBe("code_1");
-    expect(out.priorActiveCodeId).toBeNull();
     expect(out.readUrl).toMatch(
       /^https:\/\/oxagen\.sh\/read\?e=page-flip-reader&c=/,
     );
@@ -217,7 +216,6 @@ describe("issueCodeForLead", () => {
     const out = await issueCodeForLead("lead_1", "field-manual");
     expect(out.readUrl).toMatch(/^https:\/\/oxagen\.sh\/read\?e=field-manual&c=/);
     expect(out.codeId).toBe("code_new");
-    expect(out.priorActiveCodeId).toBe("code_old");
   });
 
   it("throws when the lead row is missing", async () => {
@@ -364,9 +362,26 @@ describe("redeemAndRotate — lock order", () => {
 });
 
 describe("finalizeCodeDelivery", () => {
-  function fakeUpdateTx() {
+  /**
+   * select() resolves from `selects` in order (the lead lock, then the new
+   * code's status); every update's where() argument is recorded.
+   */
+  function fakeFinalizeTx(selects: unknown[][]) {
     const whereArgs: unknown[] = [];
+    const locks: unknown[] = [];
     const tx = {
+      select: () => {
+        let table: unknown;
+        const result = selects.shift() ?? [];
+        const chain: Record<string, unknown> = {
+          from: (t: unknown) => ((table = t), chain),
+          where: () => chain,
+          limit: () => chain,
+          for: () => (locks.push(table), chain),
+          then: (resolve: (v: unknown) => unknown) => resolve(result),
+        };
+        return chain;
+      },
       update: () => ({
         set: () => ({
           where: (arg: unknown) => {
@@ -376,29 +391,46 @@ describe("finalizeCodeDelivery", () => {
         }),
       }),
     };
-    return { tx, whereArgs };
+    return { tx, whereArgs, locks };
   }
 
-  it("revokes the PRIOR code on a successful delivery, leaving the new one active", async () => {
-    const { tx, whereArgs } = fakeUpdateTx();
+  it("makes a delivered code the lead's one live link, revoking every other active code", async () => {
+    const { tx, whereArgs, locks } = fakeFinalizeTx([
+      [{ id: "lead_1" }],
+      [{ status: "active" }],
+    ]);
     h.tx = tx;
-    await finalizeCodeDelivery("new_1", "prior_1", true);
-    expect(whereArgs).toHaveLength(1);
-    expect(whereArgs[0]).toEqual(eq(bookAccessCodes.id, "prior_1"));
+    await finalizeCodeDelivery("lead_1", "new_1", true);
+    expect(locks).toEqual([leads]);
+    expect(whereArgs).toEqual([
+      and(
+        eq(bookAccessCodes.leadId, "lead_1"),
+        eq(bookAccessCodes.status, "active"),
+        ne(bookAccessCodes.id, "new_1"),
+      ),
+    ]);
   });
 
-  it("revokes the NEW code on a failed delivery, leaving the prior one usable", async () => {
-    const { tx, whereArgs } = fakeUpdateTx();
+  it("revokes nothing when a competing finalize already revoked this code", async () => {
+    const { tx, whereArgs } = fakeFinalizeTx([
+      [{ id: "lead_1" }],
+      [{ status: "revoked" }],
+    ]);
     h.tx = tx;
-    await finalizeCodeDelivery("new_1", "prior_1", false);
-    expect(whereArgs).toHaveLength(1);
-    expect(whereArgs[0]).toEqual(eq(bookAccessCodes.id, "new_1"));
+    await finalizeCodeDelivery("lead_1", "new_1", true);
+    expect(whereArgs).toEqual([]);
   });
 
-  it("is a no-op on a successful delivery with no prior code to revoke", async () => {
-    const updateSpy = vi.fn();
-    h.tx = { update: updateSpy };
-    await finalizeCodeDelivery("new_1", null, true);
-    expect(updateSpy).not.toHaveBeenCalled();
+  it("revokes only the NEW code on a failed delivery, leaving any earlier link usable", async () => {
+    const { tx, whereArgs, locks } = fakeFinalizeTx([[{ id: "lead_1" }]]);
+    h.tx = tx;
+    await finalizeCodeDelivery("lead_1", "new_1", false);
+    expect(locks).toEqual([leads]);
+    expect(whereArgs).toEqual([
+      and(
+        eq(bookAccessCodes.id, "new_1"),
+        eq(bookAccessCodes.status, "active"),
+      ),
+    ]);
   });
 });

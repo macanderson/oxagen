@@ -259,15 +259,14 @@ cmsRoute.post("/leads", async (c) => {
         (data.source === "field-manual"
           ? "field-manual"
           : DEFAULT_EDITION_SLUG);
-      const { readUrl, codeId, priorActiveCodeId } =
-        await captureLeadAndIssueCode(
-          leadInput,
-          edition,
-          "signup",
-          clientCtx(c),
-        );
+      const { readUrl, leadId, codeId } = await captureLeadAndIssueCode(
+        leadInput,
+        edition,
+        "signup",
+        clientCtx(c),
+      );
       const delivered = await emailReaderLink(data.email, edition, readUrl);
-      await finalizeCodeDelivery(codeId, priorActiveCodeId, delivered);
+      await finalizeCodeDelivery(leadId, codeId, delivered);
       if (!delivered) {
         // The lead is already persisted and (if this was not the visitor's
         // first code) their prior link is still live — only the email
@@ -347,13 +346,13 @@ cmsRoute.post("/book/resend", async (c) => {
       // accepted trade-off for a public marketing funnel.
       return c.json({ ok: true, sent: false, message: NOT_FOUND_MESSAGE }, 200);
     }
-    const { readUrl, codeId, priorActiveCodeId } = await issueCodeForLead(
+    const { readUrl, codeId } = await issueCodeForLead(
       lead.id,
       edition,
       clientCtx(c),
     );
     const delivered = await emailReaderLink(lead.email, edition, readUrl);
-    await finalizeCodeDelivery(codeId, priorActiveCodeId, delivered);
+    await finalizeCodeDelivery(lead.id, codeId, delivered);
     // On failure the prior code (if the lead had one) was left active by
     // finalizeCodeDelivery above, so this is never worse than the resend
     // never having happened.

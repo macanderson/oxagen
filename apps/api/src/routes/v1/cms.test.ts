@@ -121,7 +121,6 @@ beforeEach(() => {
     readUrl: "http://localhost:8080/read?e=page-flip-reader&c=abc",
     leadId: "lead_1",
     codeId: "code_1",
-    priorActiveCodeId: null,
   });
 });
 
@@ -187,8 +186,8 @@ describe("POST /v1/cms/leads", () => {
     // and finalize revokes the new code rather than the (absent) prior one.
     expect(mocks.captureLeadAndIssueCode).toHaveBeenCalledTimes(1);
     expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "lead_1",
       "code_1",
-      null,
       false,
     );
   });
@@ -206,8 +205,8 @@ describe("POST /v1/cms/leads", () => {
       message: SIGNUP_DELIVERY_FAILED,
     });
     expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "lead_1",
       "code_1",
-      null,
       false,
     );
   });
@@ -342,16 +341,15 @@ describe("POST /v1/cms/book/resend", () => {
     mocks.issueCodeForLead.mockResolvedValue({
       readUrl: "http://localhost:8080/read?e=page-flip-reader&c=xyz",
       codeId: "code_2",
-      priorActiveCodeId: "code_old",
     });
     const res = await post("/book/resend", { email: "ada@example.com" });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, sent: true, message: SENT });
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
-    // Delivered: finalize revokes the PRIOR code, keeping the new one active.
+    // Delivered: finalize makes the new code the lead's one live link.
     expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "lead_1",
       "code_2",
-      "code_old",
       true,
     );
   });
@@ -364,7 +362,6 @@ describe("POST /v1/cms/book/resend", () => {
     mocks.issueCodeForLead.mockResolvedValue({
       readUrl: "http://localhost:8080/read?e=page-flip-reader&c=xyz",
       codeId: "code_2",
-      priorActiveCodeId: "code_old",
     });
     mocks.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
     const res = await post("/book/resend", { email: "ada@example.com" });
@@ -377,8 +374,8 @@ describe("POST /v1/cms/book/resend", () => {
     // Not delivered: finalize revokes the NEW code, so the prior link (the
     // one the lead already knew worked) is left active, not both dead.
     expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "lead_1",
       "code_2",
-      "code_old",
       false,
     );
   });
@@ -391,7 +388,6 @@ describe("POST /v1/cms/book/resend", () => {
     mocks.issueCodeForLead.mockResolvedValue({
       readUrl: "http://localhost:8080/read?e=page-flip-reader&c=xyz",
       codeId: "code_2",
-      priorActiveCodeId: "code_old",
     });
     mocks.sendEmail.mockResolvedValueOnce({
       accepted: [],
@@ -405,8 +401,8 @@ describe("POST /v1/cms/book/resend", () => {
       message: RESEND_DELIVERY_FAILED,
     });
     expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "lead_1",
       "code_2",
-      "code_old",
       false,
     );
   });

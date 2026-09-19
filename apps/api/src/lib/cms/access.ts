@@ -20,7 +20,7 @@ import {
   type ReferralSource,
   type CodeIssueReason,
 } from "@oxagen/database";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { isProductionRuntime } from "@oxagen/config/env";
 
 const { leads, bookEditions, bookAccessCodes } = schema;
@@ -155,8 +155,6 @@ interface MintOpts {
 interface PendingMint {
   code: string;
   codeId: string;
-  /** The lead's active code before this mint, if any — not yet revoked. */
-  priorActiveCodeId: string | null;
 }
 
 /**
@@ -217,32 +215,81 @@ async function mintCodeTx(
   // An INSERT … RETURNING always yields exactly one row.
   if (!inserted) throw new Error("code insert returned no row");
 
-  return { code, codeId: inserted.id, priorActiveCodeId: prior?.id ?? null };
+  return { code, codeId: inserted.id };
 }
 
 /**
- * Resolve a pending mint once its fate is known: revoke the prior code on
- * success (the normal rotation), or revoke the NEW code on failure so the
- * prior one — the reader's last known-working link — stays active instead of
- * both codes being unusable. A no-op when there was no prior code to fall
- * back to (a first-time signup that never had one).
+ * Revoke every active code the lead holds except `keepCodeId`. The caller
+ * must hold the lead lock. Revoking all of them, rather than the one "prior"
+ * code a mint saw, is what keeps overlapping mints from ending with two live
+ * links: each mint releases the lead lock before its email goes out, so a
+ * second mint can see the same prior code and neither would know about the
+ * other's.
+ */
+async function revokeOtherActiveCodesTx(
+  tx: Tx,
+  leadId: string,
+  keepCodeId: string,
+): Promise<void> {
+  await tx
+    .update(bookAccessCodes)
+    .set({ status: "revoked", updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(bookAccessCodes.leadId, leadId),
+        eq(bookAccessCodes.status, "active"),
+        ne(bookAccessCodes.id, keepCodeId),
+      ),
+    );
+}
+
+/**
+ * Resolve a pending mint once its fate is known.
+ *
+ * Delivered: the new code becomes the lead's only live link, and every other
+ * active code is revoked. Not delivered: only the new code is revoked, so the
+ * reader's last working link (if any) stays active.
+ *
+ * Runs under the lead lock, and a delivered finalize whose code is no longer
+ * active does nothing. With two overlapping sends, the later finalize wins and
+ * exactly one code stays active; a finalize for a code that a competing
+ * finalize already revoked cannot revoke the winner.
  *
  * Its own transaction: this always runs strictly after the mint's tx has
  * committed (only then is "delivered" known), so it cannot be folded into it.
  */
 export async function finalizeCodeDelivery(
+  leadId: string,
   newCodeId: string,
-  priorActiveCodeId: string | null,
   delivered: boolean,
 ): Promise<void> {
-  const idToRevoke = delivered ? priorActiveCodeId : newCodeId;
-  if (!idToRevoke) return;
-  await withSystemDb((tx) =>
-    tx
-      .update(bookAccessCodes)
-      .set({ status: "revoked", updatedAt: sql`now()` })
-      .where(eq(bookAccessCodes.id, idToRevoke)),
-  );
+  await withSystemDb(async (tx) => {
+    await tx
+      .select({ id: leads.id })
+      .from(leads)
+      .where(eq(leads.id, leadId))
+      .for("update")
+      .limit(1);
+    if (!delivered) {
+      await tx
+        .update(bookAccessCodes)
+        .set({ status: "revoked", updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(bookAccessCodes.id, newCodeId),
+            eq(bookAccessCodes.status, "active"),
+          ),
+        );
+      return;
+    }
+    const [mine] = await tx
+      .select({ status: bookAccessCodes.status })
+      .from(bookAccessCodes)
+      .where(eq(bookAccessCodes.id, newCodeId))
+      .limit(1);
+    if (mine?.status !== "active") return;
+    await revokeOtherActiveCodesTx(tx, leadId, newCodeId);
+  });
 }
 
 /**
@@ -258,7 +305,6 @@ export async function captureLeadAndIssueCode(
   readUrl: string;
   leadId: string;
   codeId: string;
-  priorActiveCodeId: string | null;
 }> {
   return withSystemDb(async (tx) => {
     const lead = await upsertLeadTx(tx, input);
@@ -272,7 +318,6 @@ export async function captureLeadAndIssueCode(
       readUrl: readerUrl(edition, minted.code),
       leadId: lead.id,
       codeId: minted.codeId,
-      priorActiveCodeId: minted.priorActiveCodeId,
     };
   });
 }
@@ -305,7 +350,6 @@ export async function issueCodeForLead(
 ): Promise<{
   readUrl: string;
   codeId: string;
-  priorActiveCodeId: string | null;
 }> {
   return withSystemDb(async (tx) => {
     const minted = await mintCodeTx(tx, leadId, {
@@ -317,7 +361,6 @@ export async function issueCodeForLead(
     return {
       readUrl: readerUrl(edition, minted.code),
       codeId: minted.codeId,
-      priorActiveCodeId: minted.priorActiveCodeId,
     };
   });
 }
@@ -420,17 +463,24 @@ export async function redeemAndRotate(
       .where(eq(bookAccessCodes.id, codeRow.id));
 
     // No external delivery step here — the new code goes straight back over
-    // this same response — so there is nothing to finalize after the fact.
-    // The code just consumed above is what mintCodeTx would have found as
-    // "prior active"; it is already `consumed`, not `active`, so the lookup
-    // returns none and there is nothing left to revoke either way.
-    const { code: newCode } = await mintCodeTx(tx, codeRow.leadId, {
-      reason: "rotation",
-      parentCodeId: codeRow.id,
-      editionSlug: editionSlug as EditionSlug,
-      ip: ctx.ip,
-      userAgent: ctx.userAgent,
-    });
+    // this same response — so the rotation is settled in this transaction
+    // rather than through finalizeCodeDelivery.
+    const { code: newCode, codeId: newCodeId } = await mintCodeTx(
+      tx,
+      codeRow.leadId,
+      {
+        reason: "rotation",
+        parentCodeId: codeRow.id,
+        editionSlug: editionSlug as EditionSlug,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+      },
+    );
+    // A resend or signup for this lead may still be awaiting its email, with
+    // its code active beside this one. This redemption is the reader acting
+    // now, so its successor is the one live link; the pending finalize will
+    // then find its own code revoked and leave this one alone.
+    await revokeOtherActiveCodesTx(tx, codeRow.leadId, newCodeId);
 
     const editionList = await tx
       .select({
