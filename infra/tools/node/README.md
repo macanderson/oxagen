@@ -21,7 +21,7 @@ manifest describing how it runs:
 ```json
 {
   "port": 3001,
-  "image": "node:22-alpine",
+  "image": "node:24.21.0-alpine",
   "command": ["node", "website/server.js"],
   "memory": "512m",
   "health_path": "/",

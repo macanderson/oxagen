@@ -16,6 +16,8 @@ import {
   rfc822,
   siteFooter,
   siteHeader,
+  THEME_HEAD,
+  THEME_SWITCH,
   urls,
 } from "./html.mjs";
 
@@ -135,6 +137,34 @@ describe("chrome", () => {
     );
     expect(footer).toContain("Beta &amp; co");
     expect(footer).toContain(`© ${new Date().getUTCFullYear()} Oxagen`);
+  });
+
+  it("puts the System / Light / Dark control in the footer, System first", () => {
+    const footer = siteFooter({ wordmark, pillars });
+    expect(footer).toContain(THEME_SWITCH);
+    const order = [...THEME_SWITCH.matchAll(/data-theme-choice="(\w+)"/g)].map(
+      (m) => m[1],
+    );
+    expect(order).toEqual(["system", "light", "dark"]);
+    // One tab stop: only the checked choice is reachable before script runs.
+    expect(THEME_SWITCH.match(/tabindex="-1"/g)).toHaveLength(2);
+  });
+
+  it("stamps the stored theme before the stylesheet loads", () => {
+    const html = layout({
+      title: "T",
+      description: "D",
+      path: "/blog/",
+      image: "/x.png",
+      body: "",
+      wordmark,
+      pillars,
+    });
+    expect(html).toContain('<meta name="color-scheme" content="light dark">');
+    expect(html.indexOf(THEME_HEAD)).toBeGreaterThan(-1);
+    expect(html.indexOf(THEME_HEAD)).toBeLessThan(
+      html.indexOf('<link rel="stylesheet" href="/assets/oxagen.css">'),
+    );
   });
 
   it("layout emits canonical, OG, feed link, and JSON-LD with escaped </script>", () => {

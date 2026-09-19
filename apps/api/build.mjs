@@ -69,7 +69,7 @@ await writeFile(
   `${FUNC}/.vc-config.json`,
   JSON.stringify(
     {
-      runtime: "nodejs22.x",
+      runtime: "nodejs24.x",
       handler: "index.cjs",
       launcherType: "Nodejs",
       supportsResponseStreaming: true,
