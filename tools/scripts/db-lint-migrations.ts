@@ -241,6 +241,19 @@ export interface AtlasBaselineResult {
  *   The caller prints that note rather than staying silent: a shallow clone
  *   must never read as "ordering verified".
  *
+ * WHY THE HEAD REF IS NOT ALWAYS LITERALLY "HEAD"
+ *   `actions/checkout` on a `pull_request` event checks out GitHub's synthetic
+ *   merge ref (`refs/pull/N/merge`) by default, so `HEAD` in CI is a merge
+ *   commit whose parents are the PR's real tip and the base branch's tip at
+ *   that moment, not the PR branch itself. `origin/main` is an ancestor of
+ *   that merge commit, so `git merge-base HEAD origin/main` degenerates to
+ *   `origin/main`'s current tip rather than the branch's real divergence
+ *   point, collapsing the two-tier fail/warn distinction above into one tier:
+ *   every added migration would be compared only against the moving target
+ *   the WARN case exists to protect against. `DB_LINT_HEAD_REF` (defaulting
+ *   to `HEAD` when unset) lets CI pass the PR's actual head SHA
+ *   (`github.event.pull_request.head.sha`) instead.
+ *
  * Needs no database connection: `git merge-base` plus two `git ls-tree`
  * listings, so this stays in the DB-less `checks` CI job.
  */
@@ -248,7 +261,12 @@ export function checkAtlasBaseline(
   currentFiles: readonly string[],
   opts: { headRef?: string; baseRef?: string; run?: GitRunner } = {},
 ): AtlasBaselineResult {
-  const headRef = opts.headRef ?? "HEAD";
+  // `|| "HEAD"`, not `??`: on a push event the workflow step still sets
+  // DB_LINT_HEAD_REF (to github.event.pull_request.head.sha, which GitHub
+  // Actions expands to an empty string outside a pull_request event), and an
+  // empty string is not the caller's request for a different ref.
+  const headRef =
+    opts.headRef ?? (process.env.DB_LINT_HEAD_REF || "HEAD");
   const baseRef =
     opts.baseRef ?? process.env.DB_LINT_BASE_REF ?? "origin/main";
   const run = opts.run ?? defaultGitRunner;

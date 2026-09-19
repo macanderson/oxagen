@@ -7,7 +7,7 @@
  * store: `mergeBaseOf` and `atlasFilesAtRef` are exercised only through the
  * function they are injected into, which is what a caller actually sees.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   atlasVersionOf,
   checkAtlasBaseline,
@@ -333,5 +333,121 @@ describe("the real #3337 incident, reproduced from its actual merge base", () =>
     );
     expect(result.errors[0]).toContain("20260918161000");
     expect(result.errors[0]).toContain("20260918200000");
+  });
+});
+
+describe("headRef, and CI's synthetic pull_request merge commit", () => {
+  // A Codex P2 review finding on the PR that added this check: actions/checkout
+  // on a pull_request event checks out GitHub's synthetic merge ref
+  // (refs/pull/N/merge) by default, so plain "HEAD" in CI is a merge commit
+  // descended from origin/main's CURRENT tip, not the PR branch's own tip.
+  // `git merge-base HEAD origin/main` then degenerates to origin/main's tip
+  // (an ancestor of the merge commit is its own merge-base with anything it is
+  // already an ancestor of), collapsing the fail/warn distinction into one
+  // tier: every added migration is judged only against the moving target the
+  // WARN case exists to protect against.
+
+  /**
+   * A `GitRunner` where `merge-base`'s answer depends on which head ref is
+   * passed, the way real `git merge-base` does: the synthetic merge commit
+   * ("HEAD") is already a descendant of origin/main's current tip, so a
+   * merge-base against it returns that tip; the actual PR head ("pr-head")
+   * returns the branch's real, earlier divergence point.
+   */
+  function ciShapedGit(): GitRunner {
+    const atRef: Record<string, readonly string[]> = {
+      "divergence-sha": ["20260918040000_a.sql", "20260918200000_b.sql"],
+      "main-tip-sha": [
+        "20260918040000_a.sql",
+        "20260918200000_b.sql",
+        "20260918230000_landed_after_branch_cut.sql",
+      ],
+      "origin/main": [
+        "20260918040000_a.sql",
+        "20260918200000_b.sql",
+        "20260918230000_landed_after_branch_cut.sql",
+      ],
+    };
+    return (args: string[]): string => {
+      if (args[0] === "merge-base") {
+        const headRef = args[1];
+        return headRef === "HEAD" ? "main-tip-sha\n" : "divergence-sha\n";
+      }
+      if (args[0] === "ls-tree") {
+        const spec = args[2]!;
+        const ref = spec.split(":")[0]!;
+        const files = atRef[ref];
+        if (files === undefined) throw new Error(`fatal: unknown ref ${ref}`);
+        return files.join("\n");
+      }
+      throw new Error(`unmocked git command: ${args.join(" ")}`);
+    };
+  }
+
+  // A migration that cleared the branch's real merge base (200000) but has
+  // since fallen behind origin/main's moved tip (230000): the WARN case.
+  const currentFiles = [
+    "20260918040000_a.sql",
+    "20260918200000_b.sql",
+    "20260918210000_correctly_stamped_when_written.sql",
+  ];
+
+  it("documents the bug: left at the default \"HEAD\", the merge-base check misfires FAIL", () => {
+    const result = checkAtlasBaseline(currentFiles, { run: ciShapedGit() });
+    expect(result.status).toBe("ok");
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain(
+      "20260918210000_correctly_stamped_when_written.sql",
+    );
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("is fixed by passing the real PR head as headRef: WARN, not FAIL", () => {
+    const result = checkAtlasBaseline(currentFiles, {
+      headRef: "pr-head",
+      run: ciShapedGit(),
+    });
+    expect(result.status).toBe("ok");
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain(
+      "20260918210000_correctly_stamped_when_written.sql",
+    );
+    expect(result.warnings[0]).toContain("cleared its merge base");
+  });
+
+  describe("DB_LINT_HEAD_REF, the env var CI sets to the real PR head", () => {
+    const ORIGINAL = process.env.DB_LINT_HEAD_REF;
+
+    afterEach(() => {
+      if (ORIGINAL === undefined) delete process.env.DB_LINT_HEAD_REF;
+      else process.env.DB_LINT_HEAD_REF = ORIGINAL;
+    });
+
+    it("is used when opts.headRef is not supplied", () => {
+      process.env.DB_LINT_HEAD_REF = "pr-head";
+      const result = checkAtlasBaseline(currentFiles, { run: ciShapedGit() });
+      expect(result.errors).toEqual([]);
+      expect(result.warnings).toHaveLength(1);
+    });
+
+    it("an empty string falls back to HEAD rather than being read as a ref", () => {
+      // GitHub Actions expands github.event.pull_request.head.sha to an
+      // empty string on a push event, where the workflow step still sets
+      // DB_LINT_HEAD_REF: an empty ref is not a request for a different one.
+      process.env.DB_LINT_HEAD_REF = "";
+      const result = checkAtlasBaseline(currentFiles, { run: ciShapedGit() });
+      expect(result.errors).toHaveLength(1); // the "HEAD" (buggy) path
+    });
+
+    it("opts.headRef wins over the env var", () => {
+      process.env.DB_LINT_HEAD_REF = "HEAD";
+      const result = checkAtlasBaseline(currentFiles, {
+        headRef: "pr-head",
+        run: ciShapedGit(),
+      });
+      expect(result.errors).toEqual([]);
+      expect(result.warnings).toHaveLength(1);
+    });
   });
 });

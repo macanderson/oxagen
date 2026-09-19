@@ -186,6 +186,15 @@ jobs:
         run: pnpm --filter @oxagen/app check:messages
 
       - name: Manifest, contracts, env invariants
+        env:
+          # actions/checkout on a pull_request event checks out GitHub's
+          # synthetic merge ref, so HEAD here is a merge commit, not the PR
+          # branch tip. db:lint-migrations' git-aware ordering check
+          # (checkAtlasBaseline(), #3387) needs the real tip to tell a branch
+          # that was correctly stamped from one that was not; empty on a push
+          # event, where db-lint-migrations.ts's own HEAD default is already
+          # correct.
+          DB_LINT_HEAD_REF: ${{ github.event.pull_request.head.sha }}
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations && pnpm check:db-migrate-script && pnpm schema:manifest:check && pnpm check:inngest-senders && pnpm docs:architecture:check
 
       # Unconditional, and that is the whole point. The affected-package gate
