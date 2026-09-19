@@ -24,7 +24,7 @@ export default defineConfig({
     // tree, and a section test drives a dialog through several open-and-close
     // cycles with an axe pass in `afterEach`. CI spawns one worker per file
     // across 189 files on a shared runner, so 5s expires under load and the
-    // timed-out test's async continuation then runs inside the next test —
+    // timed-out test's async continuation then runs inside the next test,
     // the neighbour fails with a count nobody can explain from its own code
     // (#3327). 20s is what `@oxagen/plugins`, `@oxagen/stella-engine-client`
     // and `apps/app_deprecated` already use; `hookTimeout` matches because

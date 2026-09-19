@@ -31,12 +31,12 @@ export type ProfileDraft = {
   /**
    * Left out to change the name alone, which is what the Profile form does:
    * sending the avatar it rendered with would revert a newer one saved since
-   * (in the editor, or in another tab) — the handler writes every field it
+   * (in the editor, or in another tab), because the handler writes every
    * is given.
    *
    * When present: an https URL or a designed-avatar spec string, per the
    * canonical `avatarUrlSchema`; empty clears the avatar. Not validated here
-   * — `kernelWrite` pre-parses with the contract's own schema and answers
+   * `kernelWrite` pre-parses with the contract's own schema and answers
    * `invalid` with the offending field before the kernel runs (§3.2 step 5).
    */
   avatarUrl?: string;
@@ -169,7 +169,7 @@ export type ExportProgress = {
 /**
  * `get_export_status`: where a queued bundle has got to, and the link once it
  * is ready. `export_data` answers the instant it queues, so without this read
- * the Privacy tab could start a bundle it could never hand over — and the
+ * the Privacy tab could start a bundle it could never hand over, and the
  * right the export exists to serve is receiving the data, not starting a job.
  */
 export async function readExportStatus(

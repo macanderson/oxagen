@@ -4,14 +4,14 @@
 // A person's avatar is one of three kinds. An `icon` is a Lucide glyph, the
 // set the product ships, drawn at one line weight in the tone's ink. `initials`
 // are up to six letters in one of three typefaces. A `photo` is an `https://`
-// URL and is not a spec string at all — it is stored as the bare URL, the
+// URL and is not a spec string at all: it is stored as the bare URL, the
 // form every avatar-carrying contract already accepts.
 //
 // Tone is the only colour choice, and it is not a colour: solid, soft and line
 // are three relations to the theme (the foreground ink as a disc, a lifted
 // panel, a hairline), each fixing its own glyph colour, so the three stay
 // distinct on ink and on paper alike and there is no combination that fails.
-// No free colour and no gradient — the house scale and nothing else.
+// No free colour and no gradient: the house scale and nothing else.
 //
 // This module is dependency-free on purpose: the renderer and the editor both
 // import it into client bundles, and the contract's zod schema stays on the
@@ -69,9 +69,9 @@ export type DesignedAvatar =
 
 /**
  * The emoji body the app stored under `avatar:v1:` before the W11 editor:
- * `{"emoji":"\u{1F98A}","bg":"#f59e0b","mode":"full"}`. Still readable, never writable --
- * the editor offers icons, monograms and photos and nothing else, so no new
- * value takes this shape.
+ * `{"emoji":"\u{1F98A}","bg":"#f59e0b","mode":"full"}`. Still readable, never
+ * writable: the editor offers icons, monograms and photos and nothing else, so
+ * no new value takes this shape.
  *
  * It is read because the rows are real: `avatarUrlSchema` accepted this body,
  * it is still accepted, and profiles, workspaces and agents hold it. Dropping

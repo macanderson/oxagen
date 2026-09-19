@@ -43,7 +43,7 @@ describe("privacy.data.export.status capability", () => {
     expect(privacyDataExportStatus.defaultEffect).toBe("allow");
   });
 
-  // The four system org roles are Owner, Admin, Compliance and Billing --
+  // The four system org roles are Owner, Admin, Compliance and Billing:
   // there is no org-level Member or Viewer, and a map naming roles that do not
   // exist seeds nothing.
   it("names exactly the real roles at each scope", () => {

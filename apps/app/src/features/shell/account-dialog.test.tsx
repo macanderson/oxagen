@@ -122,7 +122,7 @@ async function openDialog(
 
 // The zones Preferences offers. The engine's own list runs to about 400, and
 // axe walks a node per option, which made this file's accessibility checks the
-// slowest in the app — they expired first at 15s and then at 30s on a loaded
+// slowest in the app. They expired first at 15s and then at 30s on a loaded
 // runner. The list is a seam the dialog reads, not the subject of any test
 // here, so it is stubbed down to four real zones; that the select renders
 // whatever the engine reports is proven directly below.
@@ -263,8 +263,8 @@ describe("Profile", () => {
     await user.click(screen.getByTestId("account-save"));
 
     // The name alone. `viewer.avatarUrl` is what the server rendered with, so
-    // sending it back would revert an avatar saved since — in the editor, or
-    // in another tab — because the handler writes every field it is given.
+    // sending it back would revert an avatar saved since (in the editor, or
+    // in another tab), because the handler writes every field it is given.
     expect(updateProfile).toHaveBeenCalledWith("acme", {
       displayName: "Marcus B",
     });
@@ -520,7 +520,7 @@ describe("Privacy", () => {
 
   // export_data answers the moment it queues; the bundle is written later. If
   // the tab stopped at the id, a person could start a bundle they could never
-  // receive — which is the whole point of the export.
+  // receive, which is the whole point of the export.
   it("polls a queued export and offers the bundle once it is ready", async () => {
     readExportStatus.mockResolvedValueOnce({
       ok: true,

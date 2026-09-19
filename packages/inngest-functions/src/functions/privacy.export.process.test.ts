@@ -248,7 +248,7 @@ describe("privacyExportProcess Inngest handler", () => {
 
     await handler({ event: { data: baseEvent }, step: makeStep() });
 
-    // Marked processing first, then ready with the canonical storage KEY --
+    // Marked processing first, then ready with the canonical storage KEY,
     // never the url. For a private object the url is not a route anyone can
     // fetch (the fs driver returns the key itself), so the column carries the
     // key the serving route reads back with storage().get().

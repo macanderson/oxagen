@@ -269,7 +269,7 @@ describe("Save", () => {
   });
 
   // auth.users.display_name is nullable and the editor has no name field, so
-  // it used to send "" for a person who has never set one — which
+  // it used to send "" for a person who has never set one, which
   // update_profile's schema refuses, so their avatar could never be saved at
   // all. The save carries the avatar alone now.
   it("saves for a person who has no display name", async () => {

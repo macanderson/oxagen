@@ -1,14 +1,14 @@
 "use client";
 // The Account dialog (spec App. F; mockup `accountBody`/`accountTabs`): the
 // account pages collapse into one dialog reachable from the user menu, with
-// four tabs — Profile, Preferences, Security, Privacy. The mockup's fifth tab
+// four tabs: Profile, Preferences, Security, Privacy. The mockup's fifth tab
 // is an onboarding demo and is not a product tab.
 //
 // Every control here saves or acts, and none is a stub: Profile writes
 // `update_profile`; Preferences reads `get_user_preferences` and writes
 // `set_preferences`; Security lists and revokes Better Auth sessions and
 // reissues recovery codes; Privacy queues `export_data`. What the product
-// cannot do yet is absent, not drawn — a control that cannot act is the thing
+// cannot do yet is absent, not drawn: a control that cannot act is the thing
 // this file exists to stop shipping.
 //
 // It is a `SheetDialog` like every other dialog in the app, so on a phone it
@@ -153,8 +153,8 @@ function ProfileTab({ data }: { data: ShellData }) {
     setPending(true);
     try {
       // The name alone. `viewer.avatarUrl` is what the server rendered with,
-      // so sending it back would revert an avatar saved since — in the
-      // editor, or in another tab — because the handler writes every field
+      // so sending it back would revert an avatar saved since (in the
+      // editor, or in another tab), because the handler writes every field
       // it is given.
       const result = await updateProfile(org.slug, { displayName });
       if (result.ok) {

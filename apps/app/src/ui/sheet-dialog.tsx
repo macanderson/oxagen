@@ -13,7 +13,7 @@ const FooterSlotContext = createContext<HTMLElement | null>(null);
 
 /**
  * A dialog's primary action, rendered from inside its body into the footer
- * beside Close — for a body whose tabs each own their submit button and its
+ * beside Close, for a body whose tabs each own their submit button and its
  * pending state, which a static `footer` prop could not carry.
  */
 export function SheetFooterAction({ children }: { children: ReactNode }) {

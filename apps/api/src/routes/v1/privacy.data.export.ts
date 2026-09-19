@@ -22,7 +22,7 @@ privacyDataExportRoute.post("/", async (c) => {
   return c.json(result, 202);
 });
 
-// GET /privacy/export/:exportId — poll export status.
+// GET /privacy/export/:exportId: poll export status.
 //
 // This read used to query privacy.privacy_export_requests here, outside
 // invoke(), so it carried no IAM check, no audit row and no parity entry. It
@@ -39,7 +39,7 @@ privacyDataExportRoute.get("/:exportId", async (c) => {
   return c.json(result);
 });
 
-// GET /privacy/export/:exportId/download — stream the archive itself.
+// GET /privacy/export/:exportId/download: stream the archive itself.
 //
 // The status read answers with a storage key and no URL, because the bundle is
 // a private object and the storage contract forbids rendering a private

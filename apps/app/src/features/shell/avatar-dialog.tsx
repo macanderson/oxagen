@@ -3,8 +3,8 @@
 // opened from the Account dialog's Profile tab in place of it and returning to
 // it on save or cancel.
 //
-// The draft is one of three kinds — a Lucide glyph, a monogram of up to six
-// letters in one of three typefaces, or a photo by https link — and, for the
+// The draft is one of three kinds (a Lucide glyph, a monogram of up to six
+// letters in one of three typefaces, or a photo by https link) and, for the
 // two drawn kinds, one of three tones from the house scale. The preview on the
 // left is the draft itself at every size the shell draws it, and the tone
 // swatches are the draft in each tone, so what is picked is what is got.

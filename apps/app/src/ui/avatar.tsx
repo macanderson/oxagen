@@ -20,7 +20,7 @@
 // with no effect and no stale flag to reset.
 //
 // People are round; agents are squircles. The tone lives on the record and is
-// one of three relations to the theme — solid, soft, line — from the house
+// one of three relations to the theme (solid, soft, line) from the house
 // scale, each fixing its own glyph colour, so there is no combination that
 // fails on ink or on paper.
 import {
@@ -114,9 +114,9 @@ function initialsScale(letters: number): number {
 export type AvatarShape = "person" | "agent";
 
 /**
- * The avatar for a person or an agent. Decorative in every state — the name it
+ * The avatar for a person or an agent. Decorative in every state: the name it
  * belongs to is rendered as text beside it, or carried by the trigger's
- * `aria-label` — so the image has an empty alt and the tiles are hidden from
+ * `aria-label`, so the image has an empty alt and the tiles are hidden from
  * the accessibility tree.
  */
 export function Avatar({

@@ -4,7 +4,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 // The handler issues one read: select(...).from(exportRequests).where().limit(1).
 // The `where` is captured so the principal fence can be asserted rather than
-// assumed --- a status read that matched on the id alone would hand one person
+// assumed: a status read that matched on the id alone would hand one person
 // another's bundle.
 const mocks = vi.hoisted(() => ({
   rows: [] as unknown[],
