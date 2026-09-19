@@ -84,6 +84,25 @@ describe("kernel decision-rules gate", () => {
     expect(seen).toEqual([{ amount_usd: 10 }]);
   });
 
+  // #3153: an auto-approved receipt needs the call's run id to name the run
+  // it belongs to. The kernel reads it off `ctx.agentRun.runId` (proven for a
+  // real agent-run invocation in kernel.test.ts's "agent-run enforcement"
+  // block, which sets up the IAM runtime this needs), so this pins the null
+  // case the gate must see for ordinary human/API traffic, where there is no
+  // run to attach a receipt to.
+  it("hands the gate ctx.runId: null for a call that carries no agent run", async () => {
+    registerRefund();
+    registerHandler("test.refund", async () => async () => ({ ok: true }));
+    const seenRunIds: (string | null | undefined)[] = [];
+    setDecisionRulesGate(async ({ ctx: gateCtx }) => {
+      seenRunIds.push(gateCtx.runId);
+    });
+
+    await invoke("test.refund", { amount_usd: 10 }, ctx);
+
+    expect(seenRunIds).toEqual([null]);
+  });
+
   it("a passing gate lets the handler run and return", async () => {
     registerRefund();
     registerHandler("test.refund", async () => async () => ({ ok: true }));

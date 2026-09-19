@@ -1493,6 +1493,9 @@ async function _invokeCoreInner(
             userId: ctx.userId ?? null,
             surface: opts?.surface,
             requestId: ctx.requestId,
+            // The run an auto-approval receipt attaches to (#3153): present
+            // whenever this invocation carries an agent-run IAM context.
+            runId: ctx.agentRun?.runId ?? null,
           },
           principal: resolvedPrincipal,
         });

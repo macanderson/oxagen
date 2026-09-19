@@ -47,6 +47,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const toolId = randomUUID();
     const versionId = randomUUID();
     const userId = randomUUID();
+    const runId = randomUUID();
+    let runPublicId = "";
     const mandateIds: string[] = [];
     const NOW = new Date("2026-09-16T12:00:00.000Z");
 
@@ -104,14 +106,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where(eq(schema.approvalRequests.workspaceId, workspaceId)),
       );
 
-    const autoApprove = (input: unknown, rules: unknown[]) =>
+    const autoApprove = (
+      input: unknown,
+      rules: unknown[],
+      runId?: string | null,
+    ) =>
       inScope(() =>
         autoApproveParkedCall({
           capability: "stripe__create_payment",
           input,
           ruleSet: v2(rules) as never,
           verdict: VERDICT,
-          ctx: { orgId, workspaceId, userId },
+          ctx: { orgId, workspaceId, userId, runId },
           now: () => NOW,
         }),
       );
@@ -166,6 +172,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .update(schema.tools)
           .set({ activeVersionId: versionId })
           .where(eq(schema.tools.id, toolId));
+        // The run an auto-approved call's receipt attaches to (#3153).
+        const [run] = await tx
+          .insert(schema.agentRuns)
+          .values({
+            id: runId,
+            orgId,
+            workspaceId,
+            surface: "api",
+            spec: {},
+          })
+          .returning({ publicId: schema.agentRuns.publicId });
+        runPublicId = run!.publicId;
       });
     });
 
@@ -174,6 +192,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await tx
           .delete(schema.approvalRequests)
           .where(eq(schema.approvalRequests.workspaceId, workspaceId));
+        await tx
+          .delete(schema.agentRuns)
+          .where(eq(schema.agentRuns.id, runId));
         for (const id of mandateIds) {
           await tx
             .delete(schema.mandateLedger)
@@ -681,6 +702,36 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       expect(row!.tokenUsedAt?.toISOString()).toBe(NOW.toISOString());
       expect(row!.resolvedAt?.toISOString()).toBe(NOW.toISOString());
+    });
+
+    // #3153: the receipt names the run the call belonged to, the same way
+    // resolve_approval's rows do, so list_resolved_approvals can find it by
+    // run.
+    it("attaches the receipt to the call's run when one was in scope", async () => {
+      const decision = await autoApprove(CALL, [RULE], runId);
+      await inScope(async () => {
+        await decision?.commit?.();
+      });
+      const [row] = await approvalsOf();
+      expect(row?.runPublicId).toBe(runPublicId);
+    });
+
+    it("leaves run_public_id null for a call with no run in scope, never a fabricated one", async () => {
+      const decision = await autoApprove(CALL, [RULE], null);
+      await inScope(async () => {
+        await decision?.commit?.();
+      });
+      const [row] = await approvalsOf();
+      expect(row?.runPublicId).toBeNull();
+    });
+
+    it("leaves run_public_id null for a run id that does not resolve in this workspace (negative)", async () => {
+      const decision = await autoApprove(CALL, [RULE], randomUUID());
+      await inScope(async () => {
+        await decision?.commit?.();
+      });
+      const [row] = await approvalsOf();
+      expect(row?.runPublicId).toBeNull();
     });
 
     it("writes nothing when the call does not qualify, and reports why", async () => {

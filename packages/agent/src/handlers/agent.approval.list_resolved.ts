@@ -4,7 +4,6 @@
 // (packages/oxagen/src/contracts/agent.approval.list_resolved.ts).
 import { schema, withTenantDb } from "@oxagen/database";
 import { isFloorReason } from "@oxagen/rules";
-import { alias } from "drizzle-orm/pg-core";
 import { and, desc, eq, gte, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 import type {
   AgentApprovalListResolvedInput,
@@ -17,7 +16,7 @@ export type { AgentApprovalListResolvedInput, AgentApprovalListResolvedOutput };
 export type ResolvedApprovalListItem =
   AgentApprovalListResolvedOutput["items"][number];
 
-/** The columns one page reads; the joins fill `requesterPublicId` / `resolvedByUserPublicId` or leave them null. */
+/** The columns one page reads; the relations fill `requesterPublicId` / `resolvedByUserPublicId` or leave them null. */
 export type ResolvedApprovalListRow = {
   publicId: string;
   capabilityName: string;
@@ -34,6 +33,53 @@ export type ResolvedApprovalListRow = {
   autoRuleId: string | null;
   resolvedReasons: string[];
 };
+
+/**
+ * One row as the relational query API's `with` shape hands it back:
+ * `agent.approval_requests` → `chat.messages` → `chat.conversations` →
+ * `auth.users` (the requester) and → `tools.mandates` (the mandate) each
+ * cross a schema, so every hop runs through the declared relations
+ * (`packages/database/src/relations.ts`, AGENTS.md "Storage Boundaries")
+ * rather than a raw cross-schema join written here.
+ */
+type QueriedRow = {
+  publicId: string;
+  capabilityName: string;
+  createdAt: Date;
+  expiresAt: Date;
+  resolvedAt: Date | null;
+  resolution: string | null;
+  resolvedByPolicy: string | null;
+  runPublicId: string | null;
+  ruleIds: string[];
+  autoRuleId: string | null;
+  resolvedReasons: string[];
+  message: { conversation: { user: { publicId: string } | null } | null } | null;
+  resolvedBy: { publicId: string } | null;
+  mandate: { publicId: string } | null;
+};
+
+function toResolvedApprovalListRow(row: QueriedRow): ResolvedApprovalListRow {
+  return {
+    publicId: row.publicId,
+    capabilityName: row.capabilityName,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    // The `isNotNull(ar.resolvedAt)` / `isNotNull(ar.resolution)` filters in
+    // the query guarantee both are set at runtime; the columns stay nullable
+    // in the schema because a pending row has neither.
+    resolvedAt: row.resolvedAt ?? row.createdAt,
+    resolution: row.resolution ?? "",
+    requesterPublicId: row.message?.conversation?.user?.publicId ?? null,
+    resolvedByUserPublicId: row.resolvedBy?.publicId ?? null,
+    resolvedByPolicy: row.resolvedByPolicy,
+    mandatePublicId: row.mandate?.publicId ?? null,
+    runPublicId: row.runPublicId,
+    ruleIds: row.ruleIds,
+    autoRuleId: row.autoRuleId,
+    resolvedReasons: row.resolvedReasons,
+  };
+}
 
 /** A page boundary: the last row's (resolved_at, public_id). */
 export type ResolvedApprovalCursor = { resolvedAt: Date; id: string };
@@ -103,7 +149,6 @@ export function toResolvedApprovalListItem(
 }
 
 const ar = schema.approvalRequests;
-const resolvedByUsers = alias(schema.users, "resolved_by_users");
 /** Millisecond precision, so a cursor built from a JS Date compares exactly against the column. */
 const resolvedAtMs = sql`date_trunc('milliseconds', ${ar.resolvedAt})`;
 
@@ -121,79 +166,65 @@ export async function agentApprovalListResolvedHandler(
   ctx: CapabilityContext,
 ): Promise<AgentApprovalListResolvedOutput> {
   const after = decodeResolvedCursor(input.cursor);
-  const rows = await withTenantDb((tx) =>
-    tx
-      .select({
-        publicId: ar.publicId,
-        capabilityName: ar.capabilityName,
-        createdAt: ar.createdAt,
-        expiresAt: ar.expiresAt,
-        resolvedAt: ar.resolvedAt,
-        resolution: ar.resolution,
-        requesterPublicId: schema.users.publicId,
-        resolvedByUserPublicId: resolvedByUsers.publicId,
-        resolvedByPolicy: ar.resolvedByPolicy,
-        mandatePublicId: schema.mandates.publicId,
-        runPublicId: ar.runPublicId,
-        ruleIds: ar.ruleIds,
-        autoRuleId: ar.autoRuleId,
-        resolvedReasons: ar.resolvedReasons,
-      })
-      .from(ar)
-      .leftJoin(schema.mandates, eq(schema.mandates.id, ar.mandateId))
-      .leftJoin(resolvedByUsers, eq(resolvedByUsers.id, ar.resolvedByUserId))
-      .leftJoin(
-        schema.messages,
-        and(
-          eq(schema.messages.id, ar.messageId),
-          eq(schema.messages.orgId, ar.orgId),
-          eq(schema.messages.workspaceId, ar.workspaceId),
-        ),
-      )
-      .leftJoin(
-        schema.conversations,
-        and(
-          eq(schema.conversations.id, schema.messages.conversationId),
-          eq(schema.conversations.orgId, ar.orgId),
-          eq(schema.conversations.workspaceId, ar.workspaceId),
-        ),
-      )
-      .leftJoin(schema.users, eq(schema.users.id, schema.conversations.userId))
-      .where(
-        and(
-          eq(ar.orgId, ctx.orgId),
-          eq(ar.workspaceId, ctx.workspaceId),
-          isNotNull(ar.resolution),
-          isNotNull(ar.resolvedAt),
-          // One run's resolved calls, when the caller names one.
-          input.runId === undefined
-            ? undefined
-            : eq(ar.runPublicId, input.runId),
-          input.since === undefined
-            ? undefined
-            : gte(ar.resolvedAt, new Date(input.since)),
-          input.until === undefined
-            ? undefined
-            : lte(ar.resolvedAt, new Date(input.until)),
-          after ? afterCursor(after) : undefined,
-        ),
-      )
-      .orderBy(desc(resolvedAtMs), desc(ar.publicId))
-      .limit(input.limit + 1),
-  );
+  const rows = (await withTenantDb((tx) =>
+    tx.query.approvalRequests.findMany({
+      where: and(
+        eq(ar.orgId, ctx.orgId),
+        eq(ar.workspaceId, ctx.workspaceId),
+        isNotNull(ar.resolution),
+        isNotNull(ar.resolvedAt),
+        // One run's resolved calls, when the caller names one.
+        input.runId === undefined ? undefined : eq(ar.runPublicId, input.runId),
+        input.since === undefined
+          ? undefined
+          : gte(ar.resolvedAt, new Date(input.since)),
+        input.until === undefined
+          ? undefined
+          : lte(ar.resolvedAt, new Date(input.until)),
+        after ? afterCursor(after) : undefined,
+      ),
+      orderBy: [desc(resolvedAtMs), desc(ar.publicId)],
+      limit: input.limit + 1,
+      columns: {
+        publicId: true,
+        capabilityName: true,
+        createdAt: true,
+        expiresAt: true,
+        resolvedAt: true,
+        resolution: true,
+        resolvedByPolicy: true,
+        runPublicId: true,
+        ruleIds: true,
+        autoRuleId: true,
+        resolvedReasons: true,
+      },
+      with: {
+        // The requester: the message the call parked on, then its
+        // conversation, then the person whose turn it was: both hops cross
+        // a schema (agent → chat → auth), so both run through the declared
+        // relations rather than a raw join in this handler.
+        message: {
+          columns: {},
+          with: {
+            conversation: {
+              columns: {},
+              with: { user: { columns: { publicId: true } } },
+            },
+          },
+        },
+        // The person who answered, when one did; null on a row a rule
+        // resolved, whose approver is `resolvedByPolicy` instead.
+        resolvedBy: { columns: { publicId: true } },
+        // The mandate the parked call drew on (ADR-059); null on a row the
+        // chat approval gate wrote.
+        mandate: { columns: { publicId: true } },
+      },
+    }),
+  )) as QueriedRow[];
   const page = rows.slice(0, input.limit);
   const last = page[page.length - 1];
   return {
-    items: page.map((row) =>
-      toResolvedApprovalListItem({
-        ...row,
-        resolvedAt: row.resolvedAt ?? row.createdAt,
-        // The `isNotNull(ar.resolution)` filter guarantees a string at
-        // runtime; the column stays nullable in the schema because a pending
-        // row has none.
-        resolution: row.resolution ?? "",
-      }),
-    ),
+    items: page.map((row) => toResolvedApprovalListItem(toResolvedApprovalListRow(row))),
     nextCursor:
       rows.length > input.limit && last
         ? encodeResolvedCursor({

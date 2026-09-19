@@ -143,18 +143,54 @@ describe("approvals.resolved (#3153)", () => {
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: agentApprovalListResolved,
-      input: { runId: "arun_7k2m9q", limit: 100 },
+      input: { runId: "arun_7k2m9q", limit: 100, cursor: undefined },
       page: "run",
     });
     expect(captureError).not.toHaveBeenCalled();
   });
 
-  it("passes a failed read through (negative)", async () => {
+  // #3153 P2: a run with more than one page of resolved approvals must not
+  // silently read as only the newest page.
+  it("walks every page the contract hands back and combines them into one list", async () => {
+    kernelRead
+      .mockResolvedValueOnce(
+        readOk({ items: [resolvedItem], nextCursor: "c2" }),
+      )
+      .mockResolvedValueOnce(
+        readOk({
+          items: [{ ...resolvedItem, id: "apr_next" }],
+          nextCursor: null,
+        }),
+      );
+    const out = await approvals.resolved(ctx, { runId: "arun_7k2m9q" });
+    expect(out.ok && out.value.map((i) => i.id)).toEqual([
+      "apr_q8t1",
+      "apr_next",
+    ]);
+    expect(kernelRead).toHaveBeenCalledTimes(2);
+    expect(kernelRead).toHaveBeenNthCalledWith(2, ctx, {
+      contract: agentApprovalListResolved,
+      input: { runId: "arun_7k2m9q", limit: 100, cursor: "c2" },
+      page: "run",
+    });
+  });
+
+  it("stops at MAX_RESOLVED_PAGES rather than paging a run's ledger forever (negative)", async () => {
+    kernelRead.mockImplementation(() =>
+      Promise.resolve(readOk({ items: [resolvedItem], nextCursor: "more" })),
+    );
+    const out = await approvals.resolved(ctx, { runId: "arun_7k2m9q" });
+    expect(kernelRead).toHaveBeenCalledTimes(10);
+    expect(out.ok && out.value).toHaveLength(10);
+  });
+
+  it("passes a failed read through, without paging further (negative)", async () => {
     const down = readError("run_index_unavailable", 503);
     kernelRead.mockResolvedValue(down);
     expect(await approvals.resolved(ctx, { runId: "arun_7k2m9q" })).toEqual(
       down,
     );
+    expect(kernelRead).toHaveBeenCalledOnce();
   });
 
   it("answers record_unmappable and reports once for a record the view refuses (negative)", async () => {
