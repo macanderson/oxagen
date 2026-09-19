@@ -3,7 +3,7 @@
 // It lives at the page's lifetime, not a component's, so these tests drive the
 // module directly and reset it between cases.
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { recoveryCodeVault, useRecoveryCodeVault } from "./recovery-code-vault";
 
 const ME = "11111111-1111-4111-8111-111111111111";
@@ -176,5 +176,78 @@ describe("recoveryCodeVault", () => {
     const { result } = renderHook(() => useRecoveryCodeVault(ME));
     expect(result.current.codes).toEqual(["aaaa-1111"]);
     expect(asked()).toBe(true);
+  });
+});
+
+// Each tab is its own realm with its own copy of this store, so the in-page
+// gate cannot see a rotation in another tab. A Web Lock can: it is shared by
+// every tab of the origin. This fake stands in for the browser's lock manager,
+// with `elsewhere` playing a lock another tab holds.
+describe("the cross-tab claim", () => {
+  const manager = { held: false, elsewhere: false };
+  const fakeLocks = {
+    request(
+      _name: string,
+      _options: { ifAvailable: boolean },
+      callback: (lock: { name: string } | null) => unknown,
+    ): Promise<unknown> {
+      if (manager.held || manager.elsewhere) {
+        return Promise.resolve(callback(null));
+      }
+      manager.held = true;
+      return Promise.resolve(callback({ name: _name })).then((value) => {
+        manager.held = false;
+        return value;
+      });
+    },
+  };
+
+  beforeEach(() => {
+    manager.held = false;
+    manager.elsewhere = false;
+    Object.defineProperty(navigator, "locks", {
+      value: fakeLocks,
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    recoveryCodeVault.resetForTests();
+    Reflect.deleteProperty(navigator, "locks");
+  });
+
+  it("refuses while another tab holds the rotation (negative)", async () => {
+    manager.elsewhere = true;
+    expect(recoveryCodeVault.begin(ME)).toBe(true);
+    expect(await recoveryCodeVault.claimAcrossTabs()).toBe(false);
+  });
+
+  // Held through the unsaved set, not only while the request is on the wire:
+  // a second tab rotating after this answer arrived would void it all the same.
+  it("holds the claim until the set is saved, then lets it go", async () => {
+    recoveryCodeVault.begin(ME);
+    expect(await recoveryCodeVault.claimAcrossTabs()).toBe(true);
+    expect(manager.held).toBe(true);
+    recoveryCodeVault.end();
+    recoveryCodeVault.hold(ME, ["aaaa-1111"]);
+    expect(manager.held).toBe(true);
+
+    recoveryCodeVault.clear();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(manager.held).toBe(false);
+  });
+
+  // A lost answer leaves the old set possibly void, so another tab may not
+  // rotate either. The claim goes straight from the rotation to the doubt and
+  // is never let go in between.
+  it("keeps the claim through a lost answer and into the next rotation", async () => {
+    recoveryCodeVault.begin(ME);
+    await recoveryCodeVault.claimAcrossTabs();
+    recoveryCodeVault.lose(ME);
+    await Promise.resolve();
+    expect(manager.held).toBe(true);
+    recoveryCodeVault.begin(ME);
+    expect(await recoveryCodeVault.claimAcrossTabs()).toBe(true);
   });
 });

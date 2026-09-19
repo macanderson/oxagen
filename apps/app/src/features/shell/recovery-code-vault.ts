@@ -65,6 +65,22 @@ function ask(event: BeforeUnloadEvent): void {
 }
 let asking = false;
 
+// The cross-tab claim. This store is one per tab, and each tab is its own
+// JavaScript realm, so the in-page gate in `begin()` cannot see a rotation in
+// another tab. Two tabs rotating for one account is the same failure as two
+// rotations in one: the later server commit voids the earlier set while the
+// earlier tab still shows it as the one to save.
+//
+// A Web Lock is shared by every tab of the origin and is dropped by the
+// browser when the tab holding it closes or crashes, so a tab that dies
+// mid-rotation cannot wedge the others. It is held from the start of a
+// rotation until nothing is at stake here: through an unsaved set and through
+// a lost answer, not only while the request is on the wire, because a second
+// tab rotating after the first one's answer arrives voids that answer just
+// the same. The lock carries no codes. Nothing leaves this tab's memory.
+const ROTATION_LOCK = "oxagen.recovery-code-rotation";
+let releaseLock: (() => void) | null = null;
+
 function set(next: VaultState): void {
   state = next;
   const shouldAsk = atStake(next);
@@ -73,7 +89,42 @@ function set(next: VaultState): void {
     else window.removeEventListener("beforeunload", ask);
     asking = shouldAsk;
   }
+  if (!shouldAsk && releaseLock) {
+    releaseLock();
+    releaseLock = null;
+  }
   for (const listener of listeners) listener();
+}
+
+/**
+ * Take the cross-tab rotation lock, or keep the one this tab already holds.
+ * False when another tab holds it. A browser without Web Locks gets the
+ * in-page gate alone, which is what every tab had before.
+ */
+function claimAcrossTabs(): Promise<boolean> {
+  if (releaseLock) return Promise.resolve(true);
+  const locks =
+    typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks) return Promise.resolve(true);
+  return new Promise<boolean>((resolve) => {
+    locks
+      .request(ROTATION_LOCK, { ifAvailable: true }, (lock) => {
+        if (!lock) {
+          resolve(false);
+          return undefined;
+        }
+        // Held until `set()` sees nothing at stake and calls this.
+        return new Promise<void>((release) => {
+          releaseLock = release;
+          resolve(true);
+        });
+      })
+      // A lock manager that fails is treated as one that is absent, so the
+      // in-page gate still stands and the person is not locked out.
+      .catch(() => {
+        resolve(true);
+      });
+  });
 }
 
 function subscribe(listener: () => void): () => void {
@@ -153,6 +204,13 @@ export const recoveryCodeVault = {
   heldByAnother(userId: string): boolean {
     return state.userId !== null && state.userId !== userId && atStake(state);
   },
+  /**
+   * The second half of `begin()`: claim the rotation across every tab of this
+   * browser. False when another tab has a rotation running or codes unsaved;
+   * the caller then calls `end()` and says so. Awaited before the request
+   * leaves, so a refused claim sends nothing.
+   */
+  claimAcrossTabs,
   /** The rotation answered: nothing is on the wire any more. */
   end(): void {
     if (state.rotating) set({ ...state, rotating: false });

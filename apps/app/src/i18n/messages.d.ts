@@ -2023,6 +2023,7 @@ type Messages = {
         revoked: string;
         sessionsHint: string;
         codesBlockedByOther: string;
+        codesBlockedElsewhere: string;
       };
       privacy: {
         export: string;

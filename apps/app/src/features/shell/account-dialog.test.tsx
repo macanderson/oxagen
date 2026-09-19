@@ -1036,6 +1036,36 @@ describe("Security", () => {
     expect(asked()).toBe(false);
   });
 
+  // Two tabs of one browser rotating for one account void each other's sets,
+  // and neither tab can see the other's rotation in its own memory. When
+  // another tab holds the cross-tab claim, this one sends nothing and says
+  // why.
+  it("sends nothing while another tab holds the rotation (negative)", async () => {
+    Object.defineProperty(navigator, "locks", {
+      value: {
+        request: (
+          _name: string,
+          _options: unknown,
+          callback: (lock: null) => unknown,
+        ) => Promise.resolve(callback(null)),
+      },
+      configurable: true,
+    });
+    try {
+      const { user } = await openDialog("security");
+      await user.click(screen.getByTestId("account-codes-open"));
+      await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+      await user.click(screen.getByTestId("account-codes-confirm"));
+      expect(await screen.findByTestId("account-codes-elsewhere")).toBeTruthy();
+      expect(liveRegenerateBackupCodes).not.toHaveBeenCalled();
+      const asked = () =>
+        !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+      expect(asked()).toBe(false);
+    } finally {
+      Reflect.deleteProperty(navigator, "locks");
+    }
+  });
+
   // A thrown call is a lost answer, not a refusal. The server may have
   // committed the rotation before the connection went, which voids the old set
   // and leaves the new one nowhere. Saying "password not accepted" would let
