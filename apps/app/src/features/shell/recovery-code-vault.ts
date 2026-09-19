@@ -110,6 +110,13 @@ export const recoveryCodeVault = {
    * Claim the one rotation that may run. False when one is already on the
    * wire: two rotations can settle in either order, and the loser's set would
    * land after the winner's, on screen and already void.
+   *
+   * False too while someone else has anything at stake. If a person's session
+   * ends elsewhere and another signs in within the same page, the first
+   * person's unsaved set or unresolved rotation is still here, hidden from the
+   * second. Letting the second rotate would overwrite it, and that set is the
+   * only copy there is. Nothing is lost by refusing: a reload clears the page
+   * after the browser has asked.
    */
   begin(userId: string): boolean {
     if (state.rotating) return false;
@@ -130,7 +137,7 @@ export const recoveryCodeVault = {
     // first person their account on the next lost authenticator. The tab
     // reads `heldByAnother` and says which of the two happened, rather than
     // leaving a button that does nothing.
-    if (!mine && (state.codes !== null || state.uncertain)) return false;
+    if (!mine && atStake(state)) return false;
     set({
       userId,
       rotating: true,
@@ -144,11 +151,7 @@ export const recoveryCodeVault = {
    * somebody else's set is unsaved, or their rotation never resolved.
    */
   heldByAnother(userId: string): boolean {
-    return (
-      state.userId !== null &&
-      state.userId !== userId &&
-      (state.codes !== null || state.uncertain)
-    );
+    return state.userId !== null && state.userId !== userId && atStake(state);
   },
   /** The rotation answered: nothing is on the wire any more. */
   end(): void {
@@ -164,7 +167,13 @@ export const recoveryCodeVault = {
    * still stands: a refusal now says nothing about that one.
    */
   refuse(): void {
-    set(state.uncertain ? { ...state, rotating: false, codes: null } : EMPTY);
+    // A set still waiting to be saved is untouched as well: a refused rotation
+    // did not replace it, so it is still the one that works.
+    set(
+      state.uncertain || state.codes !== null
+        ? { ...state, rotating: false }
+        : EMPTY,
+    );
   },
   /**
    * The call threw: the request may or may not have reached the server, and

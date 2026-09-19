@@ -146,4 +146,39 @@ describe("recoveryCodeVault", () => {
     recoveryCodeVault.refuse();
     expect(asked()).toBe(false);
   });
+
+  // Another person's session can end elsewhere and a new person sign in within
+  // the same page. The first person's unsaved set is hidden from the second,
+  // and it is the only copy there is, so the second may not rotate over it.
+  it("refuses a rotation while someone else has codes at stake (negative)", () => {
+    recoveryCodeVault.hold(ME, ["aaaa-1111"]);
+    expect(recoveryCodeVault.begin(SOMEONE_ELSE)).toBe(false);
+    const { result } = renderHook(() => useRecoveryCodeVault(ME));
+    expect(result.current.codes).toEqual(["aaaa-1111"]);
+
+    act(() => {
+      recoveryCodeVault.clear();
+      recoveryCodeVault.lose(ME);
+    });
+    expect(recoveryCodeVault.begin(SOMEONE_ELSE)).toBe(false);
+    expect(result.current.uncertain).toBe(true);
+  });
+
+  it("lets another person rotate once nothing is at stake", () => {
+    recoveryCodeVault.hold(ME, ["aaaa-1111"]);
+    recoveryCodeVault.clear();
+    expect(recoveryCodeVault.begin(SOMEONE_ELSE)).toBe(true);
+  });
+
+  // A refused rotation replaced nothing, so an unsaved set from before it is
+  // still the one that works and stays held.
+  it("keeps an unsaved set through a refused rotation", () => {
+    recoveryCodeVault.hold(ME, ["aaaa-1111"]);
+    recoveryCodeVault.begin(ME);
+    recoveryCodeVault.end();
+    recoveryCodeVault.refuse();
+    const { result } = renderHook(() => useRecoveryCodeVault(ME));
+    expect(result.current.codes).toEqual(["aaaa-1111"]);
+    expect(asked()).toBe(true);
+  });
 });
