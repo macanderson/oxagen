@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
 import { getCapability } from "../registry";
 import "./index";
 
-/** INV-27: the billing-page reads and the three billing writes. */
+/** INV-27: the billing-page reads and the billing writes that buy or change plan. */
 const BILLING_PAGE_CONTRACTS = [
   "get_subscription",
   "get_contract_rate",
@@ -29,6 +29,9 @@ const BILLING_PAGE_CONTRACTS = [
   // WL-67, the second meter (§3.9): the in-app AI usage credit top-up. A
   // prepaid org whose GAU bucket is empty must still be able to buy credits.
   "purchase_credits",
+  // Change plan on the Billing page (#3309). A prepaid org at remaining = 0
+  // is the one that needs to upgrade; without the flag the kernel refused it.
+  "start_subscription_upgrade",
 ] as const;
 
 /** INV-28: the §1.5 list — every rev1 invoke that is not a governed action. */

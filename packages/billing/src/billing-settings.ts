@@ -13,6 +13,7 @@ import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
+import { readRecordedCustomerId } from "./recorded-customer";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -405,16 +406,10 @@ export async function updateAutoReloadSettings(
       } else {
         // Check if the org has a default payment method on Stripe.
         try {
-          const sub = await withTenantDb((tx) =>
-            tx.query.subscriptions.findFirst({
-              where: eq(schema.subscriptions.orgId, orgId),
-              columns: { stripeCustomerId: true },
-            }),
-          );
-          if (sub?.stripeCustomerId) {
-            const defaultPm = await billingProvider().getDefaultPaymentMethodId(
-              sub.stripeCustomerId,
-            );
+          const customerId = await readRecordedCustomerId(orgId);
+          if (customerId) {
+            const defaultPm =
+              await billingProvider().getDefaultPaymentMethodId(customerId);
             hasValidPaymentMethod = !!defaultPm;
           }
         } catch (err) {
