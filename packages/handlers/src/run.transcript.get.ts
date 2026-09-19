@@ -114,10 +114,21 @@ export function foldPageStart(
   // No fold ends at the cursor: the fold the previous page returned has
   // grown. Prefer the last containing range so an earlier fold that expanded
   // over a later fold's opening does not reclaim the cursor.
-  const grown = folds.findLastIndex(
-    (fold) =>
-      BigInt(fold.opening.seq) <= cursor && BigInt(fold.endSeq) > cursor,
-  );
+  // Walked backwards rather than with findLastIndex, which needs the ES2023
+  // lib: this module typechecks again under apps/api, whose lib does not
+  // carry it.
+  let grown = -1;
+  for (let i = folds.length - 1; i >= 0; i -= 1) {
+    const fold = folds[i];
+    if (
+      fold !== undefined &&
+      BigInt(fold.opening.seq) <= cursor &&
+      BigInt(fold.endSeq) > cursor
+    ) {
+      grown = i;
+      break;
+    }
+  }
   if (grown !== -1) return grown;
   return folds.findIndex((fold) => BigInt(fold.opening.seq) > cursor);
 }
@@ -240,9 +251,7 @@ export function createRunTranscriptGetHandler(
     let running: number | null = null;
     for (const frame of read.frames) {
       running =
-        frame.costMicros === null
-          ? running
-          : (running ?? 0) + frame.costMicros;
+        frame.costMicros === null ? running : (running ?? 0) + frame.costMicros;
       costThrough.set(frame.seq, running);
     }
 
