@@ -53,6 +53,8 @@ bundle. A field here would be a way to enumerate other people's exports.
 | `forbidden` / `no_principal` | A machine credential: MCP builds every context with `userId: null`, so this can only refuse there. That is why the capability has no MCP surface. |
 | `not_found` / `export_not_found` | No such id, **or** an id belonging to someone else. The two are deliberately the same answer: distinguishing them would tell a caller whether a stranger's export id is real. |
 | `forbidden` / `org_export_requires_admin` | The export's scope is `org` and the caller is no longer an Owner or Admin of the organization that governed it. See below. |
+| `forbidden` / `org_export_not_permitted` | The export's scope is `org` and an explicit rule now denies `export_data`, either in the workspace that queued the export or in the one the read comes through. See below. |
+| `forbidden` / `org_export_scope_unknown` | The export's scope is `org` and the row was written before the queuing workspace was recorded, so a deny there cannot be checked. Request a new export. |
 
 ## Organization exports are re-authorized at read time
 
@@ -74,6 +76,18 @@ refuses when it is no longer Owner or Admin. The role is read through
 `packages/handlers/src/_org_membership.ts`, the one place that knows
 `org_users.role` is written in both casings. A personal export takes no second
 read: it is the caller's own data and no role ever gated it.
+
+The role is one of two ways the mandate is taken back. The other is an
+explicit `deny` on `export_data` itself, which the role cannot see, so the
+handler asks `export_data`'s policy too. It asks in the workspace that queued
+the export and again in the one the read comes through, and either refusal
+refuses the read. The download route is mounted under any workspace slug, so
+asking only in the calling workspace would let a deny in the queuing workspace
+be stepped around. `export_data` records the queuing workspace on the row, or
+the org-only sentinel for a queue made in no workspace. A row written before
+that column existed has no recorded scope, and its organization archive is
+refused rather than released on a check that may be asking the wrong
+workspace.
 
 ## Surfaces
 

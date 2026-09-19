@@ -143,6 +143,8 @@ function personalRow(overrides: Record<string, unknown> = {}) {
     status: "ready",
     exportUrl: "privacy-exports/org/exp.zip",
     completedAt: null,
+    // Queued in the workspace `ctx()` calls from, unless a case says otherwise.
+    workspaceId: "33333333-3333-4333-8333-333333333333",
     ...overrides,
   };
 }
@@ -613,11 +615,40 @@ describe("an export_data deny in the workspace that queued the export", () => {
     expect(authz.workspaces).toEqual([CALLING_FROM]);
   });
 
-  // Rows written before the column existed, or queued in no workspace, carry
-  // none. They keep the check they had: the calling scope alone.
-  it("asks in the calling scope alone for a row with no workspace", async () => {
-    readyOrgExportQueuedIn(null);
+  // A queue made in no workspace records the org-only sentinel, so its
+  // recheck asks at organization scope as well as in the calling one.
+  it("asks at organization scope for an export queued in no workspace", async () => {
+    const ORG_ONLY = "00000000-0000-0000-0000-000000000000";
+    readyOrgExportQueuedIn(ORG_ONLY);
     await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx());
-    expect(authz.workspaces).toEqual([CALLING_FROM]);
+    expect(authz.workspaces).toEqual([ORG_ONLY, CALLING_FROM]);
+  });
+
+  // A row written before the column existed has no recorded scope. A deny in
+  // the workspace that governed it cannot be checked, and the archive holds
+  // the whole organization's data, so it is refused, not released on a check
+  // that may be asking the wrong workspace.
+  it("refuses an organization export whose scope was never recorded (negative)", async () => {
+    readyOrgExportQueuedIn(null);
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        isHandlerError(error) &&
+        error.code === "forbidden" &&
+        error.reason === "org_export_scope_unknown",
+    );
+    expect(authz.workspaces).toEqual([]);
+  });
+
+  // The refusal is for organization archives only. A personal export is the
+  // caller's own data and no workspace policy ever gated it.
+  it("still hands over a personal export with no recorded scope", async () => {
+    queueSelects([personalRow({ workspaceId: null })]);
+    const out = await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx(),
+    );
+    expect(out.storageKey).toBe("privacy-exports/org/exp.zip");
   });
 });

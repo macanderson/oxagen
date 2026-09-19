@@ -188,12 +188,23 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     expect(mocks.inserted[0]?.workspaceId).toBe("ws_1");
   });
 
-  it("records no workspace for a request made in no workspace", async () => {
+  // Null is reserved for rows written before the column, which the status
+  // read refuses. A queue made in no workspace records the org-only sentinel
+  // instead, so its archive stays downloadable.
+  it("records the org-only sentinel for a request made in no workspace", async () => {
+    const ORG_ONLY = "00000000-0000-0000-0000-000000000000";
     await privacyDataExportHandler(
       { scope: "user" },
-      { ...CTX, workspaceId: "00000000-0000-0000-0000-000000000000" },
+      { ...CTX, workspaceId: ORG_ONLY },
     );
-    expect(mocks.inserted[0]?.workspaceId).toBeNull();
+    await privacyDataExportHandler({ scope: "user" }, {
+      ...CTX,
+      workspaceId: undefined,
+    } as unknown as CapabilityContext);
+    expect(mocks.inserted.map((row) => row.workspaceId)).toEqual([
+      ORG_ONLY,
+      ORG_ONLY,
+    ]);
   });
 
   it("allows org-scope export for an Owner of the org", async () => {
