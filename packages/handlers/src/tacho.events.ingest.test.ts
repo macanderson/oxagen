@@ -592,11 +592,20 @@ function wire(db: FakeDb): void {
             where: async () =>
               tableName(table) === "context_promotions"
                 ? [{ ledger: 0, steering: 0 }]
-                : db.gatewayChains.map((row) => ({
-                    chain: row.chainSessionUuid,
-                    at: row.lastSeenAt,
-                    genesisHash: row.chainGenesisHash,
-                  })),
+                : tableName(table) === "session_files"
+                  ? // The rollup reads this session's existing rows to keep
+                    // one file on one row across batches, so the fixture
+                    // holds them rather than answering with another table's
+                    // shape.
+                    db.files.map((row) => ({
+                      path: row["path"],
+                      repoRelativePath: row["repoRelativePath"],
+                    }))
+                  : db.gatewayChains.map((row) => ({
+                      chain: row.chainSessionUuid,
+                      at: row.lastSeenAt,
+                      genesisHash: row.chainGenesisHash,
+                    })),
             leftJoin: () => ({ where: async () => [] }),
           }),
         }),
@@ -1194,6 +1203,97 @@ describe("ingest_tacho_events", () => {
       linesAdded: 9,
       linesRemoved: 2,
     });
+  });
+
+  it("keeps one file on one row when the reconciliation lands in a later batch", async () => {
+    // The within-batch normalization only helps when both frames travel
+    // together, which is what a test constructs and the rarer case in
+    // practice. The reconciliation is asynchronous, so it usually arrives a
+    // batch or more after the tool frame, and the conflict key is
+    // (session_id, path). Without matching the rows already stored, the run
+    // still ends up with two rows for one file.
+    const db = fakeDb();
+    wire(db);
+    const context = {
+      cwd: "/home/dev/proj",
+      worktree_path: "/home/dev/proj",
+      model: "claude-haiku-4-5-20251001",
+      permission_mode: "default",
+    };
+    const send = async (drafts: UnsealedTachoEvent[], from: ChainCursor) => {
+      let cursor = from;
+      const events: TachoEvent[] = [];
+      for (const draft of drafts) {
+        const sealed = sealEvent(draft, cursor);
+        cursor = sealed.next;
+        events.push(sealed.event);
+      }
+      const output = await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events,
+          daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+        },
+        CONTEXT,
+      );
+      expect(output.accepted).toBe(events.length);
+      return cursor;
+    };
+
+    // Batch one: the tool announces a relative path.
+    const after = await send(
+      [
+        unsealed("agent_start", {}, "hook", CLAUDE_CODE, { context }),
+        unsealed(
+          "file_io",
+          {
+            tool_name: "Write",
+            tool_use_id: "toolu_1",
+            effect_kind: "file_write",
+            tool_target: "src/a.ts",
+            effect_id: "eff_1",
+            tool_input_bytes: 12,
+          },
+          "hook",
+          CLAUDE_CODE,
+          { context },
+        ),
+      ],
+      GENESIS_CURSOR,
+    );
+    expect(db.files).toHaveLength(1);
+
+    // Batch two: git reports the same file absolutely.
+    await send(
+      [
+        unsealed(
+          "oxagen:worktree_reconciled",
+          {
+            observed_changes: [
+              {
+                path: "/home/dev/proj/src/a.ts",
+                repo_relative_path: "src/a.ts",
+                status: "modified",
+                lines_added: 9,
+                lines_removed: 2,
+              },
+            ],
+            observed_changes_total: 1,
+            observed_changes_truncated: false,
+          },
+          "collector",
+          CLAUDE_CODE,
+          { context },
+        ),
+      ],
+      after,
+    );
+
+    // Two upserts, both naming the path the first row already stored, so the
+    // conflict fires and the run has one file rather than two.
+    expect(db.files).toHaveLength(2);
+    expect(db.files[1]?.["path"]).toBe(db.files[0]?.["path"]);
   });
 
   it("files a Codex session under runtime codex, not custom", async () => {

@@ -102,6 +102,20 @@ describe("runTachoHook", () => {
     expect(namelessAnswer["permission"]).toBe("deny");
     expect(namelessAnswer["continue"]).toBe(false);
 
+    // Truncated JSON is the likeliest unreadable payload there is, and it
+    // takes a different branch from a readable payload that fails the
+    // schema. Fixing one and not the other left the common case open.
+    const truncated = await runTachoHook({
+      paths,
+      env: {},
+      stdin: '{"hook_event_name":"preToolUse","tool_nam',
+      harness: "cursor",
+    });
+    expect(truncated.path).toBe("invalid");
+    expect(
+      (JSON.parse(truncated.stdout) as Record<string, unknown>)["permission"],
+    ).toBe("deny");
+
     // Claude Code keeps its own answer: `{}` is how a hook says nothing
     // there, and changing it would alter behaviour this finding is not about.
     const claude = await runTachoHook({

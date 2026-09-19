@@ -451,6 +451,13 @@ const tachoColumns = {
     completenessGaps: sessions.completenessGaps,
     enforcementTier: sessions.enforcementTier,
     name: sessions.name,
+    // The deterministic fallback the ingest derives from the run's first
+    // frames. `name` is written only by `summarize_run`, which refuses a
+    // live run and refuses `digest_only` outright, so without this a run
+    // showed its public id until it sealed and every `digest_only` run
+    // showed one for ever. That is the whole point of deriving a title, and
+    // it was being written to a column nothing read.
+    title: sessions.title,
     summary: sessions.summary,
     summaryGeneratedAt: sessions.summaryGeneratedAt,
     summaryModel: sessions.summaryModel,
@@ -526,6 +533,11 @@ export function tachoSessionQuery(
 /** The generated summary columns a run row carries (`summarize_run`, G14). */
 type GeneratedSummaryColumns = {
   name: string | null;
+  /**
+   * The deterministic fallback a wrapped session's ingest derives. A ledger
+   * run has no such column, so it is optional here rather than shared.
+   */
+  title?: string | null;
   summary: string | null;
   summaryGeneratedAt: Date | null;
   summaryModel: string | null;
@@ -864,7 +876,9 @@ export function toTachoRunItem(
     // only the one it started on.
     model: modelFactsOf(session.modelFinal ?? session.modelInitial),
     machine: toRunMachine(row.host),
-    name: session.name,
+    // The model-written name when `summarize_run` has produced one, and the
+    // derived title until then. A run always has something to be called.
+    name: session.name ?? session.title ?? null,
     summary: generatedSummary(session),
   };
 }

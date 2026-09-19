@@ -1873,8 +1873,38 @@ async function rollupFiles(
       byPath.set(identityOf(change.path), entry);
     }
   }
+  if (byPath.size === 0) return;
+  // Identity has to hold across batches, not only inside one.
+  //
+  // The conflict key on this table is (session_id, path), so two batches
+  // naming one file differently still make two rows: the attested frame
+  // arrives with a relative `src/a.ts` and the reconciliation, which is
+  // asynchronous and usually lands a batch or more later, arrives with the
+  // absolute `/repo/src/a.ts`. Normalizing inside the batch fixed only the
+  // case where both happen to travel together, which is the case a test
+  // constructs and the rarer one in practice.
+  //
+  // So the rows this session already has are read once and keyed the same
+  // way, and an entry that matches one reuses that row's stored path. The
+  // insert then conflicts as it should and enriches the row rather than
+  // adding a second. One query per rollup, not one per file.
+  const stored = await tx
+    .select({
+      path: schema.tachoSessionFiles.path,
+      repoRelativePath: schema.tachoSessionFiles.repoRelativePath,
+    })
+    .from(schema.tachoSessionFiles)
+    .where(eq(schema.tachoSessionFiles.sessionId, sessionId));
+  const pathByIdentity = new Map<string, string>();
+  for (const row of stored) {
+    pathByIdentity.set(row.repoRelativePath ?? row.path, row.path);
+    pathByIdentity.set(identityOf(row.path), row.path);
+  }
   for (const entry of byPath.values()) {
-    const path = entry.path;
+    const path =
+      pathByIdentity.get(
+        entry.observed?.repoRelativePath ?? identityOf(entry.path),
+      ) ?? entry.path;
     await tx
       .insert(schema.tachoSessionFiles)
       .values({

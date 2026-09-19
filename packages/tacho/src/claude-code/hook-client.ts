@@ -370,7 +370,15 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     raw = JSON.parse(deps.stdin);
   } catch {
     return {
-      stdout: "{}\n",
+      // Truncated or malformed JSON is the likeliest way a payload arrives
+      // unreadable, and it is answered the same way a readable payload that
+      // fails the schema is. An earlier pass fixed only the schema branch
+      // and left this one, a dozen lines above it, still answering with
+      // nothing. `cursorRefusal` reads the event name off the payload, and
+      // there is no payload here, so it refuses in both shapes at once.
+      stdout: cursor
+        ? cursorRefusal(undefined, CURSOR_UNREADABLE_PAYLOAD)
+        : "{}\n",
       stderr: "tacho-hook: stdin is not JSON\n",
       exitCode: 0,
       path: "invalid",
