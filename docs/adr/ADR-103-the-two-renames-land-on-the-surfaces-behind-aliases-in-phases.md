@@ -48,9 +48,12 @@ also prints a managed settings document that MDM pushes to a fleet. So
 `tachod` and `tacho-hook` are not identifiers. They are a service name and a
 binary path recorded on every enrolled machine, and in documents an
 administrator has already distributed. Renaming them without a migration
-un-enrolls those machines. `oxagen.frame/1.0` is the envelope on the wire
+un-enrolls those machines. `tacho/1.0` is the envelope version on the wire
 between the hook, the collector, and the server, so its name is a protocol
-term, not a label.
+term, not a label: `TACHO_ENVELOPE_VERSION` in `packages/tacho/src/envelope.ts`
+accepts that literal and no other, and phase 5 is what adds `oxagen.frame/1.0`
+beside it. This sentence named the replacement as though it were current until
+2026-09-19, and the corpus README inherited the error from here.
 
 On the other side, ADR-025 retired the dotted capability form **with no alias
 fallback**, and MCP tool names are the wire contract that a customer's agent
@@ -173,11 +176,13 @@ request.**
    | `docs/capabilities/*.md` | 28 | The prose is rewritten; the filename and the `**Surfaces:**` line are not. 15 of the 28 say `Tacho` in prose a reader reads, and "Enrol a machine as a Tacho host" is the product name on a docs surface whatever the file is called. The other 13 carry only identifiers (`tacho.hosts`, `revoke_tacho_enrollment`, `tacho_host_v1`), which stay. |
    | `docs/adr/` | 33 | Nothing. A dated record of what was decided. Two carry the word in the filename. Rewriting one is rewriting the record. |
    | `docs/audits/` | 3 | Nothing. Dated records, same reason. |
-   | `docs/specs/tacho/` | 17 | Rewritten. The canonical description. |
+   | `docs/specs/tacho/` | 17 | Three kinds. 11 are prose and are rewritten: this `README.md`, `spec.md`, `plan.md`, `data-model.md`, and the seven design documents. 3 are `design/adr-0003` through `adr-0005`, accepted and dated 2026-08-31, so they are left alone for the same reason `docs/adr/` is; living outside that directory does not make a decision record rewritable. 3 are code examples under `design/examples/`, whose occurrences are SDK identifiers (`TachoCallbackHandler`, `tacho.Session`, `@oxagen/tacho`, `tacho.middleware`); those stay and only comment prose changes. |
    | Everything else | 22 | Rewritten. Current-tense product prose, which is where a reader meets the word. |
 
-   16 + 28 + 33 + 3 + 17 + 22 = 119. Of those, 54 files carry prose phase 3
-   rewrites (17 + 22 + 15) and 65 are left alone entirely (16 + 33 + 3 + 13).
+   16 + 28 + 33 + 3 + 17 + 22 = 119. Of those, 48 files carry prose phase 3
+   rewrites (11 + 22 + 15), 3 more change only in their comments (the code
+   examples), and 68 are left alone entirely (16 + 33 + 3 + 13 + the three
+   design decision records). 48 + 3 + 68 = 119.
 
    `check-capability-docs` is not the reason to exclude a capability document's
    prose. It compares each document's `**Surfaces:**` line against its
@@ -194,9 +199,13 @@ request.**
    identifier, and decision 1 says those change when their file is being
    changed for another reason, not as a campaign.
 
-   **The prose keeps naming what exists.** `tachod`, `tacho-hook`,
-   `oxagen.frame` and `tacho_sessions` are live until phases 4, 5 and 6 rename
-   them. `@oxagen/tacho` and `ingest_tacho_events` are not renamed by any
+   **The prose keeps naming what exists.** `tachod`, `tacho-hook`, `tacho/1.0`
+   and `tacho_sessions` are live until phases 4, 5 and 6 rename them. The
+   envelope's live name is `tacho/1.0`, the one literal
+   `TACHO_ENVELOPE_VERSION` accepts; `oxagen.frame/1.0` is what phase 5 adds
+   beside it. Naming the replacement as though it were current would tell a
+   producer to send a version the collector rejects, which is the failure this
+   paragraph exists to prevent. `@oxagen/tacho` and `ingest_tacho_events` are not renamed by any
    phase: decision 1 keeps the package name, and the capability name is an MCP
    tool a customer's agent calls, which ADR-025 retired the dotted form of with
    no alias fallback. A doc that calls any of the six something else is a doc
