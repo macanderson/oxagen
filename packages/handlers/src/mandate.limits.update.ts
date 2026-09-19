@@ -26,7 +26,11 @@ import { HandlerError } from "@oxagen/oxagen";
 import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { lockMandate, hasDrawnInCurrentPeriod } from "@oxagen/rules";
+import {
+  lockMandate,
+  hasDrawnInCurrentPeriod,
+  hasOpenReservation,
+} from "@oxagen/rules";
 import {
   mandateLimitsSchema,
   type MandateLimitChanges,
@@ -100,13 +104,16 @@ export function applyLimitChanges(
 
 /**
  * Refuse renaming a measure's window while that measure still has authority
- * drawn under the window the ledger already wrote.
+ * drawn under the window the ledger already wrote, or an open reservation
+ * under any period key.
  *
  * Settlements and open reservations keep the periodKey they were filed under.
  * `readAuthority` and `reserve` derive the key from the limit's period alone,
  * so a monthly-to-daily rename would make today's draw invisible and grant the
- * ceiling again. Leaving the period alone, or changing it when nothing is
- * reserved or settled in the current window, is fine: a bare figure change
+ * ceiling again. An open reservation that crossed midnight stays under the old
+ * day's key after the current window rolls; that row must block the rename
+ * too. Leaving the period alone, or changing it when the current window is
+ * clear and no reservation is open anywhere, is fine: a bare figure change
  * still binds the same key.
  */
 export async function assertPeriodChangeAllowed(
@@ -119,12 +126,19 @@ export async function assertPeriodChangeAllowed(
   for (const [measure, next] of Object.entries(after)) {
     const prev = before[measure];
     if (!prev || prev.period === next.period) continue;
-    if (!(await hasDrawnInCurrentPeriod(tx, mandateId, measure, prev.period, at)))
-      continue;
+    const drawn = await hasDrawnInCurrentPeriod(
+      tx,
+      mandateId,
+      measure,
+      prev.period,
+      at,
+    );
+    const open = await hasOpenReservation(tx, mandateId, measure);
+    if (!drawn && !open) continue;
     throw new HandlerError({
       code: "conflict",
       reason: "period_drawn",
-      message: `Measure "${measure}" still has authority drawn under its ${prev.period} window; change the period only when nothing is reserved or settled in the current window`,
+      message: `Measure "${measure}" still has authority drawn under its ${prev.period} window, or an open reservation under an earlier key; change the period only when nothing is reserved or settled in the current window and no reservation remains open`,
     });
   }
 }

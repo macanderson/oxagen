@@ -181,6 +181,29 @@ export async function hasDrawnInCurrentPeriod(
   return sums.drawn > 0n;
 }
 
+/**
+ * Whether this measure still has an open reservation under any period key.
+ *
+ * A call parked for approval can keep its reserve row past the old window's
+ * boundary. `hasDrawnInCurrentPeriod` only sees the key the stored period
+ * names today, so a midnight rollover would miss that row and let a period
+ * rename orphan it. Settled and released rows net to zero here; only a
+ * reserve with no matching settle or release counts.
+ */
+export async function hasOpenReservation(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+): Promise<boolean> {
+  const [row] = await tx
+    .select({
+      reserved: sql<string>`coalesce(sum(case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end), 0)::text`,
+    })
+    .from(l)
+    .where(and(eq(l.mandateId, mandateId), eq(l.measure, measure)));
+  return BigInt(row?.reserved ?? "0") > 0n;
+}
+
 /** Remaining authority by measure, as get_mandate and list_mandates report it. */
 export async function readAuthority(
   tx: Tx,

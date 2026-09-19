@@ -63,6 +63,7 @@ export {
 export {
   expireApproval,
   hasDrawnInCurrentPeriod,
+  hasOpenReservation,
   lockMandate,
   parseMandateRow,
   readAuthority,

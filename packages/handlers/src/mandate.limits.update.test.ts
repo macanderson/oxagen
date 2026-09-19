@@ -31,6 +31,12 @@ const doubles = vi.hoisted(() => ({
    * merge cases stay about the merge; a period-rename case stubs true here.
    */
   drawn: false,
+  /**
+   * Whether `hasOpenReservation` answers open under any period key. Independent
+   * of `drawn` so a midnight-crossed reserve can refuse a rename when the
+   * current window is empty.
+   */
+  openReservation: false,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -95,8 +101,10 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
     };
   },
   // Undrawn by default so the existing merge cases still write. A case that
-  // renames a drawn window stubs true here.
+  // renames a drawn window stubs true here. Open reservations under any key
+  // are independent: a crossed-midnight park stubs openReservation alone.
   hasDrawnInCurrentPeriod: async () => doubles.drawn,
+  hasOpenReservation: async () => doubles.openReservation,
 }));
 
 vi.mock("./_mandate", async (importOriginal) => ({
@@ -167,6 +175,7 @@ beforeEach(() => {
   doubles.locked.limits = { amount: AMOUNT, calls: CALLS };
   doubles.stale = { amount: AMOUNT, calls: CALLS };
   doubles.drawn = false;
+  doubles.openReservation = false;
 });
 
 describe("update_mandate_limits, limitChanges", () => {
@@ -313,6 +322,22 @@ describe("update_mandate_limits, limitChanges", () => {
       period: "daily",
     });
   });
+
+  // A reservation parked before midnight keeps the old day's periodKey. After
+  // the window rolls, hasDrawnInCurrentPeriod sees an empty new day and would
+  // allow the rename; the open-reservation check must still refuse.
+  it("refuses a period rename while a reservation is open under an older key", async () => {
+    doubles.drawn = false;
+    doubles.openReservation = true;
+    await expect(
+      change({
+        limitChanges: { amount: { period: "weekly" } },
+      }),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "period_drawn",
+    );
+    expect(doubles.written).toHaveLength(0);
+  });
 });
 
 describe("assertPeriodChangeAllowed", () => {
@@ -321,6 +346,21 @@ describe("assertPeriodChangeAllowed", () => {
 
   it("refuses when the current window still holds a draw", async () => {
     doubles.drawn = true;
+    await expect(
+      assertPeriodChangeAllowed(
+        tx,
+        mandateId,
+        { amount: AMOUNT },
+        { amount: { ...AMOUNT, period: "daily" } },
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "period_drawn",
+    );
+  });
+
+  it("refuses when a reservation is open under any period key", async () => {
+    doubles.drawn = false;
+    doubles.openReservation = true;
     await expect(
       assertPeriodChangeAllowed(
         tx,
@@ -344,6 +384,7 @@ describe("assertPeriodChangeAllowed", () => {
       ),
     ).resolves.toBeUndefined();
     doubles.drawn = false;
+    doubles.openReservation = false;
     await expect(
       assertPeriodChangeAllowed(
         tx,
