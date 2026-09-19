@@ -879,12 +879,11 @@ describe("Security", () => {
     expect(asked()).toBe(false);
   });
 
-  // The window opens when the request is sent, not when it answers. Better
-  // Auth voids the old set the moment the call lands, so during the in-flight
-  // span the old codes are already dead and the new ones do not exist on this
-  // page yet: a reload there loses them with nothing held anywhere to recover.
-  // Guarding only the arrived set left exactly that span unguarded.
-  it("asks before unloading while a rotation is still in flight", async () => {
+  // Better Auth voids the old set the moment the rotation lands, before the
+  // response arrives. A reload in that gap loses the only copy of the new set,
+  // so the guard has to be up while the rotation is in flight, not only once
+  // a set is on screen.
+  it("asks before unloading the page while a rotation is in flight", async () => {
     let issue: ((result: unknown) => void) | undefined;
     liveRegenerateBackupCodes.mockImplementation(
       () =>
@@ -895,17 +894,14 @@ describe("Security", () => {
     const { user } = await openDialog("security");
     const asked = () =>
       !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
-    expect(asked()).toBe(false);
 
     await user.click(screen.getByTestId("account-codes-open"));
     await user.type(screen.getByTestId("account-codes-password"), "hunter2");
     await user.click(screen.getByTestId("account-codes-confirm"));
-
-    // Nothing on screen yet, and nothing in the vault, and it still asks.
     expect(screen.queryByTestId("account-codes")).toBeNull();
     expect(asked()).toBe(true);
 
-    issue?.({ ok: true, codes: ["flight-1111", "flight-2222"] });
+    issue?.({ ok: true, codes: ["pend-1111", "pend-2222"] });
     await screen.findByTestId("account-codes");
     expect(asked()).toBe(true);
 
@@ -1098,14 +1094,14 @@ it("presents as a bottom sheet on a phone", async () => {
   }
 });
 
-// 60s, not the 30s default, and not because the check is flaky. The
-// Preferences tab renders one `<option>` per zone `Intl.supportedValuesOf`
-// reports — around 400 nodes — and axe-core walks every one of them under
-// jsdom for each of the WCAG rule sets. On CI that run alone passed 30s and
-// failed the whole `test` job on a timeout, with no violation to show for it
-// (run 35398598488). A budget that the honest work does not fit in reports a
-// slow assertion as an accessibility failure, which is the one thing this
-// check must never do.
+// 60s, not the 30s default. The zone stub above takes the bulk of the cost
+// out, but these are still the four slowest assertions in the app: axe-core
+// runs five WCAG rule sets over a whole dialog under jsdom, four times. They
+// have already expired twice on a loaded runner — at 15s, then at 30s, which
+// failed the entire `test` job with no violation to show for it (run
+// 35398598488). A budget the honest work does not fit in reports a slow
+// assertion as an accessibility failure, which is the one thing this check
+// must never do, so the headroom stays even now the work is smaller.
 it.each(["profile", "preferences", "security", "privacy"] as const)(
   "has no axe violations on the %s tab",
   async (tab) => {
