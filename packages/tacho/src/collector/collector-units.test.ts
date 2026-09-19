@@ -604,7 +604,8 @@ describe("shipper", () => {
   });
 
   it("drains past a request the route refuses as too large, rather than wedging", async () => {
-    // The ingest route caps a request at 1 MiB and answers 413. A retry
+    // The ingest route caps a request at `TACHO_MAX_REQUEST_BYTES` and answers
+    // 413 above it. A retry
     // cannot make a batch smaller, so treating 413 as retryable meant
     // offering the same oversized request on every drain for ever. The WAL
     // head never advanced past it and every later event on the host queued
