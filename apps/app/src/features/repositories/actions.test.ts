@@ -36,8 +36,12 @@ const {
   linkWorkspaceRepository,
   listGithubInstallations,
   listInstallationRepositories,
+  openInitPullRequest,
+  readRepositoryChanges,
+  readRepositoryTree,
   readWorkspaceRepositories,
   readWorkspaceRepository,
+  setProductionBranch,
   unlinkWorkspaceRepository,
 } = await import("./actions");
 
@@ -123,6 +127,7 @@ const REPOSITORIES = {
       htmlUrl: "https://github.com/acme/platform",
       boundAt: "2026-09-16T10:00:00.000Z",
       connectionLive: true,
+      events: "installed",
     },
     {
       bindingId: "rpb_0d1e2f",
@@ -134,6 +139,7 @@ const REPOSITORIES = {
       htmlUrl: "https://github.com/acme/docs-site",
       boundAt: "2026-09-17T10:00:00.000Z",
       connectionLive: false,
+      events: "retired",
     },
   ],
 };
@@ -628,5 +634,222 @@ describe("unlinkWorkspaceRepository", () => {
       field: "bindingId",
     });
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("readRepositoryTree", () => {
+  const TREE = {
+    bindingId: "rpb_0a1b2c",
+    role: "main",
+    fullName: "acme/platform",
+    productionBranch: "main",
+    githubDefaultBranch: "main",
+    head: "0123456789abcdef",
+    oxagen: { present: true, files: [".oxagen/workspace.toml"] },
+    workspaceToml: "[workspace]\n",
+    governanceToml: null,
+    governanceMode: "absent",
+    initPullRequest: null,
+    readAt: "2026-09-19T10:00:00.000Z",
+  };
+
+  it("reads get_repository_tree for the binding it names", async () => {
+    invoke.mockResolvedValue(TREE);
+    expect(
+      await readRepositoryTree("acme", "core-platform", "rpb_0a1b2c"),
+    ).toEqual({ ok: true, value: TREE });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "get_repository_tree",
+      { bindingId: "rpb_0a1b2c" },
+      expect.objectContaining({ workspaceId: ctx.workspaceId, surface: "app" }),
+    );
+  });
+
+  it("carries github_not_connected across as a conflict (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "conflict",
+      reason: "github_not_connected",
+    });
+    expect(
+      await readRepositoryTree("acme", "core-platform", "rpb_0a1b2c"),
+    ).toEqual({ ok: false, reason: "conflict", code: "github_not_connected" });
+  });
+
+  it("names the installation when the read fails for a reason the seam cannot classify (negative)", async () => {
+    invoke.mockRejectedValue(new Error("socket hang up"));
+    expect(
+      await readRepositoryTree("acme", "core-platform", "rpb_0a1b2c"),
+    ).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "installation_unreachable",
+    });
+  });
+});
+
+describe("setProductionBranch", () => {
+  it("sets the branch and answers what moved", async () => {
+    invoke.mockResolvedValue({
+      bindingId: "rpb_0a1b2d",
+      fullName: "acme/platform",
+      productionBranch: "release",
+      previousBranch: "main",
+      changed: true,
+      setAt: "2026-09-19T10:00:00.000Z",
+    });
+    expect(
+      await setProductionBranch("acme", "core-platform", "rpb_0a1b2c", "release"),
+    ).toEqual({
+      ok: true,
+      value: {
+        bindingId: "rpb_0a1b2d",
+        fullName: "acme/platform",
+        productionBranch: "release",
+        previousBranch: "main",
+        changed: true,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_production_branch",
+      { bindingId: "rpb_0a1b2c", branch: "release" },
+      expect.objectContaining({ surface: "app" }),
+    );
+  });
+
+  it("carries branch_not_found across (negative)", async () => {
+    invoke.mockRejectedValue({ code: "not_found", reason: "branch_not_found" });
+    expect(
+      await setProductionBranch("acme", "core-platform", "rpb_0a1b2c", "nope"),
+    ).toEqual({ ok: false, reason: "not_found", code: "branch_not_found" });
+  });
+
+  it("refuses a name git does not accept before the kernel runs (negative)", async () => {
+    const result = await setProductionBranch(
+      "acme",
+      "core-platform",
+      "rpb_0a1b2c",
+      "two words",
+    );
+    expect(result).toMatchObject({ ok: false, reason: "invalid" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("openInitPullRequest", () => {
+  const INPUT = {
+    bindingId: "rpb_0d1e2f",
+    governanceMode: "team" as const,
+    workspaceToml: "[workspace]\n",
+    governanceToml: 'mode = "team"\n',
+  };
+
+  it("opens the init pull request with the reviewed files", async () => {
+    invoke.mockResolvedValue({
+      bindingId: "rpb_0d1e2f",
+      fullName: "acme/docs-site",
+      branch: "oxagen/init",
+      base: "trunk",
+      pullRequest: {
+        number: 7,
+        htmlUrl: "https://github.com/acme/docs-site/pull/7",
+      },
+      files: [".oxagen/workspace.toml"],
+      reused: false,
+      openedAt: "2026-09-19T10:00:00.000Z",
+    });
+    expect(await openInitPullRequest("acme", "core-platform", INPUT)).toEqual({
+      ok: true,
+      value: {
+        fullName: "acme/docs-site",
+        branch: "oxagen/init",
+        base: "trunk",
+        pullRequest: {
+          number: 7,
+          htmlUrl: "https://github.com/acme/docs-site/pull/7",
+        },
+        files: [".oxagen/workspace.toml"],
+        reused: false,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "open_init_pr",
+      INPUT,
+      expect.objectContaining({ surface: "app" }),
+    );
+  });
+
+  it("carries oxagen_tree_exists across (negative)", async () => {
+    invoke.mockRejectedValue({ code: "conflict", reason: "oxagen_tree_exists" });
+    expect(await openInitPullRequest("acme", "core-platform", INPUT)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "oxagen_tree_exists",
+    });
+  });
+});
+
+describe("readRepositoryChanges", () => {
+  const proposal = (id: string, status: string, pr: boolean) => ({
+    id,
+    lineageId: "lin_1",
+    kind: "rule",
+    force: "must",
+    constraintEffect: null,
+    sharingScope: "workspace",
+    statement: `statement ${id}`,
+    rationale: "",
+    source: "the promoter",
+    support: { runs: [], agents: [], recordIds: [], evidenceLinks: [] },
+    status,
+    pr: pr
+      ? {
+          number: 42,
+          url: "https://github.com/acme/platform/pull/42",
+          repository: "acme/platform",
+          branch: `oxagen/${id}`,
+        }
+      : null,
+    checks: pr ? { passed: 6, total: 6 } : null,
+    createdAt: "2026-09-18T10:00:00.000Z",
+    updatedAt: "2026-09-18T10:00:00.000Z",
+  });
+
+  it("keeps only proposals with a pull request and counts the open ones", async () => {
+    invoke.mockResolvedValue({
+      proposals: [
+        proposal("prp_1", "checks_failed", true),
+        proposal("prp_2", "merged", true),
+        proposal("prp_3", "proposed", false),
+      ],
+      total: 3,
+    });
+    const result = await readRepositoryChanges("acme", "core-platform");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.changes.map((c) => c.proposalId)).toEqual([
+      "prp_1",
+      "prp_2",
+    ]);
+    expect(result.value.open).toBe(1);
+    expect(result.value.changes[0]).toMatchObject({
+      kind: "context_record",
+      openedBy: "the promoter",
+      status: "checks_failed",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "list_proposals",
+      { limit: 50, offset: 0 },
+      expect.objectContaining({ surface: "app" }),
+    );
+  });
+
+  it("carries a denial across as denied (negative)", async () => {
+    invoke.mockRejectedValue({ code: "authz_denied" });
+    expect(await readRepositoryChanges("acme", "core-platform")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "repository.read",
+    });
   });
 });
