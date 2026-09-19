@@ -26,18 +26,20 @@
 # (infra/modules/app-node/main.tf). The password is read the other way round —
 # on the node, inside a tracing-off window — so it never reaches this machine.
 
-# render_remote_migration BUCKET HOST PORT DATABASE USER APPLY ALLOW_DIRTY
+# render_remote_migration BUCKET HOST PORT DATABASE USER APPLY ALLOW_DIRTY [NON_LINEAR]
 #
 # APPLY is "1" to apply, anything else for a status-only dry run.
 # ALLOW_DIRTY is "1" to pass --allow-dirty to `atlas migrate apply`.
+# NON_LINEAR is "1" to pass --exec-order non-linear; it defaults to "0".
 # Writes the rendered script to stdout. Fails if any placeholder survives.
 render_remote_migration() {
-  if [[ $# -ne 7 ]]; then
-    echo "render_remote_migration: expected 7 arguments, got $#" >&2
+  if [[ $# -ne 7 && $# -ne 8 ]]; then
+    echo "render_remote_migration: expected 7 or 8 arguments, got $#" >&2
     return 2
   fi
 
   local bucket=$1 host=$2 port=$3 database=$4 user=$5 apply=$6 allow_dirty=$7
+  local non_linear=${8:-0}
   local arg name
 
   # An empty value renders a script that fails somewhere further in, on a
@@ -59,6 +61,9 @@ render_remote_migration() {
 
   local dirty_flag=""
   [[ $allow_dirty == "1" ]] && dirty_flag="--allow-dirty"
+
+  local order_flag=""
+  [[ $non_linear == "1" ]] && order_flag="--exec-order non-linear"
 
   local rendered
   rendered=$(
@@ -160,6 +165,7 @@ REMOTE
   if [[ $apply_flag == "1" ]]; then
     local apply_line="atlas migrate apply --env ci"
     [[ -n $dirty_flag ]] && apply_line="$apply_line $dirty_flag"
+    [[ -n $order_flag ]] && apply_line="$apply_line $order_flag"
     tail="$apply_line
 echo \"--- applied; status after apply (expect no pending) ---\"
 atlas migrate status --env ci"
@@ -344,6 +350,14 @@ PGUSER=${PGUSER:-oxagen}
 # and a way to double-create objects every other time.
 ALLOW_DIRTY=${ALLOW_DIRTY:-0}
 
+# Off by default. NON_LINEAR=1 lets Atlas apply a pending file whose version
+# is older than the last one applied. That happens when two PRs carry
+# migrations and the later-numbered one reaches production first: the dry run
+# reports "Pending Files: N (1 out of order)" and a plain apply refuses. Read
+# the out-of-order file before setting this; it must not depend on anything
+# the newer files changed.
+NON_LINEAR=${NON_LINEAR:-0}
+
 assert_atlas_project "$DB_DIR" || exit 1
 
 # Resolving the endpoint here is also the cheapest proof that the caller's
@@ -401,7 +415,7 @@ PARAMS_FILE=$(mktemp "${TMPDIR:-/tmp}/mig-params-XXXXXX")
 trap 'rm -f "$REMOTE_FILE" "$PARAMS_FILE"' EXIT
 
 render_remote_migration \
-  "$BUCKET" "$PGHOST" "$PGPORT" "$PGDB" "$PGUSER" "$APPLY" "$ALLOW_DIRTY" \
+  "$BUCKET" "$PGHOST" "$PGPORT" "$PGDB" "$PGUSER" "$APPLY" "$ALLOW_DIRTY" "$NON_LINEAR" \
   > "$REMOTE_FILE"
 
 if [[ $APPLY == "1" ]]; then

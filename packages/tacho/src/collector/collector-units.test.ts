@@ -376,7 +376,11 @@ describe("detector", () => {
       listProcesses: () => processes,
       transcriptRoots: [paths.claudeProjects, join(paths.root, "missing")],
       readSettings: () => settings,
-      enrollmentId: TEST_ENROLLMENT,
+      enrollment: () => ({
+        enrollmentId: TEST_ENROLLMENT,
+        harnesses: ["claude-code"],
+        verified: true,
+      }),
       now,
       graceMs: 10_000,
     });
@@ -410,7 +414,11 @@ describe("detector", () => {
       readSettings: () => {
         throw new Error("unreadable");
       },
-      enrollmentId: TEST_ENROLLMENT,
+      enrollment: () => ({
+        enrollmentId: TEST_ENROLLMENT,
+        harnesses: ["claude-code"],
+        verified: true,
+      }),
       now,
     });
     expect((await unreadable.tick()).map((e) => e.kind)).toEqual([
@@ -484,7 +492,11 @@ describe("detector", () => {
       listProcesses: () => [],
       transcriptRoots: [paths.claudeProjects],
       readSettings: () => ({ hooks: {} }),
-      enrollmentId: TEST_ENROLLMENT,
+      enrollment: () => ({
+        enrollmentId: TEST_ENROLLMENT,
+        harnesses: ["claude-code"],
+        verified: true,
+      }),
       now,
     });
     // Stands in for the WAL: frames in the order they were appended.
