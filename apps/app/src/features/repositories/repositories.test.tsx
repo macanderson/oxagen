@@ -1161,6 +1161,8 @@ describe("change read states", () => {
   });
 
   it("prints an unsafe pull request URL as text and distinguishes unreported checks", () => {
+    const [change] = CHANGES.changes;
+    if (change === undefined) throw new Error("Expected a change fixture");
     render(
       <IntlProvider>
         <Changes
@@ -1172,10 +1174,10 @@ describe("change read states", () => {
               open: 1,
               changes: [
                 {
-                  ...CHANGES.changes[0]!,
+                  ...change,
                   checks: null,
                   pullRequest: {
-                    ...CHANGES.changes[0]!.pullRequest,
+                    ...change.pullRequest,
                     url: "https://example.com/acme/platform/pull/42",
                   },
                 },
