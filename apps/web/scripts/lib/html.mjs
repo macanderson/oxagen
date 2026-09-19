@@ -102,7 +102,7 @@ export function siteFooter({ wordmark, pillars }) {
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="/" aria-label="Oxagen home">${wordmark}</a>
-        <p>Can you explain your AI bill?<br>Neither can your provider.</p>
+        <p>Mission Control for your autonomous agents.</p>
       </div>
       <nav class="foot-col" aria-label="Product">
         <h4>Product</h4>
@@ -159,6 +159,7 @@ export function layout(o) {
 <meta name="description" content="${esc(o.description)}">
 <link rel="canonical" href="${esc(url)}">
 <meta name="theme-color" content="#09090B">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="color-scheme" content="dark">
 <meta property="og:type" content="${o.type ?? "website"}">
 <meta property="og:url" content="${esc(url)}">
@@ -180,6 +181,7 @@ export function layout(o) {
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/oxagen.webmanifest">
 <link rel="preload" href="/fonts/space-grotesk-latin-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
 ${o.ldjson ? `<script type="application/ld+json">\n${JSON.stringify(o.ldjson, null, 2).replace(/</g, "\\u003c")}\n</script>` : ""}
