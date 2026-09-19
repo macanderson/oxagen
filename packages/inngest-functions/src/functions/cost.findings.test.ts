@@ -45,7 +45,10 @@ describe("cost.findings", () => {
 
   it("batches requests per workspace", () => {
     const { config } = registered.get("cost.findings")!;
-    expect(config.batchEvents).toMatchObject({ key: "event.data.workspaceId" });
+    expect(config.batchEvents).toMatchObject({
+      key: "event.data.workspaceId",
+      maxSize: 5,
+    });
   });
 
   it("runs one pass per workspace the batch names, however many seals asked", async () => {

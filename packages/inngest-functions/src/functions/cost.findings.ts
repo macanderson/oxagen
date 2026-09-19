@@ -19,16 +19,19 @@ export function scopesOf(events: readonly { data: unknown }[]): Scope[] {
 /**
  * `cost/findings.requested` → one findings pass per workspace (Mission
  * Control spec §12.8; ADR-062 §4). The run rollup sends the event after each
- * sealed run's row lands; events batch per workspace for up to five minutes,
- * so a burst of seals costs one pass over the trailing window rather than one
- * per run. A degraded store throws, and Inngest retries the batch.
+ * sealed run's row lands. Events batch per workspace, up to five per run or
+ * five minutes, so a burst of seals costs one pass per five runs rather than
+ * one per run. Five is the most Inngest's plan accepts: a larger `maxSize`
+ * makes Inngest refuse the whole app's sync, which left every function added
+ * after it unregistered. A degraded store throws, and Inngest retries the
+ * batch.
  */
 export const [costFindings] = createFunction(
   {
     id: "cost.findings",
     retries: 3,
     batchEvents: {
-      maxSize: 100,
+      maxSize: 5,
       timeout: "5m",
       key: "event.data.workspaceId",
     },

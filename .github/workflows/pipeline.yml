@@ -980,3 +980,21 @@ jobs:
           directory: dist-deploy/${{ matrix.service }}
           hostname: ${{ matrix.hostname }}
 
+      # Inngest learns which functions exist only when the app syncs, and no
+      # deploy synced it. A function added in a merge stayed unknown to Inngest
+      # until someone ran the sync by hand, and a sync Inngest refused failed
+      # quietly: `cost.findings` asked for a batch of 100 against a limit of 5,
+      # Inngest answered 400, and `cost.run-rollup` never ran for any sealed
+      # run. This step syncs the api after each deploy and fails the deploy
+      # when Inngest refuses the sync or the key pair does not match.
+      - name: Sync Inngest functions and verify the key pair
+        if: steps.tip.outputs.at_tip == 'true' && matrix.service == 'api'
+        run: |
+          set -euo pipefail
+          INNGEST_EVENT_KEY=$(aws ssm get-parameter --name /oxagen/production/INNGEST_EVENT_KEY --with-decryption --query Parameter.Value --output text)
+          INNGEST_SIGNING_KEY=$(aws ssm get-parameter --name /oxagen/production/INNGEST_SIGNING_KEY --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$INNGEST_EVENT_KEY"
+          echo "::add-mask::$INNGEST_SIGNING_KEY"
+          export INNGEST_EVENT_KEY INNGEST_SIGNING_KEY
+          pnpm inngest:verify --url https://api.oxagen.sh/api/inngest
+
