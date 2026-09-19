@@ -67,6 +67,14 @@ interface Receipt {
   backup?: string;
   /** Parent directories Tacho created for it, outermost first. */
   created_dirs: string[];
+  /**
+   * SHA-256 of the bytes Tacho last wrote here, so `settle` can tell its own
+   * leftovers from something the user typed. Absent on a receipt written
+   * before this field existed, and on one taken by a `write` that then
+   * failed; both fall back to the blankness test alone, which is what those
+   * receipts have always had.
+   */
+  last_written?: string;
 }
 
 interface ReceiptsDocument {
@@ -122,6 +130,11 @@ function writeAtomic(path: string, data: string | Buffer, mode: number): void {
 }
 
 /** Blank: nothing, whitespace, or a JSON document with nothing in it. */
+/** SHA-256 of a file's text, as `settle` compares it against the receipt. */
+function digestOf(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
 function isBlank(text: string): boolean {
   if (text.trim() === "") return true;
   try {
@@ -225,6 +238,11 @@ export class HarnessFiles {
     // 0600 while enrolled: every one of these files carries the loopback
     // bearer. `settle` puts the user's own mode back.
     writeAtomic(target, text, 0o600);
+    const receipt = receipts.files[path];
+    if (receipt !== undefined) {
+      receipt.last_written = digestOf(text);
+      this.save(receipts);
+    }
   }
 
   /**
@@ -259,7 +277,21 @@ export class HarnessFiles {
     if (current === undefined) {
       result = "missing";
     } else if (!receipt.existed) {
-      if (isBlank(current)) {
+      // A file Tacho created. Blank is the obvious case, but not the only
+      // one: a strip leaves behind whatever scaffolding the merge had to add
+      // to make the file valid in the first place, and Cursor's `version` is
+      // exactly that — `mergeCursorHooks` writes it because the schema
+      // requires a positive integer, and `stripCursorHooks` cannot drop it
+      // without also emptying a file the user may have had. So a document of
+      // nothing but our own scaffolding read as a user edit, and `.cursor`
+      // and its `hooks.json` survived `--purge`.
+      //
+      // Matching the bytes Tacho last wrote answers it without any harness's
+      // shape leaking in here: unchanged since our last write means nobody
+      // else has touched it, so it is ours to take away. One character typed
+      // into it and the digest differs, and it is kept — which is the whole
+      // point of the check.
+      if (isBlank(current) || digestOf(current) === receipt.last_written) {
         unlinkSync(target);
         result = "deleted";
       } else {
