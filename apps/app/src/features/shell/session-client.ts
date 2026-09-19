@@ -100,12 +100,44 @@ export async function liveRevokeSession(token: string): Promise<boolean> {
 }
 
 /** Issues a fresh set of two-factor recovery codes; the old set is void. Needs the password. */
+/**
+ * Rotates the recovery codes, and says whether a failure is one we can explain.
+ *
+ * `refused` separates two outcomes a single `ok: false` used to collapse. A
+ * 400, 401 or 403 is the server declining the password: it read the request and
+ * said no, so nothing was rotated and the stored set still works. Anything
+ * else, a 5xx or a call that never came back, says nothing about what the
+ * server did. Better Auth voids the old codes as soon as it commits, so an
+ * unexplained failure may well have committed and lost only the response, in
+ * which case the old set is already dead and the new one is gone.
+ *
+ * Reporting that as "the password was not accepted" is the dangerous reading:
+ * it tells the person nothing happened, so they carry on with codes that no
+ * longer work and find out when the authenticator is gone.
+ */
 export async function liveRegenerateBackupCodes(
   password: string,
-): Promise<{ ok: true; codes: string[] } | { ok: false }> {
-  const reply = await (await client()).twoFactor.generateBackupCodes({
-    password,
-  });
-  if (reply.error) return { ok: false };
-  return { ok: true, codes: reply.data?.backupCodes ?? [] };
+): Promise<{ ok: true; codes: string[] } | { ok: false; refused: boolean }> {
+  try {
+    const reply = await (await client()).twoFactor.generateBackupCodes({
+      password,
+    });
+    if (reply.error) {
+      // Read defensively rather than asserted, and through `unknown`: the
+      // client types the error loosely, and an unreadable status is an unknown
+      // outcome, not a refusal, which is the direction that fails safe.
+      const failure: unknown = reply.error;
+      const refused =
+        isRecord(failure) &&
+        (failure.status === 400 ||
+          failure.status === 401 ||
+          failure.status === 403);
+      return { ok: false, refused };
+    }
+    return { ok: true, codes: reply.data?.backupCodes ?? [] };
+  } catch {
+    // Never reached the server, or never came back from it. Either way the
+    // outcome is unknown, which is not the same as refused.
+    return { ok: false, refused: false };
+  }
 }

@@ -727,8 +727,32 @@ describe("Security", () => {
     expect(codes).toHaveTextContent("cccc-dddd");
   });
 
+  // A failure that says nothing about what the server did is not a refusal,
+  // and calling it one is the answer that gets somebody locked out. Better
+  // Auth voids the old codes the moment it commits, so a lost response may be
+  // a committed rotation: the old set already dead and the new one gone. Told
+  // "that password was not accepted", the person carries on with codes that no
+  // longer work and finds out when the authenticator is gone.
+  it("says the outcome is unknown when the rotation fails unexplained", async () => {
+    liveRegenerateBackupCodes.mockResolvedValue({ ok: false, refused: false });
+    const { user } = await openDialog("security");
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+
+    const warned = await screen.findByTestId("account-codes-uncertain");
+    expect(warned).toHaveTextContent("could not confirm");
+    expect(warned).toHaveTextContent("may no longer work");
+    // Not reported as a rejected password, which is the claim that misleads.
+    expect(screen.queryByTestId("account-codes-refused")).toBeNull();
+    // And nothing is shown as if it were the stored set.
+    expect(screen.queryByTestId("account-codes")).toBeNull();
+    // The way out stays open: generate another set and save it.
+    expect(screen.getByTestId("account-codes-open")).toBeTruthy();
+  });
+
   it("reads a refused password back and shows no set at all (negative)", async () => {
-    liveRegenerateBackupCodes.mockResolvedValue({ ok: false });
+    liveRegenerateBackupCodes.mockResolvedValue({ ok: false, refused: true });
     const { user } = await openDialog("security");
     await user.click(screen.getByTestId("account-codes-open"));
     await user.type(screen.getByTestId("account-codes-password"), "wrong");
@@ -786,7 +810,7 @@ describe("Security", () => {
   // knowing it. Nothing is shown, nothing is vaulted, and the affordance is
   // released rather than held shut by the rotation that failed.
   it("leaves no set on screen or in the vault when a rotation fails (negative)", async () => {
-    liveRegenerateBackupCodes.mockResolvedValue({ ok: false });
+    liveRegenerateBackupCodes.mockResolvedValue({ ok: false, refused: true });
     const { user } = await openDialog("security");
     await user.click(screen.getByTestId("account-codes-open"));
     await user.type(screen.getByTestId("account-codes-password"), "wrong");
@@ -992,7 +1016,7 @@ describe("Security", () => {
   // A refused rotation leaves nothing at stake, so the guard must release: the
   // old codes still work and there is no new set to lose.
   it("stops asking when a rotation is refused (negative)", async () => {
-    liveRegenerateBackupCodes.mockResolvedValue({ ok: false });
+    liveRegenerateBackupCodes.mockResolvedValue({ ok: false, refused: true });
     const { user } = await openDialog("security");
     const asked = () =>
       !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));

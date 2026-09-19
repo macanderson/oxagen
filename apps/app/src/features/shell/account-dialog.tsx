@@ -772,7 +772,16 @@ type SessionsState =
 type CodesState =
   | { kind: "closed" }
   | { kind: "asking"; password: string; refused: boolean }
-  | { kind: "issued"; codes: string[] };
+  | { kind: "issued"; codes: string[] }
+  /**
+   * The rotation failed in a way that says nothing about what the server did.
+   * Better Auth voids the old codes the moment it commits, so this may be a
+   * committed rotation whose response was lost: the old set already dead, the
+   * new one gone. Reporting it as a rejected password would tell the person
+   * nothing happened and send them away with codes that no longer work, so it
+   * is its own state, and it does not clear until a rotation succeeds.
+   */
+  | { kind: "uncertain" };
 
 /** "MacBook Pro · Chrome 141" from a user agent, or the raw string when nothing is recognised. */
 function describeAgent(userAgent: string | null, fallback: string): string {
@@ -920,18 +929,28 @@ function SecurityTab({
         // to the still-mounted dialog is the only thing keeping the codes.
         setHeldCodes(result.codes);
         setCodes({ kind: "issued", codes: result.codes });
-      } else {
-        // A rotation that failed leaves the stored set unknowable from here:
-        // the refusal may have come before the server wrote anything or after.
-        // So nothing is displayed. A set left on screen would be a claim that
-        // it is the set stored, and that is the claim this cannot make.
+      } else if (result.refused) {
+        // The server read the request and declined the password, so nothing
+        // was rotated and the stored set still works. Nothing is displayed,
+        // because a set on screen would be a claim about what is stored.
         setHeldCodes(null);
         setCodes({ kind: "asking", password: "", refused: true });
+      } else {
+        // It failed in a way that says nothing about what the server did. This
+        // is the case that used to read as "that password was not accepted",
+        // which is the one answer that can get somebody locked out: Better
+        // Auth voids the old codes as soon as it commits, so a lost response
+        // means the old set may already be dead and the new one gone. Saying
+        // so is the whole fix; pretending to know is the defect.
+        setHeldCodes(null);
+        setCodes({ kind: "uncertain" });
       }
     } catch {
+      // Unreachable now that the seam catches, and kept fail-safe rather than
+      // fail-quiet: an unexpected throw is still an unknown outcome.
       rotation.end();
       setHeldCodes(null);
-      setCodes({ kind: "asking", password: "", refused: true });
+      setCodes({ kind: "uncertain" });
     }
   }
 
@@ -1054,9 +1073,14 @@ function SecurityTab({
                   </button>
                 </div>
               ) : null}
+              {codes.kind === "uncertain" ? (
+                <FormAlert testId="account-codes-uncertain">
+                  {t("codesUncertain")}
+                </FormAlert>
+              ) : null}
             </div>
             {viewer.twoFactorEnabled ? (
-              codes.kind === "closed" ? (
+              codes.kind === "closed" || codes.kind === "uncertain" ? (
                 <button
                   type="button"
                   data-testid="account-codes-open"
