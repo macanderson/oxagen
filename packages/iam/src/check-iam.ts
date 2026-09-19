@@ -232,11 +232,21 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
     // moments earlier for this same key in the caller's adapter
     // (`bootstrap.ts`). A second small read here, on the org's own plane, is
     // the cost of correct evidence and is bounded to API-key traffic only.
-    const purpose = ctx.apiKeyId
-      ? await readKeyScope(ctx.orgId, ctx.apiKeyId).then((scope) =>
-          scope.kind === "purpose" ? scope.purpose : null,
-        )
-      : null;
+    //
+    // Gated on `!ctx.userId`, the same condition `fetchAuthz`'s `isApiKey`
+    // uses below: a request that already carries a resolved person (a CLI
+    // session key, or any surface that put a session user on the context)
+    // has nothing for this read to disambiguate. `machineAttributedPrincipal`
+    // leaves `principal` (here, `null`) untouched for a non-machine purpose
+    // regardless, so skipping the read changes no outcome and avoids a query
+    // for every ordinary human MCP/API call that happens to carry an
+    // `apiKeyId` alongside its `userId`.
+    const purpose =
+      !ctx.userId && ctx.apiKeyId
+        ? await readKeyScope(ctx.orgId, ctx.apiKeyId).then((scope) =>
+            scope.kind === "purpose" ? scope.purpose : null,
+          )
+        : null;
     const bypassPrincipal = machineAttributedPrincipal(ctx, null, purpose);
     emitAudit({
       capability,
