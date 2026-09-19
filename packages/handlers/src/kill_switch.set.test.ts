@@ -47,6 +47,7 @@ import { makeCTX } from "./test-utils/fixtures";
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const WS = "0192d4a8-7c1e-7a00-8000-00000000ac40";
 const USER = "0192d4a8-7c1e-7a00-8000-0000000005e1";
+const USER_PUBLIC_ID = "usr_finops1";
 const SERVER = "0192d4a8-7c1e-7a00-8000-0000000000aa";
 const CONNECTION = "0192d4a8-7c1e-7a00-8000-0000000000bb";
 /** A second workspace of the same organisation. */
@@ -182,7 +183,10 @@ const lookups: KillSwitchTargetLookups = {
   mcpServer: async (_s, id) => (id === "mcs_github" ? { id: SERVER } : null),
   connection: async (_s, id) => (id === "mcrd_gh" ? { id: CONNECTION } : null),
   agent: async (_s, id) => (id === "agt_finops" ? { publicId: id } : null),
-  orgMember: async (_o, userId) => userId === USER,
+  resolveOperator: async (_o, idOrPublicId) =>
+    idOrPublicId === USER || idOrPublicId === USER_PUBLIC_ID
+      ? { userId: USER, publicId: USER_PUBLIC_ID }
+      : null,
   workspace: async (_o, wsId) => wsId === WS || wsId === OTHER_WS,
 };
 
@@ -220,6 +224,7 @@ describe("resolveKillSwitchTarget", () => {
     ["connection", "mcrd_gh", "connection", CONNECTION],
     ["agent", "agt_finops", "agent", "agt_finops"],
     ["operator", USER, "operator", USER],
+    ["operator", USER_PUBLIC_ID, "operator", USER],
     ["workspace", WS, "workspace", WS],
     ["workspace", OTHER_WS, "workspace", OTHER_WS],
     ["org", ORG, "org", ORG],
@@ -245,6 +250,7 @@ describe("resolveKillSwitchTarget", () => {
     ["connection", "mcrd_missing"],
     ["agent", "agt_missing"],
     ["operator", "0192d4a8-7c1e-7a00-8000-0000000005e2"],
+    ["operator", "usr_missing"],
     ["workspace", "0192d4a8-7c1e-7a00-8000-00000000ac42"],
   ] as const)("an unknown %s is not_found", async (kind, id) => {
     await expect(
@@ -586,6 +592,100 @@ describe("set_kill_switch", () => {
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: WS }),
     );
+  });
+
+  it("flips an operator switch on from a selected member's usr_ public id", async () => {
+    const flip = flipTx({ generation: 1, activeSwitches: [], liveGrants: 0 });
+    const out = await handlerOver(flip)(
+      {
+        target: { kind: "operator", id: USER_PUBLIC_ID },
+        on: true,
+        reason: "compromised laptop",
+      },
+      ctx(),
+    );
+    expect(out).toMatchObject({ changed: true, on: true });
+    const insert = flip.ops.find((o) => o.op === "insert");
+    expect(
+      insert && insert.op === "insert" ? insert.values : null,
+    ).toMatchObject({
+      workspaceId: null,
+      scopeKind: "org",
+      denyKind: "resource_scope",
+      // The digest matches the raw user id the live gate carries as
+      // ctx.userId, not the public id the caller submitted (#3147).
+      resourceScopeDigest: resourceScopeDigestOf({
+        kind: "operator",
+        id: USER,
+      }),
+      targetKind: "operator",
+      targetId: USER_PUBLIC_ID,
+    });
+  });
+
+  it("flips an operator switch on from the raw user uuid, kept for backward compatibility", async () => {
+    const flip = flipTx({ generation: 1, activeSwitches: [], liveGrants: 0 });
+    const out = await handlerOver(flip)(
+      { target: { kind: "operator", id: USER }, on: true, reason: "x" },
+      ctx(),
+    );
+    expect(out).toMatchObject({ changed: true, on: true });
+    const insert = flip.ops.find((o) => o.op === "insert");
+    expect(
+      insert && insert.op === "insert" ? insert.values : null,
+    ).toMatchObject({
+      resourceScopeDigest: resourceScopeDigestOf({
+        kind: "operator",
+        id: USER,
+      }),
+      targetId: USER,
+    });
+  });
+
+  it("an unknown operator usr_ id is refused by name, not a generic schema failure", async () => {
+    const flip = flipTx({ generation: 1, activeSwitches: [], liveGrants: 0 });
+    await expect(
+      handlerOver(flip)(
+        {
+          target: { kind: "operator", id: "usr_missing" },
+          on: true,
+          reason: "x",
+        },
+        ctx(),
+      ),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      reason: "operator_not_found",
+    });
+    expect(flip.ops).toEqual([]);
+  });
+
+  it("an operator outside the org is refused by name, the same not_found an unknown id gets", async () => {
+    const flip = flipTx({ generation: 1, activeSwitches: [], liveGrants: 0 });
+    // resolveOperator's org join (postgresKillSwitchTargetLookups) answers
+    // null for a real user who is simply not a member of this org; the fake
+    // here models that the same way it models "does not exist".
+    const outOfOrg = {
+      ...lookups,
+      resolveOperator: vi.fn(async () => null),
+    };
+    await expect(
+      createKillSwitchSetHandler({
+        lookups: outOfOrg,
+        transaction: (fn) => fn(flip.tx as never),
+      })(
+        {
+          target: { kind: "operator", id: "usr_other_org" },
+          on: true,
+          reason: "x",
+        },
+        ctx(),
+      ),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      reason: "operator_not_found",
+    });
+    expect(outOfOrg.resolveOperator).toHaveBeenCalledWith(ORG, "usr_other_org");
   });
 
   it("turning on a switch for a target that does not exist is not_found and writes nothing", async () => {

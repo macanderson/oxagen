@@ -10,6 +10,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { ResolvedPrincipal } from "@oxagen/oxagen";
 import type { AuthzData } from "./fetch-authz";
+import type { KeyScope } from "./machine-key-scope";
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
 
@@ -21,11 +22,20 @@ const mocks = vi.hoisted(() => ({
   resolveOrgTierDetailed: vi.fn(),
   canAccessACL: vi.fn(),
   captureError: vi.fn(),
+  // Only the non-enterprise bypass branch reaches this: it identifies a
+  // purpose-scoped key without a second DB round trip through fetchAuthz,
+  // which the bypass branch never calls. Defaults to "no purpose", matching
+  // the pre-existing tests' apiKeyId: null fixture, where this is never even
+  // invoked.
+  readKeyScope: vi.fn<(orgId: string, apiKeyId: string) => Promise<KeyScope>>(
+    async () => ({ kind: "missing" }),
+  ),
 }));
 
 vi.mock("./fetch-authz", () => ({ fetchAuthz: mocks.fetchAuthz }));
 vi.mock("./emit-audit", () => ({ emitAudit: mocks.emitAudit }));
 vi.mock("@oxagen/oxagen/iam", () => ({ resolve: mocks.resolve }));
+vi.mock("./machine-key-scope", () => ({ readKeyScope: mocks.readKeyScope }));
 vi.mock("@oxagen/billing", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
@@ -88,6 +98,7 @@ const EMPTY_AUTHZ: AuthzData = {
   roles: [],
   roleGrants: [],
   policies: [],
+  apiKeyPurpose: null,
 };
 
 const ALLOW_TRACE = {
@@ -519,5 +530,193 @@ describe("checkIAM tier gate fails closed (#1384)", () => {
 
     expect(result.result.outcome).toBe("allow");
     expect(mocks.resolveOrgTierDetailed).not.toHaveBeenCalled();
+  });
+});
+
+// ── Evidence attribution for a purpose-scoped key (#3151) ─────────────────
+//
+// fetchAuthz still resolves a purpose-scoped key (tacho_host_v1,
+// tacho_gateway_v1, ...) to its creator's role grants. That inheritance is
+// unchanged and untested again here (fetch-authz.test.ts owns it). What
+// these tests pin is the SEPARATE question: what identity does the AUDIT row
+// name, and does the kernel's own resolvedPrincipal stay the one resolve()
+// actually matched grants against.
+describe("checkIAM(): purpose-scoped key evidence attribution", () => {
+  const GATEWAY_CTX: CapabilityContext = {
+    ...CTX,
+    userId: null,
+    apiKeyId: "aky_gateway",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.emitAudit.mockResolvedValue(undefined);
+    mockEstablishedTier("enterprise");
+    mocks.canAccessACL.mockReturnValue(true);
+  });
+
+  it("audits a tacho_gateway_v1 call against the credential, not the creator whose grants allowed it", async () => {
+    mocks.fetchAuthz.mockResolvedValue({
+      ...EMPTY_AUTHZ,
+      principal: PRINCIPAL, // the enroller's principal, used for role matching
+      apiKeyPurpose: "tacho_gateway_v1",
+    });
+    mocks.resolve.mockReturnValue({ outcome: "allow", trace: ALLOW_TRACE });
+
+    const result = await checkIAM({
+      capability: "query_ontology",
+      ctx: GATEWAY_CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    // resolve() matched grants against the REAL (enroller) principal.
+    // Unchanged, and required for enterprise-tier machine flows to work.
+    expect(mocks.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ principal: PRINCIPAL }),
+    );
+
+    // The audit row names the credential, never the enroller's principal.
+    expect(mocks.emitAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        principal: {
+          id: "aky_gateway",
+          kind: "service",
+          orgId: "org_test",
+          workspaceId: "ws_test",
+        },
+      }),
+    );
+
+    // What the kernel threads onward as resolvedPrincipal (feeds tenant-scope
+    // RLS) is the ORIGINAL principal, not the audit substitute. An API key
+    // id is not a row in iam.principals, and widening the swap there would
+    // trade a real vulnerability for a dangling foreign reference.
+    expect(result.principal).toEqual(PRINCIPAL);
+  });
+
+  it("leaves a plain org key's audit and returned principal alone", async () => {
+    mocks.fetchAuthz.mockResolvedValue({
+      ...EMPTY_AUTHZ,
+      principal: PRINCIPAL,
+      apiKeyPurpose: null,
+    });
+    mocks.resolve.mockReturnValue({ outcome: "allow", trace: ALLOW_TRACE });
+
+    const result = await checkIAM({
+      capability: "generate_markdown",
+      ctx: GATEWAY_CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(mocks.emitAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ principal: PRINCIPAL }),
+    );
+    expect(result.principal).toEqual(PRINCIPAL);
+  });
+
+  it("leaves a cli_session_v1 key's audit alone: it is a person's own credential", async () => {
+    mocks.fetchAuthz.mockResolvedValue({
+      ...EMPTY_AUTHZ,
+      principal: PRINCIPAL,
+      apiKeyPurpose: "cli_session_v1",
+    });
+    mocks.resolve.mockReturnValue({ outcome: "allow", trace: ALLOW_TRACE });
+
+    await checkIAM({
+      capability: "generate_markdown",
+      ctx: GATEWAY_CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(mocks.emitAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ principal: PRINCIPAL }),
+    );
+  });
+
+  // ── The non-enterprise fast path: the tier where this was invisible ───────
+  //
+  // This branch is the one nothing checked before #3151: it audited every
+  // API-key call as `principal: null` (an anonymous zero-id service
+  // principal), which was already NOT the enroller's identity, but also
+  // named no credential at all. It now identifies the key when it can, on
+  // exactly the tier `checkIAM`'s own module comment calls "the 90% of
+  // customers who don't need ACL management": the common case, not an edge
+  // one.
+
+  it("non-enterprise tier: attributes a gateway key's audit to the credential without running the resolver", async () => {
+    mocks.canAccessACL.mockReturnValue(false);
+    mockEstablishedTier("build");
+    mocks.readKeyScope.mockResolvedValue({
+      kind: "purpose",
+      purpose: "tacho_gateway_v1",
+      hostEnrollmentId: "tch_1",
+    });
+
+    const result = await checkIAM({
+      capability: "query_ontology",
+      ctx: GATEWAY_CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(result.result.outcome).toBe("allow");
+    // The resolver never runs on this tier. machineKeyDenial (run by the
+    // bootstrap.ts adapter BEFORE checkIAM, not exercised in this unit test)
+    // is what stands between a gateway key and a capability outside its
+    // mandate; this fast path only decides evidence once already allowed.
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mocks.fetchAuthz).not.toHaveBeenCalled();
+    expect(mocks.readKeyScope).toHaveBeenCalledWith("org_test", "aky_gateway");
+    expect(mocks.emitAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        principal: {
+          id: "aky_gateway",
+          kind: "service",
+          orgId: "org_test",
+          workspaceId: "ws_test",
+        },
+      }),
+    );
+    // This tier already returns null for resolvedPrincipal (no resolver ran
+    // to produce a real one), so there is nothing here for
+    // machineAttributedPrincipal's RLS guard to protect. The kernel gets
+    // exactly what it got before this change.
+    expect(result.principal).toBeNull();
+  });
+
+  it("non-enterprise tier: a plain org key (or none) still audits as the anonymous service principal", async () => {
+    mocks.canAccessACL.mockReturnValue(false);
+    mockEstablishedTier("build");
+    mocks.readKeyScope.mockResolvedValue({ kind: "personal" });
+
+    const result = await checkIAM({
+      capability: "generate_markdown",
+      ctx: GATEWAY_CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(result.result.outcome).toBe("allow");
+    expect(mocks.emitAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ principal: null }),
+    );
+    expect(result.principal).toBeNull();
+  });
+
+  it("non-enterprise tier: no apiKeyId (a human session) never calls readKeyScope", async () => {
+    mocks.canAccessACL.mockReturnValue(false);
+    mockEstablishedTier("build");
+
+    await checkIAM({
+      capability: "generate_markdown",
+      ctx: CTX, // apiKeyId: null
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(mocks.readKeyScope).not.toHaveBeenCalled();
   });
 });

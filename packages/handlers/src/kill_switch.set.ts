@@ -50,6 +50,7 @@ import {
 import { revokeCredentialGrants } from "@oxagen/plugins";
 import { and, eq, isNull } from "drizzle-orm";
 import { registryCapabilityId } from "@oxagen/agent/runtime/tool-registry-facts";
+import { USER_PUBLIC_ID } from "./lib/org-member";
 
 /** What a target resolves to before a switch is turned on. */
 interface ResolvedTarget {
@@ -95,7 +96,16 @@ export interface KillSwitchTargetLookups {
     scope: { orgId: string; workspaceId: string },
     publicId: string,
   ): Promise<{ publicId: string } | null>;
-  orgMember(orgId: string, userId: string): Promise<boolean>;
+  /**
+   * Resolves the operator's `usr_…` public id, or (backward compatibility)
+   * their raw user uuid, to the user within the org: the raw uuid for the
+   * live gate's digest, the public id unchanged (#3147). Null when the id
+   * names nobody in this org.
+   */
+  resolveOperator(
+    orgId: string,
+    idOrPublicId: string,
+  ): Promise<{ userId: string; publicId: string } | null>;
   workspace(orgId: string, workspaceId: string): Promise<boolean>;
 }
 
@@ -176,20 +186,24 @@ const postgresKillSwitchTargetLookups: KillSwitchTargetLookups = {
     );
     return row ?? null;
   },
-  orgMember: async (orgId, userId) => {
+  resolveOperator: async (orgId, idOrPublicId) => {
+    const isPublicId = USER_PUBLIC_ID.test(idOrPublicId);
     const [row] = await withTenantDb((tx) =>
       tx
-        .select({ id: schema.orgUsers.id })
-        .from(schema.orgUsers)
+        .select({ id: schema.users.id, publicId: schema.users.publicId })
+        .from(schema.users)
+        .innerJoin(schema.orgUsers, eq(schema.orgUsers.userId, schema.users.id))
         .where(
           and(
             eq(schema.orgUsers.orgId, orgId),
-            eq(schema.orgUsers.userId, userId),
+            isPublicId
+              ? eq(schema.users.publicId, idOrPublicId)
+              : eq(schema.users.id, idOrPublicId),
           ),
         )
         .limit(1),
     );
-    return row !== undefined;
+    return row ? { userId: row.id, publicId: row.publicId } : null;
   },
   workspace: async (orgId, workspaceId) => {
     const [row] = await withTenantDb((tx) =>
@@ -273,10 +287,14 @@ export async function resolveKillSwitchTarget(
       };
     }
     case "operator": {
-      if (!(await lookups.orgMember(ctx.orgId, target.id)))
-        throw notFound(target);
+      // The live gate's digest is computed over the acting user's raw
+      // internal id (packages/iam/src/resource-scope.ts, `ctx.userId`), so
+      // the deny must match that id regardless of which form the caller
+      // passed (#3147).
+      const operator = await lookups.resolveOperator(ctx.orgId, target.id);
+      if (!operator) throw notFound(target);
       return {
-        deny: scopeDeny("operator", target.id),
+        deny: scopeDeny("operator", operator.userId),
         connectionId: null,
       };
     }
