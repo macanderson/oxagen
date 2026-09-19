@@ -48,7 +48,8 @@
       "themeNow": "now {theme, select, light {Paper} dark {Ink} other {system}}",
       "signOut": "Sign out",
       "signingOut": "Signing out…",
-      "signOutFailed": "Sign-out did not go through, so this session is still open. Try again."
+      "signOutFailed": "Sign-out did not go through, so this session is still open. Try again.",
+      "signOutHoldsCodes": "Save your new recovery codes first. Signing out now would lose them, and the old ones no longer work."
     },
     "commands": {
       "title": "Command menu",

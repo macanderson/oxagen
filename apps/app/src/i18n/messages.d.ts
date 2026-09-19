@@ -1915,6 +1915,7 @@ type Messages = {
       signOut: string;
       signingOut: string;
       signOutFailed: string;
+      signOutHoldsCodes: string;
     };
     commands: {
       title: string;

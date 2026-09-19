@@ -32,15 +32,31 @@ const LINKS: readonly { tab: AccountTab; testId: string }[] = [
 export function UserMenu({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
   const navigate = useNavigate();
-  const { theme, setTheme, openAccount } = useShellState();
+  const { theme, setTheme, openAccount, codesAtStake } = useShellState();
   const { viewer } = data;
   const displayName = viewer.name ?? viewer.email;
 
   const [signOutFailed, setSignOutFailed] = useState(false);
+  const [signOutBlocked, setSignOutBlocked] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   async function signOut() {
     if (signingOut) return;
+    // Recovery codes are at stake: a rotation is in flight, or a set has come
+    // back and has not been saved. Signing out is a client transition to
+    // `/login`, which leaves this layout and unmounts the Account dialog
+    // holding the only plaintext copy. The old set is already void, so the
+    // person would be left with no working recovery codes and nothing would
+    // have said so. `beforeunload` cannot cover this: it does not fire for a
+    // Next.js client transition.
+    //
+    // Refused rather than confirmed, because the way out is one click away and
+    // costs nothing: save the codes, press "I have saved these", sign out.
+    if (codesAtStake) {
+      setSignOutBlocked(true);
+      return;
+    }
+    setSignOutBlocked(false);
     setSigningOut(true);
     setSignOutFailed(false);
     let ended: boolean;
@@ -133,6 +149,14 @@ export function UserMenu({ data }: { data: ShellData }) {
                     The announcement is made by the live region outside the
                     menu below, which is where a role that does not belong in a
                     menu can live. */}
+                {signOutBlocked ? (
+                  <span
+                    data-testid="sign-out-blocked"
+                    className="mt-0.5 block text-xs text-destructive"
+                  >
+                    {t("userMenu.signOutHoldsCodes")}
+                  </span>
+                ) : null}
                 {signOutFailed ? (
                   <span
                     data-testid="sign-out-failed"
@@ -150,6 +174,7 @@ export function UserMenu({ data }: { data: ShellData }) {
           allows, and assertive because the person believes they have just
           signed out on a machine they may not trust. */}
       <p role="alert" aria-live="assertive" className="sr-only">
+        {signOutBlocked ? t("userMenu.signOutHoldsCodes") : ""}
         {signOutFailed ? t("userMenu.signOutFailed") : ""}
       </p>
     </Menu.Root>

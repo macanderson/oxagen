@@ -109,11 +109,12 @@ async function openDialog(
   tab: AccountTab = "profile",
   viewer: Viewer = viewerWith(),
   container?: HTMLElement,
+  timeZone?: string,
 ) {
   const user = userEvent.setup();
   const data = shellData({ viewer });
   render(
-    <IntlProvider>
+    <IntlProvider timeZone={timeZone}>
       <ShellStateProvider>
         <OpenIt />
         <AccountDialog data={data} />
@@ -669,6 +670,25 @@ describe("Preferences", () => {
 });
 
 describe("Security", () => {
+  // Preferences promises every date and time follows the zone chosen there,
+  // and this list used to answer in UTC regardless: `toISOString()` sliced and
+  // suffixed with a Z. "Was that me?" is a question about the clock the person
+  // was actually looking at, so a device list in the wrong zone is the one
+  // place that promise matters most.
+  it("shows device activity in the viewer's zone, not UTC", async () => {
+    await openDialog(
+      "security",
+      viewerWith(),
+      undefined,
+      "America/Los_Angeles",
+    );
+    const sessions = await screen.findByTestId("account-sessions");
+    // 2026-09-11T08:12:00Z is 01:12 in Los Angeles, on the same date.
+    expect(sessions).toHaveTextContent("1:12");
+    expect(sessions).not.toHaveTextContent("08:12");
+    expect(sessions).not.toHaveTextContent(/\dZ\b/);
+  });
+
   it("lists every session, names this device, and revokes another", async () => {
     const { user } = await openDialog("security");
     const sessions = await screen.findByTestId("account-sessions");

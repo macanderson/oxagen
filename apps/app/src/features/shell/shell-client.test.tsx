@@ -57,11 +57,15 @@ vi.mock("next/navigation", () => ({
 // The Account dialog's tabs read on open; the shell test only needs them to
 // answer, not what they answer with (account-dialog.test.tsx covers that).
 const liveSignOut = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
+type RotationReply = { ok: false } | { ok: true; codes: string[] };
+const liveRegenerateBackupCodes = vi.hoisted(() =>
+  vi.fn<() => Promise<RotationReply>>(() => Promise.resolve({ ok: false })),
+);
 vi.mock("./session-client", () => ({
   liveSignOut,
   liveListSessions: () => Promise.resolve({ ok: true, sessions: [] }),
   liveRevokeSession: () => Promise.resolve(true),
-  liveRegenerateBackupCodes: () => Promise.resolve({ ok: false }),
+  liveRegenerateBackupCodes,
 }));
 vi.mock("./account-actions", () => ({
   updateProfile: vi.fn(),
@@ -496,6 +500,60 @@ describe("user menu", () => {
     await user.click(
       within(await screen.findByRole("menu")).getByTestId("sign-out"),
     );
+    expect(nav.replace).toHaveBeenCalledWith("/login");
+  });
+
+  // `beforeunload` does not fire for a Next.js client transition, so the
+  // page-level guard on unsaved recovery codes cannot see the exit that
+  // actually costs them: Sign out is `router.replace("/login")`, which leaves
+  // this layout and unmounts the dialog holding the only plaintext copy. The
+  // old set is already void by then, so the person would be left with no
+  // working recovery codes and nothing would have said so.
+  it("refuses to sign out while recovery codes are unsaved", async () => {
+    liveRegenerateBackupCodes.mockResolvedValueOnce({
+      ok: true,
+      codes: ["keep-1111", "keep-2222"],
+    });
+    const user = userEvent.setup();
+    renderShell(shellData());
+
+    // Rotate a set through the Account dialog, then leave it unacknowledged.
+    await user.click(
+      screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+    );
+    await user.click(
+      within(await screen.findByRole("menu")).getByTestId("open-security"),
+    );
+    await user.click(await screen.findByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes");
+    await user.keyboard("{Escape}");
+
+    await user.click(
+      screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+    );
+    await user.click(
+      within(await screen.findByRole("menu")).getByTestId("sign-out"),
+    );
+
+    expect(liveSignOut).not.toHaveBeenCalled();
+    expect(nav.replace).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("sign-out-blocked")).toBeTruthy();
+
+    // Acknowledging the set releases it, and the same press then signs out.
+    await user.click(
+      within(await screen.findByRole("menu")).getByTestId("open-security"),
+    );
+    await user.click(await screen.findByTestId("account-codes-saved"));
+    await user.keyboard("{Escape}");
+    await user.click(
+      screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+    );
+    await user.click(
+      within(await screen.findByRole("menu")).getByTestId("sign-out"),
+    );
+    expect(liveSignOut).toHaveBeenCalledTimes(1);
     expect(nav.replace).toHaveBeenCalledWith("/login");
   });
 

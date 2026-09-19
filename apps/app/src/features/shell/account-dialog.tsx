@@ -27,6 +27,7 @@ import {
   useState,
 } from "react";
 import { routes } from "@/shared/safe-path";
+import { useFormatter } from "@/ui/formatter";
 import { timeZoneChoices } from "@/shared/time-zone";
 import { Avatar } from "@/ui/avatar";
 import { buttonPrimary, inputBase, panel } from "@/ui/control-styles";
@@ -75,8 +76,13 @@ const tabClass =
 
 export function AccountDialog({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account");
-  const { accountOpen, setAccountOpen, accountTab, setAccountTab } =
-    useShellState();
+  const {
+    accountOpen,
+    setAccountOpen,
+    accountTab,
+    setAccountTab,
+    setCodesAtStake,
+  } = useShellState();
 
   // Recovery codes are shown exactly once, so they are held here rather than
   // in the Security tab that renders them.
@@ -165,6 +171,25 @@ export function AccountDialog({ data }: { data: ShellData }) {
       window.removeEventListener("beforeunload", ask);
     };
   }, [guardUnload]);
+
+  // And the same fact published to the shell, because `beforeunload` does not
+  // fire for a Next.js client transition and therefore cannot see the exit
+  // that actually costs the codes: Sign out in the user menu calls
+  // `router.replace("/login")`, which leaves this layout, unmounts this
+  // component and takes the vault with it. The old set is already void by
+  // then, so the person is left with no working recovery codes and nothing
+  // told them. The menu reads this and refuses while it holds.
+  useEffect(() => {
+    setCodesAtStake(guardUnload);
+  }, [guardUnload, setCodesAtStake]);
+
+  // Released on unmount as well, so a shell that tears this component down for
+  // any other reason cannot leave Sign out permanently refusing.
+  useEffect(() => {
+    return () => {
+      setCodesAtStake(false);
+    };
+  }, [setCodesAtStake]);
 
   // The ARIA tabs pattern, because `role="tab"` is a promise about the
   // keyboard. A screen-reader user told a control is a tab expects Left and
@@ -843,6 +868,11 @@ function SecurityTab({
   rotation,
 }: { data: ShellData } & CodeVault) {
   const t = useTranslations("shell.account.security");
+  // The viewer's zone, not UTC. Preferences promises every date and time
+  // follows the zone chosen there, and a device list that answers in UTC
+  // breaks that promise where it matters most: "was that me?" is a question
+  // about the clock the person was actually looking at.
+  const format = useFormatter();
   const passwordId = useId();
   const [sessions, setSessions] = useState<SessionsState>({ kind: "loading" });
   // Seeded from the vault, so a return to this tab shows codes issued while
@@ -1133,8 +1163,10 @@ function SecurityTab({
                 <time className={listTime} dateTime={s.updatedAt.toISOString()}>
                   {s.current
                     ? t("now")
-                    : s.updatedAt.toISOString().slice(0, 16).replace("T", " ") +
-                      "Z"}
+                    : format.dateTime(s.updatedAt, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
                 </time>
                 {s.current ? null : (
                   <button
