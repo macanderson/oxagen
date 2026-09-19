@@ -216,21 +216,41 @@ describe("POST /v1/tacho/events", () => {
     };
     expect((await post(huge)).status).toBe(413);
     expect(mocks.invoke).not.toHaveBeenCalled();
-    // A single body at the recorder's 1 MiB cap is about 1.4 MiB as base64:
-    // the route must let it through to validation rather than refuse its size.
-    const oneBody = {
-      ...VALID_BATCH,
-      padding: "x".repeat(Math.ceil((TACHO_MAX_BODY_BYTES * 4) / 3)),
-    };
-    expect((await post(oneBody)).status).not.toBe(413);
   });
 
   it("admits a batch carrying a body at the 1 MiB cap", async () => {
-    const atCap = {
-      ...VALID_BATCH,
-      padding: Buffer.alloc(TACHO_MAX_BODY_BYTES, 0x61).toString("base64"),
+    // A real `bodies` entry keyed to one of VALID_BATCH's events by its
+    // idempotency id, not a forbidden top-level `padding` field: the strict
+    // batch schema rejects an unknown key before the kernel is ever reached,
+    // so a 400 there would satisfy `not.toBe(413)` for the wrong reason. The
+    // body sits at the 1 MiB raw cap, about 1.4 MiB base64 on the wire, which
+    // is the largest single body the route must let through to the kernel.
+    const eventIdIdem = VALID_BATCH.events[0]?.event_id_idem;
+    if (!eventIdIdem) throw new Error("VALID_BATCH carries no sealed event");
+    const atCapBody = {
+      event_id_idem: eventIdIdem,
+      content_type: "text/plain; charset=utf-8",
+      bytes_base64: Buffer.alloc(TACHO_MAX_BODY_BYTES, 0x61).toString(
+        "base64",
+      ),
     };
-    expect((await post(atCap)).status).not.toBe(413);
+    const atCap = { ...VALID_BATCH, bodies: [atCapBody] };
+    const response = await post(atCap);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(OUTPUT);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "ingest_tacho_events",
+      expect.objectContaining({
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST,
+        bodies: [atCapBody],
+      }),
+      expect.objectContaining({
+        orgId: KEY_ORG_ID,
+        workspaceId: KEY_WORKSPACE_ID,
+      }),
+      { surface: "api" },
+    );
   });
 });
 
