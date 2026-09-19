@@ -480,7 +480,12 @@ describe("requestMandate", () => {
     });
   });
 
-  it("falls back to the default zone when the saved one cannot be read (negative)", async () => {
+  // Both of these fell back to Pacific. That is right for drawing a date and
+  // wrong for writing a validity window: for an operator in Tokyo, Pacific moves
+  // the end of their day 17 hours later, which is authority nobody granted, and
+  // nothing afterwards says the zone was guessed. Refusing is visible, and the
+  // grant can be made again once the zone is known.
+  it("refuses the grant when the saved zone cannot be read (negative)", async () => {
     kernelRead.mockResolvedValue({
       ok: false,
       reason: "error",
@@ -488,34 +493,40 @@ describe("requestMandate", () => {
       status: 503,
     });
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
-    await requestMandate("acme", "core-platform", {
-      ...good,
-      validFrom: "2026-01-15",
-      validTo: "2026-01-15",
+    expect(
+      await requestMandate("acme", "core-platform", {
+        ...good,
+        validFrom: "2026-01-15",
+        validTo: "2026-01-15",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "time_zone_unavailable",
     });
-    // Pacific is the default every page prints in, so the window agrees with
-    // the dates on screen rather than silently becoming a UTC day.
-    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      validFrom: "2026-01-15T08:00:00.000Z",
-      validTo: "2026-01-16T07:59:59.999Z",
-    });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("falls back to the default zone for a saved one this runtime cannot format in (negative)", async () => {
+  it("refuses the grant for a saved zone this runtime cannot format in (negative)", async () => {
     kernelRead.mockResolvedValue({
       ok: true,
       value: { timezone: "Mars/Olympus_Mons" },
     });
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
-    await requestMandate("acme", "core-platform", {
-      ...good,
-      validFrom: "2026-01-15",
-      validTo: "2026-01-15",
+    // A conflict rather than an unavailability: retrying will not help until the
+    // person stores a zone this runtime knows.
+    expect(
+      await requestMandate("acme", "core-platform", {
+        ...good,
+        validFrom: "2026-01-15",
+        validTo: "2026-01-15",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "time_zone_unsupported",
     });
-    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      validFrom: "2026-01-15T08:00:00.000Z",
-      validTo: "2026-01-16T07:59:59.999Z",
-    });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("accepts a mandate that starts and ends on one day", async () => {

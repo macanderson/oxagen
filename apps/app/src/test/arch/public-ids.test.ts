@@ -3,6 +3,13 @@
 // src/data/contracts is walked — `z.object`, `z.strictObject`, `z.looseObject`
 // and `.extend` arguments, nested in arrays and unions alike — so no exported
 // view model carries a raw database id under any name.
+//
+// The allowlist stays empty, and a foreign identifier is the reason it can. A
+// value Oxagen neither mints nor can validate — a payment intent, a commit, the
+// user id a kill switch recorded — is carried as `…Ref` rather than `…Id`
+// (`src/data/contracts/tools.ts`, `mandates.ts`), which says what it is instead
+// of claiming a public id it is not. An exemption list would answer the same
+// need and would, from then on, be somewhere a real raw uuid could hide.
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {

@@ -20,7 +20,7 @@ A senior engineer who has read the logs and is telling you what happened.
 
 | Surface | Tone shift | Example |
 |---|---|---|
-| Website hero | Most compressed. One claim, one sentence of how, one action. | Mission Control for your autonomous agents. Give each agent an identity. Set its authority, budget, tools, and skills. Explore Mission Control. |
+| Website hero | Most compressed. One claim, one sentence of how, one action. | Mission Control for agent operators. Give each agent an identity. Set its authority, budget, tools, and skills. Explore Mission Control. |
 | Product page | Explains the mechanism in order. Reads like a good README. States the scope beside each control. | see `examples.md` |
 | Docs | Second person, imperative, one step per sentence. | Open the Agents page and choose Wrap Claude Code. Run a prompt. The page turns to connected when the first frame arrives. |
 | UI strings | Terse, present tense, never a full sentence where a fragment reads faster. | Denied by rule `no-push-main`. Waiting on Priya, rule `release-branch`. recorded, not enforced. |
@@ -36,7 +36,7 @@ Each pair shows the same idea in the wrong voice and then in Oxagen's. No "After
 
 **Enthusiasm**
 Before: We're excited to introduce a revolutionary new way to manage your AI agents!
-After: Mission Control for your autonomous agents.
+After: Mission Control for agent operators.
 
 **Abstraction**
 Before: Oxagen provides comprehensive governance and observability for autonomous agents across your organization.

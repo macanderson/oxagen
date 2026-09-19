@@ -26,9 +26,14 @@
 // The answer is stamped `asOf` with the instant it was mapped, because whether
 // a mandate is in effect is a question about an instant and a component may
 // not ask a clock during render.
+import type { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
 import type { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import type { z } from "zod";
-import type { MandateList, MeasureValue } from "@/data/contracts/mandates";
+import type {
+  MandateDetail,
+  MandateList,
+  MeasureValue,
+} from "@/data/contracts/mandates";
 import {
   isCurrencyCode,
   moneyFromMicros,
@@ -40,6 +45,7 @@ import type { ContractOutput } from "@/server/kernel";
 type Out = ContractOutput<typeof mandateList>;
 type MandateOut = Out["items"][number];
 type AuthorityOut = MandateOut["authority"][number];
+type DetailOut = ContractOutput<typeof mandateGet>;
 
 function measureValue(
   value: string,
@@ -79,6 +85,69 @@ function toAuthority(
   };
 }
 
+/**
+ * The approval rule's thresholds, each in its measure's own form where the
+ * mandate's limits establish what that form is.
+ *
+ * `humanAbove` is a measure-keyed record of integer strings and names neither a
+ * currency nor a unit, so the only evidence for the form is the limit on the
+ * same measure — which is exactly where `authority` got its own. A threshold on a
+ * measure the mandate does not limit therefore has no form, and `value` is null
+ * rather than assumed: the rule is still in force, and the page prints the
+ * recorded digits beside the measure's name. Guessing dollars there would be the
+ * same mistake `isCurrencyCode` is a stand-in for above, one layer further from
+ * the evidence.
+ */
+function toApproval(
+  item: MandateOut,
+): z.input<typeof MandateList>["mandates"][number]["approval"] {
+  const formOf = (measure: string): string | null => {
+    const limit = item.authority.find((entry) => entry.measure === measure);
+    return limit?.currencyOrUnit ?? null;
+  };
+  return {
+    humanAbove: Object.entries(item.approval.humanAbove).map(
+      ([measure, recorded]) => {
+        const unit = formOf(measure);
+        return {
+          measure,
+          value: unit === null ? null : measureValue(recorded, unit),
+          recorded,
+        };
+      },
+    ),
+    alwaysHumanFor: [...item.approval.alwaysHumanFor],
+    approvers: [...item.approval.approvers],
+  };
+}
+
+/** One mandate row, shared by `list_mandates` and `get_mandate`: the same view model. */
+function toMandateRow(
+  item: MandateOut,
+): z.input<typeof MandateList>["mandates"][number] {
+  return {
+    id: item.id,
+    agentId: item.agentId,
+    agentSlug: item.agentSlug,
+    requestedBy: item.requestedBy,
+    grantedBy: item.grantedBy,
+    roleAtGrant: item.roleAtGrant,
+    consequenceTags: item.consequenceTags,
+    tools: item.tools,
+    targets: Object.entries(item.targets).map(([measure, rule]) => ({
+      measure,
+      allow: [...rule.allow],
+      deny: [...rule.deny],
+    })),
+    approval: toApproval(item),
+    purpose: item.purpose,
+    validFrom: item.validFrom,
+    validTo: item.validTo,
+    status: item.status,
+    authority: item.authority.map(toAuthority),
+  };
+}
+
 export function toMandateList(
   out: Out,
   limit: number,
@@ -87,20 +156,52 @@ export function toMandateList(
   return {
     asOf: asOf.toISOString(),
     truncatedAt: out.items.length >= limit ? limit : null,
-    mandates: out.items.map((item) => ({
-      id: item.id,
-      agentId: item.agentId,
-      agentSlug: item.agentSlug,
-      requestedBy: item.requestedBy,
-      grantedBy: item.grantedBy,
-      roleAtGrant: item.roleAtGrant,
-      consequenceTags: item.consequenceTags,
-      tools: item.tools,
-      purpose: item.purpose,
-      validFrom: item.validFrom,
-      validTo: item.validTo,
-      status: item.status,
-      authority: item.authority.map(toAuthority),
+    mandates: out.items.map(toMandateRow),
+  };
+}
+
+/**
+ * `get_mandate` to the mandate page's record. The limits and the authority go
+ * through the same row mapper the ledger tables read, so the figures on the
+ * detail page and the figures in the two tables are one mapping.
+ *
+ * The ledger rows keep the measure's own form — micros under a currency, whole
+ * units under a unit name — through the same `measureValue` the limits use, so
+ * a movement and the limit it drew against are printed by the same rule. The
+ * row's `id` and `toolCallId` are dropped rather than carried: both are raw
+ * database uuids and INV-11 admits none into a view model (`MandateLedgerRow`
+ * carries the reasoning).
+ */
+export function toMandateDetail(
+  out: DetailOut,
+  ledgerLimit: number,
+  asOf: Date = new Date(),
+): z.input<typeof MandateDetail> {
+  return {
+    asOf: asOf.toISOString(),
+    // What the read can establish: the bound it asked for, when the answer
+    // filled it. Not "truncated" — a ledger of exactly the bound looks the same
+    // as one of the bound plus a thousand, and `get_mandate` answers no total, no
+    // has-more flag and no cursor to tell them apart (`MandateDetail.readBound`).
+    readBound: out.ledger.length >= ledgerLimit ? ledgerLimit : null,
+    mandate: toMandateRow(out.mandate),
+    ledger: out.ledger.map((row) => ({
+      kind: row.kind,
+      measure: row.measure,
+      value: measureValue(row.value, row.unitOrCurrency),
+      // Empty means "nothing recorded" here, not "a value of no length".
+      // `packages/rules/src/mandates.ts` stores whatever the tool's configured
+      // effect-id path returned, an empty string included, and `get_mandate`
+      // answers it unchanged. The view model requires a non-empty string or
+      // null, so passing one through failed `MandateDetail.safeParse` and the
+      // whole page answered `record_unmappable` over one settlement — a ledger
+      // withheld because one row named its transaction with nothing.
+      externalEffectRef:
+        row.externalEffectId === null || row.externalEffectId.trim() === ""
+          ? null
+          : row.externalEffectId,
+      periodKey: row.periodKey,
+      at: row.at,
     })),
   };
 }

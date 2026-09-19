@@ -3,6 +3,7 @@
 // active mandate on an invoice agent — a monthly amount in USD with a
 // reservation held against it, and the built-in calls measure beside it. Test
 // support only: src/test is never in a production bundle.
+import type { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
 import type { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -88,4 +89,38 @@ export function mandateListOutput(
   items: MandateOutput[] = [mandateOutput()],
 ): MandatesOutput {
   return { items };
+}
+
+type MandateGetOutput = ContractOutput<typeof mandateGet>;
+type LedgerOutput = MandateGetOutput["ledger"][number];
+
+/**
+ * One ledger row as `get_mandate` answers it. `id` and `toolCallId` are raw
+ * uuids in the contract, which is why the view model drops both
+ * (`MandateLedgerRow`); they are here because the mapper's input carries them and
+ * a fixture that left them out would not be the shape under test.
+ */
+export function ledgerOutput(
+  overrides: Partial<LedgerOutput> = {},
+): LedgerOutput {
+  return {
+    id: "0199a0d4-0000-7000-8000-000000000001",
+    toolCallId: "0199a0d4-0000-7000-8000-0000000000a1",
+    kind: "settle",
+    measure: "amount",
+    value: "884600000",
+    unitOrCurrency: "USD",
+    externalEffectId: "pi_3QaL8f2Xk",
+    periodKey: "2026-09",
+    balanceAfter: "884600000",
+    at: "2026-09-04T08:40:19.000Z",
+    ...overrides,
+  };
+}
+
+export function mandateGetOutput(
+  ledger: LedgerOutput[] = [ledgerOutput()],
+  mandate: MandateOutput = mandateOutput(),
+): MandateGetOutput {
+  return { mandate, ledger };
 }

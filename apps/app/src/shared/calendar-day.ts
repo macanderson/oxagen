@@ -106,6 +106,28 @@ function zonedPartsToUtc(
   return new Date(before);
 }
 
+/**
+ * Whether `raw` is a calendar day that exists.
+ *
+ * The shape is not enough, and this is the one place that says so. `2026-99-99`
+ * matches the pattern and makes an Invalid Date; `2027-02-31` is worse, because
+ * `Date.UTC` rolls it forward to 3 March without complaint. For a mandate's
+ * validity end that is three days of authority obtained by sending a day that
+ * does not exist, so the value has to round-trip through UTC as the day it
+ * claims to be before anything converts it.
+ *
+ * Exported because the same check is owed by every surface that takes a day from
+ * a caller: the audit filters, and `changeMandateLimits`, which had only the
+ * pattern.
+ */
+export function isCalendarDay(raw: string): boolean {
+  if (!DAY.test(raw)) return false;
+  const parsed = new Date(`${raw}T00:00:00.000Z`);
+  return (
+    !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(raw)
+  );
+}
+
 function parseDay(
   day: string,
 ): { year: number; month: number; day: number } | null {

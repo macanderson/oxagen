@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Oxagen",
-    "description": "Mission Control for your autonomous agents."
+    "description": "Mission Control for agent operators."
   },
   "pages": {
     "login": "Log in",
@@ -21,6 +21,7 @@
     "agents": "Agents",
     "agent": "Agent",
     "agentSource": "Agent definition",
+    "mandate": "Mandate",
     "tools": "Tools",
     "skills": "Skills",
     "steering": "Steering",

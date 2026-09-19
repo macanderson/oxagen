@@ -188,6 +188,59 @@ export function periodKey(period: MandatePeriod, at: Date): string {
   }
 }
 
+/** Monday 00:00 UTC of ISO week `week` in ISO week-year `year`. */
+function mondayOfIsoWeek(year: number, week: number): Date {
+  // 4 January is always in week 1 of its ISO week-year.
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const day = jan4.getUTCDay() || 7;
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - (day - 1) + (week - 1) * 7);
+  return monday;
+}
+
+/**
+ * Half-open UTC range `[start, end)` a ledger `periodKey` covers, or `null`
+ * when the string is not a daily, weekly or monthly key this code writes.
+ */
+export function periodKeyRange(
+  key: string,
+): { start: number; end: number } | null {
+  const daily = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (daily) {
+    const y = Number(daily[1]);
+    const m = Number(daily[2]) - 1;
+    const d = Number(daily[3]);
+    const start = Date.UTC(y, m, d);
+    return { start, end: Date.UTC(y, m, d + 1) };
+  }
+  const weekly = /^(\d{4})-W(\d{2})$/.exec(key);
+  if (weekly) {
+    const start = mondayOfIsoWeek(Number(weekly[1]), Number(weekly[2]));
+    const end = new Date(start);
+    end.setUTCDate(start.getUTCDate() + 7);
+    return { start: start.getTime(), end: end.getTime() };
+  }
+  const monthly = /^(\d{4})-(\d{2})$/.exec(key);
+  if (monthly) {
+    const y = Number(monthly[1]);
+    const m = Number(monthly[2]) - 1;
+    return { start: Date.UTC(y, m, 1), end: Date.UTC(y, m + 1, 1) };
+  }
+  return null;
+}
+
+/**
+ * Whether two ledger period keys cover overlapping UTC ranges. Keys this
+ * code cannot parse do not overlap: the settlement guard treats an
+ * unparseable settled key as its own refuse path.
+ */
+export function periodKeysOverlap(a: string, b: string): boolean {
+  const ra = periodKeyRange(a);
+  const rb = periodKeyRange(b);
+  if (!ra || !rb) return false;
+  return ra.start < rb.end && rb.start < ra.end;
+}
+
 /**
  * A mandate's tool pattern is a flat glob over `slug@version`, or over the
  * bare slug, which matches every version.

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Oxagen is Mission Control for an autonomous agent workforce and its agent control plane (ADR-067): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the security, FinOps and engineering teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams, not to resellers. [`docs/VISION.md`](docs/VISION.md) is the reference for feature direction; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
+Oxagen is Mission Control for agent operators and the agent control plane they work in (ADR-067): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the security, FinOps and engineering teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams, not to resellers. [`docs/VISION.md`](docs/VISION.md) is the reference for feature direction; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
 
 Oxagen governs agents; it does not run them (ADR-043). Stella is the coding agent; Oxagen is the governor, grounder, explainer, meter and rater. Monorepo built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
 
@@ -195,7 +195,7 @@ is unambiguous.
 
 **Concurrency**: a push to `main` gets its own group, keyed by commit; everything else groups by ref so a new push supersedes the run before it. GitHub keeps one *queued* run per group, so a shared group means a third merge evicts the second before it starts — and when merges outpace the run, that chain never terminates. Nothing finishes, `deploy-web`/`deploy-node` never run because they need a passing check, and cancelled runs read as ordinary cleanup so nothing goes red. That took out eight deploys on 2026-09-07 (#2730). ADR-046 has the reasoning and what it costs; `tools/scripts/check-main-concurrency.mjs` fails `check:contracts` if the expression loses `github.sha`, because reverting it would look like a tidy-up.
 
-**Pre-commit hooks** (lefthook): Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, atlas-validate (only when migration files are staged). **Pre-push hooks**: `check:contracts` + `env:check`, plus `check:contextgraph-fixtures` when the CGP fixtures change — no test suites (those run in CI).
+**Pre-commit hooks** (lefthook): Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, atlas-validate (only when migration files are staged). **Pre-push hooks**: `check:contracts` + `env:check`, plus `check:messages` when `apps/app`'s catalogues or sources change and `check:contextgraph-fixtures` when the CGP fixtures change — no test suites (those run in CI). `check:messages` regenerates nothing; it fails when `apps/app/src/i18n/messages.d.ts` is stale against `messages/*.json`, which is the one way a key the catalogue plainly holds becomes a `NamespacedMessageKeys` type error. Run `pnpm --filter @oxagen/app gen:messages` and commit the result.
 
 ## Git Workflow
 

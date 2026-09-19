@@ -35,6 +35,7 @@ import {
   type MandateApproval,
   type MandateAuthority,
   type MandateLimits,
+  type MandatePeriod,
   type MandateStatus,
   type MandateTargets,
 } from "@oxagen/oxagen/mandates/schemas";
@@ -53,6 +54,8 @@ import {
   exceeds,
   isCallsMeasure,
   periodKey,
+  periodKeyRange,
+  periodKeysOverlap,
   readCallsMeasure,
   readMeasure,
   readPath,
@@ -156,6 +159,88 @@ async function periodSums(
   const reserved = BigInt(row?.reserved ?? "0");
   const settled = BigInt(row?.settled ?? "0");
   return { reserved, settled, drawn: reserved + settled };
+}
+
+/**
+ * Whether this measure has already drawn authority in the window its current
+ * period names. A period change that ran while drawn would leave those ledger
+ * rows under the old `periodKey`, so `readAuthority` and `reserve` would see an
+ * empty new window and grant the full cap again.
+ */
+export async function hasDrawnInCurrentPeriod(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+  period: MandatePeriod,
+  at: Date = new Date(),
+): Promise<boolean> {
+  const sums = await periodSums(
+    tx,
+    mandateId,
+    measure,
+    periodKey(period, at),
+  );
+  return sums.drawn > 0n;
+}
+
+/**
+ * Whether this measure still has an open reservation under any period key.
+ *
+ * A call parked for approval can keep its reserve row past the old window's
+ * boundary. `hasDrawnInCurrentPeriod` only sees the key the stored period
+ * names today, so a midnight rollover would miss that row and let a period
+ * rename orphan it. Settled and released rows net to zero here; only a
+ * reserve with no matching settle or release counts.
+ */
+export async function hasOpenReservation(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+): Promise<boolean> {
+  const [row] = await tx
+    .select({
+      reserved: sql<string>`coalesce(sum(case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end), 0)::text`,
+    })
+    .from(l)
+    .where(and(eq(l.mandateId, mandateId), eq(l.measure, measure)));
+  return BigInt(row?.reserved ?? "0") > 0n;
+}
+
+/**
+ * Whether this measure has a settlement under a period key whose calendar
+ * range overlaps the destination period's current window.
+ *
+ * A daily-to-weekly rename on Tuesday leaves Monday's settle under Monday's
+ * daily key. `hasDrawnInCurrentPeriod` only queries Tuesday, and
+ * `hasOpenReservation` ignores settled rows, so without this check the
+ * rename would succeed and weekly reads would see an empty `YYYY-Www` key.
+ * The ledger stays append-only: the rename is refused, not rewritten.
+ */
+export async function hasSettlementOverlappingPeriod(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+  destPeriod: MandatePeriod,
+  at: Date = new Date(),
+): Promise<boolean> {
+  const destKey = periodKey(destPeriod, at);
+  const rows = await tx
+    .select({
+      periodKey: l.periodKey,
+      settled: sql<string>`coalesce(sum(case when ${l.kind} = 'settle' then ${l.value} else 0 end), 0)::text`,
+    })
+    .from(l)
+    .where(and(eq(l.mandateId, mandateId), eq(l.measure, measure)))
+    .groupBy(l.periodKey);
+  for (const row of rows) {
+    if (BigInt(row.settled) <= 0n) continue;
+    // An unparseable settled key is treated as overlapping: refuse rather
+    // than hide a draw the destination window cannot query.
+    if (!periodKeyRange(row.periodKey) || periodKeysOverlap(row.periodKey, destKey)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Remaining authority by measure, as get_mandate and list_mandates report it. */

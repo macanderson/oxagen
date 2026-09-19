@@ -47,9 +47,16 @@ tokens through CSS, so nothing else is needed — never hand-pick a hex.
 
 ### Type and the gold rule
 
-Space Grotesk is the only family: **400 body · 500 UI · 600 headings and the wordmark ·
-700 the Ox lettermark** (`--font-sans` / `--font-display`; `--font-mono` is the system
-mono stack, for code and identifiers only — there is no Space Grotesk Mono).
+Three families, each with its own job. **Space Grotesk** (`--ox-font-display`) sets the
+wordmarks and h1 to h3. **Geist** (`--ox-font`) sets h4 to h6 and everything else a
+person reads: body, labels, buttons, tables, navigation. **Monaspace Neon**
+(`--ox-font-mono`) sets code, terminal output, logs, digests, paths, ids, and numbers
+in tables, with `calt` and `liga` on for texture healing. A figure in a table is mono
+so columns of digits align.
+
+This paragraph said Space Grotesk was the only family and that mono was the system
+stack. That was true of the skin before the house kit, and a generator reading it
+would set body copy in the display face and identifiers in whatever the host had.
 
 **Gold (`--ox-gold` / `--primary`) is identity, not state: at most one gold action per
 screen, and it never encodes success/failure.** State colors are `--success`
@@ -58,7 +65,7 @@ screen, and it never encodes success/failure.** State colors are `--success`
 ### Where the truth lives
 
 - `_ds_bundle.css` — every token, in the `:root` and `.dark` blocks. Read it before styling.
-- `guidelines/THEME.md` — the full three-layer token reference (value → mapping → component).
+- `guidelines/THEME.md` — where each kind of answer lives, plus the three rules a token value cannot state (gold is not state; a state's two stops are both marks, so text needs a derived one; both dark blocks state every pair).
 - `components/<group>/<Name>/<Name>.prompt.md` and `<Name>.d.ts` — per-component API and examples.
 
 ### Idiomatic example

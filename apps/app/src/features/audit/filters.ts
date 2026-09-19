@@ -21,6 +21,7 @@ import {
 import type { DataSource } from "@/data/ports";
 import type { OrgCtx } from "@/server/viewer";
 import {
+  isCalendarDay,
   startOfNextZonedDay,
   startOfZonedDay,
   supportsTimeZone,
@@ -34,7 +35,6 @@ export const AUDIT_EVENT_TYPES: readonly string[] =
 /** The outcomes the filter offers (the column's CHECK constraint). */
 export const AUDIT_OUTCOMES = AuditOutcome.options;
 
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * The largest offset the page hands the contract. The record is paged, not
  * scrolled, and PostgreSQL takes OFFSET as a bigint: a hand-edited
@@ -56,17 +56,12 @@ function value(params: Params, key: string, ok: (raw: string) => boolean) {
 }
 
 /**
- * A calendar day, or null. The shape is not enough: `2026-99-99` matches the
- * regex and makes an Invalid Date, and `2026-02-31` silently becomes 3 March,
- * so the value has to round-trip through UTC as the same day it claims to be.
+ * A calendar day, or null. This check moved to `@/shared/calendar-day`, beside
+ * the conversions that depend on it, when `changeMandateLimits` turned out to
+ * have only the pattern and to accept `2027-02-31` as three extra days of a
+ * mandate's authority. One implementation, two callers.
  */
-function isDay(raw: string): boolean {
-  if (!DAY.test(raw)) return false;
-  const parsed = new Date(`${raw}T00:00:00.000Z`);
-  return (
-    !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(raw)
-  );
-}
+const isDay = isCalendarDay;
 
 /** A calendar day the reader typed, or null; `from` after `to` is not a range, so both go. */
 function range(params: Params): Pick<AuditFilters, "from" | "to"> {

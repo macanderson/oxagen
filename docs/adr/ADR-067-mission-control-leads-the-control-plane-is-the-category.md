@@ -54,6 +54,19 @@ of the operator's page and the vocabulary of the operator's job; it is no
 longer a second category name. The mandate stays the unit, with identity made
 explicit in the access clause.
 
+
+**Amended 2026-09-19: the approved headline is "Mission Control for agent
+operators."** The decision above stands. Only the line changed. The house kit's
+message registry retired "Mission Control for your autonomous agents" on two
+grounds: it narrows the claim to autonomous agents when Oxagen governs
+supervised ones too, and it addresses the reader as an owner rather than naming
+the operator. The eyebrow "The control plane for your agent workforce" was
+retired the same way, for "The agent control plane". Both replacements are in
+`.claude/skills/oxagen-branding/references/positioning.md`, which is generated
+from the kit and is the authority a writer reads. `README.md`, `docs/VISION.md`,
+`AGENTS.md`, `CLAUDE.md` and the four published posts that carried the old line
+were migrated in the same change set.
+
 **Completion is a control, not the definition.** The definition of done
 applies to bounded tasks. Ongoing responsibilities are governed through
 authority, budget and review points. A passing verdict means the specified

@@ -53,18 +53,32 @@
  *
  * Gold as INK on white is only 2.1:1, so — exactly as the kit specifies — the
  * light theme renders every gold *mark* (accent copy, links, the focus ring)
- * in the gold's own deep shade #8A7223 (4.5:1), and dark mode uses the gold
+ * in the gold's own deep shade #8A7223 (4.65:1), and dark mode uses the gold
  * itself (9.5:1). A gold FILL is unaffected: ink on gold is 9.5:1 in both.
  *
  * Card and table HEADERS stay flat — surface plus hairline, never shaded bars.
  *
- * Out of scope for this skin (deliberately unchanged): the status ramp
- * (error/warning/success/info), which must stay clearly distinct from the one
- * gold so that colour never becomes ambiguous between identity and state.
+ * The status ramp (error/warning/success/info, and the kit's proven and
+ * critical) comes from the kit too, since 2.3.0 ships it: every stop is a
+ * reference into --ox-st-*. It stays clearly distinct from the one gold, so
+ * colour is never ambiguous between identity and state.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @import "tailwindcss";
-@import "./house-tokens.css";
+/*
+ * The kit's Tailwind layer, which imports house-tokens.css from beside it. It
+ * carries what the palette alone cannot: the `--color-ox-*` theme entries, the
+ * tracking scale, and the twelve type utilities — `text-m-h1` to `text-m-micro`
+ * for a page read once, `text-a-h1` to `text-a-micro` for a dashboard read all
+ * day. Each one sets size, line-height, face and weight together, so a heading
+ * cannot land on the body face or an off-scale size by accident.
+ *
+ * It is imported FIRST on purpose. Every name this file also defines below —
+ * the semantic `:root` and `.dark` blocks, `--font-sans`, `--font-mono` — wins
+ * on cascade order, so vendoring the kit's layer adds the scale without moving
+ * a single pixel of the skin that is already shipped.
+ */
+@import "./house-tailwind.css";
 @import "./house-fonts.css";
 
 /*
@@ -106,7 +120,7 @@
        apps/ and packages/ bind to these identifiers; a skin owns the values,
        not the names. All three stops are the kit's gold, unaltered. */
     --ox-surface: var(--ox-paper-panel); /* #FFFFFF — light card */
-    --ox-ember-deep: var(--ox-gold-deep); /* #8A7223 — gold as INK on paper (4.5:1) */
+    --ox-ember-deep: var(--ox-gold-deep); /* #8A7223 — gold as INK on paper (4.65:1) */
     --ox-ember: var(--ox-gold); /* #D4AF37 — the metal */
     --ox-ember-light: var(--ox-gold-bright); /* #F1CE65 — the shimmer highlight */
     --ox-ember-soft: oklch(0.25 0.035 88); /* gold at 14% over obsidian: a tinted fill on the dark canvas */
@@ -164,26 +178,58 @@
     --_ember-c: var(--ox-gold-bright); /* #F1CE65 */
     --_ember-navy: var(--ox-ink); /* #09090B — the canvas black */
 
-    /* Status hues. OUTSIDE the brand system on purpose, and deliberately not
-       recoloured by it: gold is identity and action only, never a state, so the
-       state ramp must stay visibly unlike the gold. */
-    --_clay: oklch(0.579 0.214 27.2); /* error — true red (hsl 0 72% 51%) */
-    --_clay-light: oklch(0.617 0.191 24.7); /* error (dark, hsl 0 72% 58%) */
-    /* Error as TEXT. The error hue is a mark colour: --_clay is 4.4:1 on the
-       light panel and --_clay-light 4.4:1 on the dark one, both under the
-       4.5:1 floor for body text. The inks are the same hue moved in lightness
-       until they pass on every surface text sits on (page, panel, popover). */
-    --_clay-ink: oklch(0.52 0.195 27.2); /* light: 5.3:1 paper, 5.6:1 panel, 5.8:1 popover */
-    --_clay-ink-light: oklch(0.7 0.16 25); /* dark: 6.6:1 canvas, 6.3:1 panel, 5.8:1 popover */
-    --_moss: oklch(0.529 0.106 154.4); /* #2F7D4F — success (light, 5.0:1 on paper) */
-    --_moss-light: oklch(0.769 0.119 149.1); /* success (dark) */
-    /* Warning sits at a clearly ORANGE hue (~52), well away from the gold at
-       hue ~75. Keep that separation: a warning that drifts toward the gold
-       reads as the brand accent rather than as a state. */
-    --_ochre: oklch(0.62 0.15 52); /* warning (light) */
-    --_ochre-light: oklch(0.75 0.14 55); /* warning (dark) */
-    --_slate: oklch(0.508 0.042 233.7); /* info */
-    --_slate-light: oklch(0.618 0.04 233.3);
+    /* Status hues, from the kit's own state ramp.
+     *
+     * These were hand-derived oklch stops, with a comment saying the ramp sat
+     * "OUTSIDE the brand system on purpose" because gold is identity and must
+     * never read as a state. That reasoning still holds — and since kit 2.3.0
+     * the kit ships the ramp itself, so honouring it no longer means inventing
+     * colour. Every stop below is now a reference into `house-tokens.css`, and
+     * a state's hue changes in the kit or nowhere.
+     *
+     * The kit's naming is the mapping: a bare `--ox-st-*` is the value on ink
+     * (the dark canvas) and the `-ink` suffix is the same state on paper, so
+     * the light theme takes the `-ink` stops and the dark theme takes the bare
+     * ones. Each `-ink` stop clears 4.5:1 on white, which is what the old
+     * `--_clay-ink` pair existed to guarantee by hand.
+     *
+     * The kit names the states after what Oxagen records rather than after a
+     * severity: allowed, approval, denied, proven, failed, critical. The four
+     * below carry the app's existing error/warning/success/info semantics; the
+     * kit's other two are exposed as `--proven` and `--critical` beside them,
+     * because a replay grade and a run that needs a person now are both states
+     * this product has to paint and neither is an error. */
+    --_clay: var(--ox-st-failed-ink); /* #992F28 — a check that did not hold, on paper */
+    --_clay-light: var(--ox-st-failed); /* #C0453C — the same, on ink */
+    /* Failed as TEXT, which the kit does not ship a stop for.
+     *
+     * The kit gives each state two values, the bare one for a mark on ink and
+     * the `-ink` one for a mark on paper. Both are MARK colours for their
+     * ground, and a mark only has to clear 3:1. Body text has to clear 4.5:1 on
+     * every surface it sits on, and on the dark side the kit's own stop does
+     * not: #C0453C on the #18181B panel is 3.52:1. Taking it for `--error-ink`
+     * put validation text under the floor, and the value it replaced carried
+     * the measurements it was derived to hit.
+     *
+     * So text keeps a derived stop where the kit has none. On paper the kit's
+     * `-ink` value already clears it (#992F28 on white is 7.5:1) and is used
+     * directly; on ink the red is lifted in lightness on the same hue until it
+     * passes on the canvas, the panel and the popover alike. */
+    --_clay-ink: var(--ox-st-failed-ink); /* #992F28 — failed as text on paper, 7.5:1 on white */
+    --_clay-ink-light: oklch(0.7 0.16 25); /* failed as text on ink: 6.6:1 canvas, 6.3:1 panel, 5.8:1 popover */
+    --_moss: var(--ox-st-allowed-ink); /* #2F7D52 — a request a rule allowed, on paper */
+    --_moss-light: var(--ox-st-allowed); /* #57A97C — the same, on ink */
+    /* The kit's denied stop is a clearly orange-red, well away from the gold,
+       which is the separation the hand-derived ochre existed to keep: a warning
+       that drifts toward the gold reads as the brand accent, not as a state. */
+    --_ochre: var(--ox-st-denied-ink); /* #9B4526 — a request a rule denied, on paper */
+    --_ochre-light: var(--ox-st-denied); /* #C66A4A — the same, on ink */
+    --_slate: var(--ox-st-approval-ink); /* #2E6BA8 — routed to a person, on paper */
+    --_slate-light: var(--ox-st-approval); /* #5B93D6 — the same, on ink */
+    --_teal: var(--ox-st-proven-ink); /* #1F7676 — the witness's word, on paper */
+    --_teal-light: var(--ox-st-proven); /* #3FA2A2 — the same, on ink */
+    --_rose: var(--ox-st-critical-ink); /* #AE2540 — needs a person now, on paper */
+    --_rose-light: var(--ox-st-critical); /* #D6455E — the same, on ink */
 
     /* ════════════════════════════════════════════════════════════════════════
      * CONTROLS — single global knobs (rounding + elevation). Flip in one place.
@@ -219,16 +265,16 @@
     --muted-foreground: var(--_stone-600);
     --accent: var(--_stone-200); /* #F4F4F5 — the row wash is NEUTRAL, never gold */
     --accent-foreground: var(--_ink); /* ink stays neutral on the wash */
-    --destructive: var(--_clay); /* true red */
+    --destructive: var(--ox-destructive-ink); /* #992F28 — a destructive action, on paper */
     --destructive-foreground: oklch(1 0 0);
     --border: var(--_stone-300); /* #E4E4E7 — paper-border, the hairline */
     --input: var(--_stone-300);
     /* The ring is a MARK on paper, not a fill, so it follows the kit's rule
        that gold on white becomes its deep shade: #D4AF37 is 2.1:1 here
        and would fail WCAG 1.4.11 (3:1 for a focus indicator); #8A7223 is
-       4.5:1. Dark mode keeps the metal itself at 9.5:1. */
+       4.65:1. Dark mode keeps the metal itself at 9.5:1. */
     --ring: var(--ox-ember-deep);
-    --link: var(--ox-ember-deep); /* #8A7223 — gold as ink on paper (4.5:1); the metal itself is 2.1:1 */
+    --link: var(--ox-ember-deep); /* #8A7223 — gold as ink on paper (4.65:1); the metal itself is 2.1:1 */
     --link-hover: var(--_amber-700); /* a darker gold, on white */
 
     /* Status — semantic names (error == destructive). */
@@ -241,11 +287,18 @@
     --error-ink: var(--_clay-ink); /* error words and figures; --error stays the mark */
     --info: var(--_slate);
     --info-foreground: oklch(1 0 0);
+    /* The kit's other two states, which the severity names above cannot carry:
+       `proven` is the witness's word beside a witness flip, and `critical` is a
+       run that needs a person now. Neither is an error. */
+    --proven: var(--_teal);
+    --proven-foreground: oklch(1 0 0);
+    --critical: var(--_rose);
+    --critical-foreground: oklch(1 0 0);
 
     /* Accent text ink — the shade of the gold that is legible as TEXT on the
        current background. #D4AF37 is the MARK colour and is only 2.1:1 on
        paper, so accent copy must not use it directly: light mode takes the
-       gold's own deep shade (#8A7223, 4.5:1) and dark mode the gold itself
+       gold's own deep shade (#8A7223, 4.65:1) and dark mode the gold itself
        (9.5:1). This is the kit's "gold as text on paper" rule. */
     --ember-ink: var(--ox-ember-deep); /* #8A7223 — the kit's "gold as text on paper" */
 
@@ -454,8 +507,11 @@
     --muted-foreground: var(--_stone-400);
     --accent: var(--_stone-800); /* #27272A — the hover/selected wash stays NEUTRAL */
     --accent-foreground: var(--_ink-white);
-    --destructive: var(--_clay-light);
-    --destructive-foreground: oklch(1 0 0);
+    --destructive: var(--ox-destructive); /* #D5584D — a destructive action, on ink */
+    /* Ink on the metal-side red, which is the pairing the kit's own Tailwind
+       layer uses. White on #D5584D is 3.92:1 and fails small text; ink on it is
+       4.92:1. A fill and its foreground are one decision and travel together. */
+    --destructive-foreground: var(--ox-ink);
     --border: var(--_stone-800); /* #27272A — the hairline on ink */
     --input: var(--ox-rule); /* #3F3F46 — the heavier rule on ink */
     --ring: var(--ox-ember); /* #D4AF37 — 9.5:1 on the canvas, no deep shade needed */
@@ -472,6 +528,10 @@
     --error-ink: var(--_clay-ink-light);
     --info: var(--_slate-light);
     --info-foreground: oklch(0.18 0.01 230);
+    --proven: var(--_teal-light);
+    --proven-foreground: oklch(0.18 0.02 190);
+    --critical: var(--_rose-light);
+    --critical-foreground: oklch(0.18 0.02 10);
 
     --chart-1: var(--ox-ember);
     --chart-2: var(--_slate-light);
@@ -585,8 +645,12 @@
       --muted-foreground: var(--_stone-400);
       --accent: var(--_stone-800); /* #27272A — the hover/selected wash stays NEUTRAL */
       --accent-foreground: var(--_ink-white);
-      --destructive: var(--_clay-light);
-      --destructive-foreground: oklch(1 0 0);
+      /* Keep in sync with .dark: the same fill and the same foreground. This
+         block carried #C0453C with a white foreground while .dark carried
+         #D5584D with ink, so one destructive badge had two colours depending
+         on whether the reader set the theme or their OS did. */
+      --destructive: var(--ox-destructive); /* #D5584D — a destructive action, on ink */
+      --destructive-foreground: var(--ox-ink); /* 4.92:1; white on this fill is 3.92:1 */
       --border: var(--_stone-800); /* #27272A — the hairline on ink */
       --input: var(--ox-rule); /* #3F3F46 — the heavier rule on ink */
       --ring: var(--ox-ember); /* #D4AF37 — 9.5:1 on the canvas, no deep shade needed */
@@ -952,10 +1016,12 @@
   h2,
   h3 {
     font-family: var(--font-display);
-    /* The kit's heading weight. Space Grotesk at 600 is the same weight the
-       wordmark is set at, which is what ties a page's headings to its logo. */
-    font-weight: 600;
-    letter-spacing: -0.015em;
+    /* The kit's own heading tokens. Space Grotesk at --ox-weight-heading (600)
+       is the same weight the wordmark is set at, which is what ties a page's
+       headings to its logo; --ox-weight-display (700) is for a hero, which the
+       text-m-h1 and text-a-h1 utilities carry. */
+    font-weight: var(--ox-weight-heading);
+    letter-spacing: var(--ox-tracking-heading);
     line-height: 1.12;
     text-wrap: balance;
   }

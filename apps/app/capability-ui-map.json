@@ -280,6 +280,14 @@
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
     },
+    "get_mandate": {
+      "route": "/[org]/[ws]/mandates/[mandate]",
+      "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
+      "entry": "/[org]/[ws]/mandates/[mandate] — the rev1 surface that invokes get_mandate (data/live/mandates.ts, data/live/mappers/mandates.ts)",
+      "proof": "apps/app/src/features/mandate/mandate.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
+    },
     "get_model_credential": {
       "route": "/[org]/model-funding",
       "page": "apps/app/src/app/[org]/model-funding/page.tsx",
@@ -653,6 +661,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "revoke_mandate": {
+      "route": "/[org]/[ws]/mandates/[mandate]",
+      "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
+      "entry": "/[org]/[ws]/mandates/[mandate] — the Revoke dialog in the mandate header (features/mandate/mandate-actions.tsx → features/mandate/actions.ts)",
+      "proof": "apps/app/src/features/mandate/actions.test.ts",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
+    },
     "rotate_agent_credential": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
@@ -758,6 +774,14 @@
       "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-m0-workspace-repositories"
+    },
+    "update_mandate_limits": {
+      "route": "/[org]/[ws]/mandates/[mandate]",
+      "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
+      "entry": "/[org]/[ws]/mandates/[mandate] — the Change limits dialog in the mandate header (features/mandate/mandate-actions.tsx → features/mandate/actions.ts)",
+      "proof": "apps/app/src/features/mandate/actions.test.ts",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
     },
     "update_profile": {
       "route": "/[org]",

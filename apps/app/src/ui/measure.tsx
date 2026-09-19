@@ -32,7 +32,7 @@ export function Measure({ value }: { value: MeasureValue }) {
   if (value.kind === "money")
     return <Money value={value.money} precision="exact" />;
   return (
-    <span data-testid="measure-count" className="tabular-nums">
+    <span data-testid="measure-count" className="font-mono tabular-nums">
       {t("count", {
         count: formatWholeUnits(value.count, locale),
         unit: value.unit,

@@ -154,6 +154,45 @@ export const mandateLimitsSchema = z
   );
 export type MandateLimits = z.infer<typeof mandateLimitsSchema>;
 
+/**
+ * One measure's bound as a **change** rather than a record: every field is
+ * optional and an absent field means "leave what is stored". A bound is
+ * replaced field by field, so clearing a per-call cap while keeping the
+ * per-period one is not expressible here and is not meant to be — deleting a
+ * bound is what `mandateLimitsSchema` replacement is for (ADR-102).
+ */
+const mandateLimitChangeSchema = z
+  .object({
+    perCall: measureValueSchema.optional(),
+    perPeriod: measureValueSchema.optional(),
+    period: mandatePeriodSchema.optional(),
+    currencyOrUnit: z.string().min(1).max(32).optional(),
+  })
+  .strict()
+  .refine(
+    (c) =>
+      c.perCall !== undefined ||
+      c.perPeriod !== undefined ||
+      c.period !== undefined ||
+      c.currencyOrUnit !== undefined,
+    "a limit change names at least one field",
+  );
+
+/**
+ * measure → the fields to change on that measure's bound, leaving every other
+ * measure and every unnamed field as stored (ADR-102). `update_mandate_limits`
+ * merges this under the row lock it already takes, which is the only place the
+ * merge is safe: a caller that read the record, merged, and sent the whole
+ * record back could restore a bound another operator lowered in between.
+ */
+export const mandateLimitChangesSchema = z
+  .record(measureNameSchema, mandateLimitChangeSchema)
+  .refine(
+    (changes) => Object.keys(changes).length > 0,
+    "a limit change names at least one measure",
+  );
+export type MandateLimitChanges = z.infer<typeof mandateLimitChangesSchema>;
+
 const mandateTargetSchema = z
   .object({
     allow: z.array(z.string().min(1).max(256)).default([]),
