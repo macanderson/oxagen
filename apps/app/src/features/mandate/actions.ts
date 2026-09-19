@@ -195,7 +195,8 @@ export async function changeMandateLimits(
     // while the figure beside it is whole units, which is the one shape this
     // form cannot write correctly. Refused in either casing, because an
     // operator who means money means it whichever way they type it.
-    if (unit === "" || isCurrencyCode(unit.toUpperCase())) return refuse("unit");
+    if (unit === "" || isCurrencyCode(unit.toUpperCase()))
+      return refuse("unit");
     if (perCall === "" && perPeriod === "") return refuse("perPeriod");
     if (perCall !== "") {
       if (!MEASURE_VALUE.test(perCall)) return refuse("perCall");
@@ -335,7 +336,12 @@ export async function revokeMandate(
 ): Promise<ActionResult<{ mandateId: string; status: string }>> {
   const reason = input.reason.trim();
   if (reason === "")
-    return { ok: false, reason: "invalid", code: "invalid_input", field: "reason" };
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "reason",
+    };
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, mandateRevoke, {
     mandateId: input.mandateId,

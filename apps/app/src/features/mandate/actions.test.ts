@@ -101,7 +101,17 @@ function kernelAnswers(options: {
       return options.preferencesThrows !== undefined
         ? Promise.reject(options.preferencesThrows)
         : Promise.resolve({
+            // The whole contract output: the kernel checks it, and a partial
+            // answer fails the read, which is now a refusal, not a fallback.
+            fontSize: "medium",
+            density: "comfortable",
+            enterToSubmit: true,
+            pendingPromptBehavior: "queue",
+            defaultTextTier: null,
+            defaultTextModel: null,
             timezone: options.timezone ?? "America/Los_Angeles",
+            language: "en",
+            theme: "system",
           });
     }
     if (options.writeThrows !== undefined)
@@ -180,9 +190,9 @@ describe("changeMandateLimits", () => {
 
   it("sends the changes the operator made, with the window's last day", async () => {
     kernelAnswers({});
-    expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
-      { ok: true, value: { mandateId: MANDATE_ID, status: "active" } },
-    );
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", draft),
+    ).toEqual({ ok: true, value: { mandateId: MANDATE_ID, status: "active" } });
     expect(requireViewer).toHaveBeenCalledWith("a-intel", "core-platform");
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
@@ -275,7 +285,7 @@ describe("changeMandateLimits", () => {
     ).toEqual({
       ok: false,
       reason: "unavailable",
-      code: "timezone_unavailable",
+      code: "time_zone_unavailable",
     });
     expect(
       invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
@@ -294,7 +304,7 @@ describe("changeMandateLimits", () => {
     ).toEqual({
       ok: false,
       reason: "conflict",
-      code: "timezone_unsupported",
+      code: "time_zone_unsupported",
     });
     expect(
       invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
@@ -305,7 +315,7 @@ describe("changeMandateLimits", () => {
     // The zone is only needed to place a day. A submission that names none is
     // not held up by a preference read it never makes.
     kernelAnswers({ preferencesThrows: new Error("preferences unreachable") });
-    await changeMandateLimits("a-intel", "core-platform", {
+    const result = await changeMandateLimits("a-intel", "core-platform", {
       ...untouched,
       callsPerDay: "70",
     });
@@ -646,8 +656,6 @@ describe("changeMandateLimits", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-
-
   // The handler's own gate: a caller whose roles are not accountable for the
   // mandate's consequences is refused before any row is touched, and the app
   // reports it as a denial rather than as a page error.
@@ -659,9 +667,9 @@ describe("changeMandateLimits", () => {
         message: "an accountable org role is required",
       }),
     });
-    expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
-      { ok: false, reason: "denied", code: "org_role_required" },
-    );
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", draft),
+    ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
   });
 
   it("reports a mandate nobody recorded as not found (negative)", async () => {
@@ -672,16 +680,16 @@ describe("changeMandateLimits", () => {
         message: "no such mandate",
       }),
     });
-    expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
-      { ok: false, reason: "not_found", code: "mandate_not_found" },
-    );
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", draft),
+    ).toEqual({ ok: false, reason: "not_found", code: "mandate_not_found" });
   });
 
   it("reports an IAM denial as a denial (negative)", async () => {
     kernelAnswers({ writeThrows: denied("update_mandate_limits") });
-    expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
-      { ok: false, reason: "denied", code: "authz_denied" },
-    );
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", draft),
+    ).toEqual({ ok: false, reason: "denied", code: "authz_denied" });
   });
 
   it("reports a mandate that has already ended as a conflict (negative)", async () => {
@@ -692,9 +700,9 @@ describe("changeMandateLimits", () => {
         message: "already revoked",
       }),
     });
-    expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
-      { ok: false, reason: "conflict", code: "mandate_ended" },
-    );
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", draft),
+    ).toEqual({ ok: false, reason: "conflict", code: "mandate_ended" });
   });
 });
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Oxagen: the agent control plane</title>
-<meta name="description" content="Mission Control for agent operators. Oxagen governs the agents you run, autonomous and supervised alike, and does not run them. One mandate per agent, checked on the calls routed through Oxagen, and every model call priced by token class and attributed to the person, the agent, the run, the turn, and the step.">
+<meta name="description" content="Mission Control for agent operators. Oxagen governs the agents you run, autonomous and supervised alike, and does not run them. One mandate per agent, checked on the calls routed through Oxagen, and every model call routed through it priced by token class and attributed to the person, the agent, the run, the turn, and the step.">
 <link rel="canonical" href="https://oxagen.sh/">
 <meta name="theme-color" content="#09090B">
 <meta name="color-scheme" content="dark">
@@ -335,7 +335,7 @@
           <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg></div>
           <h3>Budget and rules</h3>
           <p class="tag">See which agent spent what, and on whose behalf.</p>
-          <p>FinOps sets it. Every model call is priced by token class, attributed to the person,
+          <p>FinOps sets it. Every model call routed through Oxagen is priced by token class, attributed to the person,
           the agent, the run, the turn, and the step, and reconciled to the cent against the
           provider's bill. Findings ranked by the money at stake name what to fix and who can
           fix it.</p>
@@ -439,7 +439,7 @@
         <p class="eyebrow">Budget and rules</p>
         <h2>Every dollar attributed, reconciled to the cent</h2>
         <p class="lede">Your AI bill is a number with no story. Oxagen writes a cost record on
-        every model call, by token class, and hangs it on the frame.</p>
+        every model call routed through it, by token class, and hangs it on the frame.</p>
         <ul>
           <li>Spend rolls up from step to turn to run to agent to operator, so a team lead's number is the sum of their agents' runs.</li>
           <li>The reconciler matches your records against provider statements and opens an exception for any variance over one cent.</li>

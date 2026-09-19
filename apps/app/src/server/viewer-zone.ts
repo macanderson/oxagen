@@ -46,11 +46,11 @@ export async function viewerTimeZone(
     page,
   });
   if (!preferences.ok) {
-    return { ok: false, reason: "unavailable", code: "timezone_unavailable" };
+    return { ok: false, reason: "unavailable", code: "time_zone_unavailable" };
   }
   const stored = preferences.value.timezone;
   if (!supportsTimeZone(stored)) {
-    return { ok: false, reason: "conflict", code: "timezone_unsupported" };
+    return { ok: false, reason: "conflict", code: "time_zone_unsupported" };
   }
   return { ok: true, timeZone: stored };
 }

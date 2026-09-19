@@ -502,7 +502,7 @@ describe("requestMandate", () => {
     ).toEqual({
       ok: false,
       reason: "unavailable",
-      code: "timezone_unavailable",
+      code: "time_zone_unavailable",
     });
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -524,7 +524,7 @@ describe("requestMandate", () => {
     ).toEqual({
       ok: false,
       reason: "conflict",
-      code: "timezone_unsupported",
+      code: "time_zone_unsupported",
     });
     expect(invoke).not.toHaveBeenCalled();
   });

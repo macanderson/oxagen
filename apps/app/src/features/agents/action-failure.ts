@@ -48,9 +48,9 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("measureUnitMismatch");
           // Not a handler reason: the action refuses before it writes, because a
           // guessed zone moves a validity boundary by up to a day.
-          // `timezone_unavailable` is its retryable twin, under `unavailable`.
-          case "timezone_unsupported":
-            return t("timezoneUnsupported");
+          // `time_zone_unavailable` is its retryable twin, under `unavailable`.
+          case "time_zone_unsupported":
+            return t("timeZoneUnsupported");
           default:
             return t("refused", { code: failure.code });
         }
@@ -63,8 +63,8 @@ export function useActionFailure(): (failure: ActionFailure) => string {
       case "exhausted":
         return t("unavailable", { code: failure.code });
       case "unavailable":
-        return failure.code === "timezone_unavailable"
-          ? t("timezoneUnavailable")
+        return failure.code === "time_zone_unavailable"
+          ? t("timeZoneUnavailable")
           : t("unavailable", { code: failure.code });
     }
   };

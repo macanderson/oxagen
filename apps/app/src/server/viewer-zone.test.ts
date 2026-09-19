@@ -44,7 +44,7 @@ describe("viewerTimeZone", () => {
     expect(await viewerTimeZone(ctx, "mandates")).toEqual({
       ok: false,
       reason: "unavailable",
-      code: "timezone_unavailable",
+      code: "time_zone_unavailable",
     });
   });
 
@@ -52,7 +52,7 @@ describe("viewerTimeZone", () => {
     kernelRead.mockResolvedValue({ ok: false, reason: "denied" });
     expect(await viewerTimeZone(ctx, "agents")).toMatchObject({
       ok: false,
-      code: "timezone_unavailable",
+      code: "time_zone_unavailable",
     });
   });
 
@@ -66,7 +66,7 @@ describe("viewerTimeZone", () => {
     expect(await viewerTimeZone(ctx, "mandates")).toEqual({
       ok: false,
       reason: "conflict",
-      code: "timezone_unsupported",
+      code: "time_zone_unsupported",
     });
   });
 
