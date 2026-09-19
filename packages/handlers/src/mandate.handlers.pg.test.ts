@@ -1019,9 +1019,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             revokedReason: schema.mandates.revokedReason,
           })
           .from(schema.mandates)
-          .where(
-            inArray(schema.mandates.publicId, [active.id, draft.id]),
-          ),
+          .where(inArray(schema.mandates.publicId, [active.id, draft.id])),
       );
       expect(rows).toHaveLength(2);
       for (const row of rows) {
@@ -1042,7 +1040,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         [active.id, draft.id].sort(),
       );
       const got = await inScope(() =>
-        mandateGetHandler({ mandateId: active.id }, ctx(billingUserId)),
+        mandateGetHandler(
+          { mandateId: active.id, ledgerLimit: 100 },
+          ctx(billingUserId),
+        ),
       );
       expect(got.mandate.id).toBe(active.id);
       await expect(
@@ -1125,7 +1126,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
       const thirdAgentId = thirdAgent!.publicId;
 
-      const m = await grant(billingUserId, { ...body(), agentId: thirdAgentId });
+      const m = await grant(billingUserId, {
+        ...body(),
+        agentId: thirdAgentId,
+      });
       // Flip the agent's status directly rather than through retire_agent:
       // that handler already revokes every live mandate as part of
       // retirement (proven above), so going through it here would only ever
