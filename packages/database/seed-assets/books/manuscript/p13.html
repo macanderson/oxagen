@@ -1,0 +1,72 @@
+<h2 class="ch-title">Measuring agent intelligence</h2>
+<p class="ch-thesis">Benchmarking on coding challenges misses what matters in production.</p>
+
+<p class="lede">Someone asks how good your agent is, and the number you have is a benchmark score. It tells you one thing about one distribution of tasks under lab conditions. It does not tell you what a task costs, how long it takes, how much collateral change it makes, or whether it will do the same thing twice. Benchmarks measure capability ceilings. Production needs efficiency, precision, and repeatability, and those take different instruments.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · Accuracy-only evaluation misleads</span>
+  <p>The Princeton team showed this formally. Without cost as a co-equal axis, leaderboards reward scientifically meaningless spend, including retry loops and complexity that buy accuracy at any price, and the community drew wrong conclusions about why agents improved. Their prescription, jointly optimizing on a <strong>cost-accuracy Pareto frontier</strong>, revealed simple designs matching complex ones at a fraction of the cost.<sup class="cite"><a href="#r2">2</a></sup> Agentless made the same point empirically by reporting <em>% resolved, average cost, and average tokens together</em>, and separately audited SWE-bench Lite itself, finding problem-quality issues (such as issues whose text leaks the solution) that inflate naive readings of benchmark scores.<sup class="cite"><a href="#r1">1</a></sup> Anthropic's variance analysis completes the picture. If token usage explains ~80% of performance variance,<sup class="cite"><a href="#r3">3</a></sup> then a score reported without token counts is mostly measuring budget, not intelligence.</p>
+  <p class="src">Kapoor et al., TMLR 2025 · Xia et al., FSE 2025 · Anthropic, 2025</p>
+</div>
+
+<h3>The production scorecard</h3>
+<div class="mgrid">
+  <div class="mcard"><h5>files_touched / lines_changed</h5><p>Surgical or scattered. Two agents both solve the ticket. One edits 2 files, the other rewrites 14. Blast radius is review cost, merge risk, and regression surface.</p></div>
+  <div class="mcard"><h5>tokens_consumed per task</h5><p>The direct cost of thinking. Tracked per phase (retrieval, generation, repair), it tells you which part of the architecture is wasteful.</p></div>
+  <div class="mcard"><h5>tool_calls and graph_queries</h5><p>The exploration ratio. A high tool-call count with a low graph-query count means the agent is foraging probabilistically for what an index should hand it.</p></div>
+  <div class="mcard"><h5>time_to_green</h5><p>Wall clock from task start to passing CI. The metric people feel, and the one a latency-amplifying architecture (Part 9) quietly destroys.</p></div>
+  <div class="mcard"><h5>test_pass_rate and first_attempt_rate</h5><p>Not just eventually green but green in how many attempts. Each repair loop multiplies cost and proxies for context quality.</p></div>
+  <div class="mcard"><h5>cost_per_completed_task</h5><p>The number finance cares about, inclusive of retries, abandoned runs, and human rework. Report it like cost of goods sold (COGS), because it is.</p></div>
+  <div class="mcard"><h5>retrieval_precision</h5><p>Of the context supplied, how much did the final patch depend on? Intersect provided spans with edited and read spans. The best single health metric for your deterministic layer.</p></div>
+  <div class="mcard"><h5>context_utilization</h5><p>The inverse view: tokens supplied against tokens that mattered. Utilization under 10% means you are paying attention-degradation costs (Part 7) for nothing.</p></div>
+  <div class="mcard"><h5>variance / repeatability</h5><p>Run the same task 10 times. Determinism-heavy systems cluster tightly on cost and outcome. Agent-heavy systems scatter. Variance is risk, and risk is cost.</p></div>
+</div>
+
+<p>These do not replace benchmarks. They are the instrument panel a benchmark cannot be. A capability score tells you which model to buy. The scorecard tells you whether your system is improving: whether this quarter's retrieval work moved precision from 8% to 40%, whether graph queries are displacing exploratory tool calls, whether cost per task is falling while pass rates hold. Optimizing these numbers is engineering. Optimizing a single leaderboard score tells you about the model you bought, not the system you built.</p>
+
+<h3>The scorecard on one page</h3>
+<p>Copy this into your runbook. Each row is a metric, the computation behind it, and the failure it usually points at.</p>
+
+<div class="tablewrap"><table class="tbl">
+  <thead>
+    <tr><th>Metric</th><th>How to compute it</th><th>What a bad reading usually means</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>files_touched</code></td><td>Count distinct files in the final diff, per completed task</td><td>Retrieval is too broad, so the agent edits what it read rather than what the ticket named</td></tr>
+    <tr><td><code>tokens_per_task</code></td><td>Sum prompt plus completion tokens per run, tagged by phase</td><td>One phase dominates. Repair usually means bad context, retrieval usually means no budget</td></tr>
+    <tr><td><code>graph_query_ratio</code></td><td>Graph queries divided by graph queries plus exploratory file reads</td><td>The index is missing edges, so the agent forages instead of looking up</td></tr>
+    <tr><td><code>time_to_green</code></td><td>Wall clock from task start to the first passing CI run</td><td>Hand-offs between model calls dominate, which is the Part 9 tax</td></tr>
+    <tr><td><code>first_attempt_rate</code></td><td>Tasks green on attempt 1 divided by all completed tasks</td><td>The context bundle lacks the contract, so the model guesses the behavior</td></tr>
+    <tr><td><code>retrieval_precision</code></td><td>Supplied spans that the final patch read or edited, divided by all supplied spans</td><td>The retriever is shipping neighborhoods rather than slices</td></tr>
+    <tr><td><code>cost_per_completed_task</code></td><td>Total spend including retries and abandoned runs, divided by tasks merged</td><td>Abandoned runs are uncounted, and the true figure is higher than the one you quote</td></tr>
+    <tr><td><code>outcome_variance</code></td><td>Run one task 10 times, take the spread of cost and of pass or fail</td><td>Control flow is decided by inference, so the same input takes different paths</td></tr>
+  </tbody>
+</table></div>
+
+<p>Cost per task is the number that travels furthest outside engineering, and it raises a question this part does not answer: which agent, which run, and which person does a given dollar belong to. Part 17 takes that up.</p>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Emit one span per run.</strong> Wrap each agent run in an OpenTelemetry span carrying task id, model, prompt tokens, completion tokens, tool calls, and outcome. Done looks like a trace you can group by task class.</li>
+    <li><strong>Log the bundle and the diff together.</strong> Record the spans you supplied and the spans the patch read or edited, so <code>retrieval_precision</code> becomes an intersection rather than an estimate. Done looks like one precision number for last week.</li>
+    <li><strong>Count abandoned runs in the cost.</strong> Add halted, timed-out, and human-rewritten runs to the denominator of <code>cost_per_completed_task</code>. Done looks like a figure higher than the one you were quoting, and true.</li>
+    <li><strong>Run a repeatability probe.</strong> Pick three representative tasks, run each 10 times on the same commit, and record the spread of cost and outcome. Done looks like a variance number you can put next to your pass rate.</li>
+    <li><strong>Publish the eight-row table weekly.</strong> Post it where the team reads it, with last week's values beside this week's. Done looks like an argument about one row instead of an argument about the agent.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>retrieval_precision</code>: supplied context spans the final patch depended on, divided by all supplied spans. Up is good, and it moves when your index improves rather than when the model changes.</li>
+    <li><code>cost_per_completed_task</code>: all spend, including retries and abandoned runs, divided by tasks merged. Down is good. Compute it weekly, because a monthly figure hides a bad week.</li>
+    <li><code>first_attempt_rate</code>: tasks green on the first attempt, divided by all completed tasks. Up is good, and each repair loop you remove pays twice, in tokens and in wall clock.</li>
+    <li><code>outcome_variance</code>: the spread of cost and pass or fail across 10 runs of one task on one commit. Down is good, and a wide spread tells you inference is deciding something code should decide.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>A benchmark score measures the model's ceiling. Tokens, tool calls, blast radius, time to green, and retrieval precision measure your architecture. One of those is under your control, so instrument it.</p>
+</div>

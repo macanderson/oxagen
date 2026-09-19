@@ -1,4 +1,4 @@
-# notifications.mark
+# mark_notification
 
 **Domain:** notifications
 **Mode:** sync

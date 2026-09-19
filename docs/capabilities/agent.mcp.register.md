@@ -1,4 +1,4 @@
-# agent.mcp.register
+# register_mcp_server
 
 **Domain:** agent
 **Mode:** sync

@@ -1,4 +1,4 @@
-# api.key.list
+# list_api_keys
 
 **Capability:** `list_api_keys`
 **Domain:** api_key

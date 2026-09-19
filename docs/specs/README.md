@@ -1,51 +1,32 @@
-# `docs/architecture/`
+# Specifications and plans
 
-Long-lived architectural specifications and implementation plans.
+Find design intent here before changing a capability, data boundary, or product surface. Use [VISION.md](../VISION.md) for product direction and [ADRs](../adr/README.md) for accepted decisions.
 
-## Convention
+## Start here
 
-Each architectural topic lives in its own folder. Inside, two files:
-
-| File | Purpose | Audience |
-|---|---|---|
-| `spec.md` | **What** we're building, **why**, and the constraints. Product + design + engineering align here. Changes rarely once shipped; updated when scope or requirements change. | Everyone |
-| `plan.md` | **How** we'll build it. Sequenced work, dependencies, owners, milestones. Lives until implementation is complete, then archived or replaced by an ADR. | Engineering |
-
-```
-docs/architecture/
-├── README.md                          ← this file
-├── <topic>/
-│   ├── spec.md                        ← required
-│   └── plan.md                        ← created when implementation begins
-```
-
-### When to use which
-
-- **Have an idea for a new system or surface?** Start with `spec.md`. Don't write a plan until product has signed off on the spec.
-- **Spec is approved, ready to build?** Add `plan.md` next to it.
-- **Plan is being executed?** Update task progress in `plan.md` until done. Link to PRs.
-- **Decision made that overturns previous architecture?** Write an ADR in `docs/adr/`, link to it from the spec, and update the spec inline.
-
-### Naming rules
-
-- Folder names: `kebab-case`, matches the canonical product term (`information-architecture`, `application-shell`, `iam`, `agent-runtime`).
-- Files always exactly `spec.md` and `plan.md`. No version suffixes; use git history.
-
-### Difference vs. `docs/adr/` and `docs/epics/`
-
-| Folder | Holds | Lifecycle |
-|---|---|---|
-| `docs/architecture/` | The system's design intent. "How is the platform structured?" | Long-lived. Updated as the design evolves. |
-| `docs/adr/` | One-shot architectural decisions with context. "We considered X, Y, Z and picked Y because…" | Immutable once accepted. Superseded by new ADRs. |
-| `docs/epics/` | Product epics — discrete chunks of work with acceptance criteria. "Ship X by Q3." | Lifespan = the epic. Archived when complete. |
-
-Use the architecture folder for *durable* design docs. Use ADRs to record *decisions*. Use epics to track *delivery*.
-
-## Current topics
-
-| Topic | Status |
+| Topic | Reference |
 |---|---|
-| [`information-architecture/`](./information-architecture/spec.md) | Spec'd |
-| [`application-shell/`](./application-shell/spec.md) | Spec'd |
-| [`command-menu/`](./command-menu/spec.md) | Spec'd |
-| [`iam/`](./iam/plan.md) | Spec'd in IA · Wave 1 plan ready · OXA-1388/1389/1390 created |
+| Mission Control | [Spec and plan](mission-control/README.md) |
+| Agent enrollment and evidence | [Tacho](tacho/README.md) |
+| Gateway | [Gateway spec](gateway/spec.md) |
+| Steering | [Steering design](steering/README.md) |
+| Governed-action billing | [Metering spec](governed-action-metering.md) |
+| Organization data isolation | [Tenancy and RLS](tenancy-rls/spec.md) |
+| Repository binding | [Repository binding](repository-binding/README.md) |
+| Capability naming migration | [Historical name ledger](adr025-naming-mapping.md) |
+
+## Write one document per purpose
+
+Use `docs/specs/<topic>/spec.md` for the behavior, constraints, and rationale. Add a sibling `plan.md` when implementation needs sequencing. Existing topics may have other filenames. Keep their inbound links working when reorganizing them.
+
+State whether a spec is proposed, accepted, or superseded. Date implementation snapshots and link the code or PR that supports them. A design's acceptance does not establish that every feature in it ships.
+
+Track delivery in GitHub issues and PRs using the [contribution workflow](../../CONTRIBUTING.md). Remove completed task checklists when their useful decisions already live in a spec or ADR.
+
+## Historical material
+
+The information architecture, application shell, command menu, app parity overhaul, and workspace marketplace designs predate the Mission Control rebuild. They explain the old app and its retained code. Use [apps/app/ARCHITECTURE.md](../../apps/app/ARCHITECTURE.md) for the current app.
+
+The top-level July 2026 audit compilations have been removed. Their original topic documents remain in their directories. Do not restore a copied compilation as a second source of truth.
+
+The `_house/` documents belong to the shared house documentation system. Update them through their source repository and synchronization workflow.

@@ -1,4 +1,4 @@
-# tacho.incident.list
+# list_incidents
 
 **Capability:** `list_incidents`
 **Domain:** tacho

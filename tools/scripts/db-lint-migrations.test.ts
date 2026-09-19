@@ -49,9 +49,9 @@ function fakeGit(opts: {
 
 describe("atlasVersionOf and maxAtlasVersion", () => {
   it("reads the 14-digit prefix from a well-formed name", () => {
-    expect(
-      atlasVersionOf("20260918200000_repository_binding_heads.sql"),
-    ).toBe("20260918200000");
+    expect(atlasVersionOf("20260918200000_repository_binding_heads.sql")).toBe(
+      "20260918200000",
+    );
   });
 
   it("rejects a name with no valid prefix", () => {
@@ -101,10 +101,7 @@ describe("checkAtlasBaseline: (b) stamped behind the merge base", () => {
     const run = fakeGit({
       mergeBase: "base-sha",
       atRef: {
-        "base-sha": [
-          "20260918040000_a.sql",
-          "20260918200000_b.sql",
-        ],
+        "base-sha": ["20260918040000_a.sql", "20260918200000_b.sql"],
         "origin/main": [
           "20260918040000_a.sql",
           "20260918200000_b.sql",
@@ -185,14 +182,8 @@ describe("checkAtlasBaseline: (d) a rebase or merge carrying a file forward", ()
     const run = fakeGit({
       mergeBase: "base-sha",
       atRef: {
-        "base-sha": [
-          "20260918040000_inherited.sql",
-          "20260918200000_b.sql",
-        ],
-        "origin/main": [
-          "20260918040000_inherited.sql",
-          "20260918200000_b.sql",
-        ],
+        "base-sha": ["20260918040000_inherited.sql", "20260918200000_b.sql"],
+        "origin/main": ["20260918040000_inherited.sql", "20260918200000_b.sql"],
       },
     });
     // The working tree lists the inherited file too (a rebase replays it, it
@@ -392,7 +383,7 @@ describe("headRef, and CI's synthetic pull_request merge commit", () => {
     "20260918210000_correctly_stamped_when_written.sql",
   ];
 
-  it("documents the bug: left at the default \"HEAD\", the merge-base check misfires FAIL", () => {
+  it('documents the bug: left at the default "HEAD", the merge-base check misfires FAIL', () => {
     const result = checkAtlasBaseline(currentFiles, { run: ciShapedGit() });
     expect(result.status).toBe("ok");
     expect(result.errors).toHaveLength(1);

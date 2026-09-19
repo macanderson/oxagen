@@ -1,4 +1,4 @@
-# assistant.engine.get
+# get_assistant_engine
 
 Whether the in-app agent's engine can take a turn (ADR-053 §4; MC spec §4.4). The engine is a required service, so the flyout reads this before it offers a composer and again on Retry after an `engine_unavailable` refusal.
 

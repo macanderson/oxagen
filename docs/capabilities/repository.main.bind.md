@@ -1,4 +1,4 @@
-# repository.main.bind
+# bind_main_repository
 
 Bind a GitHub repository as this workspace's main repo (MC spec App. F "Bind <repo> as the main repo (installs the GitHub App: binding, Context PRs, checks …)"; #2967), and close the onboarding gate's provisional window.
 

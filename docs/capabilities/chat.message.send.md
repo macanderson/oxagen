@@ -1,4 +1,4 @@
-# chat.message.send
+# send_message
 
 **Domain:** chat
 **Mode:** async (streaming)

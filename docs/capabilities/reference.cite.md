@@ -1,4 +1,4 @@
-# reference.cite
+# cite_reference
 
 **Domain:** reference
 **Mode:** sync

@@ -1,0 +1,91 @@
+<h2 class="ch-title">Give every agent its own identity</h2>
+<p class="ch-thesis">You cannot set authority for, bill, or review something you cannot name.</p>
+
+<p class="lede">A pull request lands overnight. The commit author is a shared bot account that six agents and two scripts use. The change is fine, but the review question is not about the diff. It is: which agent did this, who started it, and what was it allowed to do? If the answer takes an afternoon of reading logs, the agents are doing work that nobody in particular is accountable for.</p>
+
+<h3>What parts 1 to 13 left open</h3>
+<p>The first thirteen parts moved decisions out of the model and into code: what to retrieve, what to keep in the window, which step runs next. One decision is still open, and it is the one a second team will ask about. What may this agent do in systems other people own? The same principle answers it. Decide in the system, before the model is involved, and keep the decision where a person can read it. That starts with a name.</p>
+
+<h3>The familiar model and what it cannot answer</h3>
+<p>The familiar model is a shared credential. One token carries everything any agent might need, and every agent that holds it looks the same to the system on the other end. It is quick to set up. It also means three questions have no answer in the data:</p>
+<ul class="plain">
+  <li><strong>Which agent acted?</strong> The target system saw the token, not the agent.</li>
+  <li><strong>On whose behalf?</strong> The person who started the task is not in the call.</li>
+  <li><strong>Under what authority?</strong> The token's scope is the union of every task anyone ever planned, so it says nothing about this task.</li>
+</ul>
+<p>Zero trust architecture gives the general form of the fix. NIST's definition assumes no implicit trust from network location or asset ownership, and it evaluates each request against policy for the specific subject and resource.<sup class="cite"><a href="#r22">22</a></sup> An agent is a subject. It needs to be one the policy can tell apart from the other agents.</p>
+
+<h3>What an agent identity holds</h3>
+<p>An identity is a record, not a credential. It answers who this is and who answers for it:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>What it says</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>agent_id</code></td><td>A stable principal, one per agent, never reused</td><td><code>agt_refund_triage</code></td></tr>
+    <tr><td><code>operator</code></td><td>The person accountable for this agent and its runs</td><td>Dana Okafor, payments platform</td></tr>
+    <tr><td><code>harness</code></td><td>What runs it, and at which version</td><td>Claude Code 2.x, wrapped</td></tr>
+    <tr><td><code>purpose</code></td><td>One sentence a reviewer can check a run against</td><td>Triage refund failures and open a fix PR</td></tr>
+    <tr><td><code>environment</code></td><td>Where it may work</td><td>staging, <code>billing/**</code></td></tr>
+    <tr><td><code>status</code></td><td>Enrolled, held, or retired, with a date</td><td>enrolled 2026-08-04</td></tr>
+  </tbody>
+</table></div>
+<p>Three properties matter more than the fields. The identity is <strong>separate from any connection credential</strong>, so rotating a GitHub token does not change who the agent is. It <strong>carries the initiator through</strong>: each run records the person who started it, so "on whose behalf" is data, not inference. And it can be <strong>revoked alone</strong>: holding one agent does not stop the other five.</p>
+
+<div class="vs">
+  <div class="a">
+    <h4>◌ One shared credential</h4>
+    <ul>
+      <li>The target system sees one actor for every agent</li>
+      <li>The initiator is not recorded</li>
+      <li>Scope is the union of all planned tasks</li>
+      <li>Revoking it stops everything that uses it</li>
+    </ul>
+  </div>
+  <div class="b">
+    <h4>● One identity per agent</h4>
+    <ul>
+      <li>Each call names the agent that made it</li>
+      <li>Each run names the person who started it</li>
+      <li>Authority attaches to the identity (part 15)</li>
+      <li>One agent can be held while the others work</li>
+    </ul>
+  </div>
+</div>
+
+<div class="evidence">
+  <span class="tag">Evidence · Excess authority is a design property</span>
+  <p>OWASP's Top 10 for LLM applications lists excessive agency as its own category. It breaks the cause into three parts: excessive functionality, excessive permissions, and excessive autonomy. Each is a property of how the system around the model was built, not of the model.<sup class="cite"><a href="#r23">23</a></sup> The Berkeley failure taxonomy from part 9 points the same way: most recorded multi-agent failures traced to system design, including specification and verification, and the authors do not expect better models alone to fix them.<sup class="cite"><a href="#r5">5</a></sup></p>
+  <div class="src">OWASP, Top 10 for LLM applications · Cemri et al., NeurIPS 2025</div>
+</div>
+
+<h3>Start with an inventory</h3>
+<p>Most teams cannot list their agents, because agents arrive one team at a time. The inventory is a spreadsheet before it is a system. One row per agent, the six fields above, and two more columns: which credentials it can reach today, and who would notice if it stopped. The rows with no operator are the first finding. The rows that share a credential are the second.</p>
+
+<div class="fits">
+  <span class="tag">Where Oxagen fits</span>
+  <p>In Oxagen each enrolled agent is a registered principal with its own identity and an accountable operator. That identity is distinct from any connection credential. Agents built by different groups, on different harnesses, appear on one Fleet page with their open requests, their spend, and their last run. Oxagen does not run the agent. A supported wrapper sits beside the harness, and the agent keeps running where it runs today.</p>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>List every agent that can write to a system.</strong> Ask each team. Include scheduled scripts that call a model. Done is one row per agent with an operator's name in it.</li>
+    <li><strong>Mark each shared credential.</strong> For every credential, list the agents that can reach it. Any credential with more than one agent is a row in your backlog.</li>
+    <li><strong>Give each agent a stable id and a one-sentence purpose.</strong> Put the id in the commit trailer, the user agent string, or the request header, whichever the target system records.</li>
+    <li><strong>Record the initiator.</strong> Pass the id of the person who started the task into the run, and write it next to the agent id on every outbound call you log.</li>
+    <li><strong>Test a single revocation.</strong> Hold one agent in staging. Confirm that it stops and that nothing else does.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>agents_with_operator</code>: agents with a named, current operator, over all agents. Anything under 1.0 is an agent nobody answers for.</li>
+    <li><code>agents_per_credential</code>: the largest number of agents that share one credential. The target is 1.</li>
+    <li><code>attributable_actions</code>: logged write actions that carry both an agent id and an initiator, over all logged write actions. Track it weekly. It should rise as wrappers roll out.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Authority, budget, and review all attach to a name. Give each agent its own identity and a person who answers for it, and keep both apart from the credentials it works through.</p>
+</div>

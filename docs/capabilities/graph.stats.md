@@ -1,4 +1,4 @@
-# graph.stats
+# get_graph_stats
 
 Workspace graph statistics: node count, edge count, inferred edge count, and breakdown by type.
 

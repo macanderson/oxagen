@@ -1,4 +1,4 @@
-# agent.mcp.consent.list
+# list_mcp_consents
 
 **Domain:** agent
 **Mode:** sync

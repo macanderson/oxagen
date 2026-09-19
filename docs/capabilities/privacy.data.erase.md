@@ -1,4 +1,4 @@
-# privacy.data.erase
+# erase_data
 
 **Domain:** privacy
 **Mode:** async

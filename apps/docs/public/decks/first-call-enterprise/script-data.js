@@ -1,55 +1,55 @@
 /* Shared narration + demo script — single source of truth for the deck and script.html. */
 window.OX_SCRIPT = [
   {
-    title: "Title: Oxagen",
-    say: "Thanks for making time. Mission Control for agent operators: see which agent spent what, and on whose behalf. In the next ten minutes I want to show you the layer that gives you that for every agent you run: every agent under a mandate, every call priced and attributed, every run on the record. Then I'll drop out of the slides and show you the actual tool. One promise up front: you won't have to re-document your business or sit through anything painful.",
+    title: "Historical: Title: Oxagen",
+    say: "Historical presentation. Product, pricing, and security claims may be obsolete. Use the current docs for setup and supported features. Thanks for making time. Mission Control for agent operators: see which agent spent what, and on whose behalf. In the next ten minutes I want to show you the layer that gives you that for every agent you run: every agent under a mandate, every call priced and attributed, every run on the record. Then I'll drop out of the slides and show you the actual tool. One promise up front: you won't have to re-document your business or sit through anything painful.",
   },
   {
-    title: "The two burns",
+    title: "Historical: The two burns",
     say: "I want to name why this call is probably happening. Two things tend to come before it. One: a consulting engagement that produced a deck and a proof of concept, then left. Nothing your team owns, nothing running in production. Two: a model bill nobody could explain. Real spend, no accountability. Underneath both is the same gap. You run agents you can't see, can't govern, and can't bill back. Pause here and let them nod. This is the moment they feel understood.",
   },
   {
-    title: "Three unanswerables",
+    title: "Historical: Three unanswerables",
     say: "Every agent in your org raises three questions no coding tool answers. What did it actually do: the record. What was it allowed to touch: the access. And why did it cost that: the cost. Coding agents make your team productive. None of them make agents accountable. That is a different layer, and it is the layer Oxagen builds.",
   },
   {
-    title: "Introducing Oxagen",
+    title: "Historical: Introducing Oxagen",
     say: "Oxagen is that layer: the agent control plane for every agent you run. You point your agents at Oxagen instead of handing them raw keys. From then on every action carries an identity, every tool call is a governed action a rule answers, every answer is grounded in your graph, and every token is priced and attributed. How your teams work does not change. What you can see and decide does.",
   },
   {
-    title: "The sharp edge: context governance",
+    title: "Historical: The sharp edge: context governance",
     say: "Before the feature grid, the one idea to hold onto. Your agents only know what they are allowed to know. Oxagen resolves every retrieval against the caller's contracted capabilities before a single node leaves the store. Not filtering after the fact, not instructions in the prompt, authorization at the graph edge itself. Three consequences. An allowed node can never bridge into a denied subgraph. If a person can't see it, their agent can't see it, and a revocation in Okta shrinks the agent's world on its next query. And a prompt injection can't widen a typed contract, so the attack fires and retrieves nothing outside the caller's surface. Say it plainly: gateways govern the tool call, Oxagen governs what the model reads.",
   },
   {
-    title: "Why only Oxagen",
+    title: "Historical: Why only Oxagen",
     say: "This is the slide I'd screenshot. Three capability families, access rules, graph grounding, and the metering to billing loop, and one product that ships all three. Coding-agent tools give you none of the rules or billing. Consultants give you a slide about it. Oxagen is the only player at the intersection: RBAC, SOC 2, typed contracts, code graph, knowledge-graph grounding, full audit export, metering to billing, per-turn budgets, and vendor-neutral BYOK. Let them read it for a beat.",
   },
   {
-    title: "Under the hood",
+    title: "Historical: Under the hood",
     say: "Briefly, how. Four graphs and one engine. The ontology, a knowledge graph, so agents answer from cited, time-aware facts, not guesses. The code graph, typed, so agents query it before editing instead of grepping blindly. The run record, every run kept as a tree of turns and steps. And the agent engine plus fleet mode, one engine for chat, the CLI, and fan-out, dispatching governed sub-agents under hard caps. Key point: all of it sits on the same identity, metering, and audit spine. Nothing is bolted on.",
   },
   {
-    title: "Access",
+    title: "Historical: Access",
     say: "Don't hand your agents the keys. Identity travels with every request, and every capability is role-gated and tenant-isolated at the database. The agent asks for what the task needs, when it needs it, and a rule answers. Tools are typed contracts, so a prompt injection can't invent or widen a tool. And this is the direct answer to the mystery bill: per-turn budgeting. A hard cap on the tool loop per turn, plus fan-out limits. A dispatch over a hundred tasks or two hundred fifty descendants is denied outright, so the runaway overnight loop stops at the cap. And SOC 2 is derived from live signal with signed audit export, not a PDF.",
   },
   {
-    title: "Metering → billing",
+    title: "Historical: Metering → billing",
     say: "The unexplained bill, explained. Every governed action is priced at the control plane and attributed, broken down by model, by surface, and by workspace, with a daily time series. When a number spikes you see which team and which agent caused it, and the same loop charges it back to them. Usage in, an invoice you can explain out, on your own keys.",
   },
   {
-    title: "Record and audit",
+    title: "Historical: Record and audit",
     say: "Full auditability. Open any run and it expands step by step: every tool call with duration, tokens, cost, and status, and every sub-agent as child lineage. Nothing runs off the record. Alongside it, a filterable audit log with signed, tamper-evident export and access reviews. When security asks what an agent could reach and what it touched, the answer is a query, not a fire drill.",
   },
   {
-    title: "Enterprise fit",
+    title: "Historical: Enterprise fit",
     say: "Why this fits you specifically. It is vendor-neutral and BYOK. Bring any model and your own keys. Oxagen governs and meters but never becomes the lock-in. It works inside your controls and compounds. Unlike a consulting engagement, it does not leave when the invoice is paid. And you don't have to re-document every process, because the graph learns them from the work itself. You don't have to be in the demo or re-explain your business. The accountability shows up on its own.",
   },
   {
-    title: "About Mac",
+    title: "Historical: About Mac",
     say: "Thirty seconds on who's building this, because you're trusting a founder as much as a product. I've built and scaled businesses across multiple countries with hundreds of staff: real operational complexity, not just code. Eight consecutive years on the Inc. 5000, which puts those businesses in the Hall of Fame. I'm a U.S. patent holder. And I've been building AI agents since the term existed, from the first time someone coupled a model response to a function call. I speak on this regularly and I'm active in the inference community. I built Oxagen as the system I wished existed every time an agent did something no one could explain.",
   },
   {
-    title: "DEMO: you are now leaving the deck",
+    title: "Historical: DEMO: you are now leaving the deck",
     say: "All right, enough slides. Let me show you the actual tool. I'm going to do three quick things that map exactly to the three questions from earlier. Follow the numbered steps below. The deck is no longer on screen, so this panel is your only guide. When I'm done I'll flip back to one final slide.",
     demo: [
       "SET UP (before you share): have a terminal and a browser tab on app.oxagen.sh both ready. Share ONLY the deck or browser window, or a single tab. This presenter window stays private. Log in with a demo org that has some prior agent runs so the run and usage screens aren't empty.",
@@ -64,7 +64,7 @@ window.OX_SCRIPT = [
     ],
   },
   {
-    title: "Thank you / contact",
+    title: "Historical: Thank you / contact",
     say: "That's Oxagen: every agent under a mandate, every call priced, on your own keys. I'd like to scope a small pilot: one team, one runaway workflow, and the bill and the record explained in a week. What do you want answered first? Contacts are on screen: app.oxagen.sh, docs.oxagen.sh, and mac@oxagen.sh. Then open it up for questions.",
   },
 ];

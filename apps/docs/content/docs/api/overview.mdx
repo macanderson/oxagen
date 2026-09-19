@@ -1,9 +1,9 @@
 ---
 title: API overview
-description: "The Oxagen REST API: versioned, authenticated, and at capability parity with the MCP server and the in-app agent."
+description: "Call the capabilities declared for the authenticated, versioned REST API."
 ---
 
-The Oxagen REST API serves every platform capability as a versioned HTTP endpoint. Use it for server-to-server integrations, your own tooling, and automation pipelines that do not speak MCP.
+The Oxagen REST API serves capabilities declared for its API surface as versioned HTTP endpoints. Use it for server-to-server integrations, your own tooling, and automation pipelines that do not speak MCP.
 
 **Base URL:** `https://api.oxagen.sh`
 
@@ -71,7 +71,7 @@ Each entry in `tools` carries `name`, `description`, `domain`, `category`, `risk
 
 ## Design principles
 
-**Capability parity.** Every capability on the REST API is also on the MCP server and the in-app agent. One contract registry defines all three surfaces. An automation you build on the API works the same way when you move it to MCP.
+**Declared surfaces.** A capability contract declares whether it is exposed on API, MCP, agent, or CLI. Shared handlers use the same kernel, but availability differs by contract. Check the declared surfaces before moving an integration.
 
 **Thin shell, shared logic.** The API server is a thin routing layer over the shared platform library. Business logic lives in the shared layer, not in route handlers, so the API behaves the same way the app does.
 
@@ -151,7 +151,7 @@ A rate-limited request is the one exception to the envelope. It returns `429` wi
 
 [Capabilities](/docs/api/capabilities) lists the available capabilities and their REST routes.
 
-Some actions exist only in the app (plan approval flows, billing page interactions). They have no contract declaration, so the API cannot reach them. [Capabilities](/docs/api/capabilities) keeps the current list of those gaps.
+Some flows also require a browser redirect or an approval interaction. Consult the operation's route and contract before assuming it can run unattended.
 
 ## Rate limits
 

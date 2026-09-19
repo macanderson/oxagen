@@ -1,4 +1,4 @@
-# audit.log.query
+# query_audit_log
 
 Query the organization's security audit events (`security.security_events`) with structured filters (actor, capability, outcome, event type, workspace, time range) and page through them newest first. Read-only. Lets an admin, or the agent on their behalf, ask "who changed the billing plan last week?".
 

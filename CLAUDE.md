@@ -2,438 +2,126 @@
 
 @AGENTS.md
 
-## Mission
+Read both files before changing the repository. `AGENTS.md` owns the repository map, capability conventions, storage boundaries, review rules, and standing decisions. This file adds operating instructions shared by all four harnesses.
 
-Oxagen is **Mission Control for agent operators**: they assign each agent an identity, set its authority and budget, equip it with tools and skills, and oversee its work through a shared **agent control plane** (ADR-067, which supersedes ADR-066's two names; the Fleet page and fleet vocabulary stay). Every agent operates under a **mandate** — its identity and access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. Completion checks are an optional control for bounded tasks, not the definition of the product. We sell to those teams (security, FinOps, engineering), not to resellers. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. A mandate has four clauses:
+## Product and architecture
 
-- **Access** (security sets it): the identity the agent acts as, the systems it is connected to, the data and graph scope it may read, the actions it is permitted.
-- **Budget & rules** (FinOps sets it): what it may spend, under which commercial terms, and the business rules it must obey.
-- **Equipment** (engineering sets it): the knowledge it is handed at the start of a job, the skills and tools it may use, the steering it runs under.
-- **Record** (the platform keeps it): what the run read, what it changed, what proved it, what it cost — one trace; proven runs leave behind skills, tools, tuned settings, and knowledge, and later train a model the customer owns.
+Read `docs/VISION.md` for feature direction and `apps/app/ARCHITECTURE.md` for app invariants. Oxagen governs agents through a mandate and records governed activity. It does not run the agent workload (ADR-043). Check `DEREGISTERED.md` before removing a feature's files. An unreachable feature may have deliberately preserved code.
 
-The mechanism is the typed capability contract, which binds identity → knowledge scope → permitted action → commercial terms → outcome → audit record into one object enforced at `invoke()` time.
+Use the code to establish what ships. Specs record intent, ADRs record decisions, and old plans record the implementation sequence at their date. A plan's unchecked box or old audit count is not evidence that the current implementation is missing.
 
-Revenue is the platform billed by use, fine-tuning runs at a flat fee, and hosting at cost. There is no margin line, so we do not build resale or re-bill machinery.
+## Operating mode
 
-Vendor-neutral BYOK (own model keys, own Neo4j endpoint) is a design constraint, not an add-on.
+- Start from fresh remote refs. Create a branch from current `origin/main`, use an isolated worktree for large changes, and push the branch immediately. Never commit or push directly to `main`.
+- Commit and push at meaningful increments. Open a PR against `main` and keep its description aligned with the final change. Follow `CONTRIBUTING.md`.
+- Fix defects encountered within the task. Investigate the cause, fix related instances, and provide verification. Follow SCR-004 when a fix cannot responsibly ride the PR.
+- Delegate independent work with explicit file ownership. Keep dependent edits sequential. Use agents that can edit when the task needs edits, and verify their changes before committing.
+- Match an available model to the task. Do not require model names or tool APIs that the active harness does not provide.
+- Do not rewrite shared history for cosmetic cleanup. Before merging, check for overlapping changes on `main` as described in AGENTS.md and ADR-110.
 
-**Oxagen governs agents; it does not run them (ADR-043).** Stella (`macanderson/stella`) is the coding agent and the CGP reference implementation; Oxagen is the governor, grounder, explainer, meter and rater of any agent. There is no sandbox, coding engine, worker, subagent fan-out, skill system, eval harness, automation/playbook engine, browser/code tool, or content generator in this repo, and none may return. The one in-app agent is a governed, metered Q&A loop over the fleet record and the knowledge graph (`runGovernedTurn` in `@oxagen/agent`). Execution evidence arrives through the evidence ledger (`@oxagen/run-ledger`) and the tacho seam (`docs/specs/tacho/`), never from an engine embedded here. Every store switches at the organisation (ADR-042 data planes). Every capability must serve one of five jobs — govern, ground, explain, meter/bill, rate — or be deleted.
+## Verification policy
 
-- **Copy and naming:** never hand an agent the keys in prose or in product. An agent holds an identity and a mandate; it requests a system, scope or action at the moment of use and a decision rule answers allow, deny or route to a person. Write "the agent can request X", never "connect your agent to X" (ADR-066; the branding skill has the vocabulary).
-- **When recommending or prioritizing features,** prefer work that deepens metering→billing, contract governance, graph grounding, vendor neutrality, or fleet lineage. If a request diverges from that direction, say so and propose the aligned alternative alongside doing what was asked.
-- **CI enforcement:** the Vision Gate (`.github/workflows/vision-gate.yml` → `tools/scripts/vision-gate.mjs`, `pnpm check:vision`) LLM-judges every PR diff against `docs/VISION.md` and posts an advisory verdict (advances / neutral / drifts). A `drifts` verdict signals to justify the exception in the PR description or redirect the work — routine maintenance, fixes, tests, and tooling are neutral by definition.
+CI is the build, lint, typecheck, coverage, and full test gate. Do not run those suites on this shared machine. The local test exception is one test file for code this task changed or created, run in isolation. Never run a package-wide suite. Restate this restriction when delegating work.
+
+```bash
+pnpm --filter @oxagen/<package> test:unit path/to/changed.test.ts
+```
+
+Do not insert `--` before the test filename. That form can discard the filter and run the whole package.
+
+Lightweight file, link, contract, and prose integrity checks remain part of review. Run `pnpm check:prose` for published prose changes. Git hooks run their configured staged-file and integrity checks. Do not start or kill the shared dev stack to satisfy a merge checklist.
+
+- Add tests for changed behavior. Keep coverage thresholds at or above their current values, capped at 90, with 2.5 percentage points of headroom.
+- `apps/app/e2e/` contains exactly `login`, `pay`, and `page-load`. Prove other flows with component and action tests. See `apps/app/ARCHITECTURE.md` §6.3.
+- For code changes, ask the test-engineer agent to audit coverage before the finished commit. Documentation-only changes need source and link verification, not new behavior tests.
+- Save local verification artifacts under the gitignored `verifications/<session-id>/`. State what ran and what remains unverified.
+- For UI changes, capture a working page or run the relevant component test. For a deployment or database mutation, verify the resulting state with a health check, API response, or query.
+- Inspect the PR's CI results after the final push. Do not report pending or failed checks as passed.
+
+## Database and dependency changes
+
+- Add dependencies to the package that imports them. Update the lockfile with `pnpm i --no-frozen-lockfile` when dependencies change.
+- Put Postgres migrations in `packages/database/atlas/migrations/`. Generate them with Atlas and choose a timestamp later than the existing migration baseline. `db:lint-migrations` checks that baseline in CI.
+- From `packages/database`, regenerate the checksum with `atlas migrate hash --dir "file://atlas/migrations"`. Do not hand-edit `atlas.sum`.
+- Confirm the database host and database name before mutation. Do not print credentials. A shell-exported `DATABASE_URL` overrides `tsx --env-file=.env.local`; unset it when the env file should choose the target.
+- Apply production migrations through the manual `db-migrate.yml` and `store-migrate.yml` workflows. Deployment does not apply them. See README.md Deployment.
 
 ## Four first-class harnesses: Claude Code, Codex, Cursor, Stella
 
 Oxagen wraps four agent harnesses as equals (ADR-101): **Claude Code, Codex, Cursor and Stella.** Claude Desktop is a fifth, connected rather than wrapped (ADR-078). No harness is the default in a design, a list, a help string, or a test.
 
-- **Everything Oxagen exports must load in all four.** Agents, skills, steering and rules, memories, commands, MCP entries, hooks: a harness-facing feature is not done until each of the four can load it, or its PR names the harness that cannot and why. Check the table in ADR-101 for where each harness reads each artifact before you write a file for one.
-- **Claude Code's layout is canonical; bridges point, they do not copy.** Author skills in `.claude/skills/`, subagents in `.claude/agents/`, commands in `.claude/commands/`, and rules in `AGENTS.md` and this file. The bridges already in the tree:
+- **Everything Oxagen exports must load in all four.** For agents, skills, steering, rules, memories, commands, MCP entries, and hooks, a harness-facing feature is not done until each of the four can load it, or its PR names the harness that cannot and why. Check the table in ADR-101 for where each harness reads each artifact before you write a file for one.
+- **Claude Code's layout is canonical. Bridges point to that source.** Author skills in `.claude/skills/`, subagents in `.claude/agents/`, commands in `.claude/commands/`, and rules in `AGENTS.md` and this file. The bridges already in the tree:
   - `.agents/skills` is a symlink to `.claude/skills`, so Codex sees the skills.
   - `.cursor/rules/oxagen.mdc` always applies and pulls in `AGENTS.md` and this file, so Cursor reads the rules.
   - `.cursor/commands` is a symlink to `.claude/commands`.
   - Cursor reads `.claude/skills` and `.claude/agents` natively. Stella adopts `.claude/{skills,agents,commands}` on `stella init` and reads both `AGENTS.md` and this file.
 - **A rule every agent must follow goes in `AGENTS.md` or this file**, never only in a harness-specific path. Codex reads `AGENTS.md` alone, and `AGENTS.md` tells it to read this file too.
-- **Adding a harness-facing enum member is a set of four.** `WRAPPED_HARNESSES` (`packages/tacho/src/wire.ts`), `TACHO_RUNTIMES` (envelope and database, with an Atlas migration for the `tacho_sessions_runtime_check` constraint), the agent-registry harness enums (`agent.list.ts`, `v2/register-agent.ts`, `v2/get-agent.ts`, and the `agents_harness_check` constraint), and the desktop app's `Harness` union. A list that names Codex and not Cursor is a defect.
+- **Adding a harness-facing enum member requires a cross-surface audit.** `WRAPPED_HARNESSES` (`packages/tacho/src/wire.ts`), `TACHO_RUNTIMES` (envelope and database, with an Atlas migration for the `tacho_sessions_runtime_check` constraint), the agent-registry harness enums (`agent.list.ts`, `v2/register-agent.ts`, `v2/get-agent.ts`, and the `agents_harness_check` constraint). Check any external desktop integration separately; this repository has no `apps/desktop`. A list that names Codex and not Cursor is a defect.
 - **How Cursor is wrapped.** `tacho enroll --harness cursor` writes `~/.cursor/hooks.json`, which the IDE and `cursor-agent` both read. `tacho-hook --harness cursor` runs Cursor's payload and answer through `packages/tacho/src/claude-code/cursor-adapter.ts`, the way Stella's go through `stella-adapter.ts`. Cursor has no `ask` on `preToolUse`, so a policy that asks is answered deny with the reason. Cursor's model calls do not pass through the Oxagen gateway, so its spend is not metered.
 
-## Prime directive — fix every issue you encounter
+## App source map
 
-When you encounter a bug, broken path, dead value, mispriced meter, stale config, or any defect — **fix it now, in place, completely.** Investigate to root cause, fix every co-located instance, and verify with tests/typecheck before declaring done. The only acceptable deferral is a true external action you cannot perform (e.g. flipping a prod env var) — and even then, fix everything in code first.
+`apps/app` has its own components at `src/ui/`, feature lanes at `src/features/`, and data ports at `src/data/`. Import UI through `@/ui/<name>`. `apps/docs` and `apps/app_deprecated` use `@/components/ui/<name>`. See AGENTS.md for the import rule and its enforcement limits.
 
-## De-registered is not deleted — read `DEREGISTERED.md` before removing anything
+Use these files to inspect the current app:
 
-`DEREGISTERED.md` at the repo root is the register of every feature Oxagen has taken **off its surfaces** while keeping the code in the tree: the marketplace and the whole plugin catalog, fourteen of the seventeen ingestion connectors, environments, prompt settings, memory import, the repo reads, and the narrow reads Appendix E folded into their objects. Each row carries the registered name, the file stem, which of contract/handler/route/tool exist, and what replaced it.
+| Concern | Source |
+|---|---|
+| Routes | `apps/app/src/app/` and `apps/app/e2e/routes.ts` |
+| Architecture and enforced invariants | `apps/app/ARCHITECTURE.md` and `apps/app/src/test/arch/` |
+| Shell and assistant flyout | `apps/app/src/features/shell/` |
+| Server data adapters | `apps/app/src/data/live/` |
+| Capability to UI bindings | `apps/app/capability-ui-map.json` |
+| Translations | `apps/app/messages/` |
+| Package versions | Each app's `package.json` and `pnpm-workspace.yaml` overrides |
 
-- **A scope decision de-registers; only an ADR deletes.** When a spec says a feature is "dropped", "out of scope", or "does not survive", that means it loses `app` from its contract's `layers[]`, loses entries from `surfaces[]`, loses its registration in `packages/handlers/src/register.ts`, or loses its route. It does **not** authorise `git rm`. The registration is one line; the capability behind it is thousands.
-- **Before you delete any file, check `DEREGISTERED.md` §14.** `pnpm check:deregistered` (wired into `check:contracts`, so it runs in `pnpm gate`, on pre-push and in CI) fails the build naming any preserved path that went missing. If you hit it, you deleted something on purpose-kept-alive. Restore it, or write the ADR.
-- **De-registering something new is a four-part change in one PR:** drop the layer/surface/registration, add the redirect if a route goes away, add the row to the right section of `DEREGISTERED.md` with its stem and parity, and add its paths to the §14 block. Re-registering deletes the row.
-- **This does not weaken the prime directive.** A defect in de-registered code is still fixed in the PR that finds it. Unreachable is not the same as abandoned.
+The workspace root is Fleet. Workspace routes include Runs, Mandates, Agents, Tools, Steering, Spend, Skills, and registration. Organization routes include Organization, Billing, Audit, Roles, API keys, and Model funding. Read the route source before adding a link. The former `[orgSlug]/[workspaceSlug]` routes and `src/components/` belong to `apps/app_deprecated`.
 
-## Operating mode — branch early, commit often, push regularly, open a PR
+The current assistant flyout and the retained API chat transport are separate surfaces. Do not copy the deprecated app's `use-tool-stream.ts` path into new app guidance. Use existing data ports and server actions, and keep platform actions behind capability contracts.
 
-`main` is a **shared, contested branch.** Multiple Claude sessions and an automated optimizer work this same tree in parallel. **Never commit or push directly to `main`** — every body of work lives on its own branch, pushed to the remote, with a pull request open against `main`. Test suites no longer run in git hooks (they run in CI on every PR and push), so pushing is cheap and safe — push early and often.
+## Runtime checks that matter
 
-- **Branch early and push it immediately.** The moment you start a body of work, cut a branch from a fresh, synced `main` and push it to the remote (`git push -u origin <branch>`). This backs the work up and makes it visible to the other sessions right away, before you've written much.
-- **Commit frequently, push regularly.** Commit in small increments as you go — at every meaningful step, not just at the end — and push after committing so the remote branch stays current. Don't hoard a giant uncommitted or unpushed change. A work-in-progress branch that's pushed beats a perfect change sitting on your disk.
-- **Open a pull request for your work.** Open a PR against `main` (a draft early on is fine) and keep pushing to it. The PR is where CI runs the full affected gate and where the work gets reviewed and merged.
-- **Don't over-optimize for cleanliness.** Many agents touch this tree at once, so unrelated changes will occasionally land in the same branch or PR by accident, and commit history will be messy. **That is fine and expected.** Do not rebase, squash, or cherry-pick to "tidy" shared history, and do not block on perfect commit or PR boundaries. Correct, complete, pushed work beats a pretty history every time.
-- **Never burn CPU on redundant or parallel heavy runs.** Verify with the **narrowest** command that proves the change — a single package's `test:unit` / `test:coverage`, or one test file — not a whole-repo run. Before launching anything heavy, check for an in-flight run (`pgrep -fl vitest`, `pgrep -fl lefthook`) and **wait** rather than stack on top of it. Never run two full suites at once.
-- **Do not verify locally at all — CI is the gate.** Never run a build, a typecheck, a lint, or a test suite on this machine. Not `pnpm build`, not `pnpm typecheck`, not `pnpm lint`, not `pnpm gate`, not `turbo run` anything. Push and let CI answer. The single exception: **one test file, in isolation, and only for a file this task changed or created** — one at a time, never two at once, never a package-wide `test:unit` or `test:coverage` sweep. Mac set this on 2026-09-17: a fleet of sessions works this tree in parallel, so a local build is not one machine's cost, it is everyone's — and the laptop's answer is not the authoritative one anyway. If you want to know whether it passes, look at the PR.
-- **NEVER run all tests — this is a hard rule for every agent and subagent.** Do not run `pnpm test`, `turbo run test`, a whole-repo `pnpm gate`, or any all-package/all-file suite. Run ONLY the specific tests obviously implicated by the files you changed: map each changed file to its nearest test and run just that file or that one package's `test:unit` (e.g. `pnpm --filter @oxagen/billing test:unit grants.test.ts`). Subagents make edits and write tests but do **not** execute suites unless explicitly told to run one specific file. The full gate runs in CI on every push and PR — that is the authoritative gate, not your laptop. When you dispatch any subagent, restate this rule in its prompt verbatim.
-- **Always start from a fresh, synced cut of `main`:**
-  1. `git fetch origin`.
-  2. If `origin/main` is ahead of local `main`, bring local up first: `git switch main && git rebase origin/main`, and **resolve any rebase conflicts** before continuing.
-  3. If local `main` already matches `origin/main`, skip the rebase.
-  4. Cut the branch (or worktree) from the now-current local `main`.
-- **Use a git worktree for any large body of work — do this autonomously, do NOT ask.** `git worktree add ../oxagen-<slug> -b <branch>` off the fresh cut of `main`; do the work in isolation, commit and push frequently, and open a PR. Small, single-file, sequentially-dependent edits may stay in the main workspace on a branch.
-- **Dangerous, breaking edits are allowed.** Non-negotiable: **everything committed must be functionally complete** — fully wired end-to-end, every layer present, tests passing, no dead code.
-
-## Test gate enforcement
-
-Every code change must leave the package's test suite at or above its `vitest.config.ts` `coverage.thresholds`.
-
-- **New code requires new tests.** Route handlers, contracts, utilities — all need tests before the commit lands.
-- **E2E is exactly three specs.** `apps/app/e2e` holds `login`, `pay` and `page-load` and nothing else (ARCHITECTURE.md §6.3). A flow or a form is proven by a component test and an action unit test, not by a fourth spec: e2e is the slowest, flakiest evidence in the repo, so it is spent only on the sign-in journey, a real Stripe Checkout session, and the assertion that every rev1 route answers 200 with its own title.
-- **Thresholds are ratchets capped at 90 — never lower them.** When new tested code raises coverage, bump the threshold only up to `floor(current coverage − 2.5)`, so the gate always keeps **at least 2.5% headroom** below actual coverage (razor-thin gates fail CI on environment noise). Never bump unless that headroom holds, **never past 90** (once a metric is at or above 90%, its gate floor is 90 and stays there), and never reduce a threshold below its current value.
-- **Run `pnpm gate` before marking a PR ready to merge.** Lint (`--max-warnings 0`), typecheck, coverage, tests, builds, migrations — all must pass locally. (This is a pre-merge gate, not a per-commit one — commit and push freely as you work; run the full gate once the body of work is finished.)
-- **Lint is part of the gate.** Zero ESLint warnings; no `eslint-disable` unless genuinely inapplicable (inline comment required).
-
-## Verification discipline
-
-Never claim a task is complete without concrete verification. Always provide evidence: test output, CI status, or rendered result.
-
-- **No task is done until verified.** State what verification you ran and its output.
-- **Verification is required for everything — save the proof.** Every task you do, not just UI work, must produce concrete verification artifacts (test/command output, CI status/logs, screenshots, DB query results, API responses). Write those artifacts into a `verifications/` directory at the repo root, inside a subdirectory named after your Claude Code session id — i.e. `verifications/<claude-session-id>/` (e.g. `verifications/session_01Y8Eqm6L7KJhRmBsBx39vH6/`). Name each file by what it proves (e.g. `cli-docs-account-setup.png`, `migration-select-after.txt`). The `verifications/` directory is gitignored, so these artifacts stay local and never bloat shared history.
-- **UI changes require a runtime artifact.** A screenshot under `verifications/<session>/` captured against a working page, or a component test that drives the affordance. The three e2e specs take no screenshots; Playwright keeps a trace on failure (`trace: "retain-on-failure"`) and that is the artifact when one fails.
-- **Forms must be tested end-to-end.** Submit data, verify success via DB query or API response.
-- **Deployments must be verified.** Health check, DB query, or API call after deploying — not just deploy logs.
-- **DB changes must be verified.** Run a `SELECT` after migration to confirm changes landed.
-
-## Golden rule — the three-command gate
-
-**Before marking a finished body of work ready to merge, ALL THREE of the following must pass locally with no errors:**
-
-```bash
-pnpm i --no-frozen-lockfile          # sync lockfile; run after any dep change
-pnpm build                           # full monorepo build from repo root
-pnpm kill && pnpm dev                # clean start; all dev servers must come up without error
-```
-
-Then run the full test suite:
-
-```bash
-pnpm gate                            # lint + typecheck + coverage + tests + migrations
-```
-
-**If you hit a "port already in use" error, run `pnpm kill` first**, then retry.
-
-This gate is non-negotiable. Do not mark the work ready to merge until all four commands succeed. (Incremental commits and pushes to your branch during the work do not each need the full gate — that would mean running all tests, which is banned; the gate is a pre-merge check.)
-
-## Dependencies
-
-- **Always add external package dependencies to the correct `package.json`** — the app or package that imports the dep, not the monorepo root. Never hoist a dep to the root just for convenience.
-- **Run `pnpm i --no-frozen-lockfile` after any dep addition or removal** to update the lockfile before committing.
-- **Do not add a dep to multiple packages** if it can be shared via a workspace package.
-
-## CI / Build
-
-**Before marking a PR ready to merge:**
-1. Run the three-command gate above — build, dev, and `pnpm gate` all pass.
-2. Verify `.env.example` and lockfile are in sync.
-3. CI runs on every push and PR; after you push, confirm it green via `gh run watch`.
-
-**Merging several PRs in a row?** Every push to `main` now starts its own run rather than evicting the queued one (ADR-046), so a burst costs concurrent runners instead of silently skipping deploys. Confirm each merge produced a *finished* run — a `cancelled` conclusion on `main` used to be normal and no longer is.
-
-## Database and migration targeting
-
-Before running any mutation/migration script, **confirm you are targeting the correct database.**
-
-- **Migration files go in `packages/database/atlas/migrations/`**, never in `apps/`. After adding or renaming one, regenerate the checksum: `atlas migrate hash --dir "file://atlas/migrations"` from `packages/database` (never hand-edit `atlas.sum`). Pick a timestamp prefix later than every existing file AND later than the shared local DB's current version; parallel sessions collide otherwise. `pnpm db:lint-migrations` enforces this in CI: its git-aware baseline check (`checkAtlasBaseline()` in `tools/scripts/db-lint-migrations.ts`, #3387) fails a migration stamped at or before the highest timestamp already in your branch's merge base with `origin/main`, and warns (without failing) when a correctly stamped migration has fallen behind `origin/main`'s current tip on a long-lived branch.
-- **Echo the target DB URL before any mutation script.** Local = `localhost:5433`; production datastores live in the AWS account (secrets in Parameter Store under `/oxagen/production/`, see README → Deployment; `where-is-production.yml` answers exactly where from inside the account). Nothing migrates production automatically: the manual `db-migrate.yml` (Postgres) and `store-migrate.yml` (ClickHouse + Neo4j) workflows are the only paths from a committed migration to prod.
-- `tsx --env-file=.env.local` does NOT override a shell `DATABASE_URL` — `unset DATABASE_URL` to force local targeting.
-- **Verify with a query after migration.** Don't trust logs alone.
-
-## Subagent workflows
-
-- **Use writable agents.** Architect agents return blueprints only; use `general-purpose` or equivalent for file edits.
-- **Grant full find-and-fix permissions.** Bug-fix workers must be able to diagnose, fix across files, run tests, and commit.
-- **Subagents commit and push too.** They commit frequently on the working branch/worktree, same as you; the session that owns the branch keeps it pushed and opens the PR. When dispatching a subagent, tell it which branch it is on.
-- **Dispatch the `test-engineer` agent (`.claude/agents/test-engineer.md`) to audit coverage before committing a finished body of work.** (The old `test-completeness-judge` skill was deleted with `.agents/` on 2026-07-10 and no longer exists.)
-- **Verify agents actually committed.** Run `git log -5 --oneline` (and `git status`) on the branch/worktree. Do not accept "committed" claims without this.
-
-## Large file handling
-
-For files >50k tokens, do NOT read the whole file. Grep or slice first:
-- `grep "pattern" file | head -50` for matching lines
-- `sed -n '/START/,/END/p' file | head -100` for sections
-
-## Completion workflow — branch, commit, push, open a PR
-
-1. Cut a fresh, synced branch/worktree from `main` (see **Operating mode** — fetch, rebase local `main` onto `origin/main` if behind, resolve conflicts, then cut) and **push it to the remote immediately** (`git push -u origin <branch>`).
-2. Implement all code changes, **committing and pushing frequently** as you go.
-3. Write unit tests for all new/changed logic.
-4. Prove user-facing changes with component and action unit tests; add to the three e2e specs only if the change alters sign-in, payment, or the rev1 route table (`apps/app/e2e/routes.ts`).
-5. Run `pnpm gate` — all gates green.
-6. Dispatch the **`test-engineer`** agent to audit coverage. Re-run until it approves.
-7. Push the final commits and **open (or mark ready) a pull request against `main`.** Confirm CI green via `gh run watch`. Don't fuss over perfectly clean commits or a perfectly scoped PR — see **Operating mode**.
-
-## Working with this user
-
-Multi-part prompts are the norm. **Decompose immediately and dispatch subagents in parallel for independent work.** Never serialize independent tasks.
-
-**Delegation is the default for any work > 2 tool calls.** Pattern:
-1. Parse → decompose → dispatch in one message.
-2. Multi-step chunk → agent. Trivially small → inline parallel tool calls.
-3. Keep work in parent only when steps are small AND sequentially dependent.
-
-Decomposition:
-- Research / investigation → agent (context isolation)
-- File edits in known locations → inline parallel tool calls
-- Codebase breadth search → `Explore` agent
-- Different repo/system → its own agent
-
-## Project skills
-
-Real skill directories live in `.claude/skills/` (checked in). Consult the matching one before writing code.
-
-- **`clear-prose`** (required): load it before writing or editing any prose a person will read, internal or external: docs, posts, READMEs, ADRs, specs, issues, PR bodies, commit messages, code comments, UI strings, errors, CLI output. Pairs with `oxagen-branding`. The rule and its scope live in `AGENTS.md` under "Writing".
-- **`oxagen-capability-contracts`** — defining a contract, the registry, handler binding, the `invoke()` pipeline, and the parity rule (contract → API route → MCP tool → CLI → UI).
-- **`oxagen-surface-patterns`** — Hono route and xmcp tool conventions: thin adapters, auth middleware, `capabilityContext`, error shaping.
-- **`oxagen-app-conventions`** — `apps/app`: server/client boundary, `actions.ts`, the `@/ui` component layer, the single chat SSE transport, the generative-UI registry, `proxy.ts`.
-- **`oxagen-tenancy`** — `runInTenantScope`, `withTenantDb` / `withSystemDb`, RLS GUCs, principal attribution, the raw `db()` ban.
-- **`oxagen-four-store-data`** — Postgres/Drizzle conventions, Neo4j via ontology contracts, ClickHouse append-only emission, blob storage; which store a datum belongs in.
-- **`oxagen-ai-calls`** — the `@oxagen/ai` chokepoint, `modelIdOf()`, metering emission, the bans on raw `ai` imports and `ai/rsc`.
-- **`oxagen-error-handling`** — typed error classes with a stable `code`, the Hono `onError` mapping, log-then-rethrow, no swallowed catches.
-- **`oxagen-naming`** — kebab-case files, `FooProps`, SCREAMING_SNAKE constants, `is`/`has` booleans, ADR-025 verb-first capability names.
-- **`oxagen-testing`** — co-located `*.test.ts`, the coverage ratchet, the three-spec e2e rule (`login`, `pay`, `page-load`), and the narrow-run-only rule.
-- **`quality-gates`** — definition-of-done for user-facing features: the five UI states, stability, performance budgets, accessibility floor.
-- **`ai-assisted-config`** — the 8-step pattern for AI-drafted configuration UIs and the boundaries the AI must not cross.
-- **`playwright-cli`**, **`reflective-memory`**, **`continuous-learning-v2`** — browser automation, the recall/reflect protocol for agents, and instinct capture.
-
-Routing: any prose → `clear-prose` first (plus `oxagen-branding` for customer-facing copy); code/schema/test/PR/CI → the matching `oxagen-*` skill first; then `pnpm gate`, push, and `gh run watch` until green before opening or finalizing the PR. UI → `oxagen-app-conventions` + `quality-gates`. Auth → Better Auth docs via Context7 plus `oxagen-tenancy`. Agent definitions for review, debugging, docs, e2e, and shipping live in `.claude/agents/`.
-
-`.agents/skills` exists again, as a symlink to `.claude/skills` so Codex can load the same skills (ADR-101). Do not put files in it; author in `.claude/skills/`. The former `.agents/skills/` corpus (`oxagen-engineering-policy`, `coss-ui`, `frontend-patterns`, `reablocks`, `reagraph`, `reaviz`, `oxagen-feature`, `vendor-better-auth`, `oxagen-code-audit`, `ci-green`, `test-completeness-judge`, and the vendored third-party skills) was deleted from git on 2026-07-10 in commit `dd36ade55`. Its symlinks under `.claude/skills/` dangled for two months and were pruned; the content is recoverable from `dd36ade55^` if any of it is wanted back.
-
-## Production URLs (interim)
-
-- App: `https://app.oxagen.sh`
-- API: `https://api.oxagen.sh` (Hono REST; no MCP protocol endpoint)
-- MCP: `https://mcp.oxagen.sh` (connect at `/mcp` over streamable HTTP; org+workspace scope carried by API key)
-- Docs: `https://docs.oxagen.sh`
-
-Use oxagen.sh domains in OAuth callbacks, env values, allowedOrigins, docs. Keep URLs isolated to env vars — oxagen.sh domain migration is a single env-var sweep.
+- Register handlers before calling `invoke()`. A missing handler throws `CapabilityError` with code `no_handler`. Handler registration does not install IAM, billing, or entitlement gates. Bootstrap those at the surface entry point.
+- `apps/app/instrumentation.ts` boots the gates. `packages/iam/src/check-iam.ts` fast-paths non-enterprise human principals, so a handler that must enforce an organization role still calls `assertOrgRole`.
+- Route LLM calls through `@oxagen/ai` and resolve models with `modelIdOf()`. Do not import generation functions directly from `ai`, use `ai/rsc`, or hard-code provider slugs.
+- Resolve organization stores through `resolveDataPlane()` in `@oxagen/tenancy` (ADR-042). Platform tables and `withSystemDb` stay on the shared plane. Read `DATABASE_URL`, `NEO4J_URI`, and `CLICKHOUSE_URL` only inside their store clients.
+- Use `withTenantDb` or `withSystemDb` for Postgres. Raw `db()` is banned. Confirm scope and principal at the data boundary.
+- Better Auth's pluralized adapter expects `rateLimits`. Test auth changes against production-equivalent rate limiting.
+- Workflow environment variables used by Turbo tasks must also appear in the task's `env[]` in `turbo.json`.
+- Regenerate `apps/app/src/i18n/messages.d.ts` with `pnpm --filter @oxagen/app gen:messages` after catalogue changes. Commit the generated file.
+- Show graph records by their human label. Resolve authorized endpoint labels server-side and make raw identifiers copyable in details, not the primary display label.
 
 ## Issues and labels
 
-GitHub issues on `macanderson/oxagen` are the tracker; Linear holds no active tickets (the tracker was reset on 2026-09-13: every open issue was closed as not planned or absorbed into one of #2949–#2978, and the labels were rebuilt from scratch). The rules below are the floor; `docs/scr/SCR-003`, `SCR-004` and `SCR-005` are the standing decisions they summarize.
+Track work in GitHub issues on `macanderson/oxagen`. Follow SCR-003, SCR-004, and SCR-005 in `docs/scr/`.
 
-**Fix over file (SCR-004).** A defect noticed during a task is fixed in that task's PR, named in the PR description. File an issue only when the fix cannot responsibly ride the PR — it needs a decision only the maintainer can make, a rig, a credential or real spend, or it is larger than the session — and only when fixing it moves at least one of stability, reliability, maintainability, innovation, efficiency, performance. Say which case and which pillar in the body. Not issues: open design questions (decide in the PR or write an ADR under `docs/adr/`), records of choices already in effect, measurements that cannot change a decision, tests for unreachable paths, tracker bookkeeping, follow-ups your own change made moot.
+Fix defects in the task's PR when the fix can responsibly ride it. File an issue only when the work needs a maintainer decision, a rig, credentials, real spend, or more work than the session can carry. State that constraint and the maintainability, stability, reliability, innovation, efficiency, or performance benefit.
 
-**Residue merges; it does not iterate (P2 rule).** A PR whose checks are green and whose only remaining review findings are **P2 or below merges now.** Every outstanding finding at P2 or below is carried into a residue issue, titled `Residue from #<PR>: <what is left>`, and the threads are resolved with a comment naming it. **One issue per PR is the default; never one per comment.** Split into more than one only where the findings cannot honestly share an issue — this repo requires exactly one `kind:` and one `job:` per issue and one full change per DoD (SCR-003), so residue spanning genuinely unrelated changes needs an issue each. Findings belonging to the same change stay together however many there are. From a reviewer's fourth round the round rule below extends this to a P1.
+One issue carries one full change. Include context, paths, reproduction steps where relevant, a proposed approach, and a `- [ ]` definition of done. Do not create sub-issues, parents, or epics. Use the templates in `.github/ISSUE_TEMPLATE/`.
 
-- **P0 and P1 never merge as residue.** They are fixed on the branch, or the PR waits. A P1 is the line: if one is open, the PR is not done. The round rule below is the one exception, and it opens only at a reviewer's fourth round.
-- **The severity is the reviewer's, not the author's.** Take the badge the review left (`P0`/`P1`/`P2`/`P3`). If a finding carries no severity, judge it by the same bar and say which you assigned and why, on the ticket.
-- **A residue ticket is a real handoff, not a receipt.** It carries the finding verbatim, the file path and line, why it is worth fixing, the pillar it moves, and a `- [ ]` DoD — the same standard as any other issue here. Apply only the `triage` label (SCR-005).
-- **Resolving the thread is an acceptance, not a dismissal.** Say in the comment that the finding stands and where it now lives, so the reviewer's work is carried rather than closed over.
-- **Relation to SCR-004.** SCR-004 says fix what you find and file only what cannot ride the PR. This names the one case where a review finding may be deferred at merge time and bounds it: severity P2 or below, one ticket per PR, the finding carried verbatim. A P0 always rides the PR, as SCR-004 requires, and so does a P1 until the round rule's fourth round.
-- **Where it lives, and why not in `docs/scr/`.** The same rules, this one and the round rule below it, are stated in `AGENTS.md` under "Git Workflow", so that both agents in this repo load them: this file imports `AGENTS.md`, and Stella reads `AGENTS.md` directly. Stating it in only one of the two would leave the two agents following opposite rules in the same repo. It sits outside that file's "## Standing decisions" block, which is a compiled mirror of `docs/scr/` checked bullet-for-bullet against the corpus (`scr-corpus-check.yml`), so a repo-local rule does not belong in it. Promoting this into the corpus proper edits `docs/scr/`, which is byte-identical across five repos and cannot be extended from this one — a cross-repo maintainer action rather than a change a session here can land.
-- **Why this exists:** an unresolved thread blocks the merge under this repo's ruleset (`required_review_thread_resolution`), so without this rule a green change with one cosmetic note waits indefinitely, and an automated reviewer can always find one more. Mac set this on 2026-09-17 after a day in which correct, tested, green work sat unmerged behind P2 notes while production carried the defects those PRs fixed. Shipping the fix and tracking the polish beats holding both.
+- A PR uses `Closes #N` only when it finishes every item in that issue's definition of done. Otherwise use `Refs #N`.
+- A PR that closes no issue uses `no-issue` for a trivial change or `closes-nothing` for a substantial change. These are PR labels, not substitute text in the body.
+- Apply only `triage` to an issue you create. The triage identity applies priority, size, and descriptive labels. Never apply workflow-owned labels manually.
+- Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
+- Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block.
 
-**Three rounds, then the rest is carried (round rule).** A reviewer that posts on every push can always find one more thing, so the rounds are counted and the count is bounded. Fix the findings of a reviewer's first three rounds on the branch. From its fourth round on, carry every remaining finding at P1 or below into that PR's residue issue and let the PR proceed, to the same standard a P2 already gets: the finding verbatim with its path and line, a `- [ ]` DoD, and a reply on the thread saying the finding stands and where it now lives.
+The triage scheme uses one `kind:` and one `job:` per issue:
 
-- **A P0 blocks at every round.** No count retires a P0. A fourth-round P0 is fixed on the branch, or the PR waits. This is the bound's only carve-out, and it is the reason the bound is safe to have.
-- **A round is one submitted review, not one comment.** A review that posts nine findings is one round. Count per reviewer, so a second reviewer that arrives late starts at its own first round rather than inheriting the count.
-- **Carrying a P1 is a decision you record.** The residue issue names the round that carried it and says the finding was deferred under this rule, because a P1 filed without that note reads as a P1 nobody noticed.
-- **The count does not license a worse fix.** A finding you can fix correctly in the fourth round is still better fixed than filed. The bound exists to stop an endless review, not to end review at a fixed number.
-- **Why three, and why a bound at all.** An automated reviewer reports on each push, so a PR that fixes everything it is told generates new findings by fixing them, and a green, tested change can sit behind cosmetic notes indefinitely while production carries the defects it fixes. By the fourth round the findings are usually about the fixes rather than about the change. Mac set this bound on 2026-09-19, at three rounds, replacing a first draft of two.
-
-**One issue carries one full change.** The body is a handoff: context with file paths, how to reproduce, constraints already found, the SCR-004 case that stopped the fix, the pillar it moves, a spec for how to get there, and a definition of done as a `- [ ]` checklist covering every part of the change — contract, API, MCP, CLI, UI, tests, docs. Add checklist rows, never sub-issues, parent tickets or epics; the DoD gate (`.github/workflows/dod-check.yml`, `tools/scripts/scr-dod-check.mjs`) verifies the checklist, and a `Closes #N` PR merges only when every box is ticked (SCR-003). Use the templates in `.github/ISSUE_TEMPLATE/`: `task.yml` for gaps, deferred defects and debt; `bug_report.yml` for a defect reported from outside a task; `feature_request.yml` for a feature.
-
-**Issue kinds** (`kind:*`, exactly one, applied at triage):
-- `kind:defect` — something that exists behaves wrongly. Allowed only when the fix could not ride the PR that found it (SCR-004).
-- `kind:gap` — the spec (`docs/specs/mission-control/spec.md`) or the mockup shows it and the built app lacks all or part of it. One gap issue carries the whole page or slice, backend included; half-built capability is a gap, never a feature.
-- `kind:feature` — genuinely new capability, none of it half-built, with a product rationale against `docs/VISION.md` (which job it serves: govern, ground, explain, meter, rate). If any part exists in the spec, the mockup or the tree, it is `kind:gap`.
-- `kind:debt` — maintenance, dependencies, tooling, docs sync; no user-visible change.
-- A decision is not a kind. A decision with no defect behind it is an ADR (SCR-002); a decision that blocks a fix is `needs:decision` on the issue that carries the fix, and that issue closes with the ADR that settles it.
-
-**Label scheme** (one dimension per prefix; the live list is `gh label list`):
-- `triage` — the only label a creator applies; the guard (`.github/workflows/triage-guard.yml`) adds it to any issue opened without it.
-- `P0`–`P4` — priority, exactly one per triaged issue, triage identity only: `P0` drop everything · `P1` this cycle · `P2` next cycle · `P3` backlog · `P4` someday. Every open issue carries `triage` or one `P*`, never neither, never both (SCR-005).
-- `size/XS|S|M|L|XL` — triage identity only; ≤1h · half-day · 1 day · multi-day · week+ (a multi-session lane). Sized on the largest of risk, blast radius, effort.
-- `kind:defect|gap|feature|debt` — exactly one, as above.
-- `area:app|surfaces|kernel|auth|billing|knowledge|evidence|data|platform|ops` — one or more; each label's description names the apps and packages it covers.
-- `job:govern|ground|explain|meter|rate` — exactly one; the product job the change serves. An issue that serves none is the one the Mission section says not to build.
-- `pillar:stability|reliability|maintainability|innovation|efficiency|performance` — one or more; the SCR-004 pillars fixing it moves.
-- `needs:decision|rig` — zero or more; the SCR-004 case that stopped the fix riding a PR (`needs:rig` covers a rig, a credential or real spend).
-- `no-issue`, `closes-nothing` — PR labels only (SCR-003): `no-issue` for a trivial change, `closes-nothing` for a substantial change that closes no issue by design.
-- `infra-drift`, `store-drift`, `main-unverified`, `agent-escalated`, `stella-verified-locally` — workflow-owned; written by the workflow or Stella source named in each label's description. Never apply or rename by hand.
-
-**Who labels what (SCR-005).** Creators — human or agent — apply `triage` and nothing else. The triage identity (`TRIAGE_LOGINS` in `triage-guard.yml`; the maintainer until the triage bot stands up) replaces `triage` with one `P*`, optionally a `size/*`, and the descriptive dimensions `kind`, `area`, `job`, `pillar`, `needs`, then comments a one-line rationale. The guard strips a `P*` set by anyone else and re-queues the issue.
-
-**Closing.** Close as completed only against a verified DoD (SCR-003; `dod-close-guard.yml` reopens otherwise). Close as not planned with a comment for won't-fix, superseded or duplicate — there are no `wontfix`, `duplicate`, `epic` or `blocked` labels; the close reason and the comment carry that.
-
-**CI-filed tickets.** `pnpm check:manifest:tickets` (`tools/scripts/ensure-manifest-tickets.ts`, run on `main` pushes by `pipeline.yml`) and `pnpm e2e:failure-ticket` (`tools/scripts/ensure-e2e-failure-ticket.ts`, run by `nightly.yml`) still file Linear tickets and no-op without `LINEAR_API_KEY`; #2980 moves both to GitHub issues under this scheme. `linear-release.yml` is the release-notes integration and is unaffected.
-
-## Operating model
-
-**Default model: Haiku.** Escalate explicitly.
-
-| Stay on Haiku | Escalate to Sonnet | Escalate to Opus |
-|---|---|---|
-| Single-file edits, reads, lookups, formatting, dispatch, summarizing | >3 files or cross-package; ambiguous requirements; non-trivial new logic; non-obvious debugging; diff review | Architectural decisions; storage boundary changes; security (auth/billing/secrets); multi-system (MCP+API+app); production incidents |
-
-**Parallelism:** Dispatch in parallel when genuinely independent. Do not parallelize when steps have dependencies, touch the same files, or dispatch overhead exceeds gain.
-
-**Dispatch table:**
-
-| Prompt signal | Action |
+| Dimension | Values |
 |---|---|
-| Rename / format, single file | Inline parallel tool calls |
-| Fix / add ≤5 files, one package | Haiku subagent |
-| Fix / add crossing packages (>3 files) | Sonnet subagent |
-| Design / architect / broad refactor | Sonnet; Opus if security/auth/billing |
-| Auth / billing / security / multi-system | Opus subagent |
+| Kind | `defect`, `gap`, `feature`, `debt` |
+| Job | `govern`, `ground`, `explain`, `meter`, `rate` |
+| Area | `app`, `surfaces`, `kernel`, `auth`, `billing`, `knowledge`, `evidence`, `data`, `platform`, `ops` |
+| Pillar | `stability`, `reliability`, `maintainability`, `innovation`, `efficiency`, `performance` |
+| Need | `decision`, `rig` |
 
-**Context budget:** Delegate to shed context. Pass only file paths, error excerpts, relevant lines. Summarize results; don't quote raw output. Use `/compact` before starting a new logical unit if context is heavy.
+A missing part of an existing spec or implementation is a gap. A feature introduces new behavior with a rationale against `docs/VISION.md`. A decision belongs in an ADR; use `needs:decision` only when it blocks a concrete fix. Read `gh label list` for current labels and descriptions.
 
-**Cost discipline:** Match model to task. Use `pnpm check:manifest --json` for contract introspection. The `ontology.*` graph query layer **is wired** — `ontology.neighbors` and `ontology.query` have contracts, API routes, and MCP tools; call them via `invoke()`/the contract, never Neo4j directly.
+`check:manifest:tickets` and `e2e:failure-ticket` still target Linear and no-op without `LINEAR_API_KEY`. Issue #2980 tracks their move to GitHub. `linear-release.yml` publishes release notes and is separate from issue tracking.
 
-## Local frontend verification
+## Documentation maintenance
 
-Authorized and encouraged every session without asking permission. Use `creds.json` at repo root (gitignored — never commit or print the password).
+Keep active instructions close to their source. Use `docs/README.md` to navigate internal docs and `apps/docs/content/docs/` for published instructions. Update capability docs when contracts change, including their registered names, surfaces, and index entries.
 
-**Stack:** `apps/app` → `http://localhost:3000`, `apps/docs` → `http://localhost:3300`, API → `:4000`, MCP → `:4100`. Local Postgres on `:5433`. `pnpm dev` starts all apps + Docker.
-
-**Login:** Email+password only (no email verification locally). New user → `/signup` → `/new-organization` → create org → `/{org}` (Organization). The workspace root `/{org}/{ws}` is Fleet. Returning: `/login`.
-
-**Browser:** Use whichever browser MCP the session exposes — chrome-devtools (`mcp__plugin_chrome-devtools-mcp_chrome-devtools__*`) or Claude in Chrome (`mcp__claude-in-chrome__*`). Browser `fill`-style tools append to inputs — to set a React-controlled field, run a script that uses the native value setter + a bubbling `input` event.
-
-## Key dependency versions
-
-- **Next.js `16.3.1`** + React `19.2.6` — App Router, Turbopack default. `proxy.ts` replaces `middleware.ts`.
-- **AI SDK `ai@7.0.14`** — use `modelIdOf()` for model resolution. `streamText`/`generateObject`/`generateText` are correct. `ai/rsc` (`streamUI`, `createStreamableUI`, `createAI`) is **forbidden**. `@ai-sdk/react` permitted for non-chat client surfaces only.
-- **TypeScript `6.0.3`** (pinned via `pnpm-workspace.yaml` overrides, alongside `drizzle-orm@0.45.2`) — no `any`.
-- **Hono `4.12.x`**, **Better Auth `1.6.x`**, **xmcp `0.6.x`**, **Vitest `2.1.x`**, **Playwright `1.60.x`**, **Node `>=24`**, **pnpm `11.7.0`** (`packageManager`).
-
-## App stack
-
-### `apps/app`
-- Next.js App Router, RSC, streaming.
-- AI via Vercel AI SDK Core (`streamText`/`generateText`/`streamObject`/`generateObject`) on server. **Never `ai/rsc`.**
-- Main chat path: `POST /api/v1/chat/stream` SSE consumed by `use-tool-stream.ts` (`apps/app/src/components/chat/use-tool-stream.ts`). Do not add a second transport. `@ai-sdk/react` only for non-chat surfaces.
-- Generative UI: model returns `generateObject` structured output; client maps to React components via chat component registry. No server-rendered React trees.
-- **Request interception: `proxy.ts`** at `apps/app/src/proxy.ts`, not `middleware.ts`. Edge-safe only: cookies, URL rewrites, redirects. No Node built-ins, DB calls, or secrets.
-
-### `apps/api`, `apps/mcp`
-- `apps/api` — Hono REST. Routes at `apps/api/src/routes/v1/<capability>.ts`.
-- `apps/mcp` — xmcp. Tools at `apps/mcp/src/tools/<capability>.ts`. Connect at `/mcp`.
-- **Capability parity rule:** new user-facing action → contract in `packages/oxagen/src/contracts/` → API route → MCP tool → CLI command. Run `pnpm check:manifest` to verify.
-- **Contract-wiring order is law:** a new user-facing section must NOT be wired to live data until a contract exists — always contract → API route → MCP tool → UI wire-up. Do not shortcut a page straight onto a raw query.
-- **UI Capability Parity is law (as strong as capability parity):** if a capability is invocable on any non-`app` surface (api / mcp / cli) **and** is meant to be operated by a human in the app, then the app MUST contain real UI that actually invokes it and works — no error page, no dead route, no missing screen. A capability whose app surface is missing or broken is **NOT feature-complete and MUST NOT be merged**, exactly like a missing API route or MCP tool. Mechanism:
-  1. The capability's contract declares `app` in its `layers[]` — the promise that a human can operate it in `apps/app`.
-  2. It has a binding in `apps/app/capability-ui-map.json` → `{ route, page, entry, proof }`, where `page` exists and `proof` points at a runtime artifact (a component or action test in `apps/app/src/`, or a screenshot committed under `verifications/<session>/`) captured against a **working, non-erroring** page. It is not a fourth e2e spec: `apps/app/e2e` is exactly `login`, `pay` and `page-load`.
-  3. `pnpm check:ui-parity` enforces it. **Forward gate** (`--strict` fails CI): every `app`-layer capability must be bound to an existing, proven page. **Reverse advisory** (warn-only): every capability the app actually invokes (`invoke(<contract>.name, …)`) but does not declare `app` for is flagged — either promise + wire it, or it is internal plumbing behind another surface. Wired into `pnpm gate`. Run `pnpm check:ui-parity --json` to see `{ forward, reverse }`.
-  4. Prime-directive corollary: encountering an app surface that 404s / throws / renders a placeholder for a capability that works elsewhere is a **defect to fix now** — wire the UI or, if the build is large (Opus/Fable-tier), file one `kind:gap` issue (`triage` label only) whose DoD checklist carries the whole page — contract binding, page, proof — before moving on (see "Issues and labels"). Never ship the dead surface.
-- **App route map (verified 2026-09-19, do NOT treat as mock):** the app is the nine pages of the Mission Control spec §14, six at workspace scope and three at organization scope, and the route parameters are `[org]` and `[ws]`. `[orgSlug]` and `[workspaceSlug]` are `apps/app_deprecated`'s segments, so a path that carries them in a log or a coverage report came from the deprecated app. Workspace pages under `apps/app/src/app/[org]/[ws]/`: the workspace root is **Fleet** (`page.tsx`), then `runs/[run]` (**Run**), `mandates/[mandate]` (one mandate and its ledger), `agents` and `agents/[agent]` with `agents/[agent]/source` (**Agents**), `tools` (**Tools**), `steering` (**Steering**), `spend` (**Spend**), plus the `register/[step]` onboarding gate. Organization pages under `[org]/`: the root (**Organization**), `billing`, `audit`, and `roles`, `api-keys` and `model-funding`, which Appendix F folds into Organization and which are still separate routes today. Also `[org]/[ws]/skills`, which Phase 2 of §17.2 replaces with a Steering tab. Outside the nine: the seven `(auth)` pages, `(onboarding)/new-organization`, and `cli/authorize` and `cli/complete`. All are real pages with server `actions.ts` backed by contracts/handlers and unit tests. **This entry described the pre-rebuild app until 2026-09-19** and named `dashboard`, `access`, `developer`, `governance`, `members`, `security`, `workspaces`, `sessions`, `knowledge`, `marketplace` and `workbench`. None of those routes exists. Do not link to them, and do not trust a route list in this file over `find apps/app/src/app -name page.tsx`.
-- **`check:manifest` combined route files:** `tools/scripts/check_manifest.mjs` content-scans `apps/api/src/routes/v1/*.ts` (contract imports + literal capability-name matches) as a fallback beyond per-capability filename existence, so a capability dispatched from a combined multi-capability route file no longer reports as a false-positive `api` gap — no manual verification needed before filing a parity ticket. Where these families live today: `connection.ts` (the `connection.*` family: create/delete/get/list/mappings.get/mappings.set/mappings.suggest/pause/preview/update), `integration.ts` (the `integration.*` family), `repo.ts` (the read/observe `repo.*` family — repository mutation left with the runtime), `schema.ts` (the `schema.*` family), `plugin-schema.ts` (`plugin.schema.get/validate` + `plugin.version.list`), `reseller.ts` (the `billing.reseller_*` family), `org.data_plane.ts` (`get_data_plane`/`set_data_plane`), `webhook.ts`, `github-*.ts`, `chat-memory.ts`, `chat-stream-translator.ts`. The former `workflow.ts`, `semantic-edge.ts`, and `semantic-relationship.ts` combined files and their capability families are gone — do not reference them. All surviving combined files are mounted in `apps/api/src/app.ts`. To see only genuine surface gaps (ignore docs/unit/e2e-only entries): `pnpm check:manifest --json` and filter for gaps whose `missing` includes `api` or `mcp`.
-
-### `apps/cli`
-Commander only. Entry: `apps/cli/src/index.ts`. A thin governance-operations CLI over the platform API — auth, budget, cost, trace, secrets, environments, telemetry, memory, graph search — with `commands/retired.ts` printing a retirement notice for every former coding-agent command (Stella owns that work). No LLM calls, no local agent loop.
-
-### `apps/docs`
-Fumadocs/MDX. Statically generated. No interactive runtime.
-
-## Common commands
-
-```bash
-pnpm dev                         # start all apps + Docker (Postgres :5433, ClickHouse :8123, Neo4j :7687)
-pnpm typecheck                   # run TS across the monorepo
-pnpm test                        # DO NOT run directly (see "NEVER run all tests"); use `pnpm --filter <pkg> test:unit <file>` for narrow runs
-pnpm check:manifest              # verify API↔MCP capability parity (warn-only)
-pnpm check:manifest --json       # machine-readable parity output
-pnpm check:contracts             # verify contract definitions
-pnpm env:check                   # validate .env.local against schema
-pnpm release:patch               # bump patch version, tag, AI release notes, PLATFORM_VERSION sync (--no-vercel to skip)
-pnpm release:minor               # bump minor version
-pnpm release:major               # bump major version
-pnpm db:migrate                  # apply pending Postgres migrations + seed platform defaults
-pnpm db:lint-migrations          # verify migration file names and checksums
-pnpm db:atlas-validate           # validate Atlas migration dir against the DB
-pnpm db:seed-iam                 # seed IAM roles and permissions
-pnpm db:seed-platform            # seed platform defaults on their own
-pnpm db:backfill-iam             # backfill org IAM for existing orgs
-pnpm gate                        # CI checks locally, scoped to packages changed since origin/main
-pnpm gate:full                   # every package, plus Playwright e2e — heavy; CI is the authoritative gate
-pnpm check:ui-parity             # app-layer capability → UI binding (--strict fails on gaps)
-pnpm check:naming                # ADR-025 verb-first snake_case compliance
-pnpm kill                        # kill all background processes
-pnpm env:pull                    # materialise .env.local from the linked Vercel projects (needs vercel login + link)
-pnpm billing:stripe-sync         # sync meter pricing and discounts with Stripe
-pnpm cli:dev                     # install this tree's `oxagen` CLI on PATH and watch-rebuild it
-lsof -ti:3000                    # check if app dev server is running
-lsof -ti:4000                    # check if API server is running
-lsof -ti:4100                    # check if MCP server is running
-git fetch origin && git rebase origin/main  # on main: sync local to remote before cutting a branch
-```
-
-## Gotchas
-
-- **`"use client"` boundary** — never call a `"use client"` function from a Server Component.
-- **`invoke()` needs handler registration** — `import "@oxagen/handlers/register"` before any `invoke()` call; forgetting silently no-ops metering/IAM.
-- **Turbopack extensionless imports** — `import Foo from "./Foo"` not `"./Foo.tsx"`.
-- **`proxy.ts` not `middleware.ts`** — `middleware.ts` is no longer recognized.
-- **Raw `db()` is banned** — use `withTenantDb` / `withSystemDb` / `scopedSession`. `FORCE RLS` requires the `oxagen_app` non-superuser role.
-- **Rebase before cutting a branch** — `git fetch origin`, and if `origin/main` is ahead, `git switch main && git rebase origin/main` (resolve conflicts), then cut your branch/worktree from the updated local `main`. Once your branch is cut, push it and work on it; don't rebase shared branch history to tidy it (see **Operating mode**).
-- **`apps/app` boots IAM, but IAM only enforces roles for enterprise orgs** — `apps/app/instrumentation.ts` calls `bootstrapIAMRuntime()` (with billing, entitlement and decision-rule gates), so `invoke()` from the app runs the full kernel check and writes the audit event. What it does *not* give you is a role gate on every tier: `checkIAM` fast-paths a non-enterprise org to an unconditional allow for non-agent principals (`packages/iam/src/check-iam.ts`). So a capability that must refuse a non-owner asserts it in the handler with `assertOrgRole`; do not infer from "IAM is wired" that the role was checked.
-- **Better Auth `rateLimits` plural** — `drizzleAdapter` with `usePlural: true` pluralizes `rateLimit` → `rateLimits`. Wrong table = 500 on all auth calls in prod (passes dev/e2e since rate-limiting is disabled locally). Always verify auth changes against a prod-equivalent environment.
-- **`tsx --env-file` does NOT override shell `DATABASE_URL`** — `unset DATABASE_URL` for local targeting. Always confirm target env before any migration. Migration files go in `packages/database/atlas/migrations/`, never in `apps/`.
-- **Attribution columns are `created_by_id` / `updated_by_id` / `deleted_by_id`** (ADR-077, migration `20260915230000`). A branch cut before 2026-09-15 that still spells `createdByUserId` breaks at typecheck after rebasing: run `node tools/scripts/codemod-attribution-columns.mjs` (whole-word, skips the migration history), then fix any not-yet-merged `CREATE TABLE` by hand and confirm with `pnpm db:atlas-validate`.
-- **Stripe webhook tunnel** — `pnpm dev` auto-starts the tunnel. Restarting `apps/api` in isolation loses the per-session signing secret — restart the full stack via `pnpm dev`.
-- **AI Gateway slug drift** — always use `modelIdOf()`, never hard-code slugs. Verify against `/v1/models` for new models.
-- **`prompt.settings.read` / `prompt.settings.write`** — for system-prompt customization, use these contracts (metered, IAM-gated, org+workspace scoped). Don't hard-code strings.
-- **`bootstrapEntitlementRuntime()` required at startup** — any new runtime (server, worker, script) that invokes capability-gated handlers must call `bootstrapEntitlementRuntime()` from `@oxagen/plugins` at startup; forgetting silently skips the entitlement gate.
-- **Turbo halts on first failing coverage package** — multi-package coverage failures are masked. Use `turbo run test:coverage --continue` to see all failures at once.
-- **Shell-exported env shadows `.env.local`** — a corrupted shell-exported `DATABASE_URL` / `MODAL_RUNNER_URL` / `ANALYTICS_URL` silently overrides `.env.local`. Prefix scripts with `env -u DATABASE_URL …` until the terminal is restarted.
-- **GitHub Actions env vars don't reach turbo tasks** — workflow `env:` values are stripped unless the var is listed in the task's `env[]` in `turbo.json`. Always update `pipeline.yml` AND `turbo.json` together.
-
-## All LLM calls must go through `@oxagen/ai`
-
-Never import `generateText` / `streamText` / `generateObject` directly from `ai` inside a handler or route. Always use `@oxagen/ai` re-exports — they emit metering, duration tracking, surface tagging, and prompt hashing to ClickHouse.
-
-## UI component import convention
-
-**Never import `@oxagen/ui/components/*` directly in app code.** An app imports UI components from its own local layer, and that layer is the sole place that touches `@oxagen/ui/components/*` — a cheap override escape hatch.
-
-**Which layer depends on the app, and `apps/app` is not the one most of this file describes.** The WL-52 rebuild gave `apps/app` its own components under `apps/app/src/ui/` (35 files, original implementations, not re-exports) and its own ESLint 10 config; it imports **no** `@oxagen/ui/components/*` at all, and `apps/app/src/components/` does not exist. `apps/app_deprecated` and `apps/docs` are the apps that keep the `src/components/ui/<name>.tsx` re-export layer, and `eslint.next.mjs` — whose first line says it covers exactly those two — is what enforces it there.
-
-| App | Import UI from | Enforced by |
-|---|---|---|
-| `apps/app` | `@/ui/<name>` | nothing — convention only (see below) |
-| `apps/docs`, `apps/app_deprecated` | `@/components/ui/<name>` | `no-restricted-imports` in `eslint.next.mjs` |
-
-```ts
-// ✅ import { Button } from "@/ui/button"           // apps/app
-// ✅ import { Button } from "@/components/ui/button" // apps/docs, app_deprecated
-// ❌ import { Button } from "@oxagen/ui/components/button"
-```
-
-**`apps/app` is not covered by that rule, and nothing else covers it either.** `eslint.next.mjs` names `apps/app_deprecated` and `apps/docs` on its first line; `apps/app/eslint.config.mjs` is standalone and its `no-restricted-imports` carries only the tenancy seams, the `next/navigation` names INV-13 routes, and the `@/features/*/*` lane isolation — no `@oxagen/ui/components/*` pattern. A direct shared-component import in `apps/app` therefore lints clean. It holds today because `apps/app` has 35 original components under `src/ui/` and imports that path zero times, not because a rule refuses it.
-
-Exceptions to the rule where it *is* enforced: the re-export files themselves, plus the `@oxagen/ui` barrel, `@oxagen/ui/styles/*` and `@oxagen/ui/lib/*`.
-
-## Citing nodes & edges in the UI
-
-**Never display a node's or edge's UUID as its primary on-screen identifier.** A raw id (`913d6df1-…`) is meaningless to a user. Whenever the UI references a graph node or relationship, cite it by its **human label** (`displayName` + domain `label`) and make the citation **inspectable** — hovering/clicking reveals the full property bag (and a copyable id, which is the only place the raw id belongs).
-
-- **Use the shared citation components**, don't hand-roll a `<span>{id}</span>`:
-  - `NodeRef` (`apps/app/src/components/knowledge/graph/node-ref.tsx`) — a colour-coded node chip with a hover/click property popover. Derive its input from an edge with `sourceNodeRef(edge)` / `targetNodeRef(edge)`.
-  - The graph-explorer detail/hover panels (`PropertyList`, `ConfidenceMeter`, `CopyableId`, `colorForLabel`) are the canonical primitives — reuse them; there is exactly one implementation of "show a node/edge nicely".
-- **Resolve the label server-side.** A capability that returns an edge/relationship must resolve each endpoint to the `knowledgeNodeRef` shape (`{ id, label, displayName, properties }`) in its handler by matching the node in workspace scope and coalescing `displayName→name→publicId`. Don't ship a bare id to the client and hope the UI has a label for it.
-- Only materialized, authorized graph records are rendered at launch. A future candidate system must define a separate attributable reference shape rather than overloading a node UUID.
-
-## Infrastructure boundaries
-
-Authoritative. Document architectural decisions in `docs/adr/`.
-
-**Neo4j — graph data only:** ontology/entity relationships, execution lineage projections, agent memory, semantic retrieval.
-
-**PostgreSQL — transactional state only:** users, orgs, permissions, billing, configs, job metadata, durable application state.
-
-**ClickHouse — append-only runtime events only:** execution events, logs, metrics, traces, token analytics, tool usage, telemetry.
-
-**File / blob storage — binary assets only:** avatars, generated images/video/documents, uploaded workspace files. Reference row (URL + metadata) lives in Postgres. Driver: Vercel Blob via `@oxagen/storage` (`BLOB_READ_WRITE_TOKEN`).
-
-**Never:** analytics in Neo4j · graph relationships in Postgres · transactional state in ClickHouse · binary payloads in any DB.
-
-**Data planes (ADR-042):** the three stores are resolved per organisation through `resolveDataPlane()` in `@oxagen/tenancy`; `withTenantDb` / `scopedSession` / `chInsert` consult it. `withSystemDb` and platform tables always live on the shared plane. Never read `DATABASE_URL` / `NEO4J_URI` / `CLICKHOUSE_URL` outside the store clients.
-
-**Exception — Connector Dual-Write:** Data connectors write to Postgres (operational record: sync cursor, connection health — source of truth, ACID) and Neo4j (graph index: entities, embeddings, relationships — async Inngest, retryable). ClickHouse observes ingestion events for telemetry.
-
-## Documentation — capability registry
-
-`docs/capabilities/` must stay in sync with live contracts. Manually maintained.
-
-- Update when a contract is added, renamed, or removed. Filename: the contract file's dotted stem (e.g. `ontology.query.md` documents `query_ontology`), matching the still-in-progress ADR-025 file-path realignment. Update `_index.md` for new capabilities.
-- Verify `docs/capabilities/` matches contracts in `packages/oxagen/src/contracts/`, `apps/api/src/routes/v1/*`, `apps/mcp/src/tools/*`, `apps/cli/src/commands/*` before committing a finished body of work.
-- **Gaps (last audited 2026-06-12):** ~38 contracts missing `docs/capabilities/*.md` (26 tracked by `pnpm check:manifest`; 12 more omit `"docs"` from `layers[]`, so the checker never sees them — add `"docs"` to the contract to track). This count drifts; do not hard-code it.
+Do not copy package counts, dependency versions, route lists, or old gap counts into additional documents. Link to the manifest, route oracle, check output, or owning source instead. Preserve useful decisions and incident records with their dates. Remove duplicate copies and repair their inbound links.

@@ -1,4 +1,4 @@
-# workspace.create
+# create_workspace
 
 Create a workspace in the caller's organization together with its main repository, which is required (MC spec §10.1, the §17 M0 acceptance test "a workspace cannot be created without a main repo"; ADR-099).
 

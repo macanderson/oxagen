@@ -1,0 +1,83 @@
+<h2 class="ch-title">Equip agents on purpose</h2>
+<p class="ch-thesis">A tool in the catalog is not a tool in the agent's hands. Assign equipment the way you assign access.</p>
+
+<p class="lede">Your platform team has built the tools this book describes: a trace slicer, a code graph, a schema index, a test lookup. They are registered once and every agent gets all of them, along with forty others that accumulated. The refund agent can see the deploy tool. The docs agent can see the database tool. Nobody decided that. It is what happens when the catalog and the assignment are the same list.</p>
+
+<h3>The tool list is context, and it is the largest part</h3>
+<p>Every tool an agent can see is sent with every request: its name, its description, and its input schema. Part 7 showed what irrelevant context costs, and tool definitions are context like any other. One measurement from Oxagen's own in-app agent, taken by hand because nothing reported it: 271 tools came to 45,007 tokens, which was 92.4% of the cacheable prefix. Providers also cap the count. OpenAI's limit is 128 tools per request, and a request over the cap fails at the provider with an error about a payload nobody on your side can inspect.</p>
+<p>Anthropic's guidance on writing tools makes the design point: more tools do not always lead to better outcomes, and it recommends building a few tools aimed at the workflows that matter most.<sup class="cite"><a href="#r20">20</a></sup> The assignment is an engineering decision. Make it in the mandate, where it can be reviewed.</p>
+
+<h3>Three kinds of equipment</h3>
+<div class="tablewrap"><table>
+  <thead><tr><th>Kind</th><th>What it is</th><th>Assigned by</th></tr></thead>
+  <tbody>
+    <tr><td>Tools</td><td>Callable actions with typed inputs: <code>schema_slice</code>, <code>tests_covering</code>, <code>open_pull_request</code></td><td>A list in the equipment clause</td></tr>
+    <tr><td>Skills</td><td>Packaged instructions for one kind of task, loaded when that task comes up, not on every request</td><td>A list in the equipment clause</td></tr>
+    <tr><td>Business context</td><td>The knowledge the work needs: domain dossiers from part 5, the graph from part 12, conventions, decisions</td><td>A scope, such as <code>domain:billing</code></td></tr>
+  </tbody>
+</table></div>
+<p>Skills follow the argument of part 6. A rule that applies to billing migrations should reach the agent when it touches a billing migration, and stay out of the window otherwise. A skill is that rule with a trigger.</p>
+<p>Context scope follows the argument of part 12. A graph makes retrieval exact, and it also makes permission exact. If knowledge is nodes with domains attached, then "this agent may read <code>domain:billing</code>" is a filter on a traversal. The same filter serves relevance and authority, and you maintain it once.</p>
+
+<h3>Assignment is not permission</h3>
+<p>Equipment and access are different clauses for a reason. Assigning <code>open_pull_request</code> to an agent means the tool is in its hands. Whether a particular pull request may be opened is still a request that a rule answers (part 16). Keep both checks. The first keeps the window small and the agent on task. The second decides each action at the moment of use.</p>
+<pre><code>equipment:                       # owner: engineering
+  tools:
+    - run_code_with_trace        # part 2
+    - schema_slice               # part 8
+    - tests_covering             # part 10
+    - open_pull_request          # each call still meets the rules
+  skills:
+    - billing-conventions        # loads when a diff touches billing/**
+    - migration-review
+  context_scope:
+    - "domain:billing"
+    - "adr:*"
+  tool_budget:
+    max_tools: 24                # a build failure over this, not a warning
+    max_tokens: 6000</code></pre>
+
+<div class="evidence">
+  <span class="tag">Evidence · Interfaces decide outcomes</span>
+  <p>SWE-agent's central result was that the agent-computer interface changes what the same model can do: purpose-built commands with compact, structured output raised resolution rates on SWE-bench over raw shell access.<sup class="cite"><a href="#r14">14</a></sup> Anthropic's tool-writing guidance adds the operating advice: choose tools deliberately, namespace them, return high-signal output, and keep token use low by default, because an agent inherits the inefficiency of its tools.<sup class="cite"><a href="#r20">20</a></sup> The Model Context Protocol moves in the same direction by having each server declare its tools, their schemas, and their descriptions, so that discovery is a lookup.<sup class="cite"><a href="#r25">25</a></sup> A declared catalog is what makes a per-agent assignment possible.</p>
+  <div class="src">Yang et al., NeurIPS 2024 · Anthropic engineering, 2025 · Model Context Protocol specification</div>
+</div>
+
+<h3>Check that the equipment reached the work</h3>
+<p>An assignment is a claim until a run shows it. For each run, record which tools were offered, which were called, which skills loaded, and which context scopes were read. Two findings come out of that data quickly. Tools that are offered on every run and called on none are candidates to remove. Tools that an agent asks for and does not have show up as failed attempts or as workarounds through a shell.</p>
+
+<div class="counter">
+  <span class="tag">Counterweight · Context is scoped, not universal</span>
+  <p>Giving an agent business context does not mean it recalls it correctly, and it does not mean every agent should have it. Storing a fact is not the same as retrieving it at the right moment, which is why parts 3 to 5 exist. Scope context to what the agent's work requires and what its mandate permits, and measure retrieval precision for the context layer the same way you measure it for code.</p>
+</div>
+
+<div class="fits">
+  <span class="tag">Where Oxagen fits</span>
+  <p>In Oxagen, tools and skills reach an agent through its mandate. A tool in the catalog does not grant every agent permission to use it, and each request still meets the decision rules. Business context is served within the scope the mandate permits. Oxagen wraps four harnesses: Claude Code, Codex, Cursor, and Stella. What a wrapper can gate and meter differs by harness, and the product says which.</p>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Count the tools and the tokens.</strong> For one agent, serialize the tool list exactly as it is sent and count both. Done is two numbers you did not have yesterday.</li>
+    <li><strong>Log offered against called.</strong> Thirty days of runs is enough. Sort tools by calls per run.</li>
+    <li><strong>Remove the tools with no calls.</strong> Take them out of that agent's assignment, not out of the catalog. Watch <code>first_attempt_rate</code> from part 13 for a week.</li>
+    <li><strong>Move one always-loaded rule into a skill.</strong> Pick the longest block of instructions that applies to one kind of task. Give it a trigger and load it on demand.</li>
+    <li><strong>Add a tool budget to CI.</strong> Fail the build when an agent's assignment exceeds a count or a token limit, or a provider's cap.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>tool_tokens_per_request</code>: tokens spent on tool definitions, per agent. Compare it with the agent's median task context.</li>
+    <li><code>tool_use_ratio</code>: distinct tools called over tools offered, per run. A low ratio means the assignment is wider than the work.</li>
+    <li><code>skill_load_rate</code>: runs in which a skill loaded, over runs where its trigger matched. Under 1.0 means the trigger is wrong.</li>
+    <li><code>out_of_scope_reads</code>: context requests outside the agent's scope. Each one is either a scope to widen or a task the agent should not have.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Give each agent the tools and skills its work requires, and the business context its mandate permits. Keep the catalog and the assignment as separate lists, and check the assignment against what the runs used.</p>
+</div>

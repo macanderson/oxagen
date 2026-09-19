@@ -1,4 +1,4 @@
-# agent.list
+# list_agents
 
 **Capability:** `list_agents`
 **Domain:** agent

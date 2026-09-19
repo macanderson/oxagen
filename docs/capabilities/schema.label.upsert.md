@@ -1,4 +1,4 @@
-# schema.label.upsert
+# upsert_schema_label
 
 Create or update a node label on a schema within the current draft version. Changes are staged in the draft — publish via `schema.version.create` or `schema.toggle` to make them live.
 

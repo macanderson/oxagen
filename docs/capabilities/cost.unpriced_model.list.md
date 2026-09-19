@@ -1,4 +1,4 @@
-# cost.unpriced_model.list
+# list_unpriced_models
 
 The models this organization is running that nobody has stated a price for (Mission Control spec §12.2, App. A.7; ADR-060 §1). A frame whose model the price book cannot price is recorded `unpriced` by the rollup — no cost, no basis, deliberately never a zero — so the run comes back with a blank cost and no explanation. This is the explanation: the model, how much of it has been run in the window, and exactly which token classes are missing a price.
 

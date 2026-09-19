@@ -3,7 +3,7 @@
 **Domain:** mandate
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent (requires approval)
+**Surfaces:** api, mcp, agent
 **Sensitivity:** high
 **Metering:** none (`noBillingGate`, ADR-052 exclusion 2)
 

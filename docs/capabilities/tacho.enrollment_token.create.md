@@ -1,4 +1,4 @@
-# tacho.enrollment_token.create
+# create_enrollment_token
 
 Mint the single-use enrollment token a machine presents to `enroll_host` to become a registered agent's host (MC spec §7.2 "a one-time enrollment token embedded"; mockup `REG_TOKEN` "expires in 30 min · single use"; #2967). The token names the agent the host will report as, is shown to the operator exactly once, is stored as its SHA-256 digest (`tacho.enrollment_tokens.token_hash`), and is consumed the first time it is presented. Issuing a token writes nothing to the agent; a token that expires unused is replaced by issuing another.
 

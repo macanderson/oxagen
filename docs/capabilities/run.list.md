@@ -1,4 +1,4 @@
-# run.list
+# list_runs
 
 The runs table on the Fleet page (`apps/app/ARCHITECTURE.md` §1.2). One list over the two stores that record runs: the evidence ledger (`agent.agent_runs`, public id `arun_…`) for runs an external engine submits evidence for, and `tacho.sessions` (public id `tse_…`) for wrapped agents. Root sessions only; a subagent chain is part of its parent's run. Newest first, keyset-paged on an opaque cursor. An API-key caller is shown no witness run (a run a `proof.observed` verdict names as its `witness_run_id`, ADR-064): a worker holds API keys and never sees a witness.
 

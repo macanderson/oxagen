@@ -1,0 +1,92 @@
+<h2 class="ch-title">The agent asks, a rule decides</h2>
+<p class="ch-thesis">Authority is a decision at the moment of use, written down by the team that owns the system.</p>
+
+<p class="lede">An agent needs to push a fix to a release branch at 2 a.m. Someone decided, at some point, whether that is fine. Where is that decision? If it is "the token has write scope," then the decision was made once, for every branch, for every task, by whoever created the token. When a team adds an agent, where does its authority get set, and who sets it?</p>
+
+<h3>A request, not a standing grant</h3>
+<p>The alternative to a broad credential is a request at the moment of use. When a task needs a system, a scope, or an action, the agent asks for it. The request carries four facts, and each one is data your system already has:</p>
+<ul class="plain">
+  <li><strong>Who started the task.</strong> The initiator from part 14.</li>
+  <li><strong>Which agent is asking.</strong> Its identity.</li>
+  <li><strong>What it wants.</strong> The tool and the action: <code>github.push</code>.</li>
+  <li><strong>What the action would reach.</strong> The resource: <code>acme/billing</code>, branch <code>release/2026.09</code>.</li>
+</ul>
+<p>This is the prompt parsing of part 3 applied to authority. The request is structured input. A rule is a deterministic function of it. No model decides whether the agent may act, in the same way no model decides which files to retrieve.</p>
+
+<h3>Three answers</h3>
+<p>The team that owns the system writes the rule, and a rule has three possible answers.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Answer</th><th>What happens</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td>Allowed</td><td>The action proceeds inside the same call. The record keeps the rule id.</td><td>Read a public repository</td></tr>
+    <tr><td>Denied</td><td>The action does not reach the code that would have done it. The agent gets a reason it can act on.</td><td>Push to <code>main</code></td></tr>
+    <tr><td>Routed to a person</td><td>The run waits. A named person answers. The run resumes with the answer in the record.</td><td>Push to a release branch</td></tr>
+  </tbody>
+</table></div>
+<p>A rule that allows everything is still a rule. Someone wrote it, someone can read it, and someone can change it. That is the difference between an allowed request and a standing grant: the first has an author and a row.</p>
+<pre><code># rules/release-branch.yaml          owner: release engineering
+id: release-branch
+when:
+  action: github.push
+  resource.branch: "release/*"
+effect: route
+route_to: role:release-owner
+timeout: 4h
+on_timeout: deny
+
+# rules/no-push-main.yaml
+id: no-push-main
+when: { action: github.push, resource.branch: main }
+effect: deny
+reason: "Push to a branch and open a pull request."</code></pre>
+
+<h3>Write the denial for the agent</h3>
+<p>A denied request is input to the next step, so write the reason as an instruction. "Request denied by rule <code>no-push-main</code>. Push to a branch and open a pull request." An agent that receives that sentence opens a pull request. An agent that receives <code>403</code> retries, then tries another path. Part 2 made the same point about tools: what the interface returns decides what the model does next.<sup class="cite"><a href="#r20">20</a></sup></p>
+
+<h3>The default is a decision too</h3>
+<p>Every rule set has a request that matches nothing. Decide what happens then, and say it on the same page as the rules. "When no rule matches, deny" and "when no rule matches, identity alone answers" are both defensible. An unstated default is the one to avoid, because the first person to learn it will be learning it during a review.</p>
+
+<h3>Where the credential lives</h3>
+<p>For a connection the platform mediates, the agent does not need the connection credential at all. The platform holds it, checks the request, and makes the call on the agent's behalf. The agent still has its own identity and whatever reaches its context, so this is not a promise about leaks. It is a statement about custody: the secret for that connection stays in one place, and each use of it is a row.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · Per-request decisions are the established pattern</span>
+  <p>NIST's zero trust architecture places a policy decision point and a policy enforcement point between every subject and every resource. Access is granted per request, under dynamic policy, and limited to what the task needs.<sup class="cite"><a href="#r22">22</a></sup> OWASP's guidance for excessive agency recommends the same controls for LLM applications: limit the permissions an extension holds, execute actions in the context of the specific user, and require human approval for high-impact actions.<sup class="cite"><a href="#r23">23</a></sup> The three answers above are those recommendations in one mechanism.</p>
+  <div class="src">NIST SP 800-207 · OWASP, Top 10 for LLM applications</div>
+</div>
+
+<div class="counter">
+  <span class="tag">Counterweight · Routing has a cost</span>
+  <p>Every routed request makes a person the latency. Route too much and approvals become a reflex, which is worse than a written rule. Review the routed requests monthly. A request the same person approves every time, without changes, is a candidate for an allow rule with a narrower condition. A request that is often rejected is a candidate for a deny rule with a better reason.</p>
+</div>
+
+<div class="fits">
+  <span class="tag">Where Oxagen fits</span>
+  <p>In Oxagen a decision rule names a capability, a condition, and one effect: allow, deny, or require approval. For governed calls, the kernel checks the rule after identity and entitlement and before the handler runs, so a denied action does not reach the code that would have done it. A routed request pauses the run. The person answers from the Access page, and the run resumes with the answer in the record. For mediated connections, Oxagen uses the connection credential on the agent's behalf and the agent does not receive it. When a workspace has no rules, identity alone answers requests, and the Access page says so.</p>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>List the ten write actions your agents take most.</strong> Pull them from the logs of part 14. For each, write the answer you want: allowed, denied, or routed, and to whom.</li>
+    <li><strong>Write the three rules that matter most as files.</strong> Use the shape above. Give each an id, an owner, and a reason.</li>
+    <li><strong>State the default.</strong> One sentence at the top of the rules directory that says what happens when nothing matches.</li>
+    <li><strong>Rewrite one denial message.</strong> Pick the denial your agents hit most and make its text the next step.</li>
+    <li><strong>Route one action to a named person.</strong> Set a timeout and an on-timeout answer. Run it once in staging and time how long the run waits.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>requests_by_answer</code>: allowed, denied, and routed, per agent, per week. A sudden rise in denials after a deploy is a tooling change nobody told security about.</li>
+    <li><code>time_to_answer_p50</code> and <code>p95</code>: how long routed requests wait. This is the latency you are adding to <code>time_to_green</code> from part 13.</li>
+    <li><code>unmatched_requests</code>: requests answered by the default. Each one is a rule nobody has written yet.</li>
+    <li><code>retries_after_denial</code>: calls an agent makes after a denial before it changes course. A good reason brings this toward 0.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Do not hand your agents the keys. Let the agent ask at the moment of use, let a rule the owning team wrote answer allowed, denied, or routed to a person, and keep the answer.</p>
+</div>

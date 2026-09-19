@@ -1,11 +1,10 @@
-# agent.debug.trace
+# debug_execution
 
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant (org + workspace)
 **Requires approval:** no
 **Risk level:** low
-**Aliases:** `debug_with_trace` (agent-surface tool name)
 
 ## Intent
 
@@ -16,7 +15,7 @@ enters a model's context — every field here is produced by a deterministic
 compressor (parse, rank, truncate) over three bounded sources, so the frame is
 safe to feed straight to a model.
 
-Prefer `agent.debug.trace` over reading raw logs or the full
+Prefer `debug_execution` over reading raw logs or the full
 [`agent.trace.get`](agent.trace.get.md) tree when an execution has **failed** and
 you need the fix site. Use `agent.trace.get` for a successful run's full tree and
 [`agent.execution.list`](agent.execution.list.md) to find runs.
@@ -76,5 +75,5 @@ at 200 calls. `truncated` flags where a cap was hit.
 
 ## Surfaces
 
-`agent` (as `debug_with_trace`), `api` (`GET /v1/{org}/agent/debug/trace/:executionId?summarize=&depth=`),
-`mcp` (`agent.debug.trace`).
+`agent` (as `debug_execution`), `api` (`GET /v1/{org}/agent/debug/trace/:executionId?summarize=&depth=`),
+`mcp` (`debug_execution`).

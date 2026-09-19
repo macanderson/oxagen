@@ -1,4 +1,4 @@
-# agent.mcp.set_enabled
+# set_mcp_enabled
 
 **Domain:** agent
 **Mode:** sync

@@ -1,4 +1,4 @@
-# workspace.model.settings.read
+# get_model_settings
 
 **Domain:** workspace
 **Mode:** sync

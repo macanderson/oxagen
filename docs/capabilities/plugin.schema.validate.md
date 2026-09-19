@@ -1,4 +1,4 @@
-# plugin.schema.validate
+# validate_plugin_schema
 
 Validate a connector plugin config object against its schema before install or configure. Returns field-level errors for form display.
 

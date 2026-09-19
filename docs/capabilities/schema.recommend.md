@@ -1,4 +1,4 @@
-# schema.recommend
+# recommend_schema
 
 AI onboarding — reads the existing graph (via `graph.stats`, observed labels from ClickHouse telemetry, and sampled ontology queries) along with the workspace's enabled schemas to propose a starter schema or targeted additions. Returns a proposal only — no mutations are made.
 

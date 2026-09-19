@@ -1,4 +1,4 @@
-# cost.price_entry.list
+# list_price_entries
 
 The price book as the active organization reads it (Mission Control spec §12.2, App. A.7; ADR-060 §1): every provider list price effective at an instant and the organization's own negotiated rows, which win over the list row for the same model and token class. A cost record names the entry ids it was priced with, so a figure can always be traced to the price behind it.
 

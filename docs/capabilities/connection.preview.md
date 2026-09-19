@@ -1,4 +1,4 @@
-# connection.preview
+# preview_connection
 
 **Domain:** connection
 **Mode:** sync

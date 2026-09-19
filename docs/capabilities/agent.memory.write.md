@@ -1,4 +1,4 @@
-# agent.memory.write
+# write_memory
 
 **Domain:** agent
 **Mode:** sync

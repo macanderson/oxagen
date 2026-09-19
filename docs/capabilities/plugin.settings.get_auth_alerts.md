@@ -1,4 +1,4 @@
-# plugin.settings.get_auth_alerts
+# get_auth_alerts
 
 Read the org's MCP auth-alert notification setting — which org roles receive alerts and whether email is sent in addition to in-app notification. Returns the documented default (`{ sendEmail: true, roles: ["Owner", "Admin"] }` with `isDefault: true`) when the org has never customised the setting. Read counterpart of [plugin.settings.set_auth_alerts](plugin.settings.set_auth_alerts.md); powers the org Governance → Policies alerts panel.
 

@@ -1,4 +1,4 @@
-# environment.delete
+# delete_environment
 
 **Domain:** environment
 **Mode:** sync
@@ -44,7 +44,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `environment.delete`
+Tool name: `delete_environment`
 
 ## Errors
 
