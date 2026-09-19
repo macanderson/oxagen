@@ -36,7 +36,7 @@ Sources: [OAuth 2.0 Policies](https://developers.google.com/identity/protocols/o
 The live checklist for configuring and verifying this client (and the GitHub LOGIN OAuth App) is **`docs/specs/social-login-oauth-apps.md`**. Summary:
 
 - **Client type:** Web application
-- **Scopes:** `openid`, `profile`, `email` only — explicitly minimal (comment at `packages/auth/src/auth.ts`). Non-sensitive tier; no Google verification required.
+- **Scopes:** `openid`, `profile`, `email` only, explicitly minimal (comment at `packages/auth/src/auth.ts`). Non-sensitive tier; no Google verification required.
 - **Consumer:** Better Auth (`packages/auth/src/auth.ts`, `socialProviders.google`), mounted at `apps/app/src/app/api/auth/[...all]/`.
 - **Production / preview redirect URI (exactly one on the shared prod client):**
   `https://app.oxagen.sh/api/auth/callback/google`
