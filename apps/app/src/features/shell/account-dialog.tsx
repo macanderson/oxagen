@@ -35,12 +35,7 @@ import { initials } from "./format";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 
-type Outcome =
-  | "saved"
-  | "invalid"
-  | "timeZoneInvalid"
-  | "denied"
-  | "failed";
+type Outcome = "saved" | "invalid" | "timeZoneInvalid" | "denied" | "failed";
 
 const fieldLabel =
   "mb-1 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground";

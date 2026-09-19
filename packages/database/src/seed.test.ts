@@ -161,6 +161,11 @@ describe("seedPlatform()", () => {
     expect(mocks.onConflictDoUpdateMock).toHaveBeenCalledOnce();
   });
 
+  it("seeds book editions after the free plan", async () => {
+    await seedPlatform();
+    expect(mocks.seedBookEditionsMock).toHaveBeenCalledOnce();
+  });
+
   it("rewrites an existing free row's GAU terms to the v1 published figures", async () => {
     await seedPlatform();
     const arg = mocks.onConflictDoUpdateMock.mock.calls[0]?.[0] as
