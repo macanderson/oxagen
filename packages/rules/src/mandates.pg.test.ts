@@ -19,7 +19,9 @@
  *     reserve is over_limit and remaining reads 0; raised → the room opens
  *   - the check: no covering mandate → no_mandate; a target outside the allow
  *     list → target_denied; a measure the version does not declare →
- *     measure_unreadable; a value over human_above parks the call with a
+ *     measure_unreadable; a measure whose currently declared kind disagrees
+ *     with the kind its limit was stamped with → measure_kind_changed; a
+ *     value over human_above parks the call with a
  *     reservation held and an approval row carrying mandate_id, tool_call_id,
  *     rule_ids and input_digest; the same call after approval proceeds on
  *     the held reservation and marks the approval used, once; the settlement
@@ -649,6 +651,42 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .update(schema.mandates)
           .set({ status: "revoked" })
           .where(eq(schema.mandates.id, undeclared)),
+      );
+    });
+
+    // #3130 (ADR-108): an unpinned mandate pattern can still match a tool
+    // version published after the mandate's limit was written. If that
+    // version now declares the same measure with a different kind (count
+    // vs. amount) under the same unit spelling, enforcing against a figure
+    // entered under the old kind would be nonsense; this refuses the call
+    // instead, the same way two matched tools disagreeing at write time
+    // already refuses (measure_kind_conflict).
+    it("denies a call whose measure's declared kind no longer matches the kind its limit was stamped with", async () => {
+      const agent = randomUUID();
+      const stale = await insertMandate(agent, {
+        limits: {
+          amount: {
+            perCall: "250000000",
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "USD",
+            kind: "count",
+          },
+        },
+      });
+      const out = await decide(
+        checkArgs(agent, { amount: { value: "10" }, vendor: "vendor:aws" }),
+      );
+      expect(out).toMatchObject({
+        kind: "deny",
+        reason: "measure_kind_changed",
+      });
+      expect(await ledgerOf(stale)).toHaveLength(0);
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({ status: "revoked" })
+          .where(eq(schema.mandates.id, stale)),
       );
     });
 

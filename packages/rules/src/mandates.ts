@@ -54,6 +54,7 @@ import {
   exceeds,
   isCallsMeasure,
   legacyMeasureKindGuess,
+  measureKindOf,
   periodKey,
   periodKeyRange,
   periodKeysOverlap,
@@ -80,6 +81,7 @@ export const MANDATE_APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
 type MandateDenyReason =
   | "no_mandate"
   | "measure_unreadable"
+  | "measure_kind_changed"
   | "target_denied"
   | "over_limit";
 
@@ -669,6 +671,31 @@ export async function decideMandate(
           reason: "measure_unreadable",
           mandate,
           detail: `${tool.slug}@${tool.version} declares no measure "${measure}"`,
+        };
+      }
+      // ADR-108 stamps a limit's kind from the declaration matched at write
+      // time (or, for a row written before ADR-108, the documented
+      // `legacyMeasureKindGuess` fallback `parseMandateRow` already resolved
+      // it to). An unpinned mandate pattern (`slug`, `slug@*`) can still
+      // match a version published after that write, and that version can
+      // declare this measure's kind differently with the same unit spelling
+      // (count to amount or back) without the mandate ever being touched
+      // again. A stored kind that disagrees with what governs this call
+      // right now is the same disagreement ADR-108 already refuses at
+      // write time when two matched tools disagree, moved to the moment it
+      // can also happen between then and now: refused here rather than
+      // enforced against a figure entered under a kind that no longer
+      // holds.
+      const storedKind = mandate.limits[measure]?.kind;
+      if (
+        storedKind !== undefined &&
+        storedKind !== measureKindOf(declaration.type)
+      ) {
+        return {
+          kind: "deny",
+          reason: "measure_kind_changed",
+          mandate,
+          detail: `${tool.slug}@${tool.version} now declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate's limit was written when it was ${storedKind}; update the mandate's limit before this call can be decided`,
         };
       }
       const read = readMeasure(args.input, declaration);

@@ -135,7 +135,32 @@ re-stamps every row it touches (§1: a `limitChanges` edit reruns
 output, so touching *any* field of an old mandate's limits refreshes every
 measure's `kind`, not only the one the operator changed).
 
-### 4. `isCurrencyCode` stops deciding anything downstream of the write
+### 4. The gate refuses a call if the declaration has drifted from the stamped kind
+
+An unpinned mandate pattern (`slug`, `slug@*`) is not bound to the tool
+version that was active when the mandate's limit was stamped. A later
+publish can change that measure's declared kind under the same unit
+spelling (count to amount, or back) without the mandate ever being written
+again, so `decideMandate` (`packages/rules/src/mandates.ts`) now compares
+the stamped `kind` against what the tool's currently active version
+declares before reading a value for that measure, and refuses the call
+(`measure_kind_changed`) on a mismatch instead of enforcing a stored figure
+against a kind that no longer holds. This is the same disagreement §2
+already refuses at write time between two matched tools, closed at the
+other moment it can happen: between the write and the call.
+
+This is a refusal, not a repair: nothing revalidates or restamps the
+mandate's limit automatically. The accountable office sees the refusal
+through the ordinary `mandate.exception` audit trail and fixes it with
+`update_mandate_limits`, which restamps every measure's kind from the
+current declaration the moment any field of the limits is touched (§3).
+Binding a mandate to the specific tool version matched at write time, so an
+unpinned pattern could never drift under it at all, was considered and
+rejected: it would refuse `stripe__create_payment@*` from ever picking up a
+routine patch release that does not touch a limited measure's kind, for the
+sake of a case only a kind-changing release creates.
+
+### 5. `isCurrencyCode` stops deciding anything downstream of the write
 
 `apps/app/src/data/live/mappers/mandates.ts`'s `measureValue` now takes the
 resolved `kind` as a parameter and switches on it, the same shape as the
@@ -171,3 +196,10 @@ classification) and is unchanged.
   might land, because a backfill is optional under this decision, not required
   by it: the fallback stays as documented, correct-by-construction cover for
   whatever mandate row nothing has touched yet.
+- `decideMandate` gains a third deny reason, `measure_kind_changed` (§4): an
+  unpinned mandate pattern that survives a tool republish changing a limited
+  measure's kind under the same unit is refused at call time rather than
+  enforced against a figure entered under a kind that no longer holds. No
+  existing fixture exercised a kind change after grant; this refusal is new
+  and only fires once a tool's active version disagrees with what a mandate
+  was stamped with.
