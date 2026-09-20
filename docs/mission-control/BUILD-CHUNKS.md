@@ -128,6 +128,8 @@ Done when:
 
 ## Session 3: agents and people
 
+Landed in PR https://github.com/macanderson/oxagen/pull/3517
+
 **Why.** The agent page reads roles and hosts and cannot write either. The toolbelt shows rules without the schemas the spec pairs them with. People lists invitations and cannot send one.
 
 Lanes:
