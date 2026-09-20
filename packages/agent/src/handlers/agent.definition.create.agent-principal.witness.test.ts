@@ -53,6 +53,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   // a suite that counts seam calls must see one identity, not two.
   const dbMock = {
     ...real,
+    withTransactionOrgScope: async (
+      tx: unknown,
+      fn: (tx: unknown) => Promise<unknown>,
+    ) => fn(tx),
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx),
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };

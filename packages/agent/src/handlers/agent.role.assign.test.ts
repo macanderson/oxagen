@@ -1,3 +1,4 @@
+import { withTransactionOrgScope } from "@oxagen/database";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createFakeTx } from "../test-utils/fake-tx";
 
@@ -14,6 +15,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   // a suite that counts seam calls must see one identity, not two.
   const dbMock = {
     ...real,
+    withTransactionOrgScope: vi.fn(
+      async (tx: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(tx),
+    ),
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fake.tx),
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
@@ -105,6 +109,7 @@ const CTX_ENTERPRISE = makeCTX({ planTier: "enterprise" });
 
 beforeEach(() => {
   fake.reset();
+  vi.mocked(withTransactionOrgScope).mockClear();
   mocks.emitAudit.mockClear();
   gate.keyCreator = "u_creator";
   gate.orgRole = "Owner";
@@ -125,6 +130,10 @@ describe("agent.role.assign handler", () => {
     expect(out.agentId).toBe("agt_1");
     expect(out.roleId).toBe("rol_contrib");
     expect(fake.mutations.insert).toBe(1);
+    expect(withTransactionOrgScope).toHaveBeenCalledWith(
+      fake.tx,
+      expect.any(Function),
+    );
   });
 
   it("emits the IAM audit event with principal_kind='agent' and the agent as target", async () => {

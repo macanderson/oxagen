@@ -115,6 +115,7 @@ vi.mock("@oxagen/rules", async () => {
     await vi.importActual<typeof import("@oxagen/rules")>("@oxagen/rules");
   return {
     DecisionRuleDeniedError: realGate.DecisionRuleDeniedError,
+    DecisionRuleUnavailableError: realGate.DecisionRuleUnavailableError,
     DecisionRuleApprovalRequiredError:
       realGate.DecisionRuleApprovalRequiredError,
     bootstrapDecisionRulesRuntime: vi.fn(),
@@ -194,13 +195,14 @@ beforeEach(async () => {
     expiresAt: new Date(Date.now() + 60_000),
     resumeStartedAt: null,
   };
-  h.invoke.mockImplementation(async (_name, input, ctx) => {
+  h.invoke.mockImplementation(async (_name, input, ctx, opts) => {
     const { createDecisionRulesGate } = await import("@oxagen/rules");
     await createDecisionRulesGate({
       loadRuleSet: async () => h.realRules,
       autoApprove: h.autoApprove,
     })({
       capability: "write_test",
+      requireFreshRules: opts?.requireFreshRules,
       input: (h.schema as z.ZodType).parse(input),
       ctx,
     });
@@ -253,6 +255,7 @@ describe("approved call resumption", () => {
         surface: "agent",
         runId: "new-run",
         assertValidatedInput: expect.any(Function),
+        requireFreshRules: true,
       },
     );
     expect(h.open.mock.calls[0]?.[0].instruction).toContain("arun_original");
@@ -288,7 +291,7 @@ describe("approved call resumption", () => {
       const commit = vi.fn().mockResolvedValue(undefined);
       h.autoApprove.mockResolvedValue({ ok: true, commit });
       expect(await resumeApprovedCall(ref)).toBe(
-        effect === "deny" ? "indeterminate" : "succeeded",
+        effect === "deny" ? "failed" : "succeeded",
       );
       if (effect === "deny") {
         expect(h.row.resumeError).toBe("decision_rule_denied");
@@ -304,6 +307,32 @@ describe("approved call resumption", () => {
         expect(commit).toHaveBeenCalledTimes(1);
         expect(h.invoke).toHaveBeenCalledTimes(1);
       }
+    },
+  );
+  it.each(["approval", "unavailable"] as const)(
+    "records a typed %s refusal before the handler as failed",
+    async (kind) => {
+      const {
+        DecisionRuleApprovalRequiredError,
+        DecisionRuleUnavailableError,
+      } = await import("@oxagen/rules");
+      h.invoke.mockRejectedValueOnce(
+        kind === "approval"
+          ? new DecisionRuleApprovalRequiredError({
+              effect: "require_approval",
+              ruleId: "new-human-rule",
+              description: "A new approval is required",
+            })
+          : new DecisionRuleUnavailableError(),
+      );
+      expect(await resumeApprovedCall(ref)).toBe("failed");
+      expect(h.row.resumeStatus).toBe("failed");
+      expect(h.row.resumeError).toBe(
+        kind === "approval"
+          ? "new_rule_requires_approval"
+          : "decision_rules_unavailable",
+      );
+      expect(h.receipt).not.toHaveBeenCalled();
     },
   );
   it.each(["run", "kill"])(

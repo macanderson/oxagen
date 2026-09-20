@@ -199,6 +199,47 @@ export function atlasFilesAtRef(
   }
 }
 
+/** Match exact working-tree bytes at this path against merge-base ancestors. */
+function isExactHistoricalRestoration(
+  file: string,
+  mergeBase: string,
+  run: GitRunner,
+): boolean {
+  const path = `${ATLAS_MIGRATIONS_REL}/${file}`;
+  try {
+    const currentBlob = run(["hash-object", "--no-filters", "--", path]).trim();
+    if (!/^[0-9a-f]{40,64}$/.test(currentBlob)) return false;
+    const commits = run([
+      "log",
+      "--format=%H",
+      "--full-history",
+      mergeBase,
+      "--",
+      path,
+    ])
+      .split("\n")
+      .filter((commit) => /^[0-9a-f]{40,64}$/.test(commit));
+    for (const commit of commits) {
+      try {
+        if (
+          run([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            `${commit}:${path}`,
+          ]).trim() === currentBlob
+        )
+          return true;
+      } catch {
+        // A deletion commit has no blob at this path. Check earlier ancestors.
+      }
+    }
+  } catch {
+    // Missing history or unreadable working bytes cannot authorize an exception.
+  }
+  return false;
+}
+
 export interface AtlasBaselineResult {
   /** "degraded" means git could not establish a baseline (see `note`). */
   status: "ok" | "degraded";
@@ -231,6 +272,11 @@ export interface AtlasBaselineResult {
  *     can still fall behind by the time it merges. That is not an authoring
  *     mistake, and blocking it would punish branch age rather than the defect
  *     this check exists for; the merge-base comparison already caught that.
+ *
+ * An exact restoration is the one exception: the working bytes must match a
+ * blob at the same path in history reachable from the merge base. Branch-only
+ * history, renamed paths, and edited historical SQL do not qualify. Restoring
+ * a file does not prove that a deployed database applied that revision.
  *
  * "ADDED" IS A FILE-SET DIFF, NOT A LINE DIFF
  *   `currentFiles` (the working tree) is compared against the merge base's
@@ -315,6 +361,14 @@ export function checkAtlasBaseline(
     if (version === null) continue; // malformed name: lintAtlas() reports it
 
     if (mergeBaseMax !== null && version <= mergeBaseMax) {
+      if (isExactHistoricalRestoration(file, mergeBase, run)) {
+        warnings.push(
+          `${file}: exact historical restoration from merge-base ancestry. ` +
+            "Preserve its revision name and verify deployed Atlas history before application. " +
+            "This check does not prove that a database applied the restored revision.",
+        );
+        continue;
+      }
       errors.push(
         `${file}: stamped ${version}, at or before ${mergeBaseMax}, the latest ` +
           `migration already on ${baseRef} where this branch diverged (merge base ` +

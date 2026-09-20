@@ -22,16 +22,16 @@ import type { SQL } from "drizzle-orm";
 
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
+  withOrgDb: vi.fn(),
   emitSecurityEvent: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  // The org-wide seam is mocked as the SAME function as the tenant
-  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
-  // a suite that counts seam calls must see one identity, not two.
+  // Separate spies expose which write scope the production handler chooses.
+  // The default org mock forwards role reads to the shared fixture.
   const dbMock = { ...real, withTenantDb: mocks.withTenantDb };
-  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+  return { ...dbMock, withOrgDb: mocks.withOrgDb };
 });
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: mocks.emitSecurityEvent,
@@ -39,6 +39,7 @@ vi.mock("@oxagen/database/security", () => ({
 
 import {
   createKillSwitchSetHandler,
+  killSwitchSetHandler,
   resolveKillSwitchTarget,
   type KillSwitchTargetLookups,
 } from "./kill_switch.set";
@@ -200,6 +201,10 @@ function handlerOver(flip: ReturnType<typeof flipTx>) {
 beforeEach(() => {
   mocks.emitSecurityEvent.mockReset();
   stubRole("Owner");
+  mocks.withOrgDb.mockReset();
+  mocks.withOrgDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+    mocks.withTenantDb(fn),
+  );
 });
 
 describe("resolveKillSwitchTarget", () => {
@@ -744,4 +749,69 @@ describe("set_kill_switch", () => {
     ).catch((e: unknown) => e);
     expect(isHandlerError(err) && err.reason).toBe("no_principal");
   });
+});
+
+describe("kill-switch transaction scope", () => {
+  it.each([
+    ["class", "moves_money", null],
+    ["workspace", WS, null],
+    ["org", ORG, null],
+    ["operator", USER_PUBLIC_ID, null],
+    ["tool_version", "tlv_pay", WS],
+    ["tool_server", "mcs_github", WS],
+    ["connection", "mcrd_gh", WS],
+    ["agent", "agt_finops", WS],
+  ] as const)(
+    "routes %s writes to the matching scope",
+    async (kind, id, expectedWorkspace) => {
+      const flip = flipTx({ generation: 4, activeSwitches: [], liveGrants: 0 });
+      const transaction = vi.fn(
+        (fn: (tx: never) => Promise<unknown>, _workspaceId: string | null) =>
+          fn(flip.tx as never),
+      );
+      const handler = createKillSwitchSetHandler({
+        lookups,
+        transaction: transaction as never,
+      });
+      await handler(
+        { target: { kind, id }, on: true, reason: "Scope regression" },
+        ctx(),
+      );
+      expect(transaction.mock.calls[0]?.[1]).toBe(expectedWorkspace);
+    },
+  );
+});
+
+describe("production kill-switch database seam", () => {
+  it.each(["class", "tool_version"] as const)(
+    "clears %s through the correct database seam",
+    async (kind) => {
+      const flip = flipTx({
+        generation: 4,
+        activeSwitches: [{ id: "deny-id", publicId: "emd_active" }],
+        liveGrants: 0,
+      });
+      const roleRead = mocks.withTenantDb.getMockImplementation();
+      if (!roleRead) throw new Error("Missing role fixture");
+      mocks.withOrgDb
+        .mockImplementationOnce(roleRead)
+        .mockImplementation((fn: (tx: unknown) => unknown) => fn(flip.tx));
+      mocks.withTenantDb.mockReset();
+      mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+        fn(flip.tx),
+      );
+      await killSwitchSetHandler(
+        {
+          target: { kind, id: kind === "class" ? "moves_money" : "tlv_pay" },
+          on: false,
+          reason: "Recovered",
+        },
+        ctx(),
+      );
+      expect(mocks.withOrgDb).toHaveBeenCalledTimes(kind === "class" ? 2 : 1);
+      expect(mocks.withTenantDb).toHaveBeenCalledTimes(
+        kind === "class" ? 0 : 1,
+      );
+    },
+  );
 });

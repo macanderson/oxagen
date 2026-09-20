@@ -14,6 +14,7 @@ import {
   inputDigest,
   DecisionRuleDeniedError,
   DecisionRuleApprovalRequiredError,
+  DecisionRuleUnavailableError,
 } from "@oxagen/rules";
 import {
   getCapability,
@@ -293,6 +294,7 @@ export async function resumeApprovedCall(
         dispatched = true;
         await invoke(cap.name, payload.rawInput, ctx, {
           surface: "agent",
+          requireFreshRules: true,
           runId: run.runId,
           assertValidatedInput: (value) => {
             if (inputDigest(value) !== payload.validatedDigest)
@@ -322,10 +324,20 @@ export async function resumeApprovedCall(
                 ? "new_rule_requires_approval"
                 : error instanceof CapabilityError
                   ? error.code
-                  : dispatched
-                    ? "execution_outcome_unknown"
-                    : "authorization_or_admission_failed";
-        const status = dispatched ? "indeterminate" : "failed";
+                  : error instanceof DecisionRuleUnavailableError
+                    ? "decision_rules_unavailable"
+                    : dispatched
+                      ? "execution_outcome_unknown"
+                      : "authorization_or_admission_failed";
+        const refusedBeforeHandler =
+          error instanceof ApprovalResumeError ||
+          error instanceof DecisionRuleDeniedError ||
+          error instanceof DecisionRuleApprovalRequiredError ||
+          error instanceof DecisionRuleUnavailableError ||
+          (error instanceof CapabilityError &&
+            error.code === "decision_rules_unavailable");
+        const status =
+          dispatched && !refusedBeforeHandler ? "indeterminate" : "failed";
         if (run) await run.seal({ status: "failed", error: reason });
         await finish(status, reason);
         return status;
