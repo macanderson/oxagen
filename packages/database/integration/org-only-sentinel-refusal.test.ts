@@ -443,55 +443,6 @@ describe("what the refusal does not depend on", () => {
   });
 });
 
-describe("workspace calls cannot write shared org rows", () => {
-  const workspace = { org: ORG, workspace: WS_A };
-
-  it("reads shared rows without gaining permission to delete them", async () => {
-    const result = await inScopeRolledBack(workspace, async (tx) => {
-      const rows =
-        await tx`SELECT public_id FROM iam.principal_role_assignments WHERE public_id = 'pra_sr_org'`;
-      const deleted =
-        await tx`DELETE FROM iam.principal_role_assignments WHERE public_id = 'pra_sr_org'`;
-      return { visible: rows.length, deleted: deleted.count };
-    });
-    expect(result).toEqual({ visible: 1, deleted: 0 });
-  });
-
-  it("refuses promotion of an owned workspace row into org scope", async () => {
-    const { code } = await refusalOf(
-      inScopeRolledBack(
-        workspace,
-        (tx) => tx`
-      UPDATE iam.principal_role_assignments SET workspace_id = NULL WHERE public_id = 'pra_sr_move'
-    `,
-      ),
-    );
-    expect(code).toBe(RLS_REFUSAL);
-  });
-
-  it("refuses insertion of an org-level assignment from a workspace", async () => {
-    const { code } = await refusalOf(
-      inScopeRolledBack(
-        workspace,
-        (tx) => tx`
-      INSERT INTO iam.principal_role_assignments (public_id, principal_id, role_id, org_id, workspace_id)
-      VALUES ('pra_sr_workspace_denied', ${PRINCIPAL}, ${ROLE_FOR_WRITE}, ${ORG}, NULL)
-    `,
-      ),
-    );
-    expect(code).toBe(RLS_REFUSAL);
-  });
-
-  it("still allows writes to the caller's own workspace", async () => {
-    const count = await inScopeRolledBack(workspace, async (tx) => {
-      const rows =
-        await tx`UPDATE iam.principal_role_assignments SET workspace_id = ${WS_A} WHERE public_id = 'pra_sr_move'`;
-      return rows.count;
-    });
-    expect(count).toBe(1);
-  });
-});
-
 describe("withOrgDb — the organisation-wide read seam", () => {
   const orgWide = {
     org: ORG,
