@@ -100,13 +100,13 @@ Lanes:
 
 Done when:
 
-- [ ] An approval can be approved or denied with a reason from Fleet and from Run
-- [ ] Each card shows who asked, which agent, which action, which rule, and the eligibility line
-- [ ] Fleet shows the enforcement tier and the verdict for every row, recorded values only
-- [ ] Observe-tier runs offer no controls
-- [ ] A live wrapped run can be paused, resumed, and cancelled from Fleet
-- [ ] Steer carries a delivery mode
-- [ ] `resolve_approval`, `get_auto_eligibility`, and `dispatch_command` (Fleet) are bound with real proofs
+- [x] An approval can be approved or denied with a reason from Fleet and from Run
+- [x] Each card shows who asked, which agent, which action, which rule, and the eligibility line
+- [x] Fleet shows the enforcement tier and the verdict for every row, recorded values only
+- [x] Observe-tier runs offer no controls
+- [x] A live wrapped run can be paused, resumed, and cancelled from Fleet
+- [x] Steer carries a delivery mode
+- [x] `resolve_approval`, `get_auto_eligibility`, and `dispatch_command` (Fleet) are bound with real proofs
 
 ## Session 2: tools governance
 
