@@ -176,10 +176,10 @@
     "dispatch_command": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command (features/run/actions.ts, features/run/run-controls.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] — Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command, and an observe-tier run draws all four disabled with the recorded reason (features/run/actions.ts, features/run/run-controls.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-018UrgFq-mc1-columns"
     },
     "export_audit_events": {
       "route": "/[org]/audit/export",
@@ -592,10 +592,10 @@
     "list_runs": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/page.tsx",
-      "entry": "/[org]/[ws] — the rev1 surface that invokes list_runs (data/live/mappers/mappers.type-test.ts, data/live/mappers/runs.ts, data/live/runs.ts)",
+      "entry": "/[org]/[ws] — the Fleet runs table, whose Tier, Replay and Verdict columns render list_runs' recorded enforcementTier, replayGrade and verdict (features/fleet/runs-table.tsx, ui/enforcement-tier.tsx, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts)",
       "proof": "apps/app/src/features/fleet/fleet.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-018UrgFq-mc1-columns"
     },
     "list_skills": {
       "route": "/[org]/[ws]/steering?tab=skills",

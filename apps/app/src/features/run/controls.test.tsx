@@ -197,6 +197,40 @@ describe("run controls", () => {
     expect(haltRun).not.toHaveBeenCalled();
   });
 
+  // An observe-tier session records what an agent did and gives Oxagen no
+  // connection point, so a queued command would have nowhere to travel. The
+  // tier is read before the ledger and the role branches, because it holds
+  // whatever those two say (#3285).
+  it("disables every control, with the reason, on an observe-tier run (negative)", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          status="live"
+          source="tacho"
+          enforcementTier="observe"
+          orgRole="owner"
+          wsRole="owner"
+        />
+      </IntlProvider>,
+    );
+    for (const command of ["pause", "resume", "steer", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
+    }
+    expect(screen.getByTestId("observe-no-control")).toHaveTextContent(
+      "Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel.",
+    );
+    expect(screen.queryByTestId("ledger-no-control")).toBeNull();
+    expect(screen.queryByTestId("role-no-control")).toBeNull();
+    await user.click(screen.getByTestId("run-pause"));
+    expect(screen.queryByTestId("run-pause-dialog")).toBeNull();
+    expect(haltRun).not.toHaveBeenCalled();
+    expect(steerRun).not.toHaveBeenCalled();
+  });
+
   it("admits a workspace Member who is only an organization Viewer, as dispatch_command does", () => {
     render(
       <IntlProvider>

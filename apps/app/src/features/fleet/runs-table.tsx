@@ -136,6 +136,12 @@ function RunsPageView({
             <td className={cell}>
               <StatusBadge status={run.status} />
             </td>
+            {/*
+              A row control belongs beside this badge. Whatever adds one asks
+              `acceptsCommands(run.enforcementTier)` first and draws nothing an
+              observe-tier run would refuse, the way the Run page's controls do
+              (#3285).
+            */}
             <td className={cell}>
               <EnforcementTierBadge tier={run.enforcementTier} />
             </td>

@@ -23,7 +23,7 @@
 // and frames page they were using stay put.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
-import type { RunRow } from "@/data/contracts/runs";
+import { acceptsCommands, type RunRow } from "@/data/contracts/runs";
 import type { ActionResult } from "@/server/kernel";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
@@ -236,7 +236,7 @@ export function RunControls({
 }) {
   const t = useTranslations("run.commands");
   if (status !== "live") return null;
-  if (enforcementTier === "observe") {
+  if (!acceptsCommands(enforcementTier)) {
     return (
       <DisabledControls
         reason={t("observeReason")}

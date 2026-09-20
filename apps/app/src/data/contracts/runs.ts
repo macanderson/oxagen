@@ -106,6 +106,19 @@ export const RunMachine = z.object({
 });
 export type RunMachine = z.infer<typeof RunMachine>;
 
+/**
+ * Can a direct command reach this run? An `observe`-tier session only records
+ * what an agent did and gives Oxagen no connection point, so a queued pause,
+ * resume, steer or cancel would have nothing to travel down (#3285).
+ *
+ * Every surface that offers a run control answers from here: the Run page's
+ * controls today, and the Fleet row controls when that lane lands. One rule,
+ * so a row cannot offer what its run page refuses.
+ */
+export function acceptsCommands(tier: EnforcementTier): boolean {
+  return tier !== "observe";
+}
+
 export const RunRow = z.object({
   id: PublicId,
   /** Which store recorded the run: the evidence ledger or a wrapped agent's session. */
