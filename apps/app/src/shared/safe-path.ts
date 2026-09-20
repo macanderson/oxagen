@@ -252,9 +252,15 @@ export const routes = {
       drill: view.drill,
       finding: view.finding,
     }),
-  /** Skills; `cursor` opens a later page of the inventory. */
+  /**
+   * Skills, the Skills tab of Steering (MC spec §10.7); `cursor` opens a later
+   * page of the inventory. `/{org}/{ws}/skills` redirects here.
+   */
   skills: (org: string, ws: string, q?: { cursor: string }): SafePath =>
-    withQuery(pathOf(org, ws, "skills"), { cursor: q?.cursor }),
+    withQuery(pathOf(org, ws, "steering"), {
+      tab: "skills",
+      cursor: q?.cursor,
+    }),
   /**
    * Tools; a tab, a category chip, the API-names toggle and a cursor are query
    * values on the one route (#2958 adds no route, ARCHITECTURE.md §1.2).
@@ -275,17 +281,27 @@ export const routes = {
       names: q.names,
       cursor: q.cursor,
     }),
-  /** Steering; a tab, a kind, a page offset and a selected proposal are query values on the one route. */
+  /**
+   * Steering; a tab, a kind, a page offset, a selected proposal and a Skills
+   * inventory cursor are query values on the one route.
+   */
   steering: (
     org: string,
     ws: string,
-    q: { tab?: string; kind?: string; offset?: string; proposal?: string } = {},
+    q: {
+      tab?: string;
+      kind?: string;
+      offset?: string;
+      proposal?: string;
+      cursor?: string;
+    } = {},
   ): SafePath =>
     withQuery(pathOf(org, ws, "steering"), {
       tab: q.tab,
       kind: q.kind,
       offset: q.offset,
       proposal: q.proposal,
+      cursor: q.cursor,
     }),
 };
 

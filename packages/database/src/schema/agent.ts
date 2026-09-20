@@ -1357,7 +1357,7 @@ export const contextRecords = agentSchema.table(
     // write path has required one since #3302, enforced today at the
     // application layer (contracts/context.record.publish.ts,
     // context.steering.store.ts). The DB-level NOT NULL is a deliberate
-    // follow-up migration (see migration `20260920140000`'s comment,
+    // follow-up migration (see migration `20260920150000`'s comment,
     // Codex round 3 on #3486): db-migrate.yml runs on no ordering guarantee
     // against the deploy that ships this requirement, so a hard constraint
     // here today could reject a write from an old container still in a

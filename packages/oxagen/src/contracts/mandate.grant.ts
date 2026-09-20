@@ -20,7 +20,7 @@ export const mandateGrant = registerCapability({
     "Grant an agent bounded, expiring authority for a consequence: limits over the tool's declared measures, allowed targets, tool patterns, the mandate's own approval rule, a purpose and a validity window. Activates a requested draft when requestId is given.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "governance" },

@@ -23,6 +23,7 @@ import { agentCredentialRotate } from "./agent.credential.rotate";
 import { agentSuspend } from "./agent.suspend";
 import { agentRetire } from "./agent.retire";
 import { agentDefinitionCommit } from "./agent.definition.commit";
+import { agentPropose } from "./agent.propose";
 import { agentToolbeltGet } from "./agent.toolbelt.get";
 import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
@@ -90,6 +91,7 @@ import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
 import { skillList } from "./skill.list";
+import { skillPropose } from "./skill.propose";
 import { spendStatementExport } from "./spend.statement.export";
 import { costPriceEntryList } from "./cost.price_entry.list";
 import { costUnpricedModelList } from "./cost.unpriced_model.list";
@@ -544,6 +546,7 @@ export {
   agentSuspend,
   agentRetire,
   agentDefinitionCommit,
+  agentPropose,
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
@@ -651,6 +654,7 @@ export {
   spendDrill,
   spendWasteList,
   skillList,
+  skillPropose,
   spendStatementExport,
   costPriceEntryList,
   costUnpricedModelList,
@@ -888,6 +892,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentSuspend,
   agentRetire,
   agentDefinitionCommit,
+  agentPropose,
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
@@ -992,6 +997,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendDrill,
   spendWasteList,
   skillList,
+  skillPropose,
   spendStatementExport,
   costPriceEntryList,
   costUnpricedModelList,

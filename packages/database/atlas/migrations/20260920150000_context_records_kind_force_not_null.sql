@@ -91,6 +91,6 @@ WHERE "kind" IS NULL OR "force" IS NULL;
 -- the same two-step (ship the writer, harden the column later) ADR-111
 -- used for measureDeclarationSchema's write boundary.
 COMMENT ON COLUMN "agent"."context_records"."kind" IS
-  'The kind the record''s active version declares. Every write path requires one since #3302; the NOT NULL constraint is a deliberate follow-up migration (see 20260920140000''s comment).';
+  'The kind the record''s active version declares. Every write path requires one since #3302; the NOT NULL constraint is a deliberate follow-up migration (see 20260920150000''s comment).';
 COMMENT ON COLUMN "agent"."context_records"."force" IS
-  'How hard the record steers: must, should, may, or info. Every write path requires one since #3302; only must/should ever reach an agent. The NOT NULL constraint is a deliberate follow-up migration (see 20260920140000''s comment).';
+  'How hard the record steers: must, should, may, or info. Every write path requires one since #3302; only must/should ever reach an agent. The NOT NULL constraint is a deliberate follow-up migration (see 20260920150000''s comment).';

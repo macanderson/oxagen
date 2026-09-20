@@ -462,6 +462,47 @@ export async function readTachoToolCallObservations(args: {
   }));
 }
 
+/**
+ * The token classes a model call can actually report today, across both
+ * frame stores. `PriceTokenClass` (@oxagen/database/schema) also carries the
+ * media and request classes (`image`, `video_second`, `embedding_input`,
+ * `rerank`, `server_tool_request`); no observation source in this codebase —
+ * the gateway's `token_usage` or a wrapped agent's `tacho_events` model-call
+ * row — reports usage in any of them today, so this file does not carry a
+ * dependency on @oxagen/database just to spell six of eleven names, and this
+ * list has nothing to omit them from: `findUnpricedModels` only ever checks a
+ * class an observation actually used, so a class with no observation source
+ * yet simply never appears. Adding a source for one of them is a one-line
+ * addition here plus one to whichever query below produces it.
+ */
+export const OBSERVED_TOKEN_CLASSES = [
+  "input_uncached",
+  "cache_read",
+  "cache_write_5m",
+  "cache_write_1h",
+  "output",
+  "reasoning",
+] as const;
+export type ObservedTokenClass = (typeof OBSERVED_TOKEN_CLASSES)[number];
+
+/**
+ * One token class's usage within one price-boundary bucket of one observed
+ * model: how much of it ran, and the span of calls that used it, both bounded
+ * to the bucket. Only classes and buckets that actually saw nonzero usage are
+ * returned — a class a model never used, or a bucket with no calls in it, is
+ * simply absent rather than a zero row.
+ */
+export interface ObservedModelClassRow {
+  tokenClass: ObservedTokenClass;
+  /** Model calls in this bucket that used this class. */
+  calls: number;
+  tokens: number;
+  /** RFC 3339. */
+  firstSeen: string;
+  /** RFC 3339. */
+  lastSeen: string;
+}
+
 /** One model an organization has actually run, folded across both frame stores. */
 export interface ObservedModelRow {
   model: string;
@@ -475,14 +516,53 @@ export interface ObservedModelRow {
   firstSeen: string;
   /** RFC 3339. */
   lastSeen: string;
+  /**
+   * This model's usage broken out by class and, when `boundaries` was given
+   * to {@link readObservedModels}, by which boundary-bounded interval it fell
+   * in — so a caller can test a price only against the classes a model
+   * actually used, and only at the instants its book answer could have
+   * differed, instead of a fixed class list judged by one snapshot.
+   */
+  classes: ObservedModelClassRow[];
 }
 
 /**
- * At most this many models. An organization running more distinct model ids
- * than this has a naming problem, not a pricing one, and an unbounded list
- * would be neither readable nor cheap.
+ * At most this many models feed the price comparison. An organization
+ * running more distinct model ids than this has a naming problem, not a
+ * pricing one, and an unbounded list would be neither readable nor cheap to
+ * rank. This bounds the store read itself against a pathological id
+ * cardinality; it is deliberately far above the 500 an unpriced-model report
+ * actually shows, because that cap is applied by @oxagen/billing AFTER it has
+ * filtered to the models the book cannot price — capping here, before that
+ * filter, would let a low-volume unpriced model get silently outranked by
+ * 500 priced, uninteresting ones and never reach the comparison at all.
  */
-const OBSERVED_MODEL_LIMIT = 500;
+const OBSERVED_MODEL_SQL_SAFETY_LIMIT = 5000;
+
+/**
+ * The interval index a timestamp falls in, given `boundaries` sorted
+ * ascending: the count of boundaries at or before it. Boundary 0 covers
+ * everything before the first boundary; the book's answer is constant within
+ * one interval, so grouping by this index groups every row whose price-book
+ * answer could not have differed.
+ */
+function bucketIndexExpr(tsColumn: string): string {
+  return `arrayCount(b -> b <= ${tsColumn}, {boundaries:Array(DateTime64(3))})`;
+}
+
+/**
+ * The reasoning figure a class-bucket row is credited with, mirroring
+ * {@link FRAME_REASONING}: the transcript's thinking figure when a transcript
+ * row joins, else the priced row's own column. Unlike {@link FRAME_REASONING},
+ * this expression names its own row alias so it can be reused across the
+ * gateway-shaped and tacho-shaped halves of the class-bucket query.
+ */
+function classBucketReasoning(rowAlias: string): string {
+  return `toInt64(if(${TRANSCRIPT_THINKING} > 0, ${TRANSCRIPT_THINKING}, coalesce(${rowAlias}.thinking_tokens, 0)))`;
+}
+function classBucketCache1h(rowAlias: string, cacheWriteExpr: string): string {
+  return `toInt64(least(${cacheWriteExpr}, if(${TRANSCRIPT_CACHE_1H} > 0, ${TRANSCRIPT_CACHE_1H}, coalesce(${rowAlias}.cache_creation_1h_tokens, 0))))`;
+}
 
 /**
  * The distinct models an organization has run since `since`, heaviest first
@@ -511,6 +591,15 @@ const OBSERVED_MODEL_LIMIT = 500;
  *
  * Throws on a degraded store: a short list read off half the frames would
  * say a model is priced when nobody has priced it.
+ *
+ * A second read then breaks each returned model's usage out by class and,
+ * when `boundaries` is given, by which price-boundary bucket it fell in
+ * ({@link ObservedModelClassRow}) — so `findUnpricedModels` can compare a
+ * price only against the classes a model actually used, at the instants its
+ * book answer could actually have differed, instead of a fixed class list
+ * judged by one snapshot. That read is skipped when the summary is empty,
+ * and is scoped to exactly the models the summary named, so a book holding
+ * boundaries for unrelated models never widens it.
  */
 export async function readObservedModels(args: {
   orgId: string;
@@ -518,6 +607,23 @@ export async function readObservedModels(args: {
   since: Date;
   /** Frames at or before this instant only; open-ended when omitted. */
   until?: Date;
+  /**
+   * Price-book boundaries ({@link import("@oxagen/billing").priceBookBoundaries})
+   * to bucket usage by, sorted ascending. Omitted or empty puts every call in
+   * one bucket per model and class, the whole window. Ignored when
+   * {@link boundariesFor} is given.
+   */
+  boundaries?: readonly Date[];
+  /**
+   * The same list, chosen once the summary read has named the models the
+   * organization actually ran, so a caller can hand in only the boundaries
+   * that could move a price for THOSE models rather than the whole book's
+   * history. Preferred over {@link boundaries} for that reason: the list is
+   * scanned per frame, so an unrelated model's rate change would otherwise
+   * both cost the scan and split this report into buckets whose price
+   * answers are identical.
+   */
+  boundariesFor?: (models: readonly string[]) => readonly Date[];
 }): Promise<ObservedModelRow[]> {
   const ch = clickhouse();
   const workspace =
@@ -534,7 +640,18 @@ export async function readObservedModels(args: {
           AND ${NOT_A_DUPLICATE}
           AND model != ''
           ${workspace}`;
-  const result = await breaker().exec(() =>
+  const baseParams = {
+    orgId: args.orgId,
+    ...(args.workspaceId === undefined
+      ? {}
+      : { workspaceId: args.workspaceId }),
+    since: chDateTime(args.since),
+    ...(args.until === undefined ? {} : { until: chDateTime(args.until) }),
+    sources: TACHO_TOKEN_SOURCES,
+    duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
+  };
+
+  const summaryResult = await breaker().exec(() =>
     ch.query({
       query: `
       SELECT
@@ -583,21 +700,11 @@ export async function readObservedModels(args: {
       ORDER BY tokens DESC, model
       LIMIT {limit:UInt32}
     `,
-      query_params: {
-        orgId: args.orgId,
-        ...(args.workspaceId === undefined
-          ? {}
-          : { workspaceId: args.workspaceId }),
-        since: chDateTime(args.since),
-        ...(args.until === undefined ? {} : { until: chDateTime(args.until) }),
-        sources: TACHO_TOKEN_SOURCES,
-        duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
-        limit: OBSERVED_MODEL_LIMIT,
-      },
+      query_params: { ...baseParams, limit: OBSERVED_MODEL_SQL_SAFETY_LIMIT },
       format: "JSONEachRow",
     }),
   );
-  type Row = {
+  type SummaryRow = {
     model: string;
     provider: string;
     calls: string | number;
@@ -605,13 +712,166 @@ export async function readObservedModels(args: {
     first_seen: string;
     last_seen: string;
   };
-  const rows = (await result.json()) as Row[];
-  return rows.map((r) => ({
+  const summaryRows = (await summaryResult.json()) as SummaryRow[];
+  if (summaryRows.length === 0) return [];
+
+  const models = [...new Set(summaryRows.map((r) => r.model))];
+  // The boundary list is chosen AFTER the summary named the models, so a
+  // caller can narrow it to the models this organization actually ran. The
+  // array is scanned once per frame by `bucketIndexExpr`, so handing in a
+  // whole price catalog's history would cost every frame a scan over
+  // boundaries no observed model could ever have been priced at, and would
+  // fragment the report into buckets that differ only by an unrelated
+  // model's rate change.
+  const boundaryDates =
+    args.boundariesFor === undefined
+      ? (args.boundaries ?? [])
+      : args.boundariesFor(models);
+  const boundaries = boundaryDates.map(chDateTime);
+  const gatewayCacheWrite = "toInt64(coalesce(cache_write_tokens, 0))";
+  const tachoCacheWrite = "toInt64(coalesce(c.cache_creation_tokens, 0))";
+  const tachoCache1h = classBucketCache1h("c", tachoCacheWrite);
+  const tachoCache5m = `toInt64(greatest(0, ${tachoCacheWrite} - ${tachoCache1h}))`;
+  const tachoReasoning = classBucketReasoning("c");
+
+  // The transcript-split joins below key on `session_uuid`, not on
+  // `root_session_uuid`. A recorder's `LlmCallLedger` is its own, and a
+  // subagent session records under its own `session_uuid` while sharing the
+  // parent's root, so a request or message id reused across a parent and its
+  // subagent would otherwise take `max()` over both and credit ONE call's
+  // thinking and one-hour cache split to both. The id is unique within the
+  // recorder that issued it, which is the session, so the session is the key.
+  const classResult = await breaker().exec(() =>
+    ch.query({
+      query: `
+      WITH gw AS (
+        SELECT
+          toString(model)                                              AS model,
+          toString(provider)                                           AS provider,
+          ${bucketIndexExpr("toDateTime64(created_at, 3, 'UTC')")}      AS bucket_index,
+          toInt64(greatest(0, toInt64(input_tokens) - toInt64(cached_tokens) - ${gatewayCacheWrite})) AS input_uncached,
+          toInt64(coalesce(cached_tokens, 0))                          AS cache_read,
+          ${gatewayCacheWrite}                                         AS cache_write_5m,
+          toInt64(0)                                                   AS cache_write_1h,
+          toInt64(coalesce(output_tokens, 0))                          AS output,
+          toInt64(0)                                                   AS reasoning,
+          toDateTime64(created_at, 3, 'UTC')                           AS ts
+        FROM token_usage
+        WHERE org_id = {orgId:UUID}
+          AND created_at >= {since:DateTime64(3)}
+          ${until.replace("{col}", "created_at")}
+          AND model IN {models:Array(String)}
+          ${workspace}
+      ),
+      tc AS (
+        SELECT
+          c.model                                                      AS model,
+          c.provider                                                   AS provider,
+          ${bucketIndexExpr("c.ts")}                                    AS bucket_index,
+          toInt64(coalesce(c.input_tokens, 0))                         AS input_uncached,
+          toInt64(coalesce(c.cache_read_tokens, 0))                    AS cache_read,
+          ${tachoCache5m}                                               AS cache_write_5m,
+          ${tachoCache1h}                                               AS cache_write_1h,
+          toInt64(greatest(0, toInt64(coalesce(c.output_tokens, 0)) - ${tachoReasoning})) AS output,
+          ${tachoReasoning}                                             AS reasoning,
+          c.ts                                                          AS ts
+        FROM (
+          SELECT
+            toString(model) AS model, toString(provider) AS provider,
+            toDateTime64(ts, 3, 'UTC') AS ts, input_tokens, output_tokens,
+            cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
+            thinking_tokens, request_id, message_id, session_uuid
+          FROM tacho_events FINAL
+          WHERE ${tachoWhere}
+            AND model IN {models:Array(String)}
+        ) AS c
+        LEFT JOIN (
+          SELECT
+            request_id AS call_key,
+            session_uuid AS session_uuid,
+            toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
+            toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
+          FROM tacho_events FINAL
+          WHERE org_id = {orgId:UUID}
+            AND ts >= {since:DateTime64(3)}
+            ${until.replace("{col}", "ts")}
+            AND kind = 'llm_call'
+            AND ${TRANSCRIPT_SPLIT_ROW}
+          GROUP BY call_key, session_uuid
+          HAVING call_key != ''
+        ) AS t ON t.call_key = c.request_id AND t.session_uuid = c.session_uuid
+        LEFT JOIN (
+          SELECT
+            message_id AS call_key,
+            session_uuid AS session_uuid,
+            toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
+            toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
+          FROM tacho_events FINAL
+          WHERE org_id = {orgId:UUID}
+            AND ts >= {since:DateTime64(3)}
+            ${until.replace("{col}", "ts")}
+            AND kind = 'llm_call'
+            AND ${TRANSCRIPT_SPLIT_ROW}
+          GROUP BY call_key, session_uuid
+          HAVING call_key != ''
+        ) AS m ON m.call_key = c.message_id AND m.session_uuid = c.session_uuid
+      ),
+      unioned AS (
+        SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, ts FROM gw
+        UNION ALL
+        SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, ts FROM tc
+      )
+      SELECT
+        model,
+        tupleElement(class_token, 1)                                    AS class,
+        bucket_index                                                    AS bucket_index,
+        count()                                                         AS calls,
+        sum(tupleElement(class_token, 2))                               AS tokens,
+        formatDateTime(min(ts), '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')         AS first_seen,
+        formatDateTime(max(ts), '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')         AS last_seen
+      FROM unioned
+      ARRAY JOIN
+        [('input_uncached', input_uncached), ('cache_read', cache_read),
+         ('cache_write_5m', cache_write_5m), ('cache_write_1h', cache_write_1h),
+         ('output', output), ('reasoning', reasoning)] AS class_token
+      WHERE tupleElement(class_token, 2) > 0
+      GROUP BY model, class, bucket_index
+      ORDER BY model, class, bucket_index
+    `,
+      query_params: { ...baseParams, models, boundaries },
+      format: "JSONEachRow",
+    }),
+  );
+  type ClassRow = {
+    model: string;
+    class: string;
+    bucket_index: string | number;
+    calls: string | number;
+    tokens: string | number;
+    first_seen: string;
+    last_seen: string;
+  };
+  const classRows = (await classResult.json()) as ClassRow[];
+  const classesByModel = new Map<string, ObservedModelClassRow[]>();
+  for (const r of classRows) {
+    const list = classesByModel.get(r.model) ?? [];
+    list.push({
+      tokenClass: r.class as ObservedTokenClass,
+      calls: Number(r.calls),
+      tokens: Number(r.tokens),
+      firstSeen: r.first_seen,
+      lastSeen: r.last_seen,
+    });
+    classesByModel.set(r.model, list);
+  }
+
+  return summaryRows.map((r) => ({
     model: r.model,
     provider: r.provider === "" ? null : r.provider,
     calls: Number(r.calls),
     tokens: Number(r.tokens),
     firstSeen: r.first_seen,
     lastSeen: r.last_seen,
+    classes: classesByModel.get(r.model) ?? [],
   }));
 }

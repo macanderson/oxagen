@@ -1,5 +1,10 @@
-// The ⌘K command menu's model: go to a page. Rev1 lists the static routes and
-// nothing else (ARCHITECTURE.md §1.2); every entry navigates.
+// The ⌘K command menu's model: go to a page, or create something. The pages
+// are the static routes (ARCHITECTURE.md §1.2). Inside a workspace the menu
+// also offers Create (roadmap creation-spec §1, the mockup's "Create" group):
+// the chooser, then one entry per kind the wizard shell hosts. Each create
+// entry opens a wizard over the current page, and every wizard ends on a pull
+// request.
+import { CREATE_KINDS, type CreateKind } from "@/shared/create";
 import {
   type NavKey,
   ORG_NAV,
@@ -9,14 +14,15 @@ import {
 } from "./nav";
 import type { SafePath } from "@/shared/safe-path";
 
-export type Command = {
-  id: string;
-  label: string;
-  href: SafePath;
-};
+export type Command =
+  | { id: string; label: string; href: SafePath }
+  /** Opens the Create chooser (`kind: null`) or one kind's wizard. */
+  | { id: string; label: string; create: CreateKind | null };
 
 export type CommandLabels = {
   nav: (key: NavKey) => string;
+  /** The chooser's label (`null`) or a kind's, e.g. "Add a skill". */
+  create: (kind: CreateKind | null) => string;
 };
 
 export function buildCommands(
@@ -38,6 +44,11 @@ export function buildCommands(
       go("apiKeys", orgHref(org, "apiKeys"));
       go("modelFunding", orgHref(org, "modelFunding"));
     }
+  }
+  if (ws !== null) {
+    out.push({ id: "create", label: labels.create(null), create: null });
+    for (const kind of CREATE_KINDS)
+      out.push({ id: `create:${kind}`, label: labels.create(kind), create: kind });
   }
   return out;
 }

@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+import type { RoleFixture } from "./test-utils/role-tx";
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
@@ -210,6 +211,8 @@ describe("connectionGetHandler", () => {
 // ── connection.create ──────────────────────────────────────────────────────────
 
 import { connectionCreateHandler } from "./connection.create";
+import { schema } from "@oxagen/database";
+import { isHandlerError } from "@oxagen/oxagen";
 
 describe("connectionCreateHandler", () => {
   const CONN_ROW = {
@@ -220,68 +223,170 @@ describe("connectionCreateHandler", () => {
     status: "pending_setup",
   };
 
-  beforeEach(() => {
-    // The handler inserts the connection row and its encrypted credentials in a
-    // single atomic transaction (one withTenantDb call). The connection insert
-    // returns CONN_ROW; the credentials insert resolves on the same tx.
+  const INPUT = {
+    connectorId: "github",
+    displayName: "My GitHub",
+    authCredential: { type: "pat", token: "ghs_xxx" },
+  };
+
+  /** Whether a drizzle SQL tree binds `value` as a parameter (mirrors role-tx.ts). */
+  function binds(
+    node: unknown,
+    value: string,
+    seen = new Set<unknown>(),
+  ): boolean {
+    if (node === value) return true;
+    if (typeof node !== "object" || node === null || seen.has(node))
+      return false;
+    seen.add(node);
+    if (Array.isArray(node)) return node.some((n) => binds(n, value, seen));
+    if ("queryChunks" in node)
+      return binds((node as { queryChunks: unknown }).queryChunks, value, seen);
+    if ("value" in node)
+      return binds((node as { value: unknown }).value, value, seen);
+    return false;
+  }
+
+  function roleRowsFor(
+    table: unknown,
+    where: unknown,
+    roles: RoleFixture,
+  ): unknown[] {
+    if (table === schema.principals) return [{ id: "prn_1" }];
+    if (table === schema.principalRoleAssignments) {
+      const role = binds(where, "workspace")
+        ? (roles.workspace ?? null)
+        : roles.org;
+      return role === null ? [] : [{ roleName: role }];
+    }
+    return [];
+  }
+
+  /**
+   * A combined `withTenantDb` double for `connectionCreateHandler`: `assertOrgRole`
+   * runs FOR REAL against it (`role-tx.ts`'s shape for `principals` /
+   * `principalRoleAssignments`), and the connection insert resolves to `connRow`
+   * on the same tx — because the handler's role gate and its write share one seam
+   * (`withOrgDb` aliases `withTenantDb`, ADR-086), and a test that mocked the
+   * gate's own decision would prove nothing about whether `checkIAM`'s
+   * non-enterprise fast path (CLAUDE.md "Gotchas") is actually closed by this
+   * handler, only that the contract's declared shape exists (#3258).
+   */
+  function connectionCreateTx(roles: RoleFixture, connRow: unknown) {
+    return {
+      select: () => ({
+        from: (table: unknown) => {
+          let where: unknown;
+          const chain = {
+            innerJoin: () => chain,
+            where: (cond: unknown) => {
+              where = cond;
+              return chain;
+            },
+            limit: () => Promise.resolve(roleRowsFor(table, where, roles)),
+          };
+          return chain;
+        },
+      }),
+      insert: () => ({
+        values: () => ({ returning: async () => [connRow] }),
+      }),
+    };
+  }
+
+  function roles(fixture: RoleFixture) {
     mocks.withTenantDb.mockImplementation((fn: DbFn) =>
-      fn(makeTxReturning([CONN_ROW]) as TxLike),
+      fn(connectionCreateTx(fixture, CONN_ROW) as unknown as TxLike),
     );
+  }
+
+  beforeEach(() => {
+    // Default: an org Owner, matching the contract's Owner/Admin/workspace-Owner
+    // restriction (connection.create.ts). Tests that need a different role call
+    // roles({...}) themselves.
+    roles({ org: "Owner" });
   });
 
   it("throws when userId is not set (unauthenticated)", async () => {
     await expect(
-      connectionCreateHandler(
-        {
-          connectorId: "github",
-          displayName: "My GitHub",
-          authCredential: { type: "pat", token: "ghs_xxx" },
-        },
-        { ...CTX, userId: null },
-      ),
+      connectionCreateHandler(INPUT, { ...CTX, userId: null }),
     ).rejects.toThrow("authenticated user");
   });
 
-  it("creates connection and returns publicId and status", async () => {
-    const result = await connectionCreateHandler(
-      {
-        connectorId: "github",
-        displayName: "My GitHub",
-        authCredential: { type: "pat", token: "ghs_xxx" },
+  describe("role gate (#3258)", () => {
+    it.each(["Member", "Billing"])(
+      "refuses an org %s with no workspace role as forbidden, before writing a row",
+      async (role) => {
+        roles({ org: role, workspace: null });
+        const err = await connectionCreateHandler(INPUT, CTX).then(
+          () => null,
+          (e: unknown) => e,
+        );
+        expect(isHandlerError(err)).toBe(true);
+        expect(err).toMatchObject({ code: "forbidden" });
+        // Refused before the insert — no orphaned pending_setup row.
+        expect(mocks.encrypt).not.toHaveBeenCalled();
       },
-      CTX,
     );
+
+    it("allows an org Admin with no workspace role", async () => {
+      roles({ org: "Admin", workspace: null });
+      const result = await connectionCreateHandler(INPUT, CTX);
+      expect(result.publicId).toBe("con_XYZ");
+    });
+
+    it("allows a workspace Owner who holds no org role — the contract's workspace leg", async () => {
+      roles({ org: null, workspace: "Owner" });
+      const result = await connectionCreateHandler(INPUT, CTX);
+      expect(result.publicId).toBe("con_XYZ");
+    });
+
+    it("refuses a workspace Member who holds no org role", async () => {
+      roles({ org: null, workspace: "Member" });
+      const err = await connectionCreateHandler(INPUT, CTX).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(isHandlerError(err)).toBe(true);
+      expect(err).toMatchObject({ code: "forbidden" });
+    });
+
+    it("refuses when checkIAM's non-enterprise fast path would otherwise have let the caller through — the handler is the only gate on this tier", async () => {
+      // No IAM runtime is set up in this suite at all (no
+      // setKernelIAMRuntime call): the handler is invoked directly, exactly
+      // as an org below the enterprise tier reaches it once checkIAM's
+      // fast path admits the caller (CLAUDE.md "Gotchas"). Refusal here
+      // proves the handler's own assertOrgRole is what stops a Member —
+      // not IAM, which this suite never engages.
+      roles({ org: "Member" });
+      await expect(connectionCreateHandler(INPUT, CTX)).rejects.toMatchObject({
+        code: "forbidden",
+      });
+    });
+  });
+
+  it("creates connection and returns publicId and status", async () => {
+    const result = await connectionCreateHandler(INPUT, CTX);
     expect(result.publicId).toBe("con_XYZ");
     expect(result.status).toBe("pending_setup");
     expect(result.connectorId).toBe("github");
   });
 
   it("encrypts the auth credential before storage", async () => {
-    await connectionCreateHandler(
-      {
-        connectorId: "github",
-        displayName: "My GitHub",
-        authCredential: { type: "pat", token: "ghs_xxx" },
-      },
-      CTX,
-    );
+    await connectionCreateHandler(INPUT, CTX);
     expect(mocks.encrypt).toHaveBeenCalledTimes(1);
   });
 
   it("passes connectionConfig to deliveryConfig when provided", async () => {
     await connectionCreateHandler(
-      {
-        connectorId: "github",
-        displayName: "My GitHub",
-        authCredential: { type: "pat", token: "ghs_xxx" },
-        connectionConfig: { org: "acme", syncDepthDays: 90 },
-      },
+      { ...INPUT, connectionConfig: { org: "acme", syncDepthDays: 90 } },
       CTX,
     );
-    // The connection row and its credentials are written in ONE atomic
-    // transaction, so withTenantDb is invoked exactly once (no orphaned
-    // pending_setup connection if the credential insert fails).
-    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
+    // One call for the role gate's org-role lookup (the default fixture is an
+    // org Owner, so the workspace leg never runs) and one further atomic
+    // transaction for the connection row and its credentials — no orphaned
+    // pending_setup connection if the credential insert failed.
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(2);
   });
 });
 

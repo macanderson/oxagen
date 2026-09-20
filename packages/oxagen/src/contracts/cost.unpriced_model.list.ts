@@ -16,6 +16,19 @@ import { priceTokenClassSchema } from "./cost.price_entry.list";
 /** The window the read covers when the caller names no `since`. */
 export const UNPRICED_MODEL_WINDOW_DAYS = 30;
 
+/**
+ * One token class this model ran that the book could not price, and the span
+ * of the calls it went unpriced over — the window the Pricing tab explains a
+ * blank run's cost with, rather than only naming the class.
+ */
+export const missingClassWindowSchema = z
+  .object({
+    tokenClass: priceTokenClassSchema,
+    unpricedFrom: z.string().datetime(),
+    unpricedTo: z.string().datetime(),
+  })
+  .strict();
+
 export const unpricedModelSchema = z
   .object({
     model: z.string(),
@@ -27,9 +40,16 @@ export const unpricedModelSchema = z
     tokens: z.number().int().nonnegative(),
     firstSeen: z.string().datetime(),
     lastSeen: z.string().datetime(),
-    /** The token classes with no effective price entry. */
+    /**
+     * The token classes this model actually used that have no effective
+     * price entry covering the calls that used them. A class the model never
+     * sent a token in is never named here, even when the book has no row
+     * for it at all.
+     */
     missingClasses: z.array(priceTokenClassSchema),
-    /** True when the book prices none of the classes — the run has no cost at all. */
+    /** The same classes, each with the window its unpriced calls fall in. */
+    missingClassWindows: z.array(missingClassWindowSchema),
+    /** True when every class the model used is missing — the run has no cost at all. */
     fullyUnpriced: z.boolean(),
   })
   .strict();
@@ -78,3 +98,4 @@ export type CostUnpricedModelListOutput = z.output<
   typeof costUnpricedModelList.output
 >;
 export type UnpricedModelDto = z.output<typeof unpricedModelSchema>;
+export type MissingClassWindowDto = z.output<typeof missingClassWindowSchema>;

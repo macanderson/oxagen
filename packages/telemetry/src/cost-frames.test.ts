@@ -253,9 +253,13 @@ describe("readModelCallFrames", () => {
 
     // One joined row per call at most, and none for a row carrying neither
     // id: a fan-out here would turn one call into several priced frames.
-    expect(joined.match(/toInt64\(max\(coalesce\(thinking_tokens, 0\)\)\)/g)).toHaveLength(2);
     expect(
-      joined.match(/toInt64\(max\(coalesce\(cache_creation_1h_tokens, 0\)\)\)/g),
+      joined.match(/toInt64\(max\(coalesce\(thinking_tokens, 0\)\)\)/g),
+    ).toHaveLength(2);
+    expect(
+      joined.match(
+        /toInt64\(max\(coalesce\(cache_creation_1h_tokens, 0\)\)\)/g,
+      ),
     ).toHaveLength(2);
     expect(joined.match(/GROUP BY call_key/g)).toHaveLength(2);
     expect(joined.match(/HAVING call_key != ''/g)).toHaveLength(2);
@@ -484,61 +488,115 @@ describe("readObservedModels", () => {
   const WS = "00000000-0000-4000-8000-000000000002";
   const SINCE = new Date("2026-08-15T00:00:00.000Z");
 
-  it("folds both frame stores by model id, heaviest first, and caps the list", async () => {
-    answer([
-      {
-        model: "vendor/brand-new",
-        provider: "vendor",
-        calls: "12",
-        tokens: "480000",
-        first_seen: "2026-09-02T09:00:00.000Z",
-        last_seen: "2026-09-13T21:30:00.000Z",
-      },
-      {
-        model: "claude-sonnet-5",
-        provider: "",
-        calls: "3",
-        tokens: "1500",
-        first_seen: "2026-09-10T00:00:00.000Z",
-        last_seen: "2026-09-11T00:00:00.000Z",
-      },
-    ]);
+  /** Answers the summary query, then the class-bucket query. */
+  function answerBoth(summary: unknown[], classes: unknown[] = []): void {
+    answer(summary);
+    answer(classes);
+  }
+
+  it("folds both frame stores by model id, heaviest first, and reads a per-class breakdown for what it found", async () => {
+    answerBoth(
+      [
+        {
+          model: "vendor/brand-new",
+          provider: "vendor",
+          calls: "12",
+          tokens: "480000",
+          first_seen: "2026-09-02T09:00:00.000Z",
+          last_seen: "2026-09-13T21:30:00.000Z",
+        },
+        {
+          model: "claude-sonnet-5",
+          provider: "",
+          calls: "3",
+          tokens: "1500",
+          first_seen: "2026-09-10T00:00:00.000Z",
+          last_seen: "2026-09-11T00:00:00.000Z",
+        },
+      ],
+      [
+        {
+          model: "vendor/brand-new",
+          class: "input_uncached",
+          bucket_index: "0",
+          calls: "10",
+          tokens: "400000",
+          first_seen: "2026-09-02T09:00:00.000Z",
+          last_seen: "2026-09-13T21:30:00.000Z",
+        },
+        {
+          model: "claude-sonnet-5",
+          class: "reasoning",
+          bucket_index: "0",
+          calls: "1",
+          tokens: "200",
+          first_seen: "2026-09-10T00:00:00.000Z",
+          last_seen: "2026-09-10T00:00:00.000Z",
+        },
+      ],
+    );
     const rows = await readObservedModels({ orgId: ORG, since: SINCE });
 
-    const { query, query_params } = lastQuery();
-    expect(query).toContain("FROM token_usage");
-    expect(query).toContain("FROM tacho_events FINAL");
-    expect(query).toContain("UNION ALL");
-    expect(query).toContain("kind = 'llm_call'");
-    expect(query).toContain("source IN {sources:Array(String)}");
+    expect(queryMock).toHaveBeenCalledTimes(2);
+    const summaryCall = queryMock.mock.calls[0]![0];
+    const classCall = queryMock.mock.calls[1]![0];
+
+    expect(summaryCall.query).toContain("FROM token_usage");
+    expect(summaryCall.query).toContain("FROM tacho_events FINAL");
+    expect(summaryCall.query).toContain("UNION ALL");
+    expect(summaryCall.query).toContain("kind = 'llm_call'");
+    expect(summaryCall.query).toContain("source IN {sources:Array(String)}");
     // Each call is priced once: a session that reports a call through the
     // OTel log AND a collector or hook event holds two rows for it under
     // different `seq`s, which FINAL does not collapse, so a plain count over
     // the admitted sources would bill the call twice and rank the model
     // above ones that need pricing more. The host stamps the later sighting
     // and this read skips stamped rows, the same rule the per-run read uses.
-    expect(query).toContain("attrs[{duplicateAttr:String}] = ''");
+    expect(summaryCall.query).toContain("attrs[{duplicateAttr:String}] = ''");
     // Retargeted from the per-turn source pick, for the reason the per-run
     // read states: the stamp is per call, so a call only the collector saw
     // after the OTel stream dropped counts here too, and an authority pick
     // would discard it and under-rank its model.
-    expect(query).not.toContain("argMin(source");
-    expect(query).not.toContain("turn_seq");
-    expect(query).toContain("GROUP BY model");
-    expect(query).toContain("ORDER BY tokens DESC, model");
-    expect(query).toContain("LIMIT {limit:UInt32}");
+    expect(summaryCall.query).not.toContain("argMin(source");
+    expect(summaryCall.query).not.toContain("turn_seq");
+    expect(summaryCall.query).toContain("GROUP BY model");
+    expect(summaryCall.query).toContain("ORDER BY tokens DESC, model");
+    expect(summaryCall.query).toContain("LIMIT {limit:UInt32}");
     // A gateway row's input_tokens is the inclusive input total, so adding it
     // to cache reads and writes again would double-count them.
-    expect(query).toContain(
+    expect(summaryCall.query).toContain(
       "greatest(0, toInt64(input_tokens) - toInt64(cached_tokens) - toInt64(cache_write_tokens))",
     );
-    expect(query_params).toEqual({
+    expect(summaryCall.query_params).toEqual({
       orgId: ORG,
       since: "2026-08-15 00:00:00.000",
       sources: ["otel_log", "collector", "hook", "transcript"],
       duplicateAttr: "oxagen.llm_call_duplicate_of",
-      limit: 500,
+      limit: 5000,
     });
+
+    // The class-bucket read is scoped to exactly the models the summary
+    // named, so a store holding boundaries or rows for unrelated models
+    // never widens it.
+    expect(classCall.query).toContain("model IN {models:Array(String)}");
+    expect(classCall.query_params).toMatchObject({
+      models: ["vendor/brand-new", "claude-sonnet-5"],
+      boundaries: [],
+    });
+    expect(classCall.query).toContain("ARRAY JOIN");
+    // The array is an array of (class, tokens) tuples under ONE alias, read
+    // with `tupleElement`. `AS (class, tok)` is not ClickHouse alias syntax —
+    // an ARRAY JOIN expression takes a single identifier — and the server
+    // refused the whole query, so every nonempty report failed.
+    expect(classCall.query).toContain("] AS class_token");
+    expect(classCall.query).not.toMatch(/AS\s*\(\s*class\s*,/);
+    expect(classCall.query).toContain("tupleElement(class_token, 1)");
+    expect(classCall.query).toContain("WHERE tupleElement(class_token, 2) > 0");
+    expect(classCall.query).toContain("GROUP BY model, class, bucket_index");
+    // Reasoning IS split out here, unlike the ranking total above: the
+    // per-run read's transcript join is needed to attribute it correctly.
+    expect(classCall.query).toContain("thinking_tokens");
+    expect(classCall.query).toContain("LEFT JOIN");
 
     expect(rows).toEqual([
       {
@@ -548,6 +606,15 @@ describe("readObservedModels", () => {
         tokens: 480_000,
         firstSeen: "2026-09-02T09:00:00.000Z",
         lastSeen: "2026-09-13T21:30:00.000Z",
+        classes: [
+          {
+            tokenClass: "input_uncached",
+            calls: 10,
+            tokens: 400_000,
+            firstSeen: "2026-09-02T09:00:00.000Z",
+            lastSeen: "2026-09-13T21:30:00.000Z",
+          },
+        ],
       },
       {
         model: "claude-sonnet-5",
@@ -556,34 +623,189 @@ describe("readObservedModels", () => {
         tokens: 1_500,
         firstSeen: "2026-09-10T00:00:00.000Z",
         lastSeen: "2026-09-11T00:00:00.000Z",
+        classes: [
+          {
+            tokenClass: "reasoning",
+            calls: 1,
+            tokens: 200,
+            firstSeen: "2026-09-10T00:00:00.000Z",
+            lastSeen: "2026-09-10T00:00:00.000Z",
+          },
+        ],
       },
     ]);
   });
 
-  it("reads the whole organization when no workspace is named", async () => {
-    answer([]);
+  it("scopes the transcript-split joins by session_uuid so a parent and its subagent sharing a request or message id cannot merge figures", async () => {
+    answerBoth([
+      {
+        model: "claude-sonnet-5",
+        provider: "",
+        calls: "1",
+        tokens: "10",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-10T00:00:00.000Z",
+      },
+    ]);
     await readObservedModels({ orgId: ORG, since: SINCE });
-    const { query, query_params } = lastQuery();
-    expect(query).not.toContain("workspace_id");
-    expect(query_params).not.toHaveProperty("workspaceId");
+    const classCall = queryMock.mock.calls[1]![0];
+
+    // The priced row carries its own session key so the joins below can be
+    // scoped by it.
+    expect(classCall.query).toContain("session_uuid");
+    // Both transcript-split joins (on the vendor request id and on the
+    // message id) must key on the SESSION, not on the id alone and not on
+    // the root. A recorder's `LlmCallLedger` is its own and a subagent
+    // session has its own `session_uuid` under the parent's root, so a root
+    // key would take max() across parent and subagent and credit one call's
+    // thinking and one-hour cache split to both.
+    expect(classCall.query).toContain("GROUP BY call_key, session_uuid");
+    expect(classCall.query).toContain(
+      "t.call_key = c.request_id AND t.session_uuid = c.session_uuid",
+    );
+    expect(classCall.query).toContain(
+      "m.call_key = c.message_id AND m.session_uuid = c.session_uuid",
+    );
+    expect(classCall.query).not.toContain("root_session_uuid");
+  });
+
+  it("skips the class-bucket read entirely when nothing was observed", async () => {
+    answer([]);
+    const rows = await readObservedModels({ orgId: ORG, since: SINCE });
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(rows).toEqual([]);
+  });
+
+  it("passes the given price-boundary buckets through to the class read, empty by default", async () => {
+    answerBoth([
+      {
+        model: "m",
+        provider: "",
+        calls: "1",
+        tokens: "10",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-10T00:00:00.000Z",
+      },
+    ]);
+    const b1 = new Date("2026-09-01T00:00:00.000Z");
+    const b2 = new Date("2026-09-12T00:00:00.000Z");
+    await readObservedModels({
+      orgId: ORG,
+      since: SINCE,
+      boundaries: [b1, b2],
+    });
+    const classCall = queryMock.mock.calls[1]![0];
+    expect(classCall.query).toContain("arrayCount(b -> b <=");
+    expect(classCall.query_params).toMatchObject({
+      boundaries: ["2026-09-01 00:00:00.000", "2026-09-12 00:00:00.000"],
+    });
+  });
+
+  // The boundary array is scanned once per frame, so a caller that hands in
+  // a whole price catalog's history pays for every model's rate changes on
+  // every frame and splits the report into buckets that answer identically.
+  // `boundariesFor` lets the caller narrow it to the models actually run.
+  it("offers the observed model list to `boundariesFor` and buckets on what it returns", async () => {
+    answerBoth([
+      {
+        model: "vendor/brand-new",
+        provider: "vendor",
+        calls: "1",
+        tokens: "10",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-10T00:00:00.000Z",
+      },
+      {
+        model: "claude-sonnet-5",
+        provider: "",
+        calls: "1",
+        tokens: "5",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-10T00:00:00.000Z",
+      },
+    ]);
+    const seen: string[][] = [];
+    await readObservedModels({
+      orgId: ORG,
+      since: SINCE,
+      // The unrelated boundary here must lose to the callback's answer.
+      boundaries: [new Date("2026-01-01T00:00:00.000Z")],
+      boundariesFor: (models) => {
+        seen.push([...models]);
+        return [new Date("2026-09-05T00:00:00.000Z")];
+      },
+    });
+
+    expect(seen).toEqual([["vendor/brand-new", "claude-sonnet-5"]]);
+    expect(queryMock.mock.calls[1]![0].query_params).toMatchObject({
+      boundaries: ["2026-09-05 00:00:00.000"],
+    });
+  });
+
+  // No models, no class read at all, so nothing asks for boundaries either:
+  // the price book is never scanned for an organization that ran nothing.
+  it("does not ask for boundaries when the summary found nothing", async () => {
+    answer([]);
+    const boundariesFor = vi.fn(() => []);
+    const rows = await readObservedModels({
+      orgId: ORG,
+      since: SINCE,
+      boundariesFor,
+    });
+    expect(rows).toEqual([]);
+    expect(boundariesFor).not.toHaveBeenCalled();
+  });
+
+  it("reads the whole organization when no workspace is named", async () => {
+    answerBoth([
+      {
+        model: "m",
+        provider: "",
+        calls: "1",
+        tokens: "1",
+        first_seen: SINCE.toISOString(),
+        last_seen: SINCE.toISOString(),
+      },
+    ]);
+    await readObservedModels({ orgId: ORG, since: SINCE });
+    const summaryCall = queryMock.mock.calls[0]![0];
+    const classCall = queryMock.mock.calls[1]![0];
+    expect(summaryCall.query).not.toContain("workspace_id");
+    expect(summaryCall.query_params).not.toHaveProperty("workspaceId");
+    expect(classCall.query_params).not.toHaveProperty("workspaceId");
   });
 
   // `list_unpriced_models` judges the book as of `at`; a model first run after
   // `at` would otherwise be reported against a snapshot from before it ran.
   it("bounds both stores above by `until` when one is given, and leaves them open-ended otherwise", async () => {
-    answer([]);
+    answerBoth([
+      {
+        model: "m",
+        provider: "",
+        calls: "1",
+        tokens: "1",
+        first_seen: SINCE.toISOString(),
+        last_seen: SINCE.toISOString(),
+      },
+    ]);
     const UNTIL = new Date("2026-09-10T00:00:00.000Z");
     await readObservedModels({ orgId: ORG, since: SINCE, until: UNTIL });
-    const bounded = lastQuery();
-    expect(bounded.query).toContain("created_at <= {until:DateTime64(3)}");
+    const summaryCall = queryMock.mock.calls[0]![0];
+    const classCall = queryMock.mock.calls[1]![0];
+    expect(summaryCall.query).toContain("created_at <= {until:DateTime64(3)}");
     // Once, in the tacho branch: `ts` is that store's timestamp column and
     // the gateway branch is bounded on `created_at` instead.
     expect(
-      bounded.query.match(/ts <= \{until:DateTime64\(3\)\}/g),
+      summaryCall.query.match(/ts <= \{until:DateTime64\(3\)\}/g),
     ).toHaveLength(1);
-    expect(bounded.query_params).toMatchObject({
+    expect(summaryCall.query_params).toMatchObject({
       until: "2026-09-10 00:00:00.000",
     });
+    // The class-bucket read bounds both its own halves the same way.
+    expect(classCall.query).toContain("created_at <= {until:DateTime64(3)}");
+    expect(
+      classCall.query.match(/ts <= \{until:DateTime64\(3\)\}/g)!.length,
+    ).toBeGreaterThanOrEqual(1);
 
     answer([]);
     await readObservedModels({ orgId: ORG, since: SINCE });
@@ -593,21 +815,31 @@ describe("readObservedModels", () => {
   });
 
   it("fences both stores on the workspace when one is named", async () => {
-    answer([]);
+    answerBoth([
+      {
+        model: "m",
+        provider: "",
+        calls: "1",
+        tokens: "1",
+        first_seen: SINCE.toISOString(),
+        last_seen: SINCE.toISOString(),
+      },
+    ]);
     await readObservedModels({ orgId: ORG, workspaceId: WS, since: SINCE });
-    const { query, query_params } = lastQuery();
+    const summaryCall = queryMock.mock.calls[0]![0];
+    const classCall = queryMock.mock.calls[1]![0];
     // Once per store: a fence on only one of them would leak the other's
     // rows into a workspace-scoped list.
-    expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(2);
-    expect(query_params).toMatchObject({ workspaceId: WS });
+    expect(
+      summaryCall.query.match(/workspace_id = \{workspaceId:UUID\}/g),
+    ).toHaveLength(2);
+    expect(summaryCall.query_params).toMatchObject({ workspaceId: WS });
+    expect(classCall.query_params).toMatchObject({ workspaceId: WS });
   });
 
-  // The per-run read joins the transcript's thinking figure back because the
-  // output and reasoning classes are priced at different rates. This list
-  // ranks rather than prices, and its sum leaves thinking out on purpose, so
-  // the same join would change no total here and the duplicate filter is the
-  // whole rule.
-  it("ranks on the row it counts, without the per-run read's transcript join", async () => {
+  // The summary ranking total leaves thinking inside `output` on purpose
+  // (see the module docblock), so its own query carries no transcript join.
+  it("ranks on the row it counts, without a transcript join in the summary query", async () => {
     answer([]);
     await readObservedModels({ orgId: ORG, since: SINCE });
     const { query } = lastQuery();
@@ -617,7 +849,24 @@ describe("readObservedModels", () => {
     expect(query).not.toContain("thinking_tokens");
   });
 
-  it("lets a degraded store throw", async () => {
+  it("lets a degraded store throw on the summary read", async () => {
+    queryMock.mockRejectedValueOnce(new Error("clickhouse down"));
+    await expect(
+      readObservedModels({ orgId: ORG, since: SINCE }),
+    ).rejects.toThrow();
+  });
+
+  it("lets a degraded store throw on the class-bucket read", async () => {
+    answer([
+      {
+        model: "m",
+        provider: "",
+        calls: "1",
+        tokens: "1",
+        first_seen: SINCE.toISOString(),
+        last_seen: SINCE.toISOString(),
+      },
+    ]);
     queryMock.mockRejectedValueOnce(new Error("clickhouse down"));
     await expect(
       readObservedModels({ orgId: ORG, since: SINCE }),
