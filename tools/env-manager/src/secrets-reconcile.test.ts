@@ -76,7 +76,7 @@ describe("reconcile", () => {
   const creds = new Map([["STRIPE_SECRET_KEY", "sk_creds"]]);
   const envLocal = new Map([["INNGEST_EVENT_KEY", "ev_env"]]);
 
-  it("uses the creds.txt value for an unsuffixed secret and flags the duplicate", () => {
+  it("keeps the remote value for an unsuffixed secret and flags the duplicate", () => {
     const r = reconcile(
       "oxagen-stripe-secret",
       "STRIPE_SECRET_KEY",
@@ -85,8 +85,8 @@ describe("reconcile", () => {
       envLocal,
     );
     expect(r).toEqual({
-      value: "sk_creds",
-      source: "creds.txt",
+      value: "sk_gcp",
+      source: "gcp",
       isDuplicate: true,
     });
   });
@@ -132,6 +132,42 @@ describe("reconcile", () => {
     expect(r).toEqual({ value: "gcp_only", source: "gcp", isDuplicate: false });
   });
 
+  it("keeps an explicitly empty remote value instead of restoring local credentials", () => {
+    expect(
+      reconcile(
+        "oxagen-stripe-secret",
+        "STRIPE_SECRET_KEY",
+        "",
+        creds,
+        envLocal,
+      ),
+    ).toEqual({ value: "", source: "gcp", isDuplicate: true });
+  });
+
+  it("fills a missing development secret from local credentials", () => {
+    expect(
+      reconcile(
+        "oxagen-stripe-secret-development",
+        "STRIPE_SECRET_KEY",
+        null,
+        creds,
+        envLocal,
+      ),
+    ).toEqual({ value: "sk_creds", source: "creds.txt", isDuplicate: true });
+  });
+
+  it("refuses an env-file fallback for a missing production secret", () => {
+    expect(
+      reconcile(
+        "oxagen-inngest-event-key-production",
+        "INNGEST_EVENT_KEY",
+        null,
+        creds,
+        envLocal,
+      ),
+    ).toEqual({ value: null, source: "missing", isDuplicate: true });
+  });
+
   it("reports missing when neither GCP nor local has a value", () => {
     const r = reconcile("oxagen-empty", null, null, creds, envLocal);
     expect(r).toEqual({ value: null, source: "missing", isDuplicate: false });
@@ -141,13 +177,13 @@ describe("reconcile", () => {
     const c = new Map([["STRIPE_SECRET", "by_canon"]]);
     const r = reconcile("oxagen-stripe-secret", null, "gcp", c, new Map());
     expect(r).toEqual({
-      value: "by_canon",
-      source: "creds.txt",
+      value: "gcp",
+      source: "gcp",
       isDuplicate: true,
     });
   });
 
-  it("uses creds even for a stage variant if GCP value is missing", () => {
+  it("refuses local fallback when a stage-specific remote value is missing", () => {
     const r = reconcile(
       "oxagen-stripe-secret-staging",
       "STRIPE_SECRET_KEY",
@@ -156,8 +192,8 @@ describe("reconcile", () => {
       envLocal,
     );
     expect(r).toEqual({
-      value: "sk_creds",
-      source: "creds.txt",
+      value: null,
+      source: "missing",
       isDuplicate: true,
     });
   });
