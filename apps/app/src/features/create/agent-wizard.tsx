@@ -171,8 +171,9 @@ function useFile(api: StepProps<AgentDraft>["api"]) {
     edited: edited !== undefined && edited !== seed,
     set: (value: string) => {
       const nextSlug = agentSourceSlug(value) ?? slug;
-      const edits = { ...d.edits };
-      delete edits[slug];
+      const edits = Object.fromEntries(
+        Object.entries(d.edits).filter(([key]) => key !== slug),
+      );
       edits[nextSlug] = value;
       api.update({ slug: nextSlug, edits });
     },
@@ -233,9 +234,11 @@ function IdentityStep({ api }: StepProps<AgentDraft>) {
           onChange={(event) => {
             const next = normalizeSlug(event.target.value);
             const source = renameAgentSource(file.text, next);
-            const edits = { ...d.edits };
-            delete edits[slug];
-            delete edits[next];
+            const edits = Object.fromEntries(
+              Object.entries(d.edits).filter(
+                ([key]) => key !== slug && key !== next,
+              ),
+            );
             if (file.edited) edits[next] = source ?? file.text;
             api.update({ slug: next, edits });
           }}

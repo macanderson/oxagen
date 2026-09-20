@@ -1079,13 +1079,13 @@ describe("cost recommendation handoff", () => {
   it("opens a closed composer without sending the draft", () => {
     render(tree());
     expect(screen.queryByTestId("assistant-composer")).toBeNull();
-    act(() =>
+    act(() => {
       openAssistantDraft({
         org: "acme",
         ws: "core-platform",
         content: "Review this code correction.",
-      }),
-    );
+      });
+    });
     expect(screen.getByTestId("assistant-composer")).toHaveValue(
       "Review this code correction.",
     );
@@ -1094,34 +1094,34 @@ describe("cost recommendation handoff", () => {
 
   it("ignores a matching workspace slug in another organization", async () => {
     await openFlyout();
-    act(() =>
+    act(() => {
       openAssistantDraft({
         org: "other",
         ws: "core-platform",
         content: "Private recommendation.",
-      }),
-    );
+      });
+    });
     expect(screen.getByTestId("assistant-composer")).toHaveValue("");
     expect(askAssistant).not.toHaveBeenCalled();
   });
 
   it("keeps drafts in their own workspace after navigation", async () => {
     const { renavigate } = await openFlyout();
-    act(() =>
+    act(() => {
       openAssistantDraft({
         org: "acme",
         ws: "core-platform",
         content: "Core recommendation.",
-      }),
-    );
+      });
+    });
     renavigate("/acme/payments");
-    act(() =>
+    act(() => {
       openAssistantDraft({
         org: "acme",
         ws: "core-platform",
         content: "Late core recommendation.",
-      }),
-    );
+      });
+    });
     expect(screen.getByTestId("assistant-composer")).toHaveValue("");
     renavigate("/acme/core-platform");
     expect(screen.getByTestId("assistant-composer")).toHaveValue(
@@ -1136,13 +1136,13 @@ describe("cost recommendation handoff", () => {
       screen.getByTestId("assistant-composer"),
       "My existing question.",
     );
-    act(() =>
+    act(() => {
       openAssistantDraft({
         org: "acme",
         ws: "core-platform",
         content: "Plan a code PR for repeated reads.",
-      }),
-    );
+      });
+    });
     expect(screen.getByTestId("assistant-composer")).toHaveValue(
       "My existing question.\n\nPlan a code PR for repeated reads.",
     );
@@ -1151,13 +1151,13 @@ describe("cost recommendation handoff", () => {
 
   it("ignores a request belonging to a different workspace", async () => {
     await openFlyout();
-    act(() =>
+    act(() => {
       openAssistantDraft({
         org: "acme",
         ws: "other",
         content: "Plan a code PR.",
-      }),
-    );
+      });
+    });
     expect(screen.getByTestId("assistant-composer")).toHaveValue("");
     expect(askAssistant).not.toHaveBeenCalled();
   });

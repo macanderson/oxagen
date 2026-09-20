@@ -19,22 +19,22 @@ export function SourceFilename({
 }) {
   const t = useTranslations("ui.sourceFilename");
   const id = useId();
-  const restoreFocus = useRef(false);
+  const restoreFocusRef = useRef(false);
   const focusInput = useCallback((input: HTMLInputElement | null) => {
     input?.focus();
     input?.select();
   }, []);
   const [draft, setDraft] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
-  const cancelled = useRef(false);
+  const cancelledRef = useRef(false);
 
   function finish(keyboard = false) {
-    if (draft === null || cancelled.current) return;
+    if (draft === null || cancelledRef.current) return;
     if (draft !== name && !onRename(draft)) {
       setInvalid(true);
       return;
     }
-    restoreFocus.current = keyboard;
+    restoreFocusRef.current = keyboard;
     setDraft(null);
     setInvalid(false);
   }
@@ -44,9 +44,9 @@ export function SourceFilename({
       {draft === null ? (
         <button
           ref={(button) => {
-            if (button && restoreFocus.current) {
+            if (button && restoreFocusRef.current) {
               button.focus();
-              restoreFocus.current = false;
+              restoreFocusRef.current = false;
             }
           }}
           type="button"
@@ -55,7 +55,7 @@ export function SourceFilename({
           aria-label={t("rename", { path })}
           className={`${mono} group inline-flex max-w-full cursor-text items-center gap-2 rounded-sm text-left hover:underline focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed`}
           onClick={() => {
-            cancelled.current = false;
+            cancelledRef.current = false;
             setInvalid(false);
             setDraft(name);
           }}
@@ -82,7 +82,9 @@ export function SourceFilename({
               setDraft(event.target.value);
               setInvalid(false);
             }}
-            onBlur={() => finish()}
+            onBlur={() => {
+              finish();
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
@@ -91,8 +93,8 @@ export function SourceFilename({
               } else if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation();
-                cancelled.current = true;
-                restoreFocus.current = true;
+                cancelledRef.current = true;
+                restoreFocusRef.current = true;
                 setDraft(null);
                 setInvalid(false);
               }

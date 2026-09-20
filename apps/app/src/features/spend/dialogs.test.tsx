@@ -267,7 +267,10 @@ describe("Fix a finding", () => {
   });
 
   it("offers a scoped code PR request for review without recording a fix", async () => {
-    const listener = vi.fn((event: Event) => assistantDraftOf(event));
+    const events: Event[] = [];
+    const listener = vi.fn((event: Event) => {
+      events.push(event);
+    });
     window.addEventListener("oxagen:assistant-draft", listener);
     try {
       await openDialog();
@@ -275,7 +278,8 @@ describe("Fix a finding", () => {
         screen.getByRole("button", { name: "Plan a code PR with Stella" }),
       );
       expect(listener).toHaveBeenCalledOnce();
-      const draft = listener.mock.results[0]?.value;
+      const event = events[0];
+      const draft = event === undefined ? null : assistantDraftOf(event);
       expect(draft?.org).toBe(at.org);
       expect(draft?.ws).toBe(at.ws);
       expect(draft?.content).toContain("Do not mark the finding fixed.");

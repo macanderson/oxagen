@@ -326,7 +326,7 @@ describe("the agent wizard: definition", () => {
       "core-platform",
       expect.objectContaining({
         slug: "other",
-        source: expect.stringContaining('slug = "other"'),
+        source: file.value,
       }),
     );
   });
