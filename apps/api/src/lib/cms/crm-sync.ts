@@ -28,8 +28,13 @@
  * note, which is what a sales rep wants to see ("they came back").
  */
 
-import { schema, withSystemDb, type EditionSlug } from "@oxagen/database";
-import { eq, isNull, asc } from "drizzle-orm";
+import {
+  schema,
+  withSystemDb,
+  type EditionSlug,
+  type Tx,
+} from "@oxagen/database";
+import { and, eq, isNull, asc, getTableColumns, sql } from "drizzle-orm";
 import { logger } from "../../middleware/logger";
 import {
   createAttioClient,
@@ -96,7 +101,7 @@ export type CrmSyncResult =
   | {
       status: "skipped";
       leadId: string;
-      reason: "not_configured" | "not_found";
+      reason: "not_configured" | "not_found" | "resubmitted";
     }
   | { status: "failed"; leadId: string; error: string };
 
@@ -179,13 +184,11 @@ export function buildLeadNote(lead: LeadRecord): {
 }
 
 /** Every edition this lead has been issued a code for, in Attio's titles. */
-async function loadRequestedAssets(leadId: string): Promise<string[]> {
-  const rows = await withSystemDb(async (tx) =>
-    tx
-      .selectDistinct({ edition: bookAccessCodes.lastEditionSlug })
-      .from(bookAccessCodes)
-      .where(eq(bookAccessCodes.leadId, leadId)),
-  );
+async function loadRequestedAssets(tx: Tx, leadId: string): Promise<string[]> {
+  const rows = await tx
+    .selectDistinct({ edition: bookAccessCodes.lastEditionSlug })
+    .from(bookAccessCodes)
+    .where(eq(bookAccessCodes.leadId, leadId));
   const titles = new Set<string>();
   for (const { edition } of rows) {
     if (edition && edition in ASSET_TITLES) {
@@ -195,35 +198,45 @@ async function loadRequestedAssets(leadId: string): Promise<string[]> {
   return [...titles].sort();
 }
 
-async function loadLead(leadId: string): Promise<LeadRecord | null> {
-  return withSystemDb(async (tx) => {
-    const [row] = await tx
-      .select()
-      .from(leads)
-      .where(eq(leads.id, leadId))
-      .limit(1);
-    return row ?? null;
-  });
+type LeadSnapshot = LeadRecord & { revision: string };
+
+async function loadLead(tx: Tx, leadId: string): Promise<LeadSnapshot | null> {
+  const [row] = await tx
+    .select({
+      ...getTableColumns(leads),
+      // Preserve Postgres microseconds that a JavaScript Date would lose.
+      revision: sql<string>`${leads.updatedAt}::text`,
+    })
+    .from(leads)
+    .where(eq(leads.id, leadId))
+    .limit(1);
+  return row ?? null;
 }
 
 async function recordOutcome(
-  leadId: string,
+  tx: Tx,
+  lead: LeadSnapshot,
   outcome: { recordId: string } | { error: string },
-): Promise<void> {
-  await withSystemDb(async (tx) => {
-    await tx
-      .update(leads)
-      .set(
-        "recordId" in outcome
-          ? {
-              crmRecordId: outcome.recordId,
-              crmSyncedAt: new Date(),
-              crmSyncError: null,
-            }
-          : { crmSyncError: outcome.error.slice(0, MAX_ERROR_LENGTH) },
-      )
-      .where(eq(leads.id, leadId));
-  });
+): Promise<boolean> {
+  const rows = await tx
+    .update(leads)
+    .set(
+      "recordId" in outcome
+        ? {
+            crmRecordId: outcome.recordId,
+            crmSyncedAt: new Date(),
+            crmSyncError: null,
+          }
+        : { crmSyncError: outcome.error.slice(0, MAX_ERROR_LENGTH) },
+    )
+    .where(
+      and(
+        eq(leads.id, lead.id),
+        sql`${leads.updatedAt} = ${lead.revision}::timestamptz`,
+      ),
+    )
+    .returning({ id: leads.id });
+  return rows.length > 0;
 }
 
 /**
@@ -235,12 +248,32 @@ export async function syncLeadToCrm(
   client: AttioClient | null = defaultClient(),
 ): Promise<CrmSyncResult> {
   if (!client) return { status: "skipped", leadId, reason: "not_configured" };
+  try {
+    // Serialize CRM writers across processes without locking the submission
+    // row while Attio responds. A newer sync cannot be overwritten by an
+    // older sync after it has already marked the lead as delivered.
+    return await withSystemDb(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`cms-crm:${leadId}`}, 0))`,
+      );
+      return syncLeadSnapshot(tx, leadId, client);
+    });
+  } catch (err) {
+    logger.error({ err, leadId }, "[cms] crm sync transaction failed");
+    return { status: "failed", leadId, error: errorText(err) };
+  }
+}
 
-  let lead: LeadRecord | null;
+async function syncLeadSnapshot(
+  tx: Tx,
+  leadId: string,
+  client: AttioClient,
+): Promise<CrmSyncResult> {
+  let lead: LeadSnapshot | null;
   let assets: string[];
   try {
-    lead = await loadLead(leadId);
-    assets = lead ? await loadRequestedAssets(leadId) : [];
+    lead = await loadLead(tx, leadId);
+    assets = lead ? await loadRequestedAssets(tx, leadId) : [];
   } catch (err) {
     logger.error({ err, leadId }, "[cms] crm sync could not load the lead");
     return { status: "failed", leadId, error: errorText(err) };
@@ -299,14 +332,16 @@ export async function syncLeadToCrm(
       });
     }
 
-    await recordOutcome(leadId, { recordId });
+    if (!(await recordOutcome(tx, lead, { recordId }))) {
+      return { status: "skipped", leadId, reason: "resubmitted" };
+    }
     logger.info({ leadId, recordId }, "[cms] lead synced to crm");
     return { status: "synced", leadId, recordId };
   } catch (err) {
     const error = errorText(err);
     logger.error({ err, leadId }, "[cms] crm sync failed");
     try {
-      await recordOutcome(leadId, { error });
+      await recordOutcome(tx, lead, { error });
     } catch (writeErr) {
       logger.error(
         { err: writeErr, leadId },

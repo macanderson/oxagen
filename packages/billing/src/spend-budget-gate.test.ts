@@ -58,6 +58,25 @@ const args = {
 beforeEach(() => clearSpendBudgetCaches());
 
 describe("assertWithinSpendBudget — admission", () => {
+  it.each([null, "00000000-0000-0000-0000-000000000000"])(
+    "enforces an organization ceiling without a workspace: %s",
+    async (workspaceId) => {
+      const d = deps({
+        loadBudgets: vi.fn(async () => [budgetRow()]),
+        readSpend: vi.fn(async () => 10_000_000n),
+      });
+      await expect(
+        assertWithinSpendBudget({ ...args, workspaceId }, d),
+      ).rejects.toBeInstanceOf(BudgetExceededError);
+      expect(d.readSpend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: "org-1",
+          workspaceId: null,
+        }),
+      );
+    },
+  );
+
   it("no configured budgets → allows without reading spend", async () => {
     const d = deps({ loadBudgets: vi.fn(async () => []) });
     await expect(assertWithinSpendBudget(args, d)).resolves.toBeUndefined();

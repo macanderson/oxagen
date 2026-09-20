@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { ORG_ONLY_WORKSPACE_ID, type CapabilityHandler } from "@oxagen/oxagen";
 import { routerPolicySet } from "@oxagen/oxagen/contracts/router.policy.set";
 import { schema, withOrgDb, withTenantDb } from "@oxagen/database";
@@ -8,7 +9,7 @@ import { logger } from "./logger";
 // set_routing_policy — partial update of the market-router policy at the org or
 // workspace scope. Merges provided fields over the existing row (or OFF
 // defaults) and upserts. High sensitivity: this changes model spend behavior, so
-// the kernel gates it to Owner/Admin via the contract's defaultRoles.
+// the handler enforces the role even when the tier bypasses kernel IAM.
 export const routerPolicySetHandler: CapabilityHandler<
   typeof routerPolicySet
 > = async (input, ctx) => {
@@ -35,6 +36,14 @@ export const routerPolicySetHandler: CapabilityHandler<
       "set_routing_policy workspace scope requires a workspace context",
     );
   }
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    {
+      org: ["Owner", "Admin"],
+      ...(scope === "workspace" ? { workspace: ["Owner", "Admin"] } : {}),
+    },
+  );
+
   // Org scope ⇒ workspace_id NULL (the org-level default row); workspace scope ⇒
   // this workspace's row.
   const targetWorkspaceId = scope === "org" ? null : ctx.workspaceId;

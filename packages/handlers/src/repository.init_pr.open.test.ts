@@ -9,7 +9,12 @@ import { HandlerError } from "@oxagen/oxagen";
 import { makeCTX } from "./test-utils/fixtures";
 
 const mocks = vi.hoisted(() => ({
-  assertOrgRole: vi.fn(async () => "Owner"),
+  assertOrgRole: vi.fn(
+    async (
+      _ctx: unknown,
+      _required: { org: readonly string[]; workspace?: readonly string[] },
+    ) => "Owner",
+  ),
   resolveActingUserId: vi.fn(async (c: { userId: string | null }) => c.userId),
 }));
 
@@ -276,6 +281,46 @@ describe("open_init_pr", () => {
     expect(client.putFile).not.toHaveBeenCalled();
   });
 
+  it.each(["workspaceToml", "governanceToml"] as const)(
+    "refuses array-of-table grants in %s before any GitHub call",
+    async (file) => {
+      const client = fakeGithub();
+      await expect(
+        handler(client)(
+          { ...INPUT, [file]: `${INPUT[file]}[[agent]]\ntools = ["shell"]\n` },
+          makeCTX(),
+        ),
+      ).rejects.toMatchObject({
+        reason: "authority_declared",
+        message: expect.stringContaining("agent.0.tools"),
+      });
+      expect(client.getRepoInfo).not.toHaveBeenCalled();
+      expect(client.createBranch).not.toHaveBeenCalled();
+      expect(client.putFile).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses a workspace Owner without an organization administrator role", async () => {
+    mocks.assertOrgRole.mockImplementation(async (_ctx, required) => {
+      if (required.workspace?.includes("Owner")) return "Owner";
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      });
+    });
+    const client = fakeGithub();
+    await expect(handler(client)(INPUT, makeCTX())).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(repositoryInitPrOpen.defaultRoles).toEqual({
+      org: { Owner: "allow", Admin: "allow" },
+      workspace: {},
+    });
+    expect(client.getRepoInfo).not.toHaveBeenCalled();
+    expect(client.putFile).not.toHaveBeenCalled();
+  });
+
   it("refuses a governance.toml that lifts a budget (negative)", async () => {
     await expect(
       handler(fakeGithub())(
@@ -425,8 +470,11 @@ describe("findAuthorityGrants", () => {
     ).toEqual([]);
   });
 
-  it("does not descend into arrays or scalars (negative)", () => {
-    expect(findAuthorityGrants([{ tools: [] }])).toEqual([]);
+  it("descends into nested arrays while ignoring scalars", () => {
+    expect(findAuthorityGrants([{ agents: [[{ tools: [] }]] }])).toEqual([
+      "0.agents.0.0.tools",
+    ]);
+    expect(findAuthorityGrants(["tools", 1, null])).toEqual([]);
     expect(findAuthorityGrants("tools")).toEqual([]);
   });
 });

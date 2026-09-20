@@ -15,6 +15,14 @@
  * (./lib/routing-policy.ts). These tests are why the guard stays.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Authorization behavior is exercised with real guards in role-enforcement.regression.test.ts.
+vi.mock("@oxagen/iam/org-role", () => ({
+  assertOrgRole: vi.fn(async () => "Owner"),
+  resolveActingUserId: vi.fn(
+    async (ctx: { userId: string | null }) => ctx.userId,
+  ),
+}));
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 

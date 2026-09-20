@@ -1,3 +1,4 @@
+import { assertCallerRole } from "./lib/capability-role-guard";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { connectionPreview } from "@oxagen/oxagen/contracts/connection.preview";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -11,6 +12,7 @@ import { logger } from "./logger";
 export const connectionPreviewHandler: CapabilityHandler<
   typeof connectionPreview
 > = async (input, ctx) => {
+  await assertCallerRole(connectionPreview, ctx);
   // Fetch source connection + auth credentials in one query
   const rows = await withTenantDb((tx) =>
     tx

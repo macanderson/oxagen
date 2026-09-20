@@ -49,3 +49,5 @@ Org Owner, Org Admin, Workspace Owner, Workspace Member.
 | `validation_error` | Input failed Zod parse (e.g. bad slug, invalid config). |
 | `unauthorized` | Caller lacks the required org/workspace role. |
 | `conflict` | An agent with the same slug already exists in the workspace. |
+
+The graph read budget requires a literal final `LIMIT` in each `UNION` branch, including branches inside subqueries. A limit on a different branch, an intermediate `WITH`, or a nested query does not satisfy that requirement. Graph access in `extend` mode retains hop and timeout budgets, but does not append a read-result `LIMIT` to writes.

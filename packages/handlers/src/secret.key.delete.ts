@@ -1,3 +1,5 @@
+import { assertCallerRole } from "./lib/capability-role-guard";
+import { secretKeyDelete } from "@oxagen/oxagen/contracts/secret.key.delete";
 import { deleteSecretKey } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
@@ -11,6 +13,7 @@ export const secretKeyDeleteHandler: CapabilityHandlerFn = async (
     throw new Error(
       "[secret.key.delete] workspaceId is required (scoped capability)",
     );
+  await assertCallerRole(secretKeyDelete, ctx);
   const { keyId } = input as { keyId: string };
   const result = await deleteSecretKey(
     { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: ctx.userId },

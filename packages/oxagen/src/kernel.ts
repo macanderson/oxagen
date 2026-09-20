@@ -8,7 +8,7 @@ import type {
   ResolvedPrincipal,
 } from "./types";
 import type { AuthorizationDecisionRef } from "./iam/agent-run";
-import { getSurfaces } from "./types";
+import { getSurfaces, ORG_ONLY_WORKSPACE_ID } from "./types";
 import { isKernelIssuedPlatformOperator } from "./platform-operator";
 import { isHandlerError, type HandlerErrorCode } from "./handler-error";
 import { getCapability, listCapabilities } from "./registry";
@@ -217,8 +217,8 @@ export function governedActionUnits(
 // scope (its withTenantDb budget read needs the active scope). It is skipped on
 // exactly the same conditions as the billing gate — unscoped capabilities and
 // `noBillingGate: true` contracts (reading your own spend/budget must never be
-// blocked by being over budget) — plus it needs a workspaceId (a workspace
-// ceiling can't be evaluated without one). Unlike the billing gate it takes the
+// blocked by being over budget). An organization-only call evaluates its
+// organization ceiling. Unlike the billing gate it takes the
 // full scope + capability so it can evaluate BOTH the org-level and
 // workspace-level ceiling and name the denied capability.
 //
@@ -227,7 +227,7 @@ export function governedActionUnits(
 
 export type BudgetAdmissionGateFn = (args: {
   orgId: string;
-  workspaceId: string;
+  workspaceId: string | null;
   capability: string;
 }) => Promise<void>;
 
@@ -1444,20 +1444,16 @@ async function _invokeCoreInner(
       // The hard period-to-date spend ceiling. Fires after the billing gate on
       // exactly the same skip conditions (unscoped / noBillingGate skip it — a
       // read of your own spend/budget must not be blocked by being over budget),
-      // and additionally requires a workspaceId (a workspace ceiling can't be
-      // evaluated without one). Throws BudgetExceededError (code
+      // including organization-only calls. Throws BudgetExceededError (code
       // "budget_exceeded") when a scope's period-to-date spend has reached its
       // ceiling — DENIED before this invocation's own provider cost is incurred.
-      if (
-        _budgetGate !== null &&
-        ctx.orgId &&
-        ctx.workspaceId &&
-        !skipBilling &&
-        isScoped
-      ) {
+      if (_budgetGate !== null && ctx.orgId && !skipBilling && isScoped) {
         await _budgetGate({
           orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId,
+          workspaceId:
+            ctx.workspaceId === ORG_ONLY_WORKSPACE_ID
+              ? null
+              : ctx.workspaceId || null,
           capability: canonical,
         });
       }

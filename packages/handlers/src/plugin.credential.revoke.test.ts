@@ -9,6 +9,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("./lib/capability-role-guard", () => ({
+  assertCallerRole: vi.fn(async () => undefined),
+}));
+
 const mocks = vi.hoisted(() => ({
   deleteWorkspaceSecret: vi.fn(),
 }));

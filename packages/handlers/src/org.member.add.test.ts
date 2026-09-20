@@ -160,6 +160,13 @@ describe("orgMemberAddHandler", () => {
       status: "pending",
     });
     expect(typeof result.expiresAt).toBe("string");
+    expect(mockAssertSeatAvailable).toHaveBeenCalledWith(
+      "org-abc",
+      expect.objectContaining({ insert: mockInsert }),
+    );
+    expect(
+      mockAssertSeatAvailable.mock.invocationCallOrder.at(-1),
+    ).toBeLessThan(mockInsert.mock.invocationCallOrder.at(-1)!);
   });
 
   it("happy path with null expiresAt → expiresAt is null in output", async () => {

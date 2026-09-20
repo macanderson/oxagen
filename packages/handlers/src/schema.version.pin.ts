@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaVersionPin } from "@oxagen/oxagen/contracts/schema.version.pin";
 import { getOrCreateRegistry, pinVersion } from "./schema.versioning";
@@ -6,6 +7,11 @@ import { logger } from "./logger";
 export const schemaVersionPinHandler: CapabilityHandler<
   typeof schemaVersionPin
 > = async (input, ctx) => {
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"], workspace: ["Owner"] },
+  );
+
   const registry = await getOrCreateRegistry(
     ctx.orgId,
     ctx.workspaceId,

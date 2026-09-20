@@ -12,6 +12,10 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("./lib/capability-role-guard", () => ({
+  assertCallerRole: vi.fn(async () => undefined),
+}));
+
 const mocks = vi.hoisted(() => ({
   selectRows: vi.fn(),
   decrypt: vi.fn(),

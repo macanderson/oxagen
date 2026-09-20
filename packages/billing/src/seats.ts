@@ -6,11 +6,11 @@
  *   - qty 1 = 1 license; free/no-sub orgs have exactly 1 license.
  *   - pending invitations consume a seat (the invited user is reserved until
  *     they decline or the invite expires).
- *   - `assertSeatAvailable` must be called BEFORE creating an invitation.
+ *   - Check availability and create the invitation in the same transaction.
  */
 
 import { and, count, eq, sql } from "drizzle-orm";
-import { withTenantDb, schema } from "@oxagen/database";
+import { withTenantDb, schema, type Tx } from "@oxagen/database";
 import { logger } from "./logger";
 
 // ── SeatLimitError ────────────────────────────────────────────────────────────
@@ -64,8 +64,11 @@ export interface OrgSeatUsage {
  *
  * Pure DB read — no Stripe calls, safe to call on every request.
  */
-export async function getOrgSeatUsage(orgId: string): Promise<OrgSeatUsage> {
-  const { activeSub, usersRow, invRow } = await withTenantDb(async (tx) => {
+export async function getOrgSeatUsage(
+  orgId: string,
+  transaction?: Tx,
+): Promise<OrgSeatUsage> {
+  const read = async (tx: Tx) => {
     const sub = await tx
       .select({ seatCount: schema.subscriptions.seatCount })
       .from(schema.subscriptions)
@@ -93,7 +96,10 @@ export async function getOrgSeatUsage(orgId: string): Promise<OrgSeatUsage> {
       );
 
     return { activeSub: sub, usersRow: uRow, invRow: iRow };
-  });
+  };
+  const { activeSub, usersRow, invRow } = transaction
+    ? await read(transaction)
+    : await withTenantDb(read);
 
   const licenses = activeSub[0]?.seatCount ?? 1;
   const activeUsers = Number(usersRow?.total ?? 0);
@@ -116,10 +122,28 @@ export async function getOrgSeatUsage(orgId: string): Promise<OrgSeatUsage> {
  * Assert that the org has at least one available license.
  *
  * Throws `SeatLimitError` when `used >= licenses`. Callers should invoke this
- * before creating an invitation or adding a member directly.
+ * with the transaction that creates the invitation or adds the member.
+ * Without a transaction this is only an advisory availability check.
  */
-export async function assertSeatAvailable(orgId: string): Promise<void> {
-  const usage = await getOrgSeatUsage(orgId);
+export async function assertSeatAvailable(
+  orgId: string,
+  tx?: Tx,
+): Promise<void> {
+  if (tx) {
+    // Lock the organization even when a free organization has no subscription.
+    // Hold this lock through the invitation insert in the caller's transaction.
+    await tx
+      .select({ id: schema.organizations.id })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, orgId))
+      .for("update");
+    await tx
+      .select({ id: schema.subscriptions.id })
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.orgId, orgId))
+      .for("update");
+  }
+  const usage = await getOrgSeatUsage(orgId, tx);
   if (usage.used >= usage.licenses) {
     logger.warn(
       { orgId, licenses: usage.licenses, used: usage.used },

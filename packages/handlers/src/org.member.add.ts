@@ -21,7 +21,7 @@ import {
 } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { assertSeatAvailable, isSeatLimitError } from "@oxagen/billing";
+import { assertSeatAvailable } from "@oxagen/billing";
 import { logger, maskEmail } from "./logger";
 
 // 30-day invitation TTL.
@@ -81,22 +81,6 @@ export const orgMemberAddHandler: CapabilityHandler<
     }
   }
 
-  // ── Seat enforcement ─────────────────────────────────────────────────────────
-  try {
-    await assertSeatAvailable(ctx.orgId);
-  } catch (err) {
-    if (isSeatLimitError(err)) {
-      logger.warn(
-        { orgId: ctx.orgId, licenses: err.licenses, used: err.used },
-        "org.member.add: seat limit reached",
-      );
-      // Re-throw as-is — the typed error lets the API/MCP layer surface a
-      // 402 / structured MCP error with code:"seat_limit_reached".
-      throw err;
-    }
-    throw err;
-  }
-
   // ── Create pending invitation ────────────────────────────────────────────────
   const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
 
@@ -106,8 +90,9 @@ export const orgMemberAddHandler: CapabilityHandler<
   let invitation: { publicId: string; expiresAt: Date | null };
 
   try {
-    const [row] = await withTenantDb((tx) =>
-      tx
+    const [row] = await withTenantDb(async (tx) => {
+      await assertSeatAvailable(ctx.orgId!, tx);
+      return tx
         .insert(schema.invitations)
         .values({
           orgId: ctx.orgId,
@@ -122,8 +107,8 @@ export const orgMemberAddHandler: CapabilityHandler<
         .returning({
           publicId: schema.invitations.publicId,
           expiresAt: schema.invitations.expiresAt,
-        }),
-    );
+        });
+    });
 
     if (!row) throw new Error("invitation insert returned no row");
     invitation = row;

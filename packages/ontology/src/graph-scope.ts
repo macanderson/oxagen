@@ -1838,6 +1838,56 @@ export function clampLimits(cypher: string, maxNodes: number): string {
     );
   }
 
+  // Check each query scope separately. A limit inside a subquery or before
+  // the final RETURN cannot bound an unlimited UNION branch.
+  const code = stripLiteralsAndComments(cypher);
+  const keywords = (text: string, word: string) =>
+    [...text.matchAll(new RegExp(`${ID_BEGIN}${word}${ID_END}`, "giu"))].filter(
+      (match) =>
+        startsAClause(text, match.index, match.index + match[0].length),
+    );
+  const checkBranches = (text: string): void => {
+    const unions = keywords(text, "UNION");
+    if (unions.length === 0) return;
+    const ends = [...unions.map((match) => match.index), text.length];
+    let start = 0;
+    for (const end of ends) {
+      const branch = text.slice(start, end);
+      const lastReturn = keywords(branch, "RETURN").at(-1);
+      const bounded =
+        lastReturn &&
+        keywords(branch, "LIMIT").some(
+          (limit) =>
+            limit.index > lastReturn.index &&
+            new RegExp(`^\\s+\\d+${ID_END}`, "u").test(
+              branch.slice(limit.index + limit[0].length),
+            ),
+        );
+      if (!bounded) {
+        throw new GraphScopeError(
+          "Cannot enforce maxNodes budget: every UNION branch needs a final literal LIMIT",
+        );
+      }
+      start = end + "UNION".length;
+    }
+  };
+  // An explicit stack also handles deeply nested queries without recursion.
+  const scopes = [""];
+  for (const char of code) {
+    if (char === "{") {
+      scopes.push("");
+    } else if (char === "}") {
+      if (scopes.length === 1)
+        throw new GraphScopeError("Unbalanced query braces");
+      checkBranches(scopes.pop()!);
+      scopes[scopes.length - 1] += " {} ";
+    } else {
+      scopes[scopes.length - 1] += char;
+    }
+  }
+  if (scopes.length !== 1) throw new GraphScopeError("Unbalanced query braces");
+  checkBranches(scopes[0]!);
+
   let hadLiteral = false;
   const clamped = cypher.replace(/\bLIMIT\s+(\d+)\b/gi, (_m, n: string) => {
     hadLiteral = true;
@@ -1906,7 +1956,9 @@ export function applyGraphScope(
   if (budget?.maxHops !== undefined) {
     finalCypher = clampVarLengthHops(finalCypher, budget.maxHops);
   }
-  if (budget?.maxNodes !== undefined) {
+  // LIMIT bounds returned read rows. Appending it to SET, CREATE, or DELETE
+  // makes a write invalid and does not bound the number of rows it changes.
+  if (budget?.maxNodes !== undefined && scope.mode !== "extend") {
     finalCypher = clampLimits(finalCypher, budget.maxNodes);
   }
 

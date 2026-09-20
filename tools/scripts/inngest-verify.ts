@@ -97,7 +97,7 @@ async function sleep(ms: number): Promise<void> {
 }
 
 /** Step 1 — the check that needs no network. */
-function checkKeyPosture(signingKey: string): void {
+export function checkKeyPosture(signingKey: string): void {
   const complaint = inngestEnvironmentComplaint({
     nodeEnv: process.env.NODE_ENV ?? "",
     signingKey,

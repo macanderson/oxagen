@@ -8,6 +8,8 @@
  * ceiling back on, so an invisible row was unrecoverable.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { withOrgDb } from "@oxagen/database";
 
 /**
  * Captures the where() clause so a test can assert whether one was applied.
@@ -16,7 +18,9 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  */
 const selectChain = {
   from: vi.fn((): unknown => selectChain),
-  where: vi.fn((): unknown => selectChain),
+  where: vi.fn(
+    (_predicate?: import("drizzle-orm").SQL): unknown => selectChain,
+  ),
 };
 
 const dbMocks = {
@@ -34,7 +38,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
     withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   };
-  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+  return { ...dbMock, withOrgDb: vi.fn(dbMock.withTenantDb) };
 });
 
 const { getScopeBudgets, listSpendBudgets } = await import(
@@ -112,4 +116,15 @@ describe("listSpendBudgets — the panel read", () => {
       limitMicros: 125_000_000n,
     });
   });
+});
+
+it("reads only the organization ceiling through the org-wide seam", async () => {
+  selectChain.where.mockResolvedValueOnce([]);
+  await getScopeBudgets({ orgId: "org-a", workspaceId: null });
+  expect(withOrgDb).toHaveBeenCalled();
+  const predicate = selectChain.where.mock.calls.at(-1)?.[0];
+  const query = new PgDialect().sqlToQuery(predicate!);
+  expect(query.sql).toContain('"org_id" =');
+  expect(query.sql).toContain('"workspace_id" is null');
+  expect(query.params).toContain("org-a");
 });

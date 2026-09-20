@@ -1403,6 +1403,52 @@ describe("clampVarLengthHops", () => {
 });
 
 describe("clampLimits", () => {
+  it.each([
+    "MATCH (a) RETURN a LIMIT 10 UNION MATCH (b) RETURN b",
+    "MATCH (a) RETURN a UNION MATCH (b) RETURN b LIMIT 10",
+    "MATCH (a) WITH a LIMIT 10 RETURN a UNION MATCH (b) RETURN b LIMIT 10",
+    "MATCH (a) RETURN a, 'LIMIT 10' UNION MATCH (b) RETURN b LIMIT 10",
+    "CALL { MATCH (a) RETURN a LIMIT 10 UNION MATCH (b) RETURN b } RETURN a LIMIT 10",
+  ])("rejects an unlimited UNION branch: %s", (query) => {
+    expect(() => clampLimits(query, 100)).toThrow(/UNION/);
+  });
+
+  it.each([
+    "éUNION",
+    "UNIONé",
+    "RETURNé",
+    "éRETURN",
+    "LIMITé",
+    "éLIMIT",
+    "𝐱UNION",
+  ])("keeps Unicode aliases intact: %s", (alias) => {
+    const query = `MATCH (n) RETURN n AS ${alias} LIMIT 10 UNION MATCH (m) RETURN m AS ${alias} LIMIT 10`;
+    expect(clampLimits(query, 100)).toBe(query);
+    expect(() => clampLimits(query.replace(/ LIMIT 10$/, ""), 100)).toThrow(
+      /UNION/,
+    );
+  });
+
+  it("does not let a property named RETURN hide a bounded branch", () => {
+    const query =
+      "MATCH (n) RETURN n . RETURN LIMIT 10 UNION MATCH (m) RETURN m . RETURN LIMIT 10";
+    expect(clampLimits(query, 100)).toBe(query);
+  });
+
+  it("rejects unbalanced query scopes", () => {
+    expect(() => clampLimits("CALL { RETURN 1 LIMIT 10", 100)).toThrow(
+      /braces/,
+    );
+  });
+
+  it("does not treat map keys, properties, or escaped names as UNION branches", () => {
+    const query =
+      "MATCH (n) RETURN {union: 1, return: 2}, n.union, n.`UNION` LIMIT 1000";
+    expect(clampLimits(query, 100)).toBe(
+      query.replace("LIMIT 1000", "LIMIT 100"),
+    );
+  });
+
   it("clamps a larger literal LIMIT down", () => {
     expect(clampLimits("MATCH (n) RETURN n LIMIT 1000", 100)).toBe(
       "MATCH (n) RETURN n LIMIT 100",
@@ -1503,6 +1549,20 @@ describe("applyGraphScope", () => {
         },
       ),
     ).toThrow(GraphScopeError);
+  });
+
+  it("preserves write syntax while enforcing traversal budgets", () => {
+    const query = "MATCH (a)-[r*1..9]->(b) SET b.seen = true";
+    const result = applyGraphScope(
+      query,
+      {},
+      {
+        mode: "extend",
+        budget: { maxNodes: 100, maxHops: 2, maxTraversalMs: 250 },
+      },
+    );
+    expect(result.cypher).toBe("MATCH (a)-[r*1..2]->(b) SET b.seen = true");
+    expect(result.txConfig).toEqual({ timeout: 250 });
   });
 
   it("allows writes when mode is extend", () => {

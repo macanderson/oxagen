@@ -1,3 +1,5 @@
+import { assertCallerRole } from "./lib/capability-role-guard";
+import { secretKeyUpsert } from "@oxagen/oxagen/contracts/secret.key.upsert";
 import { upsertSecretKey } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
@@ -11,6 +13,7 @@ export const secretKeyUpsertHandler: CapabilityHandlerFn = async (
     throw new Error(
       "[secret.key.upsert] workspaceId is required (scoped capability)",
     );
+  await assertCallerRole(secretKeyUpsert, ctx);
   const { key, sensitive, memo, defaultValue } = input as {
     key: string;
     sensitive: boolean;

@@ -1,5 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+// Authorization behavior is exercised with real guards in packages/handlers/src/role-enforcement.regression.test.ts.
+vi.mock("@oxagen/iam/org-role", () => ({
+  assertOrgRole: vi.fn(async () => "Owner"),
+  resolveActingUserId: vi.fn(
+    async (ctx: { userId: string | null }) => ctx.userId,
+  ),
+}));
+
 // ── @oxagen/database mock ────────────────────────────────────────────────────
 // set_enabled: select→from→where→limit (resolve server), then update→set→where.
 // delete: update→set→where→returning.

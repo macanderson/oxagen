@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordPromote } from "@oxagen/oxagen/contracts/context.record.promote";
 import {
@@ -30,6 +31,11 @@ const STATUS_BY_ACTION = {
 export const contextRecordPromoteHandler: CapabilityHandler<
   typeof contextRecordPromote
 > = async (input, ctx) => {
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] },
+  );
+
   // Resolve the record by publicId or slug (same dual resolution as
   // skill.version.list).
   const [record] = await withTenantDb((tx) =>
