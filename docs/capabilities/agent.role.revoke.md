@@ -34,6 +34,10 @@ Org Owner, Org Admin — checked by the handler (`assertOrgRole`, INV-29), the g
 - Postgres: soft-deletes the matching `iam.principal_role_assignments` row.
 - ClickHouse: emits the IAM audit event with `principal_kind='agent'` and the agent as the audit target (only when something was revoked).
 
+## App
+
+`/{org}/{ws}/agents/{agent}?tab=identity` — Revoke on each row of the Roles panel (`apps/app/src/features/agents/identity.tsx`, `role-controls.tsx`, `actions.ts`), behind a dialog that names the role it detaches.
+
 ## Errors
 
 | code | meaning |
