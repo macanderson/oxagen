@@ -89,8 +89,16 @@ const settled = {
 } as const;
 
 /** A HandlerError as the kernel raises it: the refusal is in `reason`. */
+class TestHandlerError extends Error {
+  constructor(
+    readonly code: string,
+    readonly reason: string,
+  ) {
+    super(reason);
+  }
+}
 const handlerError = (code: string, reason: string) =>
-  Object.assign(new Error(reason), { code, reason });
+  new TestHandlerError(code, reason);
 
 /** The one `resolve_approval` call's input. */
 function written(): unknown {
@@ -196,12 +204,10 @@ describe("resolveApprovalAction", () => {
     });
   });
 
-  // ADR-114: the decision is the one billed action of this surface, so the
+  // ADR-115: the decision is the one billed action of this surface, so the
   // billing admission gate can refuse it where it refuses no read here.
   it("carries the exhausted code the billing gate raised (negative)", async () => {
-    invoke.mockRejectedValue(
-      Object.assign(new Error("gau exhausted"), { code: "gau_exhausted" }),
-    );
+    invoke.mockRejectedValue(handlerError("gau_exhausted", "gau exhausted"));
     const result = await resolveApprovalAction("acme", "core-platform", {
       approvalId: APPROVAL,
       decision: "approved",

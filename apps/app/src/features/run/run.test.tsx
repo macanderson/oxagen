@@ -1162,7 +1162,8 @@ describe("approvals on the run", () => {
       },
       { tab: "approvals" },
     );
-    const [card] = screen.getAllByTestId("approval");
+    const card = screen.getAllByTestId("approval")[0];
+    if (!card) throw new Error("Approval card missing");
     expect(card).toHaveTextContent("create_release");
   });
 
@@ -1200,16 +1201,15 @@ describe("approvals on the run", () => {
       },
       { tab: "approvals" },
     );
-    const [card] = screen.getAllByTestId("approval");
-    const chain = within(card as HTMLElement).getByTestId("chain");
+    const card = screen.getAllByTestId("approval")[0];
+    if (!card) throw new Error("Approval card missing");
+    const chain = within(card).getByTestId("chain");
     expect(chain).toHaveTextContent("usr_marcusbell");
     expect(chain).toHaveTextContent("acme.core.release-bot");
-    expect(
-      within(card as HTMLElement).getByTestId("eligibility"),
-    ).toHaveTextContent("small-vendor-payments");
-    expect(within(card as HTMLElement).getByTestId("decide")).toHaveTextContent(
-      "Decide",
+    expect(within(card).getByTestId("eligibility")).toHaveTextContent(
+      "small-vendor-payments",
     );
+    expect(within(card).getByTestId("decide")).toHaveTextContent("Decide");
   });
 
   // The Run page used to hand the panel an empty map, so every card here said
@@ -1242,10 +1242,12 @@ describe("approvals on the run", () => {
       { tab: "approvals" },
     );
     expect(calls.mandates).toEqual([[ctx, { agentId: null }]]);
-    const [card] = screen.getAllByTestId("approval");
-    expect(
-      within(card as HTMLElement).getByTestId("mandate-bar"),
-    ).toHaveAttribute("data-measure", "amount");
+    const card = screen.getAllByTestId("approval")[0];
+    if (!card) throw new Error("Approval card missing");
+    expect(within(card).getByTestId("mandate-bar")).toHaveAttribute(
+      "data-measure",
+      "amount",
+    );
   });
 
   it("makes no mandate read for a run whose parked calls name none (negative)", async () => {

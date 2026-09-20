@@ -3,7 +3,7 @@
 // the dialog makes beside it, and the commands an operator sends to a run from
 // its row. Every one runs for the workspace viewer the URL names.
 //
-// **`resolve_approval` is the one billed action of this surface (ADR-114).**
+// **`resolve_approval` is the one billed action of this surface (ADR-115).**
 // The contract carries no `noBillingGate`, so the billing admission gate fires
 // after IAM and before the handler, and an exhausted organization gets
 // `exhausted` with the code the gate raised. The reads around it

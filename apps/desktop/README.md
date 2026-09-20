@@ -53,6 +53,7 @@ install to work from a terminal. `cli_install::ensure_cli_installed`
 ## Build
 
 ```
+pnpm dist:local                            # from the repo root: sidecars + app for this OS, installer copied to ~/Desktop
 pnpm --filter @oxagen/desktop sidecars     # compile tacho + oxagen (Node SEA), stage with the host triple
 pnpm --filter @oxagen/desktop bundle:dmg   # macOS .dmg (tauri build --bundles dmg)
 pnpm --filter @oxagen/desktop bundle       # every bundle the current OS supports
@@ -75,7 +76,8 @@ that path.
 For a build made some other way:
 
 ```
-gh workflow run desktop.yml --ref main                       # build all four targets in CI
+pnpm release:<patch|minor|major>:publish                     # bump, tag, CI builds all four targets, upload (tools/scripts/release-publish.ts)
+gh workflow run desktop.yml --ref main                       # build all four targets in CI without a release
 pnpm --filter @oxagen/desktop publish:downloads --run <id>   # CI artifacts → https://downloads.oxagen.sh/
 pnpm --filter @oxagen/desktop smoke:e2e -- --login --enroll --org <org> --workspace <ws> --cleanup
 ```

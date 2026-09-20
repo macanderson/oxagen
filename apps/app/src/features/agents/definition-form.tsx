@@ -14,7 +14,12 @@ import type { AgentDetail } from "@/data/contracts/agents";
 import { isEffective, type MandateList } from "@/data/contracts/mandates";
 import { diffStat } from "@/shared/line-diff";
 import type { SafePath } from "@/shared/safe-path";
-import { tomlLiteral, tomlMultiline, tomlSet, tomlTableForm } from "@/shared/toml-patch";
+import {
+  tomlLiteral,
+  tomlMultiline,
+  tomlSet,
+  tomlTableForm,
+} from "@/shared/toml-patch";
 import {
   parseTomlSubset,
   type TomlParse,

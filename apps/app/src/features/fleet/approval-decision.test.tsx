@@ -220,7 +220,7 @@ describe("the decision", () => {
     );
   });
 
-  // ADR-114: the decision is the one billed action of this surface, and
+  // ADR-115: the decision is the one billed action of this surface, and
   // INV-14 has the refusal carry the way out of it.
   it.each(["gau_exhausted", "billing_suspended", "budget_exceeded"] as const)(
     "names the exhausted credit the billing gate raised and links to billing: %s (negative)",

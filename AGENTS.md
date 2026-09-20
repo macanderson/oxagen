@@ -143,7 +143,10 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm check:brand` | Verifies every frontend is on the Oxagen house brand kit (needs the house kit `oxagenai/oxagen-brand` checked out at `$OXAGEN_HOUSE_BRAND` or `../oxagen-house-brand`) |
 | `pnpm check:naming` | ADR-025 naming compliance |
 | `pnpm check:audit-coverage` | SOC 2 audit-event coverage (runs on every PR in CI) |
-| `pnpm release:patch/minor/major` | Lockstep version bump (all packages) + model-written release notes under the clear-prose and oxagen-branding skills (via Vercel AI Gateway; `tools/scripts/lib/release-notes.ts`) + the docs page `apps/docs/content/docs/releases/v<version>.mdx` + git tag. Releases ship from the Release workflow (`.github/workflows/release.yml`, `workflow_dispatch`), which runs this and opens the release PR; see CONTRIBUTING.md → Release Process |
+| `pnpm release:patch/minor/major` | Lockstep version bump (every tracked manifest, whatever its language) + model-written release notes under the clear-prose and oxagen-branding skills (via Vercel AI Gateway; `tools/scripts/lib/release-notes.ts`) + the docs page `apps/docs/content/docs/releases/v<version>.mdx` + git tag. Releases ship from the Release workflow (`.github/workflows/release.yml`, `workflow_dispatch`), which runs this and opens the release PR; see CONTRIBUTING.md → Release Process |
+| `pnpm release:patch/minor/major:publish` | The same bump and notes (ending in a link to every installer and executable), then the commit, both tags, the pull request, the CI build of all four desktop targets, and the uploads to downloads.oxagen.sh, npm, and the GitHub release, run from a laptop (`tools/scripts/release-publish.ts`; `--dry-run`, `--publish-only`). Every upload step skips a version that is already there, so it is safe beside the Release workflow |
+| `pnpm dist:local` | Build `tacho`, `oxagen`, and the desktop app from this tree for this OS and copy the installer to `~/Desktop` (`--out <dir>`); bumps and publishes nothing |
+| `pnpm check:versions` | Every tracked manifest carries the root version, whatever its language (`package.json`, `Cargo.toml`, `Cargo.lock`); `--fix` writes it. Part of `check:contracts` |
 | `pnpm test:e2e` | Run the three Playwright specs (`apps/app/e2e`: `login`, `pay`, `page-load`). The suite holds exactly these three and gains no fourth — every other flow is a component test (`.claude/skills/oxagen-testing`, `apps/app/ARCHITECTURE.md` §6.3). |
 
 **Narrow test runs** (never run all tests): `pnpm --filter @oxagen/<pkg> test:unit <file>.test.ts`
@@ -163,7 +166,7 @@ is unambiguous.
 
 **Affected-package caveat:** `pnpm gate` selects packages changed since `origin/main`. If `HEAD` equals `origin/main`, it may select no packages. An empty selection is not verification evidence. Inspect the actual CI jobs and their output.
 
-**Release script flags**: `tsx tools/scripts/release.ts major --dry-run` (preview without writing), `--set X.Y.Z` (exact version), `--no-vercel` / `--no-npm` / `--no-git` / `--no-notes` (skip individual steps), `--from <ref>` (regenerate notes for an existing tag).
+**Release script flags**: `tsx tools/scripts/release.ts major --dry-run` (preview without writing), `--set X.Y.Z` (exact version), `--no-npm` / `--no-git` / `--no-notes` (skip individual steps), `--from <ref>` (regenerate notes for an existing tag).
 
 ## Key Patterns
 

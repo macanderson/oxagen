@@ -16,6 +16,7 @@
  * receive is refused instead of queued (§7.3).
  */
 import { z } from "zod";
+import { STEER_TEXT_MAX, COMMAND_REASON_MAX } from "../tacho/command-limits";
 import { registerCapability } from "../registry";
 import { tachoDeliveryModeSchema } from "../tacho/schemas";
 import { runPublicIdSchema } from "./run.list";
@@ -50,10 +51,7 @@ export const commandTargetSchema = z.discriminatedUnion("kind", [
 ]);
 export type CommandTarget = z.output<typeof commandTargetSchema>;
 
-export const STEER_TEXT_MAX = 16_384;
-
-/** The reason a pause, resume or cancel carries, as the model reads it on resume. */
-export const COMMAND_REASON_MAX = 512;
+export { STEER_TEXT_MAX, COMMAND_REASON_MAX } from "../tacho/command-limits";
 
 export const commandPayloadSchema = z
   .object({

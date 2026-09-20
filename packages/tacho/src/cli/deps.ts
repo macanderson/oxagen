@@ -4,7 +4,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { get as httpGet } from "node:http";
 import { createServer } from "node:net";
 import {
@@ -39,6 +39,7 @@ import {
   type ServiceManager,
   serviceManagerFor,
 } from "../host/service";
+import { TACHO_VERSION } from "../version";
 
 export interface Credentials {
   token: string;
@@ -717,23 +718,7 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     randomToken: () => randomBytes(24).toString("hex"),
     sleep: (ms) =>
       new Promise((resolvePromise) => setTimeout(resolvePromise, ms)),
-    wrapperVersion: packageVersion(),
+    wrapperVersion: TACHO_VERSION,
     ...overrides,
   };
-}
-
-/** Stamped by `scripts/bundle.mjs`; undefined when running from source. */
-declare const __TACHO_VERSION__: string | undefined;
-
-function packageVersion(): string {
-  if (typeof __TACHO_VERSION__ === "string") return __TACHO_VERSION__;
-  try {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const pkg = JSON.parse(
-      readFileSync(resolve(here, "..", "..", "package.json"), "utf8"),
-    ) as { version?: string };
-    return pkg.version ?? "0.0.0";
-  } catch {
-    return "0.0.0";
-  }
 }

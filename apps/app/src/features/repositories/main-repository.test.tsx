@@ -1424,7 +1424,9 @@ describe("the return leg from GitHub", () => {
 
     expect(await screen.findByTestId("repository-setup")).toBeTruthy();
     expect(screen.getByTestId("workspace-github-connected")).toBeTruthy();
-    expect(nav.replace).toHaveBeenCalledWith("/acme/core-platform/repositories");
+    expect(nav.replace).toHaveBeenCalledWith(
+      "/acme/core-platform/repositories",
+    );
   });
 
   it("acknowledges nothing and leaves the URL alone on an ordinary visit (negative)", async () => {
@@ -1462,7 +1464,9 @@ describe("the return leg from GitHub", () => {
     expect(
       await screen.findByTestId("workspace-repository-install"),
     ).toBeTruthy();
-    expect(nav.replace).toHaveBeenCalledWith("/acme/core-platform/repositories");
+    expect(nav.replace).toHaveBeenCalledWith(
+      "/acme/core-platform/repositories",
+    );
   });
 
   /**

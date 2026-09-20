@@ -69,9 +69,9 @@ type MeasuredReason = (typeof MEASURED_REASONS)[number];
 type PlainReason = (typeof PLAIN_REASONS)[number];
 
 const isMeasured = (code: string): code is MeasuredReason =>
-  (MEASURED_REASONS as readonly string[]).includes(code);
+  MEASURED_REASONS.some((entry) => entry === code);
 const isPlain = (code: string): code is PlainReason =>
-  (PLAIN_REASONS as readonly string[]).includes(code);
+  PLAIN_REASONS.some((entry) => entry === code);
 
 function Reason({ code }: { code: string }) {
   const t = useTranslations("fleet.approvals.eligibility");
@@ -205,7 +205,7 @@ export function ApprovalDecision({
   /**
    * The refusal itself, not a rendered sentence. INV-14 has an exhausted
    * refusal carry the way out of it, and this is the invariant's one rev1
-   * producer: a decision is the one billed action of the surface (ADR-114), so
+   * producer: a decision is the one billed action of the surface (ADR-115), so
    * the dialog holds the failure and draws the billing link beside the code.
    */
   const [failure, setFailure] = useState<Failure | null>(null);

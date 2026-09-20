@@ -42,7 +42,7 @@ function moduleDir(): string {
     // fall through to the CJS path
   }
   // esbuild CJS bundle: the Node module-wrapper __dirname global exists and
-  // points at the function directory (where apps/api build.mjs copies the
+  // points at the bundle directory (where apps/api build-node.mjs copies the
   // bundled connector schema.yaml files).
   if (typeof __dirname === "string") return __dirname;
   return process.cwd();
@@ -205,8 +205,8 @@ export const BUILT_IN_PLUGIN_IDS = new Set([
 
 /**
  * Locate a built-in connector's bundled schema.yaml. Checks, in order:
- *  1. next to this module (apps/api esbuild bundle — build.mjs copies the
- *     connector schemas into the function directory, preserving the
+ *  1. next to this module (apps/api esbuild bundle — build-node.mjs copies the
+ *     connector schemas beside the bundle, preserving the
  *     connectors/<id>/ layout),
  *  2. the connectors dir relative to the process cwd (defensive fallback).
  * In dev/vitest, (1) resolves to packages/ingestion/src/connectors/<id>/.

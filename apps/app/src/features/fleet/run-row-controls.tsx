@@ -25,7 +25,7 @@
 // command for nobody. It never says the run paused, only that the pause was
 // taken, because `dispatch_command` queues and the run's own status is what
 // says the agent obeyed.
-import { COMMAND_REASON_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import { COMMAND_REASON_MAX } from "@oxagen/oxagen/tacho/command-limits";
 import { useTranslations } from "next-intl";
 import {
   type SyntheticEvent,

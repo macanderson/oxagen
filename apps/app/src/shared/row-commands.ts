@@ -16,5 +16,5 @@ export type RowCommand = (typeof ROW_COMMANDS)[number];
 
 /** Whether a command a form submitted is one of the three a row sends. */
 export function isRowCommand(value: string): value is RowCommand {
-  return (ROW_COMMANDS as readonly string[]).includes(value);
+  return ROW_COMMANDS.some((entry) => entry === value);
 }

@@ -1577,7 +1577,9 @@ describe("GET /oauth/github/callback", () => {
     // Nothing was claimed and nothing was attached, so there is nothing to
     // acknowledge — neither a success nor a failure.
     const location = res.headers.get("location") ?? "";
-    expect(location).toBe(`${APP_URL}/my-org/my-ws/repositories?settings=repository`);
+    expect(location).toBe(
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository`,
+    );
     expect(location).not.toContain("github=");
   });
 
@@ -1754,7 +1756,9 @@ describe("GET /oauth/github/callback", () => {
 
     expect(tx.insert).not.toHaveBeenCalled();
     const location = res.headers.get("location") ?? "";
-    expect(location).toBe(`${APP_URL}/my-org/my-ws/repositories?settings=repository`);
+    expect(location).toBe(
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository`,
+    );
     expect(location).not.toContain("github=");
   });
 

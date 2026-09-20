@@ -31,7 +31,7 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import {
   acceptsCommands,
-  type DeliveryMode,
+  DeliveryMode,
   type RunRow,
 } from "@/data/contracts/runs";
 import type { ActionResult } from "@/server/kernel";
@@ -58,7 +58,7 @@ const DELIVERY_COPY = {
   interrupt: "interrupt",
   turn_boundary: "turnBoundary",
 } as const satisfies Record<DeliveryMode, string>;
-const DELIVERY_MODES = Object.keys(DELIVERY_COPY) as DeliveryMode[];
+const DELIVERY_MODES = DeliveryMode.options;
 const DELIVERY_DEFAULT: DeliveryMode = "next_step";
 
 /**

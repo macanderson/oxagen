@@ -13,7 +13,7 @@
 // caller passes the seam's own value, so a new `reason` on `ActionResult`
 // fails to compile at each call site rather than falling through to a
 // sentence that does not fit it.
-import { COMMAND_REASON_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import { COMMAND_REASON_MAX } from "@oxagen/oxagen/tacho/command-limits";
 import { useTranslations } from "next-intl";
 
 export type CommandFailure =
