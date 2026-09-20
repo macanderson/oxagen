@@ -314,7 +314,7 @@ describe("loadBuiltInSchema — built-in plugins", () => {
 
   it("resolves each built-in schema file from the loader module directory", () => {
     // Mirror the loader's primary resolution path (moduleDir() → connectors/<id>).
-    // The bundle copy in apps/api/build.mjs relies on this exact layout, so a
+    // The bundle copy in apps/api/build-node.mjs relies on this exact layout, so a
     // drift here would break prod even while dev/vitest pass via the fallback.
     const moduleDir = dirname(fileURLToPath(import.meta.url));
     const connectorsDir = resolve(moduleDir, "..", "connectors");

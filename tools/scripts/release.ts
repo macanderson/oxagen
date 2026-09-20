@@ -5,9 +5,7 @@
  * Every workspace package is versioned in lockstep (one number for the entire
  * platform), so a release is: bump every package.json `version` to the same new
  * value, regenerate AI-written release notes from the git history since the last
- * tag, commit + tag, and propagate the new platform version to Vercel as the
- * `PLATFORM_VERSION` env var across every oxagen-v2 project and every
- * environment (development / preview / production).
+ * tag, and commit + tag.
  *
  *   pnpm release:patch            # 0.1.0 -> 0.1.1
  *   pnpm release:minor            # 0.1.0 -> 0.2.0
@@ -16,13 +14,12 @@
  *   tsx tools/scripts/release.ts --set 0.2.0         # set an exact version
  *
  * Flags:
- *   --dry-run     compute + print, but write no files, no git, no Vercel, no npm
+ *   --dry-run     compute + print, but write no files, no git, no npm
  *   --set X.Y.Z   set an exact version instead of bumping
  *   --from <ref>  base ref for the notes diff (default: newest tag); use this to
  *                 regenerate notes for an already-tagged release
  *   --no-notes    skip the Anthropic release-notes generation (plain changelog)
  *   --no-git      skip the commit + tag
- *   --no-vercel   skip the Vercel PLATFORM_VERSION sync
  *   --no-npm      skip the CLI build + npm publish (even if NPM_TOKEN is available)
  *   --yes         (reserved) non-interactive; this script is already non-interactive
  *
@@ -43,12 +40,16 @@
  * newest first).
  *
  * `.github/workflows/release.yml` runs this on `workflow_dispatch` with
- * --no-git --no-vercel --no-npm and turns the result into a pull request; the
- * merge of that PR tags the release and builds the desktop app.
+ * --no-git --no-npm and turns the result into a pull request; the merge of that
+ * PR tags the release and builds the desktop app.
  *
- * Vercel sync uses the REST API (VERCEL_TOKEN + VERCEL_TEAM_ID) because the
- * Vercel CLI can't set "all preview branches" non-interactively. PLATFORM_VERSION
- * is a plain (non-secret) tag.
+ * This script no longer propagates PLATFORM_VERSION to the runtime. It used to
+ * write the tag into every oxagen-v2-* Vercel project through the REST API;
+ * production runs on AWS and that account is being decommissioned (#1295), so
+ * the sync had nothing left to write to. Nothing on the AWS path sets the var
+ * in its place, which means `platformVersion()` falls back to "0.0.0" in
+ * production — a real gap, but one that belongs to the deploy pipeline (SSM
+ * `/oxagen/production`), not to this script.
  *
  * Run via `pnpm release:<patch|minor|major>` (wraps this with --env-file-if-exists).
  */
@@ -79,9 +80,6 @@ import {
 } from "./lib/release-notes";
 
 const ROOT = resolve(import.meta.dirname, "../..");
-const DEFAULT_TEAM_ID = "team_DiMizWNDHKFFU5ajKe2ZVKl9";
-const VERCEL_PROJECT_PREFIX = "oxagen-v2-"; // the live v2 stack; v1 projects are left alone
-const PLATFORM_ENVS = ["development", "preview", "production"] as const;
 const NOTES_MAX_TOKENS = 8192; // headroom so large releases don't truncate mid-section
 
 type Bump = "patch" | "minor" | "major";
@@ -93,13 +91,12 @@ interface Options {
   dryRun: boolean;
   notes: boolean;
   git: boolean;
-  vercel: boolean;
   npm: boolean;
 }
 
 // ── small utilities ──────────────────────────────────────────────────────────
 
-/** Env values pasted into a Vercel dashboard arrive double-quoted; strip one pair. */
+/** Env values pasted in from a dashboard arrive double-quoted; strip one pair. */
 function deQuote(v: string | undefined): string {
   if (!v) return "";
   return v.length >= 2 && v.startsWith('"') && v.endsWith('"')
@@ -193,7 +190,7 @@ function setPackageVersion(
   return { name: pkg.name ?? file, from };
 }
 
-// ── .env.local PLATFORM_VERSION sync (local mirror of the Vercel tag) ─────────
+// ── .env.local PLATFORM_VERSION sync (local mirror of the release tag) ───────
 
 function syncLocalEnv(version: string): void {
   const file = join(ROOT, ".env.local");
@@ -427,138 +424,6 @@ function writeNotes(
   return { changelog: changelogFile, release: releaseFile, page };
 }
 
-// ── Vercel PLATFORM_VERSION propagation (REST; all v2 projects × all envs) ────
-
-interface VercelProject {
-  id: string;
-  name: string;
-}
-
-/** Authoritative team id from the linked project file; env/default are fallbacks
- * (the env var is historically typo-prone — see VERCEL_TEAM_ID trailing-E bug). */
-function resolveTeamId(): string {
-  const linked = join(ROOT, ".vercel/project.json");
-  if (existsSync(linked)) {
-    try {
-      const orgId = (
-        JSON.parse(readFileSync(linked, "utf8")) as { orgId?: string }
-      ).orgId;
-      if (orgId) return orgId;
-    } catch {
-      /* fall through to env/default */
-    }
-  }
-  return deQuote(env.VERCEL_TEAM_ID) || DEFAULT_TEAM_ID;
-}
-
-function vercelCfg(): { token: string; teamId: string } | null {
-  const token = deQuote(env.VERCEL_TOKEN) || deQuote(env.TURBO_TOKEN);
-  if (!token) {
-    console.log(
-      kleur.yellow("[release] VERCEL_TOKEN not set — skipping Vercel sync."),
-    );
-    return null;
-  }
-  return { token, teamId: resolveTeamId() };
-}
-
-async function vercelFetch(
-  cfg: { token: string; teamId: string },
-  path: string,
-  init?: RequestInit,
-): Promise<Response> {
-  const sep = path.includes("?") ? "&" : "?";
-  return fetch(`https://api.vercel.com${path}${sep}teamId=${cfg.teamId}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${cfg.token}`,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-}
-
-async function listV2Projects(cfg: {
-  token: string;
-  teamId: string;
-}): Promise<VercelProject[]> {
-  const res = await vercelFetch(cfg, "/v9/projects?limit=100");
-  if (!res.ok)
-    throw new Error(`list projects: ${res.status} ${await res.text()}`);
-  const json = (await res.json()) as { projects?: VercelProject[] };
-  return (json.projects ?? []).filter((p) =>
-    p.name.startsWith(VERCEL_PROJECT_PREFIX),
-  );
-}
-
-async function upsertPlatformVersion(
-  cfg: { token: string; teamId: string },
-  project: VercelProject,
-  version: string,
-): Promise<void> {
-  // Remove any existing all-branches PLATFORM_VERSION on every target, then POST
-  // a single plain value scoped to all three targets. Idempotent re-run safe.
-  const listRes = await vercelFetch(cfg, `/v9/projects/${project.id}/env`);
-  if (!listRes.ok)
-    throw new Error(
-      `${project.name} list env: ${listRes.status} ${await listRes.text()}`,
-    );
-  const envs =
-    (
-      (await listRes.json()) as {
-        envs?: Array<{ id: string; key: string; gitBranch?: string }>;
-      }
-    ).envs ?? [];
-  for (const e of envs.filter(
-    (e) => e.key === "PLATFORM_VERSION" && !e.gitBranch,
-  )) {
-    const del = await vercelFetch(
-      cfg,
-      `/v10/projects/${project.id}/env/${e.id}`,
-      { method: "DELETE" },
-    );
-    if (!del.ok)
-      throw new Error(
-        `${project.name} delete: ${del.status} ${await del.text()}`,
-      );
-  }
-  const post = await vercelFetch(cfg, `/v10/projects/${project.id}/env`, {
-    method: "POST",
-    body: JSON.stringify({
-      key: "PLATFORM_VERSION",
-      value: version,
-      type: "plain",
-      target: [...PLATFORM_ENVS],
-    }),
-  });
-  if (!post.ok)
-    throw new Error(
-      `${project.name} post: ${post.status} ${await post.text()}`,
-    );
-}
-
-async function syncVercel(version: string): Promise<void> {
-  const cfg = vercelCfg();
-  if (!cfg) return;
-  const projects = await listV2Projects(cfg);
-  if (projects.length === 0) {
-    console.log(
-      kleur.yellow(
-        "[release] no oxagen-v2-* projects found on the team — nothing to sync.",
-      ),
-    );
-    return;
-  }
-  for (const p of projects) {
-    await upsertPlatformVersion(cfg, p, version);
-    console.log(
-      kleur.green(
-        `[release]   ✓ ${p.name} PLATFORM_VERSION=${version} (dev+preview+prod)`,
-      ),
-    );
-  }
-}
-
 // ── npm CLI publish (only if NPM_TOKEN is available) ────────────────────────
 
 function npmCfg(): { token: string } | null {
@@ -672,7 +537,6 @@ function parseArgs(): Options {
     dryRun: false,
     notes: true,
     git: true,
-    vercel: true,
     npm: true,
   };
   for (let i = 0; i < args.length; i++) {
@@ -682,7 +546,6 @@ function parseArgs(): Options {
     else if (a === "--dry-run") opts.dryRun = true;
     else if (a === "--no-notes") opts.notes = false;
     else if (a === "--no-git") opts.git = false;
-    else if (a === "--no-vercel") opts.vercel = false;
     else if (a === "--no-npm") opts.npm = false;
     else if (a === "--yes") {
       /* non-interactive already */
@@ -703,7 +566,7 @@ async function main(): Promise<void> {
   if (!opts.bump && !opts.setVersion) {
     console.error(
       kleur.red(
-        "[release] usage: release.ts <patch|minor|major> [--set X.Y.Z] [--from <ref>] [--dry-run] [--no-notes|--no-git|--no-vercel]",
+        "[release] usage: release.ts <patch|minor|major> [--set X.Y.Z] [--from <ref>] [--dry-run] [--no-notes|--no-git|--no-npm]",
       ),
     );
     exit(2);
@@ -784,23 +647,6 @@ async function main(): Promise<void> {
     console.log(kleur.dim("    (push with: git push && git push --tags)"));
   } else if (opts.git) {
     console.log(kleur.dim("\n  Git: would commit + tag v" + next));
-  }
-
-  // ── Vercel PLATFORM_VERSION sync ──
-  if (opts.vercel) {
-    console.log(kleur.bold("\n  Vercel PLATFORM_VERSION sync:"));
-    if (opts.dryRun) {
-      const cfg = vercelCfg();
-      if (cfg) {
-        const projects = await listV2Projects(cfg);
-        for (const p of projects)
-          console.log(
-            kleur.dim(`    would set ${p.name} → ${next} (dev+preview+prod)`),
-          );
-      }
-    } else {
-      await syncVercel(next);
-    }
   }
 
   // ── npm CLI publish ──
