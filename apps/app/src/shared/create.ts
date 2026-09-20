@@ -23,7 +23,8 @@ export const CREATE_KINDS: readonly CreateKind[] = ["agent", "skill", "record"];
 export const CREATE_EVENT = "oxagen:create";
 
 export type CreatePrefill = { description: string };
-export const CREATE_DESCRIPTION_MAX = 2000;
+// Compatible with the strictest propose_record rationale bound (v2).
+export const CREATE_DESCRIPTION_MAX = 1000;
 type CreateRequest = { kind: CreateKind | null; prefill?: CreatePrefill };
 
 /** Open the chooser (`null`) or one kind's wizard over the current page. */

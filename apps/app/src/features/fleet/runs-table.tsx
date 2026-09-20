@@ -107,6 +107,13 @@ function RunsPageView({
                     ? notRecorded
                     : t(`operatorKind.${run.operatorKind}`))}
               </span>
+              {run.operatorName === null && run.operatorId !== null ? (
+                <span
+                  className={`${mono} block max-w-40 truncate text-xs text-muted-foreground`}
+                >
+                  {run.operatorId}
+                </span>
+              ) : null}
             </td>
             <td className={cell}>
               <StatusBadge status={run.status} />

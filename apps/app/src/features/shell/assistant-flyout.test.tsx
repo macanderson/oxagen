@@ -7,7 +7,14 @@
 //
 // The flyout WL-06 deleted had a `disabled` textarea, so the assertion that
 // earns this file is the first one: a composer that reaches ask_assistant.
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createRoot } from "react-dom/client";
 import {
@@ -1161,4 +1168,24 @@ describe("cost recommendation handoff", () => {
     expect(screen.getByTestId("assistant-composer")).toHaveValue("");
     expect(askAssistant).not.toHaveBeenCalled();
   });
+});
+
+it("preserves an existing draft when a recommendation would exceed the message limit", async () => {
+  await openFlyout();
+  const existing = "x".repeat(32_760);
+  fireEvent.change(screen.getByTestId("assistant-composer"), {
+    target: { value: existing },
+  });
+  act(() => {
+    openAssistantDraft({
+      org: "acme",
+      ws: "core-platform",
+      content: "Plan a code PR for this finding.",
+    });
+  });
+  expect(screen.getByTestId("assistant-composer")).toHaveValue(existing);
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Your existing draft is unchanged",
+  );
+  expect(askAssistant).not.toHaveBeenCalled();
 });

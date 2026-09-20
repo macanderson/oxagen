@@ -3698,6 +3698,7 @@ type Messages = {
         label: string;
         placeholder: string;
         send: string;
+        draftTooLong: string;
       };
       refused: {
         denied: string;
@@ -3909,6 +3910,7 @@ type Messages = {
         codeAction: string;
         codeDraft: string;
       };
+      costData: string;
     };
     strip: {
       spend: string;

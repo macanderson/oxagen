@@ -17,6 +17,7 @@ import { formatCount, formatMoney, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import {
   CostFigure,
+  EstimateBasis,
   CountFigure,
   Instant,
   MoneyFigure,
@@ -216,6 +217,7 @@ function FindingCard({
         </span>
         <span className="font-mono text-2xl font-semibold tabular-nums">
           <MoneyFigure money={finding.saving} />
+          <EstimateBasis cost={finding.saving} />
         </span>
         <span className="text-xs text-muted-foreground">
           {share === null
@@ -293,6 +295,7 @@ export function FindingsSection({
             </dt>
             <dd className="font-mono text-4xl font-semibold tracking-tight tabular-nums">
               <MoneyFigure money={findings.saving} />
+              <EstimateBasis cost={findings.saving} />
             </dd>
             <dd className="text-xs text-muted-foreground">
               {t("findings.savingNote")}
@@ -315,6 +318,7 @@ export function FindingsSection({
             </dt>
             <dd className="font-mono text-xl tabular-nums">
               <MoneyFigure money={findings.annualised} />
+              <EstimateBasis cost={findings.annualised} />
             </dd>
             <dd className="text-xs text-muted-foreground">
               {t("findings.annualisedNote")}
@@ -406,6 +410,7 @@ export function FindingEvidenceSection({
           note={t("findings.evidence.atStakeNote")}
         >
           <MoneyFigure money={finding.saving} />
+          <EstimateBasis cost={finding.saving} />
         </Tile>
         <Tile term={t("findings.evidence.confidence")}>
           {t(`findings.confidence.${finding.confidence}`)}

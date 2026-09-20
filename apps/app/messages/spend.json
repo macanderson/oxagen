@@ -118,7 +118,8 @@
         "draft": "Finding {id} for {subject}. Window: {from} to {to}. Cites {runs} runs and {calls} calls. Potential savings: {amount} {currency}, estimated on {basis} cost data. Implementation cost is not estimated.\n\nRecommended change: {fix}\n\nObserved behavior: {why}",
         "codeAction": "Plan a code PR with Stella",
         "codeDraft": "Inspect this spend finding and read the cited calls before proposing a change. Plan the smallest harness hook, custom tool, or code fix that addresses the behavior, with tests. Separate measured costs from potential savings. Estimate implementation cost only with stated assumptions. Open a reviewable code PR only if repository tools and access are available. Otherwise report the missing access. Do not mark the finding fixed.\n\n{finding}"
-      }
+      },
+      "costData": "Cost data: {basis}"
     },
     "strip": {
       "spend": "Spend",

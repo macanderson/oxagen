@@ -423,6 +423,32 @@ describe("runs table", () => {
     expect(runsSection()).not.toHaveTextContent(/trust/i);
   });
 
+  it("distinguishes unnamed operators with a visible secondary principal identifier", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          operatorName: null,
+          operatorKind: "service",
+          operatorId: "prn_service_alpha",
+        }),
+        runRow({
+          id: "arun_b2",
+          operatorName: null,
+          operatorKind: "service",
+          operatorId: "prn_service_beta",
+        }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const rows = within(runsSection()).getAllByTestId("run-row");
+    const first = within(rows[0] ?? runsSection()).getAllByRole("cell")[2];
+    const second = within(rows[1] ?? runsSection()).getAllByRole("cell")[2];
+    expect(first).toHaveTextContent("Serviceprn_service_alpha");
+    expect(second).toHaveTextContent("Serviceprn_service_beta");
+    expect(screen.getByText("prn_service_alpha")).toBeVisible();
+    expect(screen.getByText("prn_service_beta")).toBeVisible();
+  });
+
   it("omits proof, replay, and verdict columns from the operator table", async () => {
     await renderFleet({ runs: runPage([runRow()]), approvals: NO_APPROVALS });
     const headers = within(runsSection())

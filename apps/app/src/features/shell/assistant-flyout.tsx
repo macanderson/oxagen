@@ -102,6 +102,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
+  ASSISTANT_CONTENT_MAX,
   ASSISTANT_DRAFT_EVENT,
   assistantDraftOf,
 } from "@/shared/assistant-draft";
@@ -137,6 +138,7 @@ type Thread = {
   entries: readonly Entry[];
   conversationId: string | null;
   draft: string;
+  draftTooLong?: boolean;
   pending: boolean;
 };
 
@@ -357,12 +359,15 @@ export function AssistantFlyout() {
         const next = new Map(prior);
         const current = prior.get(scope) ?? EMPTY_THREAD;
         // Keep unsent work and place the requested change after it.
-        next.set(scope, {
-          ...current,
-          draft: current.draft.trim()
-            ? `${current.draft}\n\n${request.content}`
-            : request.content,
-        });
+        const combined = current.draft.trim()
+          ? `${current.draft}\n\n${request.content}`
+          : request.content;
+        next.set(
+          scope,
+          combined.length > ASSISTANT_CONTENT_MAX
+            ? { ...current, draftTooLong: true }
+            : { ...current, draft: combined, draftTooLong: false },
+        );
         return next;
       });
       setAssistantOpen(true);
@@ -462,6 +467,7 @@ export function AssistantFlyout() {
     if (
       pending ||
       content === "" ||
+      content.length > ASSISTANT_CONTENT_MAX ||
       org === null ||
       ws === null ||
       scope === null
@@ -493,6 +499,7 @@ export function AssistantFlyout() {
       ...t,
       entries: [...t.entries, { kind: "asked", id, text: content }],
       draft: "",
+      draftTooLong: false,
       pending: true,
     }));
     try {
@@ -703,6 +710,7 @@ export function AssistantFlyout() {
             <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2">
               <textarea
                 rows={2}
+                maxLength={ASSISTANT_CONTENT_MAX}
                 value={draft}
                 disabled={pending}
                 aria-label={t("composer.label")}
@@ -711,7 +719,11 @@ export function AssistantFlyout() {
                 onChange={(e) => {
                   if (shownScope === null) return;
                   const value = e.target.value;
-                  updateThread(shownScope, (t) => ({ ...t, draft: value }));
+                  updateThread(shownScope, (t) => ({
+                    ...t,
+                    draft: value,
+                    draftTooLong: false,
+                  }));
                 }}
                 className="min-h-10 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
               />
@@ -725,6 +737,11 @@ export function AssistantFlyout() {
                 <Send aria-hidden="true" className="size-4" />
               </button>
             </div>
+            {thread.draftTooLong ? (
+              <p role="alert" className="mt-2 text-sm text-muted-foreground">
+                {t("composer.draftTooLong")}
+              </p>
+            ) : null}
           </form>
         ) : (
           <p

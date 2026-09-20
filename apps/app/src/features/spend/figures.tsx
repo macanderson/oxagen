@@ -48,6 +48,25 @@ export function CostFigure({ cost }: { cost: Cost | null }) {
   );
 }
 
+/** Pricing provenance for a potential saving, separate from the estimate. */
+export function EstimateBasis({ cost }: { cost: Cost | null }) {
+  const t = useTranslations("spend");
+  if (cost === null) return null;
+  return (
+    <span
+      data-estimate-basis={cost.basis ?? "not_recorded"}
+      className="block text-xs font-normal text-muted-foreground"
+    >
+      {t("findings.costData", {
+        basis:
+          cost.basis === null
+            ? t("basisNotRecorded")
+            : t(`basis.${cost.basis}`),
+      })}
+    </span>
+  );
+}
+
 export function MoneyFigure({
   money,
   precision = "cents",

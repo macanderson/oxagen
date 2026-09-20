@@ -1,6 +1,8 @@
 // A page may offer a request for review in the assistant composer. Opening a
 // draft never sends a turn, spends money, or changes a finding's status.
 export const ASSISTANT_DRAFT_EVENT = "oxagen:assistant-draft";
+// Matches the assistant input contract in chat.message.send.ts.
+export const ASSISTANT_CONTENT_MAX = 32_768;
 export const ASSISTANT_DRAFT_MAX = 16_000;
 
 export type AssistantDraft = { org: string; ws: string; content: string };

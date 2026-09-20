@@ -200,11 +200,12 @@
       "composer": {
         "label": "Ask the assistant",
         "placeholder": "Ask about a run, an agent, or what this is costing…",
-        "send": "Send"
+        "send": "Send",
+        "draftTooLong": "This request would exceed the message limit. Your existing draft is unchanged. Send or shorten it, then open the recommendation again."
       },
       "refused": {
         "denied": "You do not have permission to ask the assistant in this workspace.",
-        "invalid": "That question was refused. A question is 1 to 32,000 characters.",
+        "invalid": "That question was refused. A question is 1 to 32,768 characters.",
         "exhausted": "This organization has no budget left for the assistant.",
         "parked": "That turn is waiting on an approval before it can answer.",
         "unavailable": "The assistant could not be reached. Try again."

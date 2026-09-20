@@ -237,6 +237,33 @@ describe("Fix a finding", () => {
     });
   }
 
+  it("bounds a long finding handoff to the downstream rationale limit", async () => {
+    const listener = vi.fn((event: Event) => createRequestOf(event));
+    window.addEventListener("oxagen:create", listener);
+    try {
+      const description =
+        "Finding fnd_1. " + "Review repeated tool calls. ".repeat(80);
+      renderWithIntl(
+        <FixDialog
+          at={at}
+          findingId="fnd_1"
+          fix="Batch repeated reads."
+          contextDescription={description}
+        />,
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Review fix" }));
+      await userEvent.click(
+        screen.getByRole("button", { name: "Draft a context PR" }),
+      );
+      const request = listener.mock.results[0]?.value;
+      expect(request?.prefill?.description).toBe(description.slice(0, 1000));
+      expect(request?.prefill?.description).toHaveLength(1000);
+      expect(recordFindingFixAction).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("oxagen:create", listener);
+    }
+  });
+
   it("opens a prefilled context draft without claiming a fix or writing a PR", async () => {
     const listener = vi.fn((event: Event) => createRequestOf(event));
     window.addEventListener("oxagen:create", listener);
