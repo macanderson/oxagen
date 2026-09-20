@@ -828,7 +828,11 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
 
   // The transport spy: the real materializePinnedMcpTools executes via the MCP
   // client's callTool, so "the transport ran" now means fakeExecute was called.
-  const fakeExecute = vi.fn(async () => ({ content: { data: "result" } }));
+  const fakeExecute = vi.fn(
+    async (): Promise<{ isError?: boolean; content: { data: string } }> => ({
+      content: { data: "result" },
+    }),
+  );
 
   beforeEach(() => {
     vi.mocked(authorizeExternalCapability).mockClear();
@@ -890,6 +894,35 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     );
   });
 
+  it("audits a resolved MCP error result as one failed invocation", async () => {
+    fakeExecute.mockResolvedValueOnce({
+      isError: true,
+      content: { data: "refused" },
+    });
+    const { tools } = await materializeTools(CTX);
+    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as unknown as {
+      execute: (input: unknown) => Promise<unknown>;
+    };
+    await expect(t.execute({})).rejects.toMatchObject({
+      code: "mcp_tool_execution_failed",
+    });
+    expect(fakeExecute).toHaveBeenCalledOnce();
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledOnce();
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+      CTX,
+      "error",
+      expect.any(Number),
+      expect.objectContaining({ code: "mcp_tool_execution_failed" }),
+    );
+    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "failed",
+        error_class: "McpToolExecutionError",
+      }),
+    );
+  });
+
   it.each([1, 2, 3])(
     "blocks the transport when external rules refuse at check %i",
     async (checkNumber) => {
@@ -905,6 +938,14 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       await expect(t.execute({})).rejects.toThrow("external decision denied");
       expect(fakeExecute).not.toHaveBeenCalled();
       expect(externalRulesMock).toHaveBeenCalledTimes(checkNumber);
+      expect(emitExternalCapabilityOutcome).toHaveBeenCalledOnce();
+      expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
+        `mcp.${MCP_SERVER.id}.list_pull_requests`,
+        CTX,
+        "error",
+        expect.any(Number),
+        expect.objectContaining({ message: "external decision denied" }),
+      );
       expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
         expect.objectContaining({ status: "failed", error_class: "Error" }),
       );

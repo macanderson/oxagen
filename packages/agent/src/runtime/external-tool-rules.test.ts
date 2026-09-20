@@ -302,19 +302,14 @@ describe("external decision admission", () => {
       })(),
     ).rejects.toMatchObject({ code: "decision_rule_denied" });
   });
-  it("reports infrastructure failures as security errors", async () => {
+  it("leaves infrastructure failure auditing to the invocation boundary", async () => {
     const emit = vi.fn();
     setSecurityEventEmitter(emit);
     clearDecisionRulesGate();
     await expect(check()()).rejects.toMatchObject({
       code: "external_rules_unavailable",
     });
-    expect(emit).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        outcome: "error",
-        errorCode: "external_rules_unavailable",
-      }),
-    );
+    expect(emit).not.toHaveBeenCalled();
     setDecisionRulesGate(
       createDecisionRulesGate({
         loadRuleSet: async () => {
@@ -323,12 +318,7 @@ describe("external decision admission", () => {
       }),
     );
     await expect(check()()).rejects.toThrow("offline");
-    expect(emit).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        outcome: "error",
-        errorCode: "external_decision_refused",
-      }),
-    );
+    expect(emit).not.toHaveBeenCalled();
   });
   it("fails closed on a rule loader failure", async () => {
     setDecisionRulesGate(
