@@ -59,6 +59,9 @@ vi.mock("./billing-settings", () => ({
 // #1420 turns on.
 interface DbState {
   subRow: Record<string, unknown> | null;
+  grantRow: { id: string } | null;
+  grantPredicate: SQL | null;
+  failClose: boolean;
   /** The org_billing_settings customer id; null leaves the column empty. */
   settingsCustomerId: string | null;
   /** Set by closeReloadEpisode; the marker that a reload actually finished. */
@@ -75,6 +78,9 @@ interface DbState {
 function makeState(): DbState {
   return {
     subRow: null,
+    grantRow: null,
+    grantPredicate: null,
+    failClose: false,
     settingsCustomerId: null,
     lastAutoReloadAt: null,
     episodeKey: null,
@@ -89,6 +95,12 @@ function makeState(): DbState {
 function makeDb(state: DbState) {
   return {
     query: {
+      creditLedger: {
+        findFirst: vi.fn((args: { where: SQL }) => {
+          state.grantPredicate = args.where;
+          return Promise.resolve(state.grantRow);
+        }),
+      },
       subscriptions: {
         findFirst: vi.fn(async () => state.subRow),
       },
@@ -103,6 +115,7 @@ function makeDb(state: DbState) {
         return {
           where: vi.fn((predicate: SQL) => {
             if (vals["autoReloadEpisodeKey"] === null) {
+              if (state.failClose) throw new Error("cleanup unavailable");
               state.closePredicates.push(predicate);
               const query = new PgDialect().sqlToQuery(predicate);
               if (query.params.includes(state.episodeKey)) {
@@ -283,6 +296,47 @@ describe("maybeAutoReload", () => {
       lotId: "lot-1",
       effectiveBalanceCents: 3000n,
     });
+  });
+
+  it.each([true, false])(
+    "verifies a competing grant before clearing the episode: %s",
+    async (exists) => {
+      const state = makeState();
+      state.subRow = { stripeCustomerId: "cus_test" };
+      state.grantRow = exists ? { id: "ledger-1" } : null;
+      dbHolder.instance = makeDb(state);
+      getOrgBillingSettingsMock.mockResolvedValue(makeSettings());
+      effectiveBalanceMock.mockResolvedValue(100n);
+      createCreditLotMock.mockRejectedValueOnce({ cause: { code: "23505" } });
+      const result = await maybeAutoReload("org-abc");
+      expect(result.reloaded).toBe(exists);
+      expect(state.episodeKey === null).toBe(exists);
+      if (!state.grantPredicate)
+        throw new Error("Expected a scoped ledger lookup");
+      const query = new PgDialect().sqlToQuery(state.grantPredicate);
+      expect(query.sql).toContain('"org_id"');
+      expect(query.sql).toContain('"delta_cents"');
+      expect(query.sql).toContain('"reason"');
+      expect(query.params).toContain("org-abc");
+      expect(query.params).toContain("pi_test_001");
+      expect(query.params).toContain("payment_intent");
+      expect(query.params).toContain("grant_auto_reload");
+      expect(query.params.map(String)).toContain("2000");
+      expect(chargeOffSessionMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("reports granted credits when episode cleanup fails", async () => {
+    const state = makeState();
+    state.subRow = { stripeCustomerId: "cus_test" };
+    state.failClose = true;
+    dbHolder.instance = makeDb(state);
+    getOrgBillingSettingsMock.mockResolvedValue(makeSettings());
+    effectiveBalanceMock.mockResolvedValue(100n);
+    const result = await maybeAutoReload("org-abc");
+    expect(result.reloaded).toBe(true);
+    expect(state.episodeKey).not.toBeNull();
+    expect(createCreditLotMock).toHaveBeenCalledTimes(1);
   });
 
   it("skips when auto-reload is disabled", async () => {
