@@ -35,7 +35,13 @@ export interface TenantScope extends Partial<PrincipalAttribution> {
   readonly workspaceId: string;
 }
 
-const als = new AsyncLocalStorage<TenantScope>();
+interface StoredScope extends PrincipalAttribution {
+  readonly orgId: string;
+  readonly workspaceId: string;
+  readonly attribution: PrincipalAttribution;
+}
+
+const als = new AsyncLocalStorage<StoredScope>();
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,7 +55,7 @@ const UUID_RE =
 const MAX_ECHOED_VALUE_LENGTH = 64;
 
 function assertUuid(value: string, field: string): void {
-  if (!UUID_RE.test(value)) {
+  if (typeof value !== "string" || !UUID_RE.test(value)) {
     // `String(...)` rather than `value` directly: the `string` type is a
     // compile-time promise, and the untyped callers (Inngest step payloads,
     // JS interop) can hand this a non-string. Coercing keeps the rejection a
@@ -61,6 +67,7 @@ function assertUuid(value: string, field: string): void {
         : raw;
     throw new TenantScopeError(
       `Invalid ${field}: expected a uuid, got ${JSON.stringify(echoed)}`,
+      "invalid_tenant_scope",
     );
   }
 }
@@ -73,6 +80,16 @@ const PRINCIPAL_KINDS: readonly PrincipalKind[] = ["human", "agent", "service"];
  * Null/undefined are legal — attribution is best-effort by design.
  */
 function assertAttribution(scope: TenantScope): void {
+  if (
+    scope.capabilityName != null &&
+    (typeof scope.capabilityName !== "string" ||
+      !/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,266}$/.test(scope.capabilityName))
+  ) {
+    throw new TenantScopeError(
+      "Invalid capabilityName: expected a bounded capability identifier",
+      "invalid_tenant_scope",
+    );
+  }
   if (scope.principalId != null) assertUuid(scope.principalId, "principalId");
   if (scope.userId != null) assertUuid(scope.userId, "userId");
   if (
@@ -81,6 +98,7 @@ function assertAttribution(scope: TenantScope): void {
   ) {
     throw new TenantScopeError(
       `Invalid principalKind: ${JSON.stringify(scope.principalKind)}`,
+      "invalid_tenant_scope",
     );
   }
 }
@@ -99,17 +117,20 @@ export function runInTenantScope<T>(scope: TenantScope, fn: () => T): T {
   assertUuid(scope.orgId, "orgId");
   assertUuid(scope.workspaceId, "workspaceId");
   assertAttribution(scope);
-  return als.run(
-    Object.freeze({
-      orgId: scope.orgId,
-      workspaceId: scope.workspaceId,
-      principalId: scope.principalId ?? null,
-      principalKind: scope.principalKind ?? null,
-      userId: scope.userId ?? null,
-      capabilityName: scope.capabilityName ?? null,
-    }),
-    fn,
-  );
+  const attribution: PrincipalAttribution = Object.freeze({
+    principalId: scope.principalId ?? null,
+    principalKind: scope.principalKind ?? null,
+    userId: scope.userId ?? null,
+    capabilityName: scope.capabilityName ?? null,
+  });
+  const stored: StoredScope = {
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+    ...attribution,
+    attribution,
+  };
+  Object.defineProperty(stored, "attribution", { enumerable: false });
+  return als.run(Object.freeze(stored), fn);
 }
 
 /**
@@ -181,12 +202,7 @@ const EMPTY_ATTRIBUTION: PrincipalAttribution = Object.freeze({
 export function getPrincipalAttribution(): PrincipalAttribution {
   const s = als.getStore();
   if (!s) return EMPTY_ATTRIBUTION;
-  return {
-    principalId: s.principalId ?? null,
-    principalKind: s.principalKind ?? null,
-    userId: s.userId ?? null,
-    capabilityName: s.capabilityName ?? null,
-  };
+  return s.attribution;
 }
 
 /** The active scope, or null when none is set. */

@@ -646,3 +646,19 @@ describe("error middleware via app.fetch (requestId from logger)", () => {
     }
   });
 });
+
+describe("tenant scope errors", () => {
+  it.each(["no_tenant_scope", "invalid_tenant_scope"])(
+    "maps %s to HTTP 400",
+    async (code) => {
+      const error = Object.assign(new Error("Tenant context is invalid"), {
+        code,
+      });
+      const result = await triggerError(error);
+      expect(result.status).toBe(400);
+      expect(result.body).toMatchObject({
+        error: { code: "invalid_tenant_scope" },
+      });
+    },
+  );
+});

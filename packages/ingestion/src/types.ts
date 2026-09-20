@@ -87,6 +87,8 @@ export interface EntityMutation {
   naturalKey: string;
   /** Compatibility lookup only. Never reuse without matching source URL and record type. */
   legacyNaturalKey?: string;
+  /** Stored property name for source URLs on nodes written before sourceExternalUrl. */
+  legacyUrlProperty?: string;
   /** Stable provider key retained when an existing graph node keeps its legacy key. */
   canonicalNaturalKey?: string;
   operation: EntityOperation;

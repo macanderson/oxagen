@@ -187,6 +187,7 @@ export async function upsertEntityNode(
          n.canonicalNaturalKey = coalesce($canonicalNaturalKey, n.canonicalNaturalKey),
          n.entityType       = $entityType,
          n.sourceRecordType = $sourceRecordType,
+         n.sourceExternalUrl = coalesce($sourceExternalUrl, n.sourceExternalUrl),
          n.label            = $label,
          n.displayName      = $displayName,
          n.connectionId     = $connectionId,
@@ -205,6 +206,7 @@ export async function upsertEntityNode(
         orgId,
         entityType: mutation.entityType,
         sourceRecordType: mutation.sourceRecordType,
+        sourceExternalUrl: mutation.sourceRef.externalUrl ?? null,
         // `label` is the PascalCase type chip the explorer groups/filters/colours
         // on (e.g. "Issue", "PullRequest", "SourceRepository"). The lowercase
         // registry slug stays on `entityType` above — the two are intentionally
