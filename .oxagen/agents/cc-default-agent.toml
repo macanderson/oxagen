@@ -1,0 +1,9 @@
+schema = "agent-definition/v0.1"
+slug = "cc-default-agent"
+name = "Claude Code - Default Agent"
+description = "The default agent identity for claude code initiated agent runs."
+model_tier = "complex"
+side_effects = ["read", "write"]
+
+[harness.claude-code]
+color = "green"
