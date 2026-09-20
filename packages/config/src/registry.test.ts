@@ -222,3 +222,31 @@ describe("renderEnvExample", () => {
     expect(example).toContain("not-in-schema");
   });
 });
+
+describe("ADR-131 per-organisation key provisioning", () => {
+  // `create_organization` declares `surfaces: ["api", "mcp", "agent"]`, and
+  // `build-env.ts` omits every variable whose registry entry does not name the
+  // target service. A service that can create an organisation without these two
+  // takes the provisioner's `disabled` path silently and leaves that
+  // organisation on the shared key, which is the outcome ADR-131 exists to end.
+  it.each(["OPENROUTER_MANAGEMENT_KEY", "OPENROUTER_ORG_KEY_DAILY_LIMIT_USD"])(
+    "%s reaches every service that can create an organisation",
+    (key) => {
+      const entry = ENV_REGISTRY[key as keyof typeof ENV_REGISTRY];
+      expect(entry).toBeDefined();
+      expect(entry?.services).toEqual(
+        expect.arrayContaining(["api", "app", "mcp"]),
+      );
+    },
+  );
+
+  // `build-env.ts` resolves a static value before it consults Parameter Store
+  // (`staticValue ?? fromStore.get(key)`), so a static entry here would read a
+  // deployed ceiling and discard it. The code's own fallback in `dailyLimitUsd()`
+  // and `env.ts` supplies 25 when the variable is unset.
+  it("leaves the daily ceiling operator-settable rather than static", () => {
+    expect(ENV_REGISTRY.OPENROUTER_ORG_KEY_DAILY_LIMIT_USD?.valueOrigin).toBe(
+      "manual",
+    );
+  });
+});

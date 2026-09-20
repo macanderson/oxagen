@@ -1188,7 +1188,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "shared key.",
     secret: true,
     clientExposed: false,
-    services: ["api", "app"],
+    // `create_organization` declares the `mcp` surface, so an organisation can
+    // be created there. A service that does not carry this key takes the
+    // disabled path silently, which is the outcome ADR-131 exists to end.
+    services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
   },
@@ -1199,13 +1202,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "radius, not a budget: the credit gate bounds what a customer may spend, " +
       "and this stops one runaway loop draining the account every other " +
       "customer's assistant depends on. A key that hits it stops answering " +
-      "until midnight UTC, so set it well above a heavy legitimate day.",
+      "until midnight UTC, so set it well above a heavy legitimate day. " +
+      "Unset falls back to 25, which is the ceiling ADR-131 reasons about.",
     secret: false,
     clientExposed: false,
-    services: ["api", "app"],
+    // Same surface reasoning as the management key above: a minted key needs
+    // its ceiling wherever it is minted.
+    services: ["api", "app", "mcp"],
     requiredIn: [],
-    valueOrigin: "static",
-    staticValue: { "*": "25" },
+    // Operator-supplied, not static. `build-env.ts` resolves a static value
+    // before it consults Parameter Store, so a static entry here would read a
+    // deployed setting and discard it, leaving the documented knob inert. The
+    // 25 that used to sit here is the code's own fallback in
+    // `dailyLimitUsd()` and `env.ts`, so an unset variable still mints at 25.
+    valueOrigin: "manual",
   },
   STELLA_SERVE_URL: {
     group: "Agent engine",
