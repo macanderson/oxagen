@@ -285,6 +285,8 @@ export function agentsSource(reads: AgentReads) {
       grants: refuse,
       killSwitches: refuse,
       approvalRules: refuse,
+      connections: refuse,
+      mcpServers: refuse,
     },
   };
   return { source, calls };

@@ -1,14 +1,19 @@
-// Connections (#2958): the credential grants log — every credential the broker
-// put to use for a tool server on behalf of a run, with the connection it drew
-// on, how far it was narrowed, its TTL and whether it is still live. No secret
-// material is on the wire, and no agent ever held any of these.
+// Connections (#2957, #2958): the workspace's stored connections, and beneath
+// them the credential grants log — every credential the broker put to use for
+// a tool server on behalf of a run, with the connection it drew on, how far it
+// was narrowed, its TTL and whether it is still live. No secret material is on
+// the wire, and no agent ever held any of these.
 //
-// The mockup's Connections table above the log (Connection · Kind · Owner ·
-// Servers · Downscope · Grants 30d · Reviewed · Next review · Status) is not
-// here: no capability lists the workspace's connections, so every column of it
-// would be invented. The log is what `list_credential_grants` records.
+// The mockup's Connections table above the log is here now, over
+// `list_connections`. Three of its columns are not: Owner, Reviewed and Next
+// review have no field on the connection record, so each renders the
+// not-recorded state rather than a value nothing carries. Servers, Downscope
+// and Grants 30d are properties of a use, not of a connection, and the log
+// below is where the record carries them.
 import { useTranslations } from "next-intl";
 import type {
+  Connection,
+  ConnectionList,
   CredentialGrant,
   CredentialGrantPage,
 } from "@/data/contracts/tools";
@@ -16,9 +21,12 @@ import type { Read } from "@/data/read";
 import type { OrgRole } from "@/server/viewer";
 import { mono } from "@/ui/control-styles";
 import { cell, Table } from "@/ui/table";
+import { AddConnection } from "./add-connection";
+import { ConnectionDrawer } from "./connection-drawer";
 import {
   Chip,
   CursorPager,
+  NotCarried,
   Section,
   StateDot,
   type Tone,
@@ -26,6 +34,22 @@ import {
 } from "./parts";
 import { ReadFailure } from "./read-failure";
 import { type ToolsAt, toolsLink } from "./view";
+
+/** A connection's lifecycle word as a tone; the word itself is what is printed. */
+const CONNECTION_TONE = {
+  pending_setup: "warn",
+  connected: "ok",
+  paused: "neutral",
+  error: "deny",
+  deleting: "warn",
+  deleted: "neutral",
+} as const satisfies Record<Connection["status"], Tone>;
+
+const CONNECTION_HEALTH_TONE = {
+  healthy: "ok",
+  degraded: "warn",
+  errored: "deny",
+} as const satisfies Record<Connection["healthStatus"], Tone>;
 
 const STATUS_TONE = {
   active: "ok",
@@ -104,7 +128,7 @@ function Row({ grant }: { grant: CredentialGrant }) {
   );
 }
 
-export function Connections({
+function GrantsLog({
   at,
   orgRole,
   cursor,
@@ -166,5 +190,180 @@ export function Connections({
         {t("notCarriedNote")}
       </p>
     </Section>
+  );
+}
+
+function ConnectionRow({ at, item }: { at: ToolsAt; item: Connection }) {
+  const t = useTranslations("tools.connections.list");
+  const date = useDate();
+  return (
+    <tr data-connection={item.id}>
+      <td className={cell}>
+        <ConnectionDrawer
+          at={at}
+          connectionId={item.id}
+          title={item.displayName}
+        >
+          <span className="flex flex-col gap-0.5">
+            <span className="font-medium text-foreground">
+              {item.displayName}
+            </span>
+            <span className={`${mono} text-xs text-muted-foreground`}>
+              {item.id}
+            </span>
+          </span>
+        </ConnectionDrawer>
+      </td>
+      <td className={cell}>
+        <Chip>{item.connector}</Chip>
+      </td>
+      <td className={cell}>
+        <span className="flex flex-wrap gap-1">
+          <Chip>{item.authScheme}</Chip>
+          <Chip>{item.deliveryMethod}</Chip>
+        </span>
+      </td>
+      <td className={cell}>
+        <StateDot
+          tone={CONNECTION_HEALTH_TONE[item.healthStatus]}
+          name={item.healthStatus}
+          label={t(`health.${item.healthStatus}`)}
+        />
+      </td>
+      <td className={cell}>
+        <span className="text-xs tabular-nums text-foreground">
+          {item.entityCount}
+        </span>
+      </td>
+      <td className={cell}>
+        {item.lastSyncAt === null ? (
+          <NotCarried />
+        ) : (
+          <span className="text-xs text-foreground">
+            {date(item.lastSyncAt)}
+          </span>
+        )}
+      </td>
+      {/* Owner, Reviewed and Next review: the mockup's review columns, which
+          `list_connections` carries no field for. The cell says so rather
+          than standing in a name or a date nothing recorded (INV-10). */}
+      <td className={cell}>
+        <NotCarried />
+      </td>
+      <td className={cell}>
+        <NotCarried />
+      </td>
+      <td className={cell}>
+        <NotCarried />
+      </td>
+      <td className={cell}>
+        <StateDot
+          tone={CONNECTION_TONE[item.status]}
+          name={item.status}
+          label={t(`status.${item.status}`)}
+        />
+      </td>
+    </tr>
+  );
+}
+
+function ConnectionsTable({
+  at,
+  orgRole,
+  read,
+}: {
+  at: ToolsAt;
+  orgRole: OrgRole;
+  read: Read<ConnectionList>;
+}) {
+  const t = useTranslations("tools.connections.list");
+  if (!read.ok) {
+    return (
+      <ReadFailure
+        at={at}
+        orgRole={orgRole}
+        read={read}
+        retry={toolsLink(at, { tab: "connections" })}
+      />
+    );
+  }
+  const { connections } = read.value;
+  // Every connector already in use, as the add dialog's suggestions. It is
+  // what this workspace has reached for, not what this deployment ships: no
+  // capability lists the connectors, and inventing that list here would offer
+  // a slug the handler may refuse.
+  const connectors = [
+    ...new Set(connections.map((item) => item.connector)),
+  ].sort();
+  const add = <AddConnection at={at} connectors={connectors} />;
+  if (connections.length === 0) {
+    return (
+      <Section
+        id="tools-connection-list"
+        title={t("empty.title")}
+        lead={t("empty.body")}
+        actions={add}
+        data-state="empty"
+      />
+    );
+  }
+  return (
+    <Section
+      id="tools-connection-list"
+      title={t("title")}
+      lead={t("lead")}
+      actions={add}
+    >
+      <Table
+        label={t("title")}
+        columns={[
+          { label: t("columns.connection") },
+          { label: t("columns.connector") },
+          { label: t("columns.auth") },
+          { label: t("columns.health") },
+          { label: t("columns.entities") },
+          { label: t("columns.lastSync") },
+          { label: t("columns.owner") },
+          { label: t("columns.reviewed") },
+          { label: t("columns.nextReview") },
+          { label: t("columns.status") },
+        ]}
+      >
+        {connections.map((item) => (
+          <ConnectionRow key={item.id} at={at} item={item} />
+        ))}
+      </Table>
+      <p className="max-w-prose text-xs text-muted-foreground">
+        {t("notCarriedNote")}
+      </p>
+    </Section>
+  );
+}
+
+/**
+ * The Connections tab: the workspace's connections, then the grants log of
+ * every use one of them was put to. Two reads, each answered on its own, so a
+ * refusal of one leaves the other readable.
+ */
+export function Connections({
+  at,
+  orgRole,
+  cursor,
+  connections,
+  read,
+}: {
+  at: ToolsAt;
+  orgRole: OrgRole;
+  cursor: string | null;
+  /** list_connections: every connection in the workspace. */
+  connections: Read<ConnectionList>;
+  /** list_credential_grants: one cursor page of the broker's grants. */
+  read: Read<CredentialGrantPage>;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <ConnectionsTable at={at} orgRole={orgRole} read={connections} />
+      <GrantsLog at={at} orgRole={orgRole} cursor={cursor} read={read} />
+    </div>
   );
 }

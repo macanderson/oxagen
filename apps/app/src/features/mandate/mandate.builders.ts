@@ -68,6 +68,8 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       grants: refuse,
       killSwitches: refuse,
       approvalRules: refuse,
+      connections: refuse,
+      mcpServers: refuse,
     },
     mandates: {
       list: refuse,

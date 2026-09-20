@@ -140,10 +140,16 @@ async function TabBody({
 }) {
   switch (view.tab) {
     case "registry": {
-      const read = await source.tools.versions(ctx, {
-        category: view.category,
-        cursor: view.cursor,
-      });
+      // The server roster comes with the registry: the import control picks
+      // from it, and the servers section under the table is where a row in it
+      // is registered.
+      const [read, servers] = await Promise.all([
+        source.tools.versions(ctx, {
+          category: view.category,
+          cursor: view.cursor,
+        }),
+        source.tools.mcpServers(ctx),
+      ]);
       return (
         <Registry
           at={at}
@@ -153,17 +159,26 @@ async function TabBody({
           cursor={view.cursor}
           canImport={canImportTools(ctx)}
           canClassify={canAdministerOrg(ctx)}
+          canRegister={canAdministerOrg(ctx)}
           read={read}
+          servers={servers}
         />
       );
     }
     case "connections": {
-      const read = await source.tools.grants(ctx, { cursor: view.cursor });
+      // Two reads: the workspace's connections, and the grants log of the
+      // uses they were put to. Neither narrows the other, and a refusal of
+      // one leaves the other readable.
+      const [read, connections] = await Promise.all([
+        source.tools.grants(ctx, { cursor: view.cursor }),
+        source.tools.connections(ctx, { status: null, connectorId: null }),
+      ]);
       return (
         <Connections
           at={at}
           orgRole={ctx.orgRole}
           cursor={view.cursor}
+          connections={connections}
           read={read}
         />
       );

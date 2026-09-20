@@ -8,7 +8,7 @@ export const connectionCreate = registerCapability({
     "Create a new data source connection for a workspace. Credentials are encrypted before storage.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "write" },
   sensitivity: "high",
