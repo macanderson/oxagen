@@ -1,7 +1,7 @@
 {
   "name": "propose_agent",
   "domain": "agent",
-  "description": "Write a new agent as a pull request: cut agents/<slug> from the main repository's production branch, commit .oxagen/agents/<slug>.toml and the subagent file generated from it, and open the pull request. Six checks (schema, key, belt, authority, budget, secret and PII scan) run first, and a failed check writes nothing. No row is written; the agent exists on merge.",
+  "description": "Write a new agent as a pull request: cut agents/<slug> from the main repository's production branch, commit .oxagen/agents/<slug>.toml and the subagent file generated from it, and open the pull request. Six checks (schema, key, belt, authority, budget, secret and PII scan) run first, and a failed check writes nothing. No row is written; register the agent after merge to create its identity.",
   "mode": "sync",
   "surfaces": [
     "api"
@@ -76,7 +76,14 @@
         "type": "string"
       },
       "generatedPath": {
-        "type": "string"
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
       },
       "branch": {
         "type": "string"
