@@ -3,7 +3,7 @@
 // Validates the four security invariants:
 //   1. chInsert stamps org_id/workspace_id from scope onto every row.
 //   2. chSelect binds orgId/workspaceId as query params.
-//   3. chSelect rejects a query that omits org_id (cross-tenant read guard).
+//   3. chSelect rejects unsupported sources before contacting ClickHouse.
 //   4. Both helpers fail closed when no tenant scope is active.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,6 +81,9 @@ describe("clickhouse tenant seam", () => {
 
   it.each([
     "SELECT org_id FROM events",
+    "SELECT * FROM events WHERE id IN (1, 2)",
+    "SELECT * FROM events WHERE id IN [1, 2]",
+    "SELECT * FROM events WHERE id IN {ids:Array(UUID)}",
     "SELECT count() FROM events WHERE 1 = 1 OR org_id = {orgId:UUID}",
     "SELECT org_id FROM events FINAL GROUP BY org_id",
   ])(
@@ -89,7 +92,7 @@ describe("clickhouse tenant seam", () => {
       await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
         chSelect({
           query: sql,
-          params: { orgId: "foreign", workspaceId: "foreign" },
+          params: { orgId: "foreign", workspaceId: "foreign", ids: [ORG] },
         }),
       );
       expect(query).toHaveBeenCalledWith(
@@ -97,13 +100,20 @@ describe("clickhouse tenant seam", () => {
           query: expect.stringMatching(
             /FROM \(SELECT \* FROM events(?: FINAL)? WHERE org_id = \{orgId:UUID\} AND workspace_id = \{workspaceId:UUID\}\) AS events/,
           ),
-          query_params: { orgId: ORG, workspaceId: WS },
+          query_params: { orgId: ORG, workspaceId: WS, ids: [ORG] },
         }),
       );
     },
   );
 
   it.each([
+    "SELECT {victim:UUID} IN foreign_events FROM events",
+    "SELECT * FROM events WHERE id NOT IN foreign_events",
+    "SELECT * FROM events WHERE id GLOBAL IN other.foreign_events",
+    'SELECT * FROM events WHERE id IN "foreign_events"',
+    "SELECT * FROM events WHERE id IN `foreign_events`",
+    "SELECT * FROM events WHERE id in remote('host', 'foreign_events')",
+    "SELECT * FROM events WHERE id IN {table:Identifier}",
     "SELECT * FROM events UNION ALL SELECT * FROM foreign_events",
     "SELECT * FROM events WHERE id IN (SELECT id FROM foreign_events)",
     "SELECT * FROM events -- org_id = {orgId:UUID}",

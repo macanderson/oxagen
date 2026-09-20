@@ -84,6 +84,9 @@ function scopeSelectSource(query: string): string {
     /^\s*SELECT\b/i.test(query) &&
     (query.match(/\bSELECT\b/gi)?.length ?? 0) === 1 &&
     (query.match(/\bFROM\b/gi)?.length ?? 0) === 1 &&
+    // IN may read another table without a FROM. Admit value lists and array
+    // parameters only, so table names and table functions cannot add a source.
+    !/\bIN\b(?!\s*(?:\(|\[|\{[a-z_]\w*:Array\())/i.test(query) &&
     !/;|--|\/\*|\*\/|#|\b(?:JOIN|UNION|INTERSECT|EXCEPT|WITH|INTO|SETTINGS|FORMAT)\b/i.test(
       query,
     );

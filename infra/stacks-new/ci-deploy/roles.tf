@@ -279,8 +279,8 @@ data "aws_iam_policy_document" "oxagen_platform" {
   # `AWS-StartInteractiveCommand` and `SSM-SessionManagerRunShell` are shells,
   # and a role that may forward a port has no business getting one.
   statement {
-    sid       = "PortForwardDocument"
-    actions   = ["ssm:StartSession"]
+    sid     = "PortForwardDocument"
+    actions = ["ssm:StartSession"]
     resources = [
       "arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSession",
       "arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSessionToRemoteHost",
