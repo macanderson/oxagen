@@ -139,12 +139,12 @@ Lanes:
 
 Done when:
 
-- [ ] A role can be assigned and revoked on the agent page
-- [ ] An enrollment can be revoked and a new one minted from the page
-- [ ] The agent shows the budget it runs under with its basis
-- [ ] The toolbelt shows each tool's input schema and digest
-- [ ] An organization invitation can be sent from People
-- [ ] Five bindings with real proofs; the toolbelt contract change is documented
+- [x] A role can be assigned and revoked on the agent page
+- [x] An enrollment can be revoked and a new one minted from the page
+- [x] The agent shows the budget it runs under with its basis
+- [x] The toolbelt shows each tool's input schema and digest
+- [x] An organization invitation can be sent from People
+- [x] Five bindings with real proofs; the toolbelt contract change is documented
 
 ## Session 4: run evidence
 
