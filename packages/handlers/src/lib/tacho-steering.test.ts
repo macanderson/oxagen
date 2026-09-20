@@ -196,7 +196,7 @@ function fakeTx(db: {
         expect(query.sql).toContain("md5(string_agg(md5(");
         expect(query.sql).toContain('"context_records"."active_version_id"');
         expect(query.sql).toContain('"context_records"."statement"');
-        expect(query.sql).toContain('order by "context_records"."id"');
+        expect(query.sql).toContain('order by "agent"."context_records"."id"');
         expect(query.params).toContain("org");
         expect(query.params).toContain("active");
         if (!ready) {

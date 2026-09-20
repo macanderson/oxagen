@@ -113,8 +113,8 @@ describe("assembled model responses", () => {
       partial: false,
       cost: null,
     };
-    const page = runTranscript({ entries: [transcriptEntry()] });
-    const entry = page.entries[0]!;
+    const entry = transcriptEntry();
+    const page = runTranscript({ entries: [entry] });
     const mapped = RunTranscript.parse(
       toRunTranscript({
         ...page,

@@ -282,6 +282,13 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
 const PLATFORM_NAMED_ROWS: Readonly<
   Record<string, Readonly<Record<string, readonly string[]>>>
 > = {
+  // Browser controls read the shared ceiling without loading the contract registry.
+  "src/features/fleet/run-row-controls.tsx": {
+    "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
+  },
+  "src/ui/command-failure.ts": {
+    "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
+  },
   "instrumentation.ts": {
     "@oxagen/telemetry": ["initTracer", "recordSecurityEvent"],
     "@oxagen/database/security": ["makeSecurityEventInserter"],
