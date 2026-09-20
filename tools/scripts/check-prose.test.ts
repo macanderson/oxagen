@@ -37,10 +37,7 @@ describe("check-prose", () => {
     for (const [text, kind] of [
       ["Fewer tokens, same answers.", "avoid: Fewer tokens, same answers"],
       ["Stop wasting money on AI.", "avoid: Stop wasting money"],
-      [
-        "Can you explain your AI bill?",
-        "avoid: explain your AI bill",
-      ],
+      ["Can you explain your AI bill?", "avoid: explain your AI bill"],
       [
         "Mission Control for your autonomous agents.",
         "avoid: Mission Control for your autonomous agents",
@@ -52,10 +49,7 @@ describe("check-prose", () => {
 
   it("flags an unqualified key-custody claim", () => {
     for (const [text, kind] of [
-      [
-        "The agent never sees the key.",
-        "avoid: The agent never sees the key",
-      ],
+      ["The agent never sees the key.", "avoid: The agent never sees the key"],
       ["The key never moves.", "avoid: The key never moves"],
       [
         "There is nothing for the agent to leak.",
@@ -76,17 +70,30 @@ describe("check-prose", () => {
       ),
     ).toEqual([]);
     expect(
-      findHits(
-        "The agent never receives a connection credential.",
-        ".html",
-      ),
+      findHits("The agent never receives a connection credential.", ".html"),
     ).toEqual([]);
   });
 
   // The approved replacement must not trip the scanner, or the fix for one of
   // these findings would fail the gate that exists to enforce it.
   it("leaves the approved headline alone", () => {
-    expect(findHits("Mission Control for agent operators.", ".mdx")).toEqual(
+    expect(
+      findHits("Workforce management for autonomous agents.", ".mdx"),
+    ).toEqual([]);
+    expect(
+      findHits(
+        "Your agents are a workforce now. Manage them like one.",
+        ".mdx",
+      ),
+    ).toEqual([]);
+  });
+
+  it("flags the retired product name but not a citation of the document", () => {
+    expect(findHits("We ship Mission Control today.", ".mdx")[0].kind).toBe(
+      "avoid: Mission Control",
+    );
+    expect(findHits("See the Mission Control spec 14.1.", ".mdx")).toEqual([]);
+    expect(findHits("See the Mission Control mockup 2821.", ".mdx")).toEqual(
       [],
     );
   });

@@ -1,6 +1,6 @@
 export const meta = {
   name: 'mc-2-tools-governance',
-  description: 'Mission Control session 2: the Tools page gains auto-approval rules, grant a mandate, a connections table with add connection, and servers in the registry, all over handlers that already ship; one PR',
+  description: 'Rev1 app session 2: the Tools page gains auto-approval rules, grant a mandate, a connections table with add connection, and servers in the registry, all over handlers that already ship; one PR',
   whenToUse: 'Run after mc-0-rebaseline; independent of session 1. Owns the app half of #2970 and the remainder of #2957.',
   phases: [
     { title: 'Scout', detail: 'confirm each lane is still open on main' },
@@ -193,7 +193,7 @@ async function runSession(session, specHint) {
 const session = {
   id: '2',
   title: 'Tools governance: rules, grants, connections, servers',
-  prTitle: 'Mission Control: auto-approval rules, grant a mandate, connections, and servers on the Tools page',
+  prTitle: 'Oxagen app: auto-approval rules, grant a mandate, connections, and servers on the Tools page',
   issueHint: 'Read #2970 and #2957. Their DoDs include backend and decision items; use Refs unless every box is done. Label closes-nothing if neither is closed.',
   lanes: [
     {

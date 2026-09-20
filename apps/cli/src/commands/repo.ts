@@ -12,9 +12,18 @@
  *   oxagen repo unlink <bindingId>      — remove a linked repository by the
  *                                         `rpb_…` id `repo list` shows
  *                                         (unlink_repository)
+ *   oxagen repo tree <bindingId>        — what the repository holds under
+ *                                         .oxagen/ on its production branch
+ *                                         (get_repository_tree)
+ *   oxagen repo branch <bindingId> <b>  — confirm or change the production
+ *                                         branch (set_production_branch)
+ *   oxagen repo init <bindingId>        — open the pull request that adds
+ *                                         .oxagen/ (open_init_pr)
  *
  * Every call goes through the shared org-scoped API client in lib/api.ts:
- * `repositories` (GET), `repository/link` and `repository/unlink` (POST). The
+ * `repositories` (GET), `repository/link` and `repository/unlink` (POST),
+ * `repository/tree` (POST), `repository/production-branch` (POST) and
+ * `repository/init-pr` (POST). The
  * caller never names a GitHub installation. The API takes it from the
  * workspace's GitHub connection.
  *
@@ -23,6 +32,7 @@
  * unlink); failures are uniform stderr lines (exit 2 for a bad argument,
  * exit 1 for an API failure).
  */
+import { readFile } from "node:fs/promises";
 import { apiGetOrThrow, apiPostOrThrow, printTable } from "../lib/api.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
@@ -42,6 +52,14 @@ export interface RepositoryRow {
   htmlUrl: string;
   boundAt: string;
   connectionLive: boolean;
+  /** Whether GitHub can deliver the repository's events at all. */
+  events:
+    | "installed"
+    | "suspended"
+    | "uninstalled"
+    | "paused"
+    | "retired"
+    | "unknown";
 }
 
 /** The `list_repositories` output. */
@@ -64,6 +82,62 @@ export interface RepositoryUnlinkResult {
   bindingId: string;
   fullName: string;
   unlinkedAt: string;
+}
+
+/** The `get_repository_tree` output. */
+export interface RepositoryTreeResult {
+  bindingId: string;
+  role: RepositoryRole;
+  fullName: string;
+  productionBranch: string;
+  githubDefaultBranch: string;
+  head: string | null;
+  oxagen: { present: boolean; files: string[] };
+  workspaceToml: string | null;
+  governanceToml: string | null;
+  governanceMode: "solo" | "team" | "regulated" | "absent" | "invalid";
+  initPullRequest: { number: number; htmlUrl: string } | null;
+  readAt: string;
+}
+
+/** The `set_production_branch` output. */
+export interface ProductionBranchResult {
+  bindingId: string;
+  fullName: string;
+  productionBranch: string;
+  previousBranch: string;
+  changed: boolean;
+  setAt: string;
+}
+
+/** The `open_init_pr` output. */
+export interface InitPrResult {
+  bindingId: string;
+  fullName: string;
+  branch: string;
+  base: string;
+  pullRequest: { number: number; htmlUrl: string };
+  files: string[];
+  reused: boolean;
+  openedAt: string;
+}
+
+export type GovernanceMode = "solo" | "team" | "regulated";
+const GOVERNANCE_MODES: readonly GovernanceMode[] = [
+  "solo",
+  "team",
+  "regulated",
+];
+
+/** `.oxagen/rules/governance.toml` for a mode, as the Repositories page drafts it. */
+export function draftGovernanceToml(mode: GovernanceMode): string {
+  return [
+    "# Read on the production branch when a pull request is opened and again",
+    "# when it is merged. A missing file means team.",
+    `mode = "${mode}"`,
+    `separation_of_duties = ${mode === "regulated" ? "true" : "false"}`,
+    "",
+  ].join("\n");
 }
 
 interface RepoOptions {
@@ -112,18 +186,19 @@ export async function repoList(
   }
   if (result.repositories.length === 0) {
     writer.write(
-      "No repositories are bound to this workspace. Bind a main repository from Mission Control, then link more with `oxagen repo link <owner/name>`.",
+      "No repositories are bound to this workspace. Bind a main repository in Oxagen, then link more with `oxagen repo link <owner/name>`.",
     );
     return;
   }
   printTable(
-    ["ROLE", "REPOSITORY", "DEFAULT REF", "BINDING", "CONNECTION"],
+    ["ROLE", "REPOSITORY", "DEFAULT REF", "BINDING", "CONNECTION", "EVENTS"],
     result.repositories.map((r) => [
       r.role,
       r.fullName,
       r.defaultRef,
       r.bindingId,
       connectionState(r.connectionLive),
+      r.events,
     ]),
     writer,
   );
@@ -131,7 +206,7 @@ export async function repoList(
   if (retired.length > 0) {
     writer.write("");
     writer.write(
-      `${retired.length} of ${result.repositories.length} sit on a retired GitHub connection and do not resolve. Reconnect GitHub from the workspace's settings.`,
+      `${retired.length} of ${result.repositories.length} sit on a retired GitHub connection and do not resolve. Reconnect GitHub from the Repositories page.`,
     );
   }
 }
@@ -207,5 +282,165 @@ export async function repoUnlink(
   writer.write(`unlinked ${result.fullName} · ${result.bindingId}`);
   writer.write(
     "Its binding versions stay as evidence for the runs that cited them. Link it again to write the next version.",
+  );
+}
+
+// ── repo tree ────────────────────────────────────────────────────────────────
+
+export async function repoTree(
+  bindingId: string,
+  opts: RepoOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const id = bindingId.trim();
+  if (id.length === 0) {
+    return usage(
+      writer,
+      "a binding id is required",
+      "oxagen repo tree <bindingId> [--json]",
+    );
+  }
+  const out = createOutput({ json: opts.json }, writer);
+  let result: RepositoryTreeResult;
+  try {
+    result = await apiPostOrThrow<RepositoryTreeResult>("repository/tree", {
+      bindingId: id,
+    });
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  writer.write(
+    `${result.fullName} · ${result.role} · ${result.productionBranch} at ${result.head ?? "(branch not found)"}`,
+  );
+  if (result.githubDefaultBranch !== result.productionBranch) {
+    writer.write(
+      `GitHub's default branch is ${result.githubDefaultBranch}. The production branch stays ${result.productionBranch} until you change it with \`oxagen repo branch\`.`,
+    );
+  }
+  if (!result.oxagen.present) {
+    writer.write(
+      result.initPullRequest === null
+        ? "No .oxagen/ on the production branch. Add it with `oxagen repo init`."
+        : `No .oxagen/ yet. The init pull request is open: ${result.initPullRequest.htmlUrl}`,
+    );
+    return;
+  }
+  writer.write(`governance mode: ${result.governanceMode}`);
+  for (const file of result.oxagen.files) writer.write(`  ${file}`);
+}
+
+// ── repo branch ──────────────────────────────────────────────────────────────
+
+export async function repoBranch(
+  bindingId: string,
+  branch: string,
+  opts: RepoOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const id = bindingId.trim();
+  const name = branch.trim();
+  if (id.length === 0 || name.length === 0) {
+    return usage(
+      writer,
+      "a binding id and a branch are required",
+      "oxagen repo branch <bindingId> <branch> [--json]",
+    );
+  }
+  const out = createOutput({ json: opts.json }, writer);
+  let result: ProductionBranchResult;
+  try {
+    result = await apiPostOrThrow<ProductionBranchResult>(
+      "repository/production-branch",
+      { bindingId: id, branch: name },
+    );
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  writer.write(
+    result.changed
+      ? `${result.fullName}: production branch ${result.previousBranch} → ${result.productionBranch} · ${result.bindingId}`
+      : `${result.fullName}: production branch is already ${result.productionBranch}; nothing was written`,
+  );
+}
+
+// ── repo init ────────────────────────────────────────────────────────────────
+
+interface InitOptions extends RepoOptions {
+  mode?: string;
+  workspaceToml?: string;
+  governanceToml?: string;
+}
+
+export async function repoInit(
+  bindingId: string,
+  opts: InitOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const line =
+    "oxagen repo init <bindingId> --workspace-toml <file> [--mode solo|team|regulated] [--governance-toml <file>] [--json]";
+  const id = bindingId.trim();
+  if (id.length === 0) {
+    return usage(writer, "a binding id is required", line);
+  }
+  const mode = (opts.mode ?? "team") as GovernanceMode;
+  if (!GOVERNANCE_MODES.includes(mode)) {
+    return usage(
+      writer,
+      `expected a mode of solo, team or regulated, got ${JSON.stringify(opts.mode)}`,
+      line,
+    );
+  }
+  if (opts.workspaceToml === undefined) {
+    return usage(writer, "--workspace-toml is required", line);
+  }
+  let workspaceToml: string;
+  let governanceToml: string;
+  try {
+    workspaceToml = await readFile(opts.workspaceToml, "utf8");
+    governanceToml =
+      opts.governanceToml === undefined
+        ? draftGovernanceToml(mode)
+        : await readFile(opts.governanceToml, "utf8");
+  } catch (err) {
+    return usage(
+      writer,
+      `could not read a file: ${err instanceof Error ? err.message : String(err)}`,
+      line,
+    );
+  }
+  const out = createOutput({ json: opts.json }, writer);
+  let result: InitPrResult;
+  try {
+    result = await apiPostOrThrow<InitPrResult>("repository/init-pr", {
+      bindingId: id,
+      governanceMode: mode,
+      workspaceToml,
+      governanceToml,
+    });
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  writer.write(
+    result.reused
+      ? `An init pull request is already open on ${result.fullName}: ${result.pullRequest.htmlUrl}`
+      : `Opened ${result.pullRequest.htmlUrl} on ${result.fullName}: ${result.branch} → ${result.base}, ${result.files.length} files`,
+  );
+  writer.write(
+    "Nothing reaches the production branch until a person merges it.",
   );
 }

@@ -1,6 +1,7 @@
-// The Workspace settings dialog's view models (MC spec §10.1–§10.2): the
+// The Repositories page's view models (MC spec §10.1, §10.2, §11.4): the
 // workspace's main repository, whether a GitHub App installation is attached,
-// and the set of repositories that installation reaches.
+// the set of repositories that installation reaches, what each bound
+// repository holds under `.oxagen/`, and the pull requests Oxagen has open.
 //
 // The main repo is where `.oxagen/` lives — published steering records, the
 // promotion ledger, and every agent definition under `.oxagen/agents/`. A
@@ -169,6 +170,18 @@ type BoundRepositoryRow = {
    * repository that silently stopped resolving, and the row says so.
    */
   connectionLive: boolean;
+  /**
+   * Whether GitHub can deliver this repository's events: the App's
+   * installation lifecycle and the connection's state. `installed` is the
+   * precondition for delivery, not a claim that an event arrived.
+   */
+  events:
+    | "installed"
+    | "suspended"
+    | "uninstalled"
+    | "paused"
+    | "retired"
+    | "unknown";
 };
 
 /**
@@ -194,4 +207,88 @@ export type UnlinkedRepository = {
   bindingId: string;
   fullName: string;
   unlinkedAt: string;
+};
+
+/** The governance mode `.oxagen/rules/governance.toml` declares, as read. */
+export type DeclaredGovernanceMode =
+  | "solo"
+  | "team"
+  | "regulated"
+  | "absent"
+  | "invalid";
+
+/**
+ * What one bound repository holds under `.oxagen/` on its production branch,
+ * as `get_repository_tree` read it from GitHub at `readAt`. `head` is null
+ * when the production branch no longer exists on GitHub: a fact the page
+ * shows, with the repair beside it.
+ */
+export type RepositoryTree = {
+  bindingId: string;
+  role: "main" | "linked";
+  fullName: string;
+  productionBranch: string;
+  /** GitHub's default branch now: the suggestion, never the decision. */
+  githubDefaultBranch: string;
+  head: string | null;
+  oxagen: { present: boolean; files: string[] };
+  workspaceToml: string | null;
+  governanceToml: string | null;
+  governanceMode: DeclaredGovernanceMode;
+  initPullRequest: { number: number; htmlUrl: string } | null;
+  readAt: string;
+};
+
+/** What `set_production_branch` settled. */
+export type ProductionBranchSet = {
+  bindingId: string;
+  fullName: string;
+  productionBranch: string;
+  previousBranch: string;
+  changed: boolean;
+};
+
+/** What `open_init_pr` settled: the pull request that adds `.oxagen/`. */
+export type InitPullRequest = {
+  fullName: string;
+  branch: string;
+  base: string;
+  pullRequest: { number: number; htmlUrl: string };
+  files: string[];
+  reused: boolean;
+};
+
+/**
+ * One pull request Oxagen has open or has had merged, as the Changes tab
+ * lists it. Today every row is a context record's Context PR
+ * (`list_proposals`): the other kinds the mockup names (init, skill, agent,
+ * tool, configuration) have no list read yet, and the tab says so.
+ */
+export type RepositoryChange = {
+  proposalId: string;
+  statement: string;
+  kind: "context_record";
+  pullRequest: {
+    number: number;
+    url: string;
+    repository: string;
+    branch: string;
+  };
+  /** Who opened it, as the proposal recorded its source. */
+  openedBy: string;
+  status:
+    | "pr_open"
+    | "checks_running"
+    | "checks_passed"
+    | "checks_failed"
+    | "merged"
+    | "rejected";
+  checks: { passed: number; total: number } | null;
+  openedAt: string;
+};
+
+export type RepositoryChanges = {
+  changes: RepositoryChange[];
+  /** Pull requests still waiting on a person: every state but merged and rejected. */
+  open: number;
 };

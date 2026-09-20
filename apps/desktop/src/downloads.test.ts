@@ -3,9 +3,11 @@ import {
   classifyInstaller,
   countPublishedObjects,
   decidePublication,
+  FONT_FILES,
   formatSize,
   type PageEntry,
   type PublicationProbe,
+  releaseLinks,
   renderIndexHtml,
   reportPublicationDecision,
   reservationArgs,
@@ -105,7 +107,8 @@ describe("page helpers", () => {
     expect(linux).toBeGreaterThan(win);
     expect(html).toContain('href="desktop/2.1.1/SHA256SUMS.txt"');
     expect(html).toContain("47.7 MB");
-    // An OS with nothing published gets no empty table.
+    expect(html).toContain(`${"3".padStart(64, "0")}</code>`);
+    // An OS with nothing published gets no empty panel.
     const macOnly = renderIndexHtml({
       version: V,
       entries: entries.slice(0, 2),
@@ -118,8 +121,69 @@ describe("page helpers", () => {
       entries: [],
       publishedAt: "<script>",
     });
-    expect(hostile).not.toContain("<script>");
+    // The page carries one <script> of its own; the hostile date is not it.
+    expect(hostile.match(/<script>/g)).toHaveLength(1);
+    expect(hostile).toContain("Published <code>&lt;script&gt;</code>");
     expect(hostile).toContain("2&quot;&lt;b&gt;");
+  });
+
+  it("offers one gold action, picked per OS by the script and the first installer without it", () => {
+    const entries: PageEntry[] = FILES.map((f) => ({
+      ...classifyInstaller(f, V)!,
+      bytes: 1,
+      sha256: "0".repeat(64),
+    }));
+    const html = renderIndexHtml({ version: V, entries, publishedAt: "d" });
+    // The no-script answer is the first row of the first panel.
+    expect(html).toContain(
+      '<a class="btn" id="pick" href="desktop/2.1.1/Oxagen_2.1.1_aarch64.dmg" data-os="macOS">Download for macOS (Apple silicon)</a>',
+    );
+    // The script chooses the installer most machines want on each OS.
+    expect(html).toContain(
+      '"Windows":{"href":"desktop/2.1.1/Oxagen_2.1.1_x64-setup.exe"',
+    );
+    expect(html).toContain(
+      '"Linux":{"href":"desktop/2.1.1/Oxagen_2.1.1_amd64.AppImage"',
+    );
+    // Exactly one gold-filled action on the page.
+    expect(html.match(/class="btn"/g)).toHaveLength(1);
+    // Both themes ship: obsidian by default, white on the OS preference.
+    expect(html).toContain("prefers-color-scheme: light");
+    expect(html).toContain('<meta name="color-scheme" content="dark light">');
+    // The three faces, loaded from the host's own /fonts/.
+    for (const file of FONT_FILES) expect(html).toContain(`fonts/${file}`);
+    // No em dash reaches a reader.
+    expect(html).not.toContain("\u2014");
+    // A version with no installers at all still renders without an action.
+    const empty = renderIndexHtml({
+      version: V,
+      entries: [],
+      publishedAt: "d",
+    });
+    expect(empty).not.toContain('id="pick"');
+  });
+
+  it("links every version to its release notes and its GitHub release", () => {
+    expect(releaseLinks("2.1.1")).toEqual({
+      notes: "https://docs.oxagen.sh/docs/releases/v2.1.1",
+      allReleases: "https://docs.oxagen.sh/docs/releases",
+      githubRelease:
+        "https://github.com/macanderson/oxagen/releases/tag/desktop-v2.1.1",
+    });
+    expect(releaseLinks("2 1").notes).toBe(
+      "https://docs.oxagen.sh/docs/releases/v2%201",
+    );
+    const html = renderIndexHtml({
+      version: "2.1.1",
+      entries: [],
+      publishedAt: "d",
+    });
+    expect(html).toContain(
+      'href="https://docs.oxagen.sh/docs/releases/v2.1.1"',
+    );
+    expect(html).toContain(
+      'href="https://github.com/macanderson/oxagen/releases/tag/desktop-v2.1.1"',
+    );
   });
 });
 
@@ -192,7 +256,7 @@ describe("decidePublication", () => {
       stdout: JSON.stringify({ Contents: [{ Key: "k" }] }),
     });
     expect(got.action).toBe("stop");
-    expect(got).toMatchObject({ code: 1 });
+    expect(got).toMatchObject({ code: 1, reason: "published" });
     if (got.action !== "stop") throw new Error("unreachable");
     expect(got.message).toContain("already published");
     expect(got.message).toContain("--allow-overwrite");
@@ -226,6 +290,7 @@ describe("decidePublication", () => {
   it("stops when aws never ran", () => {
     const got = decide({ status: null, spawnFailed: true });
     expect(got.action).toBe("stop");
+    expect(got).toMatchObject({ reason: "unknown" });
     if (got.action !== "stop") throw new Error("unreachable");
     expect(got.message).toContain("could not be run");
   });

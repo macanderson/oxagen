@@ -35,6 +35,12 @@
  *      the release's notes, and publish it. Publishing moves the in-app
  *      updater feed (`desktop.yml`, job `feed`).
  *
+ * Steps 5 and 6 are also what `desktop.yml`'s `publish` job does on the tag,
+ * so on a healthy run this script finds both already done and says so. It
+ * does them itself because the job can fail on a credential this laptop
+ * holds and the runner does not, and because the check in step 6 is the one
+ * place a missing asset stops a release from being called published.
+ *
  * Every step after the tags is idempotent: a version already on
  * downloads.oxagen.sh, on npm, or published on GitHub is left alone and
  * reported, so an interrupted run resumes with `--publish-only`, and a CI

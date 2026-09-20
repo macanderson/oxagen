@@ -1,5 +1,5 @@
 /*
- * Mission Control styles: Tailwind v4 and the Oxagen house tokens from
+ * Oxagen app styles: Tailwind v4 and the Oxagen house tokens from
  * @oxagen/ui (tokens, fonts, light/dark). House tokens only; no raw palette.
  */
 @import "@oxagen/ui/styles/globals.css";
@@ -19,6 +19,14 @@
   --color-muted: var(--muted-surface);
   --color-banner: var(--banner-bg);
   --color-app-canvas: var(--ink);
+  /* Code surfaces (ui/code-editor.tsx): the ground and the syntax colours. */
+  --color-code-bg: var(--code-bg);
+  --color-code-comment: var(--code-comment);
+  --color-code-table: var(--code-table);
+  --color-code-key: var(--code-key);
+  --color-code-string: var(--code-string);
+  --color-code-number: var(--code-number);
+  --color-code-punct: var(--code-punct);
 }
 
 @layer base {
@@ -72,6 +80,15 @@
     --shadow:
       0 1px 0 rgba(255, 255, 255, 0.7), 0 18px 44px rgba(9, 9, 11, 0.08);
     --shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.06);
+    /* Code sits a shade below the panel: grey on paper, and on ink a grey
+       between the panel and the canvas, never the canvas itself. */
+    --code-bg: var(--ox-paper-hl);
+    --code-comment: var(--muted-foreground);
+    --code-table: var(--ember-ink);
+    --code-key: var(--foreground);
+    --code-string: var(--proven);
+    --code-number: var(--info);
+    --code-punct: var(--muted-foreground);
   }
 
   body {
@@ -107,6 +124,7 @@
     --dim: var(--ox-dim);
     --muted-surface: var(--ox-hl);
     --banner-bg: var(--ox-hl);
+    --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
     --button-primary-bg: var(--gold);
     --button-primary-fg: var(--on-gold);
     --button-primary-hover-bg: var(--gold-bright);
@@ -142,6 +160,7 @@
       --dim: var(--ox-dim);
       --muted-surface: var(--ox-hl);
       --banner-bg: var(--ox-hl);
+      --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
       --button-primary-bg: var(--gold);
       --button-primary-fg: var(--on-gold);
       --button-primary-hover-bg: var(--gold-bright);

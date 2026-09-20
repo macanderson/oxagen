@@ -1,4 +1,4 @@
-# ADR-113: One version across every manifest, and a publish flow that runs from a laptop
+# ADR-114: One version across every manifest, and a publish flow that runs from a laptop
 
 **Date:** 2026-09-19
 **Status:** Accepted

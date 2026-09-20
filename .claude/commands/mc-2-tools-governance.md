@@ -1,5 +1,5 @@
 ---
-description: Mission Control session 2: auto-approval rules, grant a mandate, a connections table with add connection, and servers in the registry on the Tools page, all over handlers that already ship. Runs the mc-2-tools-governance workflow.
+description: Rev1 app session 2: auto-approval rules, grant a mandate, a connections table with add connection, and servers in the registry on the Tools page, all over handlers that already ship. Runs the mc-2-tools-governance workflow.
 ---
 
 # /mc-2-tools-governance

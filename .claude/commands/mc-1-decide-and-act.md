@@ -1,5 +1,5 @@
 ---
-description: Mission Control session 1 (P0): approve and deny with a reason on Fleet and Run, the four-hop chain and eligibility line, the enforcement tier and verdict columns, run controls from Fleet, and steer with a delivery mode. Runs the mc-1-decide-and-act workflow.
+description: Rev1 app session 1 (P0): approve and deny with a reason on Fleet and Run, the four-hop chain and eligibility line, the enforcement tier and verdict columns, run controls from Fleet, and steer with a delivery mode. Runs the mc-1-decide-and-act workflow.
 ---
 
 # /mc-1-decide-and-act

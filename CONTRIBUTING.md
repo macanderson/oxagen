@@ -1,6 +1,6 @@
 # Contributing
 
-Oxagen is Mission Control for agent operators and the agent control plane they work in: every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
+Oxagen is workforce management for autonomous agents, on the shared agent control plane their operators work in (ADR-113): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
 
 ## Prerequisites
 
@@ -166,20 +166,81 @@ Keep production URLs isolated to env vars — never hard-code domains.
 
 ## Release Process
 
-Only for maintainers. Three commands, one flow each:
+Only for maintainers. There are two ways to cut a release and one way to try
+a build. They write the same version into every tracked manifest in the tree,
+whatever its language (`package.json`, `Cargo.toml`, `Cargo.lock`);
+`pnpm check:versions` holds them in lockstep in CI and `--fix` writes them.
+
+### From GitHub, the usual way
+
+Actions, Release, Run workflow, then pick `patch`, `minor` or `major`. That run:
+
+1. bumps every manifest to the next version and has a model write the release
+   notes from the diff since the last tag, under the `clear-prose` and
+   `oxagen-branding` skills, checked by `check:prose`;
+2. writes `releases/v<version>.md`, the top of `CHANGELOG.md`, and the docs
+   page `apps/docs/content/docs/releases/v<version>.mdx`;
+3. opens a pull request titled `chore(release): v<version>` with auto-merge
+   on. Read the notes there; edit the docs page on that branch if a line is
+   wrong. CI gates the PR like any other.
+
+When the PR merges, the `tag` job tags `v<version>` and `desktop-v<version>`,
+opens the GitHub release with the notes, publishes `@oxagen/cli` to npm, and
+the `desktop-v` tag starts `.github/workflows/desktop.yml`, which builds the
+app on four runners and publishes the installers, their checksums and the
+listing page to https://downloads.oxagen.sh/. The docs page is live at
+https://docs.oxagen.sh/docs/releases/v<version> once main deploys.
+
+The workflow needs the `RELEASE_TOKEN` secret: a fine-grained personal
+access token for this repository with contents, pull requests and workflows
+set to write. The workflow's own token cannot open a PR that CI runs on.
+`dry_run: true` previews the version and the notes without it.
+
+### From a laptop, when you want to watch it land
 
 ```bash
-pnpm dist:local                 # build tacho, oxagen, and the desktop app from this tree; the installer lands on ~/Desktop
 pnpm release:patch:publish      # 2.1.1 -> 2.1.2, then build every platform in CI and upload
 pnpm release:minor:publish      # 2.1.1 -> 2.2.0
 pnpm release:major:publish      # 2.1.1 -> 3.0.0
 ```
 
-`dist:local` builds what is on your machine for your OS and architecture, signed with the updater key when `~/.tauri/oxagen-desktop.key` is present, and bumps nothing. It is the way to try an installer before a release.
+`release:<bump>:publish` (`tools/scripts/release-publish.ts`) diffs the notes
+from the last published GitHub release rather than the newest tag, so a tag
+that never shipped is not a release boundary, and ends them with a link to
+every installer and executable of the version by its published name. It then
+commits on `release/vX.Y.Z`, tags `vX.Y.Z` and `desktop-vX.Y.Z`, opens the
+pull request, waits for `desktop.yml` to build the four targets, uploads the
+installers to downloads.oxagen.sh and `@oxagen/cli` to npm, checks that every
+file the notes link to is on the GitHub release, and publishes it.
 
-`release:<bump>:publish` (`tools/scripts/release-publish.ts`) writes the next version into every manifest in the tree, whatever its language (`package.json`, `Cargo.toml`, `Cargo.lock`; `pnpm check:versions` holds them in lockstep in CI), writes the notes from the diff since the last published GitHub release with a link to every installer and executable, commits on `release/vX.Y.Z`, tags `vX.Y.Z` and `desktop-vX.Y.Z`, opens the pull request, waits for `desktop.yml` to build the four targets, uploads the installers to downloads.oxagen.sh and `@oxagen/cli` to npm, and publishes the GitHub release. `--dry-run` previews the version and the notes. `--publish-only` resumes after the tags exist. Every upload step skips a version that is already there.
+The uploads are the same ones `desktop.yml` does on the tag, so on a healthy
+run this reports them already done. Every step skips a version that is
+already on downloads.oxagen.sh, on npm, or published on GitHub, which is what
+makes it safe beside the Release workflow and what lets an interrupted run
+resume with `--publish-only`. `--dry-run` previews the version and the notes.
 
-`pnpm release:<bump>` alone (`tools/scripts/release.ts`) is the bump, the notes, and the local commit and tag, with no CI wait and no uploads. See the header of each script for flags.
+### A build with no release
+
+```bash
+pnpm dist:local                 # tacho, oxagen, and the desktop app from this tree; the installer lands on ~/Desktop
+pnpm dist:local --out /tmp/x    # somewhere else
+```
+
+`dist:local` builds what is on your machine, for your OS and architecture
+only (the sidecars embed the running `node` and are not cross-compiled),
+signed with the updater key when `~/.tauri/oxagen-desktop.key` is present. It
+bumps nothing and uploads nothing. It is the way to try an installer before a
+release.
+
+`pnpm release:<bump>` alone (`tools/scripts/release.ts`) is the bump, the
+notes, and a local commit and tag, with no CI wait and no uploads:
+
+```bash
+tsx tools/scripts/release.ts patch --dry-run   # the bump and the notes, nothing written
+pnpm release:patch                             # bump, notes, commit and tag on your branch
+```
+
+See the header of each script for its flags.
 
 ## Security
 

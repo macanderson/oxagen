@@ -1,7 +1,7 @@
 {
   "name": "Oxagen",
   "short_name": "Oxagen",
-  "description": "Mission Control for agent operators.",
+  "description": "Your agents are a workforce now. Manage them like one.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#09090B",

@@ -282,9 +282,18 @@ export const routes = {
       cursor: q.cursor,
     }),
   /**
-   * Steering; a tab, a kind, a page offset, a selected proposal and a Skills
-   * inventory cursor are query values on the one route.
+   * Repositories; its tabs are path segments (`/repositories/changes`), as the
+   * mockup's route names them, and the first tab is the bare path.
    */
+  repositories: (
+    org: string,
+    ws: string,
+    tab?: "working-copies" | "changes" | "configuration",
+  ): SafePath =>
+    tab === undefined
+      ? pathOf(org, ws, "repositories")
+      : pathOf(org, ws, "repositories", tab),
+  /** Steering filters, a selected proposal, and a Skills inventory cursor. */
   steering: (
     org: string,
     ws: string,

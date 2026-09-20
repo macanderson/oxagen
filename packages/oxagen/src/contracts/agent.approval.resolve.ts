@@ -4,7 +4,7 @@ import { registerCapability } from "../registry";
 /**
  * An approval request id in either of its two forms (#2906):
  *
- * - the public id `apr_…` that list reads and the Mission Control app show, or
+ * - the public id `apr_…` that list reads and the app show, or
  * - the row uuid that the runtime keys its waiters on and that the deprecated
  *   app still sends from stream events.
  *

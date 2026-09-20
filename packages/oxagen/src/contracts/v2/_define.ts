@@ -2,8 +2,8 @@ import type { z } from "zod";
 import type { CapabilityDeclaration } from "../../types";
 
 /**
- * A Mission Control target tool (spec Appendix E), staged beside the contracts
- * it replaces.
+ * A target tool of the Mission Control spec (Appendix E), staged beside the
+ * contracts it replaces.
  *
  * These deliberately do NOT call `registerCapability()`. Most v2 names collide
  * with a live v1 name — `create_org` is both the tool Appendix E targets and the

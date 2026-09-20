@@ -508,3 +508,117 @@ describe("listBranches", () => {
     expect(branches).toHaveLength(300);
   });
 });
+
+// ---------------------------------------------------------------------------
+// getBranch
+// ---------------------------------------------------------------------------
+
+describe("getBranch", () => {
+  it("answers the branch's head commit by name", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        commit: { sha: "abc123", commit: { tree: { sha: "t" } } },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+    const out = await client.getBranch({
+      owner: "acme",
+      repo: "widgets",
+      branch: "release/2026",
+    });
+    expect(out).toEqual({ name: "release/2026", sha: "abc123" });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/repos/acme/widgets/branches/release%2F2026",
+    );
+  });
+
+  it("answers null when GitHub says the branch does not exist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(makeResponse({ message: "Not Found" }, 404)),
+    );
+    const client = createGitHubClient({ token: "tok" });
+    await expect(
+      client.getBranch({ owner: "acme", repo: "widgets", branch: "gone" }),
+    ).resolves.toBeNull();
+  });
+
+  it("rethrows any other refusal", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(makeResponse({ message: "Forbidden" }, 403)),
+    );
+    const client = createGitHubClient({ token: "tok" });
+    await expect(
+      client.getBranch({ owner: "acme", repo: "widgets", branch: "main" }),
+    ).rejects.toThrow(/403/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getTree
+// ---------------------------------------------------------------------------
+
+describe("getTree", () => {
+  it("resolves a commit SHA, not only a branch name", async () => {
+    const sha = "0f4b9c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({ sha, commit: { tree: { sha: "tree-1" } } }),
+      )
+      .mockResolvedValueOnce(
+        makeResponse({
+          truncated: false,
+          tree: [
+            { path: ".oxagen/workspace.toml", type: "blob", sha: "b1" },
+            { path: ".oxagen", type: "tree", sha: "t1" },
+          ],
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const paths = await client.getTree({
+      owner: "acme",
+      repo: "widgets",
+      ref: sha,
+    });
+
+    // A commit SHA is not a branch name: reading it through /branches/ is
+    // what answered 404 for every repository with a production branch.
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      `https://api.github.com/repos/acme/widgets/commits/${sha}`,
+    );
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      "/git/trees/tree-1?recursive=1",
+    );
+    expect(paths).toEqual([".oxagen/workspace.toml"]);
+  });
+
+  it("takes a branch name through the same path", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({ sha: "head", commit: { tree: { sha: "tree-2" } } }),
+      )
+      .mockResolvedValueOnce(makeResponse({ truncated: false, tree: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    await client.getTree({
+      owner: "acme",
+      repo: "widgets",
+      ref: "release/2026",
+    });
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://api.github.com/repos/acme/widgets/commits/release%2F2026",
+    );
+  });
+});

@@ -27,11 +27,7 @@ import type {
   ToolSideEffect,
 } from "@/data/contracts/tools";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
-import {
-  kernelRead,
-  kernelWrite,
-  readToActionResult,
-} from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 /**
@@ -278,7 +274,7 @@ function bodyOf(rule: StoredRule | ApprovalRuleDraft) {
  * differently and that is not a change anyone made.
  */
 function bodyKey(body: ReturnType<typeof bodyOf>): string {
-  const ordered = <T,>(record: Readonly<Record<string, T>>) =>
+  const ordered = <T>(record: Readonly<Record<string, T>>) =>
     Object.fromEntries(
       Object.entries(record).sort(([left], [right]) =>
         left < right ? -1 : left > right ? 1 : 0,

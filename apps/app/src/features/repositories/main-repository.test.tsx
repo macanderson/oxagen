@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-// The Workspace settings dialog over fake reads and a fake bind: the control
-// beside the workspace tile opens it, and each of the states the panel can be
-// in is drawn from what the capabilities answered, never guessed.
+// The Repositories page's GitHub setup over fake reads and a fake bind: each
+// of the states the panel can be in is drawn from what the capabilities
+// answered, never guessed. It lived in a Workspace settings dialog until the
+// workspace menu stopped carrying Settings; every case below is the same case
+// it was there.
 //
 // The assertion that earns this file is the third describe block. Binding a
 // main repository was unreachable before this: the only affordance offered the
@@ -30,37 +32,27 @@ import {
 import type {
   GitHubInstallations,
   InstallationRepositories,
-  WorkspaceRepositories,
   WorkspaceRepository,
 } from "@/data/contracts/repository";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
-import { shellData } from "./shell.builders";
-import { ShellStateProvider } from "./shell-state";
-import { SidebarNav } from "./sidebar";
 
 const readWorkspaceRepository = vi.fn();
 const listInstallationRepositories = vi.fn();
 const bindWorkspaceRepository = vi.fn();
 const listGithubInstallations = vi.fn();
 const attachGithubInstallation = vi.fn();
-const readWorkspaceRepositories = vi.fn();
-const linkWorkspaceRepository = vi.fn();
-const unlinkWorkspaceRepository = vi.fn();
-vi.mock("./workspace-settings-actions", () => ({
+vi.mock("./actions", () => ({
   readWorkspaceRepository,
   listInstallationRepositories,
   bindWorkspaceRepository,
   listGithubInstallations,
   attachGithubInstallation,
-  readWorkspaceRepositories,
-  linkWorkspaceRepository,
-  unlinkWorkspaceRepository,
 }));
 
 const nav = vi.hoisted(() => ({
-  pathname: "/acme/core-platform",
+  pathname: "/acme/core-platform/repositories",
   query: "",
   push: vi.fn(),
   replace: vi.fn(),
@@ -97,7 +89,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-const { WorkspaceSettingsDialog } = await import("./workspace-settings");
+const { RepositorySetup } = await import("./main-repository");
 
 // Three doors, and the contract now names them apart. `connectUrl` is the
 // IDENTITY leg — authorize Oxagen as this GitHub user, for an account that
@@ -228,39 +220,11 @@ const listing: InstallationRepositories = {
   truncated: false,
 };
 
-/** The Repositories section's rows: the main repository, and one linked. */
-const MAIN_ROW: WorkspaceRepositories["repositories"][number] = {
-  bindingId: "rpb_0a1b2c",
-  role: "main",
-  owner: "acme",
-  name: "platform",
-  fullName: "acme/platform",
-  defaultRef: "main",
-  htmlUrl: "https://github.com/acme/platform",
-  boundAt: "2026-09-16T10:00:00.000Z",
-  connectionLive: true,
-};
-const LINKED_ROW: WorkspaceRepositories["repositories"][number] = {
-  bindingId: "rpb_0d1e2f",
-  role: "linked",
-  owner: "acme",
-  name: "docs-site",
-  fullName: "acme/docs-site",
-  defaultRef: "trunk",
-  htmlUrl: "https://github.com/acme/docs-site",
-  boundAt: "2026-09-17T10:00:00.000Z",
-  connectionLive: true,
-};
-
-/** The shell as a person meets it: the sidebar header carries the control, the dialog answers it. */
+/** The setup section as the Repositories tab renders it. */
 function Shell({ container }: { container?: HTMLElement } = {}) {
-  const data = shellData();
   return render(
     <IntlProvider>
-      <ShellStateProvider>
-        <SidebarNav data={data} />
-        <WorkspaceSettingsDialog data={data} />
-      </ShellStateProvider>
+      <RepositorySetup org="acme" ws="core-platform" />
     </IntlProvider>,
     container ? { container } : undefined,
   );
@@ -269,14 +233,13 @@ function Shell({ container }: { container?: HTMLElement } = {}) {
 async function openSettings(container?: HTMLElement) {
   const user = userEvent.setup();
   Shell({ container });
-  await user.click(screen.getByTestId("open-workspace-settings"));
   return {
     user,
-    dialog: await screen.findByTestId("workspace-settings-dialog"),
+    dialog: await screen.findByTestId("repository-setup"),
   };
 }
 
-// ShellStateProvider reads the theme from a media query jsdom does not have.
+// jsdom has no matchMedia, and the sheet and phone helpers read it.
 beforeAll(() => {
   vi.stubGlobal("matchMedia", (query: string) => ({
     matches: false,
@@ -287,7 +250,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  nav.pathname = "/acme/core-platform";
+  nav.pathname = "/acme/core-platform/repositories";
   nav.query = "";
   nav.push.mockReset();
   nav.replace.mockReset();
@@ -297,32 +260,6 @@ beforeEach(() => {
   bindWorkspaceRepository.mockReset();
   listGithubInstallations.mockReset();
   attachGithubInstallation.mockReset();
-  readWorkspaceRepositories.mockReset();
-  linkWorkspaceRepository.mockReset();
-  unlinkWorkspaceRepository.mockReset();
-  // The Repositories section's default: a workspace bound to its main
-  // repository and nothing else.
-  readWorkspaceRepositories.mockResolvedValue({
-    ok: true,
-    value: { repositories: [MAIN_ROW] },
-  });
-  linkWorkspaceRepository.mockResolvedValue({
-    ok: true,
-    value: {
-      bindingId: "rpb_0d1e2f",
-      fullName: "acme/docs-site",
-      defaultRef: "trunk",
-      linkedAt: "2026-09-17T10:00:00.000Z",
-    },
-  });
-  unlinkWorkspaceRepository.mockResolvedValue({
-    ok: true,
-    value: {
-      bindingId: "rpb_0d1e2f",
-      fullName: "acme/docs-site",
-      unlinkedAt: "2026-09-18T10:00:00.000Z",
-    },
-  });
   // The ordinary first-time default: nobody has authorized GitHub yet, so
   // there is nothing to pick from and the doors are the whole panel.
   listGithubInstallations.mockResolvedValue(NOT_AUTHORIZED);
@@ -342,54 +279,6 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
-
-describe("the control that opens it", () => {
-  it("is the last Workspace nav item, labelled Settings, and reads for the workspace in the URL", async () => {
-    Shell();
-    const list = screen.getByRole("list", { name: "Workspace" });
-    const items = within(list).getAllByRole("listitem");
-    const last = items.at(-1);
-    if (!last) throw new Error("the Workspace nav list rendered no items");
-    expect(last.textContent).toBe("Settings");
-    expect(within(last).getByTestId("open-workspace-settings")).toBeTruthy();
-    cleanup();
-    await openSettings();
-    await waitFor(() => {
-      expect(readWorkspaceRepository).toHaveBeenCalledWith(
-        "acme",
-        "core-platform",
-      );
-    });
-  });
-
-  it("reads nothing until a person opens it: the list is a live GitHub call", () => {
-    Shell();
-    expect(readWorkspaceRepository).not.toHaveBeenCalled();
-    expect(listInstallationRepositories).not.toHaveBeenCalled();
-    expect(readWorkspaceRepositories).not.toHaveBeenCalled();
-  });
-
-  it("is absent with no workspace to settle, and so is the dialog (negative)", () => {
-    nav.pathname = "/acme";
-    render(
-      <IntlProvider>
-        <ShellStateProvider>
-          <SidebarNav
-            data={shellData({
-              context: { ok: false, reason: "error", code: "x", status: 503 },
-            })}
-          />
-          <WorkspaceSettingsDialog
-            data={shellData({
-              context: { ok: false, reason: "error", code: "x", status: 503 },
-            })}
-          />
-        </ShellStateProvider>
-      </IntlProvider>,
-    );
-    expect(screen.queryByTestId("open-workspace-settings")).toBeNull();
-  });
-});
 
 describe("no GitHub App installation", () => {
   it("shows a pending state while the record is read, never a blank panel", async () => {
@@ -1213,17 +1102,18 @@ describe("a bound main repository", () => {
     await expectNoAxe(dialog);
   });
 
-  // ARCHITECTURE.md §1.2, the phone shell: a dialog on a phone is a sheet from
-  // the bottom edge, not a centred desktop modal with viewport margins.
-  it("presents as a bottom sheet on a phone", async () => {
+  // ARCHITECTURE.md §1.2, the phone shell: every control in the section is a
+  // 44px touch target at phone width, so none of it needs a stylus.
+  it("keeps every control a 44px touch target on a phone", async () => {
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: bound });
     const phone = phoneWidth();
     try {
-      const { dialog } = await openSettings(phone.container);
-      const style = getComputedStyle(dialog);
-      expect(dialog.dataset.sheet).toBe("");
-      expect(style.width).toBe("100%");
-      expect(dialog.querySelector("[data-sheet-handle]")).not.toBeNull();
-      expect(dialog.querySelector("[data-sheet-footer]")).not.toBeNull();
+      await openSettings(phone.container);
+      await screen.findByTestId("workspace-repository-bound");
+      const targets = phone.container.querySelectorAll("[data-touch-target]");
+      expect(targets.length).toBeGreaterThan(0);
+      for (const target of targets)
+        expect(getComputedStyle(target).minHeight).toBe("44px");
     } finally {
       phone.restore();
     }
@@ -1527,28 +1417,29 @@ describe("refusals on the panel's own read", () => {
 });
 
 describe("the return leg from GitHub", () => {
-  it("opens on ?settings=repository, acknowledges the install, and drops the query", async () => {
+  it("acknowledges the install on ?settings=repository and drops the query", async () => {
     nav.query = "settings=repository&github=connected";
     readWorkspaceRepository.mockResolvedValue({ ok: true, value: connected });
     Shell();
 
-    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(await screen.findByTestId("repository-setup")).toBeTruthy();
     expect(screen.getByTestId("workspace-github-connected")).toBeTruthy();
-    expect(nav.replace).toHaveBeenCalledWith("/acme/core-platform");
+    expect(nav.replace).toHaveBeenCalledWith(
+      "/acme/core-platform/repositories",
+    );
   });
 
-  it("does not open, or acknowledge anything, on an ordinary URL (negative)", async () => {
+  it("acknowledges nothing and leaves the URL alone on an ordinary visit (negative)", async () => {
     Shell();
-    await waitFor(() => {
-      expect(screen.queryByTestId("workspace-settings-dialog")).toBeNull();
-    });
+    expect(await screen.findByTestId("repository-setup")).toBeTruthy();
+    expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
     expect(nav.replace).not.toHaveBeenCalled();
   });
 
-  it("opens without the acknowledgement when the query names no install (negative)", async () => {
+  it("says nothing when the query names no install (negative)", async () => {
     nav.query = "settings=repository";
     Shell();
-    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(await screen.findByTestId("repository-setup")).toBeTruthy();
     expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
     expect(screen.queryByTestId("workspace-github-failed")).toBeNull();
   });
@@ -1566,14 +1457,16 @@ describe("the return leg from GitHub", () => {
     });
     Shell();
 
-    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(await screen.findByTestId("repository-setup")).toBeTruthy();
     expect(screen.getByTestId("workspace-github-failed")).toBeTruthy();
     expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
     // The install door is still the thing to press, so it is still drawn.
     expect(
       await screen.findByTestId("workspace-repository-install"),
     ).toBeTruthy();
-    expect(nav.replace).toHaveBeenCalledWith("/acme/core-platform");
+    expect(nav.replace).toHaveBeenCalledWith(
+      "/acme/core-platform/repositories",
+    );
   });
 
   /**
@@ -1596,7 +1489,7 @@ describe("the return leg from GitHub", () => {
     });
     Shell();
 
-    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(await screen.findByTestId("repository-setup")).toBeTruthy();
     const said = screen.getByTestId("workspace-github-authorize");
     expect(said).toHaveTextContent(/nothing has been attached yet/i);
     // Never the word for a real attach.
@@ -1621,7 +1514,7 @@ describe("the return leg from GitHub", () => {
     listGithubInstallations.mockResolvedValue({ ok: true, value: reachable });
     Shell();
 
-    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(await screen.findByTestId("repository-setup")).toBeTruthy();
     expect(screen.getByTestId("workspace-github-choose")).toBeTruthy();
     expect(
       await screen.findByTestId("workspace-installation-picker"),
@@ -1641,7 +1534,7 @@ describe("the return leg from GitHub", () => {
     });
     Shell();
 
-    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(await screen.findByTestId("repository-setup")).toBeTruthy();
     expect(screen.getByTestId("workspace-github-none")).toBeTruthy();
     // Authorizing again would loop: the door that matters is installations/new.
     expect(
@@ -1657,583 +1550,10 @@ describe("the return leg from GitHub", () => {
   it("acknowledges nothing for an unknown github value (negative)", async () => {
     nav.query = "settings=repository&github=something-else";
     Shell();
-    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    expect(await screen.findByTestId("repository-setup")).toBeTruthy();
     expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
     expect(screen.queryByTestId("workspace-github-failed")).toBeNull();
     expect(screen.queryByTestId("workspace-github-choose")).toBeNull();
     expect(screen.queryByTestId("workspace-github-none")).toBeNull();
-  });
-});
-
-describe("the Repositories section (§10.1, §17 M0)", () => {
-  async function openRepositories() {
-    const opened = await openSettings();
-    const section = await screen.findByTestId("workspace-repositories");
-    return { ...opened, section };
-  }
-
-  it("shows a pending state while the list is read, never a blank section", async () => {
-    let answer!: (value: unknown) => void;
-    readWorkspaceRepositories.mockReturnValue(
-      new Promise((resolve) => {
-        answer = resolve;
-      }),
-    );
-    const { section } = await openRepositories();
-    expect(
-      within(section).getByTestId("workspace-repository-list-loading"),
-    ).toBeTruthy();
-    answer({ ok: true, value: { repositories: [MAIN_ROW] } });
-    expect(
-      await within(section).findByTestId("workspace-repository-list"),
-    ).toBeTruthy();
-    expect(readWorkspaceRepositories).toHaveBeenCalledWith(
-      "acme",
-      "core-platform",
-    );
-  });
-
-  it("lists every repository with its role, its GitHub link and its approved default ref", async () => {
-    readWorkspaceRepositories.mockResolvedValue({
-      ok: true,
-      value: { repositories: [MAIN_ROW, LINKED_ROW] },
-    });
-    const { section } = await openRepositories();
-    const list = await within(section).findByRole("list", {
-      name: "Repositories this workspace binds",
-    });
-    const rows = within(list).getAllByRole("listitem");
-    expect(rows).toHaveLength(2);
-    const [main, linked] = rows;
-    if (!main || !linked) throw new Error("two rows were expected");
-    expect(main).toHaveAttribute("data-role", "main");
-    expect(main).toHaveTextContent("Main");
-    expect(main).toHaveTextContent("acme/platform");
-    expect(main).toHaveTextContent("default ref main");
-    expect(
-      within(main).getByTestId("workspace-repository-open-rpb_0a1b2c"),
-    ).toHaveAttribute("href", "https://github.com/acme/platform");
-    expect(linked).toHaveAttribute("data-role", "linked");
-    expect(linked).toHaveTextContent("Linked");
-    expect(linked).toHaveTextContent("acme/docs-site");
-    expect(linked).toHaveTextContent("default ref trunk");
-    expect(
-      within(section).queryByTestId("workspace-repository-list-only-main"),
-    ).toBeNull();
-  });
-
-  // The invariant on screen: a workspace without a main repo cannot exist,
-  // so no control offers to remove it. The handler refuses it anyway.
-  it("offers an unlink on the linked row and never on the main row", async () => {
-    readWorkspaceRepositories.mockResolvedValue({
-      ok: true,
-      value: { repositories: [MAIN_ROW, LINKED_ROW] },
-    });
-    const { section } = await openRepositories();
-    await within(section).findByTestId("workspace-repository-list");
-    expect(
-      within(section).getByTestId("workspace-repository-unlink-rpb_0d1e2f"),
-    ).toBeTruthy();
-    expect(
-      within(section).queryByTestId("workspace-repository-unlink-rpb_0a1b2c"),
-    ).toBeNull();
-  });
-
-  it("says only the main repository is bound, and offers the link below it", async () => {
-    const { section } = await openRepositories();
-    expect(
-      await within(section).findByTestId("workspace-repository-list-only-main"),
-    ).toHaveTextContent("Only the main repository");
-    expect(
-      within(section).getByTestId("workspace-repository-link"),
-    ).toBeTruthy();
-  });
-
-  // The org's first workspace, before its provisional window closes: the
-  // list is honestly empty, and the main repository is what comes first.
-  it("says nothing is bound yet when the list is empty, pointing at the main panel (negative)", async () => {
-    readWorkspaceRepositories.mockResolvedValue({
-      ok: true,
-      value: { repositories: [] },
-    });
-    const { section } = await openRepositories();
-    expect(
-      await within(section).findByTestId("workspace-repository-list-none"),
-    ).toHaveTextContent("Bind its main repository above first.");
-    expect(
-      within(section).queryByTestId("workspace-repository-list"),
-    ).toBeNull();
-  });
-
-  it("says a row's connection was retired rather than showing it as live (negative)", async () => {
-    readWorkspaceRepositories.mockResolvedValue({
-      ok: true,
-      value: {
-        repositories: [MAIN_ROW, { ...LINKED_ROW, connectionLive: false }],
-      },
-    });
-    const { section } = await openRepositories();
-    expect(
-      await within(section).findByTestId(
-        "workspace-repository-retired-rpb_0d1e2f",
-      ),
-    ).toHaveTextContent("Connection retired");
-    expect(
-      within(section).queryByTestId("workspace-repository-retired-rpb_0a1b2c"),
-    ).toBeNull();
-  });
-
-  it("cites a repository whose URL is not a page on github.com without linking it (negative)", async () => {
-    readWorkspaceRepositories.mockResolvedValue({
-      ok: true,
-      value: {
-        repositories: [
-          { ...MAIN_ROW, htmlUrl: "https://github.com.evil.example/x/y" },
-        ],
-      },
-    });
-    const { section } = await openRepositories();
-    const list = await within(section).findByTestId(
-      "workspace-repository-list",
-    );
-    expect(list).toHaveTextContent("acme/platform");
-    expect(
-      within(list).queryByTestId("workspace-repository-open-rpb_0a1b2c"),
-    ).toBeNull();
-  });
-
-  it("shows the refusal when the list cannot be read, and no link form (negative)", async () => {
-    readWorkspaceRepositories.mockResolvedValue({
-      ok: false,
-      reason: "denied",
-      code: "org.admin",
-    });
-    const { section } = await openRepositories();
-    expect(
-      await within(section).findByTestId("workspace-repository-list-failure"),
-    ).toHaveTextContent("Only an organization Owner or Admin");
-    expect(
-      within(section).queryByTestId("workspace-repository-link"),
-    ).toBeNull();
-  });
-
-  it("survives a list that threw without showing an empty section (negative)", async () => {
-    readWorkspaceRepositories.mockRejectedValue(new Error("network"));
-    const { section } = await openRepositories();
-    expect(
-      await within(section).findByTestId("workspace-repository-list-failure"),
-    ).toHaveTextContent("action_failed");
-  });
-
-  it("re-reads the list after the panel above binds the main repository", async () => {
-    readWorkspaceRepository.mockResolvedValue({ ok: true, value: retired });
-    const { user, section } = await openRepositories();
-    await within(section).findByTestId("workspace-repository-list");
-    expect(readWorkspaceRepositories).toHaveBeenCalledTimes(1);
-    await screen.findByTestId("workspace-repository-retired");
-    await user.click(
-      screen.getByRole("button", { name: "Reconnect this repository" }),
-    );
-    await waitFor(() => {
-      expect(readWorkspaceRepositories).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe("linking a second repository", () => {
-    it("links the repository typed as owner/name and re-reads the list", async () => {
-      readWorkspaceRepositories
-        .mockResolvedValueOnce({
-          ok: true,
-          value: { repositories: [MAIN_ROW] },
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          value: { repositories: [MAIN_ROW, LINKED_ROW] },
-        });
-      const { user, section } = await openRepositories();
-      const input = await within(section).findByLabelText("Repository");
-      expect(input).toHaveAccessibleDescription(/owner\/name on GitHub/);
-      await user.type(input, "  acme/docs-site.git ");
-      await user.click(within(section).getByRole("button", { name: "Link" }));
-      await waitFor(() => {
-        expect(linkWorkspaceRepository).toHaveBeenCalledWith(
-          "acme",
-          "core-platform",
-          { owner: "acme", name: "docs-site" },
-        );
-      });
-      expect(
-        await within(section).findByTestId(
-          "workspace-repository-row-rpb_0d1e2f",
-        ),
-      ).toHaveTextContent("acme/docs-site");
-      expect(input).toHaveValue("");
-      expect(readWorkspaceRepositories).toHaveBeenCalledTimes(2);
-    });
-
-    it("shows a pending state while the link runs", async () => {
-      let answer!: (value: unknown) => void;
-      linkWorkspaceRepository.mockReturnValue(
-        new Promise((resolve) => {
-          answer = resolve;
-        }),
-      );
-      const { user, section } = await openRepositories();
-      await user.type(
-        await within(section).findByLabelText("Repository"),
-        "acme/docs-site",
-      );
-      await user.click(within(section).getByRole("button", { name: "Link" }));
-      expect(
-        within(section).getByRole("button", { name: "Linking…" }),
-      ).toHaveAttribute("aria-disabled", "true");
-      answer({
-        ok: true,
-        value: {
-          bindingId: "rpb_0d1e2f",
-          fullName: "acme/docs-site",
-          defaultRef: "trunk",
-          linkedAt: "2026-09-17T10:00:00.000Z",
-        },
-      });
-      await within(section).findByRole("button", { name: "Link" });
-    });
-
-    it.each(["", "docs-site", "acme/docs-site/extra", "/docs-site"])(
-      "refuses %j before the write runs, asking for owner/name (negative)",
-      async (typed) => {
-        const { user, section } = await openRepositories();
-        const input = await within(section).findByLabelText("Repository");
-        if (typed !== "") await user.type(input, typed);
-        await user.click(within(section).getByRole("button", { name: "Link" }));
-        expect(
-          await within(section).findByTestId(
-            "workspace-repository-link-failure",
-          ),
-        ).toHaveTextContent("Write it as owner/name.");
-        expect(input).toHaveAttribute("aria-invalid", "true");
-        expect(linkWorkspaceRepository).not.toHaveBeenCalled();
-      },
-    );
-
-    // Every refusal `link_repository` documents, each with its own sentence.
-    it.each([
-      [
-        "github_not_connected",
-        { ok: false, reason: "conflict", code: "github_not_connected" },
-        "No GitHub App installation is attached",
-      ],
-      [
-        "main_repo",
-        { ok: false, reason: "conflict", code: "main_repo" },
-        "That is this workspace’s main repository.",
-      ],
-      [
-        "repository_already_linked",
-        { ok: false, reason: "conflict", code: "repository_already_linked" },
-        "already linked to this workspace",
-      ],
-      [
-        "main_repo_claimed",
-        { ok: false, reason: "conflict", code: "main_repo_claimed" },
-        "Another workspace steers by that repository.",
-      ],
-      [
-        "main_repo_unbound",
-        { ok: false, reason: "conflict", code: "main_repo_unbound" },
-        "Bind this workspace’s main repository first.",
-      ],
-      [
-        "repository_not_installed",
-        { ok: false, reason: "not_found", code: "repository_not_installed" },
-        "The installation cannot read that repository.",
-      ],
-      [
-        "invalid_input",
-        { ok: false, reason: "invalid", code: "invalid_input", field: "name" },
-        "not one GitHub accepts",
-      ],
-    ])(
-      "names a link refused as %s and leaves the list as it was (negative)",
-      async (_reason, refusal, sentence) => {
-        linkWorkspaceRepository.mockResolvedValue(refusal);
-        const { user, section } = await openRepositories();
-        const input = await within(section).findByLabelText("Repository");
-        await user.type(input, "acme/docs-site");
-        await user.click(within(section).getByRole("button", { name: "Link" }));
-        expect(
-          await within(section).findByTestId(
-            "workspace-repository-link-failure",
-          ),
-        ).toHaveTextContent(sentence);
-        expect(input).toHaveValue("acme/docs-site");
-        expect(readWorkspaceRepositories).toHaveBeenCalledTimes(1);
-      },
-    );
-
-    it("survives a link that threw without claiming it landed (negative)", async () => {
-      linkWorkspaceRepository.mockRejectedValue(new Error("network"));
-      const { user, section } = await openRepositories();
-      await user.type(
-        await within(section).findByLabelText("Repository"),
-        "acme/docs-site",
-      );
-      await user.click(within(section).getByRole("button", { name: "Link" }));
-      expect(
-        await within(section).findByTestId("workspace-repository-link-failure"),
-      ).toHaveTextContent("action_failed");
-      expect(readWorkspaceRepositories).toHaveBeenCalledTimes(1);
-    });
-
-    it("links once however many times the button is pressed", async () => {
-      let answer!: (value: unknown) => void;
-      linkWorkspaceRepository.mockReturnValue(
-        new Promise((resolve) => {
-          answer = resolve;
-        }),
-      );
-      const { user, section } = await openRepositories();
-      await user.type(
-        await within(section).findByLabelText("Repository"),
-        "acme/docs-site",
-      );
-      const button = within(section).getByRole("button", { name: "Link" });
-      await user.click(button);
-      await user.click(
-        within(section).getByRole("button", { name: "Linking…" }),
-      );
-      await user.click(
-        within(section).getByRole("button", { name: "Linking…" }),
-      );
-      expect(linkWorkspaceRepository).toHaveBeenCalledTimes(1);
-      answer({
-        ok: true,
-        value: {
-          bindingId: "rpb_0d1e2f",
-          fullName: "acme/docs-site",
-          defaultRef: "trunk",
-          linkedAt: "2026-09-17T10:00:00.000Z",
-        },
-      });
-      await within(section).findByRole("button", { name: "Link" });
-    });
-  });
-
-  describe("unlinking a linked repository", () => {
-    beforeEach(() => {
-      readWorkspaceRepositories
-        .mockResolvedValueOnce({
-          ok: true,
-          value: { repositories: [MAIN_ROW, LINKED_ROW] },
-        })
-        .mockResolvedValue({ ok: true, value: { repositories: [MAIN_ROW] } });
-    });
-
-    it("asks first, names the repository, and unlinks by the binding id the list answered", async () => {
-      const { user, section } = await openRepositories();
-      await user.click(
-        await within(section).findByTestId(
-          "workspace-repository-unlink-rpb_0d1e2f",
-        ),
-      );
-      expect(unlinkWorkspaceRepository).not.toHaveBeenCalled();
-      const confirm = within(section).getByTestId(
-        "workspace-repository-unlink-confirm-rpb_0d1e2f",
-      );
-      expect(confirm).toHaveTextContent(
-        "Unlink acme/docs-site from this workspace?",
-      );
-      await user.click(
-        within(confirm).getByRole("button", { name: "Unlink it" }),
-      );
-      await waitFor(() => {
-        expect(unlinkWorkspaceRepository).toHaveBeenCalledWith(
-          "acme",
-          "core-platform",
-          "rpb_0d1e2f",
-        );
-      });
-      await waitFor(() => {
-        expect(
-          within(section).queryByTestId("workspace-repository-row-rpb_0d1e2f"),
-        ).toBeNull();
-      });
-      expect(
-        within(section).getByTestId("workspace-repository-list-only-main"),
-      ).toBeTruthy();
-    });
-
-    it("keeps the repository when the question is declined (negative)", async () => {
-      const { user, section } = await openRepositories();
-      await user.click(
-        await within(section).findByTestId(
-          "workspace-repository-unlink-rpb_0d1e2f",
-        ),
-      );
-      await user.click(
-        within(section).getByTestId(
-          "workspace-repository-unlink-keep-rpb_0d1e2f",
-        ),
-      );
-      expect(
-        within(section).queryByTestId(
-          "workspace-repository-unlink-confirm-rpb_0d1e2f",
-        ),
-      ).toBeNull();
-      expect(
-        within(section).getByTestId("workspace-repository-unlink-rpb_0d1e2f"),
-      ).toBeTruthy();
-      expect(unlinkWorkspaceRepository).not.toHaveBeenCalled();
-    });
-
-    it.each([
-      [
-        "main_repo_unlink_refused",
-        { ok: false, reason: "conflict", code: "main_repo_unlink_refused" },
-        "The main repository cannot be unlinked.",
-      ],
-      [
-        "repository_not_linked",
-        { ok: false, reason: "not_found", code: "repository_not_linked" },
-        "no longer linked to this workspace",
-      ],
-      [
-        "denied",
-        { ok: false, reason: "denied", code: "org.admin" },
-        "Only an organization Owner or Admin",
-      ],
-    ])(
-      "names an unlink refused as %s on the row and keeps it (negative)",
-      async (_reason, refusal, sentence) => {
-        unlinkWorkspaceRepository.mockResolvedValue(refusal);
-        const { user, section } = await openRepositories();
-        await user.click(
-          await within(section).findByTestId(
-            "workspace-repository-unlink-rpb_0d1e2f",
-          ),
-        );
-        await user.click(
-          within(section).getByRole("button", { name: "Unlink it" }),
-        );
-        expect(
-          await within(section).findByTestId(
-            "workspace-repository-unlink-failure-rpb_0d1e2f",
-          ),
-        ).toHaveTextContent(sentence);
-        expect(
-          within(section).getByTestId("workspace-repository-row-rpb_0d1e2f"),
-        ).toBeTruthy();
-        expect(readWorkspaceRepositories).toHaveBeenCalledTimes(1);
-      },
-    );
-
-    it("survives an unlink that threw without dropping the row (negative)", async () => {
-      unlinkWorkspaceRepository.mockRejectedValue(new Error("network"));
-      const { user, section } = await openRepositories();
-      await user.click(
-        await within(section).findByTestId(
-          "workspace-repository-unlink-rpb_0d1e2f",
-        ),
-      );
-      await user.click(
-        within(section).getByRole("button", { name: "Unlink it" }),
-      );
-      expect(
-        await within(section).findByTestId(
-          "workspace-repository-unlink-failure-rpb_0d1e2f",
-        ),
-      ).toHaveTextContent("action_failed");
-      expect(
-        within(section).getByTestId("workspace-repository-row-rpb_0d1e2f"),
-      ).toBeTruthy();
-    });
-
-    it("unlinks once however many times the button is pressed", async () => {
-      let answer!: (value: unknown) => void;
-      unlinkWorkspaceRepository.mockReturnValue(
-        new Promise((resolve) => {
-          answer = resolve;
-        }),
-      );
-      const { user, section } = await openRepositories();
-      await user.click(
-        await within(section).findByTestId(
-          "workspace-repository-unlink-rpb_0d1e2f",
-        ),
-      );
-      await user.click(
-        within(section).getByRole("button", { name: "Unlink it" }),
-      );
-      await user.click(
-        within(section).getByRole("button", { name: "Unlinking…" }),
-      );
-      expect(unlinkWorkspaceRepository).toHaveBeenCalledTimes(1);
-      answer({
-        ok: true,
-        value: {
-          bindingId: "rpb_0d1e2f",
-          fullName: "acme/docs-site",
-          unlinkedAt: "2026-09-18T10:00:00.000Z",
-        },
-      });
-      await waitFor(() => {
-        expect(
-          within(section).queryByTestId("workspace-repository-row-rpb_0d1e2f"),
-        ).toBeNull();
-      });
-    });
-  });
-
-  it("drops a list that arrives after the dialog is gone (negative)", async () => {
-    let answer!: (value: unknown) => void;
-    readWorkspaceRepositories.mockReturnValue(
-      new Promise((resolve) => {
-        answer = resolve;
-      }),
-    );
-    const { section } = await openRepositories();
-    within(section).getByTestId("workspace-repository-list-loading");
-    cleanup();
-    answer({ ok: true, value: { repositories: [MAIN_ROW, LINKED_ROW] } });
-    await waitFor(() => {
-      expect(screen.queryByTestId("workspace-repository-list")).toBeNull();
-    });
-  });
-
-  it("has no axe violations with the list, the confirmation and the link form showing", async () => {
-    readWorkspaceRepositories.mockResolvedValue({
-      ok: true,
-      value: {
-        repositories: [MAIN_ROW, { ...LINKED_ROW, connectionLive: false }],
-      },
-    });
-    const { user, dialog, section } = await openRepositories();
-    await user.click(
-      await within(section).findByTestId(
-        "workspace-repository-unlink-rpb_0d1e2f",
-      ),
-    );
-    await expectNoAxe(dialog);
-  });
-
-  it("has no axe violations while the list is refused", async () => {
-    readWorkspaceRepositories.mockResolvedValue({
-      ok: false,
-      reason: "denied",
-      code: "org.admin",
-    });
-    const { dialog, section } = await openRepositories();
-    await within(section).findByTestId("workspace-repository-list-failure");
-    await expectNoAxe(dialog);
-  });
-
-  it("has no axe violations while nothing is bound yet", async () => {
-    readWorkspaceRepositories.mockResolvedValue({
-      ok: true,
-      value: { repositories: [] },
-    });
-    const { dialog, section } = await openRepositories();
-    await within(section).findByTestId("workspace-repository-list-none");
-    await expectNoAxe(dialog);
   });
 });

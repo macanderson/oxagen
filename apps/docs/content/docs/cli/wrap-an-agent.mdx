@@ -3,7 +3,7 @@ title: Wrap an agent
 description: "What wrapping means, how Claude Code, Codex, Cursor, and Stella get wrapped in one enrollment, and how to wrap a custom agent by calling tacho hook around its steps."
 ---
 
-Wrapping an agent puts its runs under a mandate: the access it used, the budget it spent, and a record of every step, all attributed to the workspace it ran for. For the capabilities it hands the agent, Oxagen checks the access and budget clauses on the server. Tacho, the wrapper this page covers, is how a run's steps become that record.
+Wrapping an agent puts its runs under a mandate: the access it used, the budget it spent, and a record of every step, all attributed to the workspace it ran for. For the capabilities it hands the agent, Oxagen checks the access and budget clauses on the server. The wrapper this page covers is how a run's steps become that record.
 
 Hook-based records are client-attested. The process owner can remove the hooks, so the hook tier does not enforce against that person. Observe mode records activity without enforcing it.
 
@@ -19,7 +19,7 @@ Name the harness on `enroll` or `reassign`:
 tacho enroll --harness claude-code,codex,cursor,stella
 ```
 
-`enroll` merges Tacho's hook entries into each harness's own configuration without touching an entry it did not write, and never removes a harness on a re-apply; `reassign --harness <list>` with no `--workspace` is the one way to drop one. See [Account setup](/docs/cli/account-setup) for CLI authentication. You can also use `oxagen agent enroll` with the one-time token issued during agent registration.
+`enroll` merges the wrapper's hook entries into each harness's own configuration without touching an entry it did not write, and never removes a harness on a re-apply; `reassign --harness <list>` with no `--workspace` is the one way to drop one. See [Account setup](/docs/cli/account-setup) for CLI authentication. You can also use `oxagen agent enroll` with the one-time token issued during agent registration.
 
 | | Claude Code | Codex CLI | Stella | Cursor |
 | --- | --- | --- | --- | --- |
@@ -78,7 +78,7 @@ The payload is the same JSON shape Claude Code sends on stdin. Fields you don't 
 | `tool_input` | object, optional | the arguments about to run |
 | `tool_use_id` | string, optional | correlates a `PreToolUse` with its `PostToolUse` |
 | `tool_response` | unknown, optional | the tool's result, on `PostToolUse` |
-| `transcript_path` | string, optional | send `null` (Tacho treats `null` the same as omitted) if you have none |
+| `transcript_path` | string, optional | send `null` (the collector treats `null` the same as omitted) if you have none |
 
 ### Answers
 
@@ -201,7 +201,7 @@ Three places agree, because they all read the same record:
   | idle | wrapped, no runs yet |
   | not wrapped | the harness or agent name has never called the hook |
 
-- Mission Control: **Open Mission Control** opens this workspace in Oxagen, where the run lands in the workspace's fleet record once the collector ships it.
+- The operator console: **Open Oxagen** opens this workspace in the browser, where the run lands in the workspace's fleet record once the collector ships it.
 
 ## Limits
 
