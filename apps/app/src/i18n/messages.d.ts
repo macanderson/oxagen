@@ -121,6 +121,7 @@ type Messages = {
         incidents: string;
         definition: string;
         mandates: string;
+        budgets: string;
       };
       identity: {
         title: string;
@@ -238,6 +239,7 @@ type Messages = {
           bundle: string;
           deviceKey: string;
           lastSeen: string;
+          actions: string;
         };
         hooks: {
           ok: string;
@@ -252,6 +254,31 @@ type Messages = {
           title: string;
           body: string;
           command: string;
+        };
+        enroll: {
+          open: string;
+          title: string;
+          body: string;
+          confirm: string;
+          pending: string;
+          again: string;
+          token: string;
+          once: string;
+          expires: string;
+          command: string;
+          copy: string;
+          copied: string;
+          copyFailed: string;
+        };
+        revoke: {
+          open: string;
+          label: string;
+          title: string;
+          body: string;
+          reason: string;
+          reasonHint: string;
+          confirm: string;
+          pending: string;
         };
       };
       incidents: {
@@ -312,6 +339,37 @@ type Messages = {
           pullRequest: string;
           committed: string;
         };
+      };
+      budgets: {
+        title: string;
+        lead: string;
+        columns: {
+          scope: string;
+          period: string;
+          limit: string;
+          spent: string;
+          position: string;
+        };
+        scope: {
+          org: string;
+          workspace: string;
+        };
+        monthly: string;
+        rolling: string;
+        noLimit: string;
+        disabled: string;
+        position: string;
+        state: {
+          ok: string;
+          threshold_50: string;
+          threshold_80: string;
+          threshold_95: string;
+          exceeded: string;
+        };
+        basis: string;
+        empty: string;
+        agentScope: string;
+        link: string;
       };
     };
     actions: {

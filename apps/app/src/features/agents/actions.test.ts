@@ -38,8 +38,10 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   commitAgentDefinition,
+  issueAgentEnrollmentToken,
   requestMandate,
   retireAgent,
+  revokeHostEnrollment,
   rotateAgentCredential,
   setAgentSuspended,
 } = await import("./actions");
@@ -106,6 +108,130 @@ describe("rotateAgentCredential", () => {
     invoke.mockRejectedValue(denied("rotate_agent_credential"));
     expect(
       await rotateAgentCredential("acme", "core-platform", "agt_releasebot"),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+const HOST = "tch_0123456789abcdefghijkl";
+const TOKEN = "oxe_1time_23456789abcdefghjkmnpqrstv";
+
+describe("revokeHostEnrollment", () => {
+  it("revokes the host for the workspace viewer and answers the recorded instant", async () => {
+    invoke.mockResolvedValue({
+      hostEnrollmentId: HOST,
+      status: "revoked",
+      revokedAt: AT,
+    });
+    expect(
+      await revokeHostEnrollment(
+        "acme",
+        "core-platform",
+        HOST,
+        "  laptop returned  ",
+      ),
+    ).toEqual({ ok: true, value: { revokedAt: AT } });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "revoke_tacho_enrollment",
+      { hostEnrollmentId: HOST, reason: "laptop returned" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("sends no reason at all when the box is blank", async () => {
+    // The contract's input is strict with `reason` optional, and an empty
+    // string is a recorded reason that says nothing.
+    invoke.mockResolvedValue({
+      hostEnrollmentId: HOST,
+      status: "revoked",
+      revokedAt: AT,
+    });
+    await revokeHostEnrollment("acme", "core-platform", HOST, "   ");
+    expect(invoke).toHaveBeenCalledWith(
+      "revoke_tacho_enrollment",
+      { hostEnrollmentId: HOST },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses an id that is not a host enrollment public id before the kernel runs (negative)", async () => {
+    expect(
+      await revokeHostEnrollment("acme", "core-platform", "agt_releasebot", ""),
+    ).toMatchObject({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "hostEnrollmentId",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a reason longer than the contract allows (negative)", async () => {
+    expect(
+      await revokeHostEnrollment(
+        "acme",
+        "core-platform",
+        HOST,
+        "x".repeat(513),
+      ),
+    ).toMatchObject({ ok: false, reason: "invalid", field: "reason" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("revoke_tacho_enrollment"));
+    expect(
+      await revokeHostEnrollment("acme", "core-platform", HOST, ""),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+describe("issueAgentEnrollmentToken", () => {
+  it("mints for the named agent and answers the token, its expiry and the command", async () => {
+    invoke.mockResolvedValue({
+      tokenId: "tet_9",
+      token: TOKEN,
+      expiresAt: AT,
+      agentId: "agt_releasebot",
+      agentKey: "acme.core.release-bot",
+      enrollCommand: `oxagen agent enroll --token ${TOKEN}`,
+    });
+    expect(
+      await issueAgentEnrollmentToken(
+        "acme",
+        "core-platform",
+        "agt_releasebot",
+      ),
+    ).toEqual({
+      ok: true,
+      value: {
+        token: TOKEN,
+        expiresAt: AT,
+        enrollCommand: `oxagen agent enroll --token ${TOKEN}`,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "create_enrollment_token",
+      { agentId: "agt_releasebot" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses an empty agent before the kernel runs (negative)", async () => {
+    expect(
+      await issueAgentEnrollmentToken("acme", "core-platform", ""),
+    ).toMatchObject({ ok: false, reason: "invalid", field: "agentId" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("create_enrollment_token"));
+    expect(
+      await issueAgentEnrollmentToken(
+        "acme",
+        "core-platform",
+        "agt_releasebot",
+      ),
     ).toMatchObject({ ok: false, reason: "denied" });
   });
 });

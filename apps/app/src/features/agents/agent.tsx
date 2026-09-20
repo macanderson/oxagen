@@ -1,11 +1,16 @@
 // One agent (ARCHITECTURE.md §1.2 Agents row, #2956; mockup `pAgent`): the
 // identity card with its status and the writes on it, then one section chosen
-// by `?tab=`. Five sections have a store behind them: Identity (get_agent),
+// by `?tab=`. Six sections have a store behind them: Identity (get_agent),
 // Toolbelt (get_agent_toolbelt), Enrollment (get_agent's hosts), Tamper
 // incidents (list_incidents), Definition in git (get_agent's cached commit)
-// and Mandates (list_mandates narrowed to this agent, #2957). The mockup's
-// Budgets and Runs tabs have no contract that reads them per agent, so they
-// are not drawn (§3.6). Only the chosen section makes its own read.
+// and Mandates (list_mandates narrowed to this agent, #2957). Only the chosen
+// section makes its own read.
+//
+// Budgets is the mockup's seventh, drawn read-only (#2953). `get_spend_budget`
+// has no agent scope, so the tab shows the organization and workspace ceilings
+// this agent runs under and says plainly that no per-agent ceiling exists,
+// rather than drawing a figure no store holds. The mockup's Runs tab still has
+// no contract that reads runs per agent, so it is not drawn (§3.6).
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -18,6 +23,7 @@ import { buttonPrimary, panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { AgentActions } from "./agent-actions";
+import { BudgetSection } from "./budget-panel";
 import { DefinitionSection } from "./definition";
 import { EnrollmentSection } from "./enrollment";
 import { IdentitySection } from "./identity";
@@ -30,6 +36,7 @@ const TABS = [
   "identity",
   "toolbelt",
   "enrollment",
+  "budgets",
   "incidents",
   "definition",
   "mandates",
@@ -166,7 +173,27 @@ export async function Agent({
       );
       break;
     case "enrollment":
-      body = <EnrollmentSection hosts={detail.hosts} now={now} />;
+      body = (
+        <EnrollmentSection
+          hosts={detail.hosts}
+          now={now}
+          org={place.org}
+          ws={place.ws}
+          agentId={identity.id}
+          agentName={identity.name}
+          here={routes.agent(place.org, place.ws, place.agent, {
+            tab: "enrollment",
+          })}
+        />
+      );
+      break;
+    case "budgets":
+      body = (
+        <BudgetSection
+          read={await source.spend.budgets(ctx)}
+          spend={routes.spend(place.org, place.ws, { tab: "budgets" })}
+        />
+      );
       break;
     case "incidents":
       body = (
