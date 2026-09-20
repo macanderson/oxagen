@@ -15,6 +15,10 @@
  * shared plane never sees.
  */
 import { createClient, type ClickHouseClient } from "@clickhouse/client";
+import {
+  clickhouseClientBreaker,
+  guardClickhouseClient,
+} from "./clickhouse-breaker-client";
 import type { ClickHousePlaneConfig } from "@oxagen/tenancy";
 
 /** Maximum simultaneously-open dedicated ClickHouse clients per process. */
@@ -60,13 +64,16 @@ export function dedicatedClickhouse(args: {
     }
   }
 
-  const client = createClient({
-    url: args.config.url,
-    username: args.config.username,
-    password: args.config.password,
-    database: args.config.database,
-    clickhouse_settings: { date_time_input_format: "best_effort" },
-  });
+  const client = guardClickhouseClient(
+    createClient({
+      url: args.config.url,
+      username: args.config.username,
+      password: args.config.password,
+      database: args.config.database,
+      clickhouse_settings: { date_time_input_format: "best_effort" },
+    }),
+    clickhouseClientBreaker(`clickhouse:dedicated:${key}`, false),
+  );
   clients.set(key, client);
   return client;
 }

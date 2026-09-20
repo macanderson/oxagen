@@ -688,6 +688,7 @@ export type KernelFailureCode =
   | "external_decision_refused"
   | CapabilityErrorCode
   | "no_tenant_scope"
+  | "invalid_tenant_scope"
   | "budget_exceeded"
   | HandlerErrorCode;
 
@@ -1589,17 +1590,10 @@ async function _invokeCoreInner(
         applyDecisionSettlement(decisionSettlement, canonical, null),
       );
     }
-    // Distinguish CapabilityError (handler not found → deny) from a
-    // handler runtime throw (→ error). A TenantScopeError (e.g. the MCP
-    // orgId:"" fail-open path) carries a stable `code` we surface to the
-    // audit chain so the denial reason is explainable (SOC 2 forensics).
+    // Missing handlers, missing scope, and budget refusals are denials.
+    // Malformed scope is an upstream input error and keeps its own audit code.
     const isCapErr = err instanceof CapabilityError;
-    // Duck-typed stable codes from errors the kernel deliberately does NOT
-    // import (keeps it free of @oxagen/tenancy / @oxagen/billing deps): a
-    // TenantScopeError ("no_tenant_scope") and a BudgetExceededError
-    // ("budget_exceeded"). Both are DENIALS, not server errors — a
-    // spend-ceiling refusal is a policy decision that belongs in the audit
-    // chain as a deny (SOC2), exactly like an IAM deny.
+    // Match stable codes without importing the originating error classes.
     const duckCode =
       err instanceof Error && "code" in err && err.code === "no_tenant_scope"
         ? ("no_tenant_scope" as const)
@@ -1612,12 +1606,20 @@ async function _invokeCoreInner(
     // decision the handler made, so it joins the audit chain as a deny;
     // "not_found" and "conflict" stay errors but carry their code so the
     // trace names the cause.
+    const malformedScope =
+      err instanceof Error &&
+      "code" in err &&
+      err.code === "invalid_tenant_scope"
+        ? ("invalid_tenant_scope" as const)
+        : null;
     const handlerCode = isHandlerError(err) ? err.code : null;
     const isDeny =
       (isCapErr && err.code === "no_handler") ||
       duckCode !== null ||
       handlerCode === "forbidden";
-    const failureCode = isCapErr ? err.code : (duckCode ?? handlerCode);
+    const failureCode = isCapErr
+      ? err.code
+      : (duckCode ?? malformedScope ?? handlerCode);
     emitSecurityEvent({
       capability: canonical,
       outcome: isDeny ? "deny" : "error",

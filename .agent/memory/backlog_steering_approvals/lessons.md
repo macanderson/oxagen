@@ -1,0 +1,2 @@
+- [2026-09-19] When restoring partitions, inventory default grants and direct child access before copying parent policies. Later parent policy changes do not update child policies. (source: reflections/2026-09-19-tenant-telemetry-follow-up.md, agent: backlog_steering_approvals)
+- [2026-09-19] Verify the current main tree for a reviewed security fix, not just its merge in history. A later squash can remove it again, and a normal merge then preserves that removal. (source: PR #3565 refresh, agent: backlog_steering_approvals)

@@ -23,6 +23,13 @@
  * testable with an injectable clock.
  */
 
+/** A streamed response retains its admission until consumption or cancellation. */
+export interface CircuitLease {
+  succeed(): void;
+  fail(error: unknown): void;
+  cancel(): void;
+}
+
 /** Breaker states. `closed` = healthy, `open` = failing fast, `half-open` = probing recovery. */
 export type BreakerState = "closed" | "open" | "half-open";
 
@@ -174,7 +181,7 @@ export class CircuitBreaker {
    * `successThreshold > 1` therefore means N *sequential* probes, which is what
    * it always claimed to mean and now follows from the same guard.
    */
-  async exec<T>(fn: () => Promise<T>): Promise<T> {
+  begin(): CircuitLease {
     if (this.state === "open") {
       const elapsed = this.now() - this.openedAt;
       if (elapsed < this.resetTimeoutMs) {
@@ -204,20 +211,36 @@ export class CircuitBreaker {
       this.probeStartedAt = this.now();
     }
 
+    let settled = false;
+    const finish = (
+      outcome: "success" | "failure" | "cancelled",
+      error?: unknown,
+    ) => {
+      if (settled) return;
+      settled = true;
+      try {
+        if (outcome === "success") this.onSuccess(probe);
+        else if (outcome === "failure") this.onFailure(error, probe);
+      } finally {
+        if (probe !== null && this.probeToken === probe) this.probeToken = null;
+      }
+    };
+    return {
+      succeed: () => finish("success"),
+      fail: (error) => finish("failure", error),
+      cancel: () => finish("cancelled"),
+    };
+  }
+
+  async exec<T>(fn: () => Promise<T>): Promise<T> {
+    const lease = this.begin();
     try {
       const result = await fn();
-      this.onSuccess(probe);
+      lease.succeed();
       return result;
-    } catch (err) {
-      // A fail-fast from a NESTED breaker of the same key shouldn't be counted as
-      // a dependency failure, but each breaker instance is per-key so that cannot
-      // happen here; any thrown error is a real dependency failure.
-      this.onFailure(err, probe);
-      throw err;
-    } finally {
-      // Release only our own claim: a probe presumed lost must not free the
-      // slot belonging to the probe that replaced it.
-      if (probe !== null && this.probeToken === probe) this.probeToken = null;
+    } catch (error) {
+      lease.fail(error);
+      throw error;
     }
   }
 
