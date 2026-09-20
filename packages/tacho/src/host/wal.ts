@@ -294,6 +294,7 @@ export class Wal {
         }
       } catch (error) {
         this.bodyFailure(session, "read", error);
+        throw error;
       }
     }
     const out: TachoBody[] = [];
