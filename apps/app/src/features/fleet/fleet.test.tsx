@@ -28,6 +28,15 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+// The approval cards carry a decision control, which is a client component
+// reading the app router. Fleet itself navigates with links.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+vi.mock("./actions", () => ({
+  resolveApprovalAction: vi.fn(),
+  readApprovalEligibility: vi.fn(),
+}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
