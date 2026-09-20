@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Apply the platform's Atlas migrations to the production Aurora cluster.
+# Apply Atlas migrations and seed platform defaults in production Aurora.
 #
 #   infra/tools/run-db-migrations.sh <packages/database dir> [--apply]
 #
@@ -18,7 +18,9 @@
 #
 # Uses the repository's `ci` Atlas environment, which takes DATABASE_URL and
 # the migration directory and nothing else — no dev database, no drizzle
-# export, so nothing here needs Node or the workspace installed remotely.
+# export. Apply runs also carry a bundled seedPlatform entry and its assets,
+# executed in the same pinned Node container image used by the platform.
+# The app node needs Docker, but no workspace or Node installation.
 #
 # The cluster endpoint is resolved HERE and substituted into the remote
 # script, not looked up on the node: the node's role grants ssm:GetParameter
@@ -81,7 +83,7 @@ atlas version
 mkdir -p /opt/oxagen/db
 cd /opt/oxagen/db
 aws s3 cp "s3://__BUCKET__/_deploy/atlas-migrations.tgz" /tmp/atlas.tgz --region us-east-1
-rm -rf atlas atlas.hcl
+rm -rf atlas atlas.hcl src seed-assets
 tar -xzf /tmp/atlas.tgz -C /opt/oxagen/db
 
 # Tracing OFF before the secret is read, and back on after it is used.
@@ -167,6 +169,12 @@ REMOTE
     [[ -n $dirty_flag ]] && apply_line="$apply_line $dirty_flag"
     [[ -n $order_flag ]] && apply_line="$apply_line $order_flag"
     tail="$apply_line
+# Seed only after a successful migration. Pass the credential by environment
+# name so shell tracing never expands it into SSM output.
+docker run --rm --network host --read-only \
+  --mount type=bind,src=/opt/oxagen/db,dst=/seed,readonly \
+  --env DATABASE_URL --env NODE_ENV=production \
+  node:24.21.0-alpine node /seed/src/platform-seed.mjs
 echo \"--- applied; status after apply (expect no pending) ---\"
 atlas migrate status --env ci"
   else
@@ -403,8 +411,16 @@ rm -f "$TARBALL"
 # directory, so those sidecars land as unknown migration files and every
 # command fails with "checksum mismatch" naming a `._` file that was never
 # authored.
-COPYFILE_DISABLE=1 tar --exclude '._*' --exclude '.DS_Store' \
-  -czf "$TARBALL" -C "$DB_DIR" atlas atlas.hcl
+if [[ $APPLY == "1" ]]; then
+  REPO_ROOT=$(cd "$DB_DIR/../.." && pwd)
+  node "$REPO_ROOT/tools/scripts/build-platform-seed.mjs"
+  COPYFILE_DISABLE=1 tar --exclude '._*' --exclude '.DS_Store' \
+    -czf "$TARBALL" -C "$DB_DIR" atlas atlas.hcl \
+    -C "$DB_DIR/dist/platform-seed" src seed-assets
+else
+  COPYFILE_DISABLE=1 tar --exclude '._*' --exclude '.DS_Store' \
+    -czf "$TARBALL" -C "$DB_DIR" atlas atlas.hcl
+fi
 echo "==> packaged $(find "$DB_DIR/atlas/migrations" -name '*.sql' | wc -l | tr -d ' ') migrations"
 
 aws s3 cp "$TARBALL" "s3://$BUCKET/_deploy/atlas-migrations.tgz" --only-show-errors
