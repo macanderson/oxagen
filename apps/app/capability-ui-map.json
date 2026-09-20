@@ -44,13 +44,12 @@
       "verifiedBy": "session-7172f7a7-in-app-assistant"
     },
     "attach_github_installation": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Main repository — “Use this installation” on the picked GitHub account (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › GitHub connection and main repository — “Use this installation” on the picked GitHub account (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "authorize_cli": {
       "route": "/cli/authorize",
@@ -61,13 +60,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "bind_main_repository": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Main repository — “Bind as main repo” on the picked repository (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts); also the onboarding gate's provisional banner at /[org]/[ws]/register/[step] (features/onboarding/ui/bind-repository.tsx, features/onboarding/actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › GitHub connection and main repository — “Bind as main repo” on the picked repository (features/repositories/main-repository.tsx, features/repositories/actions.ts); also the onboarding gate's provisional banner at /[org]/[ws]/register/[step] (features/onboarding/ui/bind-repository.tsx, features/onboarding/actions.ts)",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "change_member_role": {
       "route": "/[org]",
@@ -298,13 +296,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "get_main_repository": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings beside the workspace switcher on every workspace page — the shell's Workspace settings dialog, whose Main repository panel invokes get_main_repository (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › GitHub connection and main repository — the panel every visit reads (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "get_mandate": {
       "route": "/[org]/[ws]/mandates/[mandate]",
@@ -436,13 +433,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "link_repository": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Repositories — “Link” on the owner/name typed into “Link a repository” (features/shell/workspace-repositories.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-m0-workspace-repositories"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › “Link” on a Not linked row, or on owner/name typed into “Link a repository by name” (features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "list_agents": {
       "route": "/[org]/[ws]/register/[step]",
@@ -501,13 +497,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_github_installations": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Main repository — the installation picker, shown when GitHub is authorized and no installation is attached to this workspace, invokes list_github_installations (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › GitHub connection and main repository — the installation picker, shown when GitHub is authorized and no installation is attached (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "list_iam_roles": {
       "route": "/[org]/roles",
@@ -526,13 +521,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_installation_repositories": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Main repository — the repository picker, shown once a GitHub App installation is attached and no main repo is bound, invokes list_installation_repositories (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › the Not linked table of repositories the installation reaches, and the main-repository picker (features/repositories/bound-repositories.tsx, features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "list_invoices": {
       "route": "/[org]/billing",
@@ -615,13 +609,12 @@
       "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT"
     },
     "list_repositories": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Repositories — the list every open reads, main first with its role, GitHub link, approved default ref and connection state (features/shell/workspace-repositories.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-m0-workspace-repositories"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › the repository table every visit reads, main first, with role, production branch, .oxagen/, events and symbols (features/repositories/repositories.tsx, features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "list_runs": {
       "route": "/[org]/[ws]",
@@ -917,13 +910,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "unlink_repository": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Repositories — “Unlink”, then “Unlink it”, on a linked row; the main row offers none (features/shell/workspace-repositories.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-m0-workspace-repositories"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › “Unlink”, then “Unlink it”, on a linked row; the main row offers none (features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "update_mandate_limits": {
       "route": "/[org]/[ws]/mandates/[mandate]",
@@ -957,6 +949,30 @@
       "proof": "apps/app/src/features/organization/model-funding-form.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-343b879e-byok"
+    },
+    "get_repository_tree": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › the .oxagen/ column, the repository dialog opened by “Details”, and the Configuration tab (features/repositories/repositories.tsx, features/repositories/repository-dialog.tsx, features/repositories/configuration.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
+    },
+    "open_init_pr": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › “Add Oxagen to a repository” › the five-step init wizard › “Open pull request” (features/repositories/init-wizard.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
+    },
+    "set_production_branch": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › “Details” › Production branch — “Make <branch> the production branch” or “Set production branch” (features/repositories/repository-dialog.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "propose_agent": {
       "route": "/[org]/[ws]/agents",

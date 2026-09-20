@@ -20,7 +20,7 @@ A senior engineer who has read the logs and is telling you what happened.
 
 | Surface | Tone shift | Example |
 |---|---|---|
-| Website hero | Most compressed. One claim, one sentence of how, one action. | Mission Control for agent operators. Give each agent an identity. Set its authority, budget, tools, and skills. Explore Mission Control. |
+| Website hero | Most compressed. One claim, one sentence of how, one action. | Your agents are a workforce now. Manage them like one. Give each agent an identity. Set its authority, budget, tools, and skills. Explore Oxagen. |
 | Product page | Explains the mechanism in order. Reads like a good README. States the scope beside each control. | see `examples.md` |
 | Docs | Second person, imperative, one step per sentence. | Open the Agents page and choose Wrap Claude Code. Run a prompt. The page turns to connected when the first frame arrives. |
 | UI strings | Terse, present tense, never a full sentence where a fragment reads faster. | Denied by rule `no-push-main`. Waiting on Priya, rule `release-branch`. recorded, not enforced. |
@@ -36,7 +36,7 @@ Each pair shows the same idea in the wrong voice and then in Oxagen's. No "After
 
 **Enthusiasm**
 Before: We're excited to introduce a revolutionary new way to manage your AI agents!
-After: Mission Control for agent operators.
+After: Your agents are a workforce now. Manage them like one.
 
 **Abstraction**
 Before: Oxagen provides comprehensive governance and observability for autonomous agents across your organization.
@@ -127,8 +127,10 @@ After: Review how agent identities map to your access controls and what each gov
 
 - oxagen, stella: lowercase as wordmarks and in logos.
 - Oxagen, Stella: capitalized as names in prose.
-- Mission Control: capitalized, no hyphen. The product and the experience.
+- workforce management for autonomous agents: lowercase in prose. The product and the lead.
 - agent control plane: lowercase in prose. The technical category.
+- operator console: lowercase in prose, descriptive, not a brand name. Oxagen is the name of the place.
+- Mission Control: retired 2026-09-19. GitHub's control-plane product carries the name. It appears only where this kit records that it is retired.
 - Fleet, Spend, Access: capitalized as page names. fleet, lowercase, as the operator's word for enrolled agents.
 - dod: lowercase, always, as a noun. "The dod held." Never DoD, never Dod, never "the DOD file."
 - Claude Code, Codex CLI: as their owners write them.

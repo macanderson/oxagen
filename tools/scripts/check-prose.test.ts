@@ -86,7 +86,23 @@ describe("check-prose", () => {
   // The approved replacement must not trip the scanner, or the fix for one of
   // these findings would fail the gate that exists to enforce it.
   it("leaves the approved headline alone", () => {
-    expect(findHits("Mission Control for agent operators.", ".mdx")).toEqual(
+    expect(
+      findHits("Workforce management for autonomous agents.", ".mdx"),
+    ).toEqual([]);
+    expect(
+      findHits(
+        "Your agents are a workforce now. Manage them like one.",
+        ".mdx",
+      ),
+    ).toEqual([]);
+  });
+
+  it("flags the retired product name but not a citation of the document", () => {
+    expect(findHits("We ship Mission Control today.", ".mdx")[0].kind).toBe(
+      "avoid: Mission Control",
+    );
+    expect(findHits("See the Mission Control spec 14.1.", ".mdx")).toEqual([]);
+    expect(findHits("See the Mission Control mockup 2821.", ".mdx")).toEqual(
       [],
     );
   });

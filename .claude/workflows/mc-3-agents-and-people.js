@@ -1,6 +1,6 @@
 export const meta = {
   name: 'mc-3-agents-and-people',
-  description: 'Mission Control session 3: agent roles assigned from the page, enrollment revoked and minted from the page, toolbelt input schemas carried on the contract, budgets read on the agent, and invitations sent from Organization; one PR',
+  description: 'Rev1 app session 3: agent roles assigned from the page, enrollment revoked and minted from the page, toolbelt input schemas carried on the contract, budgets read on the agent, and invitations sent from Organization; one PR',
   whenToUse: 'Run after mc-0-rebaseline; independent of sessions 1 and 2. Advances #2956 and #2964.',
   phases: [
     { title: 'Scout', detail: 'confirm each lane is still open on main' },
@@ -193,7 +193,7 @@ async function runSession(session, specHint) {
 const session = {
   id: '3',
   title: 'Agents and people: roles, enrollment, schemas, budgets, invitations',
-  prTitle: 'Mission Control: roles and enrollment as writes on the agent page, toolbelt schemas, budgets on the agent, and send an invitation',
+  prTitle: 'Oxagen app: roles and enrollment as writes on the agent page, toolbelt schemas, budgets on the agent, and send an invitation',
   issueHint: 'Read #2956 and #2964; use Refs unless a DoD is fully done. Label closes-nothing otherwise.',
   lanes: [
     {

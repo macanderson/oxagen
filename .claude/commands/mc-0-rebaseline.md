@@ -1,5 +1,5 @@
 ---
-description: Mission Control session 0: re-baseline the gap record at head, record the 2026-09-14 cuts in an ADR, make the parity gate check its proofs, and bring PRs #3479 and #3459 to green. Runs the mc-0-rebaseline workflow.
+description: Rev1 app session 0: re-baseline the gap record at head, record the 2026-09-14 cuts in an ADR, make the parity gate check its proofs, and bring PRs #3479 and #3459 to green. Runs the mc-0-rebaseline workflow.
 ---
 
 # /mc-0-rebaseline

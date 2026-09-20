@@ -18,5 +18,10 @@ sites = {
     bucket          = "oxagen-web-916294258235"
     distribution_id = "E2NYX5PXV8HXB3"
   }
+  # tofu -chdir=stacks-new/oxagen output downloads
+  oxagen-downloads = {
+    bucket          = "oxagen-downloads-916294258235"
+    distribution_id = "E64Z21DV86F7E"
+  }
 }
 

@@ -154,7 +154,9 @@ lead, an entry on the Attio list "Inbound lead nurture" with Asset set to the
 edition requested. The row in
 `cms.leads` keeps the Attio record id and the last sync error, and
 `pnpm --filter @oxagen/api cms:crm-backfill` re-syncs any lead Attio has not
-confirmed (ADR-111).
+confirmed (ADR-111). In production the same script ships in the API release
+as `cms-crm-backfill.cjs`: `docker exec oxagen-api node cms-crm-backfill.cjs`
+on the app node.
 
 The ebook gate is a marketing gate, not access control: form success mints a
 single-use `/read?e=...&c=` link server-side and emails it. The reader never

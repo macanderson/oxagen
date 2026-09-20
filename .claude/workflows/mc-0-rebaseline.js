@@ -1,6 +1,6 @@
 export const meta = {
   name: 'mc-0-rebaseline',
-  description: 'Mission Control session 0: re-baseline the gap record, record the 2026-09-14 cuts in an ADR, close the parity integrity holes, and bring the two open Mission Control PRs to green; one PR',
+  description: 'Rev1 app session 0: re-baseline the gap record, record the 2026-09-14 cuts in an ADR, close the parity integrity holes, and bring the two open rev1 app PRs to green; one PR',
   whenToUse: 'Run first. It unblocks sessions 1 to 5 and rewrites docs/mission-control/GAP-INVENTORY.md against head.',
   phases: [
     { title: 'Scout', detail: 'confirm each lane is still open on main' },
@@ -193,7 +193,7 @@ async function runSession(session, specHint) {
 const session = {
   id: '0',
   title: 'Re-baseline the gap record and the parity gate',
-  prTitle: 'Mission Control: re-baseline the gap inventory at head, record the 2026-09-14 cuts, and make the parity gate check its proofs',
+  prTitle: 'Oxagen app: re-baseline the gap inventory at head, record the 2026-09-14 cuts, and make the parity gate check its proofs',
   issueHint: 'This PR closes no issue by design: label closes-nothing. Refs #2592, #2950, #2957, #3286 where the docs cite them.',
   lanes: [
     {
@@ -202,7 +202,7 @@ const session = {
       checks: ['GAP-INVENTORY.md still says Mandate detail Missing', 'ARCHITECTURE.md §1.2 still claims a skills/[[...tab]] catch-all', 'no ADR records the 2026-09-14 scope review', 'docs/capabilities lacks files for approval_rule.{list,set,delete,enabled.set}, approval.auto_eligibility.get, mandate.{grant,revoke,limits.update,request,list,get}, context.steering.freshness'],
       issues: ['#2957', '#3286', '#2592'],
       task: `(a) Rewrite docs/mission-control/GAP-INVENTORY.md against origin/main: apply every correction in docs/audits/2026-09-19-mission-control-gap-inventory-review.md §1 to §3 and §5, keep the page-by-page table shape, add a "Class" column (UI-only, UI plus backend, backend, cut) per row, take the page set from apps/app/src/app with ARCHITECTURE.md §1.2 as the map, drop the scorecard, and name the owning issue per row. Keep the "Cut" rows and cite apps/app/ARCHITECTURE.md §9 (2026-09-14, 2026-09-15, 2026-09-18 entries) and ADR-062 for each.
-(b) Write one ADR, next free number after the highest in docs/adr, titled "The 2026-09-14 scope review: what Mission Control rev1 does not build", recording the ten cuts and the two reversals (Audit page 2026-09-15 #3097, Model funding 2026-09-18) with their ARCHITECTURE.md §9 sources. Status Accepted, decided by the maintainer on the dates given. Follow the shape of docs/adr/ADR-095.
+(b) Write one ADR, next free number after the highest in docs/adr, titled "The 2026-09-14 scope review: what the rev1 app does not build", recording the ten cuts and the two reversals (Audit page 2026-09-15 #3097, Model funding 2026-09-18) with their ARCHITECTURE.md §9 sources. Status Accepted, decided by the maintainer on the dates given. Follow the shape of docs/adr/ADR-095.
 (c) In docs/specs/mission-control/spec.md add a one-line status note under §2.1 that legal hold, reconciliation, and the ontology engine are cut for rev1 per that ADR. Do not rewrite the spec.
 (d) In apps/app/ARCHITECTURE.md §1.2 correct the Skills row (no catch-all route exists; the page is one section; Phase 2 moves it under Steering per ADR-097) and the Mandate row's "not yet built" sentence (line ~90), and add a decision-log line dated today.
 (e) Write the twelve missing docs/capabilities/<stem>.md files (stem = the contract file's dotted stem) in the shape of an existing one such as docs/capabilities/kill_switch.set.md, with the Surfaces line matching each contract, and add them to docs/capabilities/_index.md. Run pnpm docs:schemas if it owns any of them and commit its output.`,
@@ -219,7 +219,7 @@ const session = {
       done: 'node tools/scripts/check_ui_parity.mjs --strict passes, fails on a dangling or untracked proof, and validates also entries (the new tests prove all three); both bindings have real proofs.',
     },
     {
-      id: 'prs', integrate: false, title: 'Bring the two open Mission Control PRs to green and report merge readiness (sidecar: never merged into this session)',
+      id: 'prs', integrate: false, title: 'Bring the two open rev1 app PRs to green and report merge readiness (sidecar: never merged into this session)',
       owns: ['the branches of PR #3479 (mc/creation-wizards) and PR #3459 (mc/repositories-page) only'],
       checks: ['PR #3479 state and CI', 'PR #3459 state and CI', 'whether either has merged already'],
       issues: [],

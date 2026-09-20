@@ -7,7 +7,7 @@ Follow these entry points to inspect the current implementation. Counts, package
 | Surface | Entry point | Role |
 |---|---|---|
 | API | [app.ts](../../apps/api/src/app.ts) | Hono routes, middleware, and webhooks |
-| App | [App Router tree](../../apps/app/src/app/) and [architecture](../../apps/app/ARCHITECTURE.md) | Mission Control pages and server actions |
+| App | [App Router tree](../../apps/app/src/app/) and [architecture](../../apps/app/ARCHITECTURE.md) | the operator console's pages and server actions |
 | MCP | [src](../../apps/mcp/src/) | MCP tools and caller context |
 | CLI | [index.ts](../../apps/cli/src/index.ts) | Governance operations over the platform API |
 | Documentation site | [apps/docs](../../apps/docs/) | Fumadocs content and application |

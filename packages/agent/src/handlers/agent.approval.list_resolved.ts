@@ -54,7 +54,9 @@ type QueriedRow = {
   ruleIds: string[];
   autoRuleId: string | null;
   resolvedReasons: string[];
-  message: { conversation: { user: { publicId: string } | null } | null } | null;
+  message: {
+    conversation: { user: { publicId: string } | null } | null;
+  } | null;
   resolvedBy: { publicId: string } | null;
   mandate: { publicId: string } | null;
 };
@@ -224,7 +226,9 @@ export async function agentApprovalListResolvedHandler(
   const page = rows.slice(0, input.limit);
   const last = page[page.length - 1];
   return {
-    items: page.map((row) => toResolvedApprovalListItem(toResolvedApprovalListRow(row))),
+    items: page.map((row) =>
+      toResolvedApprovalListItem(toResolvedApprovalListRow(row)),
+    ),
     nextCursor:
       rows.length > input.limit && last
         ? encodeResolvedCursor({

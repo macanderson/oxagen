@@ -7,12 +7,12 @@ they are, keep compiling, and keep their tests. What it loses is reach: it is no
 longer offered to a user, an agent or an API caller.
 
 This file is the reference for that distinction. `docs/specs/mission-control/spec.md`
-Appendix E decides *which* features come off the surfaces for Mission Control
-rev1; this file records *what that means for the code* and where the code is, so
-a later session reshaping the product can find a capability it needs rather than
-rebuild one that already exists.
+Appendix E decides *which* features come off the surfaces for rev1; this file
+records *what that means for the code* and where the code is, so a later session
+reshaping the product can find a capability it needs rather than rebuild one that
+already exists.
 
-**Status:** opened 2026-09-16, ahead of the Mission Control cutover
+**Status:** opened 2026-09-16, ahead of the rev1 app cutover
 (`docs/specs/mission-control/plan.md`, integration branch `app-rebuild`). Every
 path below exists on `main` today.
 

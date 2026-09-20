@@ -63,6 +63,17 @@ pnpm --filter @oxagen/desktop test:coverage  # the same with the 90% ratchet
 
 ## Release
 
+A release is one button: Actions, Release, Run workflow, pick `patch`,
+`minor` or `major` (CONTRIBUTING.md, Release Process). The merge of the
+release PR pushes `desktop-v<version>`, and `.github/workflows/desktop.yml`
+does the rest: four builds, then the `publish` job copies the installers and
+`SHA256SUMS.txt` to https://downloads.oxagen.sh/desktop/<version>/, rewrites
+the listing page, opens the GitHub release with the bare `tacho` and `oxagen`
+binaries attached, and moves the updater feed. Nothing below is needed for
+that path.
+
+For a build made some other way:
+
 ```
 gh workflow run desktop.yml --ref main                       # build all four targets in CI
 pnpm --filter @oxagen/desktop publish:downloads --run <id>   # CI artifacts → https://downloads.oxagen.sh/

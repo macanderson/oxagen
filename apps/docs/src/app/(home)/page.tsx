@@ -10,7 +10,7 @@ import { HexField } from "@/components/ui/hex-field";
 export const metadata: Metadata = {
   title: "Oxagen docs: the agent control plane",
   description:
-    "Oxagen governs the agents an enterprise runs, autonomous and supervised alike: one mandate per agent, checked on the calls routed through Oxagen, and one fleet on one page. Docs for the CLI, the REST API, the MCP server, and Mission Control.",
+    "Oxagen governs the agents an enterprise runs, autonomous and supervised alike: one mandate per agent, checked on the calls routed through Oxagen, and one fleet on one page. Docs for the CLI, the REST API, the MCP server, and the operator console.",
 };
 
 /* What the control plane holds, mirrored from docs.oxagen.sh/docs. */
@@ -110,13 +110,13 @@ export default function HomePage(): ReactNode {
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              Mission Control for{" "}
-              <span className="lp-grad-text">agent operators</span>.
+              Workforce management for{" "}
+              <span className="lp-grad-text">autonomous agents</span>.
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Set each agent&apos;s identity, authority, budget, tools, and skills.
-              Inspect its recorded work in Mission Control. These docs cover the
+              Set each agent&apos;s identity, authority, budget, tools, and
+              skills. Inspect its recorded work in Oxagen. These docs cover the
               CLI, REST API, and MCP surfaces whose capability calls pass
               through the{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">

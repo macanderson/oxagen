@@ -31,7 +31,7 @@ export async function readMainRepository(
   const read = await kernelRead(ctx, {
     contract: repositoryMainGet,
     input: {},
-    page: "workspaceSettings",
+    page: "repositories",
   });
   const result = readToActionResult(read);
   if (!result.ok) return result;

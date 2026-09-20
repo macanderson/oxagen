@@ -42,7 +42,11 @@ success, `crm_sync_error` on failure. The client retries 429 and 5xx with
 backoff and honours `Retry-After`. `pnpm --filter @oxagen/api
 cms:crm-backfill` re-runs the same sync for every row with `crm_synced_at`
 null, oldest first, so an outage or a key rotation is recovered with one
-command instead of a database export. Every resubmission clears
+command instead of a database export. The API release bundles that script
+beside the server (`dist/cms-crm-backfill.cjs`), so in production it runs
+as `docker exec oxagen-api node cms-crm-backfill.cjs` on the app node, with
+the container's own environment; nothing else in the account holds
+`DATABASE_URL` and `ATTIO_API_KEY` together. Every resubmission clears
 `crm_synced_at` (the record id stays), so a lead who comes back is pending
 again until the CRM has seen the new version.
 

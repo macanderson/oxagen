@@ -128,6 +128,12 @@ export const AVOID = [
   "stop wasting money",
   "explain your ai bill",
   "mission control for your autonomous agents",
+  // Retired as the product name on 2026-09-19 (ADR-113): GitHub now ships a
+  // control-plane product called Mission Control. Say Oxagen for the app and
+  // the operator console in prose. A citation of a document by its title
+  // ("Mission Control spec", "Mission Control mockup") names a file, not the
+  // product, and is allowed by CITED_AFTER below.
+  "mission control",
   // Unqualified key-custody claims. positioning.md limits custody to mediated
   // connections; the agent still holds its own identity. These phrases came
   // back on the product page meta and Twitter description, so the scanner holds
@@ -143,6 +149,9 @@ const AVOID_RE = new RegExp(
     ")(?![\\w-])",
   "gi",
 );
+
+/** The words that turn a retired product name into a document citation. */
+const CITED_AFTER = /^\s+(spec|mockup)\b/i;
 
 /** Strip the parts of a file that are not prose, keeping line count intact. */
 export function proseOf(text, ext) {
@@ -203,8 +212,13 @@ export function findHits(text, ext) {
       });
     if (/[A-Za-z0-9)]!(?=\s|$|["'])/.test(line))
       hits.push({ line: i + 1, kind: "exclamation", text: line.trim() });
-    for (const m of line.matchAll(AVOID_RE))
+    for (const m of line.matchAll(AVOID_RE)) {
+      const cited =
+        /^mission control$/i.test(m[1]) &&
+        CITED_AFTER.test(line.slice(m.index + m[1].length));
+      if (cited) continue;
       hits.push({ line: i + 1, kind: `avoid: ${m[1]}`, text: line.trim() });
+    }
   });
   return hits;
 }

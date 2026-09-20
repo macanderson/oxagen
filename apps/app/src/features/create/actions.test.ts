@@ -73,7 +73,7 @@ describe("readMainRepository", () => {
     expect(kernelRead).toHaveBeenCalledWith(CTX, {
       contract: repositoryMainGet,
       input: {},
-      page: "workspaceSettings",
+      page: "repositories",
     });
     expect(result).toEqual({
       ok: true,

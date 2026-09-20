@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import {
+  constraintEffectSchema,
+  recordForceSchema,
+  recordKindSchema,
+} from "./context.steering.shared";
 
 // Provenance entries reuse the ContextProvenanceV1 field vocabulary
 // (packages/run-evidence/src/contextgraph.ts) rather than inventing a
@@ -15,11 +20,46 @@ const provenanceEntry = z
   })
   .strict();
 
+// The base shape, exported so a caller that needs individual fields (e.g.
+// `.shape.title`) can reach them without unwrapping the `superRefine` below —
+// `ZodEffects` (what `.superRefine` returns) drops the `.shape` accessor that
+// a plain `ZodObject` carries.
+export const contextRecordPublishShape = z
+  .object({
+    record_id: z
+      .string()
+      .min(1)
+      .describe(
+        "The record's stable id — the .stella/rules/<record_id>.toml file stem; the workspace-unique key",
+      ),
+    title: z.string().min(1).describe("Human-readable record title"),
+    body: z
+      .string()
+      .min(1)
+      .describe("The canonical record body (one TOML record per file)"),
+    kind: recordKindSchema.describe("The kind this version's body declares"),
+    force: recordForceSchema.describe(
+      "How hard the record steers: must, should, may, or info — only must/should ever reach an agent",
+    ),
+    /** Required on a constraint, refused on every other kind. */
+    constraintEffect: constraintEffectSchema.optional(),
+    statement: z
+      .string()
+      .min(1)
+      .max(2000)
+      .describe("The single-sentence claim the record makes"),
+    provenance: z
+      .array(provenanceEntry)
+      .optional()
+      .describe("Where this record came from (ContextProvenanceV1 vocabulary)"),
+  })
+  .strict();
+
 export const contextRecordPublish = registerCapability({
   name: "publish_context_record",
   domain: "context",
   description:
-    "Publish a steering context record into the workspace agent-asset registry — upserts the agent.context_records row by (workspace, record_id) and creates a new immutable version row when the canonical body changed. Idempotent on an unchanged body. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout.",
+    "Publish a steering context record into the workspace agent-asset registry — upserts the agent.context_records row by (workspace, record_id) and creates a new immutable version row when the canonical body changed. Idempotent on an unchanged body. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout. Requires the same classification (kind, force, statement) a merged Context PR carries (#3302), because readWorkspaceSteering only ever delivers a must/should record to an agent — a record with no force sits in the registry and never steers anything.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "docs", "unit"],
@@ -32,27 +72,22 @@ export const contextRecordPublish = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Admin: "allow" },
   },
-  input: z
-    .object({
-      record_id: z
-        .string()
-        .min(1)
-        .describe(
-          "The record's stable id — the .stella/rules/<record_id>.toml file stem; the workspace-unique key",
-        ),
-      title: z.string().min(1).describe("Human-readable record title"),
-      body: z
-        .string()
-        .min(1)
-        .describe("The canonical record body (one TOML record per file)"),
-      provenance: z
-        .array(provenanceEntry)
-        .optional()
-        .describe(
-          "Where this record came from (ContextProvenanceV1 vocabulary)",
-        ),
-    })
-    .strict(),
+  input: contextRecordPublishShape.superRefine((r, ctx) => {
+    if (r.kind === "constraint" && r.constraintEffect === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["constraintEffect"],
+        message: "a constraint declares require or forbid",
+      });
+    }
+    if (r.kind !== "constraint" && r.constraintEffect !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["constraintEffect"],
+        message: "only a constraint carries an effect",
+      });
+    }
+  }),
   output: z
     .object({
       publicId: z.string().describe("Public record ID (ctr_…)"),

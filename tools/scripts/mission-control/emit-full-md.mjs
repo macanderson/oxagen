@@ -53,7 +53,7 @@ const esc = (s) => String(s ?? "").replace(/\|/g, "\\|");
 const code = (xs) =>
   xs?.length ? xs.map((x) => `\`${x}\``).join(" ") : "none";
 
-let md = `# Oxagen Mission Control: traceability matrix
+let md = `# Oxagen Mission Control spec: traceability matrix
 
 Every target tool in Appendix E, traced to the code it replaces, the screen that surfaces it,
 the mockup function that draws it, the tables it touches, and the milestone that ships it.

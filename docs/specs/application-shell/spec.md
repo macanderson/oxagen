@@ -1,6 +1,6 @@
 # Application Shell — Specification
 
-> **Historical design:** This document predates the Mission Control rebuild. It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
+> **Historical design:** This document predates the rev1 app rebuild (ADR-081). It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
 
 Requirements spec for the navigation shell of the v2 app (`apps/app`). Builds on [`../information-architecture/spec.md`](../information-architecture/spec.md). This document defines **how** the IA is presented to users; the IA spec defines what it contains.
 

@@ -987,7 +987,7 @@ export function renderSite(m: Model): SitePage {
     },
     {
       id: "evidence",
-      title: "Evidence ledger and tacho",
+      title: "Evidence ledger and wrapped agents",
       lede: "Execution evidence arrives from agents Oxagen does not run. The ledger stamps, seals and grades it; it never re-runs anything (ADR-043).",
       body: flowsIn("evidence"),
     },

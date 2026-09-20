@@ -11,8 +11,32 @@ import {
   type RepositoryListOutput,
 } from "@oxagen/oxagen/contracts/repository.list";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { isLiveConnectionRow } from "./repository.github-connection";
+
+type EventDelivery = RepositoryListOutput["repositories"][number]["events"];
+
+/**
+ * Whether GitHub can deliver this repository's events, from the connection
+ * row and the installation registry row the list joined. Ordered by what a
+ * person has to do about it: a retired connection needs a re-bind, an
+ * uninstalled or suspended App needs GitHub, a paused connection needs a
+ * resume.
+ */
+export function eventDelivery(row: {
+  connectionLive: boolean;
+  connectionStatus: string | null;
+  installationRowId: string | null;
+  installationSuspendedAt: Date | null;
+  installationDeletedAt: Date | null;
+}): EventDelivery {
+  if (!row.connectionLive) return "retired";
+  if (row.installationRowId === null) return "unknown";
+  if (row.installationDeletedAt !== null) return "uninstalled";
+  if (row.installationSuspendedAt !== null) return "suspended";
+  if (row.connectionStatus === "paused") return "paused";
+  return "installed";
+}
 
 export const repositoryListHandler: CapabilityHandler<
   typeof repositoryList
@@ -29,6 +53,9 @@ export const repositoryListHandler: CapabilityHandler<
         boundAt: schema.repositoryBindingHeads.createdAt,
         connectionStatus: schema.sourceConnections.status,
         connectionDeletedAt: schema.sourceConnections.deletedAt,
+        installationRowId: schema.githubInstallations.id,
+        installationSuspendedAt: schema.githubInstallations.suspendedAt,
+        installationDeletedAt: schema.githubInstallations.deletedAt,
       })
       .from(schema.repositoryBindingHeads)
       .innerJoin(
@@ -45,6 +72,15 @@ export const repositoryListHandler: CapabilityHandler<
           schema.repositoryBindingHeads.connectionId,
         ),
       )
+      // The installation registry is a shared catalog keyed by GitHub's
+      // installation id, which the connection carries in its delivery config.
+      .leftJoin(
+        schema.githubInstallations,
+        eq(
+          schema.githubInstallations.installationId,
+          sql`${schema.sourceConnections.deliveryConfig} ->> 'installationId'`,
+        ),
+      )
       .where(
         and(
           eq(schema.repositoryBindingHeads.orgId, ctx.orgId),
@@ -54,22 +90,26 @@ export const repositoryListHandler: CapabilityHandler<
   );
 
   const repositories = rows
-    .map((r) => ({
-      bindingId: r.bindingId,
-      // The table's CHECK admits only these two; anything else is a schema
-      // the contract does not know, and its output parse refuses it.
-      role: r.role as "main" | "linked",
-      owner: r.owner,
-      name: r.name,
-      fullName: r.fullName,
-      defaultRef: r.defaultRef,
-      htmlUrl: `https://github.com/${r.fullName}`,
-      boundAt: r.boundAt.toISOString(),
-      connectionLive: isLiveConnectionRow({
+    .map((r) => {
+      const connectionLive = isLiveConnectionRow({
         status: r.connectionStatus,
         deletedAt: r.connectionDeletedAt,
-      }),
-    }))
+      });
+      return {
+        bindingId: r.bindingId,
+        // The table's CHECK admits only these two; anything else is a schema
+        // the contract does not know, and its output parse refuses it.
+        role: r.role as "main" | "linked",
+        owner: r.owner,
+        name: r.name,
+        fullName: r.fullName,
+        defaultRef: r.defaultRef,
+        htmlUrl: `https://github.com/${r.fullName}`,
+        boundAt: r.boundAt.toISOString(),
+        connectionLive,
+        events: eventDelivery({ ...r, connectionLive }),
+      };
+    })
     .sort((a, b) =>
       a.role === b.role
         ? a.fullName.localeCompare(b.fullName)

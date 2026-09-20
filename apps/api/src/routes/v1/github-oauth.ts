@@ -1824,7 +1824,7 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   // answer to a question nobody asked.
   const redirectUrl =
     returnTo === "settings"
-      ? `${appBaseUrl}/${orgSlug}/${wsSlug}?settings=repository${GITHUB_ACK[attachOutcome]}`
+      ? `${appBaseUrl}/${orgSlug}/${wsSlug}/repositories?settings=repository${GITHUB_ACK[attachOutcome]}`
       : `${appBaseUrl}/${orgSlug}/${wsSlug}/knowledge/sources?setup=github` +
         (connectionPublicId
           ? `&connectionId=${encodeURIComponent(connectionPublicId)}`

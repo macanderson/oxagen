@@ -112,6 +112,9 @@ import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bin
 import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
 import { repositoryUnlink } from "@oxagen/oxagen/contracts/repository.unlink";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
+import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
+import { repositoryProductionBranchSet } from "@oxagen/oxagen/contracts/repository.production_branch.set";
+import { repositoryInitPrOpen } from "@oxagen/oxagen/contracts/repository.init_pr.open";
 import { tachoEnrollmentTokenCreate } from "@oxagen/oxagen/contracts/tacho.enrollment_token.create";
 import { tachoHostEnroll } from "@oxagen/oxagen/contracts/tacho.host.enroll";
 import { conversationChat } from "@oxagen/oxagen/contracts/conversation.chat";
@@ -255,6 +258,9 @@ import { repositoryMainBindRoute } from "./repository.main.bind";
 import { repositoryLinkRoute } from "./repository.link";
 import { repositoryUnlinkRoute } from "./repository.unlink";
 import { repositoryListRoute } from "./repository.list";
+import { repositoryTreeGetRoute } from "./repository.tree.get";
+import { repositoryProductionBranchSetRoute } from "./repository.production_branch.set";
+import { repositoryInitPrOpenRoute } from "./repository.init_pr.open";
 import { tachoEnrollmentTokenCreateRoute } from "./tacho.enrollment_token.create";
 import { tachoHostEnrollRoute } from "./tacho.host.enroll";
 import { toolDeclarationPublishRoute } from "./tool.declaration.publish";
@@ -1041,7 +1047,15 @@ const ROUTES: ThinRoute[] = [
     route: contextRecordPublishRoute as unknown as Hono<never>,
     method: "POST",
     capability: contextRecordPublish.name,
-    body: { record_id: "no-raw-db", title: "No raw db()", body: "[rule]\n" },
+    // #3302: kind/force/statement are required on every publish.
+    body: {
+      record_id: "no-raw-db",
+      title: "No raw db()",
+      body: "[rule]\n",
+      kind: "rule",
+      force: "should",
+      statement: "No raw db() calls in handlers.",
+    },
     invalidBody: { record_id: "no-raw-db", title: "", body: "x" },
     status: 200,
   },
@@ -1246,6 +1260,41 @@ const ROUTES: ThinRoute[] = [
     invalidBody: { bindingId: "not-a-binding" },
     jsonGuard: true,
     status: 200,
+  },
+  {
+    file: "repository.tree.get",
+    route: repositoryTreeGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: repositoryTreeGet.name,
+    body: { bindingId: "rpb_0a1b2c" },
+    invalidBody: { bindingId: "not-a-binding" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "repository.production_branch.set",
+    route: repositoryProductionBranchSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: repositoryProductionBranchSet.name,
+    body: { bindingId: "rpb_0a1b2c", branch: "release/2026" },
+    invalidBody: { bindingId: "rpb_0a1b2c", branch: "has space" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "repository.init_pr.open",
+    route: repositoryInitPrOpenRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: repositoryInitPrOpen.name,
+    body: {
+      bindingId: "rpb_0a1b2c",
+      governanceMode: "team",
+      workspaceToml: 'schema = "oxagen-workspace/v0.1"',
+      governanceToml: 'mode = "team"',
+    },
+    invalidBody: { bindingId: "rpb_0a1b2c", governanceMode: "lax" },
+    jsonGuard: true,
+    status: 201,
   },
   {
     file: "repository.list",

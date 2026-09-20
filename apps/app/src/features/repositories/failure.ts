@@ -1,22 +1,20 @@
-// The sentence a refused Workspace settings read or write shows. The kernel
+// The sentence a refused Repositories page read or write shows. The kernel
 // seam classified the refusal and put the handler's reason in `code` (§3.2);
 // every reason `get_main_repository`, `list_installation_repositories`,
 // `list_github_installations`, `attach_github_installation`,
-// `bind_main_repository`, `list_repositories`, `link_repository` and
-// `unlink_repository` can give has its own sentence, and any other code is
-// printed as recorded rather than collapsed into "something went wrong".
+// `bind_main_repository`, `list_repositories`, `link_repository`,
+// `unlink_repository`, `get_repository_tree`, `set_production_branch` and
+// `open_init_pr` can give has its own sentence, and any other code is printed
+// as recorded rather than collapsed into "something went wrong".
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 
-export type WorkspaceSettingsFailure = Exclude<
-  ActionResult<unknown>,
-  { ok: true }
->;
+export type RepositoriesFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
-export function useWorkspaceSettingsFailure(): (
-  failure: WorkspaceSettingsFailure,
+export function useRepositoriesFailure(): (
+  failure: RepositoriesFailure,
 ) => string {
-  const t = useTranslations("workspaceSettings.failure");
+  const t = useTranslations("repositories.failure");
   return (failure) => {
     switch (failure.reason) {
       case "denied":
@@ -49,6 +47,25 @@ export function useWorkspaceSettingsFailure(): (
             return t("mainRepoUnlinkRefused");
           case "repository_not_linked":
             return t("repositoryNotLinked");
+          // The production branch and the init pull request (§10.2, §11.4).
+          case "branch_not_found":
+            return t("branchNotFound");
+          case "production_branch_missing":
+            return t("productionBranchMissing");
+          case "production_branch_is_init_branch":
+            return t("productionBranchIsInitBranch");
+          case "oxagen_tree_exists":
+            return t("oxagenTreeExists");
+          case "governance_toml_invalid":
+            return t("governanceTomlInvalid");
+          case "workspace_toml_invalid":
+            return t("workspaceTomlInvalid");
+          case "secret_found":
+            return t("secretFound");
+          case "authority_declared":
+            return t("authorityDeclared");
+          case "github_refused":
+            return t("githubRefused");
           default:
             return t("refused", { code: failure.code });
         }
@@ -66,7 +83,7 @@ export function useWorkspaceSettingsFailure(): (
 }
 
 /** A call that threw before it answered, as the seam would name it. */
-export const UNANSWERED: WorkspaceSettingsFailure = {
+export const UNANSWERED: RepositoriesFailure = {
   ok: false,
   reason: "unavailable",
   code: "action_failed",

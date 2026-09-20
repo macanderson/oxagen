@@ -424,10 +424,13 @@ after the registered name separately when their contract uses a dotted stem.
 | [attach_github_installation](repository.installation.attach.md) | [repository.installation.attach.ts](../../packages/oxagen/src/contracts/repository.installation.attach.ts) | api |
 | [bind_main_repository](repository.main.bind.md) | [repository.main.bind.ts](../../packages/oxagen/src/contracts/repository.main.bind.ts) | api |
 | [get_main_repository](repository.main.get.md) | [repository.main.get.ts](../../packages/oxagen/src/contracts/repository.main.get.ts) | api, mcp |
+| [get_repository_tree](repository.tree.get.md) | [repository.tree.get.ts](../../packages/oxagen/src/contracts/repository.tree.get.ts) | api, mcp, cli |
 | [link_repository](repository.link.md) | [repository.link.ts](../../packages/oxagen/src/contracts/repository.link.ts) | api, mcp, cli |
 | [list_github_installations](repository.installation.candidates.md) | [repository.installation.candidates.ts](../../packages/oxagen/src/contracts/repository.installation.candidates.ts) | api, mcp |
 | [list_installation_repositories](repository.installation.list.md) | [repository.installation.list.ts](../../packages/oxagen/src/contracts/repository.installation.list.ts) | api, mcp |
 | [list_repositories](repository.list.md) | [repository.list.ts](../../packages/oxagen/src/contracts/repository.list.ts) | api, mcp, cli |
+| [open_init_pr](repository.init_pr.open.md) | [repository.init_pr.open.ts](../../packages/oxagen/src/contracts/repository.init_pr.open.ts) | api, mcp, cli |
+| [set_production_branch](repository.production_branch.set.md) | [repository.production_branch.set.ts](../../packages/oxagen/src/contracts/repository.production_branch.set.ts) | api, mcp, cli |
 | [unlink_repository](repository.unlink.md) | [repository.unlink.ts](../../packages/oxagen/src/contracts/repository.unlink.ts) | api, mcp, cli |
 
 ## Router

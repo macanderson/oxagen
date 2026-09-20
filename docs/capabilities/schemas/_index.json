@@ -1,5 +1,5 @@
 {
-  "generatedCount": 331,
+  "generatedCount": 334,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1396,6 +1396,18 @@
       "consumes": []
     },
     {
+      "name": "get_repository_tree",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_routing_policy",
       "domain": "router",
       "surfaces": [
@@ -2474,6 +2486,18 @@
       "consumes": []
     },
     {
+      "name": "open_init_pr",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "parse_memory_import",
       "domain": "agent",
       "surfaces": [
@@ -3301,6 +3325,18 @@
     {
       "name": "set_price_entry",
       "domain": "cost",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_production_branch",
+      "domain": "repository",
       "surfaces": [
         "api",
         "mcp",

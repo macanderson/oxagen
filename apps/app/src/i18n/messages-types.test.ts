@@ -58,7 +58,7 @@ describe("gen-messages-types", () => {
   it("fails the check when a catalog gained a key the file does not type (negative)", () => {
     writeCatalog({ app: { name: "Oxagen" } });
     run([], dir);
-    writeCatalog({ app: { name: "Oxagen", tagline: "Mission Control" } });
+    writeCatalog({ app: { name: "Oxagen", tagline: "Workforce management" } });
     expect(run(["--check"], dir)).toBe(1);
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining(`${MESSAGES_TYPES_FILE} is stale`),

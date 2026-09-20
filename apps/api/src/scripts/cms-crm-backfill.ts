@@ -1,7 +1,12 @@
 /**
  * Push every website lead the CRM has not confirmed into Attio.
  *
- *   pnpm --filter @oxagen/api cms:crm-backfill [--limit N]
+ *   pnpm --filter @oxagen/api cms:crm-backfill [--limit N]        (a laptop)
+ *   docker exec oxagen-api node cms-crm-backfill.cjs [--limit N]  (the node)
+ *
+ * build-node.mjs bundles this file beside server.cjs, so on the app node it
+ * runs inside the API container with the container's own environment, which
+ * is where production's DATABASE_URL and ATTIO_API_KEY live.
  *
  * Reads cms.leads where crm_synced_at is null, oldest first, and runs the
  * same sync the form handler runs (lib/cms/crm-sync.ts). Needs ATTIO_API_KEY
