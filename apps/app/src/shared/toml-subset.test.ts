@@ -50,6 +50,84 @@ describe("parseTomlSubset", () => {
     });
   });
 
+  it("applies escapes and the line-ending backslash inside a multi-line string, as TOML does", () => {
+    expect(
+      parseTomlSubset(
+        'body = """\nPath:\\\\deploy says \\"go\\".\nA fence \\""" inside.\\\n"""\nnext = 1\n',
+      ),
+    ).toEqual({
+      ok: true,
+      doc: {
+        body: 'Path:\\deploy says "go".\nA fence """ inside.',
+        next: 1,
+      },
+    });
+    expect(parseTomlSubset('one = """a\\"""b"""')).toEqual({
+      ok: true,
+      doc: { one: 'a"""b' },
+    });
+  });
+
+  it("closes a fence after an even run of backslashes, and keeps it open after an odd one", () => {
+    // `\\"""`: the pair is one escaped backslash, so the fence closes.
+    expect(parseTomlSubset('one = """a\\\\"""')).toEqual({
+      ok: true,
+      doc: { one: "a\\" },
+    });
+    // `\\\"""`: the third backslash escapes the first quote, so the fence stays open.
+    expect(parseTomlSubset('one = """a\\\\\\"""b"""')).toEqual({
+      ok: true,
+      doc: { one: 'a\\"""b' },
+    });
+    expect(
+      parseTomlSubset('body = """\nends with a backslash \\\\"""\nnext = 1\n'),
+    ).toEqual({
+      ok: true,
+      doc: { body: "ends with a backslash \\", next: 1 },
+    });
+  });
+
+  it("decodes every basic-string escape the tacho writer emits, in one-line and multi-line strings", () => {
+    // `tomlBasicString` in packages/tacho/src/host/stella-writer.ts is
+    // JSON.stringify, so its escapes are JSON's: this is the set it can send.
+    const value =
+      'tab\tnl\ncr\rbs\bff\fq"sl\\acute\u00e9smile\u{1F600}del\u007f';
+    const written = JSON.stringify(value).split("\u007f").join("\\u007F");
+    expect(parseTomlSubset(`s = ${written}`)).toEqual({
+      ok: true,
+      doc: { s: value },
+    });
+    expect(
+      parseTomlSubset(
+        's = "\\u00E9 \\U0001F600 \\b\\f"\nm = """\n\\u00e9\\f\\b\\\n"""\n',
+      ),
+    ).toEqual({
+      ok: true,
+      doc: { s: "\u00e9 \u{1F600} \b\f", m: "\u00e9\f\b" },
+    });
+  });
+
+  it.each([
+    ['s = "\\q"', 1],
+    ['s = "\\x41"', 1],
+    ['s = "\\u12"', 1],
+    ['s = "\\u12G4"', 1],
+    ['s = "\\U0001F60"', 1],
+    ['s = "\\uD800"', 1],
+    ['s = "\\U00110000"', 1],
+    ['a = 1\nm = """\nfine\n\\q\n"""', 2],
+    ['a = 1\nm = """x\\ey"""', 2],
+  ] as const)(
+    "refuses the escape in %j at line %i instead of dropping the backslash (negative)",
+    (text, line) => {
+      expect(parseTomlSubset(text)).toEqual({
+        ok: false,
+        code: "unreadable_value",
+        line,
+      });
+    },
+  );
+
   it("reads a one-line multi-line string, dotted keys, nested arrays and CRLF line ends", () => {
     expect(
       parseTomlSubset(
@@ -59,6 +137,12 @@ describe("parseTomlSubset", () => {
       ok: true,
       doc: { a: { b: "one line" }, list: [[1, 2], []], t: { x: false } },
     });
+  });
+
+  it("trims the CRLF after an opening fence, so a CRLF file's instructions do not start with a blank line", () => {
+    expect(parseTomlSubset('body = """\r\nfirst\r\nsecond\r\n"""\r\n')).toEqual(
+      { ok: true, doc: { body: "first\r\nsecond\r\n" } },
+    );
   });
 
   it("an empty file and a file of comments are an empty table", () => {

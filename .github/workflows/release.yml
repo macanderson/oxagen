@@ -1,41 +1,238 @@
 name: Release
 
-on:
-  push:
-    tags:
-      - "v*.*.*"
+# One button releases the platform: Actions → Release → Run workflow, pick
+# patch, minor or major. Two jobs, in two runs, because main only takes a
+# pull request:
+#
+#   cut   (workflow_dispatch) bumps every package to the next version, has a
+#         model write the release notes from the diff under the clear-prose
+#         and oxagen-branding skills (tools/scripts/release.ts), writes the
+#         docs page for the release, and opens a pull request titled
+#         `chore(release): vX.Y.Z` with auto-merge on. CI gates it like any
+#         other PR, including `check:prose` on the notes.
+#
+#   tag   (push to main) runs when that PR merges: it tags `vX.Y.Z` and
+#         `desktop-vX.Y.Z`, opens the GitHub release with the notes, publishes
+#         `@oxagen/cli` to npm, and the `desktop-v*` tag starts desktop.yml,
+#         whose publish job builds the app, copies the installers to
+#         downloads.oxagen.sh and rewrites its page. The docs page deploys
+#         with main, so docs.oxagen.sh/docs/releases/vX.Y.Z is live before the
+#         installers are.
+#
+# RELEASE_TOKEN is required: a fine-grained personal access token for this
+# repository with contents: write, pull requests: write and workflows: write,
+# held by an account that may open PRs here. The workflow's own GITHUB_TOKEN
+# cannot do this job: a push or a PR made with it raises no `pull_request`
+# event, so CI would never run on the release PR, the required checks would
+# never pass, and auto-merge would wait forever. The same token pushes the
+# tags, so the tag push starts desktop.yml the way a person's would.
+#
+# A dry run (`dry_run: true`) previews the bump and the notes in the log and
+# writes nothing; it needs no token.
 
-env:
-  # Container jobs: see the identical block in pipeline.yml — git in the
-  # bind-mounted workspace trips "dubious ownership" without this.
-  GIT_CONFIG_COUNT: "1"
-  GIT_CONFIG_KEY_0: safe.directory
-  GIT_CONFIG_VALUE_0: "*"
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Which part of the version to bump"
+        type: choice
+        required: true
+        default: patch
+        options: [patch, minor, major]
+      dry_run:
+        description: "Preview the version and the notes; write nothing"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    # Only a release commit touches the root package.json.
+    paths: [package.json]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.event_name == 'push' && github.sha || 'cut' }}
+  cancel-in-progress: false
 
 jobs:
-  release:
+  cut:
+    name: Cut ${{ inputs.bump }} release
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/macanderson/oxagen-ci-base:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    timeout-minutes: 20
+    timeout-minutes: 30
+    steps:
+      - name: Require RELEASE_TOKEN
+        if: ${{ !inputs.dry_run }}
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error::RELEASE_TOKEN is not set. Add a fine-grained PAT for this repository (contents: write, pull requests: write, workflows: write) as the RELEASE_TOKEN secret. See the comment at the top of release.yml for why GITHUB_TOKEN cannot do this."
+            exit 1
+          fi
 
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      - uses: ./.github/actions/pnpm-install
+
+      # --no-git: this job commits and pushes itself, to a branch, below.
+      # --no-npm: the tag job publishes the CLI once the version is on main.
+      #
+      # There is no longer a --no-vercel to pass. The step it skipped wrote
+      # PLATFORM_VERSION into the Vercel projects; production runs on AWS and
+      # nothing writes the var there, so `platformVersion()` answers "0.0.0" in
+      # production until the deploy injects it from SSM.
+      - name: Bump the version and write the notes
+        id: bump
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          OXAGEN_LLM_BALANCED: ${{ vars.OXAGEN_LLM_BALANCED }}
+          BUMP: ${{ inputs.bump }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=("$BUMP" --no-git --no-npm)
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          pnpm exec tsx tools/scripts/release.ts "${args[@]}"
+          if [ "$DRY_RUN" = "true" ]; then exit 0; fi
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          test -f "releases/v$version.md"
+          test -f "apps/docs/content/docs/releases/v$version.mdx"
+
+      - name: Open the release pull request
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          set -euo pipefail
+          branch="release/v$VERSION"
+          git config user.name "oxagen-release"
+          git config user.email "release@oxagen.sh"
+          git switch -c "$branch"
+          git add -A
+          git commit -m "chore(release): v$VERSION"
+          git push -u origin "$branch"
+          {
+            echo "Release v$VERSION. Merging this PR tags \`v$VERSION\` and \`desktop-v$VERSION\`, opens the GitHub release, publishes \`@oxagen/cli\`, builds the desktop app and publishes it to downloads.oxagen.sh, and puts the notes at https://docs.oxagen.sh/docs/releases/v$VERSION."
+            echo
+            echo "The notes below were written by a model from the diff since the previous tag, under the clear-prose and oxagen-branding skills, and checked by \`check:prose\`. Read them once before this merges; edit the docs page on this branch if a line is wrong."
+            echo
+            cat "releases/v$VERSION.md"
+          } > pr-body.md
+          gh pr create --base main --head "$branch" \
+            --title "chore(release): v$VERSION" \
+            --body-file pr-body.md \
+            --label no-issue
+          gh pr merge "$branch" --auto --squash
+          echo "::notice::Release PR opened for v$VERSION with auto-merge on. When CI passes it merges and the tag job takes over."
+
+  tag:
+    name: Tag and publish
+    if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(release): v')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # A step's `if` cannot read `secrets`; it can read the job's `env`.
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      - name: Read the version this commit released
+        id: v
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          version="$(printf '%s\n' "$MESSAGE" | head -n1 | sed -E 's/^chore\(release\): v([0-9]+\.[0-9]+\.[0-9]+).*$/\1/')"
+          have="$(node -p "require('./package.json').version")"
+          if [ "$version" != "$have" ]; then
+            echo "::error::the release commit says v$version but package.json says $have"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Both tags on the release commit. `v*` is the platform release the notes
+      # hang off; `desktop-v*` is what desktop.yml builds and publishes. A tag
+      # that already exists (a re-run after a partial failure) is left alone.
+      - name: Tag the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+          HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          git config user.name "oxagen-release"
+          git config user.email "release@oxagen.sh"
+          for tag in "v$VERSION" "desktop-v$VERSION"; do
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+              echo "$tag already exists; leaving it"
+              continue
+            fi
+            git tag -a "$tag" -m "Oxagen $VERSION" "$GITHUB_SHA"
+            git push origin "refs/tags/$tag"
+          done
+          if [ "$HAS_RELEASE_TOKEN" != "true" ]; then
+            echo "::warning::tags were pushed with GITHUB_TOKEN, which starts no workflow; dispatching desktop.yml on desktop-v$VERSION by hand."
+            gh workflow run desktop.yml --ref "desktop-v$VERSION"
+          fi
+
+      - name: Open the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release v$VERSION already exists; leaving it"
+            exit 0
+          fi
+          {
+            echo "Release notes: https://docs.oxagen.sh/docs/releases/v$VERSION"
+            echo "Desktop app for macOS, Windows and Linux: https://downloads.oxagen.sh/"
+            echo "Bare tacho and oxagen executables: https://github.com/$GITHUB_REPOSITORY/releases/tag/desktop-v$VERSION (attached once the desktop build finishes)"
+            echo
+            sed '1{/^# /d;}' "releases/v$VERSION.md"
+          } > notes.md
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --title "Oxagen v$VERSION" --notes-file notes.md --latest
 
       - uses: ./.github/actions/pnpm-install
 
-      - name: Build
-        run: pnpm build
-
-      - name: Publish
+      # The CLI as a single-file bundle with a clean manifest; publishing
+      # apps/cli/package.json itself would leak workspace:* deps. Same checks
+      # as release.ts's publishCliToNpm, which this replaces in CI.
+      - name: Publish @oxagen/cli to npm
         if: env.NPM_TOKEN != ''
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.v.outputs.version }}
         run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          pnpm changeset publish
+          set -euo pipefail
+          if npm view "@oxagen/cli@$VERSION" version >/dev/null 2>&1; then
+            echo "@oxagen/cli@$VERSION is already on npm; leaving it"
+            exit 0
+          fi
+          pnpm -C apps/cli publish:standalone
+          manifest="apps/cli/dist-standalone/package.json"
+          have="$(node -p "require('./$manifest').version")"
+          if [ "$have" != "$VERSION" ]; then
+            echo "::error::the standalone manifest says $have, not $VERSION"
+            exit 1
+          fi
+          if node -p "Object.values(require('./$manifest').dependencies||{}).some(v=>String(v).startsWith('workspace:'))" | grep -q true; then
+            echo "::error::workspace:* dependencies leaked into the publish manifest"
+            exit 1
+          fi
+          echo "//registry.npmjs.org/:_authToken=\${NPM_TOKEN}" > apps/cli/dist-standalone/.npmrc
+          (cd apps/cli/dist-standalone && npm publish)
+          echo "::notice::@oxagen/cli@$VERSION published"

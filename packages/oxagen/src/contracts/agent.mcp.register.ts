@@ -8,7 +8,7 @@ export const agentMcpRegister = registerCapability({
     "Register an external MCP server with the workspace; its tools become available to the agent after health check",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   sensitivity: "medium",
   defaultEffect: "deny",

@@ -40,3 +40,5 @@ Org: Owner, Admin, Billing. Workspace: Owner, Admin, for that workspace's own ce
 - Audit: the kernel audit chain records the write, explaining an override.
 
 The saved ceiling is re-read after the write. When that spend read fails the call fails after the write committed; the write is a replace, so repeating the call is safe.
+
+Organization-only invocations evaluate the organization ceiling without a workspace ceiling. The gate reads this ceiling through the organization-scoped database connection. A workspace invocation evaluates both its own ceiling and the organization ceiling.

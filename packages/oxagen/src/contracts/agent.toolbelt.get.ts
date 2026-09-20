@@ -1,8 +1,9 @@
 // get_agent_toolbelt — the belt an agent would be shown, computed and not
 // executed (MC spec §6.6; #2956). The read behind the Agents detail page's
 // toolbelt tab: the tool list with the decision the pipeline produced per
-// tool, the rule that decided it, how the belt was computed, what the model
-// receives, and what the agent cannot see.
+// tool, the rule that decided it, the input schema and digest of the tool the
+// model is handed, how the belt was computed, what the model receives, and
+// what the agent cannot see.
 //
 // The decision per tool is the runtime's own: the handler runs the same
 // per-tool decision `materializeTools` runs before it builds a tool
@@ -27,6 +28,23 @@ export const beltDecisionSchema = z.enum(["allow", "require_approval"]);
  */
 export const beltRuleSchema = z.string().min(1);
 
+/**
+ * Spec §6.6: the largest canonical input schema a belt entry carries inline,
+ * in bytes. A schema over the cap is left out and flagged `schemaTruncated`;
+ * its digest still travels, so the full schema is one `list_tool_versions`
+ * read away. The cap bounds one belt read at roughly 40 tools times this,
+ * which is the size a console page can render without paging.
+ */
+export const BELT_SCHEMA_BYTE_LIMIT = 16_384;
+
+/**
+ * Where a belt entry's input schema came from, the vocabulary
+ * `list_tool_versions` already uses: `declared` for a capability contract's
+ * own input, `imported` for a tool version published from a server's
+ * `tools/list`.
+ */
+export const beltSchemaOriginSchema = z.enum(["declared", "imported"]);
+
 export const beltToolSchema = z
   .object({
     /** A capability name, or `<server>__<tool>` for an MCP tool. */
@@ -40,6 +58,27 @@ export const beltToolSchema = z
     rule: beltRuleSchema,
     /** True when the tool only reads and may run beside other calls. */
     readOnly: z.boolean(),
+    /**
+     * The JSON Schema of the tool's input, as the model receives it. Null when
+     * nothing records one for this tool, and null when the schema is over
+     * {@link BELT_SCHEMA_BYTE_LIMIT}; `schemaTruncated` tells the two apart.
+     * Optional so a reader written before this field still parses the output.
+     */
+    inputSchema: z.record(z.unknown()).nullable().optional(),
+    /** Null exactly when `inputSchema` resolved to nothing. */
+    schemaOrigin: beltSchemaOriginSchema.nullable().optional(),
+    /**
+     * SHA-256 hex over the canonical (sorted-key) schema JSON. Present
+     * whenever a schema resolved, including a truncated one, so the schema the
+     * model receives is identifiable without carrying it.
+     */
+    schemaDigest: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .nullable()
+      .optional(),
+    /** True when a schema resolved but was over the cap, so `inputSchema` is null. */
+    schemaTruncated: z.boolean().optional(),
   })
   .strict();
 
@@ -56,7 +95,7 @@ export const agentToolbeltGet = registerCapability({
   name: "get_agent_toolbelt",
   domain: "agent",
   description:
-    "Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, how the belt was computed, what the model receives in full or searchable mode, and what the agent cannot see.",
+    "Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, each tool's input schema and schema digest, how the belt was computed, what the model receives in full or searchable mode, and what the agent cannot see.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],

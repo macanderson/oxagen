@@ -19,6 +19,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { mandateList, mandateRow } from "@/test/mandate-views";
 import {
   NOW,
   runChain,
@@ -1113,7 +1114,7 @@ describe("approvals on the run", () => {
     const { calls } = await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok([]),
+        approvals: ok({ items: [], more: false }),
         resolvedApprovals: ok([]),
       },
       { tab: "approvals" },
@@ -1127,7 +1128,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok([]),
+        approvals: ok({ items: [], more: false }),
         resolvedApprovals: ok([]),
       },
       { tab: "approvals" },
@@ -1140,24 +1141,141 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok([
-          {
-            id: "apr_1",
-            runId: "tse_7k2m9q",
-            tool: "create_release",
-            agentKey: "acme.core.release-bot",
-            requester: "usr_marcusbell",
-            mandateId: null,
-            createdAt: new Date(NOW - 60_000).toISOString(),
-            expiresAt: new Date(NOW + 3_600_000).toISOString(),
-          },
-        ]),
+        approvals: ok({
+          items: [
+            {
+              id: "apr_1",
+              runId: "tse_7k2m9q",
+              tool: "create_release",
+              agentKey: "acme.core.release-bot",
+              requester: "usr_marcusbell",
+              mandateId: null,
+              rule: null,
+              autoEligibility: null,
+              createdAt: new Date(NOW - 60_000).toISOString(),
+              expiresAt: new Date(NOW + 3_600_000).toISOString(),
+            },
+          ],
+          more: false,
+        }),
         resolvedApprovals: ok([]),
       },
       { tab: "approvals" },
     );
-    const [card] = screen.getAllByTestId("approval");
+    const card = screen.getAllByTestId("approval")[0];
+    if (!card) throw new Error("Approval card missing");
     expect(card).toHaveTextContent("create_release");
+  });
+
+  // The Approvals tab is the second surface of `resolve_approval` and
+  // `get_auto_eligibility` (capability-ui-map.json, binding.also). One
+  // approval reads and decides the same on both pages, so the card here
+  // carries the four-hop chain and the Decide control Fleet's panel carries.
+  it("carries the chain and the decision on the run's own card, as Fleet does", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok({
+          items: [
+            {
+              id: "apr_1",
+              runId: "tse_7k2m9q",
+              tool: "create_release",
+              agentKey: "acme.core.release-bot",
+              requester: "usr_marcusbell",
+              mandateId: null,
+              rule: null,
+              autoEligibility: {
+                ruleRef: "small-vendor-payments",
+                ok: false,
+                reasons: ["measure_above_ceiling:amount"],
+                floor: false,
+              },
+              createdAt: new Date(NOW - 60_000).toISOString(),
+              expiresAt: new Date(NOW + 3_600_000).toISOString(),
+            },
+          ],
+          more: false,
+        }),
+        resolvedApprovals: ok([]),
+      },
+      { tab: "approvals" },
+    );
+    const card = screen.getAllByTestId("approval")[0];
+    if (!card) throw new Error("Approval card missing");
+    const chain = within(card).getByTestId("chain");
+    expect(chain).toHaveTextContent("usr_marcusbell");
+    expect(chain).toHaveTextContent("acme.core.release-bot");
+    expect(within(card).getByTestId("eligibility")).toHaveTextContent(
+      "small-vendor-payments",
+    );
+    expect(within(card).getByTestId("decide")).toHaveTextContent("Decide");
+  });
+
+  // The Run page used to hand the panel an empty map, so every card here said
+  // the mandate could not be read on the one page the call's run is in front
+  // of you. It reads `list_mandates` under Fleet's rule now.
+  it("reads the mandate ledger only when a parked call names a mandate, and draws its bar", async () => {
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok({
+          items: [
+            {
+              id: "apr_1",
+              runId: "tse_7k2m9q",
+              tool: "create_release",
+              agentKey: "acme.core.release-bot",
+              requester: "usr_marcusbell",
+              mandateId: "mnd_4f2a9c",
+              rule: "mandate:mnd_4f2a9c:human_above:amount",
+              autoEligibility: null,
+              createdAt: new Date(NOW - 60_000).toISOString(),
+              expiresAt: new Date(NOW + 3_600_000).toISOString(),
+            },
+          ],
+          more: false,
+        }),
+        resolvedApprovals: ok([]),
+        mandates: mandateList([mandateRow()]),
+      },
+      { tab: "approvals" },
+    );
+    expect(calls.mandates).toEqual([[ctx, { agentId: null }]]);
+    const card = screen.getAllByTestId("approval")[0];
+    if (!card) throw new Error("Approval card missing");
+    expect(within(card).getByTestId("mandate-bar")).toHaveAttribute(
+      "data-measure",
+      "amount",
+    );
+  });
+
+  it("makes no mandate read for a run whose parked calls name none (negative)", async () => {
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok({
+          items: [
+            {
+              id: "apr_1",
+              runId: "tse_7k2m9q",
+              tool: "create_release",
+              agentKey: null,
+              requester: "usr_marcusbell",
+              mandateId: null,
+              rule: null,
+              autoEligibility: null,
+              createdAt: new Date(NOW - 60_000).toISOString(),
+              expiresAt: new Date(NOW + 3_600_000).toISOString(),
+            },
+          ],
+          more: false,
+        }),
+        resolvedApprovals: ok([]),
+      },
+      { tab: "approvals" },
+    );
+    expect(calls.mandates).toEqual([]);
   });
 
   // #3153: the receipt a decision rule leaves when it releases a call with
@@ -1166,7 +1284,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok([]),
+        approvals: ok({ items: [], more: false }),
         resolvedApprovals: ok([
           {
             id: "apr_2",
@@ -1177,6 +1295,11 @@ describe("approvals on the run", () => {
             expiresAt: new Date(NOW + 3_600_000).toISOString(),
             resolvedAt: new Date(NOW - 30_000).toISOString(),
             resolution: "approved",
+            execution: {
+              status: "succeeded",
+              runId: "arun_resumed",
+              reason: null,
+            },
             resolvedBy: "policy:small-vendor-payments",
             autoRuleRef: "small-vendor-payments",
           },
@@ -1184,6 +1307,10 @@ describe("approvals on the run", () => {
       },
       { tab: "approvals" },
     );
+    expect(screen.getByTestId("approval-execution")).toHaveTextContent(
+      "succeeded",
+    );
+    expect(screen.getByText("arun_resumed")).toBeInTheDocument();
     const [card] = screen.getAllByTestId("resolved-approval");
     expect(card).toHaveTextContent("stripe__create_payment");
     expect(screen.getByTestId("resolved-approver")).toHaveTextContent(
@@ -1191,11 +1318,41 @@ describe("approvals on the run", () => {
     );
   });
 
+  it("labels an expired approval without guessing its cause", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok({ items: [], more: false }),
+        resolvedApprovals: ok([
+          {
+            id: "apr_expired",
+            runId: "tse_7k2m9q",
+            tool: "delete_workspace",
+            requester: null,
+            createdAt: new Date(NOW - 600_000).toISOString(),
+            expiresAt: new Date(NOW - 300_000).toISOString(),
+            resolvedAt: new Date(NOW - 300_000).toISOString(),
+            resolution: "expired",
+            resolvedBy: null,
+            autoRuleRef: null,
+          },
+        ]),
+      },
+      { tab: "approvals" },
+    );
+    expect(screen.getByTestId("resolved-approver")).toHaveTextContent(
+      /^system$/,
+    );
+    expect(screen.getByTestId("resolved-approver")).not.toHaveTextContent(
+      "unknown",
+    );
+  });
+
   it("names its own failure when the resolved read is refused (negative)", async () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok([]),
+        approvals: ok({ items: [], more: false }),
         resolvedApprovals: DOWN,
       },
       { tab: "approvals" },

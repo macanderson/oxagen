@@ -9,22 +9,81 @@
       "waiting": {
         "title": "Waiting on a human",
         "oldest": "oldest approval has waited <clock></clock> of {window}",
-        "none": "nothing is parked"
+        "none": "nothing is parked",
+        "more": "{count}+",
+        "moreBasis": "more are parked than this page read"
       }
     },
     "approvals": {
       "title": "Approvals",
       "parked": "{count} parked",
+      "more": "{count}+",
       "empty": "Nothing is waiting on a human.",
       "emptyDetail": "A call parks here when policy returns approve. Denials never park: they end the call.",
-      "agent": "Agent",
-      "requester": "Requested by",
       "timesOut": "Times out in <clock></clock>, then the call ends",
       "notRecorded": "not recorded",
       "openRun": "Open run",
       "mandateUnread": "Drew on mandate {mandate}. Its remaining authority was not read, so none is shown.",
       "mandatePeriodBasis": "Counted over the mandate's current period. A reservation this call made in an earlier period is not in these figures.",
-      "mandatePerCallOnly": "Mandate {mandate} limits these per call only, so there is no period to count them against:"
+      "mandatePerCallOnly": "Mandate {mandate} limits these per call only, so there is no period to count them against:",
+      "chain": {
+        "title": "Chain",
+        "who": "Who asked",
+        "agent": "Which agent",
+        "action": "Which action",
+        "rule": "Which rule",
+        "underMandate": "under mandate {mandate}"
+      },
+      "eligibility": {
+        "none": "No auto-approval rule covered this call, so it waited for a person.",
+        "ok": "Rule {rule} would have released this call. A mandate asked for a person anyway.",
+        "blocked": "Rule {rule} did not release this call.",
+        "floor": "At least one of these is a floor no rule can lift.",
+        "recorded": "Recorded when the call was parked. A rule edited since is a different rule.",
+        "reasons": {
+          "tool_not_declared": "No enabled declared tool backs this capability, so it carries no classification.",
+          "tainted_input": "The arguments derive from untrusted input.",
+          "critical_hazard": "The tool version's risk grade is critical.",
+          "irreversible_consequence": "The tool version carries a consequence the record marks irreversible.",
+          "measure_above_ceiling": "The call is over the rule's ceiling on {measure}.",
+          "measure_unreadable": "The rule caps {measure} and the call does not carry it.",
+          "target_not_allowed": "The {measure} target matches none of the rule's allow globs.",
+          "target_unreadable": "The rule allow-lists a {measure} target the call does not carry.",
+          "no_standing_approval": "Nobody approved this digest inside the rule's standing window.",
+          "outside_business_hours": "The call arrived outside the rule's business hours.",
+          "consequences_changed": "The tool carries a consequence the rule was not written against. Saving the rule again re-runs the accountability gate."
+        },
+        "unknownReason": "Recorded as {code}."
+      },
+      "decide": {
+        "open": "Decide",
+        "title": "Decide on {tool}",
+        "body": "Approving resumes the call. Denying ends it. Either way Oxagen records the decision, the reason, and who made it.",
+        "note": "Reason",
+        "noteHint": "Required to deny, optional to approve. It goes on the record.",
+        "approve": "Approve",
+        "deny": "Deny",
+        "approving": "Approving",
+        "denying": "Denying",
+        "checking": "Reading the recorded evaluation.",
+        "settled": "This call was already resolved by {by}. Nothing here can change it.",
+        "eligibilityUnread": "The recorded evaluation could not be read again ({code}). The line above is what the page read.",
+        "failure": {
+          "noteRequired": "Write the reason this call is denied.",
+          "noPrincipal": "Oxagen could not establish who you are. Sign in again. The call is untouched.",
+          "orgRoleRequired": "Your roles do not cover this decision. On a call a mandate parked, the office accountable for the mandate's consequences answers it. The call is untouched.",
+          "noRoleCoversAllTags": "No single organization role is named for all of this mandate's consequence tags, so nobody can answer this call until the workspace names one. The call is untouched.",
+          "notAnApprover": "This mandate's approval rule names who may answer, and you are not one of them. The call is untouched.",
+          "agentCannotResolveOwnMandate": "An agent cannot answer a call its own mandate parked. A person answers. The call is untouched.",
+          "approvalExpired": "No pending call matched: it timed out, somebody else answered it, or it was never in this workspace. Nothing was billed.",
+          "invalid": "The decision was refused before it was sent. The call is untouched.",
+          "pendingApproval": "Your access request {accessRequestId} is still waiting. The call is untouched.",
+          "exhausted": "A decision is the one billed action here, and this organization's credit is exhausted ({code}). The call is untouched.",
+          "billingLink": "Open billing",
+          "refused": "The decision was refused ({code}). The call is untouched.",
+          "unavailable": "The decision did not reach the kernel ({code}). The call is untouched, so it is safe to try again."
+        }
+      }
     },
     "runs": {
       "title": "Runs",
@@ -33,14 +92,29 @@
         "agent": "Agent",
         "operator": "Operator",
         "status": "Status",
+        "tier": "Tier",
         "replay": "Replay",
+        "verdict": "Verdict",
         "cost": "Cost",
         "frames": "Frames",
-        "started": "Started"
+        "started": "Started",
+        "controls": "Controls"
       },
       "noSummary": "No summary yet. Open the run to read its frames.",
       "notRecorded": "not recorded",
       "basisNotRecorded": "basis not recorded",
+      "verdict": {
+        "flipped": "flipped",
+        "failing": "failing",
+        "unmoved": "unmoved",
+        "unsatisfied": "unsatisfied",
+        "tampered": "tampered",
+        "unverified": "unverified",
+        "waived": "waived"
+      },
+      "legend": "Tier is where Oxagen observed a run's calls. Verdict is the word a witness reported on it. Only flipped marks a run proven.",
+      "unpriced": "{count, plural, one {# run on this page has no cost recorded} other {# runs on this page have no cost recorded}}. A total over this column leaves them out.",
+      "unpricedLink": "Open Spend",
       "source": {
         "ledger": "evidence ledger",
         "tacho": "wrapped agent"
@@ -53,6 +127,18 @@
         "body": "Nothing has reached Oxagen from this workspace. A run appears when an enrolled agent makes its first model call; agents start runs, and this page is where you open one.",
         "enroll": "Enroll the host an agent runs on, from its repository:",
         "command": "oxagen agent enroll"
+      },
+      "controls": {
+        "group": "Commands for {run}",
+        "action": "{command} {run}",
+        "verbs": {
+          "pause": "pause",
+          "resume": "resume",
+          "cancel": "cancel"
+        },
+        "sending": "Sending the {command}.",
+        "queued": "The {command} is queued. The run's status says when the agent has taken it.",
+        "reread": "Re-read the runs"
       }
     }
   }

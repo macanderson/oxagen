@@ -20,6 +20,14 @@ output "web" {
   }
 }
 
+output "downloads" {
+  description = "For stacks-new/ci-deploy's `sites` map: what the desktop publish job writes."
+  value = {
+    bucket          = module.downloads.bucket_name
+    distribution_id = module.downloads.distribution_id
+  }
+}
+
 output "alb" {
   description = "For stacks-new/stella's alias record and stacks-new/ci-deploy's node lookup."
   value = {

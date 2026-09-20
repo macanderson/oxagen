@@ -15,7 +15,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
-import { repositoryListHandler } from "./repository.list";
+import { eventDelivery, repositoryListHandler } from "./repository.list";
 
 const BOUND_AT = new Date("2026-09-15T12:06:00.000Z");
 const LINKED_AT = new Date("2026-09-17T09:00:00.000Z");
@@ -31,6 +31,9 @@ function row(overrides: Record<string, unknown>) {
     boundAt: LINKED_AT,
     connectionStatus: "connected" as string | null,
     connectionDeletedAt: null as Date | null,
+    installationRowId: "ghi_1" as string | null,
+    installationSuspendedAt: null as Date | null,
+    installationDeletedAt: null as Date | null,
     ...overrides,
   };
 }
@@ -44,7 +47,7 @@ const MAIN = row({
   boundAt: BOUND_AT,
 });
 
-/** The one read: select → from → innerJoin → leftJoin → where, awaited. */
+/** The one read: select → from → innerJoin → leftJoin → leftJoin → where, awaited. */
 function wire(rows: unknown[]): void {
   mocks.withTenantDb.mockImplementationOnce(
     async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -52,7 +55,9 @@ function wire(rows: unknown[]): void {
         select: () => ({
           from: () => ({
             innerJoin: () => ({
-              leftJoin: () => ({ where: async () => rows }),
+              leftJoin: () => ({
+                leftJoin: () => ({ where: async () => rows }),
+              }),
             }),
           }),
         }),
@@ -94,6 +99,7 @@ describe("list_repositories", () => {
       htmlUrl: "https://github.com/acme/widgets",
       boundAt: BOUND_AT.toISOString(),
       connectionLive: true,
+      events: "installed",
     });
     expect(repositoryList.output.safeParse(out).success).toBe(true);
   });
@@ -129,5 +135,74 @@ describe("list_repositories", () => {
       ["rpb_00000002", false],
       ["rpb_00000003", false],
     ]);
+  });
+
+  it("says whether GitHub can deliver each repository's events, from the connection and the installation registry", async () => {
+    wire([
+      MAIN,
+      row({ bindingId: "rpb_00000001", connectionStatus: "paused" }),
+      row({
+        bindingId: "rpb_00000002",
+        fullName: "acme/b",
+        installationSuspendedAt: new Date("2026-09-16T00:00:00.000Z"),
+      }),
+      row({
+        bindingId: "rpb_00000003",
+        fullName: "acme/c",
+        installationDeletedAt: new Date("2026-09-16T00:00:00.000Z"),
+      }),
+      row({
+        bindingId: "rpb_00000004",
+        fullName: "acme/d",
+        installationRowId: null,
+      }),
+      row({
+        bindingId: "rpb_00000005",
+        fullName: "acme/e",
+        connectionStatus: "deleting",
+      }),
+    ]);
+    const out = await repositoryListHandler({}, makeCTX());
+    expect(
+      Object.fromEntries(out.repositories.map((r) => [r.bindingId, r.events])),
+    ).toEqual({
+      rpb_ffffaaaa: "installed",
+      rpb_00000001: "paused",
+      rpb_00000002: "suspended",
+      rpb_00000003: "uninstalled",
+      rpb_00000004: "unknown",
+      rpb_00000005: "retired",
+    });
+    expect(repositoryList.output.safeParse(out).success).toBe(true);
+  });
+});
+
+describe("eventDelivery", () => {
+  const live = {
+    connectionLive: true,
+    connectionStatus: "connected",
+    installationRowId: "ghi_1",
+    installationSuspendedAt: null,
+    installationDeletedAt: null,
+  };
+
+  it("puts a retired connection ahead of anything the installation says", () => {
+    expect(
+      eventDelivery({
+        ...live,
+        connectionLive: false,
+        installationDeletedAt: new Date(),
+      }),
+    ).toBe("retired");
+  });
+
+  it("puts an uninstalled App ahead of a suspended one", () => {
+    expect(
+      eventDelivery({
+        ...live,
+        installationSuspendedAt: new Date(),
+        installationDeletedAt: new Date(),
+      }),
+    ).toBe("uninstalled");
   });
 });

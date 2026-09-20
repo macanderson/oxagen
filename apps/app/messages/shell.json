@@ -1,7 +1,7 @@
 {
   "shell": {
     "skipToContent": "Skip to content",
-    "loading": "Loading Mission Control",
+    "loading": "Loading Oxagen",
     "sidebar": {
       "label": "Sidebar",
       "navLabel": "Main",
@@ -15,6 +15,7 @@
       "agents": "Agent IAM",
       "tools": "Tools",
       "steering": "Steering",
+      "repositories": "Repositories",
       "spend": "Spend",
       "organization": "Organization",
       "billing": "Billing",

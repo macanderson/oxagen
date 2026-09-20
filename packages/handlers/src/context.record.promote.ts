@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordPromote } from "@oxagen/oxagen/contracts/context.record.promote";
 import {
@@ -30,6 +31,11 @@ const STATUS_BY_ACTION = {
 export const contextRecordPromoteHandler: CapabilityHandler<
   typeof contextRecordPromote
 > = async (input, ctx) => {
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] },
+  );
+
   // Resolve the record by publicId or slug (same dual resolution as
   // skill.version.list).
   const [record] = await withTenantDb((tx) =>
@@ -163,10 +169,15 @@ export const contextRecordPromoteHandler: CapabilityHandler<
           .where(eq(schema.contextRecordVersions.id, versionUuid))
           .limit(1);
         // A merge writes all four together, so `kind` alone tells a classified
-        // version from a legacy one. `constraintEffect` is copied even when
+        // version from a legacy one -- but narrowing on `kind` alone does not
+        // tell TypeScript `force` is non-null too, so it is named in the
+        // guard as well. Every real
+        // writer sets both together (`publishMerge`, `publish_context_record`
+        // since #3302), so this never actually excludes a version `kind`
+        // alone would have accepted. `constraintEffect` is copied even when
         // NULL: a rule version promoted over a constraint must clear it, or
         // the row's check constraint refuses the update.
-        if (pinned?.kind != null) {
+        if (pinned?.kind != null && pinned.force != null) {
           classification = {
             kind: pinned.kind,
             force: pinned.force,

@@ -1,3 +1,5 @@
+import { assertCallerRole } from "./lib/capability-role-guard";
+import { secretImportEnv } from "@oxagen/oxagen/contracts/secret.import_env";
 import { importEnv } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
@@ -11,6 +13,7 @@ export const secretImportEnvHandler: CapabilityHandlerFn = async (
     throw new Error(
       "[secret.import_env] workspaceId is required (scoped capability)",
     );
+  await assertCallerRole(secretImportEnv, ctx);
   const { text, environmentId, commit } = input as {
     text: string;
     environmentId?: string | null;

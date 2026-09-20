@@ -61,15 +61,15 @@
     },
     "detail": {
       "header": "Agent identity",
-      "seeBelt": "See the belt as the model sees it",
       "tabs": {
         "label": "Agent sections",
         "identity": "Identity",
         "toolbelt": "Toolbelt",
         "enrollment": "Enrollment",
         "incidents": "Tamper incidents",
-        "definition": "Definition in git",
-        "mandates": "Mandates"
+        "definition": "Configuration",
+        "mandates": "Mandates",
+        "budgets": "Budgets"
       },
       "identity": {
         "title": "Identity",
@@ -91,13 +91,34 @@
           "role": "Role",
           "scope": "Scope",
           "assigned": "Assigned",
-          "expires": "Expires"
+          "expires": "Expires",
+          "actions": "Actions"
         },
         "scope": {
           "org": "organization",
           "workspace": "workspace"
         },
-        "standing": "standing"
+        "standing": "standing",
+        "assign": {
+          "open": "Assign a role",
+          "title": "Assign a role",
+          "body": "The role attaches to this agent's own principal. You cannot assign a role that grants more than you hold yourself.",
+          "field": "Role",
+          "builtIn": "{name} (seeded)",
+          "loading": "Reading the role catalogue.",
+          "empty": "This organization has no role an agent may hold. Write one on the Roles page, then assign it here.",
+          "notEnforced": "On the {tier} tier the kernel allows every capability, so this role records intent and governs nothing until the organization moves to a tier that enforces it.",
+          "partial": "This organization has more roles than the 200 listed here. Assign one of the rest over the API.",
+          "confirm": "Assign",
+          "pending": "Assigning"
+        },
+        "revoke": {
+          "open": "Revoke {role}",
+          "title": "Revoke {role}",
+          "body": "The agent stops holding {role} at its next call. The assignment stays in the audit trail.",
+          "confirm": "Revoke",
+          "pending": "Revoking"
+        }
       },
       "credentials": {
         "title": "Run credentials",
@@ -164,7 +185,21 @@
             "require_approval": "requires approval"
           },
           "readOnly": "reads only",
-          "writes": "writes"
+          "writes": "writes",
+          "schema": {
+            "title": "Input schema",
+            "none": "No input schema is recorded for this tool.",
+            "origin": {
+              "declared": "Declared by the capability contract.",
+              "imported": "Imported from the server's tool list."
+            },
+            "digest": "Schema digest",
+            "copySchema": "Copy schema",
+            "copyDigest": "Copy digest",
+            "copied": "Copied",
+            "copyFailed": "Copy it by hand: this browser refused the clipboard.",
+            "truncated": "This schema is larger than the belt carries inline. The digest identifies it; read the full schema from the tool registry."
+          }
         },
         "cannotSee": {
           "title": "What this agent cannot see",
@@ -186,7 +221,8 @@
           "hooks": "Hooks",
           "bundle": "Policy bundle",
           "deviceKey": "Device key",
-          "lastSeen": "Last seen"
+          "lastSeen": "Last seen",
+          "actions": "Actions"
         },
         "hooks": {
           "ok": "in place",
@@ -201,6 +237,31 @@
           "title": "No host is enrolled under this agent",
           "body": "Enroll the host it runs on, from the repository it works in:",
           "command": "oxagen agent enroll"
+        },
+        "enroll": {
+          "open": "Enroll a host",
+          "title": "Enroll a host under {name}",
+          "body": "Mint a single-use token, then run the command below on the machine. The token is shown once and is consumed the first time it is presented.",
+          "confirm": "Mint a token",
+          "pending": "Minting",
+          "again": "Mint another",
+          "token": "Enrollment token",
+          "once": "Shown once. Mint another if it is lost or expires unused.",
+          "expires": "Expires {at}",
+          "command": "Run this on the host",
+          "copy": "Copy",
+          "copied": "Copied",
+          "copyFailed": "Copying is blocked in this browser. Select the text and copy it."
+        },
+        "revoke": {
+          "open": "Revoke",
+          "label": "Revoke {hostname}",
+          "title": "Revoke {hostname}",
+          "body": "The host's key is retired and every session on it is denied at its next prompt or tool boundary. Enrolling the machine again mints a new key. This cannot be undone.",
+          "reason": "Reason",
+          "reasonHint": "Recorded on the host row and on the revoke command. Optional.",
+          "confirm": "Revoke",
+          "pending": "Revoking"
         }
       },
       "incidents": {
@@ -231,36 +292,125 @@
       },
       "definition": {
         "openEditor": "Open in the source editor",
-        "none": {
-          "title": "No definition committed",
-          "body": "The definition of record is the file .oxagen/agents/{slug}.toml in the workspace repository. Write it in the source editor; saving commits it to a branch and opens a pull request."
+        "unset": "not set",
+        "unparsed": "The file does not parse at line {line}: {reason}. Fix the line in the source editor; the form patches nothing until it reads.",
+        "bar": {
+          "dirty": "Unsaved changes",
+          "against": "against {branch} at {commit}. Nothing is written until you commit.",
+          "againstSeed": "against a file that has not been committed. Nothing is written until you commit.",
+          "discard": "Discard",
+          "save": "Save changes"
         },
-        "unparsed": "The committed file does not parse at line {line}. Open it in the source editor to read and fix it.",
-        "fields": {
-          "title": "The file",
+        "identity": {
+          "title": "Identity",
+          "aside": "root table",
           "schema": "Schema",
           "slug": "Slug",
+          "slugHint": "Immutable. The agent key {key} is derived from it.",
           "name": "Name",
           "description": "Description",
-          "modelTier": "Model tier",
-          "budget": "Per-run budget",
-          "tools": "Tools",
-          "denyTools": "Denied tools",
+          "descriptionHint": "One sentence. Shown on the Agents list and in every receipt this agent produces."
+        },
+        "model": {
+          "title": "Model and budget",
+          "tier": "Model tier",
+          "tierHint": "complex routes to the workspace's complex model and light to its light one. The harness makes the call with its own key; Oxagen records what it reports.",
+          "budget": "Per-run budget (USD)",
+          "budgetHint": "Stored as budget = '{' per_run_micros = {micros} '}'. Checked against reported spend at each hook boundary; a breach pauses the run at the next one."
+        },
+        "tools": {
+          "title": "Tools",
+          "aside": "belt = grants ∩ this list − deny_tools",
+          "tools": "tools",
+          "toolsHint": "Patterns against the registry. github__* grants every github tool the operator can delegate.",
+          "denyTools": "deny_tools",
+          "denyHint": "A deny here wins over any grant. A version pattern like @* denies every version.",
+          "add": "Add to {key}",
+          "addPlaceholder": "add a tool pattern, Enter to keep",
+          "remove": "Remove {value}",
           "sideEffects": "Side effects",
+          "read": "May read through the gateway.",
+          "write": "May write through the gateway; every write is a receipt.",
+          "irreversible": "Needs an active mandate. This agent holds {count, plural, =0 {none} one {one} other {#}}.",
+          "irreversibleUnknown": "Needs an active mandate. The mandate ledger did not answer, so none is known to be active."
+        },
+        "instructions": {
+          "title": "Instructions",
+          "aside": "[instructions] body",
+          "label": "Instructions",
+          "hint": "Compiled into the harness file beside this one. Keep credentials and personal data out of it: nothing checks for them before a commit."
+        },
+        "harness": {
+          "title": "Harness",
           "harness": "Harness",
-          "instructions": "Instructions",
-          "unset": "not set"
+          "harnessHint": "Set at registration. Changing it is a new agent.",
+          "color": "Color",
+          "colorHint": "Cosmetic: the label the harness shows on its own screen."
         },
         "source": {
           "title": "Source",
-          "lead": "Every field is a view of this commit. The running definition is what the default branch holds; this commit runs once its pull request merges.",
-          "path": "Path",
+          "truth": "source of truth",
+          "open": "Open in the source editor",
+          "lead": "Every field on this page is a view of that file. Editing here patches one key in place; editing there changes anything. Both go through the same commit.",
+          "uncommitted": "No definition is committed yet. Saving commits this file to a branch and opens a pull request.",
           "branch": "Branch",
-          "commit": "Commit",
+          "commit": "At commit",
+          "draft": "draft",
           "digest": "definition_digest",
           "pullRequest": "Pull request",
           "committed": "Committed"
+        },
+        "changing": {
+          "title": "Changing this agent",
+          "edit": {
+            "title": "1 · Edit here or in the repository",
+            "body": "Either opens a pull request. Nothing is written to Postgres first."
+          },
+          "checks": {
+            "title": "2 · Checks",
+            "body": "Before the pull request opens, Oxagen checks the file's schema, that the slug is this agent's, and that every registered capability it names is one you hold yourself. Tool patterns and MCP tools are not checked here. Your repository's own checks run on the pull request."
+          },
+          "review": {
+            "title": "3 · Review",
+            "body": "A code-owner review is required before the merge."
+          },
+          "merge": {
+            "title": "4 · Merge is the change",
+            "body": "The merged file is the definition of record. The next run on this repository reads it from the default branch."
+          },
+          "note": "Deleting an agent is a pull request that removes the file. The principal is retired, never deleted, so its runs keep their identity."
         }
+      },
+      "budgets": {
+        "title": "Budgets",
+        "lead": "The spend ceilings this agent runs under. They are set on Spend and enforced across every agent in their scope.",
+        "columns": {
+          "scope": "Scope",
+          "period": "Period",
+          "limit": "Limit",
+          "spent": "Spent",
+          "position": "Position"
+        },
+        "scope": {
+          "org": "Organization",
+          "workspace": "This workspace"
+        },
+        "monthly": "Monthly",
+        "rolling": "Rolling {days} days",
+        "noLimit": "No ceiling",
+        "disabled": "Not enforced",
+        "position": "{ratio} · {state}",
+        "state": {
+          "ok": "under the ceiling",
+          "threshold_50": "past 50%",
+          "threshold_80": "past 80%",
+          "threshold_95": "past 95%",
+          "exceeded": "over the ceiling"
+        },
+        "basis": "Spent is metered from priced model calls over the period named in each row. A run Oxagen did not price is in no figure here.",
+        "empty": "No spend ceiling is set for this workspace or its organization.",
+        "agentScope": "Oxagen records no ceiling for one agent. get_spend_budget reads the organization and workspace scopes only, so this agent is bounded by the rows above and by the per-run budget its definition sets. A per-agent ceiling waits on an ADR for the scopes billing.budgets accepts.",
+        "link": "Set ceilings on Spend"
       }
     },
     "actions": {
@@ -324,8 +474,8 @@
       "branchAt": "{branch} at {commit}",
       "uncommitted": "no committed definition",
       "truth": "source of truth",
-      "lead": "Every field on the Definition tab is a view of this file. Saving commits it to a branch and opens a pull request; the default branch is never written.",
-      "back": "Back to the definition",
+      "lead": "Every field on the Configuration tab is a view of this file. Saving commits it to a branch and opens a pull request; the default branch is never written.",
+      "back": "Back to the configuration",
       "discard": "Discard",
       "save": "Save",
       "modified": "modified",

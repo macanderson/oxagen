@@ -1,0 +1,115 @@
+{
+  "name": "open_init_pr",
+  "domain": "repository",
+  "description": "Add Oxagen to one of the workspace's repositories: open a pull request from oxagen/init that adds the .oxagen/ tree with the reviewed workspace.toml and governance.toml. Never writes to the production branch.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      },
+      "governanceMode": {
+        "type": "string",
+        "enum": [
+          "solo",
+          "team",
+          "regulated"
+        ]
+      },
+      "workspaceToml": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64000
+      },
+      "governanceToml": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16000
+      }
+    },
+    "required": [
+      "bindingId",
+      "governanceMode",
+      "workspaceToml",
+      "governanceToml"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      },
+      "fullName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "branch": {
+        "const": "oxagen/init"
+      },
+      "base": {
+        "type": "string",
+        "minLength": 1
+      },
+      "pullRequest": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "htmlUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "number",
+          "htmlUrl"
+        ],
+        "additionalProperties": false
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "reused": {
+        "type": "boolean"
+      },
+      "openedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "bindingId",
+      "fullName",
+      "branch",
+      "base",
+      "pullRequest",
+      "files",
+      "reused",
+      "openedAt"
+    ],
+    "additionalProperties": false
+  }
+}

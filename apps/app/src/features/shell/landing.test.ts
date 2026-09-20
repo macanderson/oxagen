@@ -88,6 +88,8 @@ const source = {
     grants: vi.fn(),
     killSwitches: vi.fn(),
     approvalRules: vi.fn(),
+    connections: vi.fn(),
+    mcpServers: vi.fn(),
   },
 };
 

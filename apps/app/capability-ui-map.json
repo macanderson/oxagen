@@ -7,7 +7,8 @@
     "testid": "optional data-testid on the entry-point element",
     "proof": "path to the runtime proof: an apps/app component or action test, or verifications/<session>/<name>.png",
     "verifiedAt": "YYYY-MM-DD the proof was captured against a working page",
-    "verifiedBy": "session id that captured it"
+    "verifiedBy": "session id that captured it",
+    "also": "optional array of the second and later pages the same capability is operated on, each entry shaped like the binding itself (route, page, entry, optional testid, proof) and held to the same bar by check_ui_parity.mjs"
   },
   "bindings": {
     "accept_member_invite": {
@@ -44,13 +45,12 @@
       "verifiedBy": "session-7172f7a7-in-app-assistant"
     },
     "attach_github_installation": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Main repository — “Use this installation” on the picked GitHub account (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › GitHub connection and main repository — “Use this installation” on the picked GitHub account (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "authorize_cli": {
       "route": "/cli/authorize",
@@ -61,13 +61,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "bind_main_repository": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Main repository — “Bind as main repo” on the picked repository (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts); also the onboarding gate's provisional banner at /[org]/[ws]/register/[step] (features/onboarding/ui/bind-repository.tsx, features/onboarding/actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › GitHub connection and main repository — “Bind as main repo” on the picked repository (features/repositories/main-repository.tsx, features/repositories/actions.ts); also the onboarding gate's provisional banner at /[org]/[ws]/register/[step] (features/onboarding/ui/bind-repository.tsx, features/onboarding/actions.ts)",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "change_member_role": {
       "route": "/[org]",
@@ -93,13 +92,33 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "create_connection": {
+      "route": "/[org]/[ws]/tools?tab=connections",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Connections: “Add a connection” opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
+      "testid": "connection-add-open",
+      "proof": "apps/app/src/features/tools/connections.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc2-connections"
+    },
     "create_enrollment_token": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
       "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes create_enrollment_token (features/onboarding/actions.ts)",
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]/agents/[agent]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+          "entry": "/[org]/[ws]/agents/[agent]?tab=enrollment — Enroll a host mints the token and shows the oxagen agent enroll command once (features/agents/enrollment-controls.tsx, features/agents/actions.ts)",
+          "testid": "enroll-host",
+          "proof": "apps/app/src/features/agents/enrollment-controls.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "mc-3-enrollment"
+        }
+      ]
     },
     "create_org": {
       "route": "/new-organization",
@@ -176,10 +195,20 @@
     "dispatch_command": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command (features/run/actions.ts, features/run/run-controls.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] — Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command, and an observe-tier run draws all four disabled with the recorded reason (features/run/actions.ts, features/run/run-controls.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-018UrgFq-mc1-columns",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/[ws]/page.tsx",
+          "entry": "/[org]/[ws] (Fleet) — Pause, Resume and Cancel on a live wrapped run's row queue dispatch_command (features/fleet/actions.ts, features/fleet/run-row-controls.tsx). Steer stays on the run page: the contract requires a payload on it",
+          "proof": "apps/app/src/features/fleet/run-row-controls.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "session-018UrgFq-mc1-controls"
+        }
+      ]
     },
     "export_audit_events": {
       "route": "/[org]/audit/export",
@@ -214,6 +243,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "assign_agent_role": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=identity — Assign a role on the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
+      "proof": "apps/app/src/features/agents/role-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc-3-roles"
+    },
     "get_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
@@ -226,9 +263,18 @@
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
       "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes get_agent_toolbelt (data/live/agents.ts, data/live/mappers/agents.ts)",
-      "proof": "apps/app/src/features/agents/agent.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "proof": "apps/app/src/features/agents/toolbelt.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc-3-schemas"
+    },
+    "get_connection": {
+      "route": "/[org]/[ws]/tools?tab=connections",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
+      "testid": "connection-open-con_01k5n1",
+      "proof": "apps/app/src/features/tools/connections.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc2-connections"
     },
     "get_context_pr": {
       "route": "/[org]/[ws]/steering",
@@ -280,13 +326,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "get_main_repository": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings beside the workspace switcher on every workspace page — the shell's Workspace settings dialog, whose Main repository panel invokes get_main_repository (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › GitHub connection and main repository — the panel every visit reads (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "get_mandate": {
       "route": "/[org]/[ws]/mandates/[mandate]",
@@ -382,7 +427,17 @@
       "entry": "/[org]/[ws]/spend — the rev1 surface that invokes get_spend_budget (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]/agents/[agent]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+          "entry": "/[org]/[ws]/agents/[agent]?tab=budgets — the ceiling this agent runs under, read-only, beside the agent-scope line the contract cannot answer (features/agents/budget-panel.tsx, data/live/agents.ts)",
+          "proof": "apps/app/src/features/agents/budget-panel.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "mc-3-enrollment"
+        }
+      ]
     },
     "get_spend_drill": {
       "route": "/[org]/[ws]/spend",
@@ -418,13 +473,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "link_repository": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Repositories — “Link” on the owner/name typed into “Link a repository” (features/shell/workspace-repositories.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-m0-workspace-repositories"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › “Link” on a Not linked row, or on owner/name typed into “Link a repository by name” (features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "list_agents": {
       "route": "/[org]/[ws]/register/[step]",
@@ -458,6 +512,14 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
     },
+    "list_connections": {
+      "route": "/[org]/[ws]/tools?tab=connections",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Connections: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "proof": "apps/app/src/features/tools/connections.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc2-connections"
+    },
     "list_credential_grants": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
@@ -475,13 +537,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_github_installations": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Main repository — the installation picker, shown when GitHub is authorized and no installation is attached to this workspace, invokes list_github_installations (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › GitHub connection and main repository — the installation picker, shown when GitHub is authorized and no installation is attached (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "list_iam_roles": {
       "route": "/[org]/roles",
@@ -500,13 +561,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_installation_repositories": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Main repository — the repository picker, shown once a GitHub App installation is attached and no main repo is bound, invokes list_installation_repositories (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › the Not linked table of repositories the installation reaches, and the main-repository picker (features/repositories/bound-repositories.tsx, features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "list_invoices": {
       "route": "/[org]/billing",
@@ -531,6 +591,14 @@
       "proof": "apps/app/src/features/agents/mandates.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_mcp_servers": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Registry: the Tool servers section under the registry, and the server picker in the import dialog (features/tools/servers.tsx, features/tools/import-controls.tsx, data/live/tools.ts)",
+      "proof": "apps/app/src/features/tools/servers.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc2-connections"
     },
     "list_members": {
       "route": "/[org]",
@@ -581,21 +649,20 @@
       "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT"
     },
     "list_repositories": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Repositories — the list every open reads, main first with its role, GitHub link, approved default ref and connection state (features/shell/workspace-repositories.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-m0-workspace-repositories"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › the repository table every visit reads, main first, with role, production branch, .oxagen/, events and symbols (features/repositories/repositories.tsx, features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "list_runs": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/page.tsx",
-      "entry": "/[org]/[ws] — the rev1 surface that invokes list_runs (data/live/mappers/mappers.type-test.ts, data/live/mappers/runs.ts, data/live/runs.ts)",
+      "entry": "/[org]/[ws] — the Fleet runs table, whose Tier, Replay and Verdict columns render list_runs' recorded enforcementTier, replayGrade and verdict (features/fleet/runs-table.tsx, ui/enforcement-tier.tsx, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts)",
       "proof": "apps/app/src/features/fleet/fleet.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-018UrgFq-mc1-columns"
     },
     "list_skills": {
       "route": "/[org]/[ws]/steering?tab=skills",
@@ -693,6 +760,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "register_mcp_server": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Registry › Tool servers: “Register a server” opens the dialog that invokes register_mcp_server (features/tools/register-server.tsx, features/tools/actions.ts)",
+      "testid": "server-register-open",
+      "proof": "apps/app/src/features/tools/servers.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc2-connections"
+    },
     "remove_org_member": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
@@ -726,6 +802,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "revoke_agent_role": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=identity — Revoke on each row of the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
+      "proof": "apps/app/src/features/agents/role-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc-3-roles"
+    },
     "revoke_api_key": {
       "route": "/[org]/api-keys",
       "page": "apps/app/src/app/[org]/api-keys/page.tsx",
@@ -750,6 +834,15 @@
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
     },
+    "revoke_tacho_enrollment": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=enrollment — Revoke on a host row, confirmed by hostname, with an optional reason (features/agents/enrollment-controls.tsx, features/agents/actions.ts)",
+      "testid": "revoke-host",
+      "proof": "apps/app/src/features/agents/enrollment-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "mc-3-enrollment"
+    },
     "rotate_agent_credential": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
@@ -765,6 +858,15 @@
       "proof": "apps/app/src/features/organization/key-row.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "send_workspace_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — Organization › Pending invitations › “Invite”: an email, the role the invitation offers, and an optional note. The contract is scoped, so the kernel enters the org-only workspace sentinel an OrgCtx carries, and the handler records an organization invitation with no workspace, which is why the dialog asks for none (features/organization/invite-dialog.tsx, features/organization/actions.ts)",
+      "testid": "send-invitation",
+      "proof": "apps/app/src/features/organization/invite-dialog.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc3-invite"
     },
     "set_approval_rule_enabled": {
       "route": "/[org]/[ws]/tools?tab=autoapprovals",
@@ -874,13 +976,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "unlink_repository": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Workspace settings › Repositories — “Unlink”, then “Unlink it”, on a linked row; the main row offers none (features/shell/workspace-repositories.tsx, features/shell/workspace-settings-actions.ts)",
-      "testid": "open-workspace-settings",
-      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-m0-workspace-repositories"
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › “Unlink”, then “Unlink it”, on a linked row; the main row offers none (features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "update_mandate_limits": {
       "route": "/[org]/[ws]/mandates/[mandate]",
@@ -915,6 +1016,30 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-343b879e-byok"
     },
+    "get_repository_tree": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › the .oxagen/ column, the repository dialog opened by “Details”, and the Configuration tab (features/repositories/repositories.tsx, features/repositories/repository-dialog.tsx, features/repositories/configuration.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
+    },
+    "open_init_pr": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › “Add Oxagen to a repository” › the five-step init wizard › “Open pull request” (features/repositories/init-wizard.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
+    },
+    "set_production_branch": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › “Details” › Production branch — “Make <branch> the production branch” or “Set production branch” (features/repositories/repository-dialog.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
+    },
     "propose_agent": {
       "route": "/[org]/[ws]/agents",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
@@ -938,6 +1063,46 @@
       "proof": "apps/app/src/features/create/skill-wizard.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-creation-wizards"
+    },
+    "resolve_approval": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/page.tsx",
+      "entry": "/[org]/[ws] — Decide on a parked approval card opens the approve or deny dialog, which invokes resolve_approval through the kernel seam; the same card and dialog are drawn on /[org]/[ws]/runs/[run]?tab=approvals (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx)",
+      "testid": "decide",
+      "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-018UrgFq-mc-1-approve",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runs/[run]?tab=approvals",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 the Approvals tab draws the same card and the same Decide dialog Fleet's panel draws, over the same kernel seam (features/fleet/approvals-panel.tsx, features/fleet/approval-decision.tsx, features/run/run.tsx)",
+          "testid": "decide",
+          "proof": "apps/app/src/features/run/run.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "session-018UrgFq-mc1-review"
+        }
+      ]
+    },
+    "get_auto_eligibility": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/page.tsx",
+      "entry": "/[org]/[ws] — opening the decision dialog reads get_auto_eligibility, so the eligibility line and who has already resolved the call are current at the moment of the decision rather than as old as the page render (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
+      "testid": "eligibility",
+      "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-018UrgFq-mc-1-approve",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runs/[run]?tab=approvals",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 the card on the Approvals tab draws the recorded eligibility line, and opening its dialog reads get_auto_eligibility again (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
+          "testid": "eligibility",
+          "proof": "apps/app/src/features/run/run.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "session-018UrgFq-mc1-review"
+        }
+      ]
     }
   }
 }

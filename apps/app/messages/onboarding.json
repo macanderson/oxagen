@@ -24,7 +24,7 @@
       "lead": "The organization is the tenant: it owns its own graph database, its own encryption key, its billing account, and the namespace that appears in every agent key.",
       "name": "Organization name",
       "slug": "Address",
-      "slugHint": "Mission Control lives at /{slug}. You can change the address later.",
+      "slugHint": "Oxagen lives at /{slug}. You can change the address later.",
       "workspaceTitle": "First workspace",
       "workspaceName": "Workspace name",
       "workspaceSlug": "Workspace address",
@@ -35,7 +35,7 @@
     },
     "gate": {
       "title": "Finish setting up this workspace",
-      "lead": "Mission Control opens when an agent you wrapped has talked to Oxagen. That first frame is also the installer's smoke test, so one path covers both.",
+      "lead": "Oxagen opens when an agent you wrapped has talked to it. That first frame is also the installer's smoke test, so one path covers both.",
       "railLabel": "Onboarding",
       "steps": {
         "organization": "Name the organization",
@@ -45,7 +45,7 @@
       "subs": {
         "organization": "Tenant, namespace and the first workspace",
         "wrap": "Claude Code, an SDK agent or your own loop",
-        "run": "The first frame is what opens Mission Control"
+        "run": "The first frame is what opens Oxagen"
       },
       "state": {
         "done": "done",
@@ -174,7 +174,7 @@
         "agentNotFound": "That agent is not in this workspace. Nothing was written.",
         "slugTaken": "An agent in this workspace already holds that slug. Pick another.",
         "gateNotFound": "This workspace is not the organization's onboarding workspace, so it has no gate to move.",
-        "alreadyUnlocked": "The gate is already open. Mission Control is unlocked.",
+        "alreadyUnlocked": "The gate is already open. Oxagen is unlocked.",
         "firstFrameRequired": "The run step completes when the first frame arrives. It cannot be skipped.",
         "githubNotConnected": "No GitHub App installation reaches this workspace. Connect GitHub, then bind the repository.",
         "repositoryNotInstalled": "This workspace's GitHub App installation cannot see that repository.",

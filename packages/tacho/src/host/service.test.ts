@@ -131,7 +131,17 @@ describe("service managers", () => {
         stderr: "",
       },
     });
-    const manager = serviceManagerFor({ platform: "linux", home, exec });
+    let disabled = false;
+    const manager = serviceManagerFor({
+      platform: "linux",
+      home,
+      exec: (command, args) => {
+        if (args.includes("disable")) disabled = true;
+        if (disabled && args.includes("is-active"))
+          return { status: 3, stdout: "inactive", stderr: "" };
+        return exec(command, args);
+      },
+    });
     expect(manager.kind).toBe("systemd");
     manager.install(SPEC);
     expect(calls).toEqual([
@@ -223,10 +233,18 @@ describe("service managers", () => {
         stderr: "",
       },
     });
+    let justKilled = false;
     const manager = serviceManagerFor({
       platform: "win32",
       home,
-      exec: fake.exec,
+      exec: (command, args) => {
+        if (command === "taskkill") justKilled = true;
+        else if (command === "tasklist" && justKilled) {
+          justKilled = false;
+          return { status: 0, stdout: "No tasks", stderr: "" };
+        }
+        return fake.exec(command, args);
+      },
       launcherPath: launcher,
       pidPath,
     });

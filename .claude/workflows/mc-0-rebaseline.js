@@ -1,6 +1,6 @@
 export const meta = {
   name: 'mc-0-rebaseline',
-  description: 'Mission Control session 0: re-baseline the gap record, record the 2026-09-14 cuts in an ADR, close the parity integrity holes, and bring the two open Mission Control PRs to green; one PR',
+  description: 'Rev1 app session 0: re-baseline the gap record, record the 2026-09-14 cuts in an ADR, close the parity integrity holes, and bring the two open rev1 app PRs to green; one PR',
   whenToUse: 'Run first. It unblocks sessions 1 to 5 and rewrites docs/mission-control/GAP-INVENTORY.md against head.',
   phases: [
     { title: 'Scout', detail: 'confirm each lane is still open on main' },
@@ -44,7 +44,7 @@ CONTEXT you must read before editing (paths relative to the repo root):
 The app: routes under apps/app/src/app/[org]/..., feature lanes under apps/app/src/features/<page>/, view models under apps/app/src/data/contracts/, live adapters and mappers under apps/app/src/data/live/, the UI kit under apps/app/src/ui/ imported as @/ui/<name>, messages under apps/app/messages/. Server writes go through the kernel seam in apps/app/src/server/kernel.ts, never a raw invoke.
 `
 
-const RESULT = {
+const RESULT_FIELDS = {
   type: 'object',
   properties: {
     lane: { type: 'string' },
@@ -60,8 +60,31 @@ const RESULT = {
     open_gaps: { type: 'array', items: { type: 'string' } },
     defects_fixed: { type: 'array', items: { type: 'string' } },
   },
-  required: ['lane', 'branch', 'summary', 'ci_state', 'open_gaps'],
 }
+
+const LANE_RESULT = {
+  ...RESULT_FIELDS,
+  required: ['lane', 'branch', 'head_sha', 'summary', 'ci_state', 'open_gaps'],
+}
+const INTEGRATION_RESULT = {
+  ...RESULT_FIELDS,
+  required: ['branch', 'head_sha', 'pr_url', 'summary', 'ci_state', 'open_gaps'],
+}
+const REMOTE_HEAD = {
+  type: 'object',
+  properties: { branch: { type: 'string' }, head_sha: { type: 'string' }, exists: { type: 'boolean' } },
+  required: ['branch', 'head_sha', 'exists'],
+}
+
+function validLane(result) {
+  return result && typeof result.branch === 'string'
+    && /^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(result.branch)
+    && !result.branch.includes('..') && !result.branch.includes('//')
+    && !result.branch.endsWith('/') && !result.branch.endsWith('.')
+    && !result.branch.split('/').some(part => part.startsWith('.') || part.endsWith('.lock'))
+    && /^[a-f0-9]{40}$/.test(result.head_sha || '')
+}
+
 
 const SCOUT = {
   type: 'object',
@@ -133,7 +156,7 @@ function integratePrompt(session, built, base) {
   return `${RULES}\n${CONTEXT}
 TASK: Integrate session ${session.id} (${session.title}) into one PR.
 1. git fetch origin && git worktree add ${wt(session.id)} -b mc/${session.id} ${base}; push -u.
-2. git merge (never rebase) each finished lane branch: ${built.map(b => b.branch).join(', ')}. Resolve conflicts in messages, capability-ui-map.json, data/contracts, and ports by keeping both lanes' hunks. ${cfg.mergeMain ? 'Then merge origin/main.' : ''}
+2. git merge (never rebase) each verified lane commit: ${built.map(b => `${b.head_sha} (refs/heads/${b.branch})`).join(', ')}. Verify each fetched remote branch still points to its reported SHA before merging; stop on a mismatch. Resolve conflicts in messages, capability-ui-map.json, data/contracts, and ports by keeping both lanes' hunks. ${cfg.mergeMain ? 'Then merge origin/main.' : ''}
    Lane summaries: ${JSON.stringify(built.map(b => ({ lane: b.lane, branch: b.branch, summary: b.summary, gaps: b.open_gaps, deviations: b.spec_deviations })))}
 3. Read the combined diff once, end to end, against docs/mission-control/BUILD-CHUNKS.md §${session.id} and the spec sections it names. Fix anything missing or inconsistent. Run the generators whose --check would fail (gen:messages, docs:schemas) and commit their output. Update apps/app/e2e/routes.ts for any new route.
 4. Update apps/app/ARCHITECTURE.md §1.2 rows the session changes, and tick the session's "Done when" boxes in docs/mission-control/BUILD-CHUNKS.md that are now true. Commit and push.
@@ -147,7 +170,7 @@ function reviewPrompt(session, pr, specHint) {
   return `${RULES}\n${CONTEXT}
 TASK: Cold review of PR ${pr.pr_url} (branch ${pr.branch}, worktree ${pr.worktree || wt(session.id)}) for session ${session.id} (${session.title}).
 Review against: ${specHint}. Check spec fidelity (states, copy, entry points), tenancy and IAM on every new handler or action (withTenantDb, assertOrgRole where an org role is required), capability parity and the ui-map binding with a real proof file, every trust badge honest to the record, a test beside every new component and action, and clear-prose on every string.
-Fix every P0 and P1 you confirm directly on the branch, commit, push, and watch CI green again (up to three rounds). Carry P2 and below into ONE residue issue titled "Residue from #<PR>: <what is left>" with each finding verbatim, its file and line, why it matters, the pillar it moves, and a "- [ ]" DoD; apply only the triage label. Then, per AGENTS.md (Residue merges), reply on every carried thread that the finding stands and names the residue issue, and resolve that thread: resolving is an acceptance, not a dismissal. Leave a P0 or P1 thread open only if you could not fix it, and say why on the thread. Return what you fixed, what remains with severities, the residue issue URL, and the final ci_state.`
+Fix every P0 and P1 you confirm directly on the branch, commit, push, and watch CI green again (up to three rounds). Carry P2 and below into one residue issue by default; split genuinely unrelated changes so each issue has exactly one kind, one job, and one full change per DoD (SCR-003). Title each issue "Residue from #<PR>: <what is left>" with each finding verbatim, its file and line, why it matters, the pillar it moves, and a "- [ ]" DoD; apply only the triage label. Then, per AGENTS.md (Residue merges), reply on every carried thread that the finding stands and names the residue issue, and resolve that thread: resolving is an acceptance, not a dismissal. Leave a P0 or P1 thread open only if you could not fix it, and say why on the thread. Return what you fixed, what remains with severities, the residue issue URL, and the final ci_state.`
 }
 
 async function runSession(session, specHint) {
@@ -165,12 +188,34 @@ async function runSession(session, specHint) {
   if (cfg.dryRun) { log('dry run: returning scout only'); return { session: session.id, scout, would_build: active.map(l => l.id) } }
 
   phase('Build')
-  const built = (await parallel(active.map(l => () => agent(
+  const reported = (await parallel(active.map(l => () => agent(
     lanePrompt(session, l, (scout.lanes.find(x => x.id === l.id) || {}).facts, base),
-    { label: `lane:${l.id}`, phase: 'Build', schema: RESULT, agentType: 'general-purpose' },
+    { label: `lane:${l.id}`, phase: 'Build', schema: LANE_RESULT, agentType: 'general-purpose' },
   )))).filter(Boolean)
+  const built = []
+  for (const result of reported) {
+    const assigned = active.find(l => l.id === result.lane)
+    if (!validLane(result) || !active.some(l => l.id === result.lane)
+      || (assigned.integrate !== false && result.branch !== `mc/${session.id}-${result.lane}`)
+      || reported.filter(other => other.lane === result.lane || other.branch === result.branch || other.head_sha === result.head_sha).length !== 1) {
+      log('invalid or duplicate lane result; stopping before integration')
+      return { session: session.id, scout, error: 'invalid lane result', reported }
+    }
+    const remote = await agent(
+      `Read-only verification. Run git ls-remote --heads origin refs/heads/${result.branch} in the repository. Return exists=false if absent or the command fails; otherwise return the fully qualified remote ref (refs/heads/<branch>) in branch and the 40-character head SHA. Do not edit files or push.`,
+      { label: `verify:${result.lane}`, phase: 'Build', schema: REMOTE_HEAD, agentType: 'general-purpose' },
+    )
+    if (!remote || !remote.exists || remote.branch !== `refs/heads/${result.branch}` || remote.head_sha !== result.head_sha) {
+      log(`lane ${result.lane} has no matching remote head; stopping before integration`)
+      return { session: session.id, scout, error: 'remote head mismatch', reported }
+    }
+    built.push(result)
+  }
   const failed = active.filter(l => !built.find(b => b.lane === l.id)).map(l => l.id)
-  if (failed.length) log(`lanes that returned nothing: ${failed.join(', ')}; the integrator is told to build them`)
+  if (failed.length) {
+    log(`lanes that returned nothing: ${failed.join(', ')}; stopping before integration`)
+    return { session: session.id, scout, built, failed, error: 'missing lane result' }
+  }
   // A lane with integrate: false works on branches that are not this session's
   // (an existing PR, a maintenance task). Its result is reported, never merged.
   const sidecar = built.filter(b => (session.lanes.find(l => l.id === b.lane) || {}).integrate === false)
@@ -180,10 +225,10 @@ async function runSession(session, specHint) {
 
   phase('Integrate')
   const pr = await agent(
-    integratePrompt(session, mergeable, base) + (failed.length ? `\nNOTE: lanes ${failed.join(', ')} returned nothing. Read their branch if one was pushed (mc/${session.id}-<lane>), finish the work yourself from BUILD-CHUNKS.md, then continue.` : ''),
-    { label: `integrate:${session.id}`, phase: 'Integrate', schema: RESULT, agentType: 'general-purpose' },
+    integratePrompt(session, mergeable, base),
+    { label: `integrate:${session.id}`, phase: 'Integrate', schema: INTEGRATION_RESULT, agentType: 'general-purpose' },
   )
-  if (!pr || !pr.pr_url) return { session: session.id, scout, built: mergeable, sidecar, failed, pr }
+  if (!validLane(pr) || !pr.pr_url) return { session: session.id, scout, built: mergeable, sidecar, failed, pr }
 
   phase('Review')
   const review = await agent(reviewPrompt(session, pr, specHint), { label: `review:${session.id}`, phase: 'Review', schema: REVIEW, agentType: 'general-purpose' })
@@ -193,7 +238,7 @@ async function runSession(session, specHint) {
 const session = {
   id: '0',
   title: 'Re-baseline the gap record and the parity gate',
-  prTitle: 'Mission Control: re-baseline the gap inventory at head, record the 2026-09-14 cuts, and make the parity gate check its proofs',
+  prTitle: 'Oxagen app: re-baseline the gap inventory at head, record the 2026-09-14 cuts, and make the parity gate check its proofs',
   issueHint: 'This PR closes no issue by design: label closes-nothing. Refs #2592, #2950, #2957, #3286 where the docs cite them.',
   lanes: [
     {
@@ -202,7 +247,7 @@ const session = {
       checks: ['GAP-INVENTORY.md still says Mandate detail Missing', 'ARCHITECTURE.md §1.2 still claims a skills/[[...tab]] catch-all', 'no ADR records the 2026-09-14 scope review', 'docs/capabilities lacks files for approval_rule.{list,set,delete,enabled.set}, approval.auto_eligibility.get, mandate.{grant,revoke,limits.update,request,list,get}, context.steering.freshness'],
       issues: ['#2957', '#3286', '#2592'],
       task: `(a) Rewrite docs/mission-control/GAP-INVENTORY.md against origin/main: apply every correction in docs/audits/2026-09-19-mission-control-gap-inventory-review.md §1 to §3 and §5, keep the page-by-page table shape, add a "Class" column (UI-only, UI plus backend, backend, cut) per row, take the page set from apps/app/src/app with ARCHITECTURE.md §1.2 as the map, drop the scorecard, and name the owning issue per row. Keep the "Cut" rows and cite apps/app/ARCHITECTURE.md §9 (2026-09-14, 2026-09-15, 2026-09-18 entries) and ADR-062 for each.
-(b) Write one ADR, next free number after the highest in docs/adr, titled "The 2026-09-14 scope review: what Mission Control rev1 does not build", recording the ten cuts and the two reversals (Audit page 2026-09-15 #3097, Model funding 2026-09-18) with their ARCHITECTURE.md §9 sources. Status Accepted, decided by the maintainer on the dates given. Follow the shape of docs/adr/ADR-095.
+(b) Write one ADR, next free number after the highest in docs/adr, titled "The 2026-09-14 scope review: what the rev1 app does not build", recording the ten cuts and the two reversals (Audit page 2026-09-15 #3097, Model funding 2026-09-18) with their ARCHITECTURE.md §9 sources. Status Accepted, decided by the maintainer on the dates given. Follow the shape of docs/adr/ADR-095.
 (c) In docs/specs/mission-control/spec.md add a one-line status note under §2.1 that legal hold, reconciliation, and the ontology engine are cut for rev1 per that ADR. Do not rewrite the spec.
 (d) In apps/app/ARCHITECTURE.md §1.2 correct the Skills row (no catch-all route exists; the page is one section; Phase 2 moves it under Steering per ADR-097) and the Mandate row's "not yet built" sentence (line ~90), and add a decision-log line dated today.
 (e) Write the twelve missing docs/capabilities/<stem>.md files (stem = the contract file's dotted stem) in the shape of an existing one such as docs/capabilities/kill_switch.set.md, with the Surfaces line matching each contract, and add them to docs/capabilities/_index.md. Run pnpm docs:schemas if it owns any of them and commit its output.`,
@@ -219,7 +264,7 @@ const session = {
       done: 'node tools/scripts/check_ui_parity.mjs --strict passes, fails on a dangling or untracked proof, and validates also entries (the new tests prove all three); both bindings have real proofs.',
     },
     {
-      id: 'prs', integrate: false, title: 'Bring the two open Mission Control PRs to green and report merge readiness (sidecar: never merged into this session)',
+      id: 'prs', integrate: false, title: 'Bring the two open rev1 app PRs to green and report merge readiness (sidecar: never merged into this session)',
       owns: ['the branches of PR #3479 (mc/creation-wizards) and PR #3459 (mc/repositories-page) only'],
       checks: ['PR #3479 state and CI', 'PR #3459 state and CI', 'whether either has merged already'],
       issues: [],

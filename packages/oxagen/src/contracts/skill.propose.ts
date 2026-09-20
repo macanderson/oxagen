@@ -66,32 +66,6 @@ export function skillBranch(name: string): string {
   return `skills/${name}`;
 }
 
-export type SkillFrontmatter = {
-  /** Every `key: value` line between the fences, in order. */
-  fields: Record<string, string>;
-  /** The line after the closing fence; the body starts there. */
-  bodyStart: number;
-};
-
-/**
- * The frontmatter of a SKILL.md: the block between a `---` first line and the
- * next `---` line, read as `key: value` lines. Null when the file does not open
- * with a fence or never closes one. Only the flat keys the checks read are
- * parsed; a nested value is kept as the text after the colon.
- */
-export function readSkillFrontmatter(text: string): SkillFrontmatter | null {
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
-  if (lines[0] !== "---") return null;
-  const close = lines.indexOf("---", 1);
-  if (close < 0) return null;
-  const fields: Record<string, string> = {};
-  for (const line of lines.slice(1, close)) {
-    const m = /^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$/.exec(line);
-    if (m?.[1] !== undefined) fields[m[1]] = (m[2] ?? "").trim();
-  }
-  return { fields, bodyStart: close + 1 };
-}
-
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 /** `[major, minor, patch]`, or null for anything that is not plain semver. */
@@ -196,72 +170,6 @@ export type SkillCheck = {
   /** Why it failed, as a stable code the surfaces name in their own words; null when it passed. */
   code: string | null;
 };
-
-/**
- * The six checks over a proposed SKILL.md and the files beside it, as the
- * handler runs them before anything reaches GitHub. `replacing` is the
- * version merged on the production branch today, or null for a new skill;
- * `budget` is the workspace's search budget in tokens. The digest check here
- * asserts the canonical bytes can be hashed (the file is text with LF line
- * ends); the digest itself is taken again at merge.
- */
-export function checkSkill(args: {
-  name: string;
-  body: string;
-  files: readonly { path: string; content: string }[];
-  replacing: string | null;
-  budget: number;
-}): SkillCheck[] {
-  const fm = readSkillFrontmatter(args.body);
-  const f = fm?.fields ?? {};
-  const version = f.version === undefined ? null : parseSemver(f.version);
-  const replaced = args.replacing === null ? null : parseSemver(args.replacing);
-
-  const frontmatter: SkillCheck =
-    fm === null
-      ? { name: "frontmatter", passed: false, code: "frontmatter_missing" }
-      : !f.name || !f.version || !f.scope
-        ? {
-            name: "frontmatter",
-            passed: false,
-            code: "frontmatter_incomplete",
-          }
-        : f.name !== args.name
-          ? { name: "frontmatter", passed: false, code: "name_mismatch" }
-          : { name: "frontmatter", passed: true, code: null };
-
-  const versionCheck: SkillCheck =
-    version === null
-      ? { name: "version", passed: false, code: "version_not_semver" }
-      : replaced !== null && compareSemver(version, replaced) <= 0
-        ? { name: "version", passed: false, code: "version_not_greater" }
-        : { name: "version", passed: true, code: null };
-
-  const digest: SkillCheck = args.body.includes("\u0000")
-    ? { name: "digest", passed: false, code: "not_text" }
-    : { name: "digest", passed: true, code: null };
-
-  const granting = GRANTING_FRONTMATTER_KEYS.find((k) => k in f);
-  const grants: SkillCheck =
-    granting === undefined
-      ? { name: "grants", passed: true, code: null }
-      : { name: "grants", passed: false, code: `grants_${granting}` };
-
-  const leaked = [args.body, ...args.files.map((x) => x.content)]
-    .map(scanForSecrets)
-    .find((k) => k !== null);
-  const secrets: SkillCheck =
-    leaked === undefined
-      ? { name: "secrets", passed: true, code: null }
-      : { name: "secrets", passed: false, code: `secret_${leaked}` };
-
-  const load: SkillCheck =
-    estimateSkillTokens(args.body) > args.budget
-      ? { name: "load_cost", passed: false, code: "over_budget" }
-      : { name: "load_cost", passed: true, code: null };
-
-  return [frontmatter, versionCheck, digest, grants, secrets, load];
-}
 
 const skillCheckSchema = z
   .object({

@@ -1,6 +1,6 @@
 # Oxagen Platform
 
-Mission Control for agent operators. Every agent gets its own identity and a mandate (its authority, budget, tools, and skills), set by the teams accountable for it and enforced on the actions routed through Oxagen, the agent control plane.
+Workforce management for autonomous agents. Every agent gets its own identity and a mandate (its authority, budget, tools, and skills), set by the teams accountable for it and enforced on the actions routed through Oxagen, the agent control plane.
 
 <p align="center">
   <a href="https://github.com/macanderson/oxagen/actions/workflows/pipeline.yml">
@@ -162,6 +162,8 @@ Storage boundaries are enforced (see [`AGENTS.md`](AGENTS.md) and `docs/adr/`):
 | **Blob storage** | Binary assets (reference row lives in Postgres) | — |
 
 Tenant isolation is enforced at every layer: Postgres RLS (raw `db()` is banned — `withTenantDb` / `withSystemDb` / `scopedSession` only), ClickHouse predicates, per-workspace Neo4j scoping.
+
+ClickHouse migrations require `DATABASE_URL` for a shared Postgres advisory lock. Use the same coordination database for every migration process targeting one ClickHouse deployment. The runner fails before ClickHouse DDL if it cannot acquire the lock. See [ADR-116](docs/adr/ADR-116-clickhouse-reads-scope-the-source-and-migrations-share-a-lock.md).
 
 ---
 

@@ -177,6 +177,19 @@ export const approvalRequests = agentSchema.table(
     // key. Null when no run was in scope when the call was parked; a null
     // means "not recorded", never "some other run".
     runPublicId: text("run_public_id"),
+    resumePayload: jsonb("resume_payload"),
+    resumeKey: text("resume_key"),
+    resumeStatus: text("resume_status"),
+    resumeStartedAt: timestamp("resume_started_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    resumeFinishedAt: timestamp("resume_finished_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    resumeRunPublicId: text("resume_run_public_id"),
+    resumeError: text("resume_error"),
     capabilityName: text("capability_name").notNull(),
     inputPreview: jsonb("input_preview").notNull(),
     riskLevel: text("risk_level").notNull(),
@@ -217,6 +230,17 @@ export const approvalRequests = agentSchema.table(
     }).notNull(),
   },
   (t) => ({
+    resumeQueueIdx: index("approval_requests_resume_queue_idx")
+      .on(t.resumeStatus, t.createdAt)
+      .where(sql`resume_payload IS NOT NULL`),
+    resumeKeyIdx: index("approval_requests_resume_key_idx").on(
+      t.workspaceId,
+      t.resumeKey,
+    ),
+    resumeStatusCheck: check(
+      "approval_requests_resume_status_check",
+      sql`${t.resumeStatus} IS NULL OR ${t.resumeStatus} IN ('waiting', 'queued', 'running', 'succeeded', 'dispatched', 'failed', 'indeterminate', 'denied', 'expired')`,
+    ),
     orgResolutionIdx: index("approval_requests_org_resolution_idx").on(
       t.orgId,
       t.workspaceId,
@@ -1323,10 +1347,17 @@ export const toolVersions = agentSchema.table(
 // and the lineage id (MC spec §10.2). Lifecycle (status) is driven by the
 // append-only contextPromotions ledger below, never edited directly.
 //
-// The classification columns (kind, force, constraint_effect, statement) and
-// the publication columns (commit_sha, path, published_at) are written by
-// merge_context_pr (ADR-061). A record published through publish_context_record
-// carries only the body and has NULL in each of them.
+// The classification columns (kind, force, constraint_effect, statement) are
+// required on every write, by merge_context_pr (ADR-061) and by
+// publish_context_record alike (#3302; migration `20260920130000`). Before
+// #3302, publish_context_record wrote only the body, so a record it published
+// carried NULL in all four and sat active in the registry without ever
+// reaching an agent — readWorkspaceSteering only ever delivers a record whose
+// force is must or should, and nothing told the publisher their record never
+// steered. The publication columns (commit_sha, path, published_at) stay
+// NULL on a record published through publish_context_record: that path
+// writes no commit, because merge — not this call — is the publication event
+// for a Context PR (ADR-061 §10).
 export const contextRecords = agentSchema.table(
   "context_records",
   {
@@ -1346,9 +1377,20 @@ export const contextRecords = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
-    // The six kinds of context-record/v0.1 (Stella's file surface).
+    // The six kinds of context-record/v0.1 (Stella's file surface). Every
+    // write path has required one since #3302, enforced today at the
+    // application layer (contracts/context.record.publish.ts,
+    // context.steering.store.ts). The DB-level NOT NULL is a deliberate
+    // follow-up migration (see migration `20260920150000`'s comment,
+    // Codex round 3 on #3486): db-migrate.yml runs on no ordering guarantee
+    // against the deploy that ships this requirement, so a hard constraint
+    // here today could reject a write from an old container still in a
+    // rolling deploy.
     kind: text("kind"),
-    // How hard the record steers: must | should | may | info.
+    // How hard the record steers: must | should | may | info. Every write
+    // path has required one since #3302; a record with no force can never
+    // reach an agent. See `kind`'s comment for why this stays nullable at
+    // the DB layer for now.
     force: text("force"),
     // require | forbid on a constraint; NULL on every other kind. `allow` is
     // unrepresentable: a record never grants authority (spec §10.3).
@@ -1381,11 +1423,11 @@ export const contextRecords = agentSchema.table(
     ),
     kindCheck: check(
       "context_records_kind_check",
-      sql`${t.kind} IS NULL OR ${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
+      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
     ),
     forceCheck: check(
       "context_records_force_check",
-      sql`${t.force} IS NULL OR ${t.force} IN ('must', 'should', 'may', 'info')`,
+      sql`${t.force} IN ('must', 'should', 'may', 'info')`,
     ),
     constraintEffectCheck: check(
       "context_records_constraint_effect_check",

@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaToggle } from "@oxagen/oxagen/contracts/schema.toggle";
 import { schema as db, withTenantDb } from "@oxagen/database";
@@ -14,6 +15,11 @@ import { logger } from "./logger";
 export const schemaToggleHandler: CapabilityHandler<
   typeof schemaToggle
 > = async (input, ctx) => {
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"], workspace: ["Owner"] },
+  );
+
   const { schemaName, enabled } = input;
 
   // 1. Load/create registry

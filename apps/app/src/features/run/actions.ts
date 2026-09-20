@@ -11,6 +11,7 @@
 // Steering text is evidence. Oxagen records it, quotes it and hands it to the
 // model as content; it is never executed here.
 import {
+  COMMAND_REASON_MAX,
   STEER_TEXT_MAX,
   tachoCommandDispatch,
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
@@ -25,6 +26,7 @@ import {
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import { moneyFromMicros } from "@/data/contracts/money";
+import { DeliveryMode } from "@/data/contracts/runs";
 import {
   RunTranscript,
   type TranscriptKind,
@@ -39,7 +41,15 @@ export type QueuedCommand = { commandIds: string[] };
 
 type RunTranscriptGetOutput = ContractOutput<typeof runTranscriptGet>;
 
-/** Pause at the next boundary, or resume a run paused earlier. The reason reaches the model. */
+/**
+ * Pause at the next boundary, or resume a run paused earlier. The reason
+ * reaches the model, and an empty one is omitted rather than sent as the
+ * blank string the contract's `min(1)` would refuse.
+ *
+ * The reason is held to the contract's own ceiling here, so a long one comes
+ * back naming the field a person can shorten instead of as a schema refusal
+ * with nothing to point at.
+ */
 export async function haltRun(
   org: string,
   ws: string,
@@ -49,6 +59,14 @@ export async function haltRun(
 ): Promise<ActionResult<QueuedCommand>> {
   const ctx = await requireViewer(org, ws);
   const trimmed = reason.trim();
+  if (trimmed.length > COMMAND_REASON_MAX) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "command_reason",
+      field: "reason",
+    };
+  }
   const result = await kernelWrite(ctx, tachoCommandDispatch, {
     target: { kind: "run", id: runId },
     command,
@@ -59,22 +77,45 @@ export async function haltRun(
     : result;
 }
 
-/** Steer the run: the text reaches the model as a control frame at the delivery mode the connection point can carry. */
+/**
+ * Steer the run: the text reaches the model as a control frame, at the
+ * delivery mode the operator asked for (spec §7.3).
+ *
+ * `requestedMode` is a ceiling, not a promise. The connection point resolves
+ * the strongest mode it can carry at or below it, and the command row records
+ * both the request and what was carried, so the caller says when the text can
+ * arrive rather than when it will.
+ *
+ * A server action is an endpoint, so the mode is parsed here rather than
+ * trusted from the form: a value outside the three the contract accepts comes
+ * back as `delivery_mode` on the field that carried it, not as a schema
+ * refusal with no field to point at.
+ */
 export async function steerRun(
   org: string,
   ws: string,
   runId: string,
   text: string,
+  requestedMode: string,
 ): Promise<ActionResult<QueuedCommand>> {
   const ctx = await requireViewer(org, ws);
   const trimmed = text.trim();
   if (trimmed === "" || trimmed.length > STEER_TEXT_MAX) {
     return { ok: false, reason: "invalid", code: "steer_text", field: "text" };
   }
+  const mode = DeliveryMode.safeParse(requestedMode);
+  if (!mode.success) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "delivery_mode",
+      field: "requestedMode",
+    };
+  }
   const result = await kernelWrite(ctx, tachoCommandDispatch, {
     target: { kind: "run", id: runId },
     command: "steer",
-    payload: { text: trimmed },
+    payload: { text: trimmed, requestedMode: mode.data },
   });
   return result.ok
     ? { ok: true, value: { commandIds: result.value.commandIds } }
@@ -125,8 +166,8 @@ export async function exportRun(
  * module is a client component, and INV-19 has every exported function of a
  * `"use server"` module answer with an `ActionResult`, so a `Read` is carried
  * across rather than returned: `denied` keeps the permission the page failure
- * names, and an error keeps its code. The Workspace settings dialog does the
- * same for its two on-demand reads; the layer matrix (INV-07) keeps
+ * names, and an error keeps its code. The Repositories page does the same
+ * for its on-demand reads; the layer matrix (INV-07) keeps
  * `features/*` out of `data/live`, so each of the two owns its own copy.
  *
  * `invalid_input` becomes `invalid` rather than `unavailable`, because the

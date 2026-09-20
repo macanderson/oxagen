@@ -5,7 +5,7 @@ description: "Every oxagen command and flag: budgets and cost, runs, the knowled
 
 Run `oxagen --help` for the live list, and append `--help` to any command for its flags.
 
-Most platform commands need an [authenticated CLI](/docs/cli/account-setup). `cost`, `logs`, and `telemetry` work offline. Agent enrollment uses a one-time token, and some Tacho commands inspect local state.
+Most platform commands need an [authenticated CLI](/docs/cli/account-setup). `cost`, `logs`, and `telemetry` work offline. Agent enrollment uses a one-time token, and some wrapping commands inspect local state.
 
 <Callout type="warn">
 **Retired commands.** These commands belonged to the agent runtime and were removed: `sandbox`, `sandbox-template`, `code`, `eval`, `file-lock`, `a2a`, `models`, `skill`, `prompt`, `command`, `rules`, `settings`, `config`, `mcp`, `import`, `pr`, `recover`, and `lineage`. So were the interactive surfaces `view`, `agents`, `solve`, `daemon`, `replay`, and `fleet`, and a bare `oxagen "<prompt>"`. Each one is still registered, prints a retirement notice that points at the `stella` CLI, and exits non-zero.
@@ -112,7 +112,7 @@ oxagen agent unenroll <agent> [--host <tch_id>] [--reason <text>] [--json]
 oxagen agent enroll --token <oxe_1time_…> [--harness claude-code|codex|cursor|stella] [--port <n>] [--no-service] [--force]
 ```
 
-The scripted path of the register flow (Mission Control spec §14.1). The one-time enrollment token (issued once from the Agents page or through `create_enrollment_token`, good for thirty minutes) is the credential, so no `oxagen login` is needed: the control plane resolves the organization, the workspace and the agent from it, and the host file records what it answered. The routine is the one `oxagen tacho enroll` runs: the device key, the host credential, the `tachod` user service and the harness hooks. A token that was already used or has expired is refused (`token_used`, `token_expired`); issue a new one. The git remote of the directory the command runs in is reported so the onboarding gate can offer it as the workspace's main repository.
+The scripted path of the register flow (Mission Control spec §14.1). The one-time enrollment token (issued once from the Agents page or through `create_enrollment_token`, good for thirty minutes) is the credential, so no `oxagen login` is needed: the control plane resolves the organization, the workspace and the agent from it, and the host file records what it answered. The routine is the one `oxagen agent enroll` runs: the device key, the host credential, the `tachod` user service and the harness hooks. A token that was already used or has expired is refused (`token_used`, `token_expired`); issue a new one. The git remote of the directory the command runs in is reported so the onboarding gate can offer it as the workspace's main repository.
 
 ## oxagen agent env: bind agents to environments
 

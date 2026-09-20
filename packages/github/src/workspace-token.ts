@@ -107,7 +107,10 @@ export async function resolveGitHubToken(
           .select({ accessTokenEnc: schema.oauthAccounts.accessTokenEnc })
           .from(schema.oauthAccounts)
           .where(
-            eq(schema.oauthAccounts.id, connection.oauthAccountId as string),
+            and(
+              eq(schema.oauthAccounts.id, connection.oauthAccountId as string),
+              eq(schema.oauthAccounts.orgId, ctx.orgId),
+            ),
           )
           .limit(1),
       );

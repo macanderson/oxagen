@@ -97,6 +97,15 @@ beforeEach(() => {
 });
 
 describe("propose_agent", () => {
+  it("refuses to reset or write the production branch", async () => {
+    github.repository = { ...REPO, defaultBranch: "agents/perf-watch" };
+    await expect(handler()(input(), ctx())).rejects.toMatchObject({
+      reason: "production_branch_is_proposal_branch",
+    });
+    expect(github.deletedBranches).toEqual([]);
+    expect(github.commits).toEqual([]);
+  });
+
   it("cuts agents/<slug>, commits the definition and the generated subagent file, and opens the pull request", async () => {
     const out = await handler()(input(), ctx());
 
@@ -151,6 +160,46 @@ describe("propose_agent", () => {
     });
   });
 
+  it.each(["codex", "claude-agent-sdk", "custom"])(
+    "writes no Claude subagent file for %s",
+    async (harness) => {
+      const first = await handler()(input(), ctx());
+      const next = await handler()(input({ harness }), ctx());
+      expect(next.generatedPath).toBeNull();
+      expect(next.pullRequest.number).toBe(first.pullRequest.number);
+      expect(
+        await github.readFile(
+          REPO,
+          ".claude/agents/perf-watch.md",
+          next.branch,
+        ),
+      ).toBeNull();
+      expect(await github.readFile(REPO, next.path, next.branch)).toBe(
+        definition(),
+      );
+    },
+  );
+
+  it("preserves a rejected branch until its owner explicitly removes it", async () => {
+    const first = await handler()(input(), ctx());
+    github.commit(first.branch, "rejected.md", "rejected content");
+    await github.closePullRequest(REPO, first.pullRequest.number);
+    await expect(
+      handler()(input({ harness: "codex" }), ctx()),
+    ).rejects.toMatchObject({ reason: "proposal_branch_exists" });
+    expect(await github.readFile(REPO, "rejected.md", first.branch)).toBe(
+      "rejected content",
+    );
+    expect(github.deletedBranches).toEqual([]);
+  });
+
+  it("does not claim a generated file for Codex", async () => {
+    await handler()(input({ harness: "codex" }), ctx());
+    expect(github.pulls.at(-1)?.body).not.toContain(
+      "The subagent file is generated",
+    );
+  });
+
   it("digests the LF bytes a Windows editor sent as CRLF", async () => {
     const crlf = await handler()(
       input({ source: definition().replace(/\n/g, "\r\n") }),
@@ -186,10 +235,7 @@ describe("propose_agent", () => {
       handler()(input({ source: "schema = " }), ctx()),
     ).rejects.toMatchObject({ reason: "agent_check_schema" });
     await expect(
-      handler()(
-        input({ source: definition({ slug: '"other"' }) }),
-        ctx(),
-      ),
+      handler()(input({ source: definition({ slug: '"other"' }) }), ctx()),
     ).rejects.toMatchObject({ reason: "agent_check_schema" });
     expect(github.commits).toEqual([]);
   });
@@ -247,7 +293,9 @@ describe("propose_agent", () => {
     facts.agentKey = null;
     const out = await handler()(input(), ctx());
     expect(out.agentKey).toBeNull();
-    expect(github.pulls[0]!.body).toContain("creates the agent's principal");
+    expect(github.pulls[0]!.body).toContain(
+      "After merge, register this agent under the same slug to create its identity and credential.",
+    );
   });
 
   it("refuses a caller who is not an org Owner or Admin before reading anything (negative)", async () => {

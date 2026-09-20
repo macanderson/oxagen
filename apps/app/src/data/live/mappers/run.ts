@@ -166,18 +166,39 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
 function toTranscriptBody(
   half: RunTranscriptOutput["entries"][number]["request"],
 ): z.input<typeof RunTranscript>["entries"][number]["request"] {
-  return half === null
-    ? null
-    : {
-        seq: half.seq,
-        type: half.type,
-        digest: half.digest,
-        bytesRef: half.bytesRef,
-        redactions: half.redactions,
-        fidelity: half.fidelity,
-        text: half.text,
-        truncated: half.truncated,
-      };
+  if (half === null) return null;
+  // The current app body view is text-based. Project the already assembled
+  // message into that view, never the recorded SSE transport.
+  const blocks = half.assembly?.blocks;
+  const message = blocks
+    ?.map((block) => {
+      switch (block.kind) {
+        case "text":
+        case "thinking":
+          return block.text;
+        case "tool_use":
+          return `${block.name}\n${typeof block.input === "string" ? block.input : JSON.stringify(block.input, null, 2)}`;
+        case "tool_result":
+          return block.summary;
+      }
+    })
+    .join("\n\n");
+  const shortened =
+    blocks?.some((block) =>
+      block.kind === "text" || block.kind === "thinking"
+        ? block.truncated
+        : block.kind === "tool_use" && block.inputFolded,
+    ) ?? false;
+  return {
+    seq: half.seq,
+    type: half.type,
+    digest: half.digest,
+    bytesRef: half.bytesRef,
+    redactions: half.redactions,
+    fidelity: half.fidelity,
+    text: half.text ?? message ?? null,
+    truncated: half.truncated || shortened,
+  };
 }
 
 export function toRunTranscript(

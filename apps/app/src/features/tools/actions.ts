@@ -8,6 +8,7 @@
 // `set_kill_switch` an org Owner or Admin, and the three auto-approval writes
 // an org Owner or Admin. A refusal comes back as `denied` with nothing
 // changed, and the page names it where the person acted.
+import { agentMcpRegister } from "@oxagen/oxagen/contracts/agent.mcp.register";
 import { approvalRuleDelete } from "@oxagen/oxagen/contracts/approval_rule.delete";
 import { approvalRuleEnabledSet } from "@oxagen/oxagen/contracts/approval_rule.enabled.set";
 import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
@@ -16,23 +17,28 @@ import {
   killSwitchSet,
   type KillSwitchSetInput,
 } from "@oxagen/oxagen/contracts/kill_switch.set";
+import { connectionCreate } from "@oxagen/oxagen/contracts/connection.create";
+import { connectionGet } from "@oxagen/oxagen/contracts/connection.get";
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
 import type {
   ApprovalRuleHours,
   KillSwitchKind,
+  McpAuthStrategy,
+  RegisterableMcpTransport,
   ToolClassification,
   ToolEgress,
   ToolRiskGrade,
   ToolSideEffect,
 } from "@/data/contracts/tools";
-import type { ActionResult, ContractOutput } from "@/server/kernel";
 import {
-  kernelRead,
-  kernelWrite,
-  readToActionResult,
-} from "@/server/kernel";
+  ConnectionDetail,
+  type ConnectionDetail as ConnectionDetailView,
+} from "@/data/contracts/tools";
+import type { ActionResult, ContractOutput } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import { type ConnectionScheme, CONNECTION_SCHEMES } from "./view";
 
 /**
  * Pulls a registered MCP server's pinned tools into the registry: one
@@ -278,7 +284,7 @@ function bodyOf(rule: StoredRule | ApprovalRuleDraft) {
  * differently and that is not a change anyone made.
  */
 function bodyKey(body: ReturnType<typeof bodyOf>): string {
-  const ordered = <T,>(record: Readonly<Record<string, T>>) =>
+  const ordered = <T>(record: Readonly<Record<string, T>>) =>
     Object.fromEntries(
       Object.entries(record).sort(([left], [right]) =>
         left < right ? -1 : left > right ? 1 : 0,
@@ -402,4 +408,221 @@ export async function deleteApprovalRule(
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, approvalRuleDelete, { ruleId });
   return result.ok ? { ok: true, value: { ruleId } } : result;
+}
+
+// ── Connections and tool servers (lane: connections) ────────────────────────
+
+/** The fields the add-connection dialog collects. The secret never comes back. */
+export type ConnectionDraft = {
+  connectorId: string;
+  displayName: string;
+  scheme: ConnectionScheme;
+  /** The scheme's own fields, as typed. Secret material: never logged, never returned. */
+  secrets: Readonly<Record<string, string>>;
+  /** Blank leaves the connector's own default in place. */
+  deliveryMethod: string;
+};
+
+function refuseConnection(
+  field: "connectorId" | "displayName" | "secrets",
+): ActionResult<never> {
+  return { ok: false, reason: "invalid", code: "invalid_input", field };
+}
+
+/**
+ * Creates a data-source connection for this workspace. The handler encrypts
+ * the credential before it reaches a row and asserts an org Owner or Admin, or
+ * a workspace Owner, before it touches one; a refusal comes back as `denied`
+ * with nothing written.
+ *
+ * The connection is answered `pending_setup`: creating it stores the
+ * credential and nothing has yet drawn on it. The dialog says so rather than
+ * reporting a live connection.
+ *
+ * **The credential leaves in one direction.** It is read off the form, sent to
+ * the kernel and dropped: nothing here logs it, no branch puts it in a failure
+ * message, and the value returned carries the connection's public id, status
+ * and name only.
+ */
+export async function addConnection(
+  org: string,
+  ws: string,
+  draft: ConnectionDraft,
+): Promise<
+  ActionResult<{
+    id: string;
+    status: "pending_setup";
+    connectorId: string;
+    displayName: string;
+  }>
+> {
+  const connectorId = draft.connectorId.trim();
+  if (connectorId === "") return refuseConnection("connectorId");
+  const displayName = draft.displayName.trim();
+  if (displayName === "" || displayName.length > 255) {
+    return refuseConnection("displayName");
+  }
+  const fields = CONNECTION_SCHEMES[draft.scheme];
+  const secrets: Record<string, string> = {};
+  for (const field of fields) {
+    const value = draft.secrets[field] ?? "";
+    if (value.trim() === "") return refuseConnection("secrets");
+    secrets[field] = value;
+  }
+  const deliveryMethod = draft.deliveryMethod.trim();
+
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, connectionCreate, {
+    connectorId,
+    displayName,
+    authCredential: { scheme: draft.scheme, type: draft.scheme, ...secrets },
+    ...(deliveryMethod === "" ? {} : { deliveryMethod }),
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          id: result.value.publicId,
+          status: result.value.status,
+          connectorId: result.value.connectorId,
+          displayName: result.value.displayName,
+        },
+      }
+    : result;
+}
+
+/**
+ * One connection as `get_connection` records it, for the detail drawer. The
+ * drawer reads on open rather than the table reading every connection's detail
+ * up front, so a workspace with many connections pays for the one opened.
+ */
+export async function readConnection(
+  org: string,
+  ws: string,
+  connectionId: string,
+): Promise<ActionResult<ConnectionDetailView>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: connectionGet,
+    input: { connectionId: connectionId.trim() },
+    page: "tools",
+  });
+  if (!read.ok) return readToActionResult<never>(read);
+  // Mapped here rather than in `data/live/mappers`: an on-demand read belongs
+  // to the action that makes it, and a feature may not import a live mapper
+  // (INV-07). The record's database uuid is dropped on the way (INV-11).
+  const out = read.value;
+  const parsed = ConnectionDetail.safeParse({
+    id: out.publicId,
+    connector: out.connectorId,
+    displayName: out.displayName,
+    authScheme: out.authScheme,
+    deliveryMethod: out.deliveryMethod,
+    status: out.status,
+    entityCount: out.entityCount,
+    lastSyncAt: out.lastSyncAt,
+    healthStatus: out.healthStatus,
+    lastPollAt: out.lastPollAt,
+    nextPollAt: out.nextPollAt,
+    createdAt: out.createdAt,
+    deliveryConfig: out.deliveryConfig,
+    errorMessage: out.errorMessage,
+    consecutiveFailureCount: out.consecutiveFailureCount,
+    lastErrorAt: out.lastErrorAt,
+    updatedAt: out.updatedAt,
+  });
+  if (!parsed.success) {
+    return { ok: false, reason: "unavailable", code: "record_unmappable" };
+  }
+  return { ok: true, value: parsed.data };
+}
+
+/** The fields the register-server dialog collects. `authConfig` is secret material. */
+export type McpServerDraft = {
+  name: string;
+  transportType: RegisterableMcpTransport;
+  endpointUrl: string;
+  authStrategy: McpAuthStrategy;
+  /** header name to value, as typed. Never logged, never returned. */
+  authConfig: Readonly<Record<string, string>>;
+};
+
+/**
+ * Registers an external MCP server with this workspace. The handler health
+ * checks the endpoint, envelope-encrypts the auth config and records the pins
+ * it discovered; `import_tools` then pulls those pins into the registry.
+ *
+ * **The org role is checked here, not only in the handler.**
+ * `register_mcp_server` declares org Owner or Admin and its handler asserts
+ * nothing, so on a non-enterprise org `checkIAM` fast-paths the declaration to
+ * an allow (#3258) and the contract's restriction holds nowhere. Refusing here
+ * keeps the app from being the widest door to it. The handler is still the
+ * place the assertion belongs; until it has one, this is the gate.
+ */
+export async function registerServer(
+  org: string,
+  ws: string,
+  draft: McpServerDraft,
+): Promise<
+  ActionResult<{
+    serverId: string;
+    healthStatus: "healthy" | "degraded" | "unreachable";
+    discoveredTools: readonly string[];
+  }>
+> {
+  const name = draft.name.trim();
+  if (name === "" || name.length > 120) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "name",
+    };
+  }
+  const endpointUrl = draft.endpointUrl.trim();
+  if (endpointUrl === "") {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "endpointUrl",
+    };
+  }
+  const authConfig: Record<string, string> = {};
+  for (const [key, value] of Object.entries(draft.authConfig)) {
+    const header = key.trim();
+    const secret = value.trim();
+    if (header === "" || secret === "") continue;
+    authConfig[header] = secret;
+  }
+  if (draft.authStrategy !== "none" && Object.keys(authConfig).length === 0) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "authConfig",
+    };
+  }
+
+  const ctx = await requireViewer(org, ws);
+  if (ctx.orgRole !== "owner" && ctx.orgRole !== "admin") {
+    return { ok: false, reason: "denied", code: "org_role_required" };
+  }
+  const result = await kernelWrite(ctx, agentMcpRegister, {
+    name,
+    transportType: draft.transportType,
+    endpointUrl,
+    authStrategy: draft.authStrategy,
+    ...(draft.authStrategy === "none" ? {} : { authConfig }),
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          serverId: result.value.mcpServerId,
+          healthStatus: result.value.healthStatus,
+          discoveredTools: result.value.discoveredTools,
+        },
+      }
+    : result;
 }

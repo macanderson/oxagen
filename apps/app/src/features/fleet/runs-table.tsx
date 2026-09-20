@@ -1,6 +1,12 @@
 // The runs table: one list_runs page, newest first, with links to the next
 // page and back to the newest. A value the store did not record reads "not
 // recorded". The empty state tells a new workspace how its first run arrives.
+//
+// Three columns describe how much a row can be trusted: the enforcement tier
+// (where Oxagen observed the run's calls), the replay grade the seal recorded,
+// and the witness verdict. Each renders the recorded word and nothing stronger
+// (spec §14), so a run with no witness reads "not recorded" rather than
+// `unverified`, which is itself a verdict a runner reached.
 import { useLocale, useTranslations } from "next-intl";
 import { useFormatter } from "@/ui/formatter";
 import type { RunPage } from "@/data/contracts/runs";
@@ -8,6 +14,7 @@ import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { linkText, mono, panel } from "@/ui/control-styles";
+import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -16,6 +23,7 @@ import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, numericCell, Table } from "@/ui/table";
 import { ReadFailure } from "@/ui/read-failure";
+import { RunRowControls } from "./run-row-controls";
 
 type Place = { org: string; ws: string };
 
@@ -41,22 +49,34 @@ function RunsPageView({
   cursor,
   org,
   ws,
-}: { page: RunPage; cursor: string | null } & Place) {
+  canCommand,
+}: {
+  page: RunPage;
+  cursor: string | null;
+  canCommand: boolean;
+} & Place) {
   const t = useTranslations("fleet.runs");
   const format = useFormatter();
   const locale = useLocale();
   const notRecorded = (
     <span className="text-muted-foreground">{t("notRecorded")}</span>
   );
+  // A run whose record holds no cost is one no total over this column covers
+  // (#3304). The page counts the rows it drew rather than naming a harness:
+  // the row says whether a figure was recorded, not who failed to report one.
+  const unpriced = page.runs.filter((run) => run.cost === null).length;
   const columns = [
     { label: t("columns.run") },
     { label: t("columns.agent") },
     { label: t("columns.operator") },
     { label: t("columns.status") },
+    { label: t("columns.tier") },
     { label: t("columns.replay") },
+    { label: t("columns.verdict") },
     { label: t("columns.cost"), numeric: true },
     { label: t("columns.frames"), numeric: true },
     { label: t("columns.started") },
+    { label: t("columns.controls") },
   ];
   return (
     <>
@@ -124,10 +144,22 @@ function RunsPageView({
               <StatusBadge status={run.status} />
             </td>
             <td className={cell}>
+              <EnforcementTierBadge tier={run.enforcementTier} />
+            </td>
+            <td className={cell}>
               {run.replayGrade === null ? (
                 notRecorded
               ) : (
                 <ReplayGradeBadge grade={run.replayGrade} />
+              )}
+            </td>
+            <td className={cell}>
+              {run.verdict === null ? (
+                notRecorded
+              ) : (
+                <span data-verdict={run.verdict} className="whitespace-nowrap">
+                  {t(`verdict.${run.verdict}`)}
+                </span>
               )}
             </td>
             <td className={numericCell}>
@@ -151,9 +183,40 @@ function RunsPageView({
                 })}
               </time>
             </td>
+            <td className={cell}>
+              <RunRowControls
+                org={org}
+                ws={ws}
+                runId={run.id}
+                status={run.status}
+                source={run.source}
+                enforcementTier={run.enforcementTier}
+                canCommand={canCommand}
+              />
+            </td>
           </tr>
         ))}
       </Table>
+      <p
+        data-testid="runs-legend"
+        className="max-w-prose pt-3 text-xs text-muted-foreground"
+      >
+        {t("legend")}
+      </p>
+      {unpriced === 0 ? null : (
+        <p
+          data-testid="runs-unpriced"
+          className="max-w-prose pt-1 text-xs text-muted-foreground"
+        >
+          {t("unpriced", { count: unpriced })}{" "}
+          <SafeLink
+            to={routes.spend(org, ws, { tab: "findings" })}
+            className={linkText}
+          >
+            {t("unpricedLink")}
+          </SafeLink>
+        </p>
+      )}
       {page.nextCursor === null && cursor === null ? null : (
         <nav aria-label={t("pager")} className="flex gap-4 pt-3 text-sm">
           {cursor === null ? null : (
@@ -181,11 +244,14 @@ export function RunsTable({
   workspace,
   org,
   ws,
+  canCommand,
 }: {
   runs: Read<RunPage>;
   cursor: string | null;
   /** The workspace's display name, for the empty state. */
   workspace: string;
+  /** Whether `dispatch_command` admits this viewer, resolved once for the page. */
+  canCommand: boolean;
 } & Place) {
   const t = useTranslations("fleet.runs");
   return (
@@ -198,7 +264,13 @@ export function RunsTable({
       ) : runs.value.runs.length === 0 && cursor === null ? (
         <EmptyRuns workspace={workspace} />
       ) : (
-        <RunsPageView page={runs.value} cursor={cursor} org={org} ws={ws} />
+        <RunsPageView
+          page={runs.value}
+          cursor={cursor}
+          org={org}
+          ws={ws}
+          canCommand={canCommand}
+        />
       )}
     </section>
   );

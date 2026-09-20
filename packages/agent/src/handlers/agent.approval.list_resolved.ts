@@ -32,6 +32,9 @@ export type ResolvedApprovalListRow = {
   ruleIds: string[];
   autoRuleId: string | null;
   resolvedReasons: string[];
+  resumeStatus?: string | null;
+  resumeRunPublicId?: string | null;
+  resumeError?: string | null;
 };
 
 /**
@@ -54,7 +57,12 @@ type QueriedRow = {
   ruleIds: string[];
   autoRuleId: string | null;
   resolvedReasons: string[];
-  message: { conversation: { user: { publicId: string } | null } | null } | null;
+  resumeStatus: string | null;
+  resumeRunPublicId: string | null;
+  resumeError: string | null;
+  message: {
+    conversation: { user: { publicId: string } | null } | null;
+  } | null;
   resolvedBy: { publicId: string } | null;
   mandate: { publicId: string } | null;
 };
@@ -78,6 +86,9 @@ function toResolvedApprovalListRow(row: QueriedRow): ResolvedApprovalListRow {
     ruleIds: row.ruleIds,
     autoRuleId: row.autoRuleId,
     resolvedReasons: row.resolvedReasons,
+    resumeStatus: row.resumeStatus,
+    resumeRunPublicId: row.resumeRunPublicId,
+    resumeError: row.resumeError,
   };
 }
 
@@ -128,6 +139,15 @@ export function toResolvedApprovalListItem(
     expiresAt: row.expiresAt.toISOString(),
     resolvedAt: row.resolvedAt.toISOString(),
     resolution: toResolution(row.resolution),
+    ...(row.resumeStatus
+      ? {
+          execution: {
+            status: row.resumeStatus,
+            runId: row.resumeRunPublicId ?? null,
+            reason: row.resumeError ?? null,
+          },
+        }
+      : {}),
     resolvedBy: row.resolvedByPolicy
       ? row.resolvedByPolicy
       : row.resolvedByUserPublicId
@@ -166,7 +186,7 @@ export async function agentApprovalListResolvedHandler(
   ctx: CapabilityContext,
 ): Promise<AgentApprovalListResolvedOutput> {
   const after = decodeResolvedCursor(input.cursor);
-  const rows = (await withTenantDb((tx) =>
+  const rows: QueriedRow[] = await withTenantDb((tx) =>
     tx.query.approvalRequests.findMany({
       where: and(
         eq(ar.orgId, ctx.orgId),
@@ -197,6 +217,9 @@ export async function agentApprovalListResolvedHandler(
         ruleIds: true,
         autoRuleId: true,
         resolvedReasons: true,
+        resumeStatus: true,
+        resumeRunPublicId: true,
+        resumeError: true,
       },
       with: {
         // The requester: the message the call parked on, then its
@@ -220,11 +243,13 @@ export async function agentApprovalListResolvedHandler(
         mandate: { columns: { publicId: true } },
       },
     }),
-  )) as QueriedRow[];
+  );
   const page = rows.slice(0, input.limit);
   const last = page[page.length - 1];
   return {
-    items: page.map((row) => toResolvedApprovalListItem(toResolvedApprovalListRow(row))),
+    items: page.map((row) =>
+      toResolvedApprovalListItem(toResolvedApprovalListRow(row)),
+    ),
     nextCursor:
       rows.length > input.limit && last
         ? encodeResolvedCursor({

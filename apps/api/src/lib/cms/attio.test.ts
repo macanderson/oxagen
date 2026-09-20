@@ -5,11 +5,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import {
-  ATTIO_BASE_URL,
-  AttioRequestError,
-  createAttioClient,
-} from "./attio";
+import { ATTIO_BASE_URL, AttioRequestError, createAttioClient } from "./attio";
 
 function jsonResponse(status: number, body: unknown, headers?: HeadersInit) {
   return new Response(JSON.stringify(body), {
@@ -175,7 +171,9 @@ describe("createAttioClient", () => {
   });
 
   it("rejects a list entry assert that carries no entry id", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { data: {} }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { data: {} }));
     const client = makeClient(fetchMock as unknown as typeof fetch);
     await expect(
       client.assertListEntry({
@@ -226,7 +224,9 @@ describe("createAttioClient", () => {
   it("does not retry a 4xx other than 429", async () => {
     const fetchMock = vi
       .fn()
-      .mockImplementation(async () => jsonResponse(400, { error: "bad phone" }));
+      .mockImplementation(async () =>
+        jsonResponse(400, { error: "bad phone" }),
+      );
     const client = makeClient(fetchMock as unknown as typeof fetch);
     await expect(
       client.assertPerson({

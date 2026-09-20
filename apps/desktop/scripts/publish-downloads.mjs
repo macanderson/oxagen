@@ -4,6 +4,8 @@
  *
  *   node scripts/publish-downloads.mjs --run <actions run id>   [--version 2.1.1] [--dry-run]
  *   node scripts/publish-downloads.mjs --dir <folder of installers> [--version 2.1.1] [--dry-run]
+ *   node scripts/publish-downloads.mjs --page-only                [--version 2.1.1] [--dry-run]
+ *   node scripts/publish-downloads.mjs --dir <folder> --resume    (CI: a re-run after a partial failure)
  *
  * With --run it fetches every artifact of a `.github/workflows/desktop.yml`
  * run; with --dir it takes installers already on disk. Either way it keeps
@@ -11,7 +13,25 @@
  * version), hashes them, writes SHA256SUMS.txt to
  * s3://<bucket>/desktop/<version>/ as a conditional write that reserves the
  * version, uploads the installers there with the right content types, then
- * writes the listing page at the bucket root and invalidates it on CloudFront.
+ * writes the listing page at the bucket root, copies the page's webfonts
+ * beside it, and invalidates both on CloudFront.
+ *
+ * `.github/workflows/desktop.yml` runs this with --dir after every tagged
+ * build, so a `desktop-v*` tag is enough to update https://downloads.oxagen.sh/;
+ * the invocations above are for a build made some other way.
+ *
+ * --resume is for a re-run of the workflow's publish job after something
+ * downstream of the upload failed: when the version is already published,
+ * the installers on disk are hashed and compared with the published
+ * SHA256SUMS.txt. Missing objects are uploaded before the page is redrawn
+ * from the bucket and the job carries on. A different set is still
+ * refused: that is a new build under an old version's URLs.
+ *
+ * --page-only rewrites the listing page (and its fonts) for a version that is
+ * already published, from what the bucket holds: the object sizes from a
+ * listing of `desktop/<version>/` and the digests from its SHA256SUMS.txt.
+ * No installer is read or written. It is how a change to the page's design
+ * reaches the live version between releases.
  *
  * Versioned URLs are served immutable, so a version that is already published
  * is refused, and a version two invocations race for is won by one of them:
@@ -43,6 +63,7 @@ import { fileURLToPath } from "node:url";
 import {
   classifyInstaller,
   decidePublication,
+  FONT_FILES,
   renderIndexHtml,
   reportPublicationDecision,
   reservationArgs,
@@ -60,6 +81,8 @@ const dryRun = argv.includes("--dry-run");
 const allowOverwrite = argv.includes("--allow-overwrite");
 const runId = flag("--run");
 const fromDir = flag("--dir");
+const pageOnly = argv.includes("--page-only");
+const resume = argv.includes("--resume");
 const repo = flag("--repo") ?? "macanderson/oxagen";
 const bucket = flag("--bucket") ?? "oxagen-downloads-916294258235";
 const host = flag("--host") ?? "downloads.oxagen.sh";
@@ -67,9 +90,12 @@ const version =
   flag("--version") ??
   JSON.parse(readFileSync(join(here, "..", "package.json"), "utf8")).version;
 
-if ((runId === undefined) === (fromDir === undefined)) {
+const sources = [runId !== undefined, fromDir !== undefined, pageOnly].filter(
+  Boolean,
+).length;
+if (sources !== 1) {
   console.error(
-    "usage: publish-downloads.mjs (--run <id> | --dir <folder>) [--version x.y.z] [--bucket name] [--host name] [--allow-overwrite] [--dry-run]",
+    "usage: publish-downloads.mjs (--run <id> | --dir <folder> | --page-only) [--version x.y.z] [--bucket name] [--host name] [--allow-overwrite] [--resume] [--dry-run]",
   );
   process.exit(2);
 }
@@ -136,6 +162,211 @@ function sha256(path) {
 
 const keyPrefix = `desktop/${version}/`;
 const prefix = `s3://${bucket}/desktop/${version}`;
+const immutable = "public, max-age=31536000, immutable";
+
+function upload(path, key, contentType, cacheControl) {
+  const args = [
+    "s3",
+    "cp",
+    path,
+    key,
+    "--content-type",
+    contentType,
+    "--cache-control",
+    cacheControl,
+    "--only-show-errors",
+  ];
+  if (dryRun) console.log(`[dry-run] aws ${args.join(" ")}`);
+  else sh("aws", args);
+}
+
+/**
+ * Render the listing for `entries` and put it at the bucket root with the
+ * page's fonts beside it. The page is short-lived because it moves with every
+ * release; the fonts are the kit's files as vendored into apps/web/fonts by
+ * tools/scripts/sync-brand-assets.mjs, which change only when the kit does,
+ * so a week in caches is safe (the path is invalidated when they are
+ * re-uploaded).
+ */
+function publishPage(dir, entries, publishedAt, cliRelease = true) {
+  const page = join(dir, "index.html");
+  writeFileSync(
+    page,
+    renderIndexHtml({ version, entries, publishedAt, cliRelease }),
+  );
+  upload(
+    page,
+    `s3://${bucket}/index.html`,
+    "text/html; charset=utf-8",
+    "public, max-age=300",
+  );
+  const fontsDir = resolve(here, "..", "..", "web", "fonts");
+  for (const file of FONT_FILES) {
+    upload(
+      join(fontsDir, file),
+      `s3://${bucket}/fonts/${file}`,
+      "font/woff2",
+      "public, max-age=604800",
+    );
+  }
+}
+
+/** Invalidate `paths` on the distribution that serves the host, if any. */
+function invalidate(paths) {
+  if (dryRun) {
+    console.log(
+      `[dry-run] aws cloudfront create-invalidation ${paths.join(" ")}`,
+    );
+    return;
+  }
+  const ids = sh(
+    "aws",
+    [
+      "cloudfront",
+      "list-distributions",
+      "--query",
+      `DistributionList.Items[?contains(Aliases.Items, '${host}')].Id`,
+      "--output",
+      "text",
+    ],
+    { capture: true },
+  ).trim();
+  if (ids === "" || ids === "None") {
+    console.warn(
+      `! no CloudFront distribution serves ${host} yet; skipped invalidation`,
+    );
+    return;
+  }
+  sh("aws", [
+    "cloudfront",
+    "create-invalidation",
+    "--distribution-id",
+    ids.split(/\s+/)[0],
+    "--paths",
+    ...paths,
+  ]);
+}
+
+/** The published SHA256SUMS.txt, as file name → digest. */
+function readPublishedDigests() {
+  const sumsText = sh(
+    "aws",
+    ["s3", "cp", `${prefix}/SHA256SUMS.txt`, "-", "--only-show-errors"],
+    { capture: true },
+  );
+  return new Map(
+    sumsText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "")
+      .map((line) => {
+        const [sha256, ...rest] = line.split(/\s+/);
+        return [rest.join(" ").replace(/^\*/, ""), sha256];
+      }),
+  );
+}
+
+/** List every object under this release prefix. */
+function listPublishedObjects() {
+  const listing = JSON.parse(
+    sh(
+      "aws",
+      [
+        "s3api",
+        "list-objects-v2",
+        "--bucket",
+        bucket,
+        "--prefix",
+        keyPrefix,
+        "--output",
+        "json",
+        "--no-cli-pager",
+      ],
+      { capture: true },
+    ) || "{}",
+  );
+  return Array.isArray(listing.Contents) ? listing.Contents : [];
+}
+
+/** Refuse incomplete releases before replacing the public download page. */
+async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
+  const objects = [
+    ...listPublishedObjects(),
+    ...(dryRun ? plannedObjects : []),
+  ];
+  if (objects.length === 0) {
+    console.error(
+      `✖ nothing is published under ${prefix}/; --page-only needs a published version`,
+    );
+    process.exit(1);
+  }
+  const digests = readPublishedDigests();
+  const keys = new Set(objects.map((object) => object.Key));
+  const missing = [...digests.keys()].filter(
+    (file) => !keys.has(`${keyPrefix}${file}`),
+  );
+  if (missing.length > 0) {
+    console.error(
+      `Installers are missing from ${prefix}/: ${missing.join(", ")}. Resume the upload before publishing.`,
+    );
+    process.exit(1);
+  }
+  const published = [];
+  for (const object of objects) {
+    const name = String(object.Key).split("/").pop();
+    const installer = classifyInstaller(name, version);
+    if (installer === null) continue;
+    const sha256 = digests.get(name);
+    if (sha256 === undefined) {
+      console.error(
+        `✖ ${name} is published but SHA256SUMS.txt does not list it`,
+      );
+      process.exit(1);
+    }
+    published.push({ ...installer, bytes: Number(object.Size), sha256 });
+  }
+  if (published.length === 0) {
+    console.error(`✖ no installers for ${version} under ${prefix}/`);
+    process.exit(1);
+  }
+  // The page says when the version was published, not when it was redrawn:
+  // the checksum file is written first on a publish, so its date is that.
+  const sumsObject = objects.find(
+    (o) => o.Key === `${keyPrefix}SHA256SUMS.txt`,
+  );
+  const publishedAt =
+    String(sumsObject?.LastModified ?? "").slice(0, 10) ||
+    new Date().toISOString().slice(0, 10);
+  // A version published before the release workflow existed has no
+  // desktop-v release with the bare binaries; do not link one that 404s. A
+  // resumed publish skips the probe: its release is a draft at this point
+  // (which HEAD reports as absent) and the job publishes it moments later.
+  let cliRelease = true;
+  if (probeCliRelease) {
+    const releaseUrl = `https://github.com/${repo}/releases/tag/desktop-v${version}`;
+    cliRelease = await fetch(releaseUrl, { method: "HEAD", redirect: "manual" })
+      .then((r) => r.status === 200)
+      .catch(() => false);
+    if (!cliRelease)
+      console.warn(
+        `! ${releaseUrl} does not exist; the page omits the bare-binary link`,
+      );
+  }
+  const dir = mkdtempSync(join(tmpdir(), "oxagen-downloads-page-"));
+  publishPage(dir, sortInstallers(published), publishedAt, cliRelease);
+  invalidate(["/", "/index.html", "/fonts/*"]);
+  for (const entry of sortInstallers(published))
+    console.log(`${entry.file}  ${entry.bytes} bytes  ${entry.sha256}`);
+  console.log(`https://${host}/`);
+  rmSync(dir, { recursive: true, force: true });
+  return digests;
+}
+
+// --page-only: the version is already there; describe it from the bucket.
+if (pageOnly) {
+  await redrawFromBucket({ probeCliRelease: true });
+  process.exit(0);
+}
 
 // `immutable, max-age=31536000` is a promise to every cache that fetched the
 // URL, not just to CloudFront. Overwriting the object cannot take that promise
@@ -185,10 +416,18 @@ const decision = decidePublication(probe, { version, prefix, allowOverwrite });
 // --dry-run performs no writes, so it is told what the real run would have
 // decided and then shown the plan anyway; only a real publish stops. See
 // reportPublicationDecision, which is the one place that distinction is made.
-const report = reportPublicationDecision(decision, { dryRun });
-if (report.message !== null)
-  (report.level === "error" ? console.error : console.warn)(report.message);
-if (report.exitCode !== null) process.exit(report.exitCode);
+const resuming =
+  resume && decision.action === "stop" && decision.reason === "published";
+if (resuming) {
+  console.warn(
+    `! ${version} is already published; --resume will compare the build on disk with it`,
+  );
+} else {
+  const report = reportPublicationDecision(decision, { dryRun });
+  if (report.message !== null)
+    (report.level === "error" ? console.error : console.warn)(report.message);
+  if (report.exitCode !== null) process.exit(report.exitCode);
+}
 
 // 1. Collect the build outputs.
 const work = mkdtempSync(join(tmpdir(), "oxagen-downloads-"));
@@ -252,7 +491,7 @@ for (const os of ["macOS", "Windows", "Linux"]) {
     console.warn(`! no ${os} installer for ${version}; the page will omit it`);
 }
 
-// 3. Hash, write SHA256SUMS.txt and the page.
+// 3. Hash and write SHA256SUMS.txt.
 const entries = [];
 for (const installer of installers) {
   const path = found.get(installer.file).path;
@@ -265,36 +504,59 @@ for (const installer of installers) {
 }
 const sums = join(work, "SHA256SUMS.txt");
 writeFileSync(sums, sha256SumsText(entries));
-const page = join(work, "index.html");
-writeFileSync(
-  page,
-  renderIndexHtml({
-    version,
-    entries,
-    publishedAt: new Date().toISOString().slice(0, 10),
-  }),
-);
+
+// A retry must use the same build before it can repair missing objects.
+// Verify the complete bucket listing before the job's later steps run.
+// Anything else is a different build asking for an old version's immutable
+// URLs, which is what the refusal above exists to stop.
+if (resuming) {
+  const published = readPublishedDigests();
+  const differs = entries.filter((e) => published.get(e.file) !== e.sha256);
+  const missing = [...published.keys()].filter(
+    (file) => !entries.some((e) => e.file === file),
+  );
+  if (differs.length > 0 || missing.length > 0) {
+    console.error(
+      `✖ the build on disk is not the ${version} that is published:\n` +
+        [
+          ...differs.map((e) => `  ${e.file} has a different digest`),
+          ...missing.map((f) => `  ${f} is published but not on disk`),
+        ].join("\n") +
+        "\n  Ship the fix as a new version.",
+    );
+    process.exit(1);
+  }
+  const keys = new Set(listPublishedObjects().map((object) => object.Key));
+  const plannedObjects = [];
+  for (const entry of entries) {
+    if (!keys.has(`${keyPrefix}${entry.file}`)) {
+      upload(
+        entry.path,
+        `${prefix}/${entry.file}`,
+        entry.contentType,
+        immutable,
+      );
+      if (dryRun) {
+        plannedObjects.push({
+          Key: `${keyPrefix}${entry.file}`,
+          Size: entry.bytes,
+        });
+      }
+    }
+  }
+  await redrawFromBucket({ probeCliRelease: false, plannedObjects });
+  console.log(
+    dryRun
+      ? `[dry-run] ${version} installer recovery and page publication planned.`
+      : `${version} has every installer; page redrawn.`,
+  );
+  rmSync(work, { recursive: true, force: true });
+  process.exit(0);
+}
 
 // 4. Reserve the version, then upload. Versioned paths are immutable (a fix
-// ships as a new version, enforced above), so they cache for a year; the page
-// is short-lived because it moves with every release.
-const upload = (path, key, contentType, cacheControl) => {
-  const args = [
-    "s3",
-    "cp",
-    path,
-    key,
-    "--content-type",
-    contentType,
-    "--cache-control",
-    cacheControl,
-    "--only-show-errors",
-  ];
-  if (dryRun) console.log(`[dry-run] aws ${args.join(" ")}`);
-  else sh("aws", args);
-};
-const immutable = "public, max-age=31536000, immutable";
-
+// ships as a new version, enforced above), so they cache for a year.
+//
 // The listing above is a check, and a check cannot stop two publishes of the
 // same new version from both seeing an empty prefix before either has written
 // anything — after which their uploads interleave and the fleet can end up
@@ -343,48 +605,14 @@ if (dryRun) {
 for (const entry of entries) {
   upload(entry.path, `${prefix}/${entry.file}`, entry.contentType, immutable);
 }
-upload(
-  page,
-  `s3://${bucket}/index.html`,
-  "text/html; charset=utf-8",
-  "public, max-age=300",
-);
+publishPage(work, entries, new Date().toISOString().slice(0, 10));
 
-// 5. Invalidate the page when the distribution exists.
-if (!dryRun) {
-  const ids = sh(
-    "aws",
-    [
-      "cloudfront",
-      "list-distributions",
-      "--query",
-      `DistributionList.Items[?contains(Aliases.Items, '${host}')].Id`,
-      "--output",
-      "text",
-    ],
-    { capture: true },
-  ).trim();
-  if (ids !== "" && ids !== "None") {
-    sh("aws", [
-      "cloudfront",
-      "create-invalidation",
-      "--distribution-id",
-      ids.split(/\s+/)[0],
-      "--paths",
-      "/",
-      "/index.html",
-      // Only an --allow-overwrite republish can have a stale edge copy of the
-      // versioned prefix, and only the edge is reachable — anything further
-      // downstream was promised a year. Invalidating a prefix that was never
-      // cached costs nothing, so this runs unconditionally.
-      `/desktop/${version}/*`,
-    ]);
-  } else {
-    console.warn(
-      `! no CloudFront distribution serves ${host} yet; skipped invalidation`,
-    );
-  }
-}
+// 5. Invalidate the page when the distribution exists. Only an
+// --allow-overwrite republish can have a stale edge copy of the versioned
+// prefix, and only the edge is reachable: anything further downstream was
+// promised a year. Invalidating a prefix that was never cached costs nothing,
+// so it is always included.
+invalidate(["/", "/index.html", "/fonts/*", `/desktop/${version}/*`]);
 
 for (const entry of entries)
   console.log(

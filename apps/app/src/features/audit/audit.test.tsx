@@ -130,6 +130,8 @@ const source: DataSource = {
     grants: refuse,
     killSwitches: refuse,
     approvalRules: refuse,
+    connections: refuse,
+    mcpServers: refuse,
   },
 };
 

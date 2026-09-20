@@ -474,3 +474,152 @@ describe("resolveEntity — Pass B when the embedder cannot answer", () => {
     expect(result.similarityDeferred).toBeUndefined();
   });
 });
+
+describe("GitHub legacy record identity", () => {
+  const sourceUrl = "https://github.com/acme/one/issues/7";
+  const mutation = makeMutation({
+    naturalKey: "github:conn-1:issue:id:101",
+    legacyNaturalKey: "github:conn-1:7",
+    sourceRef: {
+      connectorType: "github",
+      connectionId: "conn-1",
+      externalId: "issue:id:101",
+      externalUrl: sourceUrl,
+    },
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+    mocks.sessionClose.mockResolvedValue(undefined);
+    mocks.upsertEntityNode.mockResolvedValue({ nodeId: "written-node" });
+    mocks.embedText.mockRejectedValue(new Error("embedding unavailable"));
+  });
+
+  function legacyRows(rows: Array<Record<string, unknown>>) {
+    mocks.sessionRun
+      .mockResolvedValueOnce({ records: [] })
+      .mockResolvedValueOnce({ records: [] })
+      .mockResolvedValueOnce({
+        records: rows.map((row) => ({ get: (key: string) => row[key] })),
+      });
+  }
+
+  it("preserves the original node and key when its source URL proves identity", async () => {
+    legacyRows([
+      {
+        nodeId: "original-node",
+        properties: JSON.stringify({ url: sourceUrl }),
+      },
+    ]);
+    const result = await resolveEntity(mutation, "org-1");
+    expect(result.principalNodeId).toBe("original-node");
+    expect(result.action).toBe("updated_principal");
+    expect(mocks.upsertEntityNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        naturalKey: "github:conn-1:7",
+        canonicalNaturalKey: mutation.naturalKey,
+      }),
+      "org-1",
+      {},
+    );
+    expect(mocks.embedText).not.toHaveBeenCalled();
+    const [query, params] = mocks.sessionRun.mock.calls[2]!;
+    expect(query).toContain("orgId: $orgId");
+    expect(query).toContain("workspaceId: $workspaceId");
+    expect(query).toContain("n.sourceRecordType = $sourceRecordType");
+    expect(params).toEqual({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      sourceRecordType: "issue",
+      legacyNaturalKey: "github:conn-1:7",
+    });
+  });
+
+  it.each([
+    [
+      "another repository",
+      [
+        {
+          nodeId: "foreign",
+          properties: JSON.stringify({
+            url: "https://github.com/acme/two/issues/7",
+          }),
+        },
+      ],
+    ],
+    ["missing source URL", [{ nodeId: "unknown", properties: "{}" }]],
+    ["malformed properties", [{ nodeId: "unknown", properties: "broken" }]],
+    [
+      "duplicate legacy nodes",
+      [
+        { nodeId: "one", properties: JSON.stringify({ url: sourceUrl }) },
+        { nodeId: "two", properties: "{}" },
+      ],
+    ],
+  ])("does not overwrite %s", async (_case, rows) => {
+    legacyRows(rows);
+    const result = await resolveEntity(mutation, "org-1");
+    expect(result.action).toBe("created_principal");
+    expect(mocks.upsertEntityNode).toHaveBeenCalledWith(
+      expect.objectContaining({ naturalKey: mutation.naturalKey }),
+      "org-1",
+      {},
+    );
+  });
+
+  it("finds a migrated legacy node by its canonical alias after a repository rename", async () => {
+    mocks.sessionRun
+      .mockResolvedValueOnce({ records: [] })
+      .mockResolvedValueOnce({
+        records: [
+          {
+            get: (key: string) =>
+              key === "nodeId" ? "original-node" : "github:conn-1:7",
+          },
+        ],
+      });
+    const result = await resolveEntity(
+      {
+        ...mutation,
+        sourceRef: {
+          ...mutation.sourceRef,
+          externalUrl: "https://github.com/acme/renamed/issues/7",
+        },
+      },
+      "org-1",
+    );
+    expect(result.principalNodeId).toBe("original-node");
+    expect(mocks.sessionRun).toHaveBeenCalledTimes(2);
+    expect(mocks.sessionRun.mock.calls[1]?.[0]).toContain(
+      "orgId: $orgId, workspaceId: $workspaceId",
+    );
+    expect(mocks.sessionRun.mock.calls[1]?.[1]).toEqual({
+      canonicalNaturalKey: mutation.naturalKey,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
+    expect(mocks.upsertEntityNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        naturalKey: "github:conn-1:7",
+        canonicalNaturalKey: mutation.naturalKey,
+      }),
+      "org-1",
+      {},
+    );
+    expect(mocks.embedText).not.toHaveBeenCalled();
+  });
+
+  it("uses the canonical node without looking up a legacy number", async () => {
+    mocks.sessionRun.mockResolvedValueOnce({
+      records: [{ get: () => "canonical-node" }],
+    });
+    const result = await resolveEntity(mutation, "org-1");
+    expect(result.principalNodeId).toBe("canonical-node");
+    expect(mocks.sessionRun).toHaveBeenCalledOnce();
+    expect(mocks.upsertEntityNode).toHaveBeenCalledWith(mutation, "org-1", {});
+  });
+});

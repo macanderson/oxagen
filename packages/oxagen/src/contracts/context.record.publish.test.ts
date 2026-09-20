@@ -6,6 +6,10 @@ const VALID_INPUT = {
   record_id: "no-bare-unwrap",
   title: "No bare unwrap on runtime data",
   body: 'id = "no-bare-unwrap"\n',
+  kind: "rule",
+  force: "must",
+  statement:
+    "Never unwrap a Result on runtime data without handling the error.",
 };
 
 describe("context.record.publish capability", () => {
@@ -50,6 +54,48 @@ describe("context.record.publish capability", () => {
   it("rejects an empty body", () => {
     expect(() =>
       contextRecordPublish.input.parse({ ...VALID_INPUT, body: "" }),
+    ).toThrow();
+  });
+
+  // ── classification (#3302) ───────────────────────────────────────────────
+
+  it("rejects a call with no kind, force or statement", () => {
+    const {
+      kind: _kind,
+      force: _force,
+      statement: _statement,
+      ...bare
+    } = VALID_INPUT;
+    expect(() => contextRecordPublish.input.parse(bare)).toThrow();
+  });
+
+  it("rejects a constraint with no constraintEffect", () => {
+    expect(() =>
+      contextRecordPublish.input.parse({ ...VALID_INPUT, kind: "constraint" }),
+    ).toThrow();
+  });
+
+  it("rejects a constraintEffect on a non-constraint kind", () => {
+    expect(() =>
+      contextRecordPublish.input.parse({
+        ...VALID_INPUT,
+        constraintEffect: "forbid",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts a constraint with require or forbid", () => {
+    const parsed = contextRecordPublish.input.parse({
+      ...VALID_INPUT,
+      kind: "constraint",
+      constraintEffect: "require",
+    });
+    expect(parsed.constraintEffect).toBe("require");
+  });
+
+  it("rejects a force outside must/should/may/info", () => {
+    expect(() =>
+      contextRecordPublish.input.parse({ ...VALID_INPUT, force: "always" }),
     ).toThrow();
   });
 

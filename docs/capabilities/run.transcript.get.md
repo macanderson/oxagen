@@ -70,8 +70,9 @@ The Mission Control mockup also draws a `thinking` chip. Neither the ledger's ev
 | `entries[].{request,response}.digest`, `.bytesRef` | string or null | the recorded digest, and where the bytes were retained |
 | `entries[].{request,response}.redactions` | object[] | what was removed before the body was written |
 | `entries[].{request,response}.fidelity` | `full` \| `digest_only` | so a `digest_only` recording says so on every half |
-| `entries[].{request,response}.text` | string or null | the body as UTF-8, cut at the zoom's cap (see below); null when no body was retained, the body is not text, the frame carried no content, or the stored bytes do not hash to the recorded digest |
+| `entries[].{request,response}.text` | string or null | the body as UTF-8, cut at the zoom's cap (see below); null when no body was retained, the body is not text, the frame carried no content, the stored bytes do not hash to the recorded digest, or the half carries an `assembly` instead |
 | `entries[].{request,response}.truncated` | boolean | true when `text` was cut |
+| `entries[].{request,response}.assembly` | object or null | a recorded model stream folded into the message it was; null for every other half |
 | `entries[].decision` | object or null | `{ seq, decision, type, at }` — the decision folded into the entry |
 | `entries[].frames` | integer | frames folded, the opening frame included |
 | `entries[].turn` | integer or null | the turn the opening frame belongs to, 1-based, the same at every zoom and under every chip filter. A recording with `turn_start` frames counts them, and a frame before the first one is in no turn (null). A recording without them starts a new turn wherever the turn index changes, and every frame is in one. A client groups `everything` entries into turns by this value |
@@ -79,6 +80,45 @@ The Mission Control mockup also draws a `thinking` chip. Neither the ledger's ev
 | `entries[].cumulativeCost` | `{ micros, currency, basis }` or null | every cost record of the run up to and including this entry (spec §8.4 prefix sum), so a page never restates the run's spend as the page's |
 | `cursor` | string or null | the point to continue from; null when nothing lies past this page |
 | `complete` | boolean | false when the run has more than 10 000 frames, so the transcript is a prefix |
+
+## A model stream is answered as a message, not as a stream
+
+A streaming provider writes a model response down as a few thousand
+server-sent events carrying a few characters each. Those bytes are the record
+and this capability never changes them. They are also not the message: a
+reader given them reads roughly six parts JSON envelope to one part text, and
+a cut measured on the envelope lands inside a token.
+
+So a half whose bytes are a recorded model stream carries `assembly` and
+`text: null`. The two are alternatives, never both, and the wire bytes are not
+on this page at all. `get_run_frame_body` answers them byte for byte when
+somebody asks for the transport.
+
+The fold happens once, where the frame is written, and is stored beside the
+body. A frame recorded before that, or one whose stored fold this codebase has
+since improved, is folded on read instead, and the answer is the same either
+way.
+
+| Field | Type | What it is |
+| --- | --- | --- |
+| `assembly.blocks[]` | object[] | `text`, `thinking`, `tool_use` and `tool_result` blocks in the order the provider indexed them, each with a stable `id`, its `chars`, its apportioned `tokens`, its `cost`, and `partial` when the stream ended before it closed |
+| `assembly.precis` | string | the step's one line, built by template from the block kinds; pure, so the same frame gives the same line on every read, and no model wrote it |
+| `assembly.stopReason` | string or null | the provider's stop reason, verbatim |
+| `assembly.ttftMs`, `.durationMs` | number or null | what the producer timed; the recorded stream carries no clock |
+| `assembly.tokensPerSecond` | number or null | output tokens per second of wall time; null without both figures |
+| `assembly.usage` | object | `inputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `outputTokens`, each nullable, so no total hides a cache hit |
+| `assembly.partial` | boolean | true when the stream ended before the message did; its blocks are still answered |
+| `assembly.wire` | object | `events` and `bytes`: what the transport was, for a reader that wants to see it |
+
+A `tool_use` block's input carries every string field up to 400 characters and
+folds a longer one to `"…N characters"`, with `inputFolded: true`. A `Write`
+call's content is the file, and a page of steps carrying every one of them
+would be the mistake the wire was. A text or thinking block is cut on a LINE
+boundary, never inside a word, and says `truncated: true`.
+
+A block's `cost` is its apportioned share of the message's output tokens at the
+model's output rate from the price book. A model the book prices no output for
+leaves every block's cost null rather than drawing a zero.
 
 ## How much body text a zoom carries
 

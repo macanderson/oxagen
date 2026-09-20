@@ -67,7 +67,7 @@ const CONTRACTS_DIR = join(REPO_ROOT, "packages", "oxagen", "src", "contracts");
 const HANDLERS_DIR = join(REPO_ROOT, "packages", "handlers", "src");
 
 const ROLE_ASSERTION_PATTERN =
-  /\bassertOrgRole\b|\bassertWorkspaceRole\b|\bassertOrgOrWorkspaceRole\b|\bassertConsequenceRole\b|\bresolveActorOrgRoles?\b|\bresolveActorWorkspaceRoles?\b|\brequireRole\b|\bassertRole\b/;
+  /\bassertCallerRole\b|\bassertOrgRole\b|\bassertWorkspaceRole\b|\bassertOrgOrWorkspaceRole\b|\bassertConsequenceRole\b|\bresolveActorOrgRoles?\b|\bresolveActorWorkspaceRoles?\b|\brequireRole\b|\bassertRole\b/;
 
 /**
  * Contracts already known to declare a role restriction their handler does
@@ -78,26 +78,19 @@ const ROLE_ASSERTION_PATTERN =
 export const ROLE_ENFORCEMENT_BASELINE = new Set([
   "api.key.list",
   "api.key.rotate",
-  "connection.delete",
-  "connection.preview",
   "context.pr.merge",
-  "context.record.promote",
-  "context.record.publish",
   "integration.install",
   "org.create",
   "org.member.add",
   "org.member.remove",
   "org.member_role.change",
   "privacy.data.export",
-  "router.policy.set",
   "run.frame_body.get",
   "run.transcript.get",
   "schema.delete",
   "schema.label.delete",
   "schema.property.delete",
   "schema.relationship.delete",
-  "schema.toggle",
-  "schema.version.pin",
   "tacho.bundle.get",
   "tacho.command.fetch",
   "tacho.events.ingest",

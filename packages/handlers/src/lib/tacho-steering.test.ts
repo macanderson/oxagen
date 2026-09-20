@@ -6,6 +6,8 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetColumnProbesForTests, runOnPlane } from "@oxagen/database";
+import { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { policyBundleSchema } from "@oxagen/oxagen/tacho/schemas";
 import {
   CONTEXT_SYSTEM_MAX_CHARS,
@@ -43,6 +45,25 @@ describe("compileSteering", () => {
         rec({ statement: "   " }),
       ]),
     ).toBeNull();
+  });
+
+  it("delivers a record published through publish_context_record, now that the handler requires a classification (#3302)", () => {
+    // Before #3302, publish_context_record wrote only the body: kind, force
+    // and statement were all NULL, `rec({ force: null })` above is exactly
+    // that row, and compileSteering excludes it. The contract now requires
+    // kind, force and statement on every call, so the handler's write can
+    // only ever produce a row shaped like this one — and this one steers.
+    const published = rec({
+      slug: "no-bare-unwrap",
+      kind: "rule",
+      force: "must",
+      statement:
+        "Never unwrap a Result on runtime data without handling the error.",
+    });
+    const text = compileSteering([published]);
+    expect(text).not.toBeNull();
+    expect(text).toContain("no-bare-unwrap");
+    expect(text).toContain(published.statement);
   });
 
   it("prints MUST before SHOULD, each sorted by slug, whatever order the rows arrive in", () => {
@@ -117,6 +138,7 @@ describe("compileSteering", () => {
 function fakeTx(db: {
   ledger: number;
   rows: SteeringRow[];
+  revisions?: string;
   /** Whether migration `20260918160000` has been applied on this database. */
   columns?: boolean;
 }) {
@@ -148,7 +170,13 @@ function fakeTx(db: {
     calls.version += 1;
     // Postgres answers count(*) as a bigint, which pg hands over as a
     // string; the read must coerce it.
-    return [{ ledger: String(db.ledger), steering: String(steeringCount()) }];
+    return [
+      {
+        ledger: String(db.ledger),
+        steering: String(steeringCount()),
+        revisions: db.revisions ?? "initial-revision",
+      },
+    ];
   };
   const recordRows = async () => {
     calls.records += 1;
@@ -161,26 +189,41 @@ function fakeTx(db: {
       probes.count += 1;
       return ready ? [{ "?column?": 1 }] : [];
     },
-    select: () => ({
-      from: (table) => ({
-        where: async () => {
-          // Two statements land here. The count is `from context_promotions`;
-          // the record-only read, which has no join to make, is
-          // `from context_records`.
-          if (tableName(table) === "context_promotions") return versionRow();
-          expect(tableName(table)).toBe("context_records");
-          expect(ready).toBe(false);
-          return recordRows();
-        },
-        leftJoin: () => ({
+    select: (fields) => {
+      if ("ledger" in fields) {
+        expect(fields.revisions).toBeInstanceOf(SQL);
+        const query = new PgDialect().sqlToQuery(fields.revisions as SQL);
+        expect(query.sql).toContain("md5(string_agg(md5(");
+        expect(query.sql).toContain('"context_records"."active_version_id"');
+        expect(query.sql).toContain('"context_records"."statement"');
+        expect(query.sql).toContain('order by "agent"."context_records"."id"');
+        expect(query.params).toContain("org");
+        expect(query.params).toContain("active");
+        if (!ready) {
+          expect(query.sql).not.toContain('"context_record_versions"');
+        }
+      }
+      return {
+        from: (table) => ({
           where: async () => {
+            // Two statements land here. The count is `from context_promotions`;
+            // the record-only read, which has no join to make, is
+            // `from context_records`.
+            if (tableName(table) === "context_promotions") return versionRow();
             expect(tableName(table)).toBe("context_records");
-            expect(ready).toBe(true);
+            expect(ready).toBe(false);
             return recordRows();
           },
+          leftJoin: () => ({
+            where: async () => {
+              expect(tableName(table)).toBe("context_records");
+              expect(ready).toBe(true);
+              return recordRows();
+            },
+          }),
         }),
-      }),
-    }),
+      };
+    },
   };
   return { tx, calls, probes };
 }
@@ -304,6 +347,41 @@ describe("readWorkspaceSteering", () => {
     expect(moved).toContain("Prefer small pull requests.");
     expect(calls).toEqual({ version: 3, records: 2 });
   });
+
+  it.each([true, false])(
+    "rereads a direct republish with unchanged ledger and count (version columns: %s)",
+    async (columns) => {
+      const db = {
+        columns,
+        ledger: 1,
+        revisions: "version-1",
+        rows: [row({})],
+      };
+      const { tx, calls } = fakeTx(db);
+      const before = await readWorkspaceSteering(tx, "org", "ws");
+      expect(before).toContain("Ask before deleting data.");
+      // publish_context_record changes the pin and classification together.
+      // It appends no promotion, and the active record count stays at one.
+      db.revisions = "version-2";
+      db.rows = [
+        row({
+          versionKind: "constraint",
+          versionConstraintEffect: "forbid",
+          versionStatement: "Do not delete production data.",
+          recordKind: "constraint",
+          recordConstraintEffect: "forbid",
+          recordStatement: "Do not delete production data.",
+        }),
+      ];
+      const after = await readWorkspaceSteering(tx, "org", "ws");
+      expect(after).toContain(
+        "Do not delete production data. (constraint, forbid;",
+      );
+      expect(after).not.toContain("Ask before deleting data.");
+      expect(await readWorkspaceSteering(tx, "org", "ws")).toBe(after);
+      expect(calls).toEqual({ version: 3, records: 2 });
+    },
+  );
 
   it("rereads after a soft delete, which appends no ledger row", async () => {
     const db = { ledger: 2, rows: [row({}), row({ slug: "b-record" })] };

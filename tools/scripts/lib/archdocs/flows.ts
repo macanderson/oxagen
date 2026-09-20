@@ -720,7 +720,7 @@ export const flows: Flow[] = [
     kind: "sequence",
     id: "tacho",
     section: "evidence",
-    title: "Tacho: evidencing an agent Oxagen does not run",
+    title: "Wrapping: evidencing an agent Oxagen does not run",
     claim:
       "The hook is answered only after the event is chained and durably written on the host; the control plane recomputes every hash on ingest and records a broken chain rather than rejecting the batch.",
     lanes: [

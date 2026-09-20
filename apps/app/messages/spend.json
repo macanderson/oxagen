@@ -332,7 +332,7 @@
       },
       "error": {
         "title": "Spend could not be loaded",
-        "body": "Nothing was changed. Runs keep recording while this page is down: the gateway writes frames, not Mission Control.",
+        "body": "Nothing was changed. Runs keep recording while this page is down: the gateway writes frames, not the operator console.",
         "code": "{code} · {status}"
       }
     },

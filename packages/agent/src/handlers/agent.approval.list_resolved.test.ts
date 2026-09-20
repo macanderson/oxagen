@@ -170,6 +170,30 @@ describe.skipIf(!process.env.DATABASE_URL)(
               tokenUsedAt: inMinutes(-5),
               expiresAt: inMinutes(5),
             },
+            // The expiry job persists this shape for a non-mandate timeout.
+            {
+              orgId: orgA,
+              workspaceId: wsA1,
+              capabilityName: "ordinary_timeout",
+              inputPreview: {},
+              riskLevel: "high",
+              resolution: "expired",
+              resolvedAt: inMinutes(-1),
+              expiresAt: inMinutes(-1),
+            },
+            {
+              orgId: orgA,
+              workspaceId: wsA1,
+              capabilityName: "resumed_failure",
+              inputPreview: {},
+              riskLevel: "high",
+              resolution: "approved",
+              resolvedAt: inMinutes(-2),
+              expiresAt: inMinutes(5),
+              resumeStatus: "failed",
+              resumeRunPublicId: "run_resume_fixture",
+              resumeError: "execution_refused",
+            },
             // Still pending: the resolved listing must not show it.
             {
               orgId: orgA,
@@ -218,6 +242,35 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(item!.resolution).toBe("approved");
       expect(item!.resolvedBy).toBe("policy:small-vendor-payments");
       expect(item!.autoRuleId).toBe("small-vendor-payments");
+    });
+
+    it("returns an ordinary timeout with its stable expiry time and no invented approver", async () => {
+      const out = await list(orgA, wsA1);
+      expect(
+        out.items.find((item) => item.tool === "ordinary_timeout"),
+      ).toMatchObject({
+        resolution: "expired",
+        resolvedAt: inMinutes(-1).toISOString(),
+        expiresAt: inMinutes(-1).toISOString(),
+        resolvedBy: null,
+        mandateId: null,
+      });
+    });
+
+    it("reads execution status, run and failure reason from the stored projection", async () => {
+      const out = agentApprovalListResolved.output.parse(
+        await list(orgA, wsA1),
+      );
+      expect(
+        out.items.find((item) => item.tool === "resumed_failure")?.execution,
+      ).toEqual({
+        status: "failed",
+        runId: "run_resume_fixture",
+        reason: "execution_refused",
+      });
+      expect(
+        out.items.find((item) => item.tool === "ordinary_timeout"),
+      ).not.toHaveProperty("execution");
     });
 
     it("does not return the still-pending row (negative)", async () => {

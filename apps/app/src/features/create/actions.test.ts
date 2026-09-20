@@ -24,8 +24,8 @@ vi.mock("@/server/kernel", async (importOriginal) => ({
 }));
 
 const { skillPropose } = await import("@oxagen/oxagen/contracts/skill.propose");
-const { repositoryMainGet } = await import(
-  "@oxagen/oxagen/contracts/repository.main.get"
+const { contextSteeringFreshness } = await import(
+  "@oxagen/oxagen/contracts/context.steering.freshness"
 );
 const { proposeSkill, readMainRepository } = await import("./actions");
 
@@ -57,28 +57,29 @@ beforeEach(() => {
 });
 
 describe("readMainRepository", () => {
-  it("reads get_main_repository for the viewer and keeps the name and branch", async () => {
+  it("reads get_steering_freshness for a workspace Member and keeps the name and branch", async () => {
     kernelRead.mockResolvedValue({
       ok: true,
       value: {
-        repository: {
-          fullName: "acme/platform",
-          defaultRef: "main",
-          installationId: 7,
-        },
+        repository: "acme/platform",
+        defaultBranch: "main",
       },
     });
     const result = await readMainRepository("acme", "core-platform");
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     expect(kernelRead).toHaveBeenCalledWith(CTX, {
-      contract: repositoryMainGet,
+      contract: contextSteeringFreshness,
       input: {},
-      page: "workspaceSettings",
+      page: "repositories",
     });
     expect(result).toEqual({
       ok: true,
       value: { fullName: "acme/platform", defaultRef: "main" },
     });
+    expect(contextSteeringFreshness.defaultRoles.workspace.Member).toBe(
+      "allow",
+    );
+    expect(contextSteeringFreshness.defaultEffect).toBe("allow");
   });
 
   it("answers null while the workspace binds no repository (empty)", async () => {

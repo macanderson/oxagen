@@ -8,8 +8,8 @@ import { notificationsList } from "../notification.list";
  *
  * **Why it survives at all.** §7.5 says an approval request "notifies (Mission
  * Control, Slack, email)", and §14 makes approvals a panel on Fleet and a strip
- * on Run rather than a page. The in-app notification is the Mission Control
- * half of that notify, and the `kind` enum already carries the four things the
+ * on Run rather than a page. The in-app notification is Oxagen's half of
+ * that notify, and the `kind` enum already carries the four things the
  * product raises — `approval`, `run`, `security`, `member` — plus `system`.
  *
  * **Why `deepLink` matters more in v2 than it did in v1.** §14's interaction

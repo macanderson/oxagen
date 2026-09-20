@@ -42,7 +42,7 @@ export async function ShellFrame({
   return (
     <div
       data-testid="shell"
-      className="min-h-dvh bg-app-canvas text-app-panel-fg md:grid md:grid-cols-[var(--sidebar-width)_minmax(0,1fr)] md:grid-rows-[auto_1fr]"
+      className="min-h-dvh bg-app-panel-bg text-app-panel-fg md:grid md:grid-cols-[var(--sidebar-width)_minmax(0,1fr)] md:grid-rows-[auto_1fr]"
     >
       {/* Before first paint: apply the stored theme so the page never flashes the wrong one. */}
       <script

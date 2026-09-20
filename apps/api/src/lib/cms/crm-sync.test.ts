@@ -13,11 +13,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const h = vi.hoisted(() => ({
   selects: [] as unknown[][],
   sets: [] as Record<string, unknown>[],
+  locks: [] as string[],
+  currentRevision: null as string | null,
+  applied: [] as Record<string, unknown>[],
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@oxagen/database")>();
+  const { PgDialect } = await import("drizzle-orm/pg-core");
+  const dialect = new PgDialect();
   const chain = (resolveVal: () => unknown, onSet?: (v: unknown) => void) => {
     const proxy: unknown = new Proxy(function () {}, {
       get(_t, prop) {
@@ -38,18 +43,63 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     return next ?? [];
   };
   const tx = {
+    execute: async (query: import("drizzle-orm").SQL) => {
+      const compiled = dialect.sqlToQuery(query);
+      expect(compiled.sql).toContain("pg_advisory_xact_lock");
+      h.locks.push(String(compiled.params[0]));
+    },
     select: () => chain(nextSelect),
     selectDistinct: () => chain(nextSelect),
-    update: () =>
-      chain(
-        () => undefined,
-        (v) => h.sets.push(v as Record<string, unknown>),
-      ),
+    update: () => {
+      let values: Record<string, unknown>;
+      let condition: import("drizzle-orm").SQL;
+      return {
+        set(v: Record<string, unknown>) {
+          values = v;
+          h.sets.push(v);
+          return this;
+        },
+        where(v: import("drizzle-orm").SQL) {
+          condition = v;
+          return this;
+        },
+        async returning() {
+          const query = dialect.sqlToQuery(condition);
+          const matches =
+            h.currentRevision === null ||
+            query.params.includes(h.currentRevision);
+          if (!matches) return [];
+          h.applied.push(values);
+          return [{ id: "lead-1" }];
+        },
+      };
+    },
   };
+  const locks = new Map<string, Promise<void>>();
   return {
     ...actual,
-    withSystemDb: async <T>(fn: (t: unknown) => Promise<T>): Promise<T> =>
-      fn(tx),
+    withSystemDb: async <T>(fn: (t: unknown) => Promise<T>): Promise<T> => {
+      let release: (() => void) | undefined;
+      try {
+        return await fn({
+          ...tx,
+          execute: async (query: import("drizzle-orm").SQL) => {
+            const key = String(dialect.sqlToQuery(query).params[0]);
+            const previous = locks.get(key);
+            locks.set(
+              key,
+              new Promise<void>((resolve) => {
+                release = resolve;
+              }),
+            );
+            await previous;
+            await tx.execute(query);
+          },
+        });
+      } finally {
+        release?.();
+      }
+    },
   };
 });
 
@@ -73,8 +123,11 @@ import {
   type LeadRecord,
 } from "./crm-sync";
 
-function lead(overrides: Partial<LeadRecord> = {}): LeadRecord {
+function lead(
+  overrides: Partial<LeadRecord> = {},
+): LeadRecord & { revision: string } {
   return {
+    revision: "2026-09-19 10:05:00.123456+00",
     id: "lead-1",
     publicId: "lead_abc",
     createdAt: new Date("2026-09-19T10:00:00Z"),
@@ -103,7 +156,7 @@ function lead(overrides: Partial<LeadRecord> = {}): LeadRecord {
     crmSyncedAt: null,
     crmSyncError: null,
     ...overrides,
-  } as LeadRecord;
+  } as LeadRecord & { revision: string };
 }
 
 function fakeClient(overrides: Partial<AttioClient> = {}) {
@@ -122,6 +175,9 @@ function fakeClient(overrides: Partial<AttioClient> = {}) {
 beforeEach(() => {
   h.selects.length = 0;
   h.sets.length = 0;
+  h.currentRevision = null;
+  h.applied.length = 0;
+  h.locks.length = 0;
   vi.clearAllMocks();
   __resetCrmClientForTests();
   delete process.env.ATTIO_API_KEY;
@@ -434,5 +490,118 @@ describe("syncPendingLeads", () => {
     h.selects.push([]);
     const out = await syncPendingLeads();
     expect(out).toEqual([]);
+  });
+});
+
+describe("resubmission during CRM sync", () => {
+  it("leaves a newer submission pending for the backfill", async () => {
+    const snapshot = lead();
+    h.currentRevision = snapshot.revision;
+    h.selects.push([snapshot], []);
+    const out = await syncLeadToCrm(
+      snapshot.id,
+      fakeClient({
+        createNote: vi.fn().mockImplementation(async () => {
+          h.currentRevision = "2026-09-19 10:05:00.123457+00";
+          return { noteId: "note-1" };
+        }),
+      }),
+    );
+    expect(out).toEqual({
+      status: "skipped",
+      leadId: snapshot.id,
+      reason: "resubmitted",
+    });
+    expect(h.applied).toEqual([]);
+
+    const latest = { ...snapshot, revision: h.currentRevision };
+    h.selects.push([{ id: snapshot.id }], [latest], []);
+    expect(await syncPendingLeads({ client: fakeClient() })).toEqual([
+      { status: "synced", leadId: snapshot.id, recordId: "person-1" },
+    ]);
+    expect(h.applied).toHaveLength(1);
+    expect(h.applied[0]).toMatchObject({
+      crmRecordId: "person-1",
+      crmSyncError: null,
+    });
+  });
+
+  it("does not overwrite a newer submission's error with an older failure", async () => {
+    const snapshot = lead();
+    h.selects.push([snapshot], []);
+    await syncLeadToCrm(
+      snapshot.id,
+      fakeClient({
+        assertPerson: vi.fn().mockImplementation(async () => {
+          h.currentRevision = "2026-09-19 10:06:00.000001+00";
+          throw new Error("older sync failed");
+        }),
+      }),
+    );
+    expect(h.applied).toEqual([]);
+  });
+
+  it("matches the full database timestamp without losing microseconds", async () => {
+    const snapshot = lead();
+    h.currentRevision = snapshot.revision;
+    h.selects.push([snapshot], []);
+    expect(await syncLeadToCrm(snapshot.id, fakeClient())).toMatchObject({
+      status: "synced",
+    });
+    expect(h.applied).toHaveLength(1);
+    expect(h.locks).toEqual(["cms-crm:lead-1"]);
+  });
+});
+
+describe("concurrent CRM writers", () => {
+  it("finishes the old sync before loading and syncing a resubmission", async () => {
+    const first = lead();
+    const second = {
+      ...first,
+      firstName: "New name",
+      revision: "2026-09-19 10:06:00.000001+00",
+    };
+    h.selects.push([first], [], [second], []);
+    h.currentRevision = first.revision;
+    let releaseFirst!: () => void;
+    let signalStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+    const blocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const writes: string[] = [];
+    const oldClient = fakeClient({
+      assertPerson: vi.fn().mockImplementation(async () => {
+        signalStarted();
+        await blocked;
+        writes.push("old");
+        return { recordId: "person-1" };
+      }),
+    });
+    const newClient = fakeClient({
+      assertPerson: vi.fn().mockImplementation(async () => {
+        writes.push("new");
+        return { recordId: "person-1" };
+      }),
+    });
+    const oldSync = syncLeadToCrm(first.id, oldClient);
+    await started;
+    h.currentRevision = second.revision;
+    const newSync = syncLeadToCrm(first.id, newClient);
+    await Promise.resolve();
+    expect(newClient.assertPerson).not.toHaveBeenCalled();
+    releaseFirst();
+    expect(await oldSync).toMatchObject({
+      status: "skipped",
+      reason: "resubmitted",
+    });
+    expect(await newSync).toMatchObject({ status: "synced" });
+    expect(writes).toEqual(["old", "new"]);
+    expect(newClient.assertPerson).toHaveBeenCalledWith(
+      expect.objectContaining({ firstName: "New name" }),
+    );
+    expect(h.applied).toHaveLength(1);
   });
 });

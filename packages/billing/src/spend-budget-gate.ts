@@ -18,7 +18,8 @@
  * hard stop where the gate denies. Raising the ceiling (set_spend_budget) is the
  * IAM-gated, audited override.
  */
-import { withTenantDb, schema } from "@oxagen/database";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
+import { withTenantDb, withOrgDb, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import { sumSpendCounter } from "./spend-counter";
 import {
@@ -54,6 +55,7 @@ export interface SpendGateDeps {
    *  true when THIS caller won the flip and should deliver the notification. */
   claimThreshold: (args: {
     budgetId: string;
+    workspaceId: string | null;
     threshold: number;
     periodStart: Date;
   }) => Promise<boolean>;
@@ -131,8 +133,8 @@ export function invalidateSpendBudgetScope(args: { orgId: string }): void {
   }
 }
 
-function scopeKey(orgId: string, workspaceId: string): string {
-  return `${orgId}:${workspaceId}`;
+function scopeKey(orgId: string, workspaceId: string | null): string {
+  return `${orgId}:${workspaceId ?? "*"}`;
 }
 
 async function cachedBudgets(
@@ -204,13 +206,19 @@ function notifyAnchor(budget: SpendBudgetRow, now: Date): Date {
  * threshold notifications along the way. Fails OPEN on any infrastructure error.
  */
 export async function assertWithinSpendBudget(
-  args: { orgId: string; workspaceId: string; capability: string },
+  args: { orgId: string; workspaceId: string | null; capability: string },
   overrides: Partial<SpendGateDeps> = {},
 ): Promise<void> {
-  const deps: SpendGateDeps = { ...productionDeps, ...overrides };
+  const workspaceId =
+    args.workspaceId === ORG_ONLY_WORKSPACE_ID ? null : args.workspaceId;
+  const deps: SpendGateDeps = {
+    ...productionDeps,
+    loadBudgets: () => getScopeBudgets({ orgId: args.orgId, workspaceId }),
+    ...overrides,
+  };
   let budgets: SpendBudgetRow[];
   try {
-    budgets = await cachedBudgets(scopeKey(args.orgId, args.workspaceId), deps);
+    budgets = await cachedBudgets(scopeKey(args.orgId, workspaceId), deps);
   } catch (err) {
     // A budget-config read failure must never block a turn — fail open.
     logger.error(
@@ -251,6 +259,7 @@ export async function assertWithinSpendBudget(
       void deps
         .claimThreshold({
           budgetId: budget.id,
+          workspaceId: budget.workspaceId,
           threshold,
           periodStart: anchor,
         })
@@ -299,7 +308,8 @@ async function deliverBudgetThresholdNotification(
   );
   if (admins.length === 0) return;
 
-  await withTenantDb((tx) =>
+  const write = budget.workspaceId === null ? withOrgDb : withTenantDb;
+  await write((tx) =>
     tx.insert(schema.notifications).values(
       budgetThresholdNotificationRows(
         notice,

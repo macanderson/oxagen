@@ -1,6 +1,7 @@
-// toApprovalItems over sample list_approvals outputs: the chain's agent key
-// lifted onto the item, the mandate the parked call drew on carried through,
-// and a null run, agent, requester or mandate kept null.
+// toApprovalItems over sample list_approvals outputs: both chain hops lifted
+// onto the item, the mandate the parked call drew on and the recorded
+// auto-approval evaluation carried through, and a null run, agent, requester,
+// mandate, rule or evaluation kept null.
 import type { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.list";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -37,6 +38,8 @@ describe("toApprovalItems", () => {
         agentKey: "acme.core.release-bot",
         requester: "usr_marcusbell",
         mandateId: null,
+        rule: "rule_release",
+        autoEligibility: null,
         createdAt: "2026-09-15T08:57:30.000Z",
         expiresAt: "2026-09-15T09:07:30.000Z",
       },
@@ -61,6 +64,8 @@ describe("toApprovalItems", () => {
       agentKey: null,
       requester: null,
       mandateId: null,
+      rule: null,
+      autoEligibility: null,
     });
     expect(z.array(ApprovalItem).safeParse(items).success).toBe(true);
   });
@@ -73,6 +78,64 @@ describe("the mandate hop", () => {
       nextCursor: null,
     });
     expect(items[0]?.mandateId).toBe("mnd_4f2a9c");
+    expect(z.array(ApprovalItem).safeParse(items).success).toBe(true);
+  });
+});
+
+// The fourth hop of the chain and the line under it. Both were recorded on the
+// row and dropped here, so every card drew three hops and said nothing about
+// what the auto-approval clause decided.
+describe("the rule hop and the recorded evaluation", () => {
+  it("carries the rule that parked the call and what the clause said about it", () => {
+    const items = toApprovalItems({
+      items: [
+        {
+          ...parked,
+          mandateId: "mnd_4f2a9c",
+          chain: {
+            agentKey: null,
+            rule: "mandate:mnd_4f2a9c:human_above:amount",
+          },
+          autoEligibility: {
+            ruleId: "small-vendor-payments",
+            ok: false,
+            reasons: ["measure_above_ceiling:amount", "tainted_input"],
+            floor: true,
+          },
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(items[0]).toMatchObject({
+      rule: "mandate:mnd_4f2a9c:human_above:amount",
+      autoEligibility: {
+        ruleRef: "small-vendor-payments",
+        ok: false,
+        reasons: ["measure_above_ceiling:amount", "tainted_input"],
+        floor: true,
+      },
+    });
+    expect(z.array(ApprovalItem).safeParse(items).success).toBe(true);
+  });
+
+  // §6.9 part 3: a mandate's own approval rule outranks any workspace rule, so
+  // an `ok` evaluation on a parked call is a legitimate record, not a bug.
+  it("carries an evaluation that qualified on a call a mandate parked anyway", () => {
+    const items = toApprovalItems({
+      items: [
+        {
+          ...parked,
+          autoEligibility: {
+            ruleId: "small-vendor-payments",
+            ok: true,
+            reasons: [],
+            floor: false,
+          },
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(items[0]?.autoEligibility).toMatchObject({ ok: true, reasons: [] });
     expect(z.array(ApprovalItem).safeParse(items).success).toBe(true);
   });
 });

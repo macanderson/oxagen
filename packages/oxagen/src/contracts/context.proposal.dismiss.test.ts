@@ -10,7 +10,7 @@ describe("dismiss_proposal contract", () => {
       org: { Owner: "allow", Admin: "allow" },
       workspace: { Owner: "allow" },
     });
-    // Dismissed from Mission Control; the MCP tool is a lane of its own.
+    // Dismissed from the operator console; the MCP tool is a lane of its own.
     expect(contextProposalDismiss.surfaces).toEqual(["api"]);
     expect(contextProposalDismiss.layers).not.toContain("mcp");
     expect(

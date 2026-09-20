@@ -149,6 +149,10 @@ describe("routes", () => {
         proposal: "prp_1&x",
       }),
     ).toBe("/acme/core/steering?tab=prs&offset=50&proposal=prp_1%26x");
+    expect(routes.repositories("acme", "core")).toBe("/acme/core/repositories");
+    expect(routes.repositories("acme", "core", "changes")).toBe(
+      "/acme/core/repositories/changes",
+    );
   });
 
   it("percent-encodes every segment, so a slug cannot add a segment or a host", () => {

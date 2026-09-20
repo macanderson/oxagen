@@ -6,8 +6,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ApprovalItem } from "@/data/contracts/approvals";
-import { readError, readOk } from "@/data/read";
+import { readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -17,6 +16,7 @@ import {
 } from "@/test/mandate-views";
 import {
   approvalItem,
+  approvalQueue,
   fleetSource,
   NOW,
   runPage,
@@ -27,6 +27,22 @@ vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
   ),
+}));
+// The approval cards carry a decision control and the runs table draws the row
+// controls. Both are client components that read the app router: the decision
+// dialog to re-read the panel, the row controls to re-read the table after a
+// queued command. Fleet itself navigates with links.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+// The three server actions are stubbed. The module's other exports are kept:
+// a "use server" module exports async functions alone, so the row's command
+// list sits in @/shared/row-commands and needs no stub.
+vi.mock("./actions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./actions")>()),
+  resolveApprovalAction: vi.fn(),
+  readApprovalEligibility: vi.fn(),
+  dispatchRunCommand: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -53,7 +69,7 @@ const DENIED = {
   permission: "workspace.read",
 } as const;
 const DOWN = readError("run_index_unavailable", 503);
-const NO_APPROVALS = readOk<ApprovalItem[]>([]);
+const NO_APPROVALS = approvalQueue([]);
 const NO_RUNS = runPage([]);
 
 async function renderFleet(
@@ -107,7 +123,7 @@ describe("stat strip", () => {
         runRow({ id: "arun_a2", status: "live", agentKey: "acme.core.docs" }),
         runRow({ id: "arun_a3", status: "sealed", agentKey: null }),
       ]),
-      approvals: readOk([
+      approvals: approvalQueue([
         approvalItem({
           id: "apr_new",
           createdAt: new Date(NOW - 30_000).toISOString(),
@@ -152,10 +168,10 @@ describe("stat strip", () => {
 });
 
 describe("approvals panel", () => {
-  it("draws one card per pending approval with its tool, agent, requester and expiry clock", async () => {
+  it("draws one card per pending approval with its four hops and expiry clock", async () => {
     await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([
+      approvals: approvalQueue([
         approvalItem(),
         approvalItem({
           id: "apr_r2",
@@ -163,22 +179,114 @@ describe("approvals panel", () => {
           tool: "merge_pull_request",
           agentKey: "acme.core.release-bot",
           requester: null,
+          mandateId: "mnd_4f2a9c",
+          rule: "mandate:mnd_4f2a9c:human_above:amount",
         }),
       ]),
+      mandates: mandateList([mandateRow()]),
     });
     const section = approvalsSection();
     expect(section).toHaveTextContent("2 parked");
     const [first, second] = within(section).getAllByTestId("approval");
+    // Four hops, in the order the chain runs: who asked, which agent, which
+    // action, which rule. A hop the store does not record says so.
     expect(first).toHaveTextContent(
-      "create_releaseAgentnot recordedRequested byusr_marcusbellTimes out in 7:30, then the call ends",
+      "create_releaseWho askedusr_marcusbellWhich agentnot recordedWhich actioncreate_releaseWhich rulenot recorded",
     );
+    expect(first).toHaveTextContent("Times out in 7:30, then the call ends");
     expect(within(first ?? section).queryByRole("link")).toBeNull();
-    expect(second).toHaveTextContent("Agentacme.core.release-bot");
-    expect(second).toHaveTextContent("Requested bynot recorded");
+    expect(second).toHaveTextContent("Which agentacme.core.release-bot");
+    expect(second).toHaveTextContent("Who askednot recorded");
+    // The rule hop names the mandate, because a rule id of this form is only
+    // legible beside it.
+    expect(second).toHaveTextContent(
+      "Which rulemandate:mnd_4f2a9c:human_above:amount (under mandate mnd_4f2a9c)",
+    );
     expect(
       within(second ?? section).getByRole("link", { name: "Open run" }),
     ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
-    expect(section).not.toHaveTextContent(/auto-approv/i);
+  });
+
+  it("says no rule covered a call the auto-approval clause never judged", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: approvalQueue([approvalItem()]),
+    });
+    expect(
+      within(approvalsSection()).getByTestId("eligibility"),
+    ).toHaveTextContent(
+      "No auto-approval rule covered this call, so it waited for a person.",
+    );
+  });
+
+  it("names the rule, its reasons and its floor when one judged the call and refused it", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: approvalQueue([
+        approvalItem({
+          autoEligibility: {
+            ruleRef: "small-vendor-payments",
+            ok: false,
+            reasons: [
+              "measure_above_ceiling:amount",
+              "tainted_input",
+              "not_a_code",
+            ],
+            floor: true,
+          },
+        }),
+      ]),
+    });
+    const line = within(approvalsSection()).getByTestId("eligibility");
+    expect(line).toHaveTextContent(
+      "Rule small-vendor-payments did not release this call.",
+    );
+    expect(line).toHaveTextContent(
+      "The call is over the rule's ceiling on amount.",
+    );
+    expect(line).toHaveTextContent(
+      "The arguments derive from untrusted input.",
+    );
+    // A code this build has no copy for is printed as recorded rather than
+    // given a sentence written for another condition.
+    expect(line).toHaveTextContent("Recorded as not_a_code.");
+    expect(
+      within(approvalsSection()).getByTestId("eligibility-floor"),
+    ).toHaveTextContent("floor no rule can lift");
+  });
+
+  // §6.9 part 3: a mandate's own approval rule outranks any workspace rule, so
+  // a call a rule would have released can still be parked.
+  it("says a rule would have released a call a mandate parked anyway", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: approvalQueue([
+        approvalItem({
+          autoEligibility: {
+            ruleRef: "small-vendor-payments",
+            ok: true,
+            reasons: [],
+            floor: false,
+          },
+        }),
+      ]),
+    });
+    expect(
+      within(approvalsSection()).getByTestId("eligibility"),
+    ).toHaveTextContent(
+      "Rule small-vendor-payments would have released this call. A mandate asked for a person anyway.",
+    );
+  });
+
+  it("marks a count the read could not finish, on the tile and on the panel", async () => {
+    await renderFleet({
+      runs: NO_RUNS,
+      approvals: approvalQueue([approvalItem()], true),
+    });
+    expect(approvalsSection()).toHaveTextContent("1+ parked");
+    expect(screen.getByTestId("waiting-more")).toHaveTextContent(
+      "more are parked than this page read",
+    );
   });
 
   it("says nothing is waiting on a human when the queue is empty", async () => {
@@ -220,7 +328,7 @@ describe("approvals panel", () => {
 });
 
 describe("runs table", () => {
-  it("draws a row per run: the generated name over the id, the agent identity, operator, status, replay grade, cost with its basis, frames and start", async () => {
+  it("draws a row per run: the generated name over the id, the agent identity, operator, status, enforcement tier, replay grade, verdict, cost with its basis, frames and start", async () => {
     await renderFleet({
       runs: runPage([runRow()]),
       approvals: NO_APPROVALS,
@@ -231,10 +339,15 @@ describe("runs table", () => {
       "reacme.core.release-botevidence ledger",
       "Marcus Bellprn_marcusbell",
       "live",
+      "observed at the harness",
       "fork",
+      "flipped",
       "$4.13gateway_observed",
       "1,204",
       "Sep 15, 2026, 8:00 AM",
+      // A live ledger run carries the recorded reason in place of controls:
+      // Oxagen holds no run token it could revoke (WL-61).
+      "This run's evidence comes from an external engine. Oxagen holds no run token it can revoke, so there is nothing here to pause, steer or cancel.",
     ]);
     // The run cell leads with what the run was, keeps the id under it, and
     // labels the model's sentence so it cannot read as the record.
@@ -294,9 +407,105 @@ describe("runs table", () => {
     const cells = within(unrecorded ?? runsSection()).getAllByRole("cell");
     expect(cells[1]).toHaveTextContent(/^not recordedwrapped agent$/);
     expect(cells[2]).toHaveTextContent(/^not recorded$/);
-    expect(cells[5]).toHaveTextContent(/^not recorded$/);
+    expect(cells[7]).toHaveTextContent(/^not recorded$/);
     expect(noBasis).toHaveTextContent("$0.00basis not recorded");
     expect(runsSection()).not.toHaveTextContent(/trust/i);
+  });
+
+  it.each([
+    ["gateway", "observed at the gateway"],
+    ["harness", "observed at the harness"],
+    ["observe", "observed from the side"],
+  ] as const)(
+    "draws the %s tier as the word the record holds, and nothing stronger",
+    async (tier, word) => {
+      await renderFleet({
+        runs: runPage([runRow({ enforcementTier: tier })]),
+        approvals: NO_APPROVALS,
+      });
+      const [row] = within(runsSection()).getAllByTestId("run-row");
+      const cells = within(row ?? runsSection()).getAllByRole("cell");
+      expect(cells[4]).toHaveTextContent(word);
+      expect(within(cells[4] ?? runsSection()).getByText(word)).toHaveAttribute(
+        "data-tier",
+        tier,
+      );
+    },
+  );
+
+  it.each([
+    "flipped",
+    "failing",
+    "unmoved",
+    "unsatisfied",
+    "tampered",
+    "unverified",
+    "waived",
+  ] as const)("draws the recorded %s verdict as its own word", async (word) => {
+    await renderFleet({
+      runs: runPage([runRow({ verdict: word })]),
+      approvals: NO_APPROVALS,
+    });
+    const [row] = within(runsSection()).getAllByTestId("run-row");
+    const cells = within(row ?? runsSection()).getAllByRole("cell");
+    expect(cells[6]).toHaveTextContent(new RegExp(`^${word}$`));
+  });
+
+  // `unverified` is a verdict a runner reached. A run no witness reported on
+  // has no verdict at all, and saying "unverified" there would claim a run was
+  // checked and found wanting.
+  it("reads a run with no recorded verdict as not recorded, never unverified (negative)", async () => {
+    await renderFleet({
+      runs: runPage([runRow({ verdict: null })]),
+      approvals: NO_APPROVALS,
+    });
+    const [row] = within(runsSection()).getAllByTestId("run-row");
+    const cells = within(row ?? runsSection()).getAllByRole("cell");
+    expect(cells[6]).toHaveTextContent(/^not recorded$/);
+    expect(runsSection()).not.toHaveTextContent("unverified");
+  });
+
+  it("says what tier and verdict mean under the table", async () => {
+    await renderFleet({ runs: runPage([runRow()]), approvals: NO_APPROVALS });
+    expect(within(runsSection()).getByTestId("runs-legend")).toHaveTextContent(
+      "Tier is where Oxagen observed a run's calls. Verdict is the word a witness reported on it. Only flipped marks a run proven.",
+    );
+  });
+
+  // A total over the cost column covers only the rows that carry a figure
+  // (#3304). The caveat counts the rows the page drew, and names no harness,
+  // because a row does not record one.
+  it("counts the rows with no recorded cost and links to Spend", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({ id: "arun_c1", cost: null }),
+        runRow({ id: "arun_c2", cost: null }),
+        runRow({ id: "arun_c3" }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const caveat = within(runsSection()).getByTestId("runs-unpriced");
+    expect(caveat).toHaveTextContent(
+      "2 runs on this page have no cost recorded. A total over this column leaves them out.",
+    );
+    expect(
+      within(caveat).getByRole("link", { name: "Open Spend" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend?tab=findings");
+  });
+
+  it("counts one such run in the singular", async () => {
+    await renderFleet({
+      runs: runPage([runRow({ cost: null })]),
+      approvals: NO_APPROVALS,
+    });
+    expect(
+      within(runsSection()).getByTestId("runs-unpriced"),
+    ).toHaveTextContent("1 run on this page has no cost recorded");
+  });
+
+  it("draws no cost caveat when every row carries a figure (negative)", async () => {
+    await renderFleet({ runs: runPage([runRow()]), approvals: NO_APPROVALS });
+    expect(within(runsSection()).queryByTestId("runs-unpriced")).toBeNull();
   });
 
   it("tells an empty workspace how its first run arrives, with the enroll command and no table", async () => {
@@ -361,7 +570,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("draws the bar of the mandate a parked call drew on", async () => {
     const { container, calls } = await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([parked]),
+      approvals: approvalQueue([parked]),
       mandates: mandateList([mandateRow()]),
     });
     expect(calls.mandates).toEqual([[ctx, { agentId: null }]]);
@@ -380,7 +589,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("says what the bar's figures are counted over, since a parked call can outlive a period", async () => {
     await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([parked]),
+      approvals: approvalQueue([parked]),
       mandates: mandateList([mandateRow()]),
     });
     expect(
@@ -391,7 +600,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("says nothing about a period on a card with no bar (negative)", async () => {
     await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([approvalItem()]),
+      approvals: approvalQueue([approvalItem()]),
     });
     expect(
       within(approvalsSection()).queryByTestId("mandate-period-basis"),
@@ -401,7 +610,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("reads no mandate at all when no parked call names one (negative)", async () => {
     const { calls } = await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([approvalItem()]),
+      approvals: approvalQueue([approvalItem()]),
     });
     expect(calls.mandates).toEqual([]);
     expect(within(approvalsSection()).queryByTestId("mandate-bar")).toBeNull();
@@ -410,7 +619,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("draws the card without its bar when the ledger refuses the viewer (negative)", async () => {
     const { container } = await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([parked]),
+      approvals: approvalQueue([parked]),
       mandates: { ok: false, reason: "denied", permission: "org.billing" },
     });
     expect(
@@ -423,7 +632,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("names a mandate the page did not read rather than drawing nothing (negative)", async () => {
     const { container } = await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([approvalItem({ mandateId: "mnd_absent" })]),
+      approvals: approvalQueue([approvalItem({ mandateId: "mnd_absent" })]),
       mandates: mandateList([mandateRow()], 100),
     });
     const section = approvalsSection();
@@ -437,7 +646,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("names the mandate on a card the viewer may not read the ledger for (negative)", async () => {
     await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([parked]),
+      approvals: approvalQueue([parked]),
       mandates: { ok: false, reason: "denied", permission: "org.billing" },
     });
     expect(
@@ -448,7 +657,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("names no mandate on a card that drew on none (negative)", async () => {
     await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([approvalItem()]),
+      approvals: approvalQueue([approvalItem()]),
     });
     expect(
       within(approvalsSection()).queryByTestId("mandate-unread"),
@@ -462,7 +671,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("names a per-call-only mandate instead of drawing an empty card", async () => {
     await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([parked]),
+      approvals: approvalQueue([parked]),
       mandates: mandateList([
         mandateRow({
           authority: [
@@ -489,7 +698,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("keeps the period caveat when a measure does have a period limit", async () => {
     await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([parked]),
+      approvals: approvalQueue([parked]),
       mandates: mandateList([mandateRow()]),
     });
     const card = within(approvalsSection()).getByTestId("approval");
@@ -505,7 +714,7 @@ describe("Fleet approvals › the mandate bar", () => {
   it("draws the bars and names the per-call-only measures beside them", async () => {
     await renderFleet({
       runs: NO_RUNS,
-      approvals: readOk([parked]),
+      approvals: approvalQueue([parked]),
       mandates: mandateList([
         mandateRow({
           authority: [

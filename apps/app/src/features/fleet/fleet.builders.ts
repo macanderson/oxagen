@@ -2,7 +2,7 @@
 // rows, pending approvals and a DataSource that answers Fleet's reads with
 // what a test hands it. Importable from tests only (`testOnlyTarget` in
 // src/test/arch/layers.ts).
-import type { ApprovalItem } from "@/data/contracts/approvals";
+import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
 import type { RunPage } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
@@ -43,6 +43,7 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
       model: "z-ai/glm-flash-latest",
     },
     replayGrade: "fork",
+    verdict: "flipped",
     enforcementTier: "harness",
     completenessGaps: [],
     canSummarize: false,
@@ -62,10 +63,24 @@ export function approvalItem(
     agentKey: null,
     requester: "usr_marcusbell",
     mandateId: null,
+    rule: null,
+    autoEligibility: null,
     createdAt: at(-150),
     expiresAt: at(450),
     ...overrides,
   };
+}
+
+/**
+ * The pending queue as `approvals.pending` answers it. `more` is the read
+ * having stopped before the end of the queue, which is what the waiting tile
+ * and the panel header mark with a `+`.
+ */
+export function approvalQueue(
+  items: ApprovalItem[],
+  more = false,
+): Read<ApprovalQueue> {
+  return readOk({ items, more });
 }
 
 export function runPage(
@@ -77,7 +92,7 @@ export function runPage(
 
 type FleetReads = {
   runs: Read<RunPage>;
-  approvals: Read<ApprovalItem[]>;
+  approvals: Read<ApprovalQueue>;
   /** Only read when a parked call names a mandate; refused when absent. */
   mandates?: Read<MandateList>;
 };
@@ -171,6 +186,8 @@ export function fleetSource(reads: FleetReads) {
       grants: refuse,
       killSwitches: refuse,
       approvalRules: refuse,
+      connections: refuse,
+      mcpServers: refuse,
     },
   };
   return { source, calls };

@@ -3,12 +3,12 @@ import { fileURLToPath } from "node:url";
 
 /**
  * Runtime data assets that esbuild cannot inline into the API bundle and that
- * build.mjs must copy next to the function.
+ * build-node.mjs must copy next to the bundle.
  *
  * The built-in connector schema YAMLs are read at runtime by @oxagen/ingestion's
  * `loadBuiltInSchema` via `readFileSync` (driving the connector install /
  * "Configure" forms). esbuild inlines JS/TS but not data files, so without this
- * copy the bundled serverless function 500s on every plugin.schema.get call.
+ * copy the bundled API 500s on every plugin.schema.get call.
  *
  * Returns `{ src, dest }` pairs where `dest` is RELATIVE to the function
  * directory, preserving the `connectors/<id>/` layout that the loader's

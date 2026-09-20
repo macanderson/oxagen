@@ -37,6 +37,8 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 import {
   withTenantDb,
+  withTransactionOrgScope,
+  type Tx,
   withOrgDb,
   withRepeatableReadTenantDb,
   withSystemDb,
@@ -427,4 +429,62 @@ describe("setTransactionWorkspaceScope", () => {
     expect(statement).toContain("true");
     expect(statement).toContain(WS);
   });
+});
+
+describe("withTransactionOrgScope", () => {
+  it.each([false, true])(
+    "restores the workspace and reuses the transaction (failure=%s)",
+    async (fails) => {
+      const { PgDialect } = await import("drizzle-orm/pg-core");
+      const dialect = new PgDialect();
+      let workspace = WS;
+      const settings: string[] = [];
+      const error = new Error("org assignment refused");
+      const writes: string[] = [];
+      const tx = {
+        execute: vi.fn(async (query: import("drizzle-orm").SQL) => {
+          const compiled = dialect.sqlToQuery(query);
+          if (compiled.sql.includes("current_setting")) return [{ workspace }];
+          workspace = compiled.params.length ? String(compiled.params[0]) : "";
+          settings.push(workspace);
+          return [];
+        }),
+        transaction: vi.fn(async (fn: (tx: Tx) => Promise<unknown>) => {
+          const prior = workspace;
+          const originalWrites = [...writes];
+          try {
+            return await fn(tx as unknown as Tx);
+          } catch (e) {
+            // PostgreSQL ROLLBACK TO SAVEPOINT restores local settings and writes.
+            workspace = prior;
+            writes.splice(0, writes.length, ...originalWrites);
+            throw e;
+          }
+        }),
+      };
+      const work = withTransactionOrgScope(
+        tx as unknown as Tx,
+        async (orgTx) => {
+          expect(orgTx).toBe(tx);
+          expect(workspace).toBe("");
+          writes.push("org assignment");
+          if (fails) throw error;
+          return "assigned";
+        },
+      );
+      if (fails) await expect(work).rejects.toBe(error);
+      else await expect(work).resolves.toBe("assigned");
+      expect(workspace).toBe(WS);
+      expect(writes).toEqual(fails ? [] : ["org assignment"]);
+      expect(settings).toEqual(fails ? [""] : ["", WS]);
+      expect(tx.transaction).toHaveBeenCalledTimes(1);
+      // Scope changes name only the workspace GUC, never org_id or bypass.
+      for (const [query] of tx.execute.mock.calls) {
+        const text = dialect.sqlToQuery(query).sql;
+        expect(text).not.toContain("app.current_org_id");
+        expect(text).not.toContain("app.rls_bypass");
+        expect(text).not.toContain("app.org_wide");
+      }
+    },
+  );
 });

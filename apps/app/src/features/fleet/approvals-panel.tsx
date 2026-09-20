@@ -1,6 +1,16 @@
 // The approvals panel: one card per pending approval, soonest expiry first as
-// list_approvals orders them. The decisions (approve, deny) arrive with the
-// approval dialog; this panel reads.
+// list_approvals orders them, each card carrying the decision that answers it.
+//
+// A card draws the four-hop chain (MC spec §7.5): who asked, which agent,
+// which action, which rule. Every hop is either a value the store recorded or
+// the words "not recorded"; a blank hop would read as "no agent was involved"
+// rather than "the gateway does not record one yet". The rule hop names the
+// mandate the call drew on when there is one, because a rule id of the form
+// `mandate:<id>:human_above:<measure>` is only legible next to the mandate.
+//
+// Under the chain sits what the workspace's auto-approval clause said about
+// this call when it was parked (ADR-070), and under that the decision: approve
+// or deny, with the reason the record keeps.
 //
 // A card whose call drew on a mandate carries the mandate bar (#2957): what
 // the period has settled, what calls in flight reserve, and what is left, from
@@ -17,7 +27,7 @@
 // period key is on `list_approvals`, so the card says what the figures are
 // counted over rather than implying they isolate this call.
 import { useLocale, useTranslations } from "next-intl";
-import type { ApprovalItem } from "@/data/contracts/approvals";
+import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
@@ -26,8 +36,9 @@ import { drawsBar, MandateBar } from "@/ui/mandate-bar";
 import { NamedMeasure } from "@/ui/measure";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import { Clock } from "./clock";
 import { ReadFailure } from "@/ui/read-failure";
+import { ApprovalDecision, Eligibility } from "./approval-decision";
+import { Clock } from "./clock";
 
 type Place = { org: string; ws: string };
 
@@ -37,11 +48,13 @@ function ApprovalCard({
   now,
   org,
   ws,
+  on,
 }: {
   item: ApprovalItem;
   /** The mandate the call drew on, when the viewer could read it. */
   mandate: MandateRow | null;
   now: number;
+  on: "fleet" | "run";
 } & Place) {
   const t = useTranslations("fleet.approvals");
   /**
@@ -68,12 +81,30 @@ function ApprovalCard({
       className="flex min-w-0 flex-col gap-2 rounded-lg border border-border p-3"
     >
       <p className={`${mono} break-all font-semibold`}>{item.tool}</p>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <dt className="text-muted-foreground">{t("agent")}</dt>
-        {recorded(item.agentKey)}
-        <dt className="text-muted-foreground">{t("requester")}</dt>
+      <dl
+        data-testid="chain"
+        aria-label={t("chain.title")}
+        className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs"
+      >
+        <dt className="text-muted-foreground">{t("chain.who")}</dt>
         {recorded(item.requester)}
+        <dt className="text-muted-foreground">{t("chain.agent")}</dt>
+        {recorded(item.agentKey)}
+        <dt className="text-muted-foreground">{t("chain.action")}</dt>
+        <dd className={`${mono} break-all`}>{item.tool}</dd>
+        <dt className="text-muted-foreground">{t("chain.rule")}</dt>
+        {item.rule === null ? (
+          recorded(null)
+        ) : (
+          <dd className={`${mono} break-all`}>
+            {item.rule}
+            {item.mandateId === null
+              ? null
+              : ` (${t("chain.underMandate", { mandate: item.mandateId })})`}
+          </dd>
+        )}
       </dl>
+      <Eligibility eligibility={item.autoEligibility} />
       {mandate !== null ? (
         <>
           {metered.map((measure) => (
@@ -127,6 +158,14 @@ function ApprovalCard({
           {t("openRun")}
         </SafeLink>
       )}
+      <ApprovalDecision
+        approvalId={item.id}
+        tool={item.tool}
+        eligibility={item.autoEligibility}
+        org={org}
+        ws={ws}
+        on={on}
+      />
     </li>
   );
 }
@@ -139,14 +178,15 @@ export function ApprovalsPanel({
   ws,
   on = "fleet",
 }: {
-  approvals: Read<ApprovalItem[]>;
+  approvals: Read<ApprovalQueue>;
   /** The mandates the cards name, by public id; empty when none was read. */
   mandates: ReadonlyMap<string, MandateRow>;
   now: number;
   /**
    * Which page is drawing the panel. It names the heading's element, so the
-   * Run page's copy cannot collide with Fleet's id; nothing else changes with
-   * it, because an approval must read the same on both pages.
+   * Run page's copy cannot collide with Fleet's id, and it is the page key a
+   * refused eligibility re-read reports its permission under. Nothing a reader
+   * acts on changes with it: an approval must read the same on both pages.
    */
   on?: "fleet" | "run";
 } & Place) {
@@ -161,22 +201,35 @@ export function ApprovalsPanel({
         </h2>
         {approvals.ok ? (
           <span className="text-xs text-muted-foreground">
+            {/*
+              The figure the header and the waiting tile both stand behind: the
+              count the read took, marked `+` when the read stopped before the
+              end of the queue. Writing the bare length here read as the whole
+              queue, which is the figure an operator staffs against. The `more`
+              call sits in the component rather than in a helper the translator
+              is passed to, because INV-12 follows a translator to its calls
+              and a key it cannot see is a key it reports as unused.
+            */}
             {t("parked", {
-              count: formatCount(approvals.value.length, locale),
+              count: approvals.value.more
+                ? t("more", {
+                    count: formatCount(approvals.value.items.length, locale),
+                  })
+                : formatCount(approvals.value.items.length, locale),
             })}
           </span>
         ) : null}
       </div>
       {!approvals.ok ? (
         <ReadFailure read={approvals} section={t("title")} />
-      ) : approvals.value.length === 0 ? (
+      ) : approvals.value.items.length === 0 ? (
         <div className="flex flex-col gap-1 text-sm">
           <p>{t("empty")}</p>
           <p className="text-xs text-muted-foreground">{t("emptyDetail")}</p>
         </div>
       ) : (
         <ul className="grid gap-3 md:grid-cols-2">
-          {approvals.value.map((item) => (
+          {approvals.value.items.map((item) => (
             <ApprovalCard
               key={item.id}
               item={item}
@@ -188,6 +241,7 @@ export function ApprovalsPanel({
               now={now}
               org={org}
               ws={ws}
+              on={on}
             />
           ))}
         </ul>

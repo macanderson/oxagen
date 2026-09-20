@@ -3,7 +3,7 @@
 // glyph and the border, so every tone passes AA on the panel.
 import { CircleCheck, LoaderCircle, Lock, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
-import { buttonPrimary, panel } from "./control-styles";
+import { buttonPrimary, buttonSecondary, panel } from "./control-styles";
 
 export function FormAlert({
   children,
@@ -35,6 +35,7 @@ export function SubmitButton({
   fullWidth = true,
   form,
   testId,
+  secondary = false,
 }: {
   pending: boolean;
   label: string;
@@ -44,15 +45,22 @@ export function SubmitButton({
   /** The id of the form it submits when it is rendered outside that form (a dialog footer). */
   form?: string;
   testId?: string;
+  /**
+   * Draw it as a secondary button. A screen has one gold action, so a submit
+   * that sits beside the screen's primary action gives up the gold.
+   */
+  secondary?: boolean;
 }) {
   return (
     <button
       type="submit"
       form={form}
       data-testid={testId}
-      data-touch-target={form ? "" : undefined}
+      // Every submit is a control, so at phone width it is a 44px target
+      // whether it sits in its form or in a dialog footer (phone.css).
+      data-touch-target=""
       aria-disabled={pending || undefined}
-      className={`${buttonPrimary} ${fullWidth ? "w-full" : ""} ${className ?? ""}`}
+      className={`${secondary ? buttonSecondary : buttonPrimary} ${fullWidth ? "w-full" : ""} ${className ?? ""}`}
     >
       {pending ? (
         <>

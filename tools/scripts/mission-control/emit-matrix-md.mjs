@@ -11,7 +11,7 @@ const grade = (t) =>
 
 const groups = [...new Set(tools.map((t) => t.group))];
 
-let md = `# Oxagen Mission Control: tool traceability matrix
+let md = `# Oxagen Mission Control spec: tool traceability matrix
 
 Generated from Appendix E of \`2026-09-11-oxagen-mission-control-spec.md\` joined against
 the \`registerCapability()\` declarations in \`packages/oxagen/src/contracts/\`.

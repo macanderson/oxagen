@@ -1,5 +1,5 @@
 ---
-description: Mission Control session 3: assign and revoke agent roles, revoke and mint enrollment from the agent page, toolbelt input schemas on the contract, budgets read on the agent, and send an invitation from Organization. Runs the mc-3-agents-and-people workflow.
+description: Rev1 app session 3: assign and revoke agent roles, revoke and mint enrollment from the agent page, toolbelt input schemas on the contract, budgets read on the agent, and send an invitation from Organization. Runs the mc-3-agents-and-people workflow.
 ---
 
 # /mc-3-agents-and-people

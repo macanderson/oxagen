@@ -58,7 +58,7 @@
     },
     "error": {
       "title": "Audit could not be loaded",
-      "body": "Nothing was changed. Runs kept recording while this page was down: events are written by the kernel, not by Mission Control.",
+      "body": "Nothing was changed. Runs kept recording while this page was down: events are written by the kernel, not by the operator console.",
       "code": "{status} {code}",
       "retry": "Try again"
     },

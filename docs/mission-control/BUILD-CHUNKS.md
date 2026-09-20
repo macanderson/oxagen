@@ -90,6 +90,8 @@ Done when:
 
 ## Session 1: decide and act
 
+Landed in PR https://github.com/macanderson/oxagen/pull/3516
+
 **Why P0.** Two pages draw the approval queue and neither can decide. The assistant flyout sends people to Fleet to approve, and nothing there approves. Fleet has no tier column while ADR-095 says the vocabulary rule applies now and Phase 4 is about to change what `gateway` means. Every piece is a component over a handler that already ships and a kernel seam that is already tested.
 
 Lanes:
@@ -100,15 +102,17 @@ Lanes:
 
 Done when:
 
-- [ ] An approval can be approved or denied with a reason from Fleet and from Run
-- [ ] Each card shows who asked, which agent, which action, which rule, and the eligibility line
-- [ ] Fleet shows the enforcement tier and the verdict for every row, recorded values only
-- [ ] Observe-tier runs offer no controls
-- [ ] A live wrapped run can be paused, resumed, and cancelled from Fleet
-- [ ] Steer carries a delivery mode
-- [ ] `resolve_approval`, `get_auto_eligibility`, and `dispatch_command` (Fleet) are bound with real proofs
+- [x] An approval can be approved or denied with a reason from Fleet and from Run
+- [x] Each card shows who asked, which agent, which action, which rule, and the eligibility line
+- [x] Fleet shows the enforcement tier and the verdict for every row, recorded values only
+- [x] Observe-tier runs offer no controls
+- [x] A live wrapped run can be paused, resumed, and cancelled from Fleet
+- [x] Steer carries a delivery mode
+- [x] `resolve_approval`, `get_auto_eligibility`, and `dispatch_command` (Fleet) are bound with real proofs
 
 ## Session 2: tools governance
+
+Landed in PR https://github.com/macanderson/oxagen/pull/3519 (connections, servers, and the ledger links).
 
 **Why.** Five approval-rule contracts, `grant_mandate`, three connection contracts, and two server contracts are registered and reachable only through the API. The accountable office has no UI for the one write the mandates ledger exists for.
 
@@ -121,12 +125,14 @@ Lanes:
 Done when:
 
 - [ ] Rules can be listed, created, edited, enabled, disabled, deleted, and explained
-- [ ] A mandate can be granted from Tools and from a request
-- [ ] Every ledger row opens the mandate page, and page-load walks it
-- [ ] Connections are listed and can be added; servers are listed and registered
-- [ ] Eleven bindings with real proofs
+- [x] A mandate can be granted from Tools and from a request
+- [ ] Every ledger row opens the mandate page, and page-load walks it (the rows link; the `page-load` row waits on the e2e seed, `apps/app/ARCHITECTURE.md` 2026-09-19 known issue)
+- [x] Connections are listed and can be added; servers are listed and registered
+- [ ] Eleven bindings with real proofs (ten bound; `get_auto_eligibility` is the eleventh and is still unbound)
 
 ## Session 3: agents and people
+
+Landed in PR https://github.com/macanderson/oxagen/pull/3517
 
 **Why.** The agent page reads roles and hosts and cannot write either. The toolbelt shows rules without the schemas the spec pairs them with. People lists invitations and cannot send one.
 
@@ -134,17 +140,17 @@ Lanes:
 
 - **roles.** Assign and revoke on the identity tab.
 - **enrollment.** Revoke a host. Mint an enrollment token and show the command once. A read-only budget panel with its basis, and the NotBacked line for agent-scope budgets.
-- **schemas.** `get_agent_toolbelt` carries each tool's input schema and digest. The toolbelt renders them. Contract change, whole parity chain.
+- **schemas.** `get_agent_toolbelt` carries each tool's input schema and digest. The toolbelt renders them. Read capability schemas from registered contract inputs, MCP schemas from the descriptors used in materialization with server identity, and versioned schemas from the resolved version. Contract change, whole parity chain.
 - **invite.** Send an organization invitation. The handler records an org role and no workspace, so there is no workspace picker and the copy claims nothing about workspaces. A repeat for a pending email returns the existing invitation, shown as already invited.
 
 Done when:
 
-- [ ] A role can be assigned and revoked on the agent page
-- [ ] An enrollment can be revoked and a new one minted from the page
-- [ ] The agent shows the budget it runs under with its basis
-- [ ] The toolbelt shows each tool's input schema and digest
-- [ ] An organization invitation can be sent from People
-- [ ] Five bindings with real proofs; the toolbelt contract change is documented
+- [x] A role can be assigned and revoked on the agent page
+- [x] An enrollment can be revoked and a new one minted from the page
+- [x] The agent shows the budget it runs under with its basis
+- [x] The toolbelt shows each tool's input schema and digest
+- [x] An organization invitation can be sent from People
+- [x] Five bindings with real proofs; the toolbelt contract change is documented
 
 ## Session 4: run evidence
 
@@ -176,7 +182,7 @@ Lanes:
 
 - **segments.** Tabs as path segments through one optional catch-all that replaces `steering/page.tsx` (Next.js refuses both at the same level), with `records` as the default, the seven tabs in spec order, NotBacked lines for Ontology and Preview, the old `?tab=` values redirected inside the page (the proxy's legacy table sees only the pathname), and a page for one published record (#3395).
 - **memory.** What agents remembered, with provenance as the record carries it. The memory record holds a free-text `source` and no frame id today, so the lane adds optional provenance fields to the contract where the store can fill them and renders NotRecorded where it cannot. Retire, demote, propose as a record.
-- **policy.** Active mandates, enabled rules, and switches that are on, each linking to its editor, with the gate notice named as Phase 1.
+- **policy.** Add cursor pagination through the mandate and kill-switch contracts, handlers and parity chain; consume all pages and report page failures. Test beyond the current 100-mandate and 200-switch caps. Active mandates, enabled rules, and switches that are on, each linking to its editor, with the gate notice named as Phase 1.
 
 Done when:
 
@@ -192,8 +198,8 @@ Every `mc-*` workflow has the same four phases and the same preamble, copied int
 
 1. **Scout.** One read-only agent checks each lane against `origin/main` and returns `still_open`, the file and line facts the builder needs, and the open PRs that overlap. A lane that already shipped is skipped and logged. `dryRun: true` stops here.
 2. **Build.** One agent per lane, in parallel, each in its own worktree on `mc/<session>-<lane>` from `origin/main`, owning only its paths, pushing after every step, opening no PR.
-3. **Integrate.** One agent merges the lane branches into `mc/<session>`, merges `origin/main`, reads the whole diff against this document, runs the generators, updates this document's boxes and `ARCHITECTURE.md` §1.2, opens the PR ready for review with the template filled, and drives CI green for up to four rounds. It does not merge.
-4. **Review.** One agent cold-reviews the PR, fixes every P0 and P1 on the branch, carries P2 and below into one residue issue, and replies on and resolves each carried thread per AGENTS.md.
+3. **Integrate.** Validate each lane's branch and SHA, then use a read-only agent to verify the published remote head. Invalid, absent or changed heads stop integration. One agent merges the verified lane commits into `mc/<session>`, merges `origin/main`, reads the whole diff against this document, runs the generators, updates this document's boxes and `ARCHITECTURE.md` §1.2, opens the PR ready for review with the template filled, and drives CI green for up to four rounds. It does not merge.
+4. **Review.** One agent cold-reviews the PR, fixes every P0 and P1 on the branch, carries P2 and below into one residue issue by default, splitting genuinely unrelated changes under SCR-003, and replies on and resolves each carried thread per AGENTS.md.
 
 A lane marked `integrate: false` is a sidecar: it works on branches that are not the session's and its result is reported, never merged.
 

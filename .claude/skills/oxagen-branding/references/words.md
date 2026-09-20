@@ -2,7 +2,7 @@
 
 ## Use these
 
-The product's vocabulary is Mission Control's vocabulary (spec §3). How exactly to use it depends on where the words sit.
+The product's vocabulary is the workforce vocabulary (spec §3). How exactly to use it depends on where the words sit.
 
 - **UI labels, page names, and detail pages** use the exact terms below. A button says "Deny", not "Block". The Access page says "routed", not "escalated".
 - **Around those terms**, familiar explanatory language is fine. "The agent asks for permission to push" can sit beside a request row that says `waiting on Priya, rule release-branch`.
@@ -12,7 +12,8 @@ The product's vocabulary is Mission Control's vocabulary (spec §3). How exactly
 
 | Word | Meaning | Not |
 |---|---|---|
-| Mission Control | the product and the experience where operators manage the agent workforce | mission control center, the dashboard, the console (as the product name) |
+| workforce management | the product and the job: give each agent an identity, set its authority and budget, equip it with tools and skills, and review what it did and what its operators spent | command center, the dashboard, agent ops |
+| operator console | lowercase and descriptive, the place an operator works, when the sentence needs one. Oxagen is the name. | the console (as a product name), the platform, the portal |
 | agent control plane | the technical category: decides what agents may do, hands them what they need, keeps the record, and does not run them | agent fleet management (as a category), orchestration layer, trust layer |
 | workforce | the agents an organization runs, autonomous or supervised, managed by its operators | swarm, army |
 | identity | the agent's own principal, with its roles and accountable operator, distinct from any connection credential | the agent's token, service account, API key |
@@ -71,7 +72,7 @@ excited, thrilled, proud, delighted, love, passionate, finally, at last, imagine
 liability, risk (as a scare word), exposed, unchecked, rogue, dangerous, protect, safeguard
 
 ### Category words owned by others
-observability, governance (as a category name; fine as a verb and as one of the five jobs), evals, guardrails, trust layer, safety layer, AI ops, LLMOps, AgentOps, orchestration (as a category name)
+Mission Control (GitHub's product name for its control plane, retired here 2026-09-19; write Oxagen or the operator console), observability, governance (as a category name; fine as a verb and as one of the five jobs), evals, guardrails, trust layer, safety layer, AI ops, LLMOps, AgentOps, orchestration (as a category name)
 
 ### Overclaims
 proven (for anything the dod did), verified (for anything a model did), guaranteed, always, never (about outcomes), 100%, zero, eliminates
@@ -108,8 +109,9 @@ In today's world, As AI agents become, With the rise of, It's no secret that, We
 | every agent you run has it | give agents the business context their work requires |
 | SOC 2 compliant | the exact report status, type, and scope, or the readiness status |
 | your agents run with a token that can push everywhere | can your team see which rule allowed it and who approved it? |
-| run your agents as a fleet | manage the workforce from Mission Control |
-| agent fleet management (as the category) | Mission Control, or agent control plane |
+| run your agents as a fleet | manage the workforce from one console |
+| agent fleet management (as the category) | workforce management for autonomous agents, or the agent control plane |
+| Mission Control | Oxagen, or the operator console |
 | the agent decides it's done (as the lead) | define completion when the work has an endpoint |
 | connect your agent to GitHub | the agent can request GitHub |
 | the agent has access to Slack | Slack is in the agent's mandate |

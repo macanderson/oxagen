@@ -1271,6 +1271,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "get_repository_tree",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "router",
       "name": "get_routing_policy",
       "reads": [],
@@ -2252,6 +2263,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "open_init_pr",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "parse_memory_import",
       "reads": [],
@@ -3013,6 +3035,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "set_production_branch",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "iam",
       "name": "set_role_grants",
       "reads": [],
@@ -3516,7 +3549,7 @@
       "writes": []
     }
   ],
-  "contentHash": "019c76503e686217499b4b1a3777a03bba9c752af80c9bc2c04790149499681d",
+  "contentHash": "7be52b6092363cbb462d234c2d81c8e685d8d32b4b93282851bb3a6ce528d524",
   "domains": [
     {
       "name": "agent",
@@ -7503,6 +7536,48 @@
         },
         {
           "name": "run_public_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "resume_payload",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "resume_key",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "resume_status",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "resume_started_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "resume_finished_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "resume_run_public_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "resume_error",
           "nullable": true,
           "primaryKey": false,
           "type": "text"

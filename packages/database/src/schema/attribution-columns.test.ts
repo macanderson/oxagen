@@ -11,7 +11,8 @@
 //
 // `iam.principal_role_assignments.assigned_by` and
 // `ingestion.deletion_jobs.requested_by` still lack the suffix; both tables
-// are being reshaped by Mission Control lanes (`granted_by_id` in App. A.4),
+// are being reshaped by lanes of the Mission Control spec (`granted_by_id` in
+// App. A.4),
 // so this test deliberately checks only the shared trio.
 
 import { describe, expect, it } from "vitest";

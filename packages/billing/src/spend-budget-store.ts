@@ -1,7 +1,7 @@
 /**
  * spend-budget-store.ts — the Postgres CRUD for the hard period-to-date spend
  * ceiling (billing.spend_budgets). All reads/writes go through
- * withTenantDb so RLS (`workspace_nullable`) scopes them: a read inside a
+ * the scope-specific database seam. RLS scopes tenant reads: a read inside a
  * workspace scope returns BOTH the org-level ceiling (workspace_id IS NULL) and
  * that workspace's own ceiling.
  *
@@ -9,7 +9,7 @@
  * getScopeBudgets lives in ./spend-budget-gate; the get_spend_budget /
  * set_spend_budget handlers call getSpendBudget / setSpendBudget here.
  */
-import { withTenantDb, schema } from "@oxagen/database";
+import { withTenantDb, withOrgDb, schema } from "@oxagen/database";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import type { SpendBudget, SpendBudgetPeriod } from "./spend-budget";
 
@@ -56,12 +56,23 @@ function rowToBudgetRow(row: Row): SpendBudgetRow {
  * org-first so the gate reports the broader ceiling first. Runs inside the
  * caller's active tenant scope (the kernel gate already holds one).
  */
-export async function getScopeBudgets(): Promise<SpendBudgetRow[]> {
-  const rows = await withTenantDb((tx) =>
+export async function getScopeBudgets(scope?: {
+  orgId: string;
+  workspaceId: string | null;
+}): Promise<SpendBudgetRow[]> {
+  const orgOnly = scope?.workspaceId === null;
+  const read = orgOnly ? withOrgDb : withTenantDb;
+  const rows = await read((tx) =>
     tx
       .select()
       .from(schema.spendBudgets)
-      .where(eq(schema.spendBudgets.enabled, true)),
+      .where(
+        and(
+          eq(schema.spendBudgets.enabled, true),
+          scope ? eq(schema.spendBudgets.orgId, scope.orgId) : undefined,
+          orgOnly ? isNull(schema.spendBudgets.workspaceId) : undefined,
+        ),
+      ),
   );
   return orgFirst(rows);
 }
@@ -133,7 +144,8 @@ export interface SetSpendBudgetInput {
 export async function setSpendBudget(
   input: SetSpendBudgetInput,
 ): Promise<SpendBudgetRow> {
-  const row = await withTenantDb(async (tx) => {
+  const transaction = input.workspaceId === null ? withOrgDb : withTenantDb;
+  const row = await transaction(async (tx) => {
     const existing = (
       await tx
         .select()
@@ -194,10 +206,12 @@ export async function setSpendBudget(
  */
 export async function claimBudgetThreshold(args: {
   budgetId: string;
+  workspaceId: string | null;
   threshold: number;
   periodStart: Date;
 }): Promise<boolean> {
-  const affected = await withTenantDb((tx) =>
+  const transaction = args.workspaceId === null ? withOrgDb : withTenantDb;
+  const affected = await transaction((tx) =>
     tx
       .update(schema.spendBudgets)
       .set({

@@ -2,6 +2,8 @@
 
 > **Historical planning snapshot (September 2026):** The measurements and delivery instructions below predate the completed app rebuild. Use [the current app architecture](../../apps/app/ARCHITECTURE.md) and [Mission Control spec](../specs/mission-control/spec.md) when implementing changes.
 
+> The product name Mission Control was retired on 2026-09-19 by [ADR-113](../adr/ADR-113-workforce-management-leads-mission-control-is-retired.md); this folder keeps its name as a path, and this plan keeps its text.
+
 | | |
 |---|---|
 | **Status** | Draft |

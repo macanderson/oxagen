@@ -1,5 +1,5 @@
 // A page on github.com (ARCHITECTURE.md §3.8): the external target the
-// Workspace settings dialog links to — the repository itself, the App's
+// Repositories page links to — the repository itself, the App's
 // install page, and the page that changes which repositories the installation
 // reaches. `get_main_repository` builds all three, and the install URL carries
 // the API's HMAC-signed state as a query value, so unlike a PullRequestUrl a

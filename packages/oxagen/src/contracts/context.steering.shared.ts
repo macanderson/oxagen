@@ -203,7 +203,16 @@ export const publishedRecordSchema = z
     id: z.string().regex(/^ctr_[0-9A-Za-z]+$/),
     lineageId: z.string(),
     title: z.string(),
-    /** Null on a record published through publish_context_record. */
+    /**
+     * Every write path has required agent.context_records.kind since #3302,
+     * but the DB-level NOT NULL is a deliberate follow-up migration (see
+     * `20260920150000`'s comment) rather than shipped with the write
+     * requirement itself, so a genuinely unclassified row can still exist.
+     * Nullable here for that reason, and because
+     * context_record_versions.kind still is (a legacy version
+     * merge_context_pr never wrote): a record's active version can, in
+     * principle, be one of those on a database this old.
+     */
     kind: recordKindSchema.nullable(),
     force: recordForceSchema.nullable(),
     constraintEffect: constraintEffectSchema.nullable(),

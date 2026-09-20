@@ -1,4 +1,9 @@
-import { withTenantDb, schema } from "@oxagen/database";
+import {
+  withTenantDb,
+  withTransactionOrgScope,
+  type Tx,
+  schema,
+} from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import pino from "pino";
 import { agentDefinitionConfigSchema } from "@oxagen/oxagen/agent-schema";
@@ -123,19 +128,22 @@ export async function agentDefinitionCreateHandler(
       )
       .limit(1);
     if (defaultRole) {
-      await tx
-        .insert(schema.principalRoleAssignments)
-        .values({
-          principalId: principal.id,
-          roleId: defaultRole.id,
-          orgId: ctx.orgId,
-          workspaceId:
-            defaultRole.scopeKind === "workspace" ? ctx.workspaceId : null,
-          assignedBy: userId,
-          createdById: userId,
-          updatedById: userId,
-        })
-        .onConflictDoNothing();
+      const assign = (tx: Tx) =>
+        tx
+          .insert(schema.principalRoleAssignments)
+          .values({
+            principalId: principal.id,
+            roleId: defaultRole.id,
+            orgId: ctx.orgId,
+            workspaceId:
+              defaultRole.scopeKind === "workspace" ? ctx.workspaceId : null,
+            assignedBy: userId,
+            createdById: userId,
+            updatedById: userId,
+          })
+          .onConflictDoNothing();
+      if (defaultRole.scopeKind === "workspace") await assign(tx);
+      else await withTransactionOrgScope(tx, assign);
     } else {
       logger.warn(
         { orgId: ctx.orgId, agentId: agent.publicId },

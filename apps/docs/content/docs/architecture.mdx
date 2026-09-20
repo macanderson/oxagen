@@ -14,7 +14,7 @@ The **[Architecture Atlas](/architecture/index.html)** is the internal engineeri
 - **Request path.** One org-scoped request from identity to row-level security, tenant data planes (ADR-042), auth tiers, and every API route.
 - **Capability kernel.** How a surface reaches a handler, the gate order inside `invoke()`, `checkIAM`'s decision order, domains × surfaces, and the full catalog.
 - **The governed turn.** The in-app agent loop on stella-serve.
-- **Evidence ledger and tacho.** The ledger's `run`, `attempt`, `event`, and `seal` records, their status machines, and the tacho ingest path.
+- **Evidence ledger and wrapped agents.** The ledger's `run`, `attempt`, `event`, and `seal` records, their status machines, and the ingest path a wrapped agent's host reports on.
 - **Metering and billing.** Governed action to credit debit (ADR-052), and the turn admission gate.
 - **Knowledge graph.** The ingestion pipeline (ADR-012), Neo4j labels, and vector indexes.
 - **Datastores.** The four stores, domains across stores, Postgres schemas, an entity-relationship diagram per schema with RLS classes, ClickHouse tables replayed from migrations, and Blob kinds.

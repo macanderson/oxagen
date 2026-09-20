@@ -77,7 +77,7 @@ export function __resetTrustedProxyHopsForTests(): void {
  * record naming an address the attacker chose is worse than one naming none,
  * because it is the record someone reaches for after the fact.
  *
- * Reached this tree in the Mission Control cutover, which moved the audited
+ * Reached this tree in the app cutover (ADR-081), which moved the audited
  * auth route out of `apps/app` and into this package. The same defect had
  * already been fixed in `apps/api`, `apps/app` and `apps/mcp`; this is the
  * fifth copy, and the reason the derivation now lives in one place.

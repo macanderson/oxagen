@@ -1,0 +1,1 @@
+- [2026-09-20] Verify each nested acceptance criterion against current source even when the backlog parent checkbox is checked. #2972 had checked rows whose defects remained in code. (source: reflections/2026-09-20-tenant-reads-and-migration-lock.md)

@@ -4,7 +4,7 @@ Read this before writing any headline, hero, tagline, ad, or opening sentence.
 
 ## The claim
 
-An agent workforce needs operators who can decide what each agent may do, equip it for the work, and inspect what happens. Oxagen is Mission Control for that workforce.
+An agent workforce needs operators who can decide what each agent may do, equip it for the work, and inspect what happens. That job is workforce management, and Oxagen is where it happens.
 
 Other layers each cover one part of the operator's job. Identity systems say who the agent is. Gateways say which tools it can call. Billing says what it consumed. Prompt repos say what it was told. Oxagen binds those decisions into one mandate per agent, applies the mandate to the actions routed through Oxagen, and keeps a record another person can read.
 
@@ -12,11 +12,13 @@ Every control claim carries its scope. Say "for actions routed through Oxagen" o
 
 ## The category
 
-**Mission Control** is the product and the experience. It is where the operator does the job: give each agent an identity, set its authority and budget, equip it with tools and skills, answer its requests, and review its activity and spend.
+**Workforce management for autonomous agents** is the product and the lead. It names the job: give each agent an identity, set its authority and budget, equip it with tools and skills, answer its requests, and review its activity and spend. Where a sentence needs to name the place that job happens, say Oxagen, or the operator console, lowercase and descriptive.
 
 **The agent control plane** is the technical category. It is what Oxagen is to the systems it governs. A control plane does not run the workload. It decides what the workload may do, hands it what it needs, and keeps the record. Oxagen does not run agents. Agents run in their supported environments.
 
-Use Mission Control in headlines and anywhere the reader will operate the product. Use agent control plane when the reader needs the technical category: an architecture review, a platform owner's evaluation, a docs overview. One product, one category. Do not claim a second category name.
+Lead with the job in headlines and anywhere the reader will operate the product. Use agent control plane when the reader needs the technical category: an architecture review, a platform owner's evaluation, a docs overview. "The control plane for your agent workforce" is a valid technical-category line. One product, one category. Do not claim a second category name.
+
+**Mission Control is retired**, as of 2026-09-19. GitHub shipped a control-plane product under that name, so the line named someone else's product. It never appears in live copy, and `messages/rules/rule-naming.yaml` blocks it in the check.
 
 **Fleet** is the name of the Fleet page and part of the operator's vocabulary. Fleet management describes the operator's job of seeing enrolled agents and acting on them. It is not a second category. Spend management is part of the same job: the budget, the meter, the rules, and the bill per agent, run, and person sit beside the agent, not in a separate finance tool.
 
@@ -43,7 +45,7 @@ Detail pages on identity name the supported identity systems and explain provisi
 
 ## Completion is optional
 
-Some work has an endpoint. Other work continues. Both belong in Mission Control.
+Some work has an endpoint. Other work continues. Oxagen manages both.
 
 - **Bounded tasks.** Define completion before the agent starts: the checks and human decisions that decide it. Oxagen locks the criteria into the run and records the results. When checks fail, the record shows the reasons and whether the agent continued, waited for a person, or reached its retry limit.
 - **Ongoing responsibilities.** Manage them through authority, budget, and review points. Do not invent a finish line for work that has none.
@@ -76,9 +78,21 @@ Proof points, stated so they survive a rebuttal:
 - **Every governed request is a row.** Who started the task, which agent asked, which tool it wanted, what data it would reach, which rule answered, and who signed. The same row the meter prices.
 - **The default is stated.** When a workspace has no rules, requests are answered by identity alone. The Access page says so.
 
+## The operator review
+
+The mandate governs the agent. The review covers the person working with it. It is the human side of the AI bill, and the entry point for the rate job.
+
+One page per operator, read from the record and not estimated. It shows spend by operator, agent, and workspace, priced from the same rows the Spend page prices. For bounded tasks it shows outcome per dollar. Beside the money it shows how the person asks, taken from the recorded turns: turns to completion, restarts on the same task, steering overridden by hand instead of written as a rule, routed requests the operator approved every time. Each habit carries its definition, so a reader can check the number against the rows behind it, and each habit carries one recommendation, worded as a rule the operator can adopt.
+
+**The honesty rule.** The review reports what the record shows and does not grade the person. "Twelve restarts on the same task this week" is a fact. "Bad prompter" is not one, and no line in this product says it. A habit is a measurement with its definition beside it, never a score, a rating, or a ranking of people. Do not imply a saving from a habit without the measured workload and conditions.
+
+The lines are held until the operator review ships. Their gate is `operator-review`.
+
 ## The lead lines
 
-**Decision, 2026-09-15, messaging review:** Mission Control is the lead, agent control plane is the category, and completion is an optional control for bounded tasks. The bill, waste, memory, proof, and fleet lines are retired for the reasons in the table below. The dod lines stay held until the dod ships.
+**Decision, 2026-09-19:** workforce management for autonomous agents is the lead, agent control plane is the category, and Mission Control is retired because GitHub's control-plane product carries the name. The operator review joins the held lines as the entry point for the rate job.
+
+**Decision, 2026-09-15, messaging review:** completion is an optional control for bounded tasks. The bill, waste, memory, proof, and fleet lines are retired for the reasons in the table below. The dod lines stay held until the dod ships.
 
 The approved lines live in the message registry at `messages/` in `oxagenai/oxagen-brand`. Each entry carries its audience, long and short copy, release status, evidence, owner, and review date, and the registry generates `message-bank.html` and the ad copy. When this list and the registry disagree, the registry wins. The list below is here so the vendored copy of this skill works without the registry. It carries no count, so adding or retiring an entry never leaves a stale number behind.
 
@@ -86,9 +100,10 @@ The approved lines live in the message registry at `messages/` in `oxagenai/oxag
 
 | Line | Use it for |
 |---|---|
-| **The agent control plane** | The homepage eyebrow |
-| **Mission Control for agent operators.** | The homepage headline, the primary ad, decks |
-| **Oxagen is Mission Control for agent operators: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.** | The one-sentence definition, the first line of an overview, the docs introduction |
+| **Workforce management for autonomous agents** | The homepage eyebrow and the product category. No trailing period as an eyebrow. |
+| **Your agents are a workforce now. Manage them like one.** | The homepage headline, the primary ad, decks, social, the manifest tagline |
+| **Oxagen is workforce management for autonomous agents: give each agent an identity, set its authority and budget, equip it with tools and skills, and review what it did and what its operators spent, through a shared agent control plane.** | The one-sentence definition, the first line of an overview, the docs introduction |
+| **The agent control plane** | The technical category, for an architecture review or a platform owner's evaluation |
 | **Don't hand your agents the keys.** | The access section of the site, security outreach |
 | **Identity, authority, and a record you can inspect.** | The security page headline |
 | **See which agent spent what, and on whose behalf.** | The finance entry point, the Spend page, finance outreach |
@@ -96,10 +111,19 @@ The approved lines live in the message registry at `messages/` in `oxagenai/oxag
 | **Set the authority behind each action.** | The authority section |
 | **Give each agent the tools and skills its work requires.** | The equipment section |
 | **Define completion when the work has an endpoint.** | The work section |
-| **Manage the workforce from Mission Control.** | The operations section, the Fleet page intro |
+| **Manage the workforce from one console.** | The operations section, the Fleet page intro |
 | **Follow the action back to its authority.** | The audit section |
 
-Candidate, pending confirmation of the launch integration: **Stella is an agent. Oxagen is Mission Control for the workforce.** Show Stella as one supported agent where that is accurate. Shared branding does not establish shared proof mechanisms or identical capabilities.
+Candidate, pending confirmation of the launch integration: **Stella is an agent. Oxagen manages the workforce.** Show Stella as one supported agent where that is accurate. Shared branding does not establish shared proof mechanisms or identical capabilities.
+
+### Held until the operator review ships
+
+| Line | Use it for |
+|---|---|
+| **Your agents get a mandate. Your operators get a review.** | The operator review entry point, finance and engineering outreach |
+| **See who spent the AI budget, and what it bought.** | The short form of the same line |
+
+Candidate for the operations section, held with them: **Manage the agents. Coach the operators.**
 
 ### Held until the dod ships
 
@@ -117,10 +141,12 @@ Earlier held lines that are not carried into the registry: "Define done before t
 | Can you explain your AI bill? Neither can your provider. | 06 | Makes an unsupported comparison with every provider and argues about providers instead of attribution | See which agent spent what, and on whose behalf. |
 | Stop wasting money on AI. | 02 | Promises a lower bill without a measured workload or conditions | See which agent spent what, and on whose behalf. |
 | Never re-explain yourself to AI ever again. | 05 | Promises universal recall and breaks the rule against outcome absolutes | Give agents the business context their work requires. |
-| Agents that prove their work. A model you own. | 01, 02 | Makes proof the defining feature and implies every run is proven | Mission Control for agent operators. |
-| Mission Control for your autonomous agents. | 07 | Narrows the claim to autonomous agents when Oxagen also governs supervised ones, and addresses the reader as an owner instead of naming the operator | Mission Control for agent operators. |
-| The control plane for your agent workforce (eyebrow) | 07 | Says the category the long way round | The agent control plane |
-| Run your agents as a fleet. | 07 | Competes with Mission Control as a second category name | Manage the workforce from Mission Control. |
+| Agents that prove their work. A model you own. | 01, 02 | Makes proof the defining feature and implies every run is proven | Your agents are a workforce now. Manage them like one. |
+| Mission Control for your autonomous agents. | 07 | Narrows the claim to autonomous agents when Oxagen also governs supervised ones, and addresses the reader as an owner instead of naming the operator | Your agents are a workforce now. Manage them like one. |
+| Mission Control for agent operators. | 07 | GitHub's control-plane product carries the name; the lead now names the job, workforce management | Your agents are a workforce now. Manage them like one. |
+| Oxagen is Mission Control for agent operators: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane. | 07 | Same name, in the one-sentence definition | Oxagen is workforce management for autonomous agents: give each agent an identity, set its authority and budget, equip it with tools and skills, and review what it did and what its operators spent, through a shared agent control plane. |
+| The control plane for your agent workforce (eyebrow) | 07 | Says the category the long way round. Still valid as a technical-category line. | Workforce management for autonomous agents |
+| Run your agents as a fleet. | 07 | Competes with the category as a second category name | Manage the workforce from one console. |
 | Oxagen learns from every run, and the next one costs less. (subline) | 02 | Promises that every next run costs less, whatever the task or model | See what each recorded run costs. |
 | Teach Oxagen your business once. Every agent you run has it. (subline) | 05 | Implies universal distribution while the mandate restricts scope | Give agents the business context their work requires. |
 
@@ -128,7 +154,7 @@ Do not write new taglines. If a surface needs a line, pick a live one, or add an
 
 ## The pitch, one sentence
 
-Oxagen is Mission Control for agent operators: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.
+Oxagen is workforce management for autonomous agents: give each agent an identity, set its authority and budget, equip it with tools and skills, and review what it did and what its operators spent, through a shared agent control plane.
 
 ## The pitch, short
 
@@ -154,7 +180,7 @@ Held with the dod lines, for bounded tasks only:
 
 ## The buyer we are built for
 
-The operator is the user. The buyer is the technology executive who answers for the agent workforce and its spend, usually a CIO or a CTO, or the platform leader who answers for both. Operators adopt Mission Control because it is where their job happens. The buyer signs because they have to answer for what the workforce did.
+The operator is the user. The buyer is the technology executive who answers for the agent workforce and its spend, usually a CIO or a CTO, or the platform leader who answers for both. Operators adopt Oxagen because it is where their job happens. The buyer signs because they have to answer for what the workforce did.
 
 ### The statement
 
@@ -173,7 +199,7 @@ Oxagen sells to the technology executive who is asked to ship autonomous agents 
 - One team, one agent, one person who holds the whole picture.
 - Agents that only read. The mandate earns its keep when an agent requests actions in systems other people own.
 - No one accountable for agent spend, which means no one to read the Spend page.
-- A mandate to stop agent adoption rather than to operate it. Mission Control is for running the workforce.
+- A mandate to stop agent adoption rather than to operate it. Oxagen is for running the workforce.
 
 ### How to open with them
 
@@ -232,7 +258,7 @@ Never name a competitor in copy. Do not dismiss a category either: no lines abou
 - **Asserting a prospect's setup.** Do not tell a prospect what token their agents hold or who reads their PRs. Ask a diagnostic question.
 - **Traction numbers without dated evidence.** Partner counts, customer counts, team size, and setup durations such as "sixty seconds" stay out of copy until an owner provides dated evidence and publication approval.
 - **Completion as the defining feature.** The dod is an optional control for bounded tasks. It never leads a page, and ongoing work needs no finish line.
-- **Two category names, or owning a category.** Mission Control is the product. Agent control plane is the category. Fleet is a page name.
+- **Two category names, or owning a category.** Workforce management for autonomous agents is the product and the lead. Agent control plane is the category. Fleet is a page name. Mission Control is retired.
 - **The fourteen oracles, the ladder, the rating, Vera.** Year-two story. Telling it now is the surface-area problem.
 - **Stamp.** Belongs to the witness. The dod settles; it does not stamp.
 - **Proven, for anything the dod did.** A held dod means the specified checks held. Proven is the witness verdict `flipped`, stated beside its scope, and nothing else.

@@ -38,6 +38,12 @@ import {
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
+import {
+  loadPriceBook,
+  type PriceBook,
+  resolvePriceEntry,
+} from "@oxagen/billing";
+import { assemblyView, readAssembly } from "./lib/transcript-assembly";
 import { digestBytes } from "@oxagen/tacho";
 import {
   invalidCursor,
@@ -63,7 +69,14 @@ const DECIMAL = /^\d+$/;
 const TACHO_START = "-1";
 
 export type RunTranscriptGetDeps = RunReadDeps & {
-  bodies: Pick<EvidenceStore, "getBody">;
+  bodies: Pick<EvidenceStore, "getBody" | "getAssembly">;
+  /**
+   * The organization's price book, read once per transcript. A block's cost
+   * is its share of the message's output tokens at the model's output rate;
+   * a model the book prices no output for leaves every block's cost null
+   * rather than drawing a zero.
+   */
+  priceBook: (orgId: string) => Promise<PriceBook>;
 };
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -148,12 +161,20 @@ export function foldPageStart(
 
 // ---- Bodies ---------------------------------------------------------------------------
 
-/** One half of the exchange, with its body text when there is one to show. */
+/**
+ * One half of the exchange.
+ *
+ * A half whose bytes are a recorded model stream carries the REASSEMBLY —
+ * the message those bytes were — and no text at all. The wire is the
+ * transport; `get_run_frame_body` answers it byte for byte when somebody asks
+ * for it. Every other half carries its text as it always did.
+ */
 async function half(
-  bodies: Pick<EvidenceStore, "getBody">,
+  bodies: Pick<EvidenceStore, "getBody" | "getAssembly">,
   scope: RunScope,
   frame: RunFrame | null,
   textMax: number,
+  outputRate: (frame: RunFrame) => number | null,
 ): Promise<TranscriptEntryBody | null> {
   if (frame === null) return null;
   const { bodyRef, bodyDigest, fidelity, redactions } = frame.body;
@@ -170,21 +191,30 @@ async function half(
     fidelity,
   };
   if (bodyRef === null || bodyDigest === null) {
-    return { ...base, text: null, truncated: false };
+    return { ...base, text: null, truncated: false, assembly: null };
   }
   const stored = await bodies.getBody(scope, bodyRef);
   if (digestBytes(stored.bytes) !== bodyDigest) {
-    return { ...base, text: null, truncated: false };
+    return { ...base, text: null, truncated: false, assembly: null };
   }
   let text: string;
   try {
     text = decoder.decode(stored.bytes);
   } catch {
-    return { ...base, text: null, truncated: false };
+    return { ...base, text: null, truncated: false, assembly: null };
+  }
+  const assembly = await readAssembly(bodies, scope, bodyRef, text, frame);
+  if (assembly !== null) {
+    return {
+      ...base,
+      text: null,
+      truncated: false,
+      assembly: assemblyView(assembly, outputRate(frame)),
+    };
   }
   return text.length > textMax
-    ? { ...base, text: text.slice(0, textMax), truncated: true }
-    : { ...base, text, truncated: false };
+    ? { ...base, text: text.slice(0, textMax), truncated: true, assembly: null }
+    : { ...base, text, truncated: false, assembly: null };
 }
 
 async function mapConcurrent<T, R>(
@@ -290,12 +320,26 @@ export function createRunTranscriptGetHandler(
 
     // A folded zoom carries an excerpt; `everything` carries the whole body.
     const textMax = transcriptTextMax(input.zoom as TranscriptZoom);
+    // Read once for the page, not once per block: a block's cost is the
+    // model's output rate applied to its apportioned share.
+    const book = await deps.priceBook(ctx.orgId);
+    const outputRate = (frame: RunFrame): number | null => {
+      const model = frame.identity.model;
+      if (model === null) return null;
+      const entry = resolvePriceEntry(book, {
+        orgId: ctx.orgId,
+        modelId: model,
+        tokenClass: "output",
+        at: frame.observedAt,
+      });
+      return entry === null ? null : Number(entry.microsPerMillion);
+    };
     const halves = await mapConcurrent(
       page,
       BODY_CONCURRENCY,
       async (fold) => ({
-        request: await half(deps.bodies, scope, fold.request, textMax),
-        response: await half(deps.bodies, scope, fold.response, textMax),
+        request: await half(deps.bodies, scope, fold.request, textMax, outputRate),
+        response: await half(deps.bodies, scope, fold.response, textMax, outputRate),
       }),
     );
 
@@ -357,4 +401,5 @@ export const runTranscriptGetHandler = createRunTranscriptGetHandler({
   get bodies() {
     return evidenceStore();
   },
+  priceBook: (orgId) => loadPriceBook({ orgId }),
 });

@@ -1,12 +1,14 @@
 /**
  * `list_repositories`: every repository the workspace binds, main and linked
- * (Mission Control spec §10.1), for the Workspace settings dialog's
- * Repositories section, the CLI and MCP.
+ * (Mission Control spec §10.1), for the Repositories page, the CLI and
+ * MCP.
  *
  * One row per binding head, carrying the binding version the head points at.
  * The main repository sorts first; the linked ones follow by full name.
  * `connectionLive` is false when the GitHub connection behind a head has been
  * retired, the state in which that repository silently stops resolving.
+ * `events` says whether GitHub can deliver the repository's events at all:
+ * the App's installation lifecycle and the connection's state.
  *
  * Makes no GitHub call: every fact here is local, so the list renders while
  * GitHub is down. A read: `noBillingGate: true`.
@@ -16,6 +18,23 @@ import { registerCapability } from "../registry";
 import { repositoryMainBind } from "./repository.main.bind";
 
 export const repositoryRole = z.enum(["main", "linked"]);
+
+/**
+ * Whether GitHub can deliver this repository's events to Oxagen, from the
+ * facts Oxagen holds: the connection's state and the App installation's
+ * lifecycle, which the App's own `installation` events keep current (§11.4).
+ * `installed` means the App is installed and the connection is live, which is
+ * the precondition for delivery and not a claim that an event arrived.
+ * `unknown` is an installation the registry has no row for.
+ */
+export const repositoryEventDelivery = z.enum([
+  "installed",
+  "suspended",
+  "uninstalled",
+  "paused",
+  "retired",
+  "unknown",
+]);
 
 export const repositoryList = registerCapability({
   name: "list_repositories",
@@ -50,6 +69,7 @@ export const repositoryList = registerCapability({
             htmlUrl: z.string().url(),
             boundAt: z.string().datetime({ offset: true }),
             connectionLive: z.boolean(),
+            events: repositoryEventDelivery,
           })
           .strict(),
       ),

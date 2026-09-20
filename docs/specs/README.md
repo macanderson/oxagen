@@ -25,7 +25,7 @@ Track delivery in GitHub issues and PRs using the [contribution workflow](../../
 
 ## Historical material
 
-The information architecture, application shell, command menu, app parity overhaul, and workspace marketplace designs predate the Mission Control rebuild. They explain the old app and its retained code. Use [apps/app/ARCHITECTURE.md](../../apps/app/ARCHITECTURE.md) for the current app.
+The information architecture, application shell, command menu, app parity overhaul, and workspace marketplace designs predate the rev1 app rebuild (ADR-081). They explain the old app and its retained code. Use [apps/app/ARCHITECTURE.md](../../apps/app/ARCHITECTURE.md) for the current app.
 
 The top-level July 2026 audit compilations have been removed. Their original topic documents remain in their directories. Do not restore a copied compilation as a second source of truth.
 

@@ -1,5 +1,5 @@
 ---
-description: Mission Control session 4: a Proof tab over get_run_proof, run export status and download through a new capability, gateway outcomes on the transcript, and the unmetered-runs caveat and cache tile on Spend. Runs the mc-4-run-evidence workflow.
+description: Rev1 app session 4: a Proof tab over get_run_proof, run export status and download through a new capability, gateway outcomes on the transcript, and the unmetered-runs caveat and cache tile on Spend. Runs the mc-4-run-evidence workflow.
 ---
 
 # /mc-4-run-evidence

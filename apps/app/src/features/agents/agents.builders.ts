@@ -9,6 +9,7 @@ import type {
   Toolbelt,
 } from "@/data/contracts/agents";
 import type { MandateList } from "@/data/contracts/mandates";
+import type { SpendBudgets } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
 
@@ -154,6 +155,12 @@ export function toolbelt(overrides: Partial<Toolbelt> = {}): Toolbelt {
         decision: "require_approval",
         rule: "agent:7:role_grant",
         readOnly: false,
+        // An MCP tool whose server was never imported into the registry: the
+        // belt records no schema for it.
+        inputSchema: null,
+        schemaOrigin: null,
+        schemaDigest: null,
+        schemaTruncated: false,
       },
       {
         name: "search_tools",
@@ -164,6 +171,16 @@ export function toolbelt(overrides: Partial<Toolbelt> = {}): Toolbelt {
         decision: "allow",
         rule: "human:8:default",
         readOnly: true,
+        // A capability: its schema is derived from the contract.
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string" } },
+          required: ["query"],
+        },
+        schemaOrigin: "declared",
+        schemaDigest:
+          "3f1a2b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708",
+        schemaTruncated: false,
       },
     ],
     cannotSee: [
@@ -201,12 +218,33 @@ export function incident(
   };
 }
 
+/** The ceilings an agent runs under, as the Budgets tab reads them (get_spend_budget). */
+export function spendBudgets(
+  overrides: Partial<SpendBudgets[number]> = {},
+): SpendBudgets {
+  return [
+    {
+      scope: "workspace",
+      enabled: true,
+      period: "monthly",
+      windowDays: null,
+      limit: { micros: "500000000", currency: "USD" },
+      spent: { micros: "125000000", currency: "USD" },
+      ratio: 0.25,
+      state: "ok",
+      ...overrides,
+    },
+  ];
+}
+
 type AgentReads = {
   list?: Read<AgentPage>;
   get?: Read<AgentDetail>;
   toolbelt?: Read<Toolbelt>;
   incidents?: Read<IncidentPage>;
   mandates?: Read<MandateList>;
+  /** The Budgets tab's read; it is `spend.budgets`, not an agents port method. */
+  budgets?: Read<SpendBudgets>;
 };
 
 /** A DataSource answering the agents reads it was handed; `calls` records each read's arguments. */
@@ -217,6 +255,7 @@ export function agentsSource(reads: AgentReads) {
     toolbelt: [],
     incidents: [],
     mandates: [],
+    budgets: [],
   };
   const refuse = () => Promise.reject(new Error("not an Agents read"));
   const answer =
@@ -258,7 +297,7 @@ export function agentsSource(reads: AgentReads) {
       fleet: refuse,
       drill: refuse,
       waste: refuse,
-      budgets: refuse,
+      budgets: answer(reads.budgets, "budgets"),
       findings: refuse,
       findingEvidence: refuse,
       priceBook: refuse,
@@ -285,6 +324,8 @@ export function agentsSource(reads: AgentReads) {
       grants: refuse,
       killSwitches: refuse,
       approvalRules: refuse,
+      connections: refuse,
+      mcpServers: refuse,
     },
   };
   return { source, calls };

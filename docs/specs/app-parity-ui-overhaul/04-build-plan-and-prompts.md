@@ -1,6 +1,6 @@
 # 04 — Build Plan, Ready-to-Go Prompts, and Model Selection
 
-> **Historical design:** This document predates the Mission Control rebuild. It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
+> **Historical design:** This document predates the rev1 app rebuild (ADR-081). It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
 
 How to ship this, in what order, and which model to run each piece with. Model
 picks follow the `CLAUDE.md` operating model: Haiku for single-file/lookups, Sonnet for

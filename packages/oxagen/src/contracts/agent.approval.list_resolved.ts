@@ -36,6 +36,13 @@ export const resolvedApprovalListItem = z
     createdAt: instant,
     expiresAt: instant,
     resolvedAt: instant,
+    execution: z
+      .object({
+        status: z.string(),
+        runId: z.string().nullable(),
+        reason: z.string().nullable(),
+      })
+      .optional(),
     resolution: z.enum(["approved", "denied", "expired"]),
     /**
      * Who resolved it: `user:<usr_…>` or `policy:<rule id>` (mutually

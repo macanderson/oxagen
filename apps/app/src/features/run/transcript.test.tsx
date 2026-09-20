@@ -21,9 +21,10 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   TRANSCRIPT_ENTRY_DEFAULT,
-  type RunTranscript,
+  RunTranscript,
   type TranscriptKind,
 } from "@/data/contracts/run";
+import { toRunTranscript } from "@/data/live/mappers/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
@@ -101,6 +102,101 @@ afterEach(() => {
   cleanup();
   readTranscriptPage.mockReset();
   refresh.mockReset();
+});
+
+describe("assembled model responses", () => {
+  it("renders mapped message blocks and keeps the full-frame link for shortened input", () => {
+    const block = {
+      id: "b0",
+      chars: 10,
+      tokens: 3,
+      partial: false,
+      cost: null,
+    };
+    const page = runTranscript({ entries: [transcriptEntry()] });
+    const entry = page.entries[0];
+    if (!entry) throw new Error("Missing transcript fixture entry");
+    const mapped = RunTranscript.parse(
+      toRunTranscript({
+        ...page,
+        entries: [
+          {
+            ...entry,
+            callId: null,
+            cost: null,
+            cumulativeCost: null,
+            request: null,
+            response: {
+              ...transcriptBody(),
+              text: null,
+              assembly: {
+                blocks: [
+                  {
+                    ...block,
+                    kind: "thinking",
+                    text: "Inspect the configuration.",
+                    seconds: null,
+                    truncated: false,
+                  },
+                  {
+                    ...block,
+                    id: "b1",
+                    kind: "text",
+                    text: "The configuration is ready.",
+                    truncated: false,
+                  },
+                  {
+                    ...block,
+                    id: "b2",
+                    kind: "tool_use",
+                    name: "Write",
+                    input: { content: "…900 characters" },
+                    inputRaw: false,
+                    inputFolded: true,
+                    callKey: "call1",
+                    verdict: null,
+                  },
+                  {
+                    ...block,
+                    id: "b3",
+                    kind: "tool_result",
+                    forId: "b2",
+                    ok: true,
+                    summary: "Saved configuration.",
+                    bytes: 900,
+                    ms: 2,
+                  },
+                ],
+                precis: "Prepared configuration.",
+                stopReason: "end_turn",
+                ttftMs: null,
+                durationMs: null,
+                tokensPerSecond: null,
+                usage: {
+                  inputTokens: null,
+                  outputTokens: null,
+                  cacheReadTokens: null,
+                  cacheWriteTokens: null,
+                },
+                partial: false,
+                wire: { bytes: 3000, events: 50 },
+              },
+            },
+          },
+        ],
+      }),
+    );
+    renderSection({ read: readOk(mapped), zoom: "everything" });
+    const half = screen.getByTestId("transcript-half");
+    expect(half.textContent).toContain("Inspect the configuration.");
+    expect(half.textContent).toContain("The configuration is ready.");
+    expect(half.textContent).toContain("Write");
+    expect(half.textContent).toContain("…900 characters");
+    expect(half.textContent).toContain("Saved configuration.");
+    expect(within(half).getByRole("link").getAttribute("href")).toContain(
+      "body=",
+    );
+  });
 });
 
 describe("the filter chips", () => {

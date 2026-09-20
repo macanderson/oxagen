@@ -321,13 +321,13 @@ describe("a step the producer wrote in two halves", () => {
     // `tool_requested` then `tool_call` is one step. Reading the frame that
     // opens it would hand the model the tool's input and call it the result.
     store('{"path":"README.md"}');
-    store("# Oxagen\nMission Control for an agent workforce.");
+    store("# Oxagen\nWorkforce management for autonomous agents.");
     const frames = [
       row(1, "tool_requested", '{"path":"README.md"}', "tu_shared"),
       row(
         2,
         "tool_call",
-        "# Oxagen\nMission Control for an agent workforce.",
+        "# Oxagen\nWorkforce management for autonomous agents.",
         "tu_shared",
       ),
     ];
@@ -337,11 +337,11 @@ describe("a step the producer wrote in two halves", () => {
       seq: "1",
       kind: "tool_call",
       input: '{"path":"README.md"}',
-      text: "# Oxagen\nMission Control for an agent workforce.",
+      text: "# Oxagen\nWorkforce management for autonomous agents.",
     });
     const prompt = summaryPrompt("tse_0a1b2c", collected);
     expect(prompt).toContain('called with: {"path":"README.md"}');
-    expect(prompt).toContain("Mission Control for an agent workforce.");
+    expect(prompt).toContain("Workforce management for autonomous agents.");
   });
 
   it("says the result was not retained rather than showing the input in its place (negative)", async () => {

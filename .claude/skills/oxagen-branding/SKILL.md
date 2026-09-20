@@ -24,9 +24,9 @@ Copy changes start in the message registry at `messages/` in `oxagenai/oxagen-br
 
 ## What Oxagen is, in one sentence
 
-Oxagen is Mission Control for agent operators: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.
+Oxagen is workforce management for autonomous agents: give each agent an identity, set its authority and budget, equip it with tools and skills, and review what it did and what its operators spent, through a shared agent control plane.
 
-Every piece of copy is downstream of that sentence. **Mission Control** is the product and the experience: the place an operator does the job. **Agent control plane** is the technical category: what Oxagen is to the systems it governs. A control plane does not run the workload. It decides what the workload may do, hands it what it needs, and keeps the record. Oxagen does not run agents.
+Every piece of copy is downstream of that sentence. **Workforce management for autonomous agents** is the product and the lead: the job the operator is doing. **Agent control plane** is the technical category: what Oxagen is to the systems it governs. A control plane does not run the workload. It decides what the workload may do, hands it what it needs, and keeps the record. Oxagen does not run agents.
 
 The unit Oxagen manages is the mandate. Each agent has its own identity and works under one mandate with four clauses: access (security sets it, including the identity the agent acts as), budget and rules (FinOps sets it), equipment (engineering sets it: tools, skills, and permitted knowledge), and the record (the platform keeps it). These responsibilities can belong to one person or to several teams. If a line does not connect to identity or a clause, cut the line.
 
@@ -38,18 +38,18 @@ Completion is optional. A definition of done is a control for bounded tasks that
 2. **No em dashes in anything a customer reads.** Use a period, a comma, or a colon. This includes UI strings, docs, ads, and specs.
 3. **Sentence case headings.** Always.
 4. **Wordmarks are lowercase: oxagen, stella.** In prose they are names and take a capital: Oxagen, Stella.
-5. **Mission Control vocabulary is the product's vocabulary.** Run, turn, step, frame, operator, agent, workspace, governed action, mandate, request, rule. Use the exact terms for UI labels and on detail pages. Familiar explanatory language around them is fine. Never session, trace, attempt, execution, or invocation in customer-facing prose. See `references/words.md`.
+5. **The workforce vocabulary is the product's vocabulary.** Run, turn, step, frame, operator, agent, workspace, governed action, mandate, request, rule. Use the exact terms for UI labels and on detail pages. Familiar explanatory language around them is fine. Never session, trace, attempt, execution, or invocation in customer-facing prose. See `references/words.md`.
 6. **The agent asks, the rule decides, the record keeps the answer, for actions routed through Oxagen.** Each agent has its own identity. For mediated connections, Oxagen uses the connection credential on the agent's behalf and the agent does not receive it. A rule the owning team wrote answers each request: allowed, denied, or routed to a person. State that scope beside the claim. Never write "connect your agent to X" or "give the agent access to X", and never promise that an agent has nothing to leak. See *The keys stay with you* in `references/positioning.md`.
 
 ## Positioning, the short version
 
-The operator's job is to give each agent an identity, set its authority and budget, equip it with tools and skills, and oversee what it does. Mission Control is where that job happens. The agent control plane is what makes those decisions apply to the actions routed through Oxagen and keeps the record of them.
+The operator's job is to give each agent an identity, set its authority and budget, equip it with tools and skills, and oversee what it does. Oxagen is where that job happens. The agent control plane is what makes those decisions apply to the actions routed through Oxagen and keeps the record of them.
 
 Other layers each cover one part of that job. Identity systems say who the agent is. Gateways say which tools it can call. Billing says what it consumed. Prompt repos say what it was told. Oxagen binds those decisions into one mandate per agent, applies it to governed calls, and records each decision. Observe mode is recorded, not enforced. Say which one applies.
 
 Some work has an endpoint. For those bounded tasks, define completion before the work starts. A passing verdict means the specified checks held, and the team decides whether those checks are enough. Other work continues. Keep its authority, activity, and spend in view as it runs.
 
-The homepage eyebrow is **The agent control plane** and the headline is **Mission Control for agent operators.** For the security reader, the access line is **Don't hand your agents the keys.** For the finance reader, it is **See which agent spent what, and on whose behalf.** For knowledge, it is **Give agents the business context their work requires.** The dod lines are held until the dod ships and then apply to bounded tasks only. The full list, the retired lines, and the reasons are in `references/positioning.md`.
+The homepage eyebrow is **Workforce management for autonomous agents** and the headline is **Your agents are a workforce now. Manage them like one.** For the security reader, the access line is **Don't hand your agents the keys.** For the finance reader, it is **See which agent spent what, and on whose behalf.** For knowledge, it is **Give agents the business context their work requires.** The dod lines are held until the dod ships and then apply to bounded tasks only. The full list, the retired lines, and the reasons are in `references/positioning.md`.
 
 ## Voice, the short version
 
@@ -77,13 +77,14 @@ Full guidance, with before and after pairs, is in `references/voice.md`.
 - [ ] Headings in sentence case
 - [ ] oxagen and stella lowercase as marks, capitalized in prose
 - [ ] No forbidden vocabulary (`references/words.md`)
-- [ ] First sentence connects to the Mission Control sentence and names identity or a mandate clause
+- [ ] First sentence connects to the one-sentence definition and names identity or a mandate clause
 - [ ] No agent holds a key, a token, or standing access anywhere in the copy; it asks, a rule answers
 - [ ] Claim scope stated: control claims say "routed through Oxagen" or "governed calls", and observe mode says recorded, not enforced
 - [ ] No leak promise. Credential custody is stated for mediated connections only
 - [ ] No savings claim without the measured workload and conditions
 - [ ] No SOC 2 attestation claim unless the actual report supports it
 - [ ] Completion is presented as optional, for bounded tasks, and never as the lead
+- [ ] An operator review line reports what the record shows, with each habit's definition beside it, and does not grade the person
 - [ ] Short forms keep the qualifiers of their longer versions
 - [ ] Buyer quotes are labelled hypothetical unless an attributed customer approved them
 - [ ] No traction numbers, partner counts, or setup durations without dated evidence

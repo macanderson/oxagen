@@ -1256,7 +1256,7 @@ describe("GET /oauth/github/callback", () => {
     // install used to land on Fleet with no acknowledgement. The landing route
     // carries the params the Workspace settings dialog opens on.
     expect(location).toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=connected`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=connected`,
     );
     expect(location).not.toContain("settings/github");
     expect(location).not.toContain("connectionId");
@@ -1558,7 +1558,7 @@ describe("GET /oauth/github/callback", () => {
     // — announcing an attach that never happened, to a dialog whose very next
     // read answers `connected: false`.
     expect(res.headers.get("location") ?? "").toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=failed`,
     );
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
   });
@@ -1577,7 +1577,9 @@ describe("GET /oauth/github/callback", () => {
     // Nothing was claimed and nothing was attached, so there is nothing to
     // acknowledge — neither a success nor a failure.
     const location = res.headers.get("location") ?? "";
-    expect(location).toBe(`${APP_URL}/my-org/my-ws?settings=repository`);
+    expect(location).toBe(
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository`,
+    );
     expect(location).not.toContain("github=");
   });
 
@@ -1663,7 +1665,7 @@ describe("GET /oauth/github/callback", () => {
       deliveryConfig: { installationId: "424242" },
     });
     expect(res.headers.get("location") ?? "").toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=connected`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=connected`,
     );
   });
 
@@ -1685,7 +1687,7 @@ describe("GET /oauth/github/callback", () => {
     expect(tx.insert).not.toHaveBeenCalled();
     expect(tx.update).not.toHaveBeenCalled();
     expect(res.headers.get("location") ?? "").toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=choose`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=choose`,
     );
   });
 
@@ -1702,7 +1704,7 @@ describe("GET /oauth/github/callback", () => {
     expect(res.status).toBe(302);
     expect(tx.insert).not.toHaveBeenCalled();
     expect(res.headers.get("location") ?? "").toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=install`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=install`,
     );
   });
 
@@ -1723,7 +1725,7 @@ describe("GET /oauth/github/callback", () => {
 
     expect(tx.insert).not.toHaveBeenCalled();
     expect(res.headers.get("location") ?? "").toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=failed`,
     );
   });
 
@@ -1754,7 +1756,9 @@ describe("GET /oauth/github/callback", () => {
 
     expect(tx.insert).not.toHaveBeenCalled();
     const location = res.headers.get("location") ?? "";
-    expect(location).toBe(`${APP_URL}/my-org/my-ws?settings=repository`);
+    expect(location).toBe(
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository`,
+    );
     expect(location).not.toContain("github=");
   });
 
@@ -1780,7 +1784,7 @@ describe("GET /oauth/github/callback", () => {
     expect(res.status).toBe(302);
     expect(tx.insert).not.toHaveBeenCalled();
     expect(res.headers.get("location") ?? "").toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository`,
     );
   });
 
@@ -1866,7 +1870,7 @@ describe("GET /oauth/github/callback", () => {
     // And the redirect does not claim a connection.
     const location = res.headers.get("location") ?? "";
     expect(location).toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=failed`,
     );
     expect(location).not.toContain("github=connected");
   });
@@ -1898,7 +1902,7 @@ describe("GET /oauth/github/callback", () => {
     });
     const location = res.headers.get("location") ?? "";
     expect(location).toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=connected`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=connected`,
     );
     // Not the no-state branch's destination: state was carried, so the
     // callback knew which workspace asked.
@@ -1957,7 +1961,7 @@ describe("GET /oauth/github/callback", () => {
     // Back on the dialog, told which click finishes it — never the app root
     // the unsigned install door used to strand people on.
     expect(location).toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=authorize`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=authorize`,
     );
     expect(location).not.toContain("github=connected");
     expect(location).not.toContain("github_installed");
@@ -2003,7 +2007,7 @@ describe("GET /oauth/github/callback", () => {
     expect(captured.insertValues).toBeUndefined();
     expect(tx.insert).not.toHaveBeenCalled();
     expect(res.headers.get("location") ?? "").toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=failed`,
     );
   });
 
@@ -2042,7 +2046,7 @@ describe("GET /oauth/github/callback", () => {
     expect(captured.insertValues).toBeUndefined();
     expect(tx.insert).not.toHaveBeenCalled();
     expect(res.headers.get("location") ?? "").toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+      `${APP_URL}/my-org/my-ws/repositories?settings=repository&github=failed`,
     );
   });
 

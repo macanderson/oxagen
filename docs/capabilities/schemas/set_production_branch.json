@@ -1,0 +1,76 @@
+{
+  "name": "set_production_branch",
+  "domain": "repository",
+  "description": "Confirm or change the production branch of one of the workspace's repositories. The branch must exist on GitHub; a change writes a new binding version and never edits the old one.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      },
+      "branch": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255,
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "required": [
+      "bindingId",
+      "branch"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      },
+      "fullName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "productionBranch": {
+        "type": "string",
+        "minLength": 1
+      },
+      "previousBranch": {
+        "type": "string",
+        "minLength": 1
+      },
+      "changed": {
+        "type": "boolean"
+      },
+      "setAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "bindingId",
+      "fullName",
+      "productionBranch",
+      "previousBranch",
+      "changed",
+      "setAt"
+    ],
+    "additionalProperties": false
+  }
+}

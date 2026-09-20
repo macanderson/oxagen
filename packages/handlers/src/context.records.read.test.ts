@@ -57,16 +57,20 @@ describe("list_records", () => {
     const h = harness();
     await publish(h, "ctx.a.rule", "rule");
     await publish(h, "ctx.a.forbid", "constraint", "forbid");
-    // A record published through publish_context_record carries no classification.
+    // A record published through publish_context_record carries no commit or
+    // path — that path writes no PR, so nothing merges it — but it always
+    // carries a real classification now (#3302): the contract requires
+    // kind and force on every call, even though the DB-level NOT NULL is a
+    // deliberate follow-up migration (see `20260920150000`'s comment).
     h.store.records.push({
       ...h.store.records[0]!,
-      id: "legacy",
-      publicId: "ctr_legacy0000000000000000",
-      slug: "ctx.legacy",
-      kind: null,
-      force: null,
+      id: "direct-publish",
+      publicId: "ctr_directpublish00000000000",
+      slug: "ctx.direct-publish",
+      kind: "memory",
+      force: "info",
       constraintEffect: null,
-      statement: null,
+      statement: "Published directly, outside a Context PR.",
       commitSha: null,
       path: null,
       publishedAt: null,
@@ -75,10 +79,12 @@ describe("list_records", () => {
     const all = await list(contextRecordsList.input.parse({}), ctx());
     expect(all.total).toBe(3);
     expect(() => contextRecordsList.output.parse(all)).not.toThrow();
-    const legacy = all.records.find((r) => r.lineageId === "ctx.legacy")!;
-    expect(legacy).toMatchObject({
-      kind: null,
-      force: null,
+    const directPublish = all.records.find(
+      (r) => r.lineageId === "ctx.direct-publish",
+    )!;
+    expect(directPublish).toMatchObject({
+      kind: "memory",
+      force: "info",
       commit: null,
       path: null,
       publishedAt: null,

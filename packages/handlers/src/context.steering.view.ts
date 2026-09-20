@@ -192,7 +192,7 @@ export function prBody(row: ProposalRow): string {
     "",
     "### Checks",
     "",
-    "Oxagen runs six checks on this pull request as check runs: schema, lineage uniqueness, record_hash recomputation, secret and PII scan, conflict against active records, constraint_effect ∈ {require, forbid}. Merge is the publication; Oxagen merges from Mission Control once every check passes and the reviewer the governance mode names approves.",
+    "Oxagen runs six checks on this pull request as check runs: schema, lineage uniqueness, record_hash recomputation, secret and PII scan, conflict against active records, constraint_effect ∈ {require, forbid}. Merge is the publication; Oxagen merges from the operator console once every check passes and the reviewer the governance mode names approves.",
     "",
     `${proposalLine(row.publicId)} · raised by ${row.source}` +
       (row.stampedRecordId ? ` · record_id \`${row.stampedRecordId}\`` : "") +

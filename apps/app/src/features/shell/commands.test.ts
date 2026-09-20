@@ -17,6 +17,7 @@ describe("buildCommands", () => {
       "/acme/core-platform/agents",
       "/acme/core-platform/tools",
       "/acme/core-platform/steering",
+      "/acme/core-platform/repositories",
       "/acme/core-platform/spend",
       "/acme",
       "/acme/roles",

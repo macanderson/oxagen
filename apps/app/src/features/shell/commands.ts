@@ -48,7 +48,11 @@ export function buildCommands(
   if (ws !== null) {
     out.push({ id: "create", label: labels.create(null), create: null });
     for (const kind of CREATE_KINDS)
-      out.push({ id: `create:${kind}`, label: labels.create(kind), create: kind });
+      out.push({
+        id: `create:${kind}`,
+        label: labels.create(kind),
+        create: kind,
+      });
   }
   return out;
 }

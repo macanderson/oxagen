@@ -91,6 +91,146 @@ export const transcriptEntryKindSchema = z.enum([
   "frame",
 ]);
 
+/**
+ * The longest a string field inside a tool call's input is carried before it
+ * is folded to its length. A `Write` call's content is the file, and a page
+ * of steps that carried every one of them would be the same mistake the wire
+ * was: bytes nobody asked for on that render. The whole input is always one
+ * `get_run_frame_body` away.
+ */
+export const TRANSCRIPT_FIELD_MAX = 400;
+
+/** Fields every reassembled block carries. */
+const blockBaseShape = {
+  /** Stable within the frame, so a deep link to a block survives a reload. */
+  id: z.string().min(1),
+  /** Characters the block renders as. */
+  chars: z.number().int().nonnegative(),
+  /** The block's apportioned share of the message's output tokens. */
+  tokens: z.number().int().nonnegative(),
+  /** True when the stream ended before this block closed. */
+  partial: z.boolean(),
+  /**
+   * The block's share of the step's output spend, priced at the model's
+   * output rate. Null when the price book prices no output for this model: a
+   * figure nobody can price is left out, never drawn as a zero.
+   */
+  cost: runCostSchema.nullable(),
+} as const;
+
+/** What a rule or a person decided about the call a `tool_use` block made. */
+export const toolVerdictSchema = z
+  .object({
+    answer: z.enum(["allowed", "denied", "routed"]),
+    /** The rule that answered, as the record spells it. */
+    rule: z.string(),
+    /** How long the decision took; null when the record did not time it. */
+    ms: z.number().int().nonnegative().nullable(),
+    /** Who the call waits on while it is routed; null otherwise. */
+    waitingOn: z.string().nullable(),
+  })
+  .strict();
+
+export const contentBlockSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      ...blockBaseShape,
+      kind: z.literal("text"),
+      text: z.string().max(TRANSCRIPT_TEXT_MAX),
+      /** True when `text` was cut at the cap, on a line boundary. */
+      truncated: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      ...blockBaseShape,
+      kind: z.literal("thinking"),
+      text: z.string().max(TRANSCRIPT_TEXT_MAX),
+      truncated: z.boolean(),
+      /** Wall seconds the block took; null when the record did not time it. */
+      seconds: z.number().nonnegative().nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      ...blockBaseShape,
+      kind: z.literal("tool_use"),
+      name: z.string().min(1),
+      /** The parsed input, or the raw fragment string when it did not parse. */
+      input: z.unknown(),
+      /** True when `input` is the raw string rather than parsed JSON. */
+      inputRaw: z.boolean(),
+      /** True when a string field was folded to its length (§ TRANSCRIPT_FIELD_MAX). */
+      inputFolded: z.boolean(),
+      /** The producer's own id for the call, so a result attaches to it. */
+      callKey: z.string().nullable(),
+      verdict: toolVerdictSchema.nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      ...blockBaseShape,
+      kind: z.literal("tool_result"),
+      /** The `tool_use` block this result answers. */
+      forId: z.string().min(1),
+      ok: z.boolean(),
+      /** One line: what came back, never the whole payload. */
+      summary: z.string(),
+      bytes: z.number().int().nonnegative().nullable(),
+      ms: z.number().int().nonnegative().nullable(),
+    })
+    .strict(),
+]);
+
+/** The token counts the provider reported, split so no total hides a cache hit. */
+export const assemblyUsageSchema = z
+  .object({
+    inputTokens: z.number().int().nonnegative().nullable(),
+    cacheReadTokens: z.number().int().nonnegative().nullable(),
+    cacheWriteTokens: z.number().int().nonnegative().nullable(),
+    outputTokens: z.number().int().nonnegative().nullable(),
+  })
+  .strict();
+
+/**
+ * A recorded model stream as the message it was: the fold the ledger wrote
+ * beside the wire at ingest, never computed here and never computed in a
+ * viewer.
+ *
+ * A half that carries one carries no `text`: the wire is the transport, the
+ * blocks are the message, and a list that shipped both would ship the bytes
+ * this exists to keep off the page. The recorded bytes stay one
+ * `get_run_frame_body` away, byte for byte.
+ */
+export const transcriptAssemblySchema = z
+  .object({
+    blocks: z.array(contentBlockSchema),
+    /**
+     * The step's one line, built by template from the block kinds. Pure: the
+     * same frame gives the same line on every read, and no model wrote it.
+     */
+    precis: z.string(),
+    /** The provider's stop reason, verbatim; null when the stream did not say. */
+    stopReason: z.string().nullable(),
+    /** Milliseconds to the first content delta; null when nothing timed it. */
+    ttftMs: z.number().int().nonnegative().nullable(),
+    /** The call's wall time; null when nothing timed it. */
+    durationMs: z.number().int().nonnegative().nullable(),
+    /** Output tokens per second of wall time; null without both figures. */
+    tokensPerSecond: z.number().nonnegative().nullable(),
+    usage: assemblyUsageSchema,
+    /** True when the stream ended before the message did. */
+    partial: z.boolean(),
+    /** What the transport was, for the tier that shows it. */
+    wire: z
+      .object({
+        events: z.number().int().nonnegative(),
+        bytes: z.number().int().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();
+
 /** One half of an exchange: the frame that carried it, and what it said. */
 export const transcriptBodySchema = z
   .object({
@@ -111,6 +251,16 @@ export const transcriptBodySchema = z
     text: z.string().max(TRANSCRIPT_TEXT_MAX).nullable(),
     /** True when `text` was cut at TRANSCRIPT_TEXT_MAX. */
     truncated: z.boolean(),
+    /**
+     * The recorded model stream folded into the message it was, or null when
+     * this half is not one (a prompt, a tool argument, a tool result).
+     *
+     * Non-null exactly when `text` is null for a retained body: the two are
+     * alternatives, never both. A reader shows the blocks, and reaches for
+     * the wire through `get_run_frame_body` only when a person asks for the
+     * transport.
+     */
+    assembly: transcriptAssemblySchema.nullable(),
   })
   .strict();
 
@@ -237,3 +387,6 @@ export type TranscriptEntry = z.output<typeof transcriptEntrySchema>;
 export type TranscriptEntryBody = z.output<typeof transcriptBodySchema>;
 export type TranscriptZoom = z.output<typeof transcriptZoomSchema>;
 export type TranscriptKind = z.output<typeof transcriptKindSchema>;
+export type TranscriptAssembly = z.output<typeof transcriptAssemblySchema>;
+export type TranscriptContentBlock = z.output<typeof contentBlockSchema>;
+export type TranscriptToolVerdict = z.output<typeof toolVerdictSchema>;

@@ -19,6 +19,15 @@
  *     script verifies the static half; CI e2e + the committed proof verify the
  *     runtime half.)
  *
+ *     One capability can be operable from more than one page: a run is paused
+ *     from the run's own page and from its row on Fleet, and both are surfaces
+ *     a person uses. The registry holds one object per capability, so the
+ *     second page and every page after it go in that object's `also` array,
+ *     and each entry is held to the same bar as the primary binding: a `page`
+ *     that exists on disk and a `proof`. Without that, a second surface is
+ *     either invisible to the gate or forces a duplicate key the registry
+ *     cannot hold.
+ *
  *   REVERSE (advisory — always warn-only):
  *     A registered capability that apps/app actually invokes (a literal
  *     invoke("<name>") call) but that does NOT declare the "app" layer is
@@ -50,7 +59,7 @@ const ROOT = resolve(process.cwd());
 const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
 const REGISTRY = join(ROOT, APP_DIR, "capability-ui-map.json");
 /**
- * The rebuilt app's own registry. During the Mission Control rebuild the
+ * The rebuilt app's own registry. During the app rebuild the
  * gates still point at the deprecated app (lib/app-dir.mjs), but a capability
  * whose UI now lives in apps/app is bound there, not here — so both are read
  * and a name the new app binds wins. The cutover batch flips APP_DIR and
@@ -193,6 +202,51 @@ export function resolveInvoked(src, validNames, identToName) {
 }
 
 /**
+ * One bound surface judged by the same two rules as any other: its `page`
+ * exists on disk and it carries a runtime `proof`. Returns the reason it
+ * fails, or null.
+ *
+ * @param {{page?:string, proof?:string}} surface
+ * @param {(p:string)=>boolean} pageExists
+ * @param {string} label - what to call the surface in the reason ("binding", "binding.also[0]")
+ */
+function surfaceGap(surface, pageExists, label) {
+  if (!surface.page || !pageExists(surface.page))
+    return `${label}.page missing on disk: ${surface.page ?? "(unset)"}`;
+  if (!surface.proof)
+    return `${label} has no runtime \`proof\` (screenshot under verifications/ or an e2e spec)`;
+  return null;
+}
+
+/**
+ * The `also` array: the second and later pages one capability is operated on.
+ *
+ * The registry holds one object per capability name, so a capability a person
+ * reaches from two places (create_enrollment_token from the register flow and
+ * from an agent's Enrollment tab) could only be recorded once. A duplicate key
+ * is not an option: JSON keeps the last one and the first page silently
+ * stops being checked. So the extra pages go in `also`, and each entry is held to
+ * the same bar as the primary binding: a page that exists and a proof that
+ * names it. An `also` that is not an array is itself the gap, because a
+ * mistyped binding that is quietly skipped is how a dead surface looks done.
+ *
+ * @param {{also?:unknown}} binding
+ * @param {(p:string)=>boolean} pageExists
+ */
+function alsoGap(binding, pageExists) {
+  const { also } = binding;
+  if (also === undefined) return null;
+  if (!Array.isArray(also)) return "binding.also is not an array";
+  for (const [i, surface] of also.entries()) {
+    if (typeof surface !== "object" || surface === null)
+      return `binding.also[${i}] is not an object`;
+    const gap = surfaceGap(surface, pageExists, `binding.also[${i}]`);
+    if (gap) return gap;
+  }
+  return null;
+}
+
+/**
  * Pure parity computation. Given parsed contracts, the registry bindings, the
  * set of app-invoked names, and a `pageExists` predicate (injected so tests
  * need no disk), return { forward, reverse, blocking } gap lists.
@@ -226,20 +280,13 @@ export function computeParity({
       });
       continue;
     }
-    if (!b.page || !pageExists(b.page)) {
-      forward.push({
-        capability: cap.name,
-        reason: `binding.page missing on disk: ${b.page ?? "(unset)"}`,
-      });
+    const gap = surfaceGap(b, pageExists, "binding");
+    if (gap) {
+      forward.push({ capability: cap.name, reason: gap });
       continue;
     }
-    if (!b.proof) {
-      forward.push({
-        capability: cap.name,
-        reason:
-          "binding has no runtime `proof` (screenshot under verifications/ or an e2e spec)",
-      });
-    }
+    const extra = alsoGap(b, pageExists);
+    if (extra) forward.push({ capability: cap.name, reason: extra });
   }
   const blocking = forward.filter((g) => !baseline.has(g.capability));
   const reverse = [];

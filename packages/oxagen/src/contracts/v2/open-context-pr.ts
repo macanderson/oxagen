@@ -1,8 +1,15 @@
 import { z } from "zod";
 import { defineTool } from "./_define";
-import { contextRecordPublish } from "../context.record.publish";
+import {
+  contextRecordPublish,
+  contextRecordPublishShape,
+} from "../context.record.publish";
 
-const publishIn = contextRecordPublish.input.shape;
+// `contextRecordPublish.input` is `contextRecordPublishShape` wrapped in a
+// `superRefine` (#3302's constraint-effect check), and `ZodEffects` drops the
+// `.shape` accessor a plain `ZodObject` carries — go through the shape
+// directly for the fields this draft still needs.
+const publishIn = contextRecordPublishShape.shape;
 const publishOut = contextRecordPublish.output.shape;
 
 /**
@@ -73,61 +80,98 @@ export const openContextPr = defineTool({
   // request through the GitHub App.
   mutates: true,
 
-  input: z.object({
-    /**
-     * §10.3 step 1 names the branch `context/<lineage>`, and §10.2 publishes
-     * one record per lineage id. Replaces v1's `record_id`.
-     */
-    lineageId: z
-      .string()
-      .min(1)
-      .describe("Names the branch (context/<lineage>) and the record file"),
+  input: z
+    .object({
+      /**
+       * §10.3 step 1 names the branch `context/<lineage>`, and §10.2 publishes
+       * one record per lineage id. Replaces v1's `record_id`.
+       */
+      lineageId: z
+        .string()
+        .min(1)
+        .describe("Names the branch (context/<lineage>) and the record file"),
 
-    // Carried by reference.
-    title: publishIn.title,
-    body: publishIn.body,
+      // Carried by reference.
+      title: publishIn.title,
+      body: publishIn.body,
 
-    /**
-     * Carried whole, including its note that entries reuse the
-     * ContextProvenanceV1 field vocabulary rather than inventing a parallel
-     * shape. §10.3 step 2's checks recompute `record_hash` and scan for secrets
-     * and PII over exactly this.
-     */
-    provenance: publishIn.provenance,
+      /**
+       * The classification, carried whole from `publish_context_record` (#3302).
+       * It is not optional detail on this call: `readWorkspaceSteering`
+       * (ADR-091 §1) only ever delivers a record whose `force` is `must` or
+       * `should`, so a Context PR that opened without a `kind` and a `force`
+       * would merge into a registry row that steers nothing, with nothing saying
+       * so. §10.2's published record carries the same block in its TOML, and
+       * §10.3 step 2's schema check reads it — this is that block's input.
+       */
+      kind: publishIn.kind,
+      force: publishIn.force,
+      constraintEffect: publishIn.constraintEffect,
+      statement: publishIn.statement,
 
-    /**
-     * Required, because §10.3 step 1 picks the target repository from it: the
-     * main repo for workspace-scoped records, the linked repo for
-     * repository-scoped ones. Defaulting it would silently open PRs on the
-     * wrong repo for every repository-scoped record.
-     */
-    sharingScope: z
-      .enum(["workspace", "repository"])
-      .describe(
-        "Selects the target repo: main for workspace, linked for repository",
-      ),
+      /**
+       * Carried whole, including its note that entries reuse the
+       * ContextProvenanceV1 field vocabulary rather than inventing a parallel
+       * shape. §10.3 step 2's checks recompute `record_hash` and scan for secrets
+       * and PII over exactly this.
+       */
+      provenance: publishIn.provenance,
 
-    /**
-     * Set when a repository-scoped record is being published — §10.2: "Each may
-     * carry its own `.oxagen/rules/` holding records with
-     * `sharing_scope = "repository"`. Those records steer only runs on that
-     * repo."
-     */
-    repoId: z
-      .string()
-      .min(1)
-      .optional()
-      .describe("The linked repo to target; required when scope is repository"),
+      /**
+       * Required, because §10.3 step 1 picks the target repository from it: the
+       * main repo for workspace-scoped records, the linked repo for
+       * repository-scoped ones. Defaulting it would silently open PRs on the
+       * wrong repo for every repository-scoped record.
+       */
+      sharingScope: z
+        .enum(["workspace", "repository"])
+        .describe(
+          "Selects the target repo: main for workspace, linked for repository",
+        ),
 
-    /**
-     * §10.3 step 1: "The PR body carries the rationale, the supporting record
-     * ids, evidence links, and an Oxagen check-run link." The first two come
-     * from the proposal; they are inputs rather than lookups so a Context PR
-     * opened by hand carries the same body as one opened by the promoter.
-     */
-    rationale: z.string().min(1).max(4000),
-    supportingRecordIds: z.array(z.string().min(1)).max(50).default([]),
-  }),
+      /**
+       * Set when a repository-scoped record is being published — §10.2: "Each may
+       * carry its own `.oxagen/rules/` holding records with
+       * `sharing_scope = "repository"`. Those records steer only runs on that
+       * repo."
+       */
+      repoId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          "The linked repo to target; required when scope is repository",
+        ),
+
+      /**
+       * §10.3 step 1: "The PR body carries the rationale, the supporting record
+       * ids, evidence links, and an Oxagen check-run link." The first two come
+       * from the proposal; they are inputs rather than lookups so a Context PR
+       * opened by hand carries the same body as one opened by the promoter.
+       */
+      rationale: z.string().min(1).max(4000),
+      supportingRecordIds: z.array(z.string().min(1)).max(50).default([]),
+    })
+    // The constraint-effect rule carries with the fields it governs, message for
+    // message. Carrying `constraintEffect` as a bare optional would accept a
+    // `rule` record that declares `forbid`, and open a PR whose file §10.3's
+    // schema check then rejects — the v1 contract refuses that at the call.
+    .superRefine((r, ctx) => {
+      if (r.kind === "constraint" && r.constraintEffect === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["constraintEffect"],
+          message: "a constraint declares require or forbid",
+        });
+      }
+      if (r.kind !== "constraint" && r.constraintEffect !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["constraintEffect"],
+          message: "only a constraint carries an effect",
+        });
+      }
+    }),
 
   output: z.object({
     // The registry side, carried whole. `published` keeps its v1 meaning — a

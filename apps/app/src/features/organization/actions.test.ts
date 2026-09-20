@@ -38,6 +38,7 @@ const {
   deleteRole,
   removeOrgMember,
   renameWorkspace,
+  sendInvitation,
   setRolePermissions,
 } = await import("./actions");
 
@@ -546,10 +547,103 @@ describe("removeOrgMember", () => {
   });
 });
 
+describe("sendInvitation", () => {
+  const invitation = {
+    id: "invi_4n5p6q7r8s9t0v1w2x3y4z",
+    status: "pending",
+    expires_at: "2026-09-27T12:00:00.000Z",
+  };
+  const draft = {
+    email: " dana.reyes@acme.example ",
+    role: "admin",
+    message: " Joining the platform team. ",
+  };
+
+  it("invites the address under the role picked, in the organization the URL names", async () => {
+    invoke.mockResolvedValue(invitation);
+    expect(await sendInvitation("acme", draft)).toEqual({
+      ok: true,
+      value: {
+        id: invitation.id,
+        status: "pending",
+        expiresAt: invitation.expires_at,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "send_workspace_invite",
+      {
+        email: "dana.reyes@acme.example",
+        role: "admin",
+        message: "Joining the platform team.",
+      },
+      // The org-only workspace sentinel: the contract is scoped, and the
+      // workspace it enters is invocation scope the invitation never records.
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("sends no note when the field was left blank", async () => {
+    invoke.mockResolvedValue(invitation);
+    await sendInvitation("acme", { ...draft, message: "   " });
+    expect(invoke).toHaveBeenCalledWith(
+      "send_workspace_invite",
+      { email: "dana.reyes@acme.example", role: "admin" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("reports the invitation that was already pending as ok, not as a failure", async () => {
+    // The handler's insert conflicts, it re-reads the pending row and answers
+    // with it, so a second invitation for the same email answers ok with the
+    // id that row already had.
+    invoke.mockResolvedValue(invitation);
+    expect(await sendInvitation("acme", draft)).toMatchObject({
+      ok: true,
+      value: { id: invitation.id },
+    });
+  });
+
+  it("refuses a role no invitation offers before the kernel runs (negative)", async () => {
+    expect(
+      await sendInvitation("acme", { ...draft, role: "compliance" }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "role_not_invitable",
+      field: "role",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses an address the contract's schema does not accept before the kernel runs (negative)", async () => {
+    expect(
+      await sendInvitation("acme", { ...draft, email: "dana.reyes" }),
+    ).toMatchObject({ ok: false, reason: "invalid", field: "email" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a viewer the capability denies as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("send_workspace_invite"));
+    expect(await sendInvitation("acme", draft)).toMatchObject({
+      ok: false,
+      reason: "denied",
+    });
+  });
+});
+
 describe("a person the organization refuses", () => {
   it.each([
     ["changeMemberRole", () => changeMemberRole("acme", MEMBER, "admin")],
     ["removeOrgMember", () => removeOrgMember("acme", MEMBER)],
+    [
+      "sendInvitation",
+      () =>
+        sendInvitation("acme", {
+          email: "dana.reyes@acme.example",
+          role: "member",
+          message: "",
+        }),
+    ],
   ])("%s runs nothing (negative)", async (_name, run) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(run()).rejects.toThrow("NEXT_NOT_FOUND");

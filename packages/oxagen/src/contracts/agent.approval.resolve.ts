@@ -4,7 +4,7 @@ import { registerCapability } from "../registry";
 /**
  * An approval request id in either of its two forms (#2906):
  *
- * - the public id `apr_…` that list reads and the Mission Control app show, or
+ * - the public id `apr_…` that list reads and the app show, or
  * - the row uuid that the runtime keys its waiters on and that the deprecated
  *   app still sends from stream events.
  *
@@ -42,7 +42,7 @@ export const agentApprovalResolve = registerCapability({
     "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "approval" },
   sensitivity: "medium",

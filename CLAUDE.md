@@ -6,7 +6,7 @@ Read both files before changing the repository. `AGENTS.md` owns the repository 
 
 ## Product and architecture
 
-Read `docs/VISION.md` for feature direction and `apps/app/ARCHITECTURE.md` for app invariants. Oxagen governs agents through a mandate and records governed activity. It does not run the agent workload (ADR-043). Check `DEREGISTERED.md` before removing a feature's files. An unreachable feature may have deliberately preserved code.
+Read `docs/VISION.md` for feature direction and `apps/app/ARCHITECTURE.md` for app invariants. Oxagen governs agents through a mandate and records governed activity. It does not run the agent workload (ADR-043). The product is workforce management for autonomous agents and the category is the agent control plane (ADR-113, superseding the product name in ADR-067). Do not write "Mission Control" in current prose or product copy. The record's operator-facing surface is the operator review: one page per person, read from the record, with spend by operator, agent and workspace, outcome per dollar for bounded tasks, prompt habits from the recorded turns, and one recommendation per habit worded as a rule the operator can adopt. It reports what the record shows and never grades the person. Check `DEREGISTERED.md` before removing a feature's files. An unreachable feature may have deliberately preserved code.
 
 Use the code to establish what ships. Specs record intent, ADRs record decisions, and old plans record the implementation sequence at their date. A plan's unchecked box or old audit count is not evidence that the current implementation is missing.
 
@@ -92,6 +92,36 @@ The current assistant flyout and the retained API chat transport are separate su
 - Regenerate `apps/app/src/i18n/messages.d.ts` with `pnpm --filter @oxagen/app gen:messages` after catalogue changes. Commit the generated file.
 - Show graph records by their human label. Resolve authorized endpoint labels server-side and make raw identifiers copyable in details, not the primary display label.
 
+## Issue titles
+
+After triage, an issue title says its priority, where it bites, and what is wrong, in
+that order, so a backlog reads without opening anything:
+
+```
+P<n> · <area>/<surface> · <what is wrong or missing>
+```
+
+Before triage, use `Queued · <area>/<surface> · <what is wrong or missing>` and apply
+only `triage`. The area and surface in the title are provisional. The triage identity
+replaces `Queued` with the assigned priority and aligns the area with its label.
+
+- **`P<n>`** repeats the issue's `P0`-`P4` label. The label is the source of truth; the
+  prefix is what a list, a search result, and a notification show. Retitle when the triage
+  identity assigns or changes the priority.
+- **`<area>`** is the `area:` label without its prefix: `app`, `surfaces`, `kernel`,
+  `auth`, `billing`, `knowledge`, `evidence`, `data`, `platform`, `ops`.
+- **`<surface>`** is where a person meets the defect: an app page (`Fleet`, `Run`,
+  `Mandates`, `Agents`, `Tools`, `Steering`, `Spend`, `Skills`, `Organization`,
+  `Repositories`, `Shell`), a wrapped surface (`API`, `MCP`, `CLI`, `Desktop`,
+  `Gateway`, `Tacho`), a store (`Postgres`, `ClickHouse`, `Neo4j`), or an operational
+  surface (`CI`, `Deploy`, `Migrations`, `Docs`). Join two with `+` when the change
+  lands on both. Omit the segment entirely when the area is the surface.
+- **The statement** is a sentence about the system, not a task name. "Approving a parked
+  tool call never runs it" beats "Fix approvals". Follow `clear-prose`.
+- **Residue issues** keep the same shape and carry their PR in a trailing
+  `(residue #<PR>)`, which replaces the older `Residue from #<PR>:` prefix. List every
+  PR when a residue issue carries more than one.
+
 ## Issues and labels
 
 Track work in GitHub issues on `macanderson/oxagen`. Follow SCR-003, SCR-004, and SCR-005 in `docs/scr/`.
@@ -105,6 +135,20 @@ One issue carries one full change. Include context, paths, reproduction steps wh
 - Apply only `triage` to an issue you create. The triage identity applies priority, size, and descriptive labels. Never apply workflow-owned labels manually.
 - Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
 - Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block.
+
+Four issue fields carry what a label cannot. When these fields are available in GitHub,
+set them when you open an issue and correct them when you learn better. Until they are
+provisioned, add an `Issue metadata` section to the issue body with each field name and
+its value. Keep those values current, then copy them into the fields when available:
+
+| Field | Type | What it records |
+|---|---|---|
+| Estimated agent minutes | Number | Minutes of agent work to reach the definition of done, including tests, docs and review response. Not wall-clock, and not human hours. |
+| Impacts schema | Yes / No | The change alters a Postgres, ClickHouse or Neo4j schema and needs a migration. |
+| Breaking change | Yes / No | The change alters a capability contract, an API response, a CLI flag, a hook payload or a stored format that a consumer already depends on. |
+| Customer reported | Yes / No | A customer or prospect reported the problem. An audit, a reviewer, CI or telemetry did not. |
+
+Size labels stay: they size the change, while estimated agent minutes sizes the work.
 
 The triage scheme uses one `kind:` and one `job:` per issue:
 

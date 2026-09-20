@@ -2,7 +2,6 @@
 // The sidebar (mockup `sidebar()`): brand, the organization and workspace
 // tiles, and the Workspace and Organization sections.
 import { OxagenWordmark } from "@oxagen/ui";
-import { Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { AssistantLauncher } from "./assistant-launcher";
@@ -15,7 +14,6 @@ import {
 } from "./nav";
 import { NAV_ICONS } from "./nav-icons";
 import type { ShellData } from "./shell-data";
-import { useShellState } from "./shell-state";
 import { OrgSwitcher, WorkspaceSwitcher } from "./switchers";
 import { routes } from "@/shared/safe-path";
 import { SafeLink } from "@/ui/navigation";
@@ -47,7 +45,7 @@ export function SidebarNav({
   onNavigate?: () => void;
 }) {
   const t = useTranslations("shell");
-  const { sections, pathname, ws } = useSidebarSections(data);
+  const { sections, pathname } = useSidebarSections(data);
   const labelId = useId();
   return (
     <nav aria-label={t("sidebar.navLabel")} className="flex-1 px-2.5 py-3">
@@ -85,56 +83,10 @@ export function SidebarNav({
                 </li>
               );
             })}
-            {section.key === "workspace" ? (
-              <li>
-                <WorkspaceSettingsButton ws={ws} onNavigate={onNavigate} />
-              </li>
-            ) : null}
           </ul>
         </div>
       ))}
     </nav>
-  );
-}
-
-/**
- * Workspace settings, the last item of the Workspace section. It opens a
- * dialog rather than a page, so it is a button styled as a nav link. The
- * dialog carries the workspace's main repository, the one `.oxagen/` is read
- * from. It is hidden without a workspace, as the section is, because there
- * would be nothing to settle.
- */
-function WorkspaceSettingsButton({
-  ws,
-  onNavigate,
-}: {
-  ws: string | null;
-  onNavigate?: () => void;
-}) {
-  const t = useTranslations("workspaceSettings");
-  const { setWorkspaceSettingsOpen } = useShellState();
-  if (ws === null) return null;
-  return (
-    <button
-      type="button"
-      data-testid="open-workspace-settings"
-      data-touch-target=""
-      aria-haspopup="dialog"
-      onClick={() => {
-        // On a phone this nav is inside the nav drawer, which is a modal of
-        // its own. Opening the settings dialog without closing it stacks two
-        // modal roots and two scrims, and the drawer is still there when the
-        // dialog closes — so the person lands back in the navigation they left
-        // rather than on the page. The drawer passes its `close` here exactly
-        // as it does to the nav links and the assistant launcher.
-        onNavigate?.();
-        setWorkspaceSettingsOpen(true);
-      }}
-      className="mb-px flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm font-medium text-sidebar-nav-link-fg transition-colors hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg focus-visible:outline-2 focus-visible:outline-ring"
-    >
-      <Settings aria-hidden="true" className="size-4 flex-none opacity-85" />
-      <span className="flex-1">{t("open")}</span>
-    </button>
   );
 }
 

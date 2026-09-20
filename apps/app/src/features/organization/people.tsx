@@ -3,8 +3,10 @@
 // link People and API keys. A refused or failed read replaces both sections;
 // the tabs stay. Each member's row carries the two writes on a membership —
 // change role and remove (WL-42) — which an Owner or an Admin makes and every
-// other role sees refused. Invitations are sent from here with the People
-// writes the #2964 lane adds.
+// other role sees refused. An invitation is sent from the Pending invitations
+// section by the same two roles (#2964); it admits the person to the
+// organization and grants no workspace, and the table re-reads when one is
+// sent (`invite-dialog.tsx`).
 import { useTranslations } from "next-intl";
 import type { MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
@@ -13,6 +15,7 @@ import type { OrgCtx, OrgRole } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
+import { InviteDialog } from "./invite-dialog";
 import { MemberRowActions } from "./member-row-actions";
 import { DateCell, emptyLine } from "./parts";
 import { OrganizationTabs } from "./tabs";
@@ -57,7 +60,12 @@ function PeopleView({
             writes={MEMBERSHIP_WRITERS.includes(orgRole)}
             here={routes.people(orgSlug)}
           />
-          <Invitations invitations={read.value.invitations} />
+          <Invitations
+            invitations={read.value.invitations}
+            org={orgSlug}
+            writes={MEMBERSHIP_WRITERS.includes(orgRole)}
+            here={routes.people(orgSlug)}
+          />
         </>
       ) : read.reason === "denied" ? (
         <OutcomePanel
@@ -170,8 +178,16 @@ function Members({
 
 function Invitations({
   invitations,
+  org,
+  writes,
+  here,
 }: {
   invitations: MemberList["invitations"];
+  org: string;
+  /** Whether this viewer's org role may send an invitation. */
+  writes: boolean;
+  /** This page, re-read after an invitation was sent. */
+  here: SafePath;
 }) {
   const t = useTranslations("organization");
   return (
@@ -179,9 +195,17 @@ function Invitations({
       aria-labelledby="people-invitations"
       className="flex flex-col gap-3"
     >
-      <h2 id="people-invitations" className={sectionTitle}>
-        {t("invitations.title")}
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="people-invitations" className={sectionTitle}>
+          {t("invitations.title")}
+        </h2>
+        <InviteDialog
+          org={org}
+          pendingIds={invitations.map((invitation) => invitation.id)}
+          allowed={writes}
+          after={here}
+        />
+      </div>
       {invitations.length === 0 ? (
         <p className={emptyLine}>{t("invitations.empty")}</p>
       ) : (

@@ -1,6 +1,6 @@
 # list_repositories
 
-Every repository the workspace binds, its one main repository and each linked one (MC spec §10.1), for the Workspace settings dialog's Repositories section, the CLI and MCP.
+Every repository the workspace binds, its one main repository and each linked one (MC spec §10.1), for the Repositories page, the CLI and MCP.
 
 One row per binding head, carrying the binding version the head points at. The main repository sorts first; the linked ones follow by full name. `connectionLive` is false when the GitHub connection behind a head has been retired, the state in which that repository silently stops resolving: `delete_connection` leaves the old row at `status = 'deleting'` and the head goes on pointing at it. The list still shows the repository, with that flag, rather than dropping it, the same judgement `get_main_repository` makes through the same predicate.
 
@@ -38,6 +38,7 @@ None. The org and workspace come from the capability context.
 | `repositories[].htmlUrl` | string | the repository on GitHub, derived from `fullName` |
 | `repositories[].boundAt` | string | RFC 3339; when the head was written |
 | `repositories[].connectionLive` | boolean | false when the connection behind the head is retired |
+| `repositories[].events` | `installed`, `suspended`, `uninstalled`, `paused`, `retired`, `unknown` | whether GitHub can deliver the repository's events: the App installation's lifecycle and the connection's state. `installed` is the precondition for delivery, not a claim that an event arrived |
 
 ## Refusals
 

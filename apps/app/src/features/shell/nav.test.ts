@@ -81,6 +81,8 @@ describe("isNavItemCurrent", () => {
     ["/acme/core-platform/agents/acme.core.triage", "agents"],
     ["/acme/core-platform/tools/switches", "tools"],
     ["/acme/core-platform/steering", "steering"],
+    ["/acme/core-platform/repositories", "repositories"],
+    ["/acme/core-platform/repositories/changes", "repositories"],
     ["/acme/core-platform/spend/budgets", "spend"],
     // Flat route, no sidebar item of its own: lights Agents, the same way
     // `runs/{run}` with no Runs item lights Fleet.
@@ -100,7 +102,6 @@ describe("isNavItemCurrent", () => {
   it("marks nothing current on a path no nav item holds, Ontology's and the retired Skills page's included (negative)", () => {
     for (const path of [
       "/",
-      "/acme/core-platform/skills",
       "/acme/core-platform/scenarios",
       "/acme/core-platform/ontology",
     ])
@@ -140,7 +141,7 @@ describe("hrefs", () => {
 });
 
 describe("sidebarSections", () => {
-  it("has the mockup's eight links in order, Audit after Billing, and no Run, Skills or Ontology entry", () => {
+  it("has the mockup's nine links in order, Repositories between Steering and Spend, and Audit after Billing, and no Run or Ontology entry", () => {
     const sections = sidebarSections("acme", "core-platform");
     expect(sections.map((s) => s.key)).toEqual(["workspace", "organization"]);
     expect(sections.flatMap((s) => s.items)).toEqual([
@@ -148,6 +149,7 @@ describe("sidebarSections", () => {
       { key: "agents", href: "/acme/core-platform/agents" },
       { key: "tools", href: "/acme/core-platform/tools" },
       { key: "steering", href: "/acme/core-platform/steering" },
+      { key: "repositories", href: "/acme/core-platform/repositories" },
       { key: "spend", href: "/acme/core-platform/spend" },
       { key: "organization", href: "/acme" },
       { key: "billing", href: "/acme/billing" },
@@ -172,10 +174,11 @@ describe("sidebarSections", () => {
 });
 
 describe("the phone's thumb bar and More sheet", () => {
-  it("split the sidebar keys: four slots, the rest in the sheet, each key once", () => {
+  it("split the nine sidebar keys: four slots, the rest in the sheet, each key once", () => {
     expect(THUMB_SLOTS).toEqual(["fleet", "agents", "tools", "spend"]);
     expect(MORE_SHEET).toEqual([
       "steering",
+      "repositories",
       "organization",
       "billing",
       "audit",
@@ -193,6 +196,7 @@ describe("the phone's thumb bar and More sheet", () => {
       "/acme/billing",
       "/acme/audit",
       "/acme/core-platform/steering",
+      "/acme/core-platform/repositories",
     ])
       expect(isMoreCurrent(path)).toBe(true);
   });

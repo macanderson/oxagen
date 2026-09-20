@@ -106,6 +106,27 @@ describe("findGaps", () => {
     expect(gaps).toEqual([]);
   });
 
+  it("recognizes the existing contract-driven caller role guard", () => {
+    setup();
+    writeFileSync(
+      join(contractsDir, "widget.make.ts"),
+      contract("make_widget"),
+    );
+    writeFileSync(
+      join(handlersDir, "widget.make.ts"),
+      "export const h = async (i, ctx) => { await assertCallerRole(contract, ctx); };\n",
+    );
+    const { gaps, staleBaselineEntries } = findGaps({
+      contractsDir,
+      handlersDir,
+      baseline: new Set(["widget.make"]),
+    });
+    expect(gaps).toEqual([]);
+    expect(staleBaselineEntries).toEqual([
+      expect.objectContaining({ stem: "widget.make" }),
+    ]);
+  });
+
   it("does not flag a handler that resolves the actor's role directly", () => {
     setup();
     writeFileSync(

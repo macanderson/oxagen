@@ -1,11 +1,24 @@
+import { spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   classifyInstaller,
   countPublishedObjects,
   decidePublication,
+  FONT_FILES,
   formatSize,
   type PageEntry,
   type PublicationProbe,
+  releaseLinks,
   renderIndexHtml,
   reportPublicationDecision,
   reservationArgs,
@@ -105,7 +118,8 @@ describe("page helpers", () => {
     expect(linux).toBeGreaterThan(win);
     expect(html).toContain('href="desktop/2.1.1/SHA256SUMS.txt"');
     expect(html).toContain("47.7 MB");
-    // An OS with nothing published gets no empty table.
+    expect(html).toContain(`${"3".padStart(64, "0")}</code>`);
+    // An OS with nothing published gets no empty panel.
     const macOnly = renderIndexHtml({
       version: V,
       entries: entries.slice(0, 2),
@@ -118,8 +132,69 @@ describe("page helpers", () => {
       entries: [],
       publishedAt: "<script>",
     });
-    expect(hostile).not.toContain("<script>");
+    // The page carries one <script> of its own; the hostile date is not it.
+    expect(hostile.match(/<script>/g)).toHaveLength(1);
+    expect(hostile).toContain("Published <code>&lt;script&gt;</code>");
     expect(hostile).toContain("2&quot;&lt;b&gt;");
+  });
+
+  it("offers one gold action, picked per OS by the script and the first installer without it", () => {
+    const entries: PageEntry[] = FILES.map((f) => ({
+      ...classifyInstaller(f, V)!,
+      bytes: 1,
+      sha256: "0".repeat(64),
+    }));
+    const html = renderIndexHtml({ version: V, entries, publishedAt: "d" });
+    // The no-script answer is the first row of the first panel.
+    expect(html).toContain(
+      '<a class="btn" id="pick" href="desktop/2.1.1/Oxagen_2.1.1_aarch64.dmg" data-os="macOS">Download for macOS (Apple silicon)</a>',
+    );
+    // The script chooses the installer most machines want on each OS.
+    expect(html).toContain(
+      '"Windows":{"href":"desktop/2.1.1/Oxagen_2.1.1_x64-setup.exe"',
+    );
+    expect(html).toContain(
+      '"Linux":{"href":"desktop/2.1.1/Oxagen_2.1.1_amd64.AppImage"',
+    );
+    // Exactly one gold-filled action on the page.
+    expect(html.match(/class="btn"/g)).toHaveLength(1);
+    // Both themes ship: obsidian by default, white on the OS preference.
+    expect(html).toContain("prefers-color-scheme: light");
+    expect(html).toContain('<meta name="color-scheme" content="dark light">');
+    // The three faces, loaded from the host's own /fonts/.
+    for (const file of FONT_FILES) expect(html).toContain(`fonts/${file}`);
+    // No em dash reaches a reader.
+    expect(html).not.toContain("\u2014");
+    // A version with no installers at all still renders without an action.
+    const empty = renderIndexHtml({
+      version: V,
+      entries: [],
+      publishedAt: "d",
+    });
+    expect(empty).not.toContain('id="pick"');
+  });
+
+  it("links every version to its release notes and its GitHub release", () => {
+    expect(releaseLinks("2.1.1")).toEqual({
+      notes: "https://docs.oxagen.sh/docs/releases/v2.1.1",
+      allReleases: "https://docs.oxagen.sh/docs/releases",
+      githubRelease:
+        "https://github.com/macanderson/oxagen/releases/tag/desktop-v2.1.1",
+    });
+    expect(releaseLinks("2 1").notes).toBe(
+      "https://docs.oxagen.sh/docs/releases/v2%201",
+    );
+    const html = renderIndexHtml({
+      version: "2.1.1",
+      entries: [],
+      publishedAt: "d",
+    });
+    expect(html).toContain(
+      'href="https://docs.oxagen.sh/docs/releases/v2.1.1"',
+    );
+    expect(html).toContain(
+      'href="https://github.com/macanderson/oxagen/releases/tag/desktop-v2.1.1"',
+    );
   });
 });
 
@@ -192,7 +267,7 @@ describe("decidePublication", () => {
       stdout: JSON.stringify({ Contents: [{ Key: "k" }] }),
     });
     expect(got.action).toBe("stop");
-    expect(got).toMatchObject({ code: 1 });
+    expect(got).toMatchObject({ code: 1, reason: "published" });
     if (got.action !== "stop") throw new Error("unreachable");
     expect(got.message).toContain("already published");
     expect(got.message).toContain("--allow-overwrite");
@@ -226,6 +301,7 @@ describe("decidePublication", () => {
   it("stops when aws never ran", () => {
     const got = decide({ status: null, spawnFailed: true });
     expect(got.action).toBe("stop");
+    expect(got).toMatchObject({ reason: "unknown" });
     if (got.action !== "stop") throw new Error("unreachable");
     expect(got.message).toContain("could not be run");
   });
@@ -327,5 +403,150 @@ describe("reportPublicationDecision", () => {
     const couldNotCheck = reportPublicationDecision(unknown, { dryRun: true });
     expect(couldNotCheck.message).toContain("unknown");
     expect(couldNotCheck.message).toContain("the planned uploads follow");
+  });
+});
+
+describe("resuming an interrupted publish", () => {
+  it("uploads missing installers before publishing the page", () => {
+    const dir = mkdtempSync(join(tmpdir(), "downloads-resume-test-"));
+    try {
+      const source = join(dir, "installers");
+      const bin = join(dir, "bin");
+      mkdirSync(source);
+      mkdirSync(bin);
+      const file = "Oxagen_2.1.1_aarch64.dmg";
+      writeFileSync(join(source, file), "installer bytes");
+      const statePath = join(dir, "bucket.json");
+      writeFileSync(
+        statePath,
+        JSON.stringify({ objects: {}, interrupted: false, writes: [] }),
+      );
+      writeFileSync(
+        join(bin, "aws"),
+        `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const path = process.env.TEST_BUCKET_STATE;
+const state = JSON.parse(fs.readFileSync(path, "utf8"));
+const save = () => fs.writeFileSync(path, JSON.stringify(state));
+const arg = (name) => args[args.indexOf(name) + 1];
+if (args[0] === "s3api" && args[1] === "list-objects-v2") {
+  const keys = Object.keys(state.objects).filter((key) => key.startsWith(arg("--prefix")));
+  console.log(JSON.stringify({ KeyCount: keys.length, Contents: keys.map((Key) => ({ Key, Size: state.objects[Key].length, LastModified: "2026-09-19" })) }));
+} else if (args[0] === "s3api" && args[1] === "put-object") {
+  state.objects[arg("--key")] = fs.readFileSync(arg("--body"), "utf8");
+  save();
+} else if (args[0] === "s3" && args[1] === "cp") {
+  if (args[3] === "-") {
+    process.stdout.write(state.objects[args[2].replace(/^s3:\\/\\/[^/]+\\//, "")]);
+  } else {
+    const key = args[3].replace(/^s3:\\/\\/[^/]+\\//, "");
+    if (key.endsWith(".dmg") && !state.interrupted) {
+      state.interrupted = true;
+      save();
+      process.exit(1);
+    }
+    state.objects[key] = fs.readFileSync(args[2], "utf8");
+    state.writes.push(key);
+    save();
+  }
+} else if (args[0] === "cloudfront") {
+  console.log("None");
+} else {
+  throw new Error("Unexpected AWS request: " + args.join(" "));
+}
+`,
+        { mode: 0o755 },
+      );
+      const run = (...args: string[]) =>
+        spawnSync(
+          process.execPath,
+          [
+            fileURLToPath(
+              new URL("../scripts/publish-downloads.mjs", import.meta.url),
+            ),
+            "--dir",
+            source,
+            "--version",
+            V,
+            "--resume",
+            ...args,
+          ],
+          {
+            encoding: "utf8",
+            env: {
+              ...process.env,
+              PATH: `${bin}:${process.env.PATH ?? ""}`,
+              TEST_BUCKET_STATE: statePath,
+            },
+          },
+        );
+      const first = run();
+      expect(first.status, first.stderr).toBe(1);
+      const interrupted = JSON.parse(readFileSync(statePath, "utf8")) as {
+        objects: Record<string, string>;
+      };
+      expect(interrupted.objects[`desktop/${V}/SHA256SUMS.txt`]).toContain(
+        file,
+      );
+      expect(interrupted.objects[`desktop/${V}/${file}`]).toBeUndefined();
+      expect(interrupted.objects["index.html"]).toBeUndefined();
+      const pageOnly = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(
+            new URL("../scripts/publish-downloads.mjs", import.meta.url),
+          ),
+          "--page-only",
+          "--version",
+          V,
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH ?? ""}`,
+            TEST_BUCKET_STATE: statePath,
+          },
+        },
+      );
+      expect(pageOnly.status, pageOnly.stderr).toBe(1);
+      expect(pageOnly.stderr).toContain("Installers are missing");
+      const refused = JSON.parse(readFileSync(statePath, "utf8")) as {
+        objects: Record<string, string>;
+        writes: string[];
+      };
+      expect(refused.objects["index.html"]).toBeUndefined();
+      expect(refused.writes).not.toContain("index.html");
+      const beforePreview = readFileSync(statePath, "utf8");
+      const preview = run("--dry-run");
+      expect(preview.status, preview.stderr).toBe(0);
+      expect(preview.stdout).toContain(
+        `[dry-run] aws s3 cp ${join(source, file)}`,
+      );
+      expect(preview.stdout).toContain("/index.html");
+      expect(preview.stdout).toContain("/fonts/");
+      expect(preview.stdout).toContain(
+        "[dry-run] aws cloudfront create-invalidation",
+      );
+      expect(preview.stdout).toContain(`${file}  15 bytes`);
+      expect(preview.stdout).toContain(
+        "installer recovery and page publication planned",
+      );
+      expect(readFileSync(statePath, "utf8")).toBe(beforePreview);
+      const resumed = run();
+      expect(resumed.status, resumed.stderr).toBe(0);
+      const complete = JSON.parse(readFileSync(statePath, "utf8")) as {
+        objects: Record<string, string>;
+        writes: string[];
+      };
+      expect(complete.objects[`desktop/${V}/${file}`]).toBe("installer bytes");
+      expect(complete.objects["index.html"]).toContain(file);
+      expect(complete.writes.indexOf(`desktop/${V}/${file}`)).toBeLessThan(
+        complete.writes.indexOf("index.html"),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

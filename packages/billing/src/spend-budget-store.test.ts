@@ -8,6 +8,8 @@
  * ceiling back on, so an invisible row was unrecoverable.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { withOrgDb, withTenantDb } from "@oxagen/database";
 
 /**
  * Captures the where() clause so a test can assert whether one was applied.
@@ -16,30 +18,50 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  */
 const selectChain = {
   from: vi.fn((): unknown => selectChain),
-  where: vi.fn((): unknown => selectChain),
+  limit: vi.fn(),
+  where: vi.fn(
+    (_predicate?: import("drizzle-orm").SQL): unknown => selectChain,
+  ),
+};
+
+const writeChain = {
+  values: vi.fn(() => writeChain),
+  set: vi.fn(() => writeChain),
+  where: vi.fn(() => writeChain),
+  returning: vi.fn(),
 };
 
 const dbMocks = {
+  insert: vi.fn(() => writeChain),
+  update: vi.fn(() => writeChain),
   select: vi.fn(() => selectChain),
 };
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  // The org-wide seam is mocked as the SAME function as the tenant
-  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
-  // a suite that counts seam calls must see one identity, not two.
+  // Separate spies detect org writes routed through the workspace seam.
   const dbMock = {
     ...real,
     db: () => dbMocks,
-    withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+    withTenantDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) =>
+      fn(dbMocks),
+    ),
     withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   };
-  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+  return {
+    ...dbMock,
+    withOrgDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) =>
+      fn(dbMocks),
+    ),
+  };
 });
 
-const { getScopeBudgets, listSpendBudgets } = await import(
-  "./spend-budget-store"
-);
+const {
+  getScopeBudgets,
+  listSpendBudgets,
+  setSpendBudget,
+  claimBudgetThreshold,
+} = await import("./spend-budget-store");
 
 function row(over: Partial<Record<string, unknown>> = {}) {
   return {
@@ -112,4 +134,64 @@ describe("listSpendBudgets — the panel read", () => {
       limitMicros: 125_000_000n,
     });
   });
+});
+
+it("reads only the organization ceiling through the org-wide seam", async () => {
+  selectChain.where.mockResolvedValueOnce([]);
+  await getScopeBudgets({ orgId: "org-a", workspaceId: null });
+  expect(withOrgDb).toHaveBeenCalled();
+  const predicate = selectChain.where.mock.calls.at(-1)?.[0];
+  const query = new PgDialect().sqlToQuery(predicate!);
+  expect(query.sql).toContain('"org_id" =');
+  expect(query.sql).toContain('"workspace_id" is null');
+  expect(query.params).toContain("org-a");
+});
+
+describe("setSpendBudget write scope", () => {
+  it.each([null, "ws-1"])(
+    "creates and updates a ceiling through its own scope: %s",
+    async (workspaceId) => {
+      const input = {
+        orgId: "org-1",
+        workspaceId,
+        enabled: true,
+        period: "monthly" as const,
+        windowDays: null,
+        limitMicros: 500n,
+        actorUserId: null,
+      };
+      for (const existing of [[], [row({ workspaceId })]]) {
+        vi.clearAllMocks();
+        selectChain.limit.mockResolvedValueOnce(existing);
+        writeChain.returning.mockResolvedValueOnce([row({ workspaceId })]);
+        await setSpendBudget(input);
+        expect(withOrgDb).toHaveBeenCalledTimes(workspaceId === null ? 1 : 0);
+        expect(withTenantDb).toHaveBeenCalledTimes(
+          workspaceId === null ? 0 : 1,
+        );
+        expect(
+          existing.length ? dbMocks.update : dbMocks.insert,
+        ).toHaveBeenCalledOnce();
+      }
+    },
+  );
+});
+
+describe("budget notification write scope", () => {
+  it.each([null, "ws-1"])(
+    "claims through the budget's scope: %s",
+    async (workspaceId) => {
+      writeChain.returning.mockResolvedValueOnce([{ id: "bdg-1" }]);
+      expect(
+        await claimBudgetThreshold({
+          budgetId: "bdg-1",
+          workspaceId,
+          threshold: 80,
+          periodStart: new Date(),
+        }),
+      ).toBe(true);
+      expect(withOrgDb).toHaveBeenCalledTimes(workspaceId === null ? 1 : 0);
+      expect(withTenantDb).toHaveBeenCalledTimes(workspaceId === null ? 0 : 1);
+    },
+  );
 });

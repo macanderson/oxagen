@@ -84,7 +84,7 @@ describe("oxagen context propose", () => {
     });
     expect(out).toEqual([
       "ctx.a · prp_9 · proposed",
-      "open its Context PR from Mission Control → Steering; merge there publishes it",
+      "open its Context PR from Oxagen → Steering; merge there publishes it",
     ]);
     expect(err).toEqual([]);
   });

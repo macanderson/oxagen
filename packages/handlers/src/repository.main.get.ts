@@ -146,7 +146,7 @@ export const envGithubUrls: MainRepositoryGetDeps = {
       workspaceId,
       // connectionId null: this is the settings-level connect (1 workspace =
       // 1 app install), which creates no source_connection up front. returnTo
-      // "settings" lands the callback back on the dialog that sent them.
+      // "settings" lands the callback back on the Repositories page that sent them.
       connectionId: null,
       returnTo: "settings" as const,
     };

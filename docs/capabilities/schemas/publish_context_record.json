@@ -1,7 +1,7 @@
 {
   "name": "publish_context_record",
   "domain": "context",
-  "description": "Publish a steering context record into the workspace agent-asset registry — upserts the agent.context_records row by (workspace, record_id) and creates a new immutable version row when the canonical body changed. Idempotent on an unchanged body. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout.",
+  "description": "Publish a steering context record into the workspace agent-asset registry — upserts the agent.context_records row by (workspace, record_id) and creates a new immutable version row when the canonical body changed. Idempotent on an unchanged body. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout. Requires the same classification (kind, force, statement) a merged Context PR carries (#3302), because readWorkspaceSteering only ever delivers a must/should record to an agent — a record with no force sits in the registry and never steers anything.",
   "mode": "sync",
   "surfaces": [
     "api"
@@ -36,6 +36,41 @@
         "type": "string",
         "minLength": 1,
         "description": "The canonical record body (one TOML record per file)"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "rule",
+          "constraint",
+          "procedure",
+          "fact",
+          "memory",
+          "preference"
+        ],
+        "description": "The kind this version's body declares"
+      },
+      "force": {
+        "type": "string",
+        "enum": [
+          "must",
+          "should",
+          "may",
+          "info"
+        ],
+        "description": "How hard the record steers: must, should, may, or info — only must/should ever reach an agent"
+      },
+      "constraintEffect": {
+        "type": "string",
+        "enum": [
+          "require",
+          "forbid"
+        ]
+      },
+      "statement": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000,
+        "description": "The single-sentence claim the record makes"
       },
       "provenance": {
         "type": "array",
@@ -72,9 +107,14 @@
     "required": [
       "record_id",
       "title",
-      "body"
+      "body",
+      "kind",
+      "force",
+      "statement"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
   },
   "output": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",

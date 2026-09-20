@@ -1,5 +1,5 @@
 ---
-description: Mission Control session 5: Steering tabs as path segments, the Memory and Policy tabs, and a page for one published record. The UI-only half of Phase 2; Preview, skill sync, and ontology notes wait on Phases 1 and 2. Runs the mc-5-steering-hub workflow.
+description: Rev1 app session 5: Steering tabs as path segments, the Memory and Policy tabs, and a page for one published record. The UI-only half of Phase 2; Preview, skill sync, and ontology notes wait on Phases 1 and 2. Runs the mc-5-steering-hub workflow.
 ---
 
 # /mc-5-steering-hub

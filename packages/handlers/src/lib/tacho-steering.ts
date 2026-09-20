@@ -21,15 +21,12 @@
  * steering version (#3311). Every control poll and every event ingest
  * carries the bundle etag, and the etag is a digest of the bundle's content,
  * so without a cache every one of those responses loaded and sorted every
- * steering record in the workspace. The steering version is the length of
- * the workspace's promotions ledger (ADR-061 section 8): a merge, a promote,
- * a retire, and a supersede each append one ledger row, and nothing else
- * changes a record's status, its pin, or the classification behind it. So the
- * text can only change when that count moves, and one `count(*)` decides
- * whether the records need reading again. The one write that appends no
- * ledger row is a soft delete of a record row, so the key also carries the
- * number of pinned, non-deleted records that steer, read in the same query.
- * A delete lowers it, and nothing raises it without a ledger row.
+ * steering record in the workspace. The key carries the promotions ledger
+ * length, the count of active steering records, and a digest of their pins
+ * and record classifications. Direct publication changes a pin without
+ * appending a promotion. Legacy versions use the record classification, so
+ * those fields also participate in the digest. Soft deletion changes the
+ * active set. None of these writes needs an in-process cache notification.
  *
  * The four version columns arrive in migration `20260918160000`, and
  * production applies migrations by hand while `deploy-node` ships on merge
@@ -106,6 +103,7 @@ export interface SteeringRow {
 export interface SteeringVersionRow {
   ledger: number | string;
   steering: number | string;
+  revisions: string | null;
 }
 
 /**
@@ -290,7 +288,7 @@ async function versionClassificationReady(
 
 /**
  * The workspace's steering version: the promotions ledger length, and the
- * number of pinned, non-deleted records that steer, in one statement.
+ * number and revision digest of pinned, non-deleted steering records.
  *
  * Every column in the scalar subquery sits inside a nested `SQL` (`eq`,
  * `and`, `effectiveForce`) on purpose: drizzle strips the table name from a
@@ -307,10 +305,16 @@ async function readSteeringVersion(
   const join = ready
     ? sql`left join ${schema.contextRecordVersions} on ${pinnedVersion}`
     : sql``;
+  // Nest every column reference so Drizzle keeps its table qualifier in the
+  // scalar subquery. Pins name immutable versions. The record fields cover
+  // legacy versions whose classification falls back to the record row.
+  const identity = sql`jsonb_build_array(${schema.contextRecords.id}, ${schema.contextRecords.activeVersionId}, ${schema.contextRecords.slug}, ${schema.contextRecords.kind}, ${schema.contextRecords.force}, ${schema.contextRecords.constraintEffect}, ${schema.contextRecords.statement})`;
+  const order = sql`${schema.contextRecords.id}`;
   const rows = (await tx
     .select({
       ledger: count(),
       steering: sql`(select count(*) from ${schema.contextRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ('must', 'should'))`,
+      revisions: sql`(select md5(string_agg(md5(${identity}::text), '' order by ${order})) from ${schema.contextRecords} ${join} where ${activePinnedIn(orgId, workspaceId)} and ${force} in ('must', 'should'))`,
     })
     .from(schema.contextPromotions)
     .where(
@@ -320,7 +324,7 @@ async function readSteeringVersion(
       ),
     )) as SteeringVersionRow[];
   const row = rows[0];
-  return `${Number(row?.ledger ?? 0)}:${Number(row?.steering ?? 0)}`;
+  return `${Number(row?.ledger ?? 0)}:${Number(row?.steering ?? 0)}:${row?.revisions ?? ""}`;
 }
 
 /** The rows that steer, each with its pinned version's classification. */
@@ -366,7 +370,7 @@ async function readSteeringRows(
 
 /**
  * The workspace's active steering records, compiled for the bundle. One
- * count statement on every call; the records are read and compiled only when
+ * aggregate statement on every call; records are read and compiled only when
  * the workspace's steering version has moved since the last call.
  */
 export async function readWorkspaceSteering(

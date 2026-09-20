@@ -30,6 +30,47 @@ export class GitHubApiError extends Error {
   }
 }
 
+/** A refused request whose next permitted attempt exceeds this call's retry budget. */
+export class GitHubRateLimitedError extends GitHubApiError {
+  readonly code = "github_rate_limited" as const;
+  constructor(
+    status: number,
+    message: string,
+    readonly retryAfterMs: number,
+  ) {
+    super(status, message);
+    this.name = "GitHubRateLimitedError";
+  }
+}
+
+function rateLimitDelay(
+  res: Response,
+  message: string,
+  attempt: number,
+): number | null {
+  if (res.status !== 403 && res.status !== 429) return null;
+  const retryAfter = res.headers?.get("retry-after");
+  const remaining = res.headers?.get("x-ratelimit-remaining");
+  if (
+    res.status !== 429 &&
+    !retryAfter &&
+    remaining !== "0" &&
+    !/rate limit|secondary limit/i.test(message)
+  )
+    return null;
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    const delay = Number.isFinite(seconds)
+      ? seconds * 1000
+      : Date.parse(retryAfter) - Date.now();
+    if (Number.isFinite(delay) && delay >= 0) return delay;
+  }
+  const reset = Number(res.headers?.get("x-ratelimit-reset"));
+  if (remaining === "0" && reset > 0)
+    return Math.max(0, reset * 1000 - Date.now());
+  return 60_000 * 2 ** attempt;
+}
+
 function isNotFound(err: unknown): boolean {
   return err instanceof GitHubApiError && err.status === 404;
 }
@@ -302,26 +343,37 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     body?: unknown,
   ): Promise<T> {
     const url = `${baseUrl}${path}`;
-    const res = await fetch(url, {
-      method,
-      headers: commonHeaders,
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-
-    if (!res.ok) {
+    for (let attempt = 0; ; attempt++) {
+      opts.signal?.throwIfAborted();
+      const timeout = AbortSignal.timeout(opts.timeoutMs ?? 30_000);
+      const signal = opts.signal
+        ? AbortSignal.any([opts.signal, timeout])
+        : timeout;
+      const res = await fetch(url, {
+        method,
+        headers: commonHeaders,
+        signal,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+      if (res.ok) {
+        if (res.status === 204) return undefined as T;
+        return res.json() as Promise<T>;
+      }
       let message = res.statusText;
       try {
         const err = (await res.json()) as GHErrorBody;
         if (err.message) message = err.message;
       } catch {
-        // fallback to statusText
+        // An aborted body read must not turn into another request.
+        signal.throwIfAborted();
       }
-      throw new GitHubApiError(res.status, message);
+      const delay = rateLimitDelay(res, message, attempt);
+      if (delay === null) throw new GitHubApiError(res.status, message);
+      if (attempt >= 2 || delay > (opts.maxRateLimitWaitMs ?? 120_000)) {
+        throw new GitHubRateLimitedError(res.status, message, delay);
+      }
+      await sleep(delay);
     }
-
-    // A DELETE answers 204 with no body.
-    if (res.status === 204) return undefined as T;
-    return res.json() as Promise<T>;
   }
 
   // -------------------------------------------------------------------------
@@ -472,6 +524,25 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     };
   }
 
+  async function deleteFile(args: {
+    owner: string;
+    repo: string;
+    path: string;
+    branch: string;
+    message: string;
+  }): Promise<void> {
+    const path = `/repos/${seg(args.owner)}/${seg(args.repo)}/contents/${filePath(args.path)}`;
+    const existing = await request<GHFileContent>(
+      "GET",
+      `${path}?ref=${encodeURIComponent(args.branch)}`,
+    );
+    await request("DELETE", path, {
+      sha: existing.sha,
+      branch: args.branch,
+      message: args.message,
+    });
+  }
+
   async function createBranch(args: {
     owner: string;
     repo: string;
@@ -569,6 +640,28 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     }
   }
 
+  /**
+   * One branch's head commit, or null when GitHub answers 404: the branch
+   * does not exist. Unlike `listBranches`, which stops at 300, this answers
+   * for any branch by name.
+   */
+  async function getBranch(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<{ name: string; sha: string } | null> {
+    try {
+      const data = await request<GHBranch>(
+        "GET",
+        `/repos/${seg(args.owner)}/${seg(args.repo)}/branches/${encodeURIComponent(args.branch)}`,
+      );
+      return { name: args.branch, sha: data.commit.sha };
+    } catch (err) {
+      if (isNotFound(err)) return null;
+      throw err;
+    }
+  }
+
   async function getTree(args: {
     owner: string;
     repo: string;
@@ -576,12 +669,16 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
   }): Promise<string[]> {
     const ref = args.ref ?? "main";
     const repoPath = `/repos/${seg(args.owner)}/${seg(args.repo)}`;
-    // Step 1 — resolve branch → tree SHA via the branches endpoint.
-    const branch = await request<GHBranch>(
+    // Step 1 — resolve the ref to its commit's tree SHA. `/commits/{ref}`
+    // takes a branch name, a tag or a commit SHA. `/branches/{ref}` takes a
+    // branch name and nothing else, so every caller that named a commit —
+    // which is what a caller does when it wants two reads to agree on one
+    // commit — was answered 404.
+    const commit = await request<GHBranchCommit>(
       "GET",
-      `${repoPath}/branches/${encodeURIComponent(ref)}`,
+      `${repoPath}/commits/${encodeURIComponent(ref)}`,
     );
-    const treeSha = branch.commit.commit.tree.sha;
+    const treeSha = commit.commit.tree.sha;
     // Step 2 — fetch the recursive tree.
     const treeData = await request<GHTreeResponse>(
       "GET",
@@ -929,12 +1026,14 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     getRepoInfo,
     createRepoInOrg,
     putFile,
+    deleteFile,
     forkRepo,
     createBranch,
     openPullRequest,
     listPullRequests,
     getFileContent,
     getTree,
+    getBranch,
     getPullRequest,
     listPullRequestComments,
     listCiChecks,

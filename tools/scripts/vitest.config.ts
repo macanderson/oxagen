@@ -5,7 +5,11 @@ export default defineConfig({
     clearMocks: true,
     environment: "node",
     globals: false,
-    include: ["*.test.ts"],
+    // `**/`, not `*`: `*` does not cross a slash, so `lib/ticket-failure.test.ts`
+    // sat in the tree and never ran, and any future test beside `lib/versions.ts`
+    // would have done the same. A test that cannot run is worse than no test,
+    // because the file reads like coverage.
+    include: ["**/*.test.ts"],
     // The one package in the repo whose coverage nothing enforced. Every other
     // vitest config here declares thresholds — 36 of 37 — and the exception was
     // this one, which holds the guards that decide whether anything else may

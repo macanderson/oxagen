@@ -1,6 +1,6 @@
 /**
  * The `app` service ships whatever APP_DIR names, and nothing else. With
- * `@oxagen/app` written into the script, the Mission Control rebuild reached
+ * `@oxagen/app` written into the script, the app rebuild reached
  * app.oxagen.sh the moment its integration branch merged (#2894), while the
  * parity gates still pointed at apps/app_deprecated. One source of truth for
  * "which app is the app", read by the gates and by the deploy alike — and

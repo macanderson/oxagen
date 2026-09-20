@@ -57,14 +57,9 @@ export interface HookDraft {
   turn?: { prompt_id?: string; turn_id?: string };
   context: Record<string, unknown>;
   host: Record<string, unknown>;
-  content_digest?: `sha256:${string}`;
   /**
-   * The bytes the event's digest names, before redaction: the prompt, the
-   * tool input, the tool result, the assistant message. The recorder redacts
-   * them, digests what is left, and holds the body for the batch the event
-   * ships in. When this is set it is the recorder's digest that reaches the
-   * chain, not `content_digest`, which is the digest of the raw text and only
-   * agrees with it when nothing was redacted.
+   * Raw frame bytes. The recorder redacts them once and computes the
+   * authoritative content digest before sealing the event.
    */
   content?: DraftContent;
   raw_source_digest: `sha256:${string}`;
@@ -378,7 +373,6 @@ export function normalizeHook(
           body,
           prompt !== undefined
             ? {
-                content_digest: digestText(prompt),
                 content: textContent(prompt),
               }
             : {},
@@ -502,9 +496,7 @@ export function normalizeHook(
           draft(
             "turn_end",
             common,
-            last !== undefined
-              ? { content_digest: digestText(last), content: textContent(last) }
-              : {},
+            last !== undefined ? { content: textContent(last) } : {},
           ),
         ];
       }

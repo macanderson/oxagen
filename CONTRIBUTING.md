@@ -1,6 +1,6 @@
 # Contributing
 
-Oxagen is Mission Control for agent operators and the agent control plane they work in: every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
+Oxagen is workforce management for autonomous agents, on the shared agent control plane their operators work in (ADR-113): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
 
 ## Prerequisites
 
@@ -41,11 +41,11 @@ Push the final commit and inspect `gh pr checks`. Report pending checks as pendi
 
 ### Stale merge base (#3237)
 
-A squash merge applies your branch's diff against its MERGE BASE (where it split from `main`), not against `main`'s current tip. A branch cut before a later PR's fix landed can carry the old copy of any file that fix touched, and if the merge resolves without a textual conflict, GitHub merges the old copy over the newer one silently. This happened on 2026-09-17: a squash merge deleted another PR's fix and its regression test with every check green, and broke `oxagen login` in production for eight hours (issue #3237, ADR-110).
+Before merging, integrate current `main` and review every resolution for behavior lost from either side. A clean squash normally preserves changes made only on `main`. The #3222/#3178 loss was already present in the PR branch's integration commit. See [ADR-110](docs/adr/ADR-110-a-squash-merge-can-silently-revert-an-older-branch-wins-fix.md).
 
-`pipeline.yml`'s `checks` job runs `tools/scripts/check-stale-merge-base.mjs` as an advisory step: when your branch is behind `main`, it names every file changed on both sides since the merge base and flags any whose copy is missing content `main` added there since. It never blocks the merge, so treat a flag as a reason to `git rebase origin/main` (or merge `main` in) before merging, not as a failure to work around.
+The advisory `tools/scripts/check-stale-merge-base.mjs` reports overlapping exact-line differences when a branch is behind `main`. Inspect the merged result for the behavior those lines carried. An up-to-date result does not check earlier integration resolutions.
 
-Flipping GitHub's "require branches to be up to date before merging" setting (`strict_required_status_checks_policy` on the `main` ruleset) closes the gap completely, but it is a live repository setting with a real merge-speed cost across every session working this tree, so it is a maintainer decision, not something a PR changes. ADR-110 has the full reasoning and how to make that change if you are the maintainer deciding to.
+Requiring up-to-date branches remains a maintainer ruleset decision. It does not prevent a bad integration resolution.
 
 Separately, `pnpm check:contracts` asserts that `packages/iam/src/machine-key-scope.ts` (the file the 2026-09-17 incident actually broke) branches on every scope `purpose` value a live API key can carry, so that file cannot lose a purpose branch again regardless of how it happens.
 
@@ -166,15 +166,81 @@ Keep production URLs isolated to env vars — never hard-code domains.
 
 ## Release Process
 
-Only for maintainers:
+Only for maintainers. There are two ways to cut a release and one way to try
+a build. They write the same version into every tracked manifest in the tree,
+whatever its language (`package.json`, `Cargo.toml`, `Cargo.lock`);
+`pnpm check:versions` holds them in lockstep in CI and `--fix` writes them.
+
+### From GitHub, the usual way
+
+Actions, Release, Run workflow, then pick `patch`, `minor` or `major`. That run:
+
+1. bumps every manifest to the next version and has a model write the release
+   notes from the diff since the last tag, under the `clear-prose` and
+   `oxagen-branding` skills, checked by `check:prose`;
+2. writes `releases/v<version>.md`, the top of `CHANGELOG.md`, and the docs
+   page `apps/docs/content/docs/releases/v<version>.mdx`;
+3. opens a pull request titled `chore(release): v<version>` with auto-merge
+   on. Read the notes there; edit the docs page on that branch if a line is
+   wrong. CI gates the PR like any other.
+
+When the PR merges, the `tag` job tags `v<version>` and `desktop-v<version>`,
+opens the GitHub release with the notes, publishes `@oxagen/cli` to npm, and
+the `desktop-v` tag starts `.github/workflows/desktop.yml`, which builds the
+app on four runners and publishes the installers, their checksums and the
+listing page to https://downloads.oxagen.sh/. The docs page is live at
+https://docs.oxagen.sh/docs/releases/v<version> once main deploys.
+
+The workflow needs the `RELEASE_TOKEN` secret: a fine-grained personal
+access token for this repository with contents, pull requests and workflows
+set to write. The workflow's own token cannot open a PR that CI runs on.
+`dry_run: true` previews the version and the notes without it.
+
+### From a laptop, when you want to watch it land
 
 ```bash
-pnpm release:patch    # bug fixes
-pnpm release:minor    # new features
-pnpm release:major    # breaking changes
+pnpm release:patch:publish      # 2.1.1 -> 2.1.2, then build every platform in CI and upload
+pnpm release:minor:publish      # 2.1.1 -> 2.2.0
+pnpm release:major:publish      # 2.1.1 -> 3.0.0
 ```
 
-This bumps package versions, generates release notes, creates a git tag, optionally publishes to npm, and synchronizes the legacy Vercel version value unless `--no-vercel` is set. Production deploys through the AWS workflows. See `tools/scripts/release.ts` for flags and README.md Deployment for the deployment paths.
+`release:<bump>:publish` (`tools/scripts/release-publish.ts`) diffs the notes
+from the last published GitHub release rather than the newest tag, so a tag
+that never shipped is not a release boundary, and ends them with a link to
+every installer and executable of the version by its published name. It then
+commits on `release/vX.Y.Z`, tags `vX.Y.Z` and `desktop-vX.Y.Z`, opens the
+pull request, waits for `desktop.yml` to build the four targets, uploads the
+installers to downloads.oxagen.sh and `@oxagen/cli` to npm, checks that every
+file the notes link to is on the GitHub release, and publishes it.
+
+The uploads are the same ones `desktop.yml` does on the tag, so on a healthy
+run this reports them already done. Every step skips a version that is
+already on downloads.oxagen.sh, on npm, or published on GitHub, which is what
+makes it safe beside the Release workflow and what lets an interrupted run
+resume with `--publish-only`. `--dry-run` previews the version and the notes.
+
+### A build with no release
+
+```bash
+pnpm dist:local                 # tacho, oxagen, and the desktop app from this tree; the installer lands on ~/Desktop
+pnpm dist:local --out /tmp/x    # somewhere else
+```
+
+`dist:local` builds what is on your machine, for your OS and architecture
+only (the sidecars embed the running `node` and are not cross-compiled),
+signed with the updater key when `~/.tauri/oxagen-desktop.key` is present. It
+bumps nothing and uploads nothing. It is the way to try an installer before a
+release.
+
+`pnpm release:<bump>` alone (`tools/scripts/release.ts`) is the bump, the
+notes, and a local commit and tag, with no CI wait and no uploads:
+
+```bash
+tsx tools/scripts/release.ts patch --dry-run   # the bump and the notes, nothing written
+pnpm release:patch                             # bump, notes, commit and tag on your branch
+```
+
+See the header of each script for its flags.
 
 ## Security
 

@@ -668,6 +668,9 @@ jobs:
       - name: RLS isolation proof and manifest coverage
         run: pnpm --filter @oxagen/database test:integration
 
+      - name: Seat reservation concurrency proof
+        run: pnpm --filter @oxagen/billing exec vitest run --config vitest.integration.config.ts
+
       - name: Migrate Neo4j
         run: DB_MIGRATE_STORES=neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
@@ -692,7 +695,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -710,7 +713,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Apply the migration directory without a superuser
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+      - name: Package the production platform seed
+        run: |
+          pnpm install --frozen-lockfile
+          node tools/scripts/build-platform-seed.mjs
+
+      - name: Apply migrations and platform defaults without a superuser
         env:
           PGHOST: postgres
           PGPORT: "5432"
@@ -1009,6 +1021,8 @@ jobs:
       # run. This step syncs the api after each deploy and fails the deploy
       # when Inngest refuses the sync or the key pair does not match.
       - name: Sync Inngest functions and verify the key pair
+        env:
+          NODE_ENV: production
         if: steps.tip.outputs.at_tip == 'true' && matrix.service == 'api'
         run: |
           set -euo pipefail

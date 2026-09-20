@@ -12,7 +12,10 @@ import type {
   IncidentPage,
   Toolbelt,
 } from "./contracts/agents";
-import type { ApprovalItem, ResolvedApprovalItem } from "./contracts/approvals";
+import type {
+  ApprovalQueue,
+  ResolvedApprovalItem,
+} from "./contracts/approvals";
 import type {
   AuditExport,
   AuditExportQuery,
@@ -75,8 +78,11 @@ import type {
 } from "./contracts/steering";
 import type {
   ApprovalRuleSet,
+  ConnectionList,
+  ConnectionStatus,
   CredentialGrantPage,
   KillSwitchBoard,
+  McpServerList,
   ToolVersionPage,
 } from "./contracts/tools";
 import type { Read } from "./read";
@@ -170,10 +176,16 @@ export interface DataSource {
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {
+    /**
+     * The whole pending queue, walked to the end of its cursor under a bound,
+     * with `more` set when the bound stopped the walk. The Fleet waiting tile
+     * counts it, so one page read as the whole queue was a figure that read as
+     * a fact.
+     */
     pending(
       ctx: WsCtx,
       q: { runId: string | null },
-    ): Promise<Read<ApprovalItem[]>>;
+    ): Promise<Read<ApprovalQueue>>;
     /**
      * list_resolved_approvals, narrowed to one run: the Run page's Approvals
      * tab reads back a resolved decision, including one a decision rule
@@ -352,8 +364,12 @@ export interface DataSource {
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
   };
   /**
-   * The Tools page's four noBillingGate reads on the workspace (#2958), each
-   * role-checked in its handler (INV-29); caller: features/tools/tools.tsx.
+   * The Tools page's six reads on the workspace (#2958), each role-checked in
+   * its handler or in IAM (INV-29); caller: features/tools/tools.tsx.
+   *
+   * The first four are `noBillingGate`. `list_connections` and
+   * `list_mcp_servers` are not, so an org out of credits is refused those two
+   * as `exhausted`, which the seam answers with the page's error state.
    */
   tools: {
     /** list_tool_versions: one cursor page of the registry, optionally one consequence tag */
@@ -370,5 +386,12 @@ export interface DataSource {
     killSwitches(ctx: WsCtx): Promise<Read<KillSwitchBoard>>;
     /** list_approval_rules: the workspace's auto-approval rules with their 30-day counters */
     approvalRules(ctx: WsCtx): Promise<Read<ApprovalRuleSet>>;
+    /** list_connections: every data-source connection the filter admits; no cursor */
+    connections(
+      ctx: WsCtx,
+      q: { status: ConnectionStatus | null; connectorId: string | null },
+    ): Promise<Read<ConnectionList>>;
+    /** list_mcp_servers: every registered MCP server in the workspace; no filter, no cursor */
+    mcpServers(ctx: WsCtx): Promise<Read<McpServerList>>;
   };
 }

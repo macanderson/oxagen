@@ -4,13 +4,13 @@ Finished prose per surface. Copy the structure, not the sentences, unless the se
 
 ## Website hero
 
-**Eyebrow.** The agent control plane
+**Eyebrow.** Workforce management for autonomous agents
 
-**Headline.** Mission Control for agent operators.
+**Headline.** Your agents are a workforce now. Manage them like one.
 
-**Sub.** Give each agent an identity. Set its authority, budget, tools, and skills. Define completion when the work has an endpoint, and oversee ongoing work through its requests, activity, and spend. Oxagen keeps the record of the actions it governs.
+**Sub.** Give each agent an identity. Set its authority and budget, equip it with tools and skills, and review what it did and what its operators spent. Oxagen keeps the record of the actions it governs.
 
-**Action.** Explore Mission Control
+**Action.** Explore Oxagen
 
 **Under the action.** Follow an agent from its assigned authority to a recorded action.
 
@@ -62,11 +62,11 @@ A passing verdict means the specified checks held. Your team decides whether tho
 
 ## Product page, the operations section
 
-### Manage the workforce from Mission Control
+### Manage the workforce from one console
 
-See the agents enrolled in Oxagen, the mandates they work under, their open requests, and their recorded activity and spend. Answer an approval request, change an assignment, or adjust a budget from the operator's view. Use the hold and stop controls supported by each integration.
+See the agents enrolled in Oxagen, the mandates they work under, their open requests, and their recorded activity and spend. Answer an approval request, change an assignment, or adjust a budget from the operator console. Use the hold and stop controls supported by each integration.
 
-Agents run in their supported environments. Oxagen is the control plane that governs their work. Each control says what it changes and when it takes effect.
+Agents run in their supported environments. Oxagen is the agent control plane that governs their work. Each control says what it changes and when it takes effect.
 
 ### The Fleet page
 
@@ -152,7 +152,7 @@ Write one rule for each thing an agent may ask for. A rule names a capability, a
 
 ## Docs introduction
 
-Oxagen is Mission Control for agent operators: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.
+Oxagen is workforce management for autonomous agents: give each agent an identity, set its authority and budget, equip it with tools and skills, and review what it did and what its operators spent, through a shared agent control plane.
 
 To enroll Claude Code, open the Agents page and choose Wrap Claude Code. The installer writes the wrapper beside Claude Code and enrolls this machine. The page turns to connected when the first frame arrives. From then on, actions routed through Oxagen are checked against the agent's mandate and recorded on the run page. In observe mode they are recorded, not enforced.
 
@@ -160,13 +160,13 @@ For a bounded task with a definition of done, the wrapper also locks the dod whe
 
 ## Launch announcement
 
-An agent workforce needs operators who can decide what each agent may do, equip it for the work, and inspect what happens. Oxagen is Mission Control for that workforce.
+An agent workforce needs operators who can decide what each agent may do, equip it for the work, and inspect what happens. That job is workforce management, and Oxagen is where it happens.
 
 Give each agent an identity. Set its authority and budget, assign tools and skills, and review requests that need a person's decision. The record connects governed actions to the agent, the rule, and the person responsible.
 
 Some work has a finish line. Define its completion criteria before the agent starts and review the recorded results afterward. Other work continues. Keep its authority, activity, and spend in view as it runs.
 
-Explore Mission Control to follow an agent from its assigned mandate to a recorded action.
+Explore Oxagen to follow an agent from its assigned mandate to a recorded action.
 
 ## Sales email, operators
 
@@ -174,9 +174,9 @@ Subject: Who sets the authority for your agents?
 
 When your team adds an agent, where do you set its identity, authority, tools, skills, and budget? Where do you review the actions it takes?
 
-Oxagen brings those decisions into Mission Control. A walkthrough follows one agent from its mandate through an approval request and the resulting record. It also shows how an operator defines completion for a bounded task and manages an ongoing responsibility.
+Oxagen brings those decisions into one console. A walkthrough follows one agent from its mandate through an approval request and the resulting record. It also shows how an operator defines completion for a bounded task and manages an ongoing responsibility.
 
-Explore Mission Control.
+Explore Oxagen.
 
 ## Sales email, security
 
@@ -228,12 +228,12 @@ For bounded tasks with a dod:
 
 ## Ad directions
 
-Candidates for rendering from the message registry. They are not additional approved taglines or measured winners. The primary ad introduces the control plane. The others explain one operator decision each.
+Candidates for rendering from the message registry. They are not additional approved taglines or measured winners. The primary ad states the job. The others explain one operator decision each.
 
 **Primary.**
-Headline: Mission Control for agent operators.
-Support: Set identity, authority, tools, and skills. Oversee the work.
-Action: Explore Mission Control
+Headline: Your agents are a workforce now. Manage them like one.
+Support: Set identity, authority, tools, and skills. Review the governed work.
+Action: Explore Oxagen
 
 **Authority.**
 Headline: Which agent can do what?
@@ -257,7 +257,7 @@ Action: Inspect workforce spend
 
 ## Oxagen and Stella
 
-Candidate line, pending confirmation of the launch integration: Stella is an agent. Oxagen is Mission Control for the workforce.
+Candidate line, pending confirmation of the launch integration: Stella is an agent. Oxagen manages the workforce.
 
 Show Stella as one supported agent where that is accurate. Keep the platform story broad enough for other supported agents. Shared branding does not establish shared proof mechanisms or identical capabilities.
 

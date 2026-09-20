@@ -40,6 +40,19 @@ function PlainLink({ children }: { children?: React.ReactNode }) {
   return <span>{children}</span>;
 }
 
+/**
+ * `text-sm` alone: its own line-height (1.25rem) matches the user bubble and
+ * the intro copy beside a reply. `leading-relaxed` on top made every paragraph
+ * and list item a taller line than the rest of the flyout. Streamdown keeps
+ * `space-y-4` between blocks, which is the paragraph spacing this keeps.
+ *
+ * Streamdown gives each `<li>` `py-1`, so sibling items sat 8px apart on top
+ * of the line-height. Halved, a list reads as one block, not a stack of
+ * paragraphs.
+ */
+const PROSE_CLASS =
+  "max-w-none text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_li]:py-0.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto";
+
 const COMPONENTS = { img: InertImage };
 const READ_ONLY_COMPONENTS = { img: InertImage, a: PlainLink };
 
@@ -80,7 +93,7 @@ export function AssistantMarkdown({
         >["plugins"]
       }
       controls={interactive ? { code: { copy: true, download: false } } : false}
-      className="max-w-none text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
+      className={PROSE_CLASS}
     >
       {children}
     </Streamdown>

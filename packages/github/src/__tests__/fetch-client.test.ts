@@ -857,13 +857,11 @@ describe("getTree", () => {
   it("resolves branch→tree SHA then fetches recursive tree and returns blob paths", async () => {
     const fetchMock = vi
       .fn()
-      // GET /repos/acme/r/branches/main
+      // GET /repos/acme/r/commits/main
       .mockResolvedValueOnce(
         makeResponse({
-          commit: {
-            sha: "commit-sha-1",
-            commit: { tree: { sha: "tree-sha-1" } },
-          },
+          sha: "commit-sha-1",
+          commit: { tree: { sha: "tree-sha-1" } },
         }),
       )
       // GET /repos/acme/r/git/trees/tree-sha-1?recursive=1
@@ -889,8 +887,8 @@ describe("getTree", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    const [branchUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(branchUrl).toBe("https://api.github.com/repos/acme/r/branches/main");
+    const [commitUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(commitUrl).toBe("https://api.github.com/repos/acme/r/commits/main");
 
     const [treeUrl] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(treeUrl).toBe(
@@ -906,10 +904,8 @@ describe("getTree", () => {
       .fn()
       .mockResolvedValueOnce(
         makeResponse({
-          commit: {
-            sha: "cs1",
-            commit: { tree: { sha: "ts1" } },
-          },
+          sha: "cs1",
+          commit: { tree: { sha: "ts1" } },
         }),
       )
       .mockResolvedValueOnce(makeResponse({ tree: [], truncated: false }));
@@ -918,8 +914,8 @@ describe("getTree", () => {
 
     await client.getTree({ owner: "acme", repo: "r" });
 
-    const [branchUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(branchUrl).toContain("/branches/main");
+    const [commitUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(commitUrl).toContain("/commits/main");
   });
 
   it("returns empty array when tree has no blobs", async () => {
@@ -927,7 +923,8 @@ describe("getTree", () => {
       .fn()
       .mockResolvedValueOnce(
         makeResponse({
-          commit: { sha: "cs", commit: { tree: { sha: "ts" } } },
+          sha: "cs",
+          commit: { tree: { sha: "ts" } },
         }),
       )
       .mockResolvedValueOnce(
@@ -953,7 +950,8 @@ describe("getTree", () => {
       .fn()
       .mockResolvedValueOnce(
         makeResponse({
-          commit: { sha: "cs", commit: { tree: { sha: "root" } } },
+          sha: "cs",
+          commit: { tree: { sha: "root" } },
         }),
       )
       // The recursive answer is cut short: only one of three blobs is in it.
@@ -1013,7 +1011,8 @@ describe("getTree", () => {
       .fn()
       .mockResolvedValueOnce(
         makeResponse({
-          commit: { sha: "cs", commit: { tree: { sha: "root" } } },
+          sha: "cs",
+          commit: { tree: { sha: "root" } },
         }),
       )
       .mockResolvedValueOnce(makeResponse({ tree: [], truncated: true }))

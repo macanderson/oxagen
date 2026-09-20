@@ -300,22 +300,24 @@ async function run<O>(
 }
 
 /**
- * The kinds `toRead` folds into a `ReadError`, keyed by the code it gives each.
+ * The kinds `toRead` folds into a `ReadError`, keyed by the status it gives each.
  *
  * `Read` has four variants and none of them is `not_found`, `conflict` or
  * `invalid`: a page renders all three the same way, as an error with a status.
- * So `toRead` puts the kind's own name in `code` and the distinction survives
- * only there. A converter that read `reason` alone would call a missing row
- * unavailable, which tells a person to come back for something that was never
- * there and hides a 404 behind a 503.
+ * So `toRead` keeps the handler's reason in `code` (`github_not_connected`,
+ * `branch_not_found`) and the kind survives only in the status. A converter
+ * that read `reason` alone would call a missing row unavailable, which tells a
+ * person to come back for something that was never there and hides a 404
+ * behind a 503; one that keyed on `code` would drop the reason the page's
+ * failure sentences are written for.
  */
-const READ_REASON_BY_CODE: Record<
-  string,
+const READ_REASON_BY_STATUS: Record<
+  number,
   "not_found" | "conflict" | "invalid"
 > = {
-  not_found: "not_found",
-  conflict: "conflict",
-  invalid_input: "invalid",
+  404: "not_found",
+  409: "conflict",
+  400: "invalid",
 };
 
 /**
@@ -328,7 +330,8 @@ const READ_REASON_BY_CODE: Record<
  *
  * It lives here, beside `toRead` which produces the value, because the two are
  * one encoding read from both ends. It was written out separately in
- * `account-actions.ts` and `workspace-settings-actions.ts`, and both copies
+ * `account-actions.ts` and the Workspace settings actions (now
+ * `features/repositories/actions.ts`), and both copies
  * collapsed every error to `unavailable`.
  */
 export function readToActionResult<T>(read: Read<T>): ActionResult<T> {
@@ -345,7 +348,7 @@ export function readToActionResult<T>(read: Read<T>): ActionResult<T> {
     case "error":
       return {
         ok: false,
-        reason: READ_REASON_BY_CODE[read.code] ?? "unavailable",
+        reason: READ_REASON_BY_STATUS[read.status] ?? "unavailable",
         code: read.code,
       };
   }
@@ -369,10 +372,11 @@ function toRead<O>(outcome: Outcome<O>, page: PageKey): Read<O> {
       };
     case "invalid":
       return readError("invalid_input", 400);
+    // The handler's reason rides in `code`; the status carries the kind.
     case "not_found":
-      return readError("not_found", 404);
+      return readError(failure.code, 404);
     case "conflict":
-      return readError("conflict", 409);
+      return readError(failure.code, 409);
     case "unavailable":
       return readError(failure.code, failure.status);
     // No read the app binds can be refused for GAUs (every one is noBillingGate).

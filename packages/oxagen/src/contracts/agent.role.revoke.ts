@@ -16,7 +16,7 @@ export const agentRoleRevoke = registerCapability({
     "Revoke an IAM role from an agent's delegated principal — soft-deletes the principal_role_assignments row (audit trail preserved). Idempotent: returns revoked=false when the agent did not hold the role. Audited with principal_kind='agent'.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "mutation" },
   sensitivity: "high",

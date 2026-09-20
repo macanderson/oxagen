@@ -6,7 +6,7 @@
  *                          --scope <workspace|repository> --statement "…"
  *                          --rationale "…" [--effect <require|forbid>] [--json]
  *
- * The Context PR is opened, checked and merged from Mission Control
+ * The Context PR is opened, checked and merged in Oxagen
  * (`open_context_pr`, `merge_context_pr`): both gate on the caller's org or
  * workspace role and declare only the `api` surface.
  *
@@ -110,6 +110,6 @@ export async function contextPropose(
   }
   writer.write(`${result.lineageId} · ${result.proposalId} · ${result.status}`);
   writer.write(
-    "open its Context PR from Mission Control → Steering; merge there publishes it",
+    "open its Context PR from Oxagen → Steering; merge there publishes it",
   );
 }

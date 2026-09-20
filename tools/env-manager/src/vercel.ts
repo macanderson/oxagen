@@ -27,16 +27,8 @@ export async function listEnv(
   return json.envs ?? [];
 }
 
-// Create-or-replace a var for one (project, target). We delete any existing
-// all-branches entry for the key+target first (Vercel rejects duplicate POSTs,
-// and its CLI can't set "all preview branches" non-interactively), then POST a
-// fresh value scoped to all branches of that target.
-//
-// This is NOT atomic and Vercel offers no transaction: if the POST fails after
-// the DELETE succeeded, the variable is left *absent* from the project rather
-// than reverted to its previous value. The old value is unrecoverable from
-// here — Vercel does not return decrypted values — so the caller must treat a
-// failed upsert of a secret var as "this key now needs to be re-pushed".
+// Vercel's upsert updates the matching key and target without a prior delete.
+// https://vercel.com/docs/rest-api/projects/create-one-or-more-environment-variables
 export async function upsertEnv(
   cfg: Config,
   projectId: string,
@@ -45,27 +37,12 @@ export async function upsertEnv(
   target: EnvName,
   secret: boolean,
 ): Promise<void> {
-  const existing = (await listEnv(cfg, projectId)).filter(
-    (e) => e.key === key && e.target.includes(target) && !e.gitBranch,
-  );
-  for (const e of existing) {
-    const del = await fetch(
-      `${BASE}/v10/projects/${projectId}/env/${e.id}?teamId=${cfg.teamId}`,
-      {
-        method: "DELETE",
-        headers: headers(cfg),
-      },
-    );
-    if (!del.ok)
-      throw new Error(
-        `delete ${key}/${target}: ${del.status} ${await del.text()}`,
-      );
-  }
   const res = await fetch(
-    `${BASE}/v10/projects/${projectId}/env?teamId=${cfg.teamId}`,
+    `${BASE}/v10/projects/${encodeURIComponent(projectId)}/env?teamId=${encodeURIComponent(cfg.teamId)}&upsert=true`,
     {
       method: "POST",
       headers: headers(cfg),
+      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
         key,
         value,
@@ -74,8 +51,14 @@ export async function upsertEnv(
       }),
     },
   );
-  if (!res.ok)
-    throw new Error(
-      `upsert ${key}/${target}: ${res.status} ${await res.text()}`,
-    );
+  if (!res.ok) throw new Error(`upsert ${key}/${target}: HTTP ${res.status}`);
+  let result: { failed?: unknown[] } | null;
+  try {
+    result = (await res.json()) as { failed?: unknown[] } | null;
+  } catch {
+    throw new Error(`upsert ${key}/${target}: invalid provider response`);
+  }
+  if (Array.isArray(result?.failed) && result.failed.length > 0) {
+    throw new Error(`upsert ${key}/${target}: provider refused the update`);
+  }
 }

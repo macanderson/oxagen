@@ -19,7 +19,9 @@ const COPY = {
   stayInside: "Work inside the toolbelt you were given.",
 };
 
-const draft = (over: Partial<Parameters<typeof draftAgentDefinition>[0]> = {}) =>
+const draft = (
+  over: Partial<Parameters<typeof draftAgentDefinition>[0]> = {},
+) =>
   draftAgentDefinition({
     slug: "perf-watch",
     desc: "Watch the performance budget on every pull request.",
@@ -45,9 +47,7 @@ describe("the slug", () => {
     expect(
       agentSlugFromDescription("Watch the performance budget on every PR"),
     ).toBe("watch-performance");
-    expect(agentSlugFromDescription("Triage new issues")).toBe(
-      "triage-issues",
-    );
+    expect(agentSlugFromDescription("Triage new issues")).toBe("triage-issues");
   });
 
   it("stays inside 18 characters without a trailing hyphen, and falls back when empty", () => {
@@ -104,14 +104,16 @@ describe("draftAgentDefinition", () => {
     const long = `${"word ".repeat(40)}end`;
     const file = draft({ desc: long });
     const line = file.split("\n").find((l) => l.startsWith("description"));
-    expect(line?.length).toBeLessThanOrEqual("description = \"\"".length + 110);
+    expect(line?.length).toBeLessThanOrEqual('description = ""'.length + 110);
     expect(line?.endsWith('…"')).toBe(true);
     expect(file).toContain(long);
   });
 
   it("escapes quotes and a triple quote so the file still parses (negative)", () => {
     const file = draft({ desc: 'Say "hi" and then """ close \\ it' });
-    expect(file).toContain('description = "Say \\"hi\\" and then \\"\\"\\" close \\\\ it"');
+    expect(file).toContain(
+      'description = "Say \\"hi\\" and then \\"\\"\\" close \\\\ it"',
+    );
     expect(readDefinition(file).ok).toBe(true);
   });
 

@@ -1643,6 +1643,27 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./repository.link"))
         .repositoryLinkHandler as CapabilityHandlerFn,
   );
+  // The Repositories page (MC spec §10.1, §10.2, §11.4): what a repository
+  // holds under .oxagen/, its production branch, and the pull request that
+  // adds Oxagen to it.
+  registerHandler(
+    "get_repository_tree",
+    async () =>
+      (await import("./repository.tree.get"))
+        .repositoryTreeGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_production_branch",
+    async () =>
+      (await import("./repository.production_branch.set"))
+        .repositoryProductionBranchSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "open_init_pr",
+    async () =>
+      (await import("./repository.init_pr.open"))
+        .repositoryInitPrOpenHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "unlink_repository",
     async () =>

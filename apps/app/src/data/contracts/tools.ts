@@ -264,3 +264,124 @@ export const ApprovalRuleSet = z.object({
   windowDays: z.number().int().positive(),
 });
 export type ApprovalRuleSet = z.infer<typeof ApprovalRuleSet>;
+
+// ── Connections and tool servers (lane: connections) ────────────────────────
+// Two reads the Tools page had no view model for until now: the workspace's
+// data-source connections (`list_connections`, `get_connection`) and the MCP
+// servers the registry imports from (`list_mcp_servers`). Both contracts
+// carry the row's database uuid beside its public id; only the public id is
+// modelled here, because INV-11 keeps a uuid off the page.
+
+/**
+ * A connection's lifecycle word, exactly as the record spells it. The contract
+ * types `status` as a bare string and the input filter enumerates six values,
+ * so the view model admits the six and refuses anything else rather than
+ * printing a word no filter can select.
+ */
+const CONNECTION_STATUSES = [
+  "pending_setup",
+  "connected",
+  "paused",
+  "error",
+  "deleting",
+  "deleted",
+] as const;
+export const ConnectionStatus = z.enum(CONNECTION_STATUSES);
+export type ConnectionStatus = z.infer<typeof ConnectionStatus>;
+
+/**
+ * The status as the record spells it, narrowed to the six. The contract types
+ * the column as a bare string, so the narrowing happens here rather than in
+ * the mapper: a seventh word refuses the read as record_unmappable instead of
+ * reaching a page that has no label for it (the `StoredOrgRole` precedent).
+ */
+const StoredConnectionStatus = z.string().pipe(ConnectionStatus);
+
+/** What the connector poll loop rolled up; the contract's own enum. */
+const ConnectionHealth = z.enum(["healthy", "degraded", "errored"]);
+
+export const Connection = z.object({
+  id: PublicId,
+  /**
+   * The connector type slug the row was created against (`github`, `stripe`).
+   * Not an id: it names a connector this deployment ships, and INV-11 reserves
+   * an `…Id` field for a public id.
+   */
+  connector: z.string().min(1),
+  displayName: z.string().min(1),
+  /** How the stored credential authenticates; free text on the contract. */
+  authScheme: z.string().min(1),
+  deliveryMethod: z.string().min(1),
+  status: StoredConnectionStatus,
+  entityCount: Count,
+  lastSyncAt: Instant.nullable(),
+  healthStatus: ConnectionHealth,
+  lastPollAt: Instant.nullable(),
+  nextPollAt: Instant.nullable(),
+  createdAt: Instant,
+});
+export type Connection = z.infer<typeof Connection>;
+
+/**
+ * Every connection the filter admits. `list_connections` carries no cursor and
+ * no total, so this is the whole answer and there is nothing to page.
+ */
+export const ConnectionList = z.object({
+  connections: z.array(Connection),
+});
+export type ConnectionList = z.infer<typeof ConnectionList>;
+
+/** One connection as `get_connection` records it: the row, plus why it is failing. */
+export const ConnectionDetail = Connection.extend({
+  /** The connector-specific configuration the row stores; never a credential. */
+  deliveryConfig: z.record(z.string(), z.unknown()).nullable(),
+  errorMessage: z.string().nullable(),
+  consecutiveFailureCount: Count,
+  lastErrorAt: Instant.nullable(),
+  updatedAt: Instant,
+});
+export type ConnectionDetail = z.infer<typeof ConnectionDetail>;
+
+/**
+ * The transports a server row may hold. `register_mcp_server` writes only two
+ * of them; `sse` reaches the table through the plugin install path, so the
+ * list admits it and the register form does not offer it.
+ */
+const MCP_TRANSPORTS = ["streamable-http", "sse", "stdio"] as const;
+const McpTransport = z.enum(MCP_TRANSPORTS);
+
+/** Transports the endpoint registration form can configure and run. */
+export const REGISTERABLE_MCP_TRANSPORTS = ["streamable-http"] as const;
+export const RegisterableMcpTransport = z.enum(REGISTERABLE_MCP_TRANSPORTS);
+export type RegisterableMcpTransport = z.infer<typeof RegisterableMcpTransport>;
+
+/** How a server authenticates the workspace to itself; `none` carries no secret. */
+export const MCP_AUTH_STRATEGIES = ["none", "bearer", "header"] as const;
+export const McpAuthStrategy = z.enum(MCP_AUTH_STRATEGIES);
+export type McpAuthStrategy = z.infer<typeof McpAuthStrategy>;
+
+/**
+ * A server's recorded health. `unknown` is what a row written outside
+ * `register_mcp_server` carries, and the page prints that word rather than a
+ * friendlier one it was not given.
+ */
+const McpHealth = z.enum(["healthy", "degraded", "unreachable", "unknown"]);
+
+export const McpServer = z.object({
+  /** `mcs_…`: the id `import_tools` names a server by. */
+  id: PublicId,
+  name: z.string().min(1),
+  transportType: McpTransport,
+  endpointUrl: z.string().min(1),
+  healthStatus: McpHealth,
+  lastHealthcheckAt: Instant.nullable(),
+  /** Pins discovered at the last health check, not versions in the registry. */
+  toolCount: Count,
+});
+export type McpServer = z.infer<typeof McpServer>;
+
+/** Every registered server in the workspace: the contract takes no filter and no cursor. */
+export const McpServerList = z.object({
+  servers: z.array(McpServer),
+});
+export type McpServerList = z.infer<typeof McpServerList>;

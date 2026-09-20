@@ -38,8 +38,13 @@ name: Desktop
 # When a `desktop-v*` release is published, the `feed` job below copies its
 # latest.json onto `desktop-latest`.
 #
-# Publishing is tag-gated: a `desktop-v*` tag creates a draft release; a
-# manual run builds and uploads the bundles as workflow artifacts only.
+# Publishing is tag-gated. A `desktop-v*` tag builds all four targets, then
+# the `publish` job below publishes the release, copies the installers and
+# their checksums to https://downloads.oxagen.sh/ and rewrites its page, and
+# points the updater feed at the release. Nothing after the tag is done by
+# hand: `release.yml` pushes the tag when a release PR merges, and a person
+# pushing one gets the same result. A manual run builds and uploads the
+# bundles as workflow artifacts only.
 
 on:
   push:
@@ -246,6 +251,95 @@ jobs:
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/nsis/*.exe
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/**/*.sig
 
+  # Everything that happens after a tagged build, in the order a reader of
+  # downloads.oxagen.sh would want: the files land under their immutable
+  # version prefix, the page moves to the new version, then the GitHub release
+  # opens with the notes and the feed follows. The job assumes the platform
+  # deploy role through OIDC, which the `production` environment scopes;
+  # `desktop-v*` tags are allowed to deploy to it, and
+  # infra/stacks-new/ci-deploy/roles.tf grants the role the downloads bucket.
+  publish:
+    name: Publish the release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: oxagen-desktop-*
+          path: installers
+
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
+
+      # `--dir` walks the download recursively, keeps only the installers whose
+      # name carries this version, and refuses a version that is already
+      # published (those URLs are immutable; a fix ships as a new version).
+      # `--resume` is for a re-run of this job after a later step failed: the
+      # same files already published means the upload is done, so the page is
+      # redrawn and the steps below run again (each is idempotent). The script
+      # needs no dependencies: it imports src/downloads.ts through Node's type
+      # stripping.
+      - name: Publish the installers and the page to downloads.oxagen.sh
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          node apps/desktop/scripts/publish-downloads.mjs --dir installers --version "${VERSION#desktop-v}" --resume
+
+      - name: Confirm the page serves this version
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          v="${VERSION#desktop-v}"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL "https://downloads.oxagen.sh/?t=$i" | grep -q "Version <code>$v</code>"; then
+              echo "downloads.oxagen.sh serves $v"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::downloads.oxagen.sh does not serve $v two minutes after the invalidation"
+          exit 1
+
+      # tauri-action left the release as a draft so nothing links to bundles
+      # that are not all there yet. Every leg built (this job needs them all),
+      # the installers are on the downloads host, so the release opens now,
+      # with the notes page as its body. `--latest=false` keeps the platform
+      # `v*` release as the repository's latest; the updater reads
+      # `desktop-latest`, not `/releases/latest`.
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          v="${TAG#desktop-v}"
+          cat > notes.md <<EOF
+          What changed: https://docs.oxagen.sh/docs/releases/v$v
+
+          Installers for macOS, Windows, and Linux, each with its SHA-256: https://downloads.oxagen.sh/
+
+          The bare \`tacho\` and \`oxagen\` executables for each platform are attached below, each with a \`.sha256\`. They are the same binaries the app links onto your PATH.
+          EOF
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "Oxagen $v" --notes-file notes.md --draft=false --latest=false
+
+      # A release published with the workflow's own token raises no `release`
+      # event, so the feed job below does not run for it; move the feed here.
+      - name: Point the update feed at this release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: bash .github/scripts/desktop-update-feed.sh
+
   # The update feed. tauri.conf.json's updater endpoint is
   # releases/download/desktop-latest/latest.json; this copies the just-
   # published desktop release's latest.json there (its platform URLs point at
@@ -257,34 +351,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/scripts
+
       - name: Copy latest.json onto the desktop-latest release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.release.tag_name }}
-        run: |
-          tmp="$(mktemp -d)"
-          if ! gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$tmp"; then
-            echo "::notice::$TAG carries no latest.json (built without TAURI_SIGNING_PRIVATE_KEY); the update feed is unchanged."
-            exit 0
-          fi
-          if ! gh release view desktop-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create desktop-latest --repo "$GITHUB_REPOSITORY" \
-              --title "Oxagen desktop update feed" \
-              --notes "latest.json for the in-app updater; the app itself is on the desktop-v* releases. Rewritten by desktop.yml when one is published." \
-              --latest=false
-          fi
-          # Never move the feed backwards. Publishing an older draft after a
-          # newer release used to clobber the feed with the older latest.json,
-          # and every installed app then saw "up to date" on an old version.
-          next="$(jq -r .version "$tmp/latest.json")"
-          mkdir "$tmp/current"
-          if gh release download desktop-latest --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$tmp/current" 2>/dev/null; then
-            current="$(jq -r .version "$tmp/current/latest.json")"
-            newest="$(printf '%s\n%s\n' "$current" "$next" | sort -V | tail -n 1)"
-            if [ "$current" = "$next" ] || [ "$newest" != "$next" ]; then
-              echo "::notice::the feed already serves $current, which is not older than $TAG ($next); left as it is."
-              exit 0
-            fi
-          fi
-          gh release upload desktop-latest "$tmp/latest.json" --repo "$GITHUB_REPOSITORY" --clobber
-          echo "::notice::desktop-latest now serves $TAG's latest.json."
+        run: bash .github/scripts/desktop-update-feed.sh

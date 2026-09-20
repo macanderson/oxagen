@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import { requestAuth } from "./request-auth";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { readFileSync } from "node:fs";
@@ -20,7 +22,19 @@ const REPO_ROOT = join(here, "..", "..", "..");
 const HTML = readFileSync(join(here, "../public/index.html"), "utf8");
 const SECRETS_HTML = readFileSync(join(here, "../public/secrets.html"), "utf8");
 
+if (!Number.isInteger(cfg.port) || cfg.port < 1 || cfg.port > 65535) {
+  throw new Error("ENV_MANAGER_PORT must be an integer from 1 to 65535");
+}
+const accessToken = randomBytes(32).toString("hex");
+const origin = `http://127.0.0.1:${cfg.port}`;
+const REQUEST_JS = readFileSync(join(here, "../public/request.js"), "utf8");
 const app = new Hono();
+app.use("*", requestAuth(origin, accessToken));
+app.get("/request.js", (c) =>
+  c.body(REQUEST_JS, 200, {
+    "Content-Type": "text/javascript; charset=utf-8",
+  }),
+);
 
 app.get("/", (c) => c.html(HTML));
 
@@ -29,10 +43,8 @@ app.get("/secrets", (c) => c.html(SECRETS_HTML));
 
 // List every secret row plus the workspace apps/packages for the usage dropdown.
 //
-// This is the one endpoint that hands plaintext secret values to the browser —
-// that is the whole point of the spreadsheet — which is why the server binds to
-// 127.0.0.1 only. openDb() creates secrets.db when it is missing, so an empty
-// list means "never pulled" and only a genuinely broken file reaches the catch.
+// This endpoint returns plaintext secrets after the local request checks.
+// openDb creates a missing database, so an empty list can mean no pull ran.
 app.get("/api/secrets", (c) => {
   try {
     const db = openDb();
@@ -303,7 +315,7 @@ app.get("/api/gaps", async (c) => {
 
 serve({ fetch: app.fetch, hostname: "127.0.0.1", port: cfg.port }, (info) => {
   console.log(
-    `\n  env-manager → http://127.0.0.1:${info.port}` +
+    `\n  env-manager: http://127.0.0.1:${info.port}/#token=${accessToken}` +
       `\n  vercel token: ${cfg.vercelToken ? "set" : "MISSING (set VERCEL_TOKEN in .env.local)"}\n`,
   );
 });

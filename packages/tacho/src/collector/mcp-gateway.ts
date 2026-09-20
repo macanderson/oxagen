@@ -57,6 +57,7 @@ import {
   type Sha256Digest,
 } from "../digest";
 import { type DraftContent, jsonContent } from "../evidence/frame-body";
+import { TACHO_VERSION } from "../version";
 import {
   TACHO_GATEWAY_GENESIS_HEADER,
   TACHO_GATEWAY_SESSION_HEADER,
@@ -216,7 +217,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 /** The protocol revision the gateway speaks; forwarded verbatim otherwise. */
 export const GATEWAY_SERVER_INFO = {
   name: "oxagen",
-  version: "2.1.1",
+  version: TACHO_VERSION,
 } as const;
 
 export function rpcError(

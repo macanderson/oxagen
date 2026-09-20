@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { billingBudgetSet } from "../billing.budget.set";
 import { billingUsageBreakdown } from "../billing.usage.breakdown";
+import { contextRecordPublish } from "../context.record.publish";
 import { changeSubscription } from "./change-subscription";
 import { eraseData } from "./erase-data";
 import { getSpend } from "./get-spend";
+import { openContextPr } from "./open-context-pr";
 import { setBudget } from "./set-budget";
 import { setConnection } from "./set-connection";
 
@@ -324,5 +326,74 @@ describe("set_budget input", () => {
         period: "monthly",
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("open_context_pr input", () => {
+  const base = {
+    lineageId: "ctx.review.no-force-push",
+    title: "Never force-push a shared branch",
+    body: 'statement = "Never force-push a shared branch"\n',
+    statement: "Never force-push a shared branch",
+    sharingScope: "workspace",
+    rationale: "Rewriting shared history invalidates every open checkout.",
+  };
+  /** The same call as a v1 publish, which keys on `record_id` (#3302 drops it). */
+  const asV1 = (input: Record<string, unknown>) => {
+    const { lineageId, sharingScope, rationale, supportingRecordIds, ...rest } =
+      input;
+    return { ...rest, record_id: lineageId };
+  };
+
+  it("accepts a constraint that declares its effect", () => {
+    expect(
+      openContextPr.input.safeParse({
+        ...base,
+        kind: "constraint",
+        force: "must",
+        constraintEffect: "forbid",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("carries the constraint-effect rule verbatim from publish_context_record", () => {
+    const constraintWithoutEffect = {
+      ...base,
+      kind: "constraint",
+      force: "must",
+    };
+    const patternWithEffect = {
+      ...base,
+      kind: "rule",
+      force: "should",
+      constraintEffect: "require",
+    };
+
+    for (const input of [constraintWithoutEffect, patternWithEffect]) {
+      const v1 = messagesAt(
+        contextRecordPublish.input,
+        asV1(input),
+        "constraintEffect",
+      );
+      expect(v1.length).toBeGreaterThan(0);
+      expect(
+        messagesAt(openContextPr.input, input, "constraintEffect"),
+      ).toEqual(v1);
+    }
+  });
+
+  it("requires the classification a record needs to steer at all", () => {
+    // Without kind and force, `readWorkspaceSteering` never delivers the merged
+    // record — so the PR cannot open without them.
+    for (const field of ["kind", "force", "statement"] as const) {
+      const { [field]: _omitted, ...without } = {
+        ...base,
+        kind: "rule",
+        force: "should",
+      };
+      expect(
+        messagesAt(openContextPr.input, without, field).length,
+      ).toBeGreaterThan(0);
+    }
   });
 });

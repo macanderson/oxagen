@@ -125,7 +125,7 @@ describe("AgentSource", () => {
     expect(editor()).toHaveValue(DEFINITION_SOURCE);
     expect(screen.getByTestId("draft-state")).toHaveTextContent("unchanged");
     expect(
-      screen.getByRole("link", { name: "Back to the definition" }),
+      screen.getByRole("link", { name: "Back to the configuration" }),
     ).toHaveAttribute(
       "href",
       "/acme/core-platform/agents/release-bot?tab=definition",

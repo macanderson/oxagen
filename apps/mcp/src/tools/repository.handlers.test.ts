@@ -1,5 +1,7 @@
 // repository.handlers.test.ts — the workspace-repository tools (MC spec §10.1):
-// `list_repositories`, `link_repository`, `unlink_repository`.
+// `list_repositories`, `link_repository`, `unlink_repository`, and the
+// Repositories page's `get_repository_tree`, `set_production_branch` and
+// `open_init_pr`.
 //
 // Same pattern as agent.handlers.test.ts: the kernel `invoke` and the context
 // seam are mocked, and each tool must dispatch its own contract with the MCP
@@ -59,6 +61,7 @@ describe("list_repositories tool", () => {
           htmlUrl: "https://github.com/acme/platform",
           boundAt: "2026-09-18T00:00:00.000Z",
           connectionLive: true,
+          events: "installed",
         },
       ],
     };
@@ -127,5 +130,101 @@ describe("unlink_repository tool", () => {
 
   it("refuses an id that is not a binding id (negative)", () => {
     expect(() => unlinkSchema.bindingId.parse("con_0b")).toThrow();
+  });
+});
+
+import treeTool, { metadata as treeMetadata } from "./repository.tree.get";
+import branchTool, {
+  metadata as branchMetadata,
+  schema as branchSchema,
+} from "./repository.production_branch.set";
+import initTool, {
+  metadata as initMetadata,
+  schema as initSchema,
+} from "./repository.init_pr.open";
+
+describe("get_repository_tree tool", () => {
+  it("is read-only and returns what the repository holds under .oxagen/", async () => {
+    expect(treeMetadata.name).toBe("get_repository_tree");
+    expect(treeMetadata.annotations?.readOnlyHint).toBe(true);
+    const output = {
+      bindingId: "rpb_0a",
+      role: "main",
+      fullName: "acme/platform",
+      productionBranch: "main",
+      githubDefaultBranch: "main",
+      head: "abc123",
+      oxagen: { present: true, files: [".oxagen/workspace.toml"] },
+      workspaceToml: 'schema = "oxagen-workspace/v0.1"',
+      governanceToml: null,
+      governanceMode: "absent",
+      initPullRequest: null,
+      readAt: "2026-09-19T00:00:00.000Z",
+    };
+    mocks.invoke.mockResolvedValue(output);
+    await expect(treeTool({ bindingId: "rpb_0a" })).resolves.toEqual(output);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "get_repository_tree",
+      { bindingId: "rpb_0a" },
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+});
+
+describe("set_production_branch tool", () => {
+  it("dispatches the branch and answers the binding it moved to", async () => {
+    expect(branchMetadata.name).toBe("set_production_branch");
+    expect(branchMetadata.annotations?.readOnlyHint).toBe(false);
+    expect(branchSchema.branch.safeParse("has space").success).toBe(false);
+    const output = {
+      bindingId: "rpb_0b",
+      fullName: "acme/platform",
+      productionBranch: "release",
+      previousBranch: "main",
+      changed: true,
+      setAt: "2026-09-19T00:00:00.000Z",
+    };
+    mocks.invoke.mockResolvedValue(output);
+    await expect(
+      branchTool({ bindingId: "rpb_0a", branch: "release" }),
+    ).resolves.toEqual(output);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "set_production_branch",
+      { bindingId: "rpb_0a", branch: "release" },
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+});
+
+describe("open_init_pr tool", () => {
+  it("dispatches the reviewed files and answers the pull request", async () => {
+    expect(initMetadata.name).toBe("open_init_pr");
+    expect(initSchema.governanceMode.safeParse("lax").success).toBe(false);
+    const args = {
+      bindingId: "rpb_0a",
+      governanceMode: "team" as const,
+      workspaceToml: 'schema = "oxagen-workspace/v0.1"',
+      governanceToml: 'mode = "team"',
+    };
+    const output = {
+      bindingId: "rpb_0a",
+      fullName: "acme/platform",
+      branch: "oxagen/init",
+      base: "main",
+      pullRequest: {
+        number: 4,
+        htmlUrl: "https://github.com/acme/platform/pull/4",
+      },
+      files: [".oxagen/workspace.toml"],
+      reused: false,
+      openedAt: "2026-09-19T00:00:00.000Z",
+    };
+    mocks.invoke.mockResolvedValue(output);
+    await expect(initTool(args)).resolves.toEqual(output);
+    expect(mocks.invoke).toHaveBeenCalledWith("open_init_pr", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });

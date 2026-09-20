@@ -108,19 +108,18 @@ const ALLOWED: Record<
     // and the two must be read together. An action that reads has to carry its
     // `Read` across into INV-19's shape, so it is part of the same seam surface
     // the two named calls are: it was written out by hand in
-    // features/shell/account-actions.ts and workspace-settings-actions.ts, and
+    // features/shell/account-actions.ts and the Workspace settings actions (now
+    // features/repositories/actions.ts), and
     // both copies collapsed every error to `unavailable`.
     //
     // `kernelRead` is here because a read that must happen ON DEMAND has
     // nowhere else to live. A page or layout read goes through a DataSource
-    // port (§3.3) and is made when the route renders; the Workspace settings
-    // dialog is in the shell chrome, which the organization layout renders
-    // above every page, and its read is a live call to GitHub
-    // (`list_installation_repositories`). Putting that on the layout would
-    // charge every workspace page for a network round trip nobody asked for,
-    // and the shell has no ctx for a workspace-scoped contract anyway — the
-    // workspace is in the URL, which only the client knows. So the dialog asks
-    // for the record when a person opens it, through a "use server" module
+    // port (§3.3) and is made when the route renders. The Repositories page's
+    // reads are live calls to GitHub (`list_installation_repositories`,
+    // `get_repository_tree`), one per bound repository, and some happen only
+    // when a person opens a picker or a dialog. Making them all at render
+    // would hold the whole page on the slowest of them. So the page asks for
+    // each record when it needs it, through a "use server" module
     // that resolves its own viewer, exactly as a write does. A read from a
     // module with no directive is still refused, and so is a read that is not
     // preceded by `requireViewer` (INV-19, actions.test.ts).
@@ -283,6 +282,13 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
 const PLATFORM_NAMED_ROWS: Readonly<
   Record<string, Readonly<Record<string, readonly string[]>>>
 > = {
+  // Browser controls read the shared ceiling without loading the contract registry.
+  "src/features/fleet/run-row-controls.tsx": {
+    "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
+  },
+  "src/ui/command-failure.ts": {
+    "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
+  },
   "instrumentation.ts": {
     "@oxagen/telemetry": ["initTracer", "recordSecurityEvent"],
     "@oxagen/database/security": ["makeSecurityEventInserter"],

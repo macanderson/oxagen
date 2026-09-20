@@ -173,7 +173,7 @@ and `unknown` never blocks.
 `autoSync` takes the merged records into the checkout before the prompt runs.
 `blockStaleRuns` refuses the prompt while records are missing. Both live in
 the `steering` block of the Oxagen settings files, and both are also
-workspace policy in Mission Control (Steering → Steering freshness), stored
+workspace policy in Oxagen (Steering → Steering freshness), stored
 in `workspace.workspaces.settings` and read by `get_steering_freshness`.
 
 The scopes combine with OR: a later scope may switch a gate on, and may never

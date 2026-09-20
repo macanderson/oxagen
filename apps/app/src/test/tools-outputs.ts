@@ -1,8 +1,12 @@
-// Contract-parsed outputs of the three #2958 reads and `list_approval_rules`,
+// Contract-parsed outputs of the three #2958 reads, `list_approval_rules` and
+// the three connection and server reads,
 // for the tests of the Tools port and the Tools page. Each record goes through
 // its contract's own output schema, so a fixture that drifts from the contract
 // fails here rather than in the view.
+import { agentMcpList } from "@oxagen/oxagen/contracts/agent.mcp.list";
 import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
+import { connectionGet } from "@oxagen/oxagen/contracts/connection.get";
+import { connectionList } from "@oxagen/oxagen/contracts/connection.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
@@ -13,6 +17,9 @@ type CredentialGrantListOutput = ReturnType<
 >;
 type KillSwitchListOutput = ReturnType<typeof killSwitchList.output.parse>;
 type ApprovalRuleListOutput = ReturnType<typeof approvalRuleList.output.parse>;
+type ConnectionListOutput = ReturnType<typeof connectionList.output.parse>;
+type ConnectionGetOutput = ReturnType<typeof connectionGet.output.parse>;
+type McpServerListOutput = ReturnType<typeof agentMcpList.output.parse>;
 
 export function toolVersionListOutput(
   over: Partial<ToolVersionListOutput> = {},
@@ -223,6 +230,103 @@ export function approvalRuleListOutput(
       },
     ],
     windowDays: 30,
+    ...over,
+  });
+}
+
+export function connectionListOutput(
+  over: Partial<ConnectionListOutput> = {},
+): ConnectionListOutput {
+  return connectionList.output.parse({
+    connections: [
+      {
+        id: "7c000000-0000-4000-8000-0000000000c1",
+        publicId: "con_01k5n1",
+        connectorId: "github",
+        displayName: "Acme GitHub",
+        authScheme: "bearer_token",
+        deliveryMethod: "webhook",
+        status: "connected",
+        entityCount: 482,
+        lastSyncAt: "2026-09-18T09:00:00.000Z",
+        healthStatus: "healthy",
+        lastPollAt: "2026-09-18T09:00:00.000Z",
+        nextPollAt: "2026-09-19T09:00:00.000Z",
+        createdAt: "2026-08-01T09:00:00.000Z",
+      },
+      {
+        // Never polled, never synced: every instant the record may leave out.
+        id: "7c000000-0000-4000-8000-0000000000c2",
+        publicId: "con_01k5n2",
+        connectorId: "stripe",
+        displayName: "Acme Stripe",
+        authScheme: "api_key",
+        deliveryMethod: "poll",
+        status: "pending_setup",
+        entityCount: 0,
+        lastSyncAt: null,
+        healthStatus: "degraded",
+        lastPollAt: null,
+        nextPollAt: null,
+        createdAt: "2026-09-18T09:00:00.000Z",
+      },
+    ],
+    ...over,
+  });
+}
+
+export function connectionGetOutput(
+  over: Partial<ConnectionGetOutput> = {},
+): ConnectionGetOutput {
+  return connectionGet.output.parse({
+    id: "7c000000-0000-4000-8000-0000000000c1",
+    publicId: "con_01k5n1",
+    connectorId: "github",
+    displayName: "Acme GitHub",
+    authScheme: "bearer_token",
+    deliveryMethod: "webhook",
+    deliveryConfig: { installationId: "42" },
+    status: "connected",
+    entityCount: 482,
+    lastSyncAt: "2026-09-18T09:00:00.000Z",
+    errorMessage: null,
+    healthStatus: "healthy",
+    consecutiveFailureCount: 0,
+    lastPollAt: "2026-09-18T09:00:00.000Z",
+    nextPollAt: "2026-09-19T09:00:00.000Z",
+    lastErrorAt: null,
+    createdAt: "2026-08-01T09:00:00.000Z",
+    updatedAt: "2026-09-18T09:00:00.000Z",
+    ...over,
+  });
+}
+
+export function mcpServerListOutput(
+  over: Partial<McpServerListOutput> = {},
+): McpServerListOutput {
+  return agentMcpList.output.parse({
+    servers: [
+      {
+        publicId: "mcs_01k5s1",
+        name: "Stripe",
+        transportType: "streamable-http",
+        endpointUrl: "https://mcp.stripe.example/v1",
+        healthStatus: "healthy",
+        lastHealthcheckAt: "2026-09-18T09:00:00.000Z",
+        toolCount: 12,
+      },
+      {
+        // The plugin-install shape: transport `sse`, health `unknown`, no
+        // health check to date.
+        publicId: "mcs_01k5s2",
+        name: "GitHub",
+        transportType: "sse",
+        endpointUrl: "https://mcp.github.example/sse",
+        healthStatus: "unknown",
+        lastHealthcheckAt: null,
+        toolCount: 0,
+      },
+    ],
     ...over,
   });
 }

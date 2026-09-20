@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Oxagen",
-    "description": "Mission Control for agent operators."
+    "description": "Workforce management for autonomous agents: govern, ground, explain, meter and rate every run."
   },
   "pages": {
     "login": "Log in",
@@ -24,6 +24,7 @@
     "mandate": "Mandate",
     "tools": "Tools",
     "steering": "Steering",
+    "repositories": "Repositories",
     "spend": "Spend",
     "people": "Organization",
     "roles": "Roles",
@@ -40,11 +41,11 @@
   "notFound": {
     "title": "Page not found",
     "body": "This address does not match a page you can open.",
-    "home": "Go to Mission Control"
+    "home": "Go to Oxagen"
   },
   "globalError": {
     "title": "Something went wrong",
-    "body": "Mission Control hit an unexpected error. Reload the page to try again.",
+    "body": "Oxagen hit an unexpected error. Reload the page to try again.",
     "retry": "Try again"
   }
 }

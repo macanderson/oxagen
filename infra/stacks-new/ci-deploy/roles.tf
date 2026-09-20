@@ -177,6 +177,38 @@ data "aws_iam_policy_document" "oxagen_platform" {
     resources = ["${local.cloudfront_arn}/${var.sites["oxagen-web"].distribution_id}"]
   }
 
+  # downloads.oxagen.sh, written by the `publish` job of desktop.yml after a
+  # tagged desktop build: the installers under `desktop/<version>/`, the
+  # listing page, and its fonts. The publish script lists the version prefix
+  # first (`s3api list-objects-v2`) to refuse a republish, and reserves the
+  # version with a conditional PutObject, so ListBucket, GetObject and
+  # PutObject are all needed. No DeleteObject: a published version is never
+  # removed, and a page that only ever gains files is what this bucket is.
+  statement {
+    sid       = "ListDownloadsBucket"
+    actions   = ["s3:ListBucket"]
+    resources = ["arn:aws:s3:::${var.sites["oxagen-downloads"].bucket}"]
+  }
+
+  statement {
+    sid       = "PublishDownloads"
+    actions   = ["s3:PutObject", "s3:GetObject"]
+    resources = ["arn:aws:s3:::${var.sites["oxagen-downloads"].bucket}/*"]
+  }
+
+  # The script finds the distribution by its alias before invalidating it.
+  statement {
+    sid       = "FindDownloadsDistribution"
+    actions   = ["cloudfront:ListDistributions"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "InvalidateDownloads"
+    actions   = ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"]
+    resources = ["${local.cloudfront_arn}/${var.sites["oxagen-downloads"].distribution_id}"]
+  }
+
   statement {
     sid     = "PublishArtifacts"
     actions = ["s3:PutObject"]
@@ -242,13 +274,17 @@ data "aws_iam_policy_document" "oxagen_platform" {
   # send statement above spells out: a tag condition would be evaluated
   # against the document, which carries no tag, and deny the session.
   #
-  # `AWS-StartPortForwardingSession` alone, not the whole document namespace —
+  # Only the two port-forwarding documents, not the whole document namespace.
+  # Remote-host forwarding reaches Aurora for the ClickHouse migration lock;
   # `AWS-StartInteractiveCommand` and `SSM-SessionManagerRunShell` are shells,
   # and a role that may forward a port has no business getting one.
   statement {
-    sid       = "PortForwardDocument"
-    actions   = ["ssm:StartSession"]
-    resources = ["arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSession"]
+    sid     = "PortForwardDocument"
+    actions = ["ssm:StartSession"]
+    resources = [
+      "arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSession",
+      "arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSessionToRemoteHost",
+    ]
   }
 
   # Closing the tunnel. Scoped to sessions this role's own identity opened,

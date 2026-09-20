@@ -1,0 +1,839 @@
+{
+  "base": "2174aa7f7",
+  "scope": "87 internal integration candidate records for PR3183,3178,3171,3169,3156,3154; read-only source review, no tests",
+  "finding": "No confirmed live behavior loss within these signals; not a proof of completeness outside the candidate detector",
+  "groups": {
+    "proxy-and-rate-limit": {
+      "disposition": "superseded or preserved",
+      "evidence": "apps/api/src/lib/context.ts:91 delegates trusted-IP derivation to packages/oxagen/src/client-ip.ts; distributed-rate-limit.ts:389 awaits nullable bucket keys. Enrollment routes use ADR-082 degrade-to-local intentionally. Auth uses the same trusted derivation. Caddy uses explicit ALB subnet trust and edge-written headers."
+    },
+    "ui-and-formatting": {
+      "disposition": "preserved after formatting or app cutover",
+      "evidence": "Current mandate safeParse and proposal parsed calls remain; fleet cacheHitRate tile and context check labels remain; control styles import remains. Timeout discovery floors, current-step assertions, refusal copy, URL rejection and page-load/pay checks remain. Deprecated fleet is under apps/app_deprecated. schemas.sample export remains with a trailing comma."
+    },
+    "contract-script": {
+      "disposition": "preserved and extended",
+      "evidence": "package.json check:contracts retains all candidate commands and adds newer integrity checks."
+    },
+    "cli-key-authority": {
+      "disposition": "preserved with stronger principal requirement",
+      "evidence": "packages/iam/src/machine-key-scope.ts:460 exempts CLI sessions only with resolved userId; CLI-session tests include no-person refusal. apps/mcp/src/context.cli-session.test.ts still tests resolved approving person."
+    },
+    "credential-revocation": {
+      "disposition": "superseded by broader enrollment credential retirement",
+      "evidence": "packages/handlers/src/lib/tacho-host-revoke.ts retireEnrollmentKeys retires host and gateway keys with idempotent predicates; revokeHostEnrollment calls it. Host key fallback still soft-deletes by server-owned id."
+    },
+    "gateway-column-probe": {
+      "disposition": "preserved after formatting",
+      "evidence": "sessionGatewayColumnReady remains at packages/handlers/src/lib/tacho-gateway-columns.ts:59; column-probe.test.ts retains before/at TTL boundary and fresh-transaction negative-cache assertions."
+    },
+    "main-grace-check": {
+      "disposition": "preserved after formatting",
+      "evidence": "tools/scripts/check-main-verified.mjs:299 retains min(graceRemainingMs(applyGrace(...)),MAX_WAIT_MS); test changes are wrapping and repeated generic string matches."
+    },
+    "billing-fixture": {
+      "disposition": "test fixture signal only",
+      "evidence": "Restored upsertChain literal exists in change-plan.test.ts. No production source loss accompanies this candidate."
+    },
+    "fleet-and-gateway": {
+      "disposition": "superseded by app cutover and credential split",
+      "evidence": "CLI handleTachoHosts now follows up to20pages with status/limit preserved. Enrollment preserves existing displaced MCP settings. daemon.ts:1483 uses gateway_api_key and refuses absent keys; gateway refusal text describes missing mandate. Host API key fallback is intentionally removed under ADR-078."
+    },
+    "generated-metadata": {
+      "disposition": "checksum or manifest hash churn",
+      "evidence": "Candidate storage-manifest rows contain only contentHash changes. Every named migration in the lost atlas.sum rows exists at frozen2174aa7f7. No missing migration file was found."
+    }
+  },
+  "records": [
+    {
+      "index": 0,
+      "prs": [
+        3183
+      ],
+      "merge": "654161543501fe4d1eb5ab3b1d4c1a9a78707cb5",
+      "path": "package.json",
+      "group": "contract-script"
+    },
+    {
+      "index": 1,
+      "prs": [
+        3183
+      ],
+      "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+      "path": ".env.example",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 2,
+      "prs": [
+        3183
+      ],
+      "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+      "path": "apps/api/src/lib/context.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 3,
+      "prs": [
+        3183
+      ],
+      "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+      "path": "apps/api/src/middleware/distributed-rate-limit.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 4,
+      "prs": [
+        3183
+      ],
+      "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+      "path": "apps/app/src/test/arch/timeout-budget.test.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 5,
+      "prs": [
+        3183
+      ],
+      "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+      "path": "docs/capabilities/tacho.host.enroll.md",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 6,
+      "prs": [
+        3183
+      ],
+      "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+      "path": "docs/capabilities/telemetry.stella.ingest.md",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 7,
+      "prs": [
+        3183
+      ],
+      "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+      "path": "infra/tools/caddy/Caddyfile.alb",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 8,
+      "prs": [
+        3183
+      ],
+      "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+      "path": "package.json",
+      "group": "contract-script"
+    },
+    {
+      "index": 9,
+      "prs": [
+        3183
+      ],
+      "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+      "path": "packages/config/src/registry.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 10,
+      "prs": [
+        3183
+      ],
+      "merge": "7df4b12df117247eac5d75058b669f24f7746078",
+      "path": "packages/tacho/src/collector/daemon.test.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 11,
+      "prs": [
+        3183
+      ],
+      "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+      "path": ".env.example",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 12,
+      "prs": [
+        3183
+      ],
+      "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+      "path": "apps/api/src/__tests__/tacho.preauth-order.test.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 13,
+      "prs": [
+        3183
+      ],
+      "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+      "path": "apps/api/src/lib/context.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 14,
+      "prs": [
+        3183
+      ],
+      "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+      "path": "apps/api/src/middleware/distributed-rate-limit.test.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 15,
+      "prs": [
+        3183
+      ],
+      "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+      "path": "apps/api/src/middleware/distributed-rate-limit.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 16,
+      "prs": [
+        3183
+      ],
+      "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+      "path": "docs/capabilities/tacho.host.enroll.md",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 17,
+      "prs": [
+        3183
+      ],
+      "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+      "path": "docs/capabilities/telemetry.stella.ingest.md",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 18,
+      "prs": [
+        3183
+      ],
+      "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+      "path": "infra/tools/caddy/Caddyfile.alb",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 19,
+      "prs": [
+        3183
+      ],
+      "merge": "af36102e6bba6fd8aa6628548f35c31ce2f55733",
+      "path": "packages/config/src/registry.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 20,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/api/src/app.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 21,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/api/src/routes/v1/tacho.host.enroll.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 22,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/e2e/page-load.spec.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 23,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/e2e/pay.spec.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 24,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/data/live/mandates.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 25,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/data/live/mappers/steering.test.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 26,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/data/live/steering.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 27,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/agents/agent.test.tsx",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 28,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/organization/create-key-dialog.test.tsx",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 29,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/spend/fleet-tiles.tsx",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 30,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/steering/action-failure.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 31,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/steering/actions.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 32,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/steering/context-pr-panel.test.tsx",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 33,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/steering/context-pr-panel.tsx",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 34,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/steering/proposals.tsx",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 35,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/steering/records.tsx",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 36,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/steering/view.test.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 37,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/steering/write-controls.test.tsx",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 38,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/features/steering/write-controls.tsx",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 39,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/shared/pull-request-url.test.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 40,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/test/steering-outputs.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 41,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app/src/ui/navigation.test.tsx",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 42,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/fleet/actions.test.ts",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 43,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "apps/app_deprecated/src/app/api/v1/chat/stream/route.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 44,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "packages/auth/src/auth-route.test.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 45,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "packages/auth/src/auth-route.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 46,
+      "prs": [
+        3183
+      ],
+      "merge": "00ff54f1b4e573159befc8ef8160384bd96fe551",
+      "path": "packages/oxagen/package.json",
+      "group": "ui-and-formatting"
+    },
+    {
+      "index": 47,
+      "prs": [
+        3178
+      ],
+      "merge": "d98301fa11af02d8848ec20aa95ae105ee4d1d43",
+      "path": "packages/iam/src/machine-key-scope.test.ts",
+      "group": "cli-key-authority"
+    },
+    {
+      "index": 48,
+      "prs": [
+        3178
+      ],
+      "merge": "d98301fa11af02d8848ec20aa95ae105ee4d1d43",
+      "path": "packages/iam/src/machine-key-scope.ts",
+      "group": "cli-key-authority"
+    },
+    {
+      "index": 49,
+      "prs": [
+        3178
+      ],
+      "merge": "3952a0f66e6f922695b5a1dd31680fe5d4908f2d",
+      "path": "packages/database/atlas/migrations/atlas.sum",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 50,
+      "prs": [
+        3178
+      ],
+      "merge": "3952a0f66e6f922695b5a1dd31680fe5d4908f2d",
+      "path": "packages/database/storage-manifest.json",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 51,
+      "prs": [
+        3178
+      ],
+      "merge": "9301c67c0a0ffcf51f9032920cd0245b1083529f",
+      "path": "packages/database/atlas/migrations/atlas.sum",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 52,
+      "prs": [
+        3178
+      ],
+      "merge": "c9dc9e4b6ed656c7b4085d15d383b74facb9e68e",
+      "path": "packages/database/atlas/migrations/atlas.sum",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 53,
+      "prs": [
+        3178
+      ],
+      "merge": "c9dc9e4b6ed656c7b4085d15d383b74facb9e68e",
+      "path": "packages/database/storage-manifest.json",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 54,
+      "prs": [
+        3178
+      ],
+      "merge": "318cedac7b0dc21217e3f44d4021afbc35ef906b",
+      "path": "packages/handlers/src/lib/tacho-host-revoke.ts",
+      "group": "credential-revocation"
+    },
+    {
+      "index": 55,
+      "prs": [
+        3178
+      ],
+      "merge": "318cedac7b0dc21217e3f44d4021afbc35ef906b",
+      "path": "packages/handlers/src/tacho.enrollment.revoke.ts",
+      "group": "credential-revocation"
+    },
+    {
+      "index": 56,
+      "prs": [
+        3171
+      ],
+      "merge": "adb2cf747c1abf7a9b544681800492b0532b6b0b",
+      "path": "packages/database/atlas/migrations/atlas.sum",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 57,
+      "prs": [
+        3171
+      ],
+      "merge": "adb2cf747c1abf7a9b544681800492b0532b6b0b",
+      "path": "packages/database/storage-manifest.json",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 58,
+      "prs": [
+        3171
+      ],
+      "merge": "0fee3b3b5ab9e51a459a9a7baed34b998858686c",
+      "path": "packages/database/atlas/migrations/atlas.sum",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 59,
+      "prs": [
+        3171
+      ],
+      "merge": "0fee3b3b5ab9e51a459a9a7baed34b998858686c",
+      "path": "packages/database/storage-manifest.json",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 60,
+      "prs": [
+        3171
+      ],
+      "merge": "3238a7f6b208b7bf22d2797ffb8dbec1a24ded9f",
+      "path": "apps/mcp/src/context.cli-session.test.ts",
+      "group": "cli-key-authority"
+    },
+    {
+      "index": 61,
+      "prs": [
+        3171
+      ],
+      "merge": "3238a7f6b208b7bf22d2797ffb8dbec1a24ded9f",
+      "path": "packages/database/storage-manifest.json",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 62,
+      "prs": [
+        3171
+      ],
+      "merge": "3238a7f6b208b7bf22d2797ffb8dbec1a24ded9f",
+      "path": "packages/oxagen/src/cli-session.test.ts",
+      "group": "cli-key-authority"
+    },
+    {
+      "index": 63,
+      "prs": [
+        3171
+      ],
+      "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+      "path": "packages/database/atlas/migrations/atlas.sum",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 64,
+      "prs": [
+        3171
+      ],
+      "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+      "path": "packages/database/src/column-probe.test.ts",
+      "group": "gateway-column-probe"
+    },
+    {
+      "index": 65,
+      "prs": [
+        3171
+      ],
+      "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+      "path": "packages/database/storage-manifest.json",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 66,
+      "prs": [
+        3171
+      ],
+      "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+      "path": "packages/handlers/src/lib/tacho-gateway-columns.ts",
+      "group": "gateway-column-probe"
+    },
+    {
+      "index": 67,
+      "prs": [
+        3171
+      ],
+      "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+      "path": "tools/scripts/check-main-verified.mjs",
+      "group": "main-grace-check"
+    },
+    {
+      "index": 68,
+      "prs": [
+        3171
+      ],
+      "merge": "d17ab4f00196401d773f48e6bb7f6b8e66fe61a2",
+      "path": "tools/scripts/check-main-verified.test.ts",
+      "group": "main-grace-check"
+    },
+    {
+      "index": 69,
+      "prs": [
+        3171
+      ],
+      "merge": "d4f2c5b8c5d7f115d0c8f13495af565edec2c485",
+      "path": "packages/database/atlas/migrations/atlas.sum",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 70,
+      "prs": [
+        3171
+      ],
+      "merge": "d4f2c5b8c5d7f115d0c8f13495af565edec2c485",
+      "path": "packages/database/storage-manifest.json",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 71,
+      "prs": [
+        3171
+      ],
+      "merge": "d19937cb500e834bf8c7807032267ad83dfb9f07",
+      "path": "packages/database/atlas/migrations/atlas.sum",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 72,
+      "prs": [
+        3171
+      ],
+      "merge": "078802499c8cdc28338a9494d7f4aaaa0b4aea02",
+      "path": "packages/database/atlas/migrations/atlas.sum",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 73,
+      "prs": [
+        3171
+      ],
+      "merge": "078802499c8cdc28338a9494d7f4aaaa0b4aea02",
+      "path": "packages/database/storage-manifest.json",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 74,
+      "prs": [
+        3171
+      ],
+      "merge": "a77d35bd92e4472384b7d185e978d006dbd82672",
+      "path": "packages/billing/src/change-plan.test.ts",
+      "group": "billing-fixture"
+    },
+    {
+      "index": 75,
+      "prs": [
+        3171
+      ],
+      "merge": "a77d35bd92e4472384b7d185e978d006dbd82672",
+      "path": "packages/database/atlas/migrations/atlas.sum",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 76,
+      "prs": [
+        3171
+      ],
+      "merge": "a77d35bd92e4472384b7d185e978d006dbd82672",
+      "path": "packages/database/storage-manifest.json",
+      "group": "generated-metadata"
+    },
+    {
+      "index": 77,
+      "prs": [
+        3169
+      ],
+      "merge": "e5d589bb924353d7d8c6ebf32b2826ff9e903fb2",
+      "path": "apps/api/src/app.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 78,
+      "prs": [
+        3169
+      ],
+      "merge": "e5d589bb924353d7d8c6ebf32b2826ff9e903fb2",
+      "path": "apps/api/src/middleware/distributed-rate-limit.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 79,
+      "prs": [
+        3169
+      ],
+      "merge": "e5d589bb924353d7d8c6ebf32b2826ff9e903fb2",
+      "path": "apps/api/src/routes/v1/tacho.host.enroll.ts",
+      "group": "proxy-and-rate-limit"
+    },
+    {
+      "index": 80,
+      "prs": [
+        3156,
+        3154
+      ],
+      "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+      "path": "apps/app/src/app/[orgSlug]/[workspaceSlug]/fleet/page.tsx",
+      "group": "fleet-and-gateway"
+    },
+    {
+      "index": 81,
+      "prs": [
+        3156,
+        3154
+      ],
+      "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+      "path": "apps/cli/src/commands/tacho.ts",
+      "group": "fleet-and-gateway"
+    },
+    {
+      "index": 82,
+      "prs": [
+        3156,
+        3154
+      ],
+      "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+      "path": "docs/adr/ADR-078-wrapped-and-connected-are-two-enforcement-tiers-neither-dominates.md",
+      "group": "fleet-and-gateway"
+    },
+    {
+      "index": 83,
+      "prs": [
+        3156,
+        3154
+      ],
+      "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+      "path": "packages/tacho/src/cli/enroll.ts",
+      "group": "fleet-and-gateway"
+    },
+    {
+      "index": 84,
+      "prs": [
+        3156,
+        3154
+      ],
+      "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+      "path": "packages/tacho/src/collector/daemon.ts",
+      "group": "fleet-and-gateway"
+    },
+    {
+      "index": 85,
+      "prs": [
+        3156,
+        3154
+      ],
+      "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+      "path": "packages/tacho/src/collector/mcp-gateway.test.ts",
+      "group": "fleet-and-gateway"
+    },
+    {
+      "index": 86,
+      "prs": [
+        3156,
+        3154
+      ],
+      "merge": "7bd1702fd82a1dd0cc280401399b42e625c1fb28",
+      "path": "packages/tacho/src/collector/mcp-gateway.ts",
+      "group": "fleet-and-gateway"
+    }
+  ]
+}
