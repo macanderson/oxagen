@@ -43,6 +43,21 @@ is a different rule from the one that judged this call.
 mandate parked can carry `ok: true` and still be waiting for a person: a
 mandate's own approval rule outranks any workspace rule (§6.9 part 3).
 
+## App
+
+The `app` layer is the approval card's eligibility line, drawn on the Fleet
+approvals panel and on the Run page's Approvals tab, and a second read the
+decide dialog makes when it opens
+(`apps/app/src/features/fleet/actions.ts` → `kernelRead`). The card's own line
+is as old as the page render, and a rule can release the call or another
+operator can answer it between the render and the click, so the dialog reads
+the row again and names who resolved it rather than sending a decision the
+handler would refuse after the operator had written a reason. The second read
+is the same recorded evaluation, never a recomputed one.
+
+A refused or unavailable re-read does not block the decision: the dialog says
+the recorded line is what the page read and leaves it standing.
+
 ## Readers
 
 An org Owner, Admin or Member — the same readers as the approvals list the
