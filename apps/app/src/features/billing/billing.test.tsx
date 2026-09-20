@@ -546,7 +546,7 @@ describe("Meters", () => {
     ).toHaveTextContent("overdrawn by 112,500");
   });
 
-  it("reports held runs and other governed actions as not recorded, never priced", async () => {
+  it("reports other governed actions without completion or witness metrics", async () => {
     await renderBilling();
     const meters = section("Meters");
     const other = within(meters).getByRole("row", {
@@ -555,10 +555,8 @@ describe("Meters", () => {
     expect(other).toHaveTextContent(
       "Other governed actionsnot recordedreported, never priced",
     );
-    const held = within(meters).getByRole("row", { name: /Held runs/ });
-    expect(held).toHaveTextContent(
-      "Held runsnot recordedreported, never priced (dod.held)",
-    );
+    expect(within(meters).queryByRole("row", { name: /Held runs/ })).toBeNull();
+    expect(screen.queryByText(/dod\.held|proven spend/i)).toBeNull();
   });
 
   it("prints the usage credit balance", async () => {
@@ -988,8 +986,8 @@ describe("read failures across the page", () => {
     expect(
       screen.queryByRole("region", { name: "Buy governed action units" }),
     ).toBeNull();
-    // Meters keeps its table — the held and other-actions rows are never
-    // priced and so never fail — but This month and Invoices have none.
+    // Meters keeps its table: the other-actions row is never
+    // priced and so cannot fail. This month and Invoices have no table.
     expect(within(section("This month")).queryByRole("table")).toBeNull();
     expect(within(section("Invoices")).queryByRole("table")).toBeNull();
   });

@@ -16,31 +16,39 @@ type FleetSpendTilesProps = {
   source: DataSource;
   /** Today in UTC; the clock when absent. */
   today?: Date;
+  embedded?: boolean;
 };
 
 export async function FleetSpendTiles({
   ctx,
   source,
   today,
+  embedded = false,
 }: FleetSpendTilesProps) {
   const period = dayOf(today);
   const read = await source.spend.fleet(ctx, period);
   return read.ok ? (
-    <FleetSpendStrip spend={read.value} period={period} />
+    <FleetSpendStrip spend={read.value} period={period} embedded={embedded} />
   ) : null;
 }
 
 function FleetSpendStrip({
   spend,
   period,
+  embedded,
 }: {
   spend: FleetSpend;
   period: DayRange;
+  embedded: boolean;
 }) {
   const t = useTranslations("spend");
   return (
-    <section aria-label={t("fleet.label")} data-testid="fleet-spend">
-      <TileStrip>
+    <section
+      aria-label={t("fleet.label")}
+      data-testid="fleet-spend"
+      className={embedded ? "contents" : undefined}
+    >
+      <TileStrip embedded={embedded}>
         <Tile
           term={t("fleet.spendToday")}
           note={t("fleet.spendTodayNote", { from: period.from })}

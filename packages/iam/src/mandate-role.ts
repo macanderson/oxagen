@@ -70,6 +70,7 @@ export async function assertConsequenceRole(
   ctx: MandateRoleActor,
   tags: readonly string[],
   overrides: ConsequenceRoles,
+  transaction?: Tx,
 ): Promise<string> {
   const roles = rolesForAllTags(tags, overrides);
   if (roles.length === 0) {
@@ -82,6 +83,7 @@ export async function assertConsequenceRole(
   return assertOrgRole(
     { ...ctx, userId: await resolveActingUserId(ctx) },
     { org: roles },
+    transaction,
   );
 }
 

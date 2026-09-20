@@ -432,3 +432,16 @@ packages/oxagen/src/contracts/connection.mappings.get.ts
 packages/oxagen/src/contracts/agent.memory_policy.read.ts
 packages/oxagen/src/contracts/router.policy.get.ts
 ```
+
+
+## 15. Completion and replay UI deferred (2026-09-20)
+
+[ADR-130](docs/adr/ADR-130-spend-and-operator-feedback-ui.md) removes completion, witness, proof, and scores from the app's current presentation. The chain and replay components remain in place with their tests and backend contracts:
+
+- `apps/app/src/features/run/chain.tsx`
+- `apps/app/src/features/run/replay-actions.tsx`
+- `apps/app/src/ui/replay-grade.tsx`
+- `forkRun` and `bisectRuns` in `apps/app/src/features/run/actions.ts`
+- `ChainCheckpoint` in `apps/app/src/data/contracts/run.ts`
+
+The app's Knip configuration excludes only these retained files from unused-file reporting. The three retained exports carry `@deregistered`. They still compile and their tests remain. No production route imports the components. The shrink-only baseline stays empty.

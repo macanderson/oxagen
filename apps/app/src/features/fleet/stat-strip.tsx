@@ -1,15 +1,15 @@
-// The stat strip: exactly two tiles, Live runs and Waiting on a human, each
-// counted from a read the page already renders. A tile whose read failed is not
-// drawn; its section below shows the failure.
+import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
+import { sumMoney, type Money as MoneyValue } from "@/data/contracts/money";
 import type { RunPage } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { formatClock, formatCount } from "@/ui/money-format";
+import { Money } from "@/ui/money";
 import { Clock } from "./clock";
 
 const TILE =
-  "flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-card p-4";
+  "flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-data-surface px-4 py-3.5";
 
 function LiveRuns({ page }: { page: RunPage }) {
   const t = useTranslations("fleet.stats.live");
@@ -92,21 +92,69 @@ function Waiting({ queue, now }: { queue: ApprovalQueue; now: number }) {
   );
 }
 
+function SpendShown({ page }: { page: RunPage }) {
+  const t = useTranslations("fleet.stats.spend");
+  const totals = new Map<string, MoneyValue[]>();
+  let priced = 0;
+  for (const run of page.runs) {
+    if (run.cost === null) continue;
+    priced += 1;
+    totals.set(run.cost.currency, [
+      ...(totals.get(run.cost.currency) ?? []),
+      run.cost,
+    ]);
+  }
+  return (
+    <dl data-testid="tile" className={TILE}>
+      <dt className="text-xs font-medium text-muted-foreground">
+        {t("title")}
+      </dt>
+      <dd className="flex flex-wrap gap-x-3 text-2xl font-semibold tabular-nums">
+        {totals.size === 0 ? (
+          <span>{t("unavailable")}</span>
+        ) : (
+          [...totals].map(([currency, costs]) => {
+            const total = sumMoney(costs);
+            return total === null ? null : (
+              <Money key={currency} value={total} />
+            );
+          })
+        )}
+      </dd>
+      <dd className="text-xs text-muted-foreground">
+        {t("coverage", { priced, count: page.runs.length })}
+      </dd>
+    </dl>
+  );
+}
+
 export function StatStrip({
   runs,
   approvals,
   now,
+  spendTiles,
 }: {
+  spendTiles?: ReactNode;
   runs: Read<RunPage>;
   approvals: Read<ApprovalQueue>;
   now: number;
 }) {
   const t = useTranslations("fleet.stats");
-  if (!runs.ok && !approvals.ok) return null;
+  if (!runs.ok && !approvals.ok && spendTiles === undefined) return null;
   return (
-    <section aria-label={t("label")} className="grid gap-3 sm:grid-cols-2">
+    <section
+      aria-label={t("label")}
+      className={`grid gap-3.5 sm:grid-cols-2 ${spendTiles === undefined ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}
+    >
       {runs.ok ? <LiveRuns page={runs.value} /> : null}
       {approvals.ok ? <Waiting queue={approvals.value} now={now} /> : null}
+      {spendTiles === undefined ? (
+        runs.ok ? (
+          <SpendShown page={runs.value} />
+        ) : null
+      ) : (
+        spendTiles
+      )}
     </section>
   );
 }

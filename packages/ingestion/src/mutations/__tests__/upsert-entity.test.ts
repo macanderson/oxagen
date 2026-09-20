@@ -97,6 +97,21 @@ describe("upsertEntityNode", () => {
     });
   });
 
+  it("stores the source URL independently of mapped properties", async () => {
+    mocks.sessionRun.mockResolvedValueOnce({
+      records: [{ get: () => "original-node" }],
+    });
+    const mutation = makeMutation();
+    mutation.sourceRef.externalUrl = "https://github.com/acme/repo/issues/42";
+    mutation.properties = { link: mutation.sourceRef.externalUrl };
+    await upsertEntityNode(mutation, "org-1");
+    const [query, params] = mocks.sessionRun.mock.calls[0]!;
+    expect(query).toContain(
+      "n.sourceExternalUrl = coalesce($sourceExternalUrl, n.sourceExternalUrl)",
+    );
+    expect(params.sourceExternalUrl).toBe(mutation.sourceRef.externalUrl);
+  });
+
   it("records a canonical provider key without replacing a legacy natural key", async () => {
     mocks.sessionRun.mockResolvedValueOnce({
       records: [{ get: () => "original-node" }],

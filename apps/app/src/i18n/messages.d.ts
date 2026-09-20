@@ -532,6 +532,8 @@ type Messages = {
       save: string;
       modified: string;
       unchanged: string;
+      identityLocked: string;
+      identityMismatch: string;
       stat: string;
       parse: {
         error: string;
@@ -989,8 +991,6 @@ type Messages = {
       overdrawn: string;
       other: string;
       otherNote: string;
-      held: string;
-      heldNote: string;
       credits: string;
       creditsValue: string;
       creditsNote: string;
@@ -1126,8 +1126,6 @@ type Messages = {
       creditsBody: string;
       free: string;
       freeBody: string;
-      reported: string;
-      reportedBody: string;
     };
     changePlan: {
       open: string;
@@ -1309,6 +1307,7 @@ type Messages = {
         tokens: string;
         revert: string;
         cost: string;
+        invalidName: string;
       };
       pr: {
         title: string;
@@ -1436,6 +1435,7 @@ type Messages = {
       unparsed: string;
       revert: string;
       request: string;
+      invalidSlug: string;
     };
     toolbelt: {
       title: string;
@@ -1753,6 +1753,11 @@ type Messages = {
         more: string;
         moreBasis: string;
       };
+      spend: {
+        title: string;
+        unavailable: string;
+        coverage: string;
+      };
     };
     approvals: {
       title: string;
@@ -1832,27 +1837,13 @@ type Messages = {
         agent: string;
         operator: string;
         status: string;
-        tier: string;
-        replay: string;
-        verdict: string;
         cost: string;
         frames: string;
         started: string;
         controls: string;
       };
-      noSummary: string;
       notRecorded: string;
       basisNotRecorded: string;
-      verdict: {
-        flipped: string;
-        failing: string;
-        unmoved: string;
-        unsatisfied: string;
-        tampered: string;
-        unverified: string;
-        waived: string;
-      };
-      legend: string;
       unpriced: string;
       unpricedLink: string;
       source: {
@@ -1879,7 +1870,15 @@ type Messages = {
         sending: string;
         queued: string;
         reread: string;
+        unavailable: string;
       };
+      unnamedRun: string;
+      operatorKind: {
+        human: string;
+        agent: string;
+        service: string;
+      };
+      rowsShown: string;
     };
   };
   mandate: {
@@ -3091,7 +3090,6 @@ type Messages = {
     notRecorded: string;
     basisNotRecorded: string;
     noSummary: string;
-    witnessed: string;
     source: {
       ledger: string;
       tacho: string;
@@ -3130,7 +3128,6 @@ type Messages = {
       transcript: string;
       frames: string;
       cost: string;
-      chain: string;
       approvals: string;
     };
     transcript: {
@@ -3174,7 +3171,6 @@ type Messages = {
       speedLabel: string;
       speed: string;
       transportNote: string;
-      transportNoteGraded: string;
       frameHead: string;
       fidelity: {
         full: string;
@@ -3495,6 +3491,7 @@ type Messages = {
       };
     };
     loading: string;
+    unnamedRun: string;
   };
   shell: {
     skipToContent: string;
@@ -3698,6 +3695,7 @@ type Messages = {
         label: string;
         placeholder: string;
         send: string;
+        draftTooLong: string;
       };
       refused: {
         denied: string;
@@ -3899,24 +3897,34 @@ type Messages = {
           refused: string;
           unavailable: string;
         };
+        contextTitle: string;
+        contextBody: string;
+        contextAction: string;
+        codeTitle: string;
+        codeBody: string;
+        effort: string;
+        draft: string;
+        codeAction: string;
+        codeDraft: string;
       };
+      costData: string;
     };
     strip: {
       spend: string;
-      proven: string;
-      provenNote: string;
-      accepted: string;
-      acceptedNote: string;
-      productiveRatio: string;
-      productiveRatioNote: string;
+      runs: string;
+      runsNote: string;
+      calls: string;
+      callsNote: string;
+      coverage: string;
+      coverageNote: string;
+      missing: string;
+      available: string;
     };
     columns: {
       provider: string;
       runs: string;
       calls: string;
       spend: string;
-      proven: string;
-      productiveRatio: string;
     };
     groups: {
       operator: {
@@ -4180,6 +4188,7 @@ type Messages = {
       skills: string;
       proposals: string;
       prs: string;
+      settings: string;
     };
     failure: {
       denied: string;
@@ -4964,6 +4973,11 @@ type Messages = {
         confirm: string;
         pending: string;
       };
+      disabledReason: {
+        classification_changed: string;
+        measure_changed: string;
+        tool_scope_changed: string;
+      };
     };
     servers: {
       title: string;
@@ -5113,6 +5127,12 @@ type Messages = {
         weekly: string;
         monthly: string;
       };
+    };
+    sourceFilename: {
+      rename: string;
+      name: string;
+      hint: string;
+      invalid: string;
     };
   };
 };

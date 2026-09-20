@@ -54,3 +54,18 @@ Inserts/updates `agent.tools` and inserts `agent.tool_versions`; repoints `tools
 - `consequence_tags`, `measures` or `effect_id_path` on a declaration whose name is no registered capability → `conflict` / `consequence_not_gated` (409), before anything is read or written. The mandate gate runs inside `invoke()`, so it never sees calls to such a tool (an external MCP tool, a Stella built-in).
 - A classification change no single org role is accountable for → `forbidden` / `no_role_covers_all_tags` (403).
 - An `amount`-typed measure whose `unit` is not an ISO 4217 currency code → schema validation error naming the `unit` field (ADR-111), before anything is read or written.
+
+
+## Tool changes and disabled rules
+
+Tool classification and publication recheck matching enabled approval rules in
+the same transaction as the tool write (ADR-119). A rule whose recorded author
+no longer has authority is disabled. A changed measure path, type, unit, or
+scale used by the rule, or a newly matching tool, requires explicit review.
+The tool change itself is not refused because an existing rule fails that check.
+
+`disabledReason` carries `code` (`classification_changed`, `measure_changed`, or
+`tool_scope_changed`), `tool` (`slug@version`), `at`, and `detail`. API and MCP
+reads return it, and Tools shows the reason. Switching off preserves it. Saving
+or switching on reruns the authoring checks and clears it. The security event
+`approval_rule.invalidated` names the rule, tool, actor, and before/after facts.

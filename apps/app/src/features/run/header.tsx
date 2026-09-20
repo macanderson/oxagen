@@ -1,19 +1,3 @@
-// The Run header (ARCHITECTURE.md §1.2 Run row; mockup `pRun`): what this run
-// is, who ran it, where it stands, and what it cost, from the one row
-// `get_run` returns.
-//
-// The badges under the identity state the recorded values and nothing
-// stronger (spec §8.4): the enforcement tier says where the run's actions were
-// observed from, the replay grade is the one the seal wrote, and the gaps the
-// seal recorded are named rather than folded into a softer word. A run
-// observed from the side says so, because it is the difference between a
-// record of what an agent did and a record of what Oxagen let it do.
-//
-// The generated name is the headline when `summarize_run` wrote one, with the
-// run id under it; a run with no name is headed by its id, because a
-// placeholder headline would read as a title the record does not have. The
-// generated summary sits under the identity, labelled, so the model's sentence
-// is never mistaken for the recording.
 import { useLocale, useTranslations } from "next-intl";
 import type { RunMachine, RunModel, RunRow } from "@/data/contracts/runs";
 import type { OrgRole, WsRole } from "@/server/viewer";
@@ -23,11 +7,9 @@ import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { GeneratedSummary } from "@/ui/generated-summary";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
-import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { NoValue } from "./parts";
 import { RecordActions } from "./record-actions";
-import { ReplayActions } from "./replay-actions";
 import { RunControls } from "./run-controls";
 import { useFormatter } from "@/ui/formatter";
 
@@ -146,15 +128,12 @@ function Figure({
 
 export function RunHeader({
   run,
-  witnessed,
   orgRole,
   wsRole,
   org,
   ws,
 }: {
   run: RunRow;
-  /** True when this run witnessed another (spec §8.5); #2955 builds its tabs. */
-  witnessed: boolean;
   /**
    * The viewer's two roles, because the writes gate on them differently:
    * `dispatch_command` admits an org Owner or Admin or a workspace Owner or
@@ -178,29 +157,18 @@ export function RunHeader({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 flex-col gap-2">
           <p className={eyebrow}>{t("eyebrow")}</p>
-          <h2
-            className={
-              run.name === null
-                ? `${mono} text-lg font-semibold break-all`
-                : "text-xl font-semibold"
-            }
-          >
-            {run.name ?? run.id}
+          <h2 className="text-xl font-semibold">
+            {run.name ?? run.taskRef ?? t("unnamedRun")}
           </h2>
-          {run.name === null ? null : (
-            <p className={`${mono} text-xs text-muted-foreground break-all`}>
-              {run.id}
-            </p>
-          )}
+          <p className={`${mono} text-xs text-muted-foreground break-all`}>
+            {run.id}
+          </p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <StatusBadge status={run.status} />
             <EnforcementTierBadge
               tier={run.enforcementTier}
               testId="run-tier"
             />
-            {run.replayGrade === null ? null : (
-              <ReplayGradeBadge grade={run.replayGrade} />
-            )}
             <span className="text-xs text-muted-foreground">
               {t(`source.${run.source}`)}
             </span>
@@ -224,14 +192,6 @@ export function RunHeader({
           ) : (
             <GeneratedSummary summary={run.summary} layout="block" />
           )}
-          {witnessed ? (
-            <p
-              data-testid="run-witnessed"
-              className="max-w-prose text-xs text-muted-foreground"
-            >
-              {t("witnessed")}
-            </p>
-          ) : null}
         </div>
         <div className="flex flex-col gap-3 lg:items-end">
           <AgentCard
@@ -258,9 +218,6 @@ export function RunHeader({
             summarizable={run.canSummarize}
             orgRole={orgRole}
           />
-          {run.status === "live" ? null : (
-            <ReplayActions org={org} ws={ws} run={run} />
-          )}
         </div>
       </div>
       <div

@@ -688,6 +688,7 @@ export type KernelFailureCode =
   | "external_decision_refused"
   | CapabilityErrorCode
   | "no_tenant_scope"
+  | "invalid_tenant_scope"
   | "budget_exceeded"
   | HandlerErrorCode;
 
@@ -1589,17 +1590,10 @@ async function _invokeCoreInner(
         applyDecisionSettlement(decisionSettlement, canonical, null),
       );
     }
-    // Distinguish CapabilityError (handler not found → deny) from a
-    // handler runtime throw (→ error). A TenantScopeError (e.g. the MCP
-    // orgId:"" fail-open path) carries a stable `code` we surface to the
-    // audit chain so the denial reason is explainable (SOC 2 forensics).
+    // Missing handlers, missing scope, and budget refusals are denials.
+    // Malformed scope is an upstream input error and keeps its own audit code.
     const isCapErr = err instanceof CapabilityError;
-    // Duck-typed stable codes from errors the kernel deliberately does NOT
-    // import (keeps it free of @oxagen/tenancy / @oxagen/billing deps): a
-    // TenantScopeError ("no_tenant_scope") and a BudgetExceededError
-    // ("budget_exceeded"). Both are DENIALS, not server errors — a
-    // spend-ceiling refusal is a policy decision that belongs in the audit
-    // chain as a deny (SOC2), exactly like an IAM deny.
+    // Match stable codes without importing the originating error classes.
     const duckCode =
       err instanceof Error && "code" in err && err.code === "no_tenant_scope"
         ? ("no_tenant_scope" as const)
@@ -1612,12 +1606,20 @@ async function _invokeCoreInner(
     // decision the handler made, so it joins the audit chain as a deny;
     // "not_found" and "conflict" stay errors but carry their code so the
     // trace names the cause.
+    const malformedScope =
+      err instanceof Error &&
+      "code" in err &&
+      err.code === "invalid_tenant_scope"
+        ? ("invalid_tenant_scope" as const)
+        : null;
     const handlerCode = isHandlerError(err) ? err.code : null;
     const isDeny =
       (isCapErr && err.code === "no_handler") ||
       duckCode !== null ||
       handlerCode === "forbidden";
-    const failureCode = isCapErr ? err.code : (duckCode ?? handlerCode);
+    const failureCode = isCapErr
+      ? err.code
+      : (duckCode ?? malformedScope ?? handlerCode);
     emitSecurityEvent({
       capability: canonical,
       outcome: isDeny ? "deny" : "error",
@@ -1846,13 +1848,19 @@ export interface AuthorizeExternalCapabilityResult {
  * @param name          Synthetic capability id, e.g. "mcp.github.list_pull_requests".
  * @param ctx           CapabilityContext built at the surface entry seam.
  * @param defaultEffect Fallback effect when no explicit grant/policy matches.
+ * @param options       Defer audit emission when a composite invocation owns it.
  */
 export async function authorizeExternalCapability(
   name: string,
   ctx: CapabilityContext,
   defaultEffect: "allow" | "deny",
+  options: { audit?: boolean } = {},
 ): Promise<AuthorizeExternalCapabilityResult> {
   const startMs = Date.now();
+  // Composite external invocations audit their final outcome once.
+  const emit = (event: KernelSecurityEvent) => {
+    if (options.audit !== false) emitSecurityEvent(event);
+  };
   const checkFn = _iamCheckFn;
   // Synthetic external ids (mcp.<server>.<tool>) are never registered, so there
   // is no canonical form to resolve — the raw name IS the identity. Aliasing
@@ -1885,7 +1893,7 @@ export async function authorizeExternalCapability(
   // unconditional allow whenever enforcement was off, silently disabling
   // authorization for every external-tool call while the resolver errors.
   if (iamCheckThrew) {
-    emitSecurityEvent({
+    emit({
       capability: canonical,
       outcome: "deny",
       surface: ctx.surface,
@@ -1910,7 +1918,7 @@ export async function authorizeExternalCapability(
   // immutable decision row exactly like a kernel invoke(). No row means the
   // operation is unrecorded, and an unrecorded decision is not an allowed one.
   if (ctx.agentRun?.principalKind === "agent" && decision === null) {
-    emitSecurityEvent({
+    emit({
       capability: canonical,
       outcome: "deny",
       surface: ctx.surface,
@@ -1934,7 +1942,7 @@ export async function authorizeExternalCapability(
     iamResult && "reason" in iamResult ? (iamResult.reason ?? null) : null;
   const isDenied = outcome !== "allow";
 
-  emitSecurityEvent({
+  emit({
     capability: canonical,
     outcome: isDenied ? "deny" : "allow",
     surface: ctx.surface,
@@ -1988,77 +1996,73 @@ export async function enforceExternalDecisionRules(
     principal?: ResolvedPrincipal | null;
   } = {},
 ): Promise<void> {
-  const started = Date.now();
-  try {
-    if (!_decisionRulesGate)
-      throw new CapabilityError(
-        name,
-        "external_rules_unavailable",
-        "External tool rules are not initialized",
-      );
-    const settlement = await _decisionRulesGate({
-      capability: name,
-      input,
-      ctx: {
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        userId: ctx.userId,
-        surface: ctx.surface,
-        requestId: ctx.requestId,
-        runId: options.runId ?? ctx.agentRun?.runId ?? null,
-      },
-      principal: options.principal ?? ctx.agentRun?.agentPrincipal ?? null,
-      external: { approvedDigest: options.approvedDigest },
-    });
-    if (settlement) {
-      await settlement.release();
-      throw new CapabilityError(
-        name,
-        "external_settlement_unsupported",
-        "External tool costs cannot be settled against a mandate",
-      );
-    }
-    emitSecurityEvent({
-      capability: name,
-      outcome: "allow",
-      surface: ctx.surface,
+  if (!_decisionRulesGate)
+    throw new CapabilityError(
+      name,
+      "external_rules_unavailable",
+      "External tool rules are not initialized",
+    );
+  const settlement = await _decisionRulesGate({
+    capability: name,
+    input,
+    ctx: {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
-      actorUserId: ctx.userId,
+      userId: ctx.userId,
+      surface: ctx.surface,
       requestId: ctx.requestId,
-      errorCode: null,
-      durationMs: Date.now() - started,
-    });
-  } catch (error) {
-    const reported =
-      error && typeof error === "object" && "code" in error
-        ? error.code
-        : undefined;
-    const code: KernelFailureCode =
-      error instanceof CapabilityError
+      runId: options.runId ?? ctx.agentRun?.runId ?? null,
+    },
+    principal: options.principal ?? ctx.agentRun?.agentPrincipal ?? null,
+    external: { approvedDigest: options.approvedDigest },
+  });
+  if (settlement) {
+    await settlement.release();
+    throw new CapabilityError(
+      name,
+      "external_settlement_unsupported",
+      "External tool costs cannot be settled against a mandate",
+    );
+  }
+  // This gate may run repeatedly and may request an approval before succeeding.
+  // The external invocation boundary, not each preflight, owns the audit event.
+}
+
+/** Record the final external invocation outcome after all preflights settle. */
+export function emitExternalCapabilityOutcome(
+  name: string,
+  ctx: CapabilityContext,
+  outcome: KernelSecurityOutcome,
+  durationMs: number,
+  error?: unknown,
+): void {
+  const reported =
+    error && typeof error === "object" && "code" in error
+      ? error.code
+      : undefined;
+  const errorCode: KernelFailureCode | null =
+    outcome === "allow"
+      ? null
+      : error instanceof CapabilityError
         ? error.code
         : reported === "decision_rule_denied" ||
             reported === "decision_rule_approval_required" ||
             reported === "external_tool_authority_unavailable"
           ? reported
-          : "external_decision_refused";
-    emitSecurityEvent({
-      capability: name,
-      outcome:
-        code === "external_rules_unavailable" ||
-        code === "external_decision_refused"
-          ? "error"
-          : "deny",
-      surface: ctx.surface,
-      orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
-      actorUserId: ctx.userId,
-      requestId: ctx.requestId,
-      errorCode: code,
-      durationMs: Date.now() - started,
-    });
-    throw error;
-  }
+          : outcome === "deny"
+            ? "authz_denied"
+            : "external_decision_refused";
+  emitSecurityEvent({
+    capability: name,
+    outcome,
+    surface: ctx.surface,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    actorUserId: ctx.userId,
+    requestId: ctx.requestId,
+    errorCode,
+    durationMs,
+  });
 }
 
 /**

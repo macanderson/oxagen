@@ -29,6 +29,8 @@ import type {
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { lockWorkspaceRuleSet } from "./_approval_rule";
+import { invalidateApprovalRules } from "./lib/approval-rule-invalidation";
 import { and, eq, isNull } from "drizzle-orm";
 
 export interface ToolClassificationDeps {
@@ -38,6 +40,8 @@ export interface ToolClassificationDeps {
     publicId: string;
   }): Promise<{ id: string; publicId: string } | null>;
   write(args: {
+    orgId: string;
+    workspaceId: string;
     versionId: string;
     riskGrade: ToolRiskGrade;
     classification: ToolClassification;
@@ -73,8 +77,38 @@ const postgresToolClassificationDeps: ToolClassificationDeps = {
     return row ?? null;
   },
   write: async (args) => {
-    await withTenantDb((tx) =>
-      tx
+    await withTenantDb(async (tx) => {
+      await lockWorkspaceRuleSet(tx, args.workspaceId);
+      const [before] = await tx
+        .select({
+          activeVersionId: schema.tools.activeVersionId,
+          slug: schema.tools.slug,
+          version: schema.toolVersions.versionNumber,
+          consequenceTags: schema.toolVersions.consequenceTags,
+          classification: schema.toolVersions.classification,
+          measures: schema.toolVersions.measures,
+        })
+        .from(schema.toolVersions)
+        .innerJoin(
+          schema.tools,
+          eq(schema.tools.id, schema.toolVersions.toolId),
+        )
+        .where(
+          and(
+            eq(schema.toolVersions.id, args.versionId),
+            eq(schema.toolVersions.workspaceId, args.workspaceId),
+            eq(schema.toolVersions.orgId, args.orgId),
+            isNull(schema.tools.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!before)
+        throw new HandlerError({
+          code: "not_found",
+          reason: "tool_version_not_found",
+          message: "The tool version is no longer available",
+        });
+      await tx
         .update(schema.toolVersions)
         .set({
           classifiedRiskGrade: args.riskGrade,
@@ -85,8 +119,17 @@ const postgresToolClassificationDeps: ToolClassificationDeps = {
           updatedAt: args.at,
           updatedById: args.userId ?? undefined,
         })
-        .where(eq(schema.toolVersions.id, args.versionId)),
-    );
+        .where(eq(schema.toolVersions.id, args.versionId));
+      if (before.activeVersionId !== args.versionId) return;
+      await invalidateApprovalRules(tx, {
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+        actorUserId: args.userId,
+        capability: toolClassificationSet.name,
+        before,
+        after: { ...before, classification: args.classification },
+      });
+    });
   },
 };
 
@@ -116,6 +159,8 @@ export function createToolClassificationSetHandler(
 
     const at = now();
     await deps.write({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
       versionId: version.id,
       riskGrade: input.riskGrade,
       classification: input.classification,

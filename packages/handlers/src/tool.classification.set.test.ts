@@ -112,6 +112,8 @@ describe("set_tool_classification", () => {
     });
     expect(writes).toEqual([
       {
+        orgId: ORG,
+        workspaceId: WS,
         versionId: "vid_1",
         riskGrade: "critical",
         classification,

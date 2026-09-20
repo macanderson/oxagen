@@ -21,6 +21,7 @@ import {
   CREATE_EVENT,
   CREATE_KINDS,
   type CreateKind,
+  type CreatePrefill,
   createRequestOf,
 } from "@/shared/create";
 import { buttonGold, buttonSecondary, mono } from "@/ui/control-styles";
@@ -123,16 +124,18 @@ function Chooser({
 function Wizard({
   kind,
   wizard,
+  prefill,
   ctx,
   onOpenChange,
 }: {
   kind: CreateKind;
   wizard: AnyWizardKind;
+  prefill?: CreatePrefill;
   ctx: CreateContext;
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("create");
-  const api = useDraft(() => wizard.init());
+  const api = useDraft(() => wizard.init(prefill));
   const [requested, setRequested] = useState(1);
   const [running, setRunning] = useState(false);
   const steps = wizard.steps(api.draft);
@@ -210,7 +213,11 @@ function Wizard({
   );
 }
 
-type Opening = { kind: CreateKind | null; session: number };
+type Opening = {
+  kind: CreateKind | null;
+  session: number;
+  prefill?: CreatePrefill;
+};
 
 export function CreateHost({
   org,
@@ -250,16 +257,23 @@ export function CreateHost({
     if (read === readsRef.current) setRepo(next);
   }, [org, ws]);
 
-  const show = useCallback((kind: CreateKind | null) => {
-    sessionsRef.current += 1;
-    setOpen({ kind, session: sessionsRef.current });
-  }, []);
+  const show = useCallback(
+    (kind: CreateKind | null, prefill?: CreatePrefill) => {
+      sessionsRef.current += 1;
+      setOpen({
+        kind,
+        session: sessionsRef.current,
+        ...(prefill === undefined ? {} : { prefill }),
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     const onCreate = (event: Event) => {
       const request = createRequestOf(event);
       if (request === null) return;
-      show(request.kind);
+      show(request.kind, request.prefill);
       void readRepo();
     };
     window.addEventListener(CREATE_EVENT, onCreate);
@@ -281,6 +295,7 @@ export function CreateHost({
       key={open.session}
       kind={open.kind}
       wizard={wizard}
+      {...(open.prefill === undefined ? {} : { prefill: open.prefill })}
       ctx={ctx}
       onOpenChange={close}
     />

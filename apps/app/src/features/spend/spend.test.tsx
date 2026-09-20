@@ -195,7 +195,7 @@ function rowOf(key: string): HTMLElement {
 }
 
 describe("Spend › By operator", () => {
-  it("prints the month's total with its basis, keeps proven and accepted apart, and opens each operator's drill", async () => {
+  it("prints the month's total with its basis, omits outcome scores, and opens each operator's drill", async () => {
     byGroup.mockResolvedValue(
       report([
         row("prn_marcusbell", { cost: cost("9000000", "mixed") }),
@@ -209,12 +209,12 @@ describe("Spend › By operator", () => {
     expect(strip).toHaveTextContent("$12.35");
     expect(strip).toHaveTextContent("gateway observed");
     expect(strip).toHaveTextContent("2026-09-01 to 2026-09-15");
-    expect(screen.getByText("Proven spend").closest("div")).toHaveTextContent(
-      "not recorded",
-    );
+    expect(screen.queryByText("Proven spend")).toBeNull();
+    expect(screen.queryByText("Accepted, not proven")).toBeNull();
+    expect(screen.queryByText("Productive ratio")).toBeNull();
     expect(
-      screen.getByText("Accepted, not proven").closest("div"),
-    ).toHaveTextContent("$2.00");
+      screen.getByText("Runs", { selector: "dt" }).closest("div"),
+    ).toHaveTextContent("12");
     expect(screen.getByRole("link", { name: "By operator" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -241,7 +241,7 @@ describe("Spend › By operator", () => {
     await renderSpend({ tab: "operator" });
     const ada = rowOf("prn_ada");
     expect(ada.querySelector("[data-testid=money]")).toBeNull();
-    expect(within(ada).getAllByText("not recorded")).toHaveLength(3);
+    expect(within(ada).getAllByText("not recorded")).toHaveLength(1);
     expect(ada).not.toHaveTextContent("$0.00");
   });
 
@@ -641,10 +641,12 @@ describe("Spend › Findings", () => {
 
     expect(findings).toHaveBeenCalledExactlyOnceWith(ctx);
     const saving = screen
-      .getByText("Savings identified", { selector: "dt" })
+      .getByText("Potential savings", { selector: "dt" })
       .closest("div");
     expect(saving).toHaveTextContent("$1,470.80");
-    expect(saving).toHaveTextContent("gateway observed");
+    expect(saving).toHaveTextContent("estimated reduction");
+    expect(saving?.querySelector("[data-basis]")).toBeNull();
+    expect(saving).toHaveTextContent("Cost data: gateway observed");
     expect(
       screen.getByText("Share of priced spend").closest("div"),
     ).toHaveTextContent("64%");
@@ -672,16 +674,43 @@ describe("Spend › Findings", () => {
     expect(card).toHaveTextContent("aws_billing__get_cost_and_usage");
     expect(card).toHaveTextContent("88 runs · 3,106 calls");
     expect(card).toHaveTextContent("$984.60");
+    expect(card).toHaveTextContent("Cost data: gateway observed");
     expect(card).toHaveTextContent("66.9% of the identified savings");
     expect(
-      within(card ?? document.body).getByRole("link", { name: "Evidence" }),
+      within(card ?? document.body).getByRole("link", {
+        name: "Review calculation",
+      }),
     ).toHaveAttribute(
       "href",
       "/acme/core-platform/spend?tab=findings&finding=fnd_01k5rtgh",
     );
     expect(
-      within(card ?? document.body).getByRole("button", { name: "Fix" }),
+      within(card ?? document.body).getByRole("button", { name: "Review fix" }),
     ).toBeInTheDocument();
+  });
+
+  it.each<[Cost["basis"], string]>([
+    ["client_attested", "client attested"],
+    ["estimated", "estimated"],
+    [null, "basis not recorded"],
+  ])("keeps %s provenance beside potential savings", async (basis, label) => {
+    byGroup.mockResolvedValue(report([]));
+    findings.mockResolvedValue(
+      readOk(
+        listed({
+          saving: cost("1000000", basis),
+          findings: [found({ saving: cost("1000000", basis) })],
+        }),
+      ),
+    );
+    await renderSpend({ tab: "findings" });
+    const hero = screen
+      .getByText("Potential savings", { selector: "dt" })
+      .closest("div");
+    expect(hero).toHaveTextContent(`Cost data: ${label}`);
+    expect(document.querySelector("li[data-finding]")).toHaveTextContent(
+      `Cost data: ${label}`,
+    );
   });
 
   it("names the largest eight in the legend and rolls the rest into one entry", async () => {
@@ -727,7 +756,7 @@ describe("Spend › Findings", () => {
     expect(screen.queryByRole("img")).toBeNull();
     expect(document.querySelector("li[data-finding]")).toBeNull();
     expect(
-      screen.getByText("Savings identified", { selector: "dt" }).closest("div"),
+      screen.getByText("Potential savings", { selector: "dt" }).closest("div"),
     ).toHaveTextContent("not recorded");
     expect(screen.queryByText("$0.00")).toBeNull();
   });
@@ -755,6 +784,9 @@ describe("Spend › Findings", () => {
     };
     findingEvidence.mockResolvedValue(readOk(evidence));
     await renderSpend({ tab: "findings", finding: "fnd_01k5rtgh" });
+    expect(
+      screen.getByText("Potential savings", { selector: "dt" }).closest("div"),
+    ).toHaveTextContent("Cost data: gateway observed");
 
     expect(findingEvidence).toHaveBeenCalledExactlyOnceWith(
       ctx,

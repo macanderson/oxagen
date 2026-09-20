@@ -26,9 +26,14 @@ export const inputBase =
   "disabled:bg-input-disabled-bg disabled:text-input-disabled-fg aria-invalid:border-input-invalid-border aria-invalid:outline-input-invalid-ring";
 
 export const panel =
-  "rounded-xl border border-border bg-card text-card-foreground shadow-sm";
+  "app-panel min-w-0 rounded-xl border border-border bg-card text-card-foreground";
 
 export const eyebrow =
   "text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground";
 
 export const mono = "font-mono text-[0.92em]";
+
+export const panelHeader =
+  "flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b border-border bg-data-surface px-4 py-3";
+export const panelFooter =
+  "flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-border bg-data-surface px-4 py-3 text-xs text-muted-foreground";

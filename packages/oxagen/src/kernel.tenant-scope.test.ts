@@ -143,8 +143,8 @@ describe("kernel tenant scope", () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       capability: "test.echo2",
-      outcome: "deny",
-      errorCode: "no_tenant_scope",
+      outcome: "error",
+      errorCode: "invalid_tenant_scope",
     });
   });
 });

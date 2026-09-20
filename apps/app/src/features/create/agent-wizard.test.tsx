@@ -228,6 +228,31 @@ describe("the agent wizard: identity", () => {
 });
 
 describe("the agent wizard: definition", () => {
+  it("moves source edits with an identity rename and never revives them after revert", async () => {
+    const file = await toDefinition();
+    fireEvent.change(file, {
+      target: { value: `${file.value}# custom instructions\n` },
+    });
+    const renameIdentity = async (slug: string) => {
+      fireEvent.click(screen.getByRole("button", { name: shell("back") }));
+      fireEvent.change(await screen.findByTestId("wizard-slug"), {
+        target: { value: slug },
+      });
+      fireEvent.click(primary());
+      return screen.findByTestId<HTMLTextAreaElement>("wizard-file");
+    };
+    const renamed = await renameIdentity("renamed-agent");
+    expect(renamed.value).toContain('slug = "renamed-agent"');
+    expect(renamed.value).toContain("# custom instructions");
+    fireEvent.click(
+      screen.getByRole("button", { name: t("definition.revert") }),
+    );
+    expect(renamed.value).not.toContain("# custom instructions");
+    const original = await renameIdentity(SLUG);
+    expect(original.value).toContain(`slug = "${SLUG}"`);
+    expect(original.value).not.toContain("# custom instructions");
+  });
+
   it("drafts the definition, says who drafted it, and reads the file back", async () => {
     const file = await toDefinition();
     expect(currentStep()).toContain(shell("steps.definition"));
@@ -269,7 +294,7 @@ describe("the agent wizard: definition", () => {
     expect(primary().disabled).toBe(true);
   });
 
-  it("flags a slug in the file that is not the identity's (negative)", async () => {
+  it("derives the path, identity, and pull request from an edited source slug", async () => {
     const file = await toDefinition();
     fireEvent.change(file, {
       target: {
@@ -277,7 +302,67 @@ describe("the agent wizard: definition", () => {
       },
     });
     expect(screen.getByTestId("derived").textContent).toContain("other");
+    expect(
+      screen.getByRole("button", { name: "Rename .oxagen/agents/other.toml" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: shell("back") }));
+    expect(
+      (await screen.findByTestId<HTMLInputElement>("wizard-slug")).value,
+    ).toBe("other");
+    fireEvent.click(primary());
+    expect(
+      (await screen.findByTestId<HTMLTextAreaElement>("wizard-file")).value,
+    ).toContain('slug = "other"');
+    fireEvent.click(primary());
+    await screen.findByTestId("belt");
+    fireEvent.click(primary());
+    await screen.findByTestId("pr-branch");
+    expect(screen.getByTestId("pr-branch").textContent).toBe("agents/other");
+    proposeAgent.mockResolvedValue(opened());
+    fireEvent.click(primary());
+    await screen.findByTestId("pr-opened");
+    expect(proposeAgent).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      expect.objectContaining({
+        slug: "other",
+        source: file.value,
+      }),
+    );
   });
+
+  it("renames from anywhere on the header filename and preserves the source body", async () => {
+    const file = await toDefinition();
+    fireEvent.change(file, {
+      target: { value: `${file.value}# Keep this comment\n` },
+    });
+    const before = file.value;
+    fireEvent.click(screen.getByText(`.oxagen/agents/${SLUG}.toml`));
+    const name = screen.getByRole<HTMLInputElement>("textbox", {
+      name: "Source name",
+    });
+    expect(document.activeElement).toBe(name);
+    fireEvent.change(name, { target: { value: "budget-watch" } });
+    fireEvent.keyDown(name, { key: "Enter" });
+    expect(file.value).toContain('slug = "budget-watch"');
+    expect(
+      file.value.replace('slug = "budget-watch"', `slug = "${SLUG}"`),
+    ).toBe(before);
+    expect(
+      screen.getByRole("button", {
+        name: "Rename .oxagen/agents/budget-watch.toml",
+      }),
+    ).toBe(document.activeElement);
+  });
+
+  it.each(['slug = "bad/name"', 'slug = ""', 'name = "No slug"'])(
+    "blocks an invalid source identifier: %s",
+    async (source) => {
+      const file = await toDefinition();
+      fireEvent.change(file, { target: { value: source } });
+      expect(primary().disabled).toBe(true);
+    },
+  );
 });
 
 describe("the agent wizard: toolbelt", () => {

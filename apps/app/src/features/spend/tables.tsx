@@ -9,17 +9,17 @@ import type {
   SpendReport,
 } from "@/data/contracts/spend";
 import { routes } from "@/shared/safe-path";
-import { linkText, mono, panel } from "@/ui/control-styles";
+import {
+  linkText,
+  mono,
+  panel,
+  panelHeader,
+  panelFooter,
+} from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import {
-  CostFigure,
-  CountFigure,
-  MoneyFigure,
-  NotRecordedValue,
-  RatioFigure,
-} from "./figures";
+import { CostFigure, CountFigure, NotRecordedValue } from "./figures";
 import type { SpendAt } from "./view";
 
 const cell = "px-4 py-2 text-left align-top";
@@ -29,6 +29,7 @@ export function Panel({
   title,
   note,
   action,
+  footer,
   children,
 }: {
   id: string;
@@ -37,11 +38,13 @@ export function Panel({
   note?: string;
   /** A control that belongs to the panel as a whole, beside its heading. */
   action?: ReactNode;
+  /** Existing explanatory or dated metadata below the data. */
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section aria-labelledby={id} className={`${panel} overflow-x-auto`}>
-      <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-4 pb-2">
+      <div className={panelHeader}>
         <div className="flex min-w-0 flex-col gap-1">
           <h2 id={id} className="text-sm font-semibold">
             {title}
@@ -53,17 +56,29 @@ export function Panel({
         {action}
       </div>
       {children}
+      {footer === undefined ? null : (
+        <div className={panelFooter}>{footer}</div>
+      )}
     </section>
   );
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <p className="px-4 pb-4 text-sm text-muted-foreground">{children}</p>;
+  return <p className="p-4 text-sm text-muted-foreground">{children}</p>;
 }
 
-export function HeaderCell({ children }: { children: ReactNode }) {
+export function HeaderCell({
+  children,
+  numeric = false,
+}: {
+  children: ReactNode;
+  numeric?: boolean;
+}) {
   return (
-    <th scope="col" className={`${cell} font-medium text-muted-foreground`}>
+    <th
+      scope="col"
+      className={`${cell} font-medium text-muted-foreground ${numeric ? "text-right" : ""}`}
+    >
       {children}
     </th>
   );
@@ -84,24 +99,25 @@ export function GroupTable({
       {rows.length === 0 ? (
         <Empty>{t(`groups.${kind}.empty`)}</Empty>
       ) : (
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr>
               <HeaderCell>{t(`groups.${kind}.key`)}</HeaderCell>
               {kind === "model" ? (
                 <HeaderCell>{t("columns.provider")}</HeaderCell>
               ) : null}
-              <HeaderCell>{t("columns.runs")}</HeaderCell>
-              <HeaderCell>{t("columns.calls")}</HeaderCell>
-              <HeaderCell>{t("columns.spend")}</HeaderCell>
-              <HeaderCell>{t("columns.proven")}</HeaderCell>
-              <HeaderCell>{t("columns.productiveRatio")}</HeaderCell>
+              <HeaderCell numeric>{t("columns.runs")}</HeaderCell>
+              <HeaderCell numeric>{t("columns.calls")}</HeaderCell>
+              <HeaderCell numeric>{t("columns.spend")}</HeaderCell>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.key} data-key={row.key}>
-                <th scope="row" className={`${cell} font-normal`}>
+                <th
+                  scope="row"
+                  className={`${cell} max-w-72 break-words font-normal`}
+                >
                   {kind === "model" ? (
                     <span className={mono}>{row.key}</span>
                   ) : (
@@ -121,20 +137,18 @@ export function GroupTable({
                     {row.provider ?? <NotRecordedValue />}
                   </td>
                 ) : null}
-                <td className={cell}>
+                <td
+                  className={`${cell} whitespace-nowrap text-right font-mono`}
+                >
                   <CountFigure count={row.runs} />
                 </td>
-                <td className={cell}>
+                <td
+                  className={`${cell} whitespace-nowrap text-right font-mono`}
+                >
                   <CountFigure count={row.calls} />
                 </td>
-                <td className={cell}>
+                <td className={`${cell} whitespace-nowrap text-right`}>
                   <CostFigure cost={row.cost} />
-                </td>
-                <td className={cell}>
-                  <MoneyFigure money={row.proven} />
-                </td>
-                <td className={cell}>
-                  <RatioFigure ratio={row.productiveRatio} />
                 </td>
               </tr>
             ))}
@@ -153,7 +167,7 @@ export function BudgetsTable({ budgets }: { budgets: SpendBudgets }) {
       {budgets.length === 0 ? (
         <Empty>{t("budgets.empty")}</Empty>
       ) : (
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr>
               <HeaderCell>{t("budgets.scopeColumn")}</HeaderCell>
@@ -166,7 +180,10 @@ export function BudgetsTable({ budgets }: { budgets: SpendBudgets }) {
           <tbody>
             {budgets.map((budget) => (
               <tr key={budget.scope} data-scope={budget.scope}>
-                <th scope="row" className={`${cell} font-normal`}>
+                <th
+                  scope="row"
+                  className={`${cell} max-w-72 break-words font-normal`}
+                >
                   {t(`budgets.scope.${budget.scope}`)}
                 </th>
                 <td className={cell}>

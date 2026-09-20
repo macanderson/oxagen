@@ -271,7 +271,7 @@ describe("the filter chips", () => {
   it("says the run has no frames when nothing is filtered and it has none", () => {
     renderSection({ read: readOk(runTranscript({ entries: [] })) });
     expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
-      "no frames yet",
+      "no recorded frames yet",
     );
   });
 

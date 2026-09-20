@@ -14,7 +14,6 @@ import type {
 } from "@/data/contracts/billing";
 import { mulMicros, sumMoney } from "@/data/contracts/money";
 import type { Read } from "@/data/read";
-import { panel } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { ReadFailure } from "./read-failure";
@@ -35,7 +34,7 @@ function Tile({
   return (
     <div
       data-tile={name}
-      className={`${panel} flex min-w-0 flex-col gap-1 p-4`}
+      className={`min-w-0 rounded-xl border border-border bg-data-surface text-card-foreground flex flex-col gap-1 p-4`}
       {...data}
     >
       <dt className="text-xs text-muted-foreground">{term}</dt>

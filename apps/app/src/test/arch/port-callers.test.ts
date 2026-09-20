@@ -16,6 +16,9 @@ import {
 
 const RULE = "port-callers";
 const PORTS_FILE = "src/data/ports.ts";
+// ADR-130 / DEREGISTERED.md §15: the chain reader is retained for the
+// excluded replay UI. Keep this exception exact; all other ports need callers.
+const RETAINED_PORTS = new Set(["runs.chain"]);
 const PROBES = "src/test/arch/probes/port-callers";
 
 type Ports = { readonly methods: string[]; readonly unreadable: string[] };
@@ -85,24 +88,31 @@ function callsIn(source: SourceText): Set<string> {
 function portCallerViolations(
   ports: SourceText,
   callers: readonly SourceText[],
+  retained: ReadonlySet<string> = new Set(),
 ): string[] {
   const { methods, unreadable } = portsOf(ports);
   const called = new Set(callers.flatMap((caller) => [...callsIn(caller)]));
   return [
     ...unreadable,
     ...methods
-      .filter((method) => !called.has(method))
+      .filter((method) => !called.has(method) && !retained.has(method))
       .map((method) => `${RULE} ${ports.file} ${method} no-caller`),
   ];
 }
 
 describe("port callers", () => {
   it(
-    "every DataSource method has a production caller in src/features or src/app",
+    "every active DataSource method has a production caller in src/features or src/app",
     () => {
       const callers = callerFiles(listFiles("src")).map(readSource);
       expect(portsOf(readSource(PORTS_FILE)).methods.length).toBeGreaterThan(0);
-      expect(portCallerViolations(readSource(PORTS_FILE), callers)).toEqual([]);
+      const ports = readSource(PORTS_FILE);
+      expect(
+        [...RETAINED_PORTS].every((method) =>
+          portsOf(ports).methods.includes(method),
+        ),
+      ).toBe(true);
+      expect(portCallerViolations(ports, callers, RETAINED_PORTS)).toEqual([]);
     },
     WHOLE_TREE_TIMEOUT_MS,
   );

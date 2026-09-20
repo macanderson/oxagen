@@ -16,7 +16,14 @@
 // The rule lives on the server, because a `required` attribute is a courtesy
 // and not a gate; this case proves the dialog shows what the refusal said
 // rather than swallowing it.
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -72,13 +79,29 @@ function draw(recorded: AutoEligibility | null = eligibility) {
 
 const dialog = () => screen.getByTestId("approval-decision");
 
-async function open() {
-  // `delay: null` keeps every interaction synchronous; the default wraps each
-  // in a timer, which under the package's coverage run costs more than the
-  // case timeout allows.
+async function open({ waitForRead = true } = {}) {
+  // Avoid input timer delays. Wait for the async read separately.
   const user = userEvent.setup({ delay: null });
   await user.click(screen.getByTestId("decide"));
+  await screen.findByTestId("approval-decision");
+  if (waitForRead) {
+    await waitFor(() => {
+      expect(screen.queryByTestId("eligibility-checking")).toBeNull();
+    });
+  }
   return user;
+}
+
+async function decisionFailure() {
+  return waitFor(() => {
+    const failure = screen.getByTestId("approval-decision-failure");
+    for (const decision of ["approve", "deny"]) {
+      expect(within(dialog()).getByTestId(decision)).not.toHaveAttribute(
+        "aria-disabled",
+      );
+    }
+    return failure;
+  });
 }
 
 beforeEach(() => {
@@ -131,8 +154,10 @@ describe("the decision", () => {
         note: "vendor is on the approved list",
       },
     );
-    expect(router.refresh).toHaveBeenCalledOnce();
-    expect(screen.queryByTestId("approval-decision")).toBeNull();
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalledOnce();
+      expect(screen.queryByTestId("approval-decision")).toBeNull();
+    });
   });
 
   it("denies with the reason, sending the decision the button names", async () => {
@@ -156,7 +181,9 @@ describe("the decision", () => {
         note: "vendor is not on the approved list",
       },
     );
-    expect(router.refresh).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalledOnce();
+    });
   });
 
   it("says a denial needs a reason, and the call is untouched (negative)", async () => {
@@ -169,7 +196,7 @@ describe("the decision", () => {
     draw();
     const user = await open();
     await user.click(within(dialog()).getByTestId("deny"));
-    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
+    expect(await decisionFailure()).toHaveTextContent(
       "Write the reason this call is denied.",
     );
     // The dialog stays open on the reason the operator now has to write, and
@@ -186,7 +213,7 @@ describe("the decision", () => {
     draw();
     const user = await open();
     await user.click(within(dialog()).getByTestId("approve"));
-    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
+    expect(await decisionFailure()).toHaveTextContent(
       "the office accountable for the mandate's consequences answers it",
     );
     expect(router.refresh).not.toHaveBeenCalled();
@@ -201,7 +228,7 @@ describe("the decision", () => {
     draw();
     const user = await open();
     await user.click(within(dialog()).getByTestId("approve"));
-    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
+    expect(await decisionFailure()).toHaveTextContent(
       "The decision did not reach the kernel (approval_store_unreachable). The call is untouched, so it is safe to try again.",
     );
   });
@@ -215,9 +242,7 @@ describe("the decision", () => {
     draw();
     const user = await open();
     await user.click(within(dialog()).getByTestId("approve"));
-    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
-      "Nothing was billed.",
-    );
+    expect(await decisionFailure()).toHaveTextContent("Nothing was billed.");
   });
 
   // ADR-115: the decision is the one billed action of this surface, and
@@ -233,7 +258,7 @@ describe("the decision", () => {
       draw();
       const user = await open();
       await user.click(within(dialog()).getByTestId("approve"));
-      const alert = screen.getByTestId("approval-decision-failure");
+      const alert = await decisionFailure();
       expect(alert).toHaveTextContent(`(${code})`);
       expect(
         within(alert).getByTestId("approval-decision-billing"),
@@ -251,19 +276,15 @@ describe("the decision", () => {
     const user = await open();
     await user.click(within(dialog()).getByTestId("approve"));
     expect(
-      within(screen.getByTestId("approval-decision-failure")).queryByTestId(
+      within(await decisionFailure()).queryByTestId(
         "approval-decision-billing",
       ),
     ).toBeNull();
   });
 
   it("names the decision in flight while the write is out", async () => {
-    let settle: (value: unknown) => void = () => undefined;
-    resolveApprovalAction.mockReturnValue(
-      new Promise((resolve) => {
-        settle = resolve;
-      }),
-    );
+    const decision = Promise.withResolvers<unknown>();
+    resolveApprovalAction.mockReturnValue(decision.promise);
     draw();
     const user = await open();
     await user.type(within(dialog()).getByLabelText("Reason"), "no");
@@ -271,9 +292,12 @@ describe("the decision", () => {
     const deny = within(dialog()).getByTestId("deny");
     expect(deny).toHaveTextContent("Denying");
     expect(deny).toHaveAttribute("aria-disabled", "true");
-    settle({
-      ok: true,
-      value: { approvalId: APPROVAL, resolution: "denied", mandate: null },
+    await act(async () => {
+      decision.resolve({
+        ok: true,
+        value: { approvalId: APPROVAL, resolution: "denied", mandate: null },
+      });
+      await decision.promise;
     });
   });
 });
@@ -283,7 +307,7 @@ describe("the evaluation the dialog reads again", () => {
     const read = Promise.withResolvers<unknown>();
     readApprovalEligibility.mockReturnValue(read.promise);
     draw();
-    const user = await open();
+    const user = await open({ waitForRead: false });
     for (const decision of ["approve", "deny"]) {
       expect(within(dialog()).getByTestId(decision)).toHaveAttribute(
         "aria-disabled",
@@ -307,20 +331,22 @@ describe("the evaluation the dialog reads again", () => {
     );
     draw();
     await open();
-    expect(screen.getByTestId("eligibility-unread")).toHaveTextContent(
-      "action_failed",
-    );
-    expect(screen.queryByTestId("eligibility-checking")).toBeNull();
-    expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
-      "aria-disabled",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("eligibility-unread")).toHaveTextContent(
+        "action_failed",
+      );
+      expect(screen.queryByTestId("eligibility-checking")).toBeNull();
+      expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
+        "aria-disabled",
+      );
+    });
   });
 
   it("discards a read that settles after its dialog closes", async () => {
     const first = Promise.withResolvers<unknown>();
     readApprovalEligibility.mockReturnValueOnce(first.promise);
     draw();
-    const user = await open();
+    const user = await open({ waitForRead: false });
     await user.keyboard("{Escape}");
     await act(async () => {
       first.resolve({
@@ -412,9 +438,7 @@ describe("approval refusal recovery", () => {
     draw();
     const user = await open();
     await user.click(within(dialog()).getByTestId("approve"));
-    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
-      copy,
-    );
+    expect(await decisionFailure()).toHaveTextContent(copy);
     expect(router.refresh).not.toHaveBeenCalled();
     expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
       "aria-disabled",
@@ -430,7 +454,7 @@ describe("approval refusal recovery", () => {
     draw();
     const user = await open();
     await user.click(within(dialog()).getByTestId("approve"));
-    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
+    expect(await decisionFailure()).toHaveTextContent(
       "The decision was refused before it was sent.",
     );
     expect(router.refresh).not.toHaveBeenCalled();
@@ -445,7 +469,7 @@ describe("approval refusal recovery", () => {
     draw();
     const user = await open();
     await user.click(within(dialog()).getByTestId("approve"));
-    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
+    expect(await decisionFailure()).toHaveTextContent(
       "Your access request arq_waiting is still waiting.",
     );
     expect(router.refresh).not.toHaveBeenCalled();
@@ -456,16 +480,16 @@ describe("approval refusal recovery", () => {
     draw();
     const user = await open();
     await user.click(within(dialog()).getByTestId("approve"));
-    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
-      "action_failed",
-    );
+    expect(await decisionFailure()).toHaveTextContent("action_failed");
     expect(router.refresh).not.toHaveBeenCalled();
     expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
       "aria-disabled",
     );
     await user.click(within(dialog()).getByTestId("approve"));
     expect(resolveApprovalAction).toHaveBeenCalledTimes(2);
-    expect(router.refresh).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalledOnce();
+    });
   });
 
   it("keeps a decision available when the freshness read itself waits for access", async () => {

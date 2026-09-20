@@ -22,12 +22,20 @@ export const CREATE_KINDS: readonly CreateKind[] = ["agent", "skill", "record"];
 
 export const CREATE_EVENT = "oxagen:create";
 
-type CreateRequest = { kind: CreateKind | null };
+export type CreatePrefill = { description: string };
+// Compatible with the strictest propose_record rationale bound (v2).
+export const CREATE_DESCRIPTION_MAX = 1000;
+type CreateRequest = { kind: CreateKind | null; prefill?: CreatePrefill };
 
 /** Open the chooser (`null`) or one kind's wizard over the current page. */
-export function openCreate(kind: CreateKind | null = null): void {
+export function openCreate(
+  kind: CreateKind | null = null,
+  prefill?: CreatePrefill,
+): void {
   window.dispatchEvent(
-    new CustomEvent<CreateRequest>(CREATE_EVENT, { detail: { kind } }),
+    new CustomEvent<CreateRequest>(CREATE_EVENT, {
+      detail: prefill === undefined ? { kind } : { kind, prefill },
+    }),
   );
 }
 
@@ -38,6 +46,20 @@ export function createRequestOf(event: Event): CreateRequest | null {
   if (typeof detail !== "object" || detail === null || !("kind" in detail))
     return null;
   const kind: unknown = detail.kind;
+  if ("prefill" in detail) {
+    const prefill: unknown = detail.prefill;
+    if (
+      kind !== "record" ||
+      typeof prefill !== "object" ||
+      prefill === null ||
+      !("description" in prefill) ||
+      typeof prefill.description !== "string" ||
+      prefill.description.trim().length === 0 ||
+      prefill.description.length > CREATE_DESCRIPTION_MAX
+    )
+      return null;
+    return { kind: "record", prefill: { description: prefill.description } };
+  }
   if (kind === null) return { kind: null };
   const known = CREATE_KINDS.find((k) => k === kind);
   return known === undefined ? null : { kind: known };

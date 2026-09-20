@@ -30,11 +30,13 @@ export default async function FleetPage({
     >
       <PageHeader title={t("fleet")} />
       <OnboardingGate ctx={ctx} source={dataSource()} />
-      <FleetSpendTiles ctx={ctx} source={dataSource()} />
       <Fleet
         ctx={ctx}
         source={dataSource()}
         cursor={firstParam(cursor) ?? null}
+        spendTiles={
+          <FleetSpendTiles ctx={ctx} source={dataSource()} embedded />
+        }
       />
     </main>
   );

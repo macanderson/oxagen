@@ -5,6 +5,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      deploy_app:
+        description: Build and deploy the production app manually
+        type: boolean
+        default: false
+      source_commit:
+        description: Full merged commit SHA to deploy
+        type: string
+        required: false
 
 concurrency:
   # A push to main gets a group of its own, per commit; everything else groups
@@ -601,12 +610,14 @@ jobs:
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
           pnpm turbo run test:e2e $TURBO_FILTER
 
-      - name: Upload Playwright traces (on failure)
-        if: failure()
+      - name: Upload Playwright screenshots and traces
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
-          path: apps/app/test-results/
+          path: |
+            apps/app/test-results/
+            apps/app/playwright-report/
           retention-days: 7
           if-no-files-found: ignore
 
@@ -1033,3 +1044,56 @@ jobs:
           export INNGEST_EVENT_KEY INNGEST_SIGNING_KEY
           pnpm inngest:verify --url https://api.oxagen.sh/api/inngest
 
+
+  manual-app-deploy:
+    name: Manual production app deployment
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_app
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    environment: production
+    concurrency:
+      group: manual-production-app
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 0
+      - name: Verify the selected source is merged
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          git fetch origin main
+          git merge-base --is-ancestor "$SOURCE_COMMIT" origin/main
+          echo "Deploying merged revision $SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"
+      - uses: ./.github/actions/pnpm-install
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
+      - name: Resolve production build configuration
+        run: |
+          set -euo pipefail
+          aws ssm get-parameters-by-path --path /oxagen/production --recursive --with-decryption --output json --query 'Parameters[].{Name:Name,Value:Value}' |
+            pnpm exec tsx tools/scripts/build-env.ts --service app --env production --prefix /oxagen/production --out "$RUNNER_TEMP/build-env"
+      - name: Build and stamp the app
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          set -euo pipefail
+          set -a
+          . "$RUNNER_TEMP/build-env"
+          set +a
+          tools/scripts/package-for-node.sh app
+          jq -n --arg revision "$SOURCE_COMMIT" --arg run "$GITHUB_RUN_ID" '{revision: $revision, run: $run}' > dist-deploy/app/oxagen-build.json
+      - uses: ./.github/actions/ship-to-node
+        with:
+          service: app
+          directory: dist-deploy/app
+          hostname: app.oxagen.sh

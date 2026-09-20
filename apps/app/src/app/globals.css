@@ -19,6 +19,7 @@
   --color-muted: var(--muted-surface);
   --color-banner: var(--banner-bg);
   --color-app-canvas: var(--ink);
+  --color-data-surface: var(--data-surface);
   /* Code surfaces (ui/code-editor.tsx): the ground and the syntax colours. */
   --color-code-bg: var(--code-bg);
   --color-code-comment: var(--code-comment);
@@ -74,6 +75,7 @@
     --mono: var(--ox-font-mono);
     --font: var(--ox-font);
     --muted-surface: var(--_stone-100);
+    --data-surface: var(--ox-paper-hl);
     --banner-bg: var(--hl);
     --button-disabled-bg: var(--muted-surface);
     --input-disabled-bg: var(--muted-surface);
@@ -123,6 +125,7 @@
     --muted: var(--ox-muted);
     --dim: var(--ox-dim);
     --muted-surface: var(--ox-hl);
+    --data-surface: var(--ox-hl);
     --banner-bg: var(--ox-hl);
     --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
     --button-primary-bg: var(--gold);
@@ -159,6 +162,7 @@
       --muted: var(--ox-muted);
       --dim: var(--ox-dim);
       --muted-surface: var(--ox-hl);
+    --data-surface: var(--ox-hl);
       --banner-bg: var(--ox-hl);
       --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
       --button-primary-bg: var(--gold);
@@ -172,5 +176,36 @@
         0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 44px rgba(0, 0, 0, 0.5);
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     }
+  }
+}
+
+/* The mockup's workspace frame and data density, shared by every app page. */
+[data-shell-page] main#main {
+  max-width: 1500px;
+  padding: 22px 24px 80px;
+}
+
+[data-shell-page] table {
+  border-collapse: collapse;
+  font-size: 13px;
+  background: var(--data-surface);
+}
+
+[data-shell-page] table thead th {
+  padding: 9px 12px;
+  white-space: nowrap;
+  background: var(--data-surface);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+[data-shell-page] table tbody :is(td, th) {
+  vertical-align: middle;
+}
+
+@media (width < 48rem) {
+  [data-shell-page] main#main {
+    padding: 16px 16px 88px;
   }
 }

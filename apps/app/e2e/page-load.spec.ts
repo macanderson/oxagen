@@ -40,6 +40,46 @@ for (const row of SIGNED_IN_ROUTES) {
     page,
   }) => {
     await loadsAndTitlesItself(page, row);
+    await expect(page.locator("main#main")).toBeVisible();
+    const desktopPath = test.info().outputPath("desktop.png");
+    await page.screenshot({
+      path: desktopPath,
+      fullPage: true,
+      animations: "disabled",
+    });
+    await test
+      .info()
+      .attach("desktop", { path: desktopPath, contentType: "image/png" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const phonePath = test.info().outputPath("phone.png");
+    await page.screenshot({
+      path: phonePath,
+      fullPage: true,
+      animations: "disabled",
+    });
+    await test
+      .info()
+      .attach("phone", { path: phonePath, contentType: "image/png" });
+    if (row.titleKey === "steering") {
+      await page.locator('[data-tab="settings"]').click();
+      await expect(page.locator('[data-tab="settings"]')).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      await expect(page).toHaveURL(/tab=settings/);
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.screenshot({
+        path: test.info().outputPath("settings-desktop.png"),
+        fullPage: true,
+        animations: "disabled",
+      });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.screenshot({
+        path: test.info().outputPath("settings-phone.png"),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
   });
 }
 

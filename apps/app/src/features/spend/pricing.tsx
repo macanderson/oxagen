@@ -137,7 +137,7 @@ function UnpricedSection({
     <Panel
       id="spend-unpriced"
       title={t("unpriced.title")}
-      note={t("unpriced.note", {
+      footer={t("unpriced.note", {
         since: format.dateTime(new Date(since), { dateStyle: "medium" }),
       })}
     >
@@ -256,7 +256,7 @@ function PriceBookSection({
     <Panel
       id="spend-price-book"
       title={t("book.title")}
-      note={t("book.note", {
+      footer={t("book.note", {
         at: format.dateTime(new Date(read.value.at), { dateStyle: "medium" }),
       })}
       action={<PriceDialog at={at} />}

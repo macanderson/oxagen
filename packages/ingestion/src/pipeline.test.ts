@@ -83,6 +83,31 @@ describe("runPipeline", () => {
     expect(ctx.getMapping).toHaveBeenCalledWith("conn-abc", "pull_request");
   });
 
+  it("tracks the legacy URL through chained property mappings", async () => {
+    const event = makeEvent();
+    event.payload = {
+      ...(event.payload as Record<string, unknown>),
+      html_url: "https://github.com/acme/repo/pull/42",
+    };
+    await runPipeline(
+      event,
+      makeCtx({
+        oxagenEntityType: "task",
+        propertyMappings: { url: "link", link: "source_link" },
+      }),
+    );
+    expect(resolveEntity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        legacyUrlProperty: "source_link",
+        properties: expect.objectContaining({
+          source_link: "https://github.com/acme/repo/pull/42",
+        }),
+      }),
+      "org-1",
+      expect.anything(),
+    );
+  });
+
   it("runs all stages and returns a PipelineResult", async () => {
     const event = makeEvent();
     const ctx = makeCtx({ oxagenEntityType: "task", propertyMappings: {} });

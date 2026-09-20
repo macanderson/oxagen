@@ -101,6 +101,11 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import {
+  ASSISTANT_CONTENT_MAX,
+  ASSISTANT_DRAFT_EVENT,
+  assistantDraftOf,
+} from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { AssistantStreamingText } from "./assistant-streaming-text";
@@ -133,6 +138,7 @@ type Thread = {
   entries: readonly Entry[];
   conversationId: string | null;
   draft: string;
+  draftTooLong?: boolean;
   pending: boolean;
 };
 
@@ -339,6 +345,39 @@ export function AssistantFlyout() {
     });
   }
 
+  useEffect(() => {
+    const receiveDraft = (event: Event) => {
+      const request = assistantDraftOf(event);
+      if (
+        request === null ||
+        request.org !== org ||
+        request.ws !== ws ||
+        scope === null
+      )
+        return;
+      setThreads((prior) => {
+        const next = new Map(prior);
+        const current = prior.get(scope) ?? EMPTY_THREAD;
+        // Keep unsent work and place the requested change after it.
+        const combined = current.draft.trim()
+          ? `${current.draft}\n\n${request.content}`
+          : request.content;
+        next.set(
+          scope,
+          combined.length > ASSISTANT_CONTENT_MAX
+            ? { ...current, draftTooLong: true }
+            : { ...current, draft: combined, draftTooLong: false },
+        );
+        return next;
+      });
+      setAssistantOpen(true);
+    };
+    window.addEventListener(ASSISTANT_DRAFT_EVENT, receiveDraft);
+    return () => {
+      window.removeEventListener(ASSISTANT_DRAFT_EVENT, receiveDraft);
+    };
+  }, [org, ws, scope, setAssistantOpen]);
+
   // Where focus came from, so closing can give it back. Captured at the open,
   // which is the launcher that was tapped — the rail's on a desktop, or, on a
   // phone, whatever the drawer handed focus to as it closed itself.
@@ -428,6 +467,7 @@ export function AssistantFlyout() {
     if (
       pending ||
       content === "" ||
+      content.length > ASSISTANT_CONTENT_MAX ||
       org === null ||
       ws === null ||
       scope === null
@@ -459,6 +499,7 @@ export function AssistantFlyout() {
       ...t,
       entries: [...t.entries, { kind: "asked", id, text: content }],
       draft: "",
+      draftTooLong: false,
       pending: true,
     }));
     try {
@@ -669,6 +710,7 @@ export function AssistantFlyout() {
             <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2">
               <textarea
                 rows={2}
+                maxLength={ASSISTANT_CONTENT_MAX}
                 value={draft}
                 disabled={pending}
                 aria-label={t("composer.label")}
@@ -677,7 +719,11 @@ export function AssistantFlyout() {
                 onChange={(e) => {
                   if (shownScope === null) return;
                   const value = e.target.value;
-                  updateThread(shownScope, (t) => ({ ...t, draft: value }));
+                  updateThread(shownScope, (t) => ({
+                    ...t,
+                    draft: value,
+                    draftTooLong: false,
+                  }));
                 }}
                 className="min-h-10 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
               />
@@ -691,6 +737,11 @@ export function AssistantFlyout() {
                 <Send aria-hidden="true" className="size-4" />
               </button>
             </div>
+            {thread.draftTooLong ? (
+              <p role="alert" className="mt-2 text-sm text-muted-foreground">
+                {t("composer.draftTooLong")}
+              </p>
+            ) : null}
           </form>
         ) : (
           <p

@@ -58,8 +58,6 @@ import {
   LLM_CALL_DUPLICATE_OF_ATTR,
   LLM_CALL_TOKEN_SOURCES,
 } from "@oxagen/tacho";
-import { breakerEnvConfig } from "./breaker-config";
-import { getBreaker } from "./circuit-breaker";
 import { clickhouse } from "./clickhouse";
 
 type CostFrameBasis = "gateway_observed" | "client_attested";
@@ -89,8 +87,6 @@ interface ToolCallFrameRow {
 export type FrameRunRef =
   | { kind: "ledger"; runUuid: string }
   | { kind: "tacho"; rootSessionUuid: string };
-
-const breaker = () => getBreaker("clickhouse", breakerEnvConfig());
 
 /**
  * The rollup prices each model call once, by the rule the ingest fold uses
@@ -179,9 +175,8 @@ export async function readModelCallFrames(args: {
   const ch = clickhouse();
   const run = args.run;
   if (run.kind === "ledger") {
-    const result = await breaker().exec(() =>
-      ch.query({
-        query: `
+    const result = await ch.query({
+      query: `
         SELECT
           formatDateTime(created_at, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
           model,
@@ -196,10 +191,9 @@ export async function readModelCallFrames(args: {
           AND execution_step_id = {runId:UUID}
         ORDER BY created_at
       `,
-        query_params: { orgId: args.orgId, runId: run.runUuid },
-        format: "JSONEachRow",
-      }),
-    );
+      query_params: { orgId: args.orgId, runId: run.runUuid },
+      format: "JSONEachRow",
+    });
     type Row = {
       at: string;
       model: string;
@@ -226,9 +220,8 @@ export async function readModelCallFrames(args: {
     }));
   }
 
-  const result = await breaker().exec(() =>
-    ch.query({
-      query: `
+  const result = await ch.query({
+    query: `
       SELECT
         formatDateTime(c.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
         c.model    AS model,
@@ -281,15 +274,14 @@ export async function readModelCallFrames(args: {
       ) AS m ON m.call_key = c.message_id
       ORDER BY c.ts, c.seq
     `,
-      query_params: {
-        orgId: args.orgId,
-        rootSessionUuid: run.rootSessionUuid,
-        sources: TACHO_TOKEN_SOURCES,
-        duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
-      },
-      format: "JSONEachRow",
-    }),
-  );
+    query_params: {
+      orgId: args.orgId,
+      rootSessionUuid: run.rootSessionUuid,
+      sources: TACHO_TOKEN_SOURCES,
+      duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
+    },
+    format: "JSONEachRow",
+  });
   type Row = {
     at: string;
     model: string;
@@ -329,9 +321,8 @@ export async function readTachoToolCallFrames(args: {
   rootSessionUuid: string;
 }): Promise<ToolCallFrameRow[]> {
   const ch = clickhouse();
-  const result = await breaker().exec(() =>
-    ch.query({
-      query: `
+  const result = await ch.query({
+    query: `
       SELECT tool_name AS name
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID}
@@ -340,13 +331,12 @@ export async function readTachoToolCallFrames(args: {
         AND source = 'hook'
       ORDER BY ts, seq
     `,
-      query_params: {
-        orgId: args.orgId,
-        rootSessionUuid: args.rootSessionUuid,
-      },
-      format: "JSONEachRow",
-    }),
-  );
+    query_params: {
+      orgId: args.orgId,
+      rootSessionUuid: args.rootSessionUuid,
+    },
+    format: "JSONEachRow",
+  });
   const rows = (await result.json()) as { name: string }[];
   return rows.map((r) => ({ name: r.name === "" ? null : r.name }));
 }
@@ -387,9 +377,8 @@ export async function readTachoToolCallObservations(args: {
   limit: number;
 }): Promise<ToolCallObservationRow[]> {
   const ch = clickhouse();
-  const result = await breaker().exec(() =>
-    ch.query({
-      query: `
+  const result = await ch.query({
+    query: `
       SELECT
         toString(h.root_session_uuid)                                  AS root_session_uuid,
         formatDateTime(h.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')           AS at,
@@ -429,16 +418,15 @@ export async function readTachoToolCallObservations(args: {
       ) AS r ON r.tool_use_id = h.tool_use_id
       SETTINGS join_use_nulls = 1
     `,
-      query_params: {
-        orgId: args.orgId,
-        workspaceId: args.workspaceId,
-        from: chDateTime(args.from),
-        to: chDateTime(args.to),
-        limit: args.limit,
-      },
-      format: "JSONEachRow",
-    }),
-  );
+    query_params: {
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      from: chDateTime(args.from),
+      to: chDateTime(args.to),
+      limit: args.limit,
+    },
+    format: "JSONEachRow",
+  });
   type Row = {
     root_session_uuid: string;
     at: string;
@@ -651,9 +639,8 @@ export async function readObservedModels(args: {
     duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
   };
 
-  const summaryResult = await breaker().exec(() =>
-    ch.query({
-      query: `
+  const summaryResult = await ch.query({
+    query: `
       SELECT
         model,
         anyIf(provider, provider != '')                                  AS provider,
@@ -700,10 +687,9 @@ export async function readObservedModels(args: {
       ORDER BY tokens DESC, model
       LIMIT {limit:UInt32}
     `,
-      query_params: { ...baseParams, limit: OBSERVED_MODEL_SQL_SAFETY_LIMIT },
-      format: "JSONEachRow",
-    }),
-  );
+    query_params: { ...baseParams, limit: OBSERVED_MODEL_SQL_SAFETY_LIMIT },
+    format: "JSONEachRow",
+  });
   type SummaryRow = {
     model: string;
     provider: string;
@@ -741,9 +727,8 @@ export async function readObservedModels(args: {
   // subagent would otherwise take `max()` over both and credit ONE call's
   // thinking and one-hour cache split to both. The id is unique within the
   // recorder that issued it, which is the session, so the session is the key.
-  const classResult = await breaker().exec(() =>
-    ch.query({
-      query: `
+  const classResult = await ch.query({
+    query: `
       WITH gw AS (
         SELECT
           toString(model)                                              AS model,
@@ -838,10 +823,9 @@ export async function readObservedModels(args: {
       GROUP BY model, class, bucket_index
       ORDER BY model, class, bucket_index
     `,
-      query_params: { ...baseParams, models, boundaries },
-      format: "JSONEachRow",
-    }),
-  );
+    query_params: { ...baseParams, models, boundaries },
+    format: "JSONEachRow",
+  });
   type ClassRow = {
     model: string;
     class: string;

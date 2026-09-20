@@ -5,6 +5,7 @@
 // context record and tool wizards read the same as the skill wizard without
 // copying it.
 import { Check, GitPullRequestArrow, Sparkles } from "lucide-react";
+import { SourceFilename } from "@/ui/source-filename";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import { buttonSecondary, mono, panel } from "@/ui/control-styles";
@@ -187,11 +188,13 @@ export function OptionCard({
  */
 export function FileEditor({
   path,
+  rename,
   value,
   onChange,
   bar,
 }: {
   path: string;
+  rename?: { name: string; onRename: (name: string) => boolean };
   value: string;
   onChange: (value: string) => void;
   /** Controls on the editor's bar, beside the path. */
@@ -201,7 +204,11 @@ export function FileEditor({
   return (
     <section aria-label={path} className={`${panel} flex flex-col`}>
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
-        <span className={`${mono} min-w-0 flex-1 break-all`}>{path}</span>
+        {rename ? (
+          <SourceFilename path={path} {...rename} />
+        ) : (
+          <span className={`${mono} min-w-0 flex-1 break-all`}>{path}</span>
+        )}
         {bar}
       </div>
       <div className="flex max-h-80 overflow-auto p-3 font-mono text-[12.5px] leading-5">

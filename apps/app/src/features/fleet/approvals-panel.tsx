@@ -31,7 +31,7 @@ import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
-import { linkText, mono, panel } from "@/ui/control-styles";
+import { linkText, mono, panel, panelHeader } from "@/ui/control-styles";
 import { drawsBar, MandateBar } from "@/ui/mandate-bar";
 import { NamedMeasure } from "@/ui/measure";
 import { formatCount } from "@/ui/money-format";
@@ -195,8 +195,8 @@ export function ApprovalsPanel({
   const headingId = `${on}-approvals`;
   return (
     <section aria-labelledby={headingId} className={`${panel} p-4`}>
-      <div className="flex items-center justify-between gap-3 pb-3">
-        <h2 id={headingId} className="text-base font-semibold">
+      <div className={`${panelHeader} -mx-4 -mt-4 mb-3`}>
+        <h2 id={headingId} className="text-sm font-semibold">
           {t("title")}
         </h2>
         {approvals.ok ? (

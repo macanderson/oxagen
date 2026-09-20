@@ -7,7 +7,6 @@ import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Cost, Money as MoneyValue } from "@/data/contracts/money";
 import type { DayRange, SpendFigure } from "@/data/contracts/spend";
-import { panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import type { MoneyPrecision } from "@/ui/money-format";
@@ -44,6 +43,25 @@ export function CostFigure({ cost }: { cost: Cost | null }) {
       >
         {cost.basis === null ? t("basisNotRecorded") : t(`basis.${cost.basis}`)}
       </span>
+    </span>
+  );
+}
+
+/** Pricing provenance for a potential saving, separate from the estimate. */
+export function EstimateBasis({ cost }: { cost: Cost | null }) {
+  const t = useTranslations("spend");
+  if (cost === null) return null;
+  return (
+    <span
+      data-estimate-basis={cost.basis ?? "not_recorded"}
+      className="block text-xs font-normal text-muted-foreground"
+    >
+      {t("findings.costData", {
+        basis:
+          cost.basis === null
+            ? t("basisNotRecorded")
+            : t(`basis.${cost.basis}`),
+      })}
     </span>
   );
 }
@@ -87,9 +105,11 @@ export function Tile({
   children: ReactNode;
 }) {
   return (
-    <div className={`${panel} flex flex-col gap-1 p-4`}>
+    <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-data-surface p-4 text-card-foreground">
       <dt className="text-xs text-muted-foreground">{term}</dt>
-      <dd className="text-lg font-semibold">{children}</dd>
+      <dd className="font-mono text-2xl font-semibold tabular-nums">
+        {children}
+      </dd>
       {note === undefined ? null : (
         <dd className="text-xs text-muted-foreground">{note}</dd>
       )}
@@ -97,13 +117,25 @@ export function Tile({
   );
 }
 
-export function TileStrip({ children }: { children: ReactNode }) {
+export function TileStrip({
+  children,
+  embedded = false,
+}: {
+  children: ReactNode;
+  embedded?: boolean;
+}) {
   return (
-    <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{children}</dl>
+    <dl
+      className={
+        embedded ? "contents" : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      }
+    >
+      {children}
+    </dl>
   );
 }
 
-/** The period's total at the top of the page; proven and accepted stay two figures. */
+/** Recorded spend and workload, without outcome or operator scores. */
 export function SpendStrip({
   total,
   period,
@@ -117,17 +149,14 @@ export function SpendStrip({
       <Tile term={t("strip.spend")} note={t("period", period)}>
         <CostFigure cost={total.cost} />
       </Tile>
-      <Tile term={t("strip.proven")} note={t("strip.provenNote")}>
-        <MoneyFigure money={total.proven} />
+      <Tile term={t("strip.runs")} note={t("strip.runsNote")}>
+        <CountFigure count={total.runs} />
       </Tile>
-      <Tile term={t("strip.accepted")} note={t("strip.acceptedNote")}>
-        <MoneyFigure money={total.accepted} />
+      <Tile term={t("strip.calls")} note={t("strip.callsNote")}>
+        <CountFigure count={total.calls} />
       </Tile>
-      <Tile
-        term={t("strip.productiveRatio")}
-        note={t("strip.productiveRatioNote")}
-      >
-        <RatioFigure ratio={total.productiveRatio} />
+      <Tile term={t("strip.coverage")} note={t("strip.coverageNote")}>
+        {total.cost === null ? t("strip.missing") : t("strip.available")}
       </Tile>
     </TileStrip>
   );

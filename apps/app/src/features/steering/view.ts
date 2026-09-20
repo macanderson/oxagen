@@ -10,10 +10,16 @@ import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
 /**
  * The tabs in the mockup's order (Records, Skills, then Proposals and their
- * Context PRs); Memory, Ontology, Policy, Preview, Effect and Retirement are
+ * Context PRs), followed by workspace Settings. Memory, Ontology, Policy, Preview, Effect and Retirement are
  * not in this release.
  */
-export const STEERING_TABS = ["records", "skills", "proposals", "prs"] as const;
+export const STEERING_TABS = [
+  "records",
+  "skills",
+  "proposals",
+  "prs",
+  "settings",
+] as const;
 export type SteeringTab = (typeof STEERING_TABS)[number];
 
 export type SteeringView = {

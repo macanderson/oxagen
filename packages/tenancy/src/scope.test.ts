@@ -369,3 +369,47 @@ describe("tenant scope", () => {
     });
   });
 });
+
+describe("normalized attribution", () => {
+  it("distinguishes invalid entry from missing scope", () => {
+    expect(() =>
+      runInTenantScope({ orgId: "invalid", workspaceId: WS }, () => undefined),
+    ).toThrowError(expect.objectContaining({ code: "invalid_tenant_scope" }));
+    expect(() => requireScope()).toThrowError(
+      expect.objectContaining({ code: "no_tenant_scope" }),
+    );
+  });
+  it("refuses an object that coerces to a valid tenant id", () => {
+    const disguised = { toString: () => ORG } as unknown as string;
+    expect(() =>
+      runInTenantScope({ orgId: disguised, workspaceId: WS }, () => undefined),
+    ).toThrowError(TenantScopeError);
+  });
+  it.each(["", "x".repeat(268), "read_tool\nforged", {}, 123])(
+    "refuses malformed capability attribution %s",
+    (name) => {
+      expect(() =>
+        runInTenantScope(
+          { orgId: ORG, workspaceId: WS, capabilityName: name as string },
+          () => undefined,
+        ),
+      ).toThrowError(TenantScopeError);
+    },
+  );
+  it("reuses an immutable attribution projection without exposing tenant ids", () => {
+    runInTenantScope(
+      { orgId: ORG, workspaceId: WS, capabilityName: "read_tool" },
+      () => {
+        const attribution = getPrincipalAttribution();
+        expect(attribution).toBe(getPrincipalAttribution());
+        expect(Object.isFrozen(attribution)).toBe(true);
+        expect(attribution).not.toHaveProperty("orgId");
+        expect(() => {
+          (attribution as { capabilityName: string }).capabilityName =
+            "write_tool";
+        }).toThrow();
+        expect(getPrincipalAttribution().capabilityName).toBe("read_tool");
+      },
+    );
+  });
+});

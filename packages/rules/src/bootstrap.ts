@@ -8,7 +8,7 @@
  * `bootstrapBillingRuntime()`. Without the call the gate is dormant and every
  * capability proceeds exactly as before rules existed.
  *
- * Where the rules live, and the cache in front of them, are in `rule-store.ts`.
+ * Committed rule reads live in `rule-store.ts`.
  */
 import { setDecisionRulesGate } from "@oxagen/oxagen/kernel";
 import { autoApproveParkedCall } from "./auto-approval-path";

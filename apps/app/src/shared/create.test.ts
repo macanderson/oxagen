@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CREATE_EVENT,
+  CREATE_DESCRIPTION_MAX,
   CREATE_KINDS,
   createRequestOf,
   openCreate,
@@ -50,6 +51,44 @@ describe("createRequestOf", () => {
     ).toBeNull();
     expect(
       createRequestOf(new CustomEvent(CREATE_EVENT, { detail: { kind: 7 } })),
+    ).toBeNull();
+  });
+});
+
+describe("context description prefill", () => {
+  it("passes a finding draft without submitting anything", () => {
+    const seen = listen();
+    openCreate("record", {
+      description: "Finding fnd_1: paginate repeated tool results.",
+    });
+    expect(seen.mock.results[0]?.value).toEqual({
+      kind: "record",
+      prefill: {
+        description: "Finding fnd_1: paginate repeated tool results.",
+      },
+    });
+  });
+  it("accepts the full downstream rationale boundary", () => {
+    const description = "x".repeat(1000);
+    const seen = listen();
+    openCreate("record", { description });
+    expect(seen.mock.results[0]?.value).toEqual({
+      kind: "record",
+      prefill: { description },
+    });
+  });
+  it.each([
+    { kind: "skill", prefill: { description: "Wrong wizard" } },
+    { kind: "record", prefill: { description: 42 } },
+    { kind: "record", prefill: { description: " " } },
+    {
+      kind: "record",
+      prefill: { description: "x".repeat(CREATE_DESCRIPTION_MAX + 1) },
+    },
+    { kind: "record", prefill: null },
+  ])("rejects invalid prefill %j", (detail) => {
+    expect(
+      createRequestOf(new CustomEvent(CREATE_EVENT, { detail })),
     ).toBeNull();
   });
 });

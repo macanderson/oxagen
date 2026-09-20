@@ -3549,7 +3549,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7be52b6092363cbb462d234c2d81c8e685d8d32b4b93282851bb3a6ce528d524",
+  "contentHash": "894ef685ce927edbb65a23d17e6d9f6a15ec23087ca2b8b73cb5b6328f1da0d4",
   "domains": [
     {
       "name": "agent",
@@ -18269,6 +18269,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "detail",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
         }
       ],
       "domain": "security",

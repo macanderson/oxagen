@@ -23,6 +23,7 @@ import {
   type SecurityEventInput,
 } from "@oxagen/telemetry";
 import { schema } from "./index";
+import type { Tx } from "./index";
 import { withSystemDb } from "./tenant";
 
 /**
@@ -72,6 +73,7 @@ export function makeSecurityEventInserter(): AuditInsertFn {
         ip: event.ip ?? undefined,
         userAgent: event.userAgent ?? undefined,
         requestId: event.requestId ?? undefined,
+        detail: event.detail,
       }),
     );
   };
@@ -114,4 +116,20 @@ export function emitSecurityEventAsync(
   event: SecurityEventInput,
 ): Promise<void> {
   return recordSecurityEventAsync(registryInserter(), event);
+}
+
+/** Record a governance mutation in the same transaction as its state change. */
+export async function emitSecurityEventIn(
+  tx: Tx,
+  event: SecurityEventInput,
+): Promise<void> {
+  await tx.insert(schema.securityEvents).values({
+    ...event,
+    actorUserId: event.actorUserId ?? undefined,
+    workspaceId: event.workspaceId ?? undefined,
+    capability: event.capability ?? undefined,
+    ip: event.ip ?? undefined,
+    userAgent: event.userAgent ?? undefined,
+    requestId: event.requestId ?? undefined,
+  });
 }

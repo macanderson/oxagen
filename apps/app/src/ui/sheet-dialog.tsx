@@ -75,7 +75,9 @@ export function SheetDialog({
           className={`fixed left-1/2 top-[12vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${wide ? "max-w-[600px]" : "max-w-md"}`}
         >
           <SheetHandle />
-          <div className={`px-4 pt-4 ${tabs ? "pb-0" : "pb-2"}`}>
+          <div
+            className={`border-b border-border bg-data-surface px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
+          >
             <Dialog.Title className="text-base font-semibold">
               {title}
             </Dialog.Title>
@@ -94,7 +96,7 @@ export function SheetDialog({
               sits under the thumb (src/ui/phone.css). */}
           <div
             data-sheet-footer=""
-            className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3"
+            className="flex flex-wrap justify-end gap-2 border-t border-border bg-data-surface px-4 py-3"
           >
             <Dialog.Close data-touch-target="" className={buttonSecondary}>
               {closeLabel ?? t("close")}

@@ -14,6 +14,11 @@ import { resourceScopeDigestOf, type KillSwitchRow } from "@oxagen/iam";
 
 type VersionRow = Record<string, unknown> & { id: string; publicId: string };
 
+vi.mock("../_approval_rule", () => ({ lockWorkspaceRuleSet: vi.fn() }));
+vi.mock("./approval-rule-invalidation", () => ({
+  invalidateApprovalRules: vi.fn(),
+}));
+
 const db = vi.hoisted(() => ({
   tool: null as null | { id: string; publicId: string; slug: string },
   versions: [] as Array<Record<string, unknown> & { id: string }>,

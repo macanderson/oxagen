@@ -3,8 +3,7 @@
     "eyebrow": "Run",
     "notRecorded": "not recorded",
     "basisNotRecorded": "basis not recorded",
-    "noSummary": "No summary yet. A sealed run can be summarized from its frames; until then the frames are the only account of what happened.",
-    "witnessed": "This run witnessed another run. Its ladder, its verdicts and the spend it proved are not drawn here yet.",
+    "noSummary": "No summary yet. Open the transcript to review recorded prompts, model calls, and tools.",
     "source": {
       "ledger": "recorded in the evidence ledger",
       "tacho": "recorded by a wrapped agent"
@@ -43,7 +42,6 @@
       "transcript": "Transcript",
       "frames": "Frames",
       "cost": "Cost",
-      "chain": "Chain and seal",
       "approvals": "Approvals"
     },
     "transcript": {
@@ -58,7 +56,7 @@
       "noBody": "No body was retained for this entry, or the bytes are not text.",
       "truncated": "Cut at the length one entry carries.",
       "openFrame": "Read the whole body of frame {seq}",
-      "empty": "This run has no frames yet. A run with no frames has cost nothing.",
+      "empty": "This run has no recorded frames yet.",
       "complete": "{count} entries. This is the whole run.",
       "cut": "{count} entries. The run has more frames than one read carries and the read offered no resume point, so this stops short of the end.",
       "runStart": "Run start",
@@ -87,7 +85,6 @@
       "speedLabel": "Playback speed",
       "speed": "×{speed}",
       "transportNote": "The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
-      "transportNoteGraded": "Replay grade {grade}. The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
       "frameHead": "seq {seq} · {time} · {fidelity}",
       "fidelity": {
         "full": "body retained",
@@ -407,6 +404,7 @@
         "noFrame": "no frame at this position"
       }
     },
-    "loading": "Loading this run"
+    "loading": "Loading this run",
+    "unnamedRun": "Untitled run"
   }
 }

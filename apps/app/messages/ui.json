@@ -95,6 +95,12 @@
         "weekly": "week",
         "monthly": "month"
       }
+    },
+    "sourceFilename": {
+      "rename": "Rename {path}",
+      "name": "Source name",
+      "hint": "Enter to apply. Escape to cancel. This updates the name in the source.",
+      "invalid": "Use a valid lowercase name with hyphens, and check that the source can be read."
     }
   }
 }

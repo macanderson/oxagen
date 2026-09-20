@@ -1,9 +1,9 @@
 // Meters (pages/billing.md): the two meters Oxagen charges on and the figures
 // it reports beside them. Governed action units are used against this month's
 // bucket (included + purchased + carried), printed as stored — a negative
-// remainder reads "overdrawn by N". Held runs and the other governed actions
-// are reported and never priced; nothing records them yet, so they print "not
-// recorded" rather than a zero. Usage credits are the in-app AI usage balance,
+// remainder reads "overdrawn by N". Other governed actions are reported and
+// never priced; nothing records them yet, so they print "not recorded"
+// rather than a zero. Usage credits are the in-app AI usage balance,
 // printed as a count. Under the table: the billing mode (prepaid or invoice),
 // and the Free-tier rule for a prepaid organization at zero with no card
 // (spec §4.2, ADR-055 §6). Counts only; no money renders here (INV-25).
@@ -139,12 +139,6 @@ export function Meters({
           meter={t("meters.other")}
           value={notRecorded}
           note={t("meters.otherNote")}
-        />
-        <Row
-          name="held"
-          meter={t("meters.held")}
-          value={notRecorded}
-          note={t("meters.heldNote")}
         />
         <Row
           name="credits"
