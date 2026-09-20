@@ -2,7 +2,7 @@
 // identity card with its status and the writes on it, then one section chosen
 // by `?tab=`. Six sections have a store behind them: Identity (get_agent),
 // Toolbelt (get_agent_toolbelt), Enrollment (get_agent's hosts), Tamper
-// incidents (list_incidents), Definition in git (get_agent's cached commit)
+// incidents (list_incidents), Configuration (get_agent's cached commit)
 // and Mandates (list_mandates narrowed to this agent, #2957). Only the chosen
 // section makes its own read.
 //
@@ -19,7 +19,7 @@ import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
-import { buttonPrimary, panel } from "@/ui/control-styles";
+import { panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { AgentActions } from "./agent-actions";
@@ -89,12 +89,6 @@ function Header({
             list={routes.agents(org, ws)}
           />
         )}
-        <SafeLink
-          to={routes.agent(org, ws, identity.slug, { tab: "toolbelt" })}
-          className={buttonPrimary}
-        >
-          {t("detail.seeBelt")}
-        </SafeLink>
       </div>
     </section>
   );
@@ -221,9 +215,14 @@ export async function Agent({
     case "definition":
       body = (
         <DefinitionSection
-          definition={detail.definition}
-          slug={identity.slug}
+          detail={detail}
+          mandates={await source.mandates.list(ctx, { agentId: identity.id })}
+          org={place.org}
+          ws={place.ws}
           editor={routes.agentSource(place.org, place.ws, place.agent)}
+          here={routes.agent(place.org, place.ws, place.agent, {
+            tab: "definition",
+          })}
         />
       );
       break;

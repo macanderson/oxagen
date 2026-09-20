@@ -4,10 +4,7 @@
 // committed file starts from a seed of the three keys the commit handler
 // requires of every file, written from its identity. Its loading, error and
 // denied states replace the editor, never the page.
-import {
-  AGENT_DEFINITION_DIR,
-  AGENT_DEFINITION_SCHEMA,
-} from "@oxagen/oxagen/contracts/agent.definition.commit";
+import { AGENT_DEFINITION_DIR } from "@oxagen/oxagen/contracts/agent.definition.commit";
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
@@ -16,19 +13,8 @@ import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { mono, panel } from "@/ui/control-styles";
 import { ReadFailure } from "@/ui/read-failure";
+import { definitionSeed } from "./definition-seed";
 import { SourceEditor } from "./source-editor";
-
-/** The keys commit_agent_definition refuses a file without, and the name and description the identity records. */
-function seed(identity: AgentDetail["identity"]): string {
-  const lines = [
-    `schema = ${JSON.stringify(AGENT_DEFINITION_SCHEMA)}`,
-    `slug = ${JSON.stringify(identity.slug)}`,
-    `name = ${JSON.stringify(identity.name)}`,
-  ];
-  if (identity.description !== null)
-    lines.push(`description = ${JSON.stringify(identity.description)}`);
-  return `${lines.join("\n")}\n`;
-}
 
 function Chips({ detail, path }: { detail: AgentDetail; path: string }) {
   const t = useTranslations("agents");
@@ -108,7 +94,7 @@ export async function AgentSource({
           ws={ws}
           agentId={identity.id}
           path={path}
-          base={definition?.source ?? seed(identity)}
+          base={definition?.source ?? definitionSeed(identity)}
           branch={definition?.branch ?? `agents/${identity.slug}`}
           back={routes.agent(org, ws, identity.slug, { tab: "definition" })}
           after={routes.agentSource(org, ws, identity.slug)}

@@ -61,14 +61,13 @@
     },
     "detail": {
       "header": "Agent identity",
-      "seeBelt": "See the belt as the model sees it",
       "tabs": {
         "label": "Agent sections",
         "identity": "Identity",
         "toolbelt": "Toolbelt",
         "enrollment": "Enrollment",
         "incidents": "Tamper incidents",
-        "definition": "Definition in git",
+        "definition": "Configuration",
         "mandates": "Mandates",
         "budgets": "Budgets"
       },
@@ -258,35 +257,93 @@
       },
       "definition": {
         "openEditor": "Open in the source editor",
-        "none": {
-          "title": "No definition committed",
-          "body": "The definition of record is the file .oxagen/agents/{slug}.toml in the workspace repository. Write it in the source editor; saving commits it to a branch and opens a pull request."
+        "unset": "not set",
+        "unparsed": "The file does not parse at line {line}: {reason}. Fix the line in the source editor; the form patches nothing until it reads.",
+        "bar": {
+          "dirty": "Unsaved changes",
+          "against": "against {branch} at {commit}. Nothing is written until you commit.",
+          "againstSeed": "against a file that has not been committed. Nothing is written until you commit.",
+          "discard": "Discard",
+          "save": "Save changes"
         },
-        "unparsed": "The committed file does not parse at line {line}. Open it in the source editor to read and fix it.",
-        "fields": {
-          "title": "The file",
+        "identity": {
+          "title": "Identity",
+          "aside": "root table",
           "schema": "Schema",
           "slug": "Slug",
+          "slugHint": "Immutable. The agent key {key} is derived from it.",
           "name": "Name",
           "description": "Description",
-          "modelTier": "Model tier",
-          "budget": "Per-run budget",
-          "tools": "Tools",
-          "denyTools": "Denied tools",
+          "descriptionHint": "One sentence. Shown on the Agents list and in every receipt this agent produces."
+        },
+        "model": {
+          "title": "Model and budget",
+          "tier": "Model tier",
+          "tierHint": "complex routes to the workspace's complex model and light to its light one. The harness makes the call with its own key; Oxagen records what it reports.",
+          "budget": "Per-run budget (USD)",
+          "budgetHint": "Stored as budget = { per_run_micros = {micros} }. Checked against reported spend at each hook boundary; a breach pauses the run at the next one."
+        },
+        "tools": {
+          "title": "Tools",
+          "aside": "belt = grants ∩ this list − deny_tools",
+          "tools": "tools",
+          "toolsHint": "Patterns against the registry. github__* grants every github tool the operator can delegate.",
+          "denyTools": "deny_tools",
+          "denyHint": "A deny here wins over any grant. A version pattern like @* denies every version.",
+          "add": "Add to {key}",
+          "addPlaceholder": "add a tool pattern, Enter to keep",
+          "remove": "Remove {value}",
           "sideEffects": "Side effects",
+          "read": "May read through the gateway.",
+          "write": "May write through the gateway; every write is a receipt.",
+          "irreversible": "Needs an active mandate. This agent holds {count, plural, =0 {none} one {one} other {#}}.",
+          "irreversibleUnknown": "Needs an active mandate. The mandate ledger did not answer, so none is known to be active."
+        },
+        "instructions": {
+          "title": "Instructions",
+          "aside": "[instructions] body",
+          "label": "Instructions",
+          "hint": "Compiled into the harness file beside this one. Keep credentials and personal data out of it: nothing checks for them before a commit."
+        },
+        "harness": {
+          "title": "Harness",
           "harness": "Harness",
-          "instructions": "Instructions",
-          "unset": "not set"
+          "harnessHint": "Set at registration. Changing it is a new agent.",
+          "color": "Color",
+          "colorHint": "Cosmetic: the label the harness shows on its own screen."
         },
         "source": {
           "title": "Source",
-          "lead": "Every field is a view of this commit. The running definition is what the default branch holds; this commit runs once its pull request merges.",
-          "path": "Path",
+          "truth": "source of truth",
+          "open": "Open in the source editor",
+          "lead": "Every field on this page is a view of that file. Editing here patches one key in place; editing there changes anything. Both go through the same commit.",
+          "uncommitted": "No definition is committed yet. Saving commits this file to a branch and opens a pull request.",
           "branch": "Branch",
-          "commit": "Commit",
+          "commit": "At commit",
+          "draft": "draft",
           "digest": "definition_digest",
           "pullRequest": "Pull request",
           "committed": "Committed"
+        },
+        "changing": {
+          "title": "Changing this agent",
+          "edit": {
+            "title": "1 · Edit here or in the repository",
+            "body": "Either opens a pull request. Nothing is written to Postgres first."
+          },
+          "checks": {
+            "title": "2 · Checks",
+            "body": "Before the pull request opens, Oxagen checks the file's schema, that the slug is this agent's, and that every registered capability it names is one you hold yourself. Tool patterns and MCP tools are not checked here. Your repository's own checks run on the pull request."
+          },
+          "review": {
+            "title": "3 · Review",
+            "body": "A code-owner review is required before the merge."
+          },
+          "merge": {
+            "title": "4 · Merge is the change",
+            "body": "The merged file is the definition of record. The next run on this repository reads it from the default branch."
+          },
+          "note": "Deleting an agent is a pull request that removes the file. The principal is retired, never deleted, so its runs keep their identity."
         }
       },
       "budgets": {
@@ -382,8 +439,8 @@
       "branchAt": "{branch} at {commit}",
       "uncommitted": "no committed definition",
       "truth": "source of truth",
-      "lead": "Every field on the Definition tab is a view of this file. Saving commits it to a branch and opens a pull request; the default branch is never written.",
-      "back": "Back to the definition",
+      "lead": "Every field on the Configuration tab is a view of this file. Saving commits it to a branch and opens a pull request; the default branch is never written.",
+      "back": "Back to the configuration",
       "discard": "Discard",
       "save": "Save",
       "modified": "modified",
