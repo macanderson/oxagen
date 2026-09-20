@@ -265,6 +265,7 @@ export function createToolImportHandler(
           workspaceId: ctx.workspaceId,
           userId: actingUserId,
           source: "mcp",
+          capability: "import_tools",
           mcpServerId: server.id,
         });
         landed += 1;

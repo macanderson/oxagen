@@ -173,6 +173,19 @@ export const approvalRuleBodySchema = z
 
 /** One rule as it is stored and as every read returns it. */
 export const approvalRuleSchema = approvalRuleBodySchema.extend({
+  disabledReason: z
+    .object({
+      code: z.enum([
+        "classification_changed",
+        "measure_changed",
+        "tool_scope_changed",
+      ]),
+      tool: z.string().min(1).max(256),
+      at: z.string().datetime({ offset: true }),
+      detail: z.string().min(1).max(512),
+    })
+    .strict()
+    .optional(),
   /** The public id (`usr_…`) of whoever last wrote the rule; null when no person did. */
   createdBy: z.string().max(64).nullable(),
   /** When it was last written, ISO-8601. */

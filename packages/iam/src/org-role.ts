@@ -155,12 +155,14 @@ export async function resolveActorOrgRole(
 export async function resolveActorOrgRoles(
   orgId: string,
   userId: string,
+  transaction?: Tx,
 ): Promise<string[]> {
-  return withOrgDb(async (tx) => {
+  const read = async (tx: Tx) => {
     const principalId = await findActivePrincipalId(tx, orgId, userId);
     if (principalId === null) return [];
     return findAssignedRoles(tx, principalId, orgId, { kind: "org" });
-  });
+  };
+  return transaction ? read(transaction) : withOrgDb(read);
 }
 
 /**
@@ -183,6 +185,7 @@ export async function resolveActorWorkspaceRoles(
   orgId: string,
   workspaceId: string,
   userId: string,
+  transaction?: Tx,
 ): Promise<string[]> {
   // Org-wide for the same reason, and for one more: `assertOrgRole` asks for
   // workspace roles whenever the required set names any, and an org-only ctx
@@ -190,14 +193,15 @@ export async function resolveActorWorkspaceRoles(
   // org-only scope in ordinary service. The `workspace_id = <sentinel>`
   // predicate matches no assignment, which is the right answer — an org-only
   // call holds no workspace role — and it is the query that says so, not RLS.
-  return withOrgDb(async (tx) => {
+  const read = async (tx: Tx) => {
     const principalId = await findActivePrincipalId(tx, orgId, userId);
     if (principalId === null) return [];
     return findAssignedRoles(tx, principalId, orgId, {
       kind: "workspace",
       workspaceId,
     });
-  });
+  };
+  return transaction ? read(transaction) : withOrgDb(read);
 }
 
 /** The credential fields of a `CapabilityContext` the acting user is read from. */
@@ -293,6 +297,7 @@ export interface OrgRoleRequirement {
 export async function assertOrgRole(
   ctx: OrgRoleActor,
   required: OrgRoleRequirement,
+  transaction?: Tx,
 ): Promise<string> {
   if (!ctx.userId) {
     throw new HandlerError({
@@ -301,7 +306,11 @@ export async function assertOrgRole(
       message: "No signed-in user on the request",
     });
   }
-  const orgRoles = await resolveActorOrgRoles(ctx.orgId, ctx.userId);
+  const orgRoles = await resolveActorOrgRoles(
+    ctx.orgId,
+    ctx.userId,
+    transaction,
+  );
   const orgMatch = mostPrivileged(
     orgRoles.filter((name) => required.org.includes(name)),
   );
@@ -313,6 +322,7 @@ export async function assertOrgRole(
       ctx.orgId,
       ctx.workspaceId,
       ctx.userId,
+      transaction,
     );
     const wsMatch = mostPrivileged(
       wsRoles.filter((name) => acceptedOnWorkspace.includes(name)),

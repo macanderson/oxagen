@@ -30,6 +30,7 @@
 import {
   SECURITY_EVENT_TYPES,
   type SecurityEventType,
+  type ApprovalRuleInvalidationDetail,
   type SecurityOutcome,
 } from "@oxagen/compliance";
 import { captureError } from "./error-reporting";
@@ -44,6 +45,8 @@ export type { SecurityEventType, SecurityOutcome };
 // ---------------------------------------------------------------------------
 
 export interface SecurityEventInput {
+  /** Structured identifiers and governance changes; exclude request payloads and secrets. */
+  detail?: ApprovalRuleInvalidationDetail;
   /** ISO timestamp. Defaults to now() on the DB if omitted. */
   occurredAt?: Date;
   eventType: SecurityEventType;

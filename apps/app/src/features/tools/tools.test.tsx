@@ -1324,6 +1324,35 @@ describe("Tools › auto-approvals", () => {
     ).toBeNull();
   });
 
+  it("explains a rule disabled by a changed tool measure", async () => {
+    const rules = approvalRuleSet();
+    const first = rules.rules[0];
+    if (!first) throw new Error("Missing rule fixture");
+    await renderRules(
+      readOk({
+        ...rules,
+        rules: [
+          {
+            ...first,
+            enabled: false,
+            disabledReason: {
+              code: "measure_changed",
+              tool: "stripe__create_refund@2",
+              at: "2026-09-19T00:00:00.000Z",
+              detail: "A measure changed",
+            },
+          },
+        ],
+      }),
+    );
+    expect(screen.getByTestId("rule-disabled-reason")).toHaveTextContent(
+      "stripe__create_refund@2 changed a measure this rule uses",
+    );
+    expect(
+      ruleRow(first.slug).querySelector('[data-state="off"]'),
+    ).not.toBeNull();
+  });
+
   it("says a rule with no condition waits only on the floors", async () => {
     const bare = approvalRuleSet({
       items: [

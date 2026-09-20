@@ -18,6 +18,7 @@
 //     unknown or deleted key, or no credential, → null
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Tx } from "@oxagen/database";
 import { isHandlerError } from "@oxagen/oxagen";
 
 const mocks = vi.hoisted(() => ({
@@ -160,6 +161,21 @@ describe("resolveActorOrgRole", () => {
 });
 
 describe("assertOrgRole", () => {
+  it("uses a supplied transaction without checking out another connection", async () => {
+    mocks.withOrgDb.mockImplementation(() => {
+      throw new Error("Nested checkout");
+    });
+    const tx = makeRoleTx("principal", "Owner", null) as unknown as Tx;
+    await expect(
+      assertOrgRole(
+        { orgId: "org_1", userId: "user_1" },
+        { org: ["Owner"] },
+        tx,
+      ),
+    ).resolves.toBe("Owner");
+    expect(mocks.withOrgDb).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

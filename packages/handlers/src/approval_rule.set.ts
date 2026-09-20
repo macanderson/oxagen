@@ -79,7 +79,7 @@ export const approvalRuleSetHandler: CapabilityHandler<
     };
     const authored = await assertRulesSavable(
       tx,
-      ctx,
+      { ...ctx, userId: actingUserId, apiKeyId: null },
       workspaceId,
       input.rules.filter((rule) => !unchanged(rule)),
     );

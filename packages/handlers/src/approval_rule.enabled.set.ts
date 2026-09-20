@@ -50,7 +50,12 @@ export const approvalRuleEnabledSetHandler: CapabilityHandler<
     // authority, and re-stamping there would silently bless a tool that was
     // classified since, so the existing stamp is carried through untouched.
     const authored = input.enabled
-      ? await assertRulesSavable(tx, ctx, workspaceId, [rule])
+      ? await assertRulesSavable(
+          tx,
+          { ...ctx, userId: actingUserId, apiKeyId: null },
+          workspaceId,
+          [rule],
+        )
       : undefined;
     // Re-stamp the toggled rule. `createdBy` and `createdAt` are documented as
     // whoever LAST wrote the rule and when (approvalRuleSchema), and a toggle
@@ -62,12 +67,15 @@ export const approvalRuleEnabledSetHandler: CapabilityHandler<
     const author = await publicUserId(tx, actingUserId);
     const next = rules.map((r) =>
       r.id === input.ruleId
-        ? stamp(
-            { ...r, enabled: input.enabled },
-            author,
-            at,
-            authored?.get(r.id) ?? r.authoredConsequences,
-          )
+        ? {
+            ...stamp(
+              { ...r, enabled: input.enabled },
+              author,
+              at,
+              authored?.get(r.id) ?? r.authoredConsequences,
+            ),
+            disabledReason: input.enabled ? undefined : r.disabledReason,
+          }
         : r,
     );
     await writeRules(tx, workspaceId, next);

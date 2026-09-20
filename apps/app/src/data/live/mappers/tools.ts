@@ -127,6 +127,7 @@ export function toApprovalRuleSet(
       name: item.name,
       tools: item.tools,
       enabled: item.enabled,
+      disabledReason: item.disabledReason,
       maxMeasures: item.maxMeasures,
       allowTargets: item.allowTargets,
       standingWindowMs: item.standingWindowMs,

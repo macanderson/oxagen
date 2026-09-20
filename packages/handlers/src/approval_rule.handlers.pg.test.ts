@@ -68,7 +68,8 @@ vi.mock("@oxagen/iam/org-role", () => ({
   },
 }));
 
-vi.mock("@oxagen/database/security", () => ({
+vi.mock("@oxagen/database/security", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/database/security")>()),
   emitSecurityEvent: (e: { eventType: string; capability: string | null }) => {
     doubles.events.push({ eventType: e.eventType, capability: e.capability });
   },
@@ -427,6 +428,261 @@ describe.skipIf(!process.env.DATABASE_URL)(
     beforeEach(() => {
       doubles.events.length = 0;
       clearDecisionRulesCache();
+    });
+
+    it("disables a reclassified rule and records its event in Postgres", async () => {
+      const slug = `classify_${tag}`;
+      const tool = await declareCapabilityTool(slug, {
+        declared: [],
+        classified: [],
+      });
+      try {
+        doubles.roles.set(ownerUserId, "Admin");
+        await set(ownerUserId, [
+          {
+            ...RULE,
+            id: "classify-rule",
+            tools: [slug],
+            maxMeasures: {},
+            allowTargets: {},
+          },
+        ]);
+        const { toolClassificationSetHandler } = await import(
+          "./tool.classification.set"
+        );
+        const version = await withSystemDb((tx) =>
+          tx.query.toolVersions.findFirst({
+            where: eq(schema.toolVersions.id, tool.versionId),
+          }),
+        );
+        if (!version) throw new Error("Missing fixture version");
+        await inScope(() =>
+          toolClassificationSetHandler(
+            {
+              toolVersionId: version.publicId,
+              riskGrade: "high",
+              reason: "Funds move",
+              classification: {
+                sideEffect: "write",
+                egress: "local",
+                consequenceTags: ["moves_money"],
+                measures: {},
+                dataClasses: [],
+              },
+            },
+            ctx(ownerUserId),
+          ),
+        );
+        const out = await inScope(() =>
+          approvalRuleListHandler({}, ctx(ownerUserId)),
+        );
+        expect(out.items[0]).toMatchObject({
+          enabled: false,
+          createdBy: ownerPublicId,
+          disabledReason: { code: "classification_changed", tool: `${slug}@1` },
+        });
+        const events = await withSystemDb((tx) =>
+          tx
+            .select()
+            .from(schema.securityEvents)
+            .where(eq(schema.securityEvents.workspaceId, workspaceId)),
+        );
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            eventType: "approval_rule.invalidated",
+            actorUserId: ownerUserId,
+            detail: expect.objectContaining({
+              ruleId: "classify-rule",
+              tool: `${slug}@1`,
+            }),
+          }),
+        );
+      } finally {
+        doubles.roles.set(ownerUserId, "Owner");
+        await removeTools([tool]);
+      }
+    });
+
+    it("keeps rules unchanged when a retained inactive version is classified", async () => {
+      const slug = `inactive_${tag}`;
+      const tool = await declareCapabilityTool(slug, {
+        declared: [],
+        classified: [],
+      });
+      try {
+        await set(ownerUserId, [
+          {
+            ...RULE,
+            id: "inactive-rule",
+            tools: [slug],
+            maxMeasures: {},
+            allowTargets: {},
+          },
+        ]);
+        const before = await settingsOf();
+        const old = await withSystemDb(async (tx) => {
+          const version = await tx.query.toolVersions.findFirst({
+            where: eq(schema.toolVersions.id, tool.versionId),
+          });
+          if (!version) throw new Error("Missing fixture version");
+          const values = { ...version, id: undefined, publicId: undefined };
+          const [retained] = await tx
+            .insert(schema.toolVersions)
+            .values({ ...values, versionNumber: 2, isLatest: false })
+            .returning();
+          if (!retained) throw new Error("Missing retained version");
+          return retained;
+        });
+        const { toolClassificationSetHandler } = await import(
+          "./tool.classification.set"
+        );
+        await inScope(() =>
+          toolClassificationSetHandler(
+            {
+              toolVersionId: old.publicId,
+              riskGrade: "high",
+              reason: "Historical classification",
+              classification: {
+                sideEffect: "write",
+                egress: "local",
+                consequenceTags: ["moves_money"],
+                measures: {},
+                dataClasses: [],
+              },
+            },
+            ctx(ownerUserId),
+          ),
+        );
+        expect(await settingsOf()).toEqual(before);
+        const retained = await withSystemDb((tx) =>
+          tx.query.toolVersions.findFirst({
+            where: eq(schema.toolVersions.id, old.id),
+          }),
+        );
+        expect(retained?.isLatest).toBe(false);
+        expect(retained?.classification).toMatchObject({
+          consequenceTags: ["moves_money"],
+        });
+        await withSystemDb((tx) =>
+          tx
+            .delete(schema.toolVersions)
+            .where(eq(schema.toolVersions.id, old.id)),
+        );
+      } finally {
+        await removeTools([tool]);
+      }
+    });
+
+    it("publishing a changed untagged measure disables the rule before evaluation", async () => {
+      const slug = `measure_${tag}`;
+      const tool = await declareCapabilityTool(slug, {
+        declared: [],
+        classified: [],
+      });
+      const { publishTool } = await import("./lib/tool-registry");
+      const declaration = {
+        orgId,
+        workspaceId,
+        userId: ownerUserId,
+        name: slug,
+        description: "Payment",
+        inputSchema: {},
+        readOnly: false,
+        riskGrade: "low" as const,
+        policyGroup: null,
+        manifest: {},
+        source: "custom" as const,
+        mcpServerId: null,
+        schemaOrigin: "declared" as const,
+        consequenceTags: [],
+      };
+      try {
+        await inScope(() =>
+          publishTool({
+            ...declaration,
+            measures: {
+              amount: {
+                path: "amount.value",
+                type: "amount",
+                unit: "USD",
+                scale: 2,
+              },
+            },
+          }),
+        );
+        await set(ownerUserId, [
+          {
+            ...RULE,
+            id: "measure-rule",
+            tools: [`${slug}@*`],
+            allowTargets: {},
+          },
+        ]);
+        let markLocked = () => undefined as void;
+        let allowPublish = () => undefined as void;
+        const locked = new Promise<void>((resolve) => {
+          markLocked = resolve;
+        });
+        const releasePublish = new Promise<void>((resolve) => {
+          allowPublish = resolve;
+        });
+        const publishing = inScope(() =>
+          publishTool({
+            ...declaration,
+            beforeNewVersion: async () => {
+              markLocked();
+              await releasePublish;
+            },
+            measures: {
+              amount: {
+                path: "fee.value",
+                type: "amount",
+                unit: "USD",
+                scale: 2,
+              },
+            },
+          }),
+        );
+        await Promise.race([locked, publishing]);
+        const { loadRuleSetIn, lockDecisionRulesIn } = await import(
+          "@oxagen/rules"
+        );
+        const reading = inScope(() =>
+          withTenantDb(async (tx) => {
+            await lockDecisionRulesIn(tx, workspaceId);
+            return loadRuleSetIn(tx, workspaceId);
+          }),
+        );
+        allowPublish();
+        await publishing;
+        const rules = await reading;
+        expect(rules?.autoApproval?.[0]).toMatchObject({
+          enabled: false,
+          disabledReason: { code: "measure_changed" },
+        });
+        const { evaluateAutoApproval } = await import("@oxagen/rules");
+        const { buildAutoApprovalSubject } = await import("@oxagen/rules");
+        const evaluated = await inScope(() =>
+          withTenantDb(async (tx) => {
+            const subject = await buildAutoApprovalSubject(tx, {
+              capability: slug,
+              workspaceId,
+              input: { amount: { value: "10000.00" }, fee: { value: "1.00" } },
+              rules: rules?.autoApproval ?? [],
+              now: new Date(),
+            });
+            return evaluateAutoApproval(rules?.autoApproval ?? [], subject);
+          }),
+        );
+        expect(evaluated?.ok ?? false).toBe(false);
+      } finally {
+        await withSystemDb(async (tx) => {
+          await tx.delete(schema.tools).where(eq(schema.tools.id, tool.toolId));
+          await tx
+            .delete(schema.toolVersions)
+            .where(eq(schema.toolVersions.toolId, tool.toolId));
+        });
+      }
     });
 
     // ── set ──────────────────────────────────────────────────────────────────

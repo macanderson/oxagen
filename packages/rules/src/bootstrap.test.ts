@@ -1,14 +1,4 @@
-/**
- * The loader's caching and degradation contract, and the one-shot wiring.
- *
- * Two properties are worth a test rather than a reading. The cache must serve
- * a negative result — most workspaces author no rules, and a miss that still
- * reads the settings row puts the table on the hot path of every tool call,
- * which is the whole reason the cache exists. And a stored rule set that no
- * longer parses must degrade to ungoverned-with-alarm rather than failing
- * every agent action, because `workspace.settings.write` is a generic merge
- * with no schema for this key yet.
- */
+/** Immediate rule reloads, malformed-document handling, and bootstrap wiring. */
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { RuleSet } from "./types";
 import type { DecisionRulesGateFn } from "./gate";
@@ -89,24 +79,24 @@ describe("loadWorkspaceRuleSet", () => {
     });
   });
 
-  test("a second read inside the TTL is served from cache", async () => {
+  test("a second read immediately reloads committed rules", async () => {
     const { loadWorkspaceRuleSet } = await freshModule();
     findFirst.mockResolvedValue({ settings: { decisionRules: RULES } });
 
     await loadWorkspaceRuleSet(WS);
     await loadWorkspaceRuleSet(WS);
 
-    expect(findFirst).toHaveBeenCalledTimes(1);
+    expect(findFirst).toHaveBeenCalledTimes(2);
   });
 
-  test("the absence of rules is cached too, not re-read every call", async () => {
+  test("the absence of rules is rechecked on every call", async () => {
     const { loadWorkspaceRuleSet } = await freshModule();
     findFirst.mockResolvedValue({ settings: {} });
 
     await expect(loadWorkspaceRuleSet(WS)).resolves.toBeNull();
     await expect(loadWorkspaceRuleSet(WS)).resolves.toBeNull();
 
-    expect(findFirst).toHaveBeenCalledTimes(1);
+    expect(findFirst).toHaveBeenCalledTimes(2);
   });
 
   test("a missing workspace row reads as no rules", async () => {
