@@ -293,6 +293,36 @@ describe("RuleEditor › create", () => {
 });
 
 describe("RuleEditor › edit", () => {
+  it("keeps the rule that opened the editor as the conflict baseline", async () => {
+    saveApprovalRule.mockResolvedValue({
+      ok: true,
+      value: { ruleId: "small-refunds" },
+    });
+    const original = rule("small-refunds");
+    const view = withIntl(<RuleEditor at={at} existing={original} />);
+    const dialog = await openEditor("rule-edit-small-refunds");
+
+    // A streamed refresh can replace the prop while the uncontrolled fields
+    // still contain the values that opened the dialog. The conflict token must
+    // describe those visible fields, not the newer prop received afterward.
+    view.rerender(
+      <IntlProvider>
+        <RuleEditor at={at} existing={{ ...original, enabled: false }} />
+      </IntlProvider>,
+    );
+    fireEvent.submit(formOf(within(dialog).getByText("Save rule")));
+
+    await waitFor(() => {
+      expect(saveApprovalRule).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        "edit",
+        expect.objectContaining({ enabled: true }),
+        rendered("small-refunds"),
+      );
+    });
+  });
+
   it("opens on the rule as it is written and writes it back unchanged when nothing was edited", async () => {
     saveApprovalRule.mockResolvedValue({
       ok: true,
