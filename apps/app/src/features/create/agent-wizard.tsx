@@ -9,6 +9,7 @@
 // New agent is not Register an agent. Register wraps an agent that already
 // runs somewhere and mints its identity; this writes one that does not exist
 // yet, and writes no row. The describe step says so.
+import { SUBAGENT_FILE_HARNESSES } from "@oxagen/oxagen/contracts/agent.propose";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import type { ActionResult } from "@/server/kernel";
@@ -523,12 +524,14 @@ function PullRequestStep({ api, ctx }: StepProps<AgentDraft>) {
       path: `.oxagen/agents/${file.slug}.toml`,
       note: t("fileDefinition"),
     },
-    {
+  ];
+  if (d.harness !== null && SUBAGENT_FILE_HARNESSES.includes(d.harness)) {
+    files.push({
       change: "add",
       path: `.claude/agents/${file.slug}.md`,
       note: t("fileGenerated"),
-    },
-  ];
+    });
+  }
   const repo = ctx.repo;
   return (
     <div className="flex flex-col gap-3">

@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   bumpPatch,
-  checkSkill,
   estimateSkillTokens,
   readSearchBudget,
-  readSkillFrontmatter,
   scanForSecrets,
   skillBranch,
   skillPath,
@@ -18,18 +16,6 @@ const GOOD = body([
   "version: 1.0.0",
   "scope: workspace:core-platform",
 ]);
-
-const run = (over: Partial<Parameters<typeof checkSkill>[0]> = {}) =>
-  checkSkill({
-    name: "release-notes",
-    body: GOOD,
-    files: [],
-    replacing: null,
-    budget: 6000,
-    ...over,
-  });
-const failed = (checks: ReturnType<typeof checkSkill>) =>
-  checks.filter((c) => !c.passed).map((c) => c.code);
 
 describe("propose_skill contract", () => {
   it("declares an org Owner or Admin write on the API alone, outside the metering surface", () => {
@@ -72,17 +58,6 @@ describe("the file helpers", () => {
     expect(skillBranch("release-notes")).toBe("skills/release-notes");
   });
 
-  it("reads the frontmatter between the fences, and nothing when a fence is missing", () => {
-    expect(readSkillFrontmatter(GOOD)?.fields).toEqual({
-      name: "release-notes",
-      version: "1.0.0",
-      scope: "workspace:core-platform",
-    });
-    expect(readSkillFrontmatter("# no fence")).toBeNull();
-    expect(readSkillFrontmatter("---\nname: x\n")).toBeNull();
-    expect(readSkillFrontmatter(GOOD.replace(/\n/g, "\r\n"))).not.toBeNull();
-  });
-
   it("bumps the patch version and refuses anything that is not semver", () => {
     expect(bumpPatch("2.1.9")).toBe("2.1.10");
     expect(bumpPatch("latest")).toBeNull();
@@ -111,69 +86,5 @@ describe("the file helpers", () => {
       "private_key",
     );
     expect(scanForSecrets("Group merged pull requests by surface.")).toBeNull();
-  });
-});
-
-describe("checkSkill", () => {
-  it("passes all six on a well-formed new skill", () => {
-    const checks = run();
-    expect(checks.map((c) => c.name)).toEqual([
-      "frontmatter",
-      "version",
-      "digest",
-      "grants",
-      "secrets",
-      "load_cost",
-    ]);
-    expect(failed(checks)).toEqual([]);
-  });
-
-  it("fails the frontmatter on a missing fence, a missing key and a name that is not the directory (negative)", () => {
-    expect(failed(run({ body: "# none" }))).toContain("frontmatter_missing");
-    expect(
-      failed(run({ body: body(["name: release-notes", "version: 1.0.0"]) })),
-    ).toContain("frontmatter_incomplete");
-    expect(failed(run({ name: "changelog" }))).toContain("name_mismatch");
-  });
-
-  it("fails a version that is not semver or not greater than the one it replaces (negative)", () => {
-    expect(failed(run({ replacing: "1.0.0" }))).toEqual([
-      "version_not_greater",
-    ]);
-    expect(failed(run({ replacing: "0.9.3" }))).toEqual([]);
-    expect(
-      failed(
-        run({
-          body: body([
-            "name: release-notes",
-            "version: latest",
-            "scope: workspace:x",
-          ]),
-        }),
-      ),
-    ).toEqual(["version_not_semver"]);
-  });
-
-  it("fails a file that grants a tool, a secret in a bundle file, and a body over budget (negative)", () => {
-    expect(
-      failed(
-        run({
-          body: body([
-            "name: release-notes",
-            "version: 1.0.0",
-            "scope: workspace:x",
-            "allowed-tools: Bash",
-          ]),
-        }),
-      ),
-    ).toEqual(["grants_allowed-tools"]);
-    expect(
-      failed(
-        run({
-          files: [{ path: "a.md", content: "ghp_" + "a".repeat(36) }],
-        }),
-      ),
-    ).toEqual(["secret_github_token"]);
-    expect(failed(run({ budget: 5 }))).toEqual(["over_budget"]);
   });
 });

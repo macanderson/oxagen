@@ -110,7 +110,7 @@ const googleCalendar: ConnectorDefinition<Config> = {
       watchUrl:
         "https://www.googleapis.com/calendar/v3/calendars/primary/events/watch",
       webhookUrl,
-      recordTypes: ["calendar_event"],
+      recordTypes: ["event"],
     });
   },
 

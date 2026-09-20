@@ -325,3 +325,30 @@ describe("findOpenPullRequest", () => {
     );
   });
 });
+
+describe("deleteFile", () => {
+  it("deletes the omitted file with its current blob SHA on the proposal branch", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse({ sha: "blob-sha" }))
+      .mockResolvedValueOnce(makeResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+    await createGitHubClient({ token: "tok" }).deleteFile({
+      owner: "o",
+      repo: "r",
+      path: "skill/old.md",
+      branch: "skills/example",
+      message: "Remove omitted file",
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.github.com/repos/o/r/contents/skill/old.md?ref=skills%2Fexample",
+    );
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(init.method).toBe("DELETE");
+    expect(JSON.parse(init.body as string)).toEqual({
+      sha: "blob-sha",
+      branch: "skills/example",
+      message: "Remove omitted file",
+    });
+  });
+});

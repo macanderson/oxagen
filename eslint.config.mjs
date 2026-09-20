@@ -115,6 +115,11 @@ export default tseslint.config(
     files: ["**/*.mjs", "**/*.config.ts", "**/*.config.mts", "**/*.config.cts"],
     ...tseslint.configs.disableTypeChecked,
   },
+  // Browser scripts have no TypeScript project. Keep syntax rules active.
+  {
+    files: ["tools/env-manager/public/*.js"],
+    ...tseslint.configs.disableTypeChecked,
+  },
   // The seam-owning packages legitimately use their own raw clients.
   {
     files: [
