@@ -638,7 +638,7 @@
         "name": "Name",
         "nameHint": "Up to 120 characters.",
         "transport": "Transport",
-        "transportHint": "The two transports registration accepts. A server carrying SSE was written by a plugin install, not here.",
+        "transportHint": "Register an HTTP endpoint. SSE servers are installed through plugins.",
         "endpoint": "Endpoint URL",
         "endpointHint": "An address reachable from the public internet. One that resolves inside this deployment is refused, because the health check carries the auth config to it.",
         "authStrategy": "Auth",

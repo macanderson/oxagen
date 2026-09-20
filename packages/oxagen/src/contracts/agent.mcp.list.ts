@@ -27,6 +27,7 @@ export const agentMcpList = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
+  noBillingGate: true,
   agent: {
     requiresApproval: false,
     riskLevel: "low",

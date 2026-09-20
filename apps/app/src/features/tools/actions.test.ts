@@ -806,7 +806,7 @@ describe("addConnection", () => {
         authCredential: {
           scheme: "bearer_token",
           type: "bearer_token",
-          token: "tok-live-secret",
+          token: " tok-live-secret ",
         },
       },
       expect.objectContaining(TENANT),
@@ -946,7 +946,7 @@ describe("registerServer", () => {
     invoke.mockResolvedValue(output);
     await registerServer("acme", "core-platform", {
       name: "Notion",
-      transportType: "stdio",
+      transportType: "streamable-http",
       endpointUrl: "https://mcp.notion.example/v1",
       authStrategy: "none",
       authConfig: {},
@@ -955,7 +955,7 @@ describe("registerServer", () => {
       "register_mcp_server",
       {
         name: "Notion",
-        transportType: "stdio",
+        transportType: "streamable-http",
         endpointUrl: "https://mcp.notion.example/v1",
         authStrategy: "none",
       },
@@ -988,7 +988,7 @@ describe("registerServer", () => {
     expect(
       await registerServer("acme", "core-platform", {
         name: "Notion",
-        transportType: "stdio",
+        transportType: "streamable-http",
         endpointUrl: "https://mcp.notion.example/v1",
         authStrategy: "none",
         authConfig: {},

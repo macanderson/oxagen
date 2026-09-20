@@ -7,7 +7,7 @@
 // registry until the import above runs. The dialog says what was discovered
 // and stops there.
 //
-// The transport select offers the two `register_mcp_server` accepts. A server
+// The form offers HTTP, which the runtime can connect to. A server
 // carrying `sse` exists in the table and was written by a plugin install, so
 // the list admits that word and this form does not offer it.
 //
@@ -33,7 +33,7 @@ import { parseMeasureLines, textValue, type ToolsAt } from "./view";
 
 const TESTID = "server-register";
 
-/** A form value as one of the two transports registration accepts. */
+/** A form value as a supported endpoint transport. */
 function transportOf(raw: string): RegisterableMcpTransport {
   return (
     REGISTERABLE_MCP_TRANSPORTS.find((option) => option === raw) ??
@@ -181,14 +181,6 @@ export function RegisterServer({ at }: { at: ToolsAt }) {
               <p className="text-xs text-muted-foreground">
                 {t("transportHint")}
               </p>
-              {transport === "stdio" ? (
-                <p
-                  data-testid={`${TESTID}-stdio`}
-                  className="text-xs text-muted-foreground"
-                >
-                  {t("stdioNote")}
-                </p>
-              ) : null}
             </div>
             <div className="flex min-w-0 flex-col gap-1.5">
               <label

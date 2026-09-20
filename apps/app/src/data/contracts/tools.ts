@@ -352,11 +352,8 @@ export const MCP_TRANSPORTS = ["streamable-http", "sse", "stdio"] as const;
 export const McpTransport = z.enum(MCP_TRANSPORTS);
 export type McpTransport = z.infer<typeof McpTransport>;
 
-/** The two transports `register_mcp_server` accepts, in the order the form offers them. */
-export const REGISTERABLE_MCP_TRANSPORTS = [
-  "streamable-http",
-  "stdio",
-] as const;
+/** Transports the endpoint registration form can configure and run. */
+export const REGISTERABLE_MCP_TRANSPORTS = ["streamable-http"] as const;
 export const RegisterableMcpTransport = z.enum(REGISTERABLE_MCP_TRANSPORTS);
 export type RegisterableMcpTransport = z.infer<typeof RegisterableMcpTransport>;
 

@@ -12,7 +12,6 @@
 // ledger is drawn with no grant offered and the server action is mocked the
 // way `grant-mandate.test.tsx` mocks it.
 import { cleanup, render, screen, within } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/read";
 import { routes } from "@/shared/safe-path";

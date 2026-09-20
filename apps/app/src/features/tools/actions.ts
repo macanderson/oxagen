@@ -465,8 +465,8 @@ export async function addConnection(
   const fields = CONNECTION_SCHEMES[draft.scheme];
   const secrets: Record<string, string> = {};
   for (const field of fields) {
-    const value = draft.secrets[field]?.trim() ?? "";
-    if (value === "") return refuseConnection("secrets");
+    const value = draft.secrets[field] ?? "";
+    if (value.trim() === "") return refuseConnection("secrets");
     secrets[field] = value;
   }
   const deliveryMethod = draft.deliveryMethod.trim();

@@ -14,9 +14,8 @@ interface McpServerFilter {
 
 /**
  * An enabled, not soft-deleted server whose `plugin.installed_plugins` row is
- * enabled and not soft-deleted, with health `healthy` or `unknown`. A server
- * with no listing (`org_listing_id` NULL) has no install row and is not
- * loaded; neither is one whose install an org admin turned off.
+ * enabled and not soft-deleted, with health `healthy` or `unknown`. Standalone
+ * HTTP servers need no install row. A linked install must remain active.
  */
 export function selectMaterializableMcpServers(
   tx: Tx,
@@ -39,7 +38,7 @@ export function selectMaterializableMcpServers(
       authKind: schema.pluginInstalledPlugins.authKind,
     })
     .from(schema.mcpServers)
-    .innerJoin(
+    .leftJoin(
       schema.pluginInstalledPlugins,
       eq(schema.mcpServers.orgListingId, schema.pluginInstalledPlugins.id),
     )
@@ -60,8 +59,16 @@ export function selectMaterializableMcpServers(
           eq(schema.mcpServers.healthStatus, "healthy"),
           eq(schema.mcpServers.healthStatus, "unknown"),
         ),
-        eq(schema.pluginInstalledPlugins.enabled, true),
-        isNull(schema.pluginInstalledPlugins.deletedAt),
+        or(
+          and(
+            isNull(schema.mcpServers.orgListingId),
+            eq(schema.mcpServers.transportType, "streamable-http"),
+          ),
+          and(
+            eq(schema.pluginInstalledPlugins.enabled, true),
+            isNull(schema.pluginInstalledPlugins.deletedAt),
+          ),
+        ),
         allowlist,
       ),
     );

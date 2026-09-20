@@ -20,6 +20,7 @@ const dbMocks = vi.hoisted(() => {
   const schema = {
     mcpServers: {
       orgId: "mcp.orgId",
+      transportType: "mcp.transportType",
       workspaceId: "mcp.workspaceId",
       enabled: "mcp.enabled",
       // soft-delete column the contributor now filters on.
@@ -45,7 +46,7 @@ const dbMocks = vi.hoisted(() => {
     select: () => ({
       from: (t: unknown) => {
         const result = rowsByTable.get(t) ?? [];
-        const chain = { innerJoin: () => chain, where: async () => result };
+        const chain = { leftJoin: () => chain, where: async () => result };
         return chain;
       },
     }),

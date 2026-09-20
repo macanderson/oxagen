@@ -9,6 +9,7 @@ export const connectionGet = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "medium",
   mutates: false,

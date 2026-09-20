@@ -141,7 +141,7 @@ describe("Servers", () => {
 });
 
 describe("RegisterServer", () => {
-  it("offers only the two transports the contract accepts", () => {
+  it("offers only the HTTP transport the runtime supports", () => {
     renderServers();
     fireEvent.click(screen.getByTestId("server-register-open"));
     const options = within(screen.getByLabelText("Transport")).getAllByRole(
@@ -149,7 +149,6 @@ describe("RegisterServer", () => {
     );
     expect(options.map((option) => option.textContent)).toEqual([
       "streamable-http",
-      "stdio",
     ]);
   });
 
@@ -211,15 +210,6 @@ describe("RegisterServer", () => {
       }
     }
     expect(document.body.textContent).not.toContain("secret-value");
-  });
-
-  it("says a stdio server is not probed from here", () => {
-    renderServers();
-    fireEvent.click(screen.getByTestId("server-register-open"));
-    fireEvent.change(screen.getByLabelText("Transport"), {
-      target: { value: "stdio" },
-    });
-    expect(screen.getByTestId("server-register-stdio")).toBeVisible();
   });
 
   it("refuses an auth config line with no value rather than dropping it", async () => {
