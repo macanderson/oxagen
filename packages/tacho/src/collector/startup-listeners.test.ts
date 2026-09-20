@@ -54,12 +54,24 @@ describe("collector startup ownership", () => {
     const failed = idleServer();
     const replacement = idleServer();
     try {
+      // The errno for "the parent directory is not there" is not the same on
+      // every platform. Binding a Unix socket under a missing directory gives
+      // ENOENT on macOS and EACCES on Linux, so pinning one of them asserts
+      // the author's machine rather than the behaviour: #3599 pinned ENOENT,
+      // passed locally, and reddened main on the Linux runner.
+      //
+      // What this test is named for is the release, so the bind has to fail
+      // for a reason that is about the path, and the next assertion is the
+      // subject. Accepting either code still refuses EADDRINUSE, which is the
+      // failure that would mean the TCP reservation leaked instead.
       await expect(
         failed.listen({
           port,
           socketPath: join(paths.root, "missing", "daemon.sock"),
         }),
-      ).rejects.toMatchObject({ code: "ENOENT" });
+      ).rejects.toMatchObject({
+        code: expect.stringMatching(/^(?:ENOENT|EACCES)$/),
+      });
       await expect(replacement.listen({ port })).resolves.toEqual({ port });
     } finally {
       await failed.close();
