@@ -44,7 +44,7 @@ CONTEXT you must read before editing (paths relative to the repo root):
 The app: routes under apps/app/src/app/[org]/..., feature lanes under apps/app/src/features/<page>/, view models under apps/app/src/data/contracts/, live adapters and mappers under apps/app/src/data/live/, the UI kit under apps/app/src/ui/ imported as @/ui/<name>, messages under apps/app/messages/. Server writes go through the kernel seam in apps/app/src/server/kernel.ts, never a raw invoke.
 `
 
-const RESULT = {
+const RESULT_FIELDS = {
   type: 'object',
   properties: {
     lane: { type: 'string' },
@@ -60,8 +60,31 @@ const RESULT = {
     open_gaps: { type: 'array', items: { type: 'string' } },
     defects_fixed: { type: 'array', items: { type: 'string' } },
   },
-  required: ['lane', 'branch', 'summary', 'ci_state', 'open_gaps'],
 }
+
+const LANE_RESULT = {
+  ...RESULT_FIELDS,
+  required: ['lane', 'branch', 'head_sha', 'summary', 'ci_state', 'open_gaps'],
+}
+const INTEGRATION_RESULT = {
+  ...RESULT_FIELDS,
+  required: ['branch', 'head_sha', 'pr_url', 'summary', 'ci_state', 'open_gaps'],
+}
+const REMOTE_HEAD = {
+  type: 'object',
+  properties: { branch: { type: 'string' }, head_sha: { type: 'string' }, exists: { type: 'boolean' } },
+  required: ['branch', 'head_sha', 'exists'],
+}
+
+function validLane(result) {
+  return result && typeof result.branch === 'string'
+    && /^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(result.branch)
+    && !result.branch.includes('..') && !result.branch.includes('//')
+    && !result.branch.endsWith('/') && !result.branch.endsWith('.')
+    && !result.branch.split('/').some(part => part.startsWith('.') || part.endsWith('.lock'))
+    && /^[a-f0-9]{40}$/.test(result.head_sha || '')
+}
+
 
 const SCOUT = {
   type: 'object',
@@ -133,7 +156,7 @@ function integratePrompt(session, built, base) {
   return `${RULES}\n${CONTEXT}
 TASK: Integrate session ${session.id} (${session.title}) into one PR.
 1. git fetch origin && git worktree add ${wt(session.id)} -b mc/${session.id} ${base}; push -u.
-2. git merge (never rebase) each finished lane branch: ${built.map(b => b.branch).join(', ')}. Resolve conflicts in messages, capability-ui-map.json, data/contracts, and ports by keeping both lanes' hunks. ${cfg.mergeMain ? 'Then merge origin/main.' : ''}
+2. git merge (never rebase) each verified lane commit: ${built.map(b => `${b.head_sha} (refs/heads/${b.branch})`).join(', ')}. Verify each fetched remote branch still points to its reported SHA before merging; stop on a mismatch. Resolve conflicts in messages, capability-ui-map.json, data/contracts, and ports by keeping both lanes' hunks. ${cfg.mergeMain ? 'Then merge origin/main.' : ''}
    Lane summaries: ${JSON.stringify(built.map(b => ({ lane: b.lane, branch: b.branch, summary: b.summary, gaps: b.open_gaps, deviations: b.spec_deviations })))}
 3. Read the combined diff once, end to end, against docs/mission-control/BUILD-CHUNKS.md §${session.id} and the spec sections it names. Fix anything missing or inconsistent. Run the generators whose --check would fail (gen:messages, docs:schemas) and commit their output. Update apps/app/e2e/routes.ts for any new route.
 4. Update apps/app/ARCHITECTURE.md §1.2 rows the session changes, and tick the session's "Done when" boxes in docs/mission-control/BUILD-CHUNKS.md that are now true. Commit and push.
@@ -147,7 +170,7 @@ function reviewPrompt(session, pr, specHint) {
   return `${RULES}\n${CONTEXT}
 TASK: Cold review of PR ${pr.pr_url} (branch ${pr.branch}, worktree ${pr.worktree || wt(session.id)}) for session ${session.id} (${session.title}).
 Review against: ${specHint}. Check spec fidelity (states, copy, entry points), tenancy and IAM on every new handler or action (withTenantDb, assertOrgRole where an org role is required), capability parity and the ui-map binding with a real proof file, every trust badge honest to the record, a test beside every new component and action, and clear-prose on every string.
-Fix every P0 and P1 you confirm directly on the branch, commit, push, and watch CI green again (up to three rounds). Carry P2 and below into ONE residue issue titled "Residue from #<PR>: <what is left>" with each finding verbatim, its file and line, why it matters, the pillar it moves, and a "- [ ]" DoD; apply only the triage label. Then, per AGENTS.md (Residue merges), reply on every carried thread that the finding stands and names the residue issue, and resolve that thread: resolving is an acceptance, not a dismissal. Leave a P0 or P1 thread open only if you could not fix it, and say why on the thread. Return what you fixed, what remains with severities, the residue issue URL, and the final ci_state.`
+Fix every P0 and P1 you confirm directly on the branch, commit, push, and watch CI green again (up to three rounds). Carry P2 and below into one residue issue by default; split genuinely unrelated changes so each issue has exactly one kind, one job, and one full change per DoD (SCR-003). Title each issue "Residue from #<PR>: <what is left>" with each finding verbatim, its file and line, why it matters, the pillar it moves, and a "- [ ]" DoD; apply only the triage label. Then, per AGENTS.md (Residue merges), reply on every carried thread that the finding stands and names the residue issue, and resolve that thread: resolving is an acceptance, not a dismissal. Leave a P0 or P1 thread open only if you could not fix it, and say why on the thread. Return what you fixed, what remains with severities, the residue issue URL, and the final ci_state.`
 }
 
 async function runSession(session, specHint) {
@@ -165,12 +188,32 @@ async function runSession(session, specHint) {
   if (cfg.dryRun) { log('dry run: returning scout only'); return { session: session.id, scout, would_build: active.map(l => l.id) } }
 
   phase('Build')
-  const built = (await parallel(active.map(l => () => agent(
+  const reported = (await parallel(active.map(l => () => agent(
     lanePrompt(session, l, (scout.lanes.find(x => x.id === l.id) || {}).facts, base),
-    { label: `lane:${l.id}`, phase: 'Build', schema: RESULT, agentType: 'general-purpose' },
+    { label: `lane:${l.id}`, phase: 'Build', schema: LANE_RESULT, agentType: 'general-purpose' },
   )))).filter(Boolean)
+  const built = []
+  for (const result of reported) {
+    if (!validLane(result) || !active.some(l => l.id === result.lane)
+      || reported.filter(other => other.lane === result.lane).length !== 1) {
+      log('invalid or duplicate lane result; stopping before integration')
+      return { session: session.id, scout, error: 'invalid lane result', reported }
+    }
+    const remote = await agent(
+      `Read-only verification. Run git ls-remote --heads origin refs/heads/${result.branch} in the repository. Return exists=false if absent or the command fails; otherwise return the exact remote branch and 40-character head SHA. Do not edit files or push.`,
+      { label: `verify:${result.lane}`, phase: 'Build', schema: REMOTE_HEAD, agentType: 'general-purpose' },
+    )
+    if (!remote || !remote.exists || remote.branch !== result.branch || remote.head_sha !== result.head_sha) {
+      log(`lane ${result.lane} has no matching remote head; stopping before integration`)
+      return { session: session.id, scout, error: 'remote head mismatch', reported }
+    }
+    built.push(result)
+  }
   const failed = active.filter(l => !built.find(b => b.lane === l.id)).map(l => l.id)
-  if (failed.length) log(`lanes that returned nothing: ${failed.join(', ')}; the integrator is told to build them`)
+  if (failed.length) {
+    log(`lanes that returned nothing: ${failed.join(', ')}; stopping before integration`)
+    return { session: session.id, scout, built, failed, error: 'missing lane result' }
+  }
   // A lane with integrate: false works on branches that are not this session's
   // (an existing PR, a maintenance task). Its result is reported, never merged.
   const sidecar = built.filter(b => (session.lanes.find(l => l.id === b.lane) || {}).integrate === false)
@@ -180,10 +223,10 @@ async function runSession(session, specHint) {
 
   phase('Integrate')
   const pr = await agent(
-    integratePrompt(session, mergeable, base) + (failed.length ? `\nNOTE: lanes ${failed.join(', ')} returned nothing. Read their branch if one was pushed (mc/${session.id}-<lane>), finish the work yourself from BUILD-CHUNKS.md, then continue.` : ''),
-    { label: `integrate:${session.id}`, phase: 'Integrate', schema: RESULT, agentType: 'general-purpose' },
+    integratePrompt(session, mergeable, base),
+    { label: `integrate:${session.id}`, phase: 'Integrate', schema: INTEGRATION_RESULT, agentType: 'general-purpose' },
   )
-  if (!pr || !pr.pr_url) return { session: session.id, scout, built: mergeable, sidecar, failed, pr }
+  if (!validLane(pr) || !pr.pr_url) return { session: session.id, scout, built: mergeable, sidecar, failed, pr }
 
   phase('Review')
   const review = await agent(reviewPrompt(session, pr, specHint), { label: `review:${session.id}`, phase: 'Review', schema: REVIEW, agentType: 'general-purpose' })
@@ -216,10 +259,10 @@ const session = {
     },
     {
       id: 'policy', title: 'Policy tab: mandates, approval rules, and kill switches in one view with their owning pages',
-      owns: ['apps/app/src/features/steering/policy*.tsx (new) and tests', 'apps/app/src/data/live/steering.ts (policy reads, composing existing ports)', 'apps/app/messages/steering.json (policy keys block)', 'apps/app/capability-ui-map.json (also entries on list_mandates, list_approval_rules, list_kill_switches for the Steering page)', 'tools/scripts/check_ui_parity.mjs and its test only if also support is absent on main'],
+      owns: ['packages/oxagen/src/contracts for list_mandates and list_kill_switches pagination', 'their handlers and co-located tests', 'API, MCP and CLI adapters and capability docs for changed contracts', 'apps/app/src/data/contracts and ports (policy pagination blocks)', 'apps/app/src/features/steering/policy*.tsx (new) and tests', 'apps/app/src/data/live/steering.ts (policy reads, composing existing ports)', 'apps/app/messages/steering.json (policy keys block)', 'apps/app/capability-ui-map.json (also entries on list_mandates, list_approval_rules, list_kill_switches for the Steering page)', 'tools/scripts/check_ui_parity.mjs and its test only if also support is absent on main'],
       checks: ['list_mandates, list_approval_rules, list_kill_switches are registered; the first and third are bound to Tools', 'gate notices (ADR-097 §3) are compiled in Phase 1 and do not exist'],
       issues: ['#3297'],
-      task: `Build the Policy tab as a read view of the gates that steer: active mandates, enabled approval rules, and kill switches that are on, each row linking to the page that edits it (the mandate page, Tools › auto-approvals, Tools › switches). For the one-line gate notice each gate will emit into steering (ADR-097 §3), render the NotBacked line naming Phase 1, not an invented sentence. Add an also entry on each of the three capabilities for the Steering page with the tab's test as proof, keeping their Tools and Agents bindings. The map holds one object per capability and the checker reads only bindings[name].page and .proof, so a second page is written as an also array entry ({route, page, proof}) that session 0's parity lane taught check_ui_parity.mjs to validate like the primary. If also is not yet supported on the main you branch from, add that support in this lane (checker, its test, and the $binding_shape doc) rather than duplicating the key or inventing a shape.`,
+      task: `First remove silent list truncation: list_mandates caps at 100 and list_kill_switches at 200. Add backward-compatible cursor pagination with deterministic ordering and tenant-scoped cursors through contracts, handlers and the parity chain, then make the policy reader consume every page. Test more than 100 mandates and 200 switches, later-page active rows, tenant isolation and later-page errors. A failed page must show an error, never a complete-looking partial list. Build the Policy tab as a read view of the gates that steer: active mandates, enabled approval rules, and kill switches that are on, each row linking to the page that edits it (the mandate page, Tools › auto-approvals, Tools › switches). For the one-line gate notice each gate will emit into steering (ADR-097 §3), render the NotBacked line naming Phase 1, not an invented sentence. Add an also entry on each of the three capabilities for the Steering page with the tab's test as proof, keeping their Tools and Agents bindings. The map holds one object per capability and the checker reads only bindings[name].page and .proof, so a second page is written as an also array entry ({route, page, proof}) that session 0's parity lane taught check_ui_parity.mjs to validate like the primary. If also is not yet supported on the main you branch from, add that support in this lane (checker, its test, and the $binding_shape doc) rather than duplicating the key or inventing a shape.`,
       done: 'The Policy tab lists every active gate with a link to its editor and says honestly that gate notices arrive with Phase 1; tests cover the three lists and the empty state.',
     },
   ],
