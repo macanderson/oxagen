@@ -6,6 +6,7 @@
 import { Command } from "commander";
 import { runHookProcess } from "../claude-code/hook-process";
 import { runDaemonProcess } from "../collector/run";
+import { addArpCommands } from "./arp";
 import { defaultCliDeps, isNativeBuild } from "./deps";
 import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
@@ -253,6 +254,7 @@ export function buildTachoProgram(): Command {
       await runHookProcess(process.argv);
     });
 
+  addArpCommands(program, deps);
   return program;
 }
 

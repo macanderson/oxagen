@@ -25,6 +25,7 @@
     "compile": "pnpm run bundle && node ../../tools/sea/compile.mjs --entry dist-standalone/sea/tacho.cjs --name tacho --out dist-bin"
   },
   "dependencies": {
+    "@contextgraphprotocol/typescript-sdk": "0.1.0",
     "canonicalize": "1.0.8",
     "commander": "12.1.0",
     "zod": "3.25.76"
