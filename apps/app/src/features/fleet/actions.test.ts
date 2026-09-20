@@ -17,6 +17,17 @@
 // a row (INV-29). What the app owes is that each refusal comes back as a
 // refusal with the handler's reason in `code`, and that a decision the kernel
 // refused sends exactly one call, so no ledger row could have moved.
+//
+// The Fleet row command through the real kernel seam: the viewer resolution
+// and the kernel's invoke() are the only fakes, so each case shows what the
+// person gets back and whether the capability ran (INV-19).
+//
+// Three rules the tests hold it to, because breaking any of them would let a
+// row claim more than the control plane did: the command carries this run as
+// its target and nothing wider, a command outside the three a row sends is
+// refused before the kernel, and no payload is ever attached, which
+// `dispatch_command` refuses on pause, resume and cancel.
+import { COMMAND_REASON_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
@@ -41,9 +52,8 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { readApprovalEligibility, resolveApprovalAction } = await import(
-  "./actions"
-);
+const { dispatchRunCommand, readApprovalEligibility, resolveApprovalAction } =
+  await import("./actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -58,6 +68,12 @@ const ctx = unsafeMint(WsCtx, {
 });
 
 const APPROVAL = "apr_q8t1";
+const RUN = "tse_7k2m9q";
+const TENANT = {
+  orgId: ctx.orgId,
+  workspaceId: ctx.workspaceId,
+  surface: "app",
+};
 
 /** The settlement `resolve_approval` answers on a row the mandate gate parked. */
 const settled = {
@@ -260,5 +276,89 @@ describe("readApprovalEligibility", () => {
     );
     // A card on the Run page reports the Run page's permission, not Fleet's.
     expect(result).toEqual({ ok: false, reason: "denied", code: "run.read" });
+  });
+});
+
+describe("dispatchRunCommand", () => {
+  it.each(["pause", "resume", "cancel"] as const)(
+    "queues a %s against this run alone and answers the command ids",
+    async (command) => {
+      invoke.mockResolvedValue({ commandIds: ["tcm_1"] });
+      expect(
+        await dispatchRunCommand(
+          "acme",
+          "core-platform",
+          RUN,
+          command,
+          "  releasing 3.2  ",
+        ),
+      ).toEqual({ ok: true, value: { commandIds: ["tcm_1"] } });
+      expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+      expect(invoke).toHaveBeenCalledWith(
+        "dispatch_command",
+        {
+          target: { kind: "run", id: RUN },
+          command,
+          reason: "releasing 3.2",
+        },
+        expect.objectContaining(TENANT),
+      );
+    },
+  );
+
+  it("omits an empty reason rather than sending the blank string the contract refuses", async () => {
+    invoke.mockResolvedValue({ commandIds: ["tcm_1"] });
+    await dispatchRunCommand("acme", "core-platform", RUN, "pause", "   ");
+    expect(invoke).toHaveBeenCalledWith(
+      "dispatch_command",
+      { target: { kind: "run", id: RUN }, command: "pause" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("carries an empty command id list through as the control plane wrote it", async () => {
+    invoke.mockResolvedValue({ commandIds: [] });
+    expect(
+      await dispatchRunCommand("acme", "core-platform", RUN, "cancel", ""),
+    ).toEqual({ ok: true, value: { commandIds: [] } });
+  });
+
+  it("refuses a command a row does not send, before the kernel runs (negative)", async () => {
+    expect(
+      await dispatchRunCommand("acme", "core-platform", RUN, "steer", "go on"),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "row_command",
+      field: "command",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a reason past the contract's ceiling before the kernel runs (negative)", async () => {
+    expect(
+      await dispatchRunCommand(
+        "acme",
+        "core-platform",
+        RUN,
+        "pause",
+        "x".repeat(COMMAND_REASON_MAX + 1),
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "command_reason",
+      field: "reason",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("carries a denial back as denied with the permission the kernel named (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.CapabilityError("dispatch_command", "authz_denied", "denied"),
+    );
+    expect(
+      await dispatchRunCommand("acme", "core-platform", RUN, "pause", ""),
+    ).toMatchObject({ ok: false, reason: "denied" });
   });
 });

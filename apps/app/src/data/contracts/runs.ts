@@ -57,6 +57,19 @@ export type ProofVerdict = z.infer<typeof ProofVerdict>;
 export const EnforcementTier = z.enum(["gateway", "harness", "observe"]);
 export type EnforcementTier = z.infer<typeof EnforcementTier>;
 
+/**
+ * Spec §7.3: which model request a steer rides, and whether the step in
+ * flight is cut short to reach one sooner. It is a ceiling, not a promise:
+ * each connection point carries the strongest mode it can at or below the one
+ * asked for, and `dispatch_command` records both the request and what was
+ * carried.
+ *
+ * Mirrors `tachoDeliveryModeSchema` (packages/tacho/src/wire.ts), the way
+ * every view model here mirrors its contract enum.
+ */
+export const DeliveryMode = z.enum(["next_step", "interrupt", "turn_boundary"]);
+export type DeliveryMode = z.infer<typeof DeliveryMode>;
+
 /** The gaps a seal recorded, from the closed vocabulary (spec §13.1). */
 const CompletenessGap = z.enum([
   "digest_only",

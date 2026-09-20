@@ -1745,6 +1745,7 @@ type Messages = {
         cost: string;
         frames: string;
         started: string;
+        controls: string;
       };
       noSummary: string;
       notRecorded: string;
@@ -1773,6 +1774,18 @@ type Messages = {
         body: string;
         enroll: string;
         command: string;
+      };
+      controls: {
+        group: string;
+        action: string;
+        verbs: {
+          pause: string;
+          resume: string;
+          cancel: string;
+        };
+        sending: string;
+        queued: string;
+        reread: string;
       };
     };
   };
@@ -3202,8 +3215,27 @@ type Messages = {
         gapBeforeSeq: string;
         fromSeq: string;
         runB: string;
+        deliveryMode: string;
+        commandReason: string;
+        rowCommand: string;
       };
       observeReason: string;
+      delivery: {
+        legend: string;
+        nextStep: {
+          label: string;
+          help: string;
+        };
+        interrupt: {
+          label: string;
+          help: string;
+        };
+        turnBoundary: {
+          label: string;
+          help: string;
+        };
+        ceiling: string;
+      };
     };
     record: {
       reread: string;

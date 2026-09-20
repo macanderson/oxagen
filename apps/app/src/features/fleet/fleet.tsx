@@ -9,6 +9,7 @@
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
+import { canCommandRun } from "@/shared/run-command-roles";
 import { ApprovalsPanel } from "./approvals-panel";
 import { RunsTable } from "./runs-table";
 import { StatStrip } from "./stat-strip";
@@ -67,6 +68,7 @@ export async function Fleet({
         workspace={ctx.wsName}
         org={ctx.orgSlug}
         ws={ctx.wsSlug}
+        canCommand={canCommandRun(ctx.orgRole, ctx.wsRole)}
       />
     </div>
   );

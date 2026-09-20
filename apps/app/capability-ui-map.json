@@ -7,7 +7,8 @@
     "testid": "optional data-testid on the entry-point element",
     "proof": "path to the runtime proof: an apps/app component or action test, or verifications/<session>/<name>.png",
     "verifiedAt": "YYYY-MM-DD the proof was captured against a working page",
-    "verifiedBy": "session id that captured it"
+    "verifiedBy": "session id that captured it",
+    "also": "optional array of the further pages the same capability is operated from, each {route, page, entry, proof, verifiedAt, verifiedBy}; check_ui_parity holds every entry to the primary binding's bar, a page on disk and a proof"
   },
   "bindings": {
     "accept_member_invite": {
@@ -177,7 +178,17 @@
       "entry": "/[org]/[ws]/runs/[run] — Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command, and an observe-tier run draws all four disabled with the recorded reason (features/run/actions.ts, features/run/run-controls.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
       "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-018UrgFq-mc1-columns"
+      "verifiedBy": "session-018UrgFq-mc1-columns",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/[ws]/page.tsx",
+          "entry": "/[org]/[ws] (Fleet) — Pause, Resume and Cancel on a live wrapped run's row queue dispatch_command (features/fleet/actions.ts, features/fleet/run-row-controls.tsx). Steer stays on the run page: the contract requires a payload on it",
+          "proof": "apps/app/src/features/fleet/run-row-controls.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "session-018UrgFq-mc1-controls"
+        }
+      ]
     },
     "export_audit_events": {
       "route": "/[org]/audit/export",
