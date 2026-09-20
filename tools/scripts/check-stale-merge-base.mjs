@@ -1,48 +1,12 @@
 #!/usr/bin/env node
 /**
- * Advisory: warn when a squash merge would take a file's content from a
- * branch that predates a newer change to that same file on `main`.
+ * Advisory overlap scan for a branch behind main (ADR-110).
  *
- * ## The incident this guards
- *
- * A squash merge applies a branch's total diff against its MERGE BASE (the
- * commit where the branch split from `main`), not against `main`'s current
- * tip. A branch cut before a later PR's fix landed carries the OLD copy of
- * any file that fix touched. If the squash merge's three-way computation
- * resolves without a textual conflict, GitHub reports the PR as cleanly
- * mergeable, and merges the branch's stale copy over the newer one, with no
- * conflict, no red check, and nothing in the diff a reviewer reads.
- *
- * On 2026-09-17, #3222 fixed `packages/iam/src/machine-key-scope.ts` (a CLI
- * session key exemption). #3178, cut earlier and unrelated to that file,
- * squash-merged two minutes later and silently deleted the fix and its
- * regression test. `oxagen login` was broken in production for about eight
- * hours before #3234 restored it (issue #3237).
- *
- * ## What this checks
- *
- * When the branch does not contain `main`'s latest commit, this finds every
- * file changed on BOTH sides since the merge base, and for each one asks: has
- * `main` added lines to this file, since the merge base, that the branch's own
- * copy does not carry? A "yes" means a squash merge risks dropping exactly
- * the content the branch never saw: the shape of the 2026-09-17 incident.
- *
- * The comparison is a coarse line-set diff, not a full three-way merge
- * simulation: `main`-added lines are the lines present in `main`'s current
- * version of the file that are absent from the merge-base version. That is
- * deliberately cheaper than reproducing GitHub's merge algorithm, and it
- * errs toward flagging real risk rather than reproducing every case GitHub's
- * merge would actually resolve cleanly by combining both sides. That bias is
- * the right one for an advisory check nobody has to act on immediately.
- *
- * ## What this does not do
- *
- * It never fails the build. Option 1 in #3237, flipping
- * `strict_required_status_checks_policy` on the `main` ruleset, closes the gap
- * completely, but that is a live repository setting change and a merge-speed
- * cost only the maintainer can accept. This check is the cheap, advisory
- * half: it surfaces the risk while a person can still look, and lets the
- * merge proceed regardless.
+ * Missing exact lines are review signals, not a prediction of Git's merge.
+ * A clean three-way merge normally preserves changes made only on main.
+ * Bad conflict resolutions or later edits can still discard those changes,
+ * including after a branch has integrated main. This check does not inspect
+ * that earlier history. audit-stale-squash.mjs does so for forensic review.
  *
  * Usage:
  *   node tools/scripts/check-stale-merge-base.mjs
@@ -133,7 +97,7 @@ export function fileMergeRisk({ baseContent, mainContent, branchContent }) {
     missingLines: missing,
     reason:
       `branch's copy of this file lacks ${missing.length} line(s) main added ` +
-      "since the merge base, so a squash merge could silently drop them",
+      "since the merge base; inspect the merged result for those changes",
   };
 }
 
@@ -147,7 +111,7 @@ function git(args, cwd) {
 
 function changedFiles(fromRef, toRef, cwd) {
   const out = git(
-    ["diff", "--name-only", "--diff-filter=ACMR", `${fromRef}...${toRef}`],
+    ["diff", "--name-only", "--diff-filter=ACDMRT", `${fromRef}...${toRef}`],
     cwd,
   );
   return out === "" ? [] : out.split("\n");
@@ -199,9 +163,8 @@ export function renderReport(report) {
   if (report.upToDate) {
     return (
       "### Stale merge base: up to date\n\n" +
-      "This branch already contains the latest commit on `main`. A squash " +
-      "merge here applies against the current tip, so there is nothing this " +
-      "check can silently lose.\n"
+      "This branch contains the latest commit on `main`. This overlap check " +
+      "does not inspect earlier integration resolutions or subsequent edits.\n"
     );
   }
 
@@ -211,15 +174,15 @@ export function renderReport(report) {
     "",
     `This branch's merge base (\`${report.mergeBase.slice(0, 9)}\`) is behind ` +
       `\`main\`'s current tip (\`${report.mainTip.slice(0, 9)}\`). A squash ` +
-      "merge here applies against the merge base, not against main's current " +
-      "content. See #3237.",
+      "merge combines both sides from their common base. Inspect the resulting " +
+      "content, including integration resolutions. See #3485.",
     "",
   ];
 
   if (report.files.length === 0) {
     lines.push(
       "No file changed on both sides since the merge base. Nothing here " +
-        "overlaps with what main changed, so there is nothing to lose.",
+        "overlaps with what main changed. Earlier integrations are outside this check.",
     );
     return lines.join("\n");
   }
@@ -228,7 +191,7 @@ export function renderReport(report) {
     lines.push(
       `${report.files.length} file(s) changed on both sides since the merge ` +
         "base, but each one's branch copy already carries everything main " +
-        "added there. No silent loss detected.",
+        "added there. This does not establish semantic equivalence.",
     );
     return lines.join("\n");
   }
@@ -253,8 +216,8 @@ export function renderReport(report) {
   lines.push(
     "",
     "Advisory only, this does not block the merge. Before merging, check " +
-      "whether these files still need what main added, and rebase or merge " +
-      "`main` into this branch if so.",
+      "the merged result for the behavior main added. Integrate current `main` " +
+      "and review each resolution before merging.",
   );
 
   const safe = report.files.filter((f) => !f.atRisk);
