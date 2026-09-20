@@ -1,6 +1,6 @@
 "use client";
-// The definition file in a source editor (mockup `pAgentSource`): a gutter of
-// line numbers beside the text, parsed on every edit with the shared TOML
+// The definition file in a source editor (mockup `pAgentSource`): the shared
+// CodeEditor, syntax-coloured and parsed on every edit with the shared TOML
 // subset so a line the editor cannot read is named; modified or unchanged
 // against the base with a line diff stat; Discard back to the base; Save opens
 // the commit dialog, which commits the draft to a branch and opens its pull
@@ -17,6 +17,7 @@ import {
   mono,
   panel,
 } from "@/ui/control-styles";
+import { CodeEditor } from "@/ui/code-editor";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
@@ -38,7 +39,8 @@ function textOf(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
-function CommitDialog({
+/** The commit sheet: the draft to a branch and its pull request. Shared with the Configuration form. */
+export function CommitDialog({
   open,
   onOpenChange,
   org,
@@ -204,7 +206,6 @@ export function SourceEditor({
   const parsed = useMemo(() => parseTomlSubset(draft), [draft]);
   const stat = useMemo(() => diffStat(base, draft), [base, draft]);
   const dirty = draft !== base;
-  const lines = draft.split("\n").length;
 
   return (
     <section aria-label={path} className={`${panel} flex flex-col`}>
@@ -254,25 +255,12 @@ export function SourceEditor({
           </FormAlert>
         </div>
       )}
-      <div className="flex min-h-80 overflow-x-auto p-4 font-mono text-[13px] leading-5">
-        <pre
-          aria-hidden="true"
-          className="select-none pr-3 text-right text-muted-foreground"
-        >
-          {Array.from({ length: lines }, (_, i) => String(i + 1)).join("\n")}
-        </pre>
-        <textarea
-          aria-label={path}
+      <div className="p-4">
+        <CodeEditor
           value={draft}
-          onChange={(event) => {
-            setDraft(event.target.value);
-          }}
-          rows={Math.max(lines, 16)}
-          wrap="off"
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          className="min-w-0 flex-1 resize-none bg-transparent leading-5 text-foreground outline-none focus-visible:outline-2 focus-visible:outline-ring"
+          onChange={setDraft}
+          language="toml"
+          label={path}
         />
       </div>
       <CommitDialog
