@@ -277,7 +277,9 @@ export class Wal {
               throw new Error("Invalid body record");
           } catch {
             if (!reportedInvalid) {
-              this.bodyFailure(session, "read", { code: "invalid_body_record" });
+              this.bodyFailure(session, "read", {
+                code: "invalid_body_record",
+              });
               reportedInvalid = true;
             }
             continue;
@@ -292,6 +294,7 @@ export class Wal {
         }
       } catch (error) {
         this.bodyFailure(session, "read", error);
+        throw error;
       }
     }
     const out: TachoBody[] = [];
