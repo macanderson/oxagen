@@ -637,10 +637,12 @@ async function main(): Promise<void> {
         ),
       );
     } else {
+      // Print what would be written, install links and all, so --dry-run is a
+      // preview of the file and not of the model's answer alone.
       console.log(
         kleur.dim(
           "\n" +
-            `SUMMARY: ${notes.summary}\n\n${notes.body}`
+            releaseBody(next, notes, install)
               .split("\n")
               .map((l) => "    │ " + l)
               .join("\n"),
