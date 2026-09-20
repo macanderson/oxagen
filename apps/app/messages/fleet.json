@@ -92,7 +92,9 @@
         "agent": "Agent",
         "operator": "Operator",
         "status": "Status",
+        "tier": "Tier",
         "replay": "Replay",
+        "verdict": "Verdict",
         "cost": "Cost",
         "frames": "Frames",
         "started": "Started"
@@ -100,6 +102,18 @@
       "noSummary": "No summary yet. Open the run to read its frames.",
       "notRecorded": "not recorded",
       "basisNotRecorded": "basis not recorded",
+      "verdict": {
+        "flipped": "flipped",
+        "failing": "failing",
+        "unmoved": "unmoved",
+        "unsatisfied": "unsatisfied",
+        "tampered": "tampered",
+        "unverified": "unverified",
+        "waived": "waived"
+      },
+      "legend": "Tier is where Oxagen observed a run's calls. Verdict is the word a witness reported on it. Only flipped marks a run proven.",
+      "unpriced": "{count, plural, one {# run on this page has no cost recorded} other {# runs on this page have no cost recorded}}. A total over this column leaves them out.",
+      "unpricedLink": "Open Spend",
       "source": {
         "ledger": "evidence ledger",
         "tacho": "wrapped agent"
