@@ -132,6 +132,7 @@ export async function agentApprovalResolveHandler(
       .update(schema.approvalRequests)
       .set({
         resolution: input.decision,
+        resumeStatus: sql`CASE WHEN ${schema.approvalRequests.resumePayload} IS NOT NULL THEN ${input.decision === "approved" ? "queued" : "denied"} ELSE ${schema.approvalRequests.resumeStatus} END`,
         resolvedAt: new Date(),
         resolvedByUserId: actingUserId,
         note: input.note ?? null,

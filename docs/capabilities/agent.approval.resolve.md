@@ -8,9 +8,9 @@
 
 ## Intent
 
-Approve or deny a pending tool-call approval request. Resolution
-resumes the paused agent stream so the runner either executes the
-approved tool call or skips it and apologises.
+Approve or deny a pending tool-call approval request. Approving a stored built-in call from the in-app assistant queues that exact call for a fresh authorization check and a new evidence run. The worker attempts it once. A crash can leave the outcome indeterminate, which requires inspection before requesting another action. Read the execution state and new run id through `list_resolved_approvals` (ADR-118).
+
+Legacy approvals without stored arguments keep their existing wait or caller-retry behavior. External MCP approvals do not use the stored-call worker.
 
 ## Input
 

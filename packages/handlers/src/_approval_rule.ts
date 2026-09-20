@@ -351,33 +351,27 @@ export async function assertRulesSavable(
           message: `Tool pattern "${pattern}" matches no declared tool in this workspace`,
         });
       }
-      // A rule can only govern a tool whose calls go through `invoke()`, which
-      // is where the decision-rules gate runs. An external MCP tool is
-      // dispatched by materialize-tools through `authorizeExternalCapability`
-      // and the transport directly, so it is IAM-checked and kill-switched but
-      // the gate never sees it — no `deny` rule, no `require_approval`, no
-      // mandate check and no auto-approval clause.
-      //
-      // Refused rather than saved, and the deny case is why it matters more
-      // than the auto-approval one: a rule set is the same document, so an
-      // operator could write a DENY rule naming an MCP tool, watch it save,
-      // see it listed as enabled, and be covered by nothing. Governance that
-      // accepts a rule and silently declines to enforce it is worse than
-      // governance that refuses it, because the operator believes they are
-      // covered.
-      //
-      // The same test `publish_tool_declaration` already applies to a
-      // classification (`conflict` / `consequence_not_gated`): the slug has to
-      // name a registered capability.
-      const ungated = matched.filter(
-        (t) => getCapability(t.slug) === undefined,
+      // External tools accept deny and human-approval rules, but they have no
+      // trusted measures with which to authorize skipping a person.
+      const external = matched.filter((tool) =>
+        /^(mcp|file-mcp)\./.test(tool.slug),
       );
-      if (ungated.length > 0) {
-        const names = [...new Set(ungated.map((t) => t.slug))].sort();
+      if (external.length > 0) {
         throw new HandlerError({
           code: "conflict",
-          reason: "rule_not_gated",
-          message: `Tool pattern "${pattern}" matches ${names.join(", ")}, which invoke() does not dispatch — the decision-rules gate never sees those calls, so a rule over them would be stored and never enforced`,
+          reason: "external_auto_approval_unsupported",
+          message:
+            "External tools require human approval because their cost and consequence measures are unavailable. Use a deny or require_approval decision rule.",
+        });
+      }
+      const unregistered = matched.filter(
+        (tool) => getCapability(tool.slug) === undefined,
+      );
+      if (unregistered.length > 0) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "tool_not_registered",
+          message: `Tool pattern "${pattern}" matches an unregistered capability`,
         });
       }
       for (const tool of matched) {

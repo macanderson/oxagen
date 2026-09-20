@@ -32,6 +32,9 @@ export type ResolvedApprovalListRow = {
   ruleIds: string[];
   autoRuleId: string | null;
   resolvedReasons: string[];
+  resumeStatus?: string | null;
+  resumeRunPublicId?: string | null;
+  resumeError?: string | null;
 };
 
 /**
@@ -54,6 +57,9 @@ type QueriedRow = {
   ruleIds: string[];
   autoRuleId: string | null;
   resolvedReasons: string[];
+  resumeStatus?: string | null;
+  resumeRunPublicId?: string | null;
+  resumeError?: string | null;
   message: {
     conversation: { user: { publicId: string } | null } | null;
   } | null;
@@ -80,6 +86,9 @@ function toResolvedApprovalListRow(row: QueriedRow): ResolvedApprovalListRow {
     ruleIds: row.ruleIds,
     autoRuleId: row.autoRuleId,
     resolvedReasons: row.resolvedReasons,
+    resumeStatus: row.resumeStatus,
+    resumeRunPublicId: row.resumeRunPublicId,
+    resumeError: row.resumeError,
   };
 }
 
@@ -130,6 +139,15 @@ export function toResolvedApprovalListItem(
     expiresAt: row.expiresAt.toISOString(),
     resolvedAt: row.resolvedAt.toISOString(),
     resolution: toResolution(row.resolution),
+    ...(row.resumeStatus
+      ? {
+          execution: {
+            status: row.resumeStatus,
+            runId: row.resumeRunPublicId ?? null,
+            reason: row.resumeError ?? null,
+          },
+        }
+      : {}),
     resolvedBy: row.resolvedByPolicy
       ? row.resolvedByPolicy
       : row.resolvedByUserPublicId
