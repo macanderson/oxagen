@@ -155,6 +155,7 @@ export const workspaceInviteSendHandler: CapabilityHandler<
           orgName,
           role: orgRole,
           email: input.email,
+          message: input.message,
         }),
       });
     } catch (err) {
