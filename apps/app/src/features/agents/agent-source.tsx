@@ -93,6 +93,7 @@ export async function AgentSource({
           org={org}
           ws={ws}
           agentId={identity.id}
+          slug={identity.slug}
           path={path}
           base={definition?.source ?? definitionSeed(identity)}
           branch={definition?.branch ?? `agents/${identity.slug}`}

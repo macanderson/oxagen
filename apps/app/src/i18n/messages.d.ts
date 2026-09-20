@@ -532,6 +532,8 @@ type Messages = {
       save: string;
       modified: string;
       unchanged: string;
+      identityLocked: string;
+      identityMismatch: string;
       stat: string;
       parse: {
         error: string;
@@ -1309,6 +1311,7 @@ type Messages = {
         tokens: string;
         revert: string;
         cost: string;
+        invalidName: string;
       };
       pr: {
         title: string;
@@ -1436,6 +1439,7 @@ type Messages = {
       unparsed: string;
       revert: string;
       request: string;
+      invalidSlug: string;
     };
     toolbelt: {
       title: string;
@@ -5118,6 +5122,12 @@ type Messages = {
         weekly: string;
         monthly: string;
       };
+    };
+    sourceFilename: {
+      rename: string;
+      name: string;
+      hint: string;
+      invalid: string;
     };
   };
 };

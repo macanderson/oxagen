@@ -14,6 +14,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openCreate } from "@/shared/create";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -154,6 +155,66 @@ describe("the skill wizard: source", () => {
 });
 
 describe("the skill wizard: describe it", () => {
+  it("follows source name edits and submits a header rename without changing other content", async () => {
+    const user = userEvent.setup();
+    const field = await toDescribe();
+    fireEvent.input(field, { target: { value: "Cut release notes" } });
+    fireEvent.click(primary());
+    const file = await screen.findByTestId<HTMLTextAreaElement>("wizard-file");
+    const edited = `${file.value.replace(/^name: .*$/m, "name: source-name")}\nKeep this body exactly.\n`;
+    fireEvent.change(file, { target: { value: edited } });
+    const path = ".oxagen/skills/source-name/SKILL.md";
+    await user.click(screen.getByText(path));
+    const name = screen.getByRole("textbox", {
+      name: translator("ui.sourceFilename")("name"),
+    });
+    await user.clear(name);
+    await user.type(name, "header-name{Enter}");
+    const renamed = edited.replace("name: source-name", "name: header-name");
+    expect(file).toHaveValue(renamed);
+    expect(
+      screen.getByText(".oxagen/skills/header-name/SKILL.md"),
+    ).toBeVisible();
+    fireEvent.click(primary());
+    expect(await screen.findByTestId("pr-branch")).toHaveTextContent(
+      "skills/header-name",
+    );
+    await waitFor(() => expect(primary()).toBeEnabled());
+    proposeSkill.mockResolvedValue(opened({ name: "header-name" }));
+    fireEvent.click(primary());
+    await screen.findByTestId("pr-opened");
+    expect(proposeSkill).toHaveBeenCalledWith("acme", "core-platform", {
+      origin: "describe",
+      name: "header-name",
+      body: renamed,
+      files: [],
+      rationale: "Cut release notes",
+    });
+  });
+
+  it("blocks a missing or invalid source name and restores the filename on revert", async () => {
+    const field = await toDescribe();
+    fireEvent.input(field, { target: { value: "Cut release notes" } });
+    fireEvent.click(primary());
+    const file = await screen.findByTestId<HTMLTextAreaElement>("wizard-file");
+    const seed = file.value;
+    for (const replacement of ["# name removed", "name: ../outside"]) {
+      fireEvent.change(file, {
+        target: { value: seed.replace(/^name: .*$/m, replacement) },
+      });
+      expect(primary()).toBeDisabled();
+    }
+    fireEvent.click(
+      screen.getByRole("button", { name: t("skill.review.revert") }),
+    );
+    expect(file).toHaveValue(seed);
+    expect(
+      screen.getByText(".oxagen/skills/cut-release-notes/SKILL.md"),
+    ).toBeVisible();
+    expect(primary()).toBeEnabled();
+    expect(proposeSkill).not.toHaveBeenCalled();
+  });
+
   it("enables Draft the file once there is a description, without rebuilding the field", async () => {
     const field = await toDescribe();
     expect(currentStep()).toContain(t("steps.describeIt"));
@@ -320,7 +381,7 @@ describe("the skill wizard: upload a bundle", () => {
     });
     proposeSkill.mockResolvedValue(
       opened({
-        name: "release-notes",
+        name: "uploaded-notes",
         version: "2.2.0",
         replaces: "2.1.0",
       }),
@@ -338,21 +399,31 @@ describe("the skill wizard: upload a bundle", () => {
     expect(primary().disabled).toBe(false);
 
     fireEvent.click(primary());
-    await screen.findByTestId("wizard-file");
+    const source =
+      await screen.findByTestId<HTMLTextAreaElement>("wizard-file");
+    fireEvent.click(screen.getByText(".oxagen/skills/release-notes/SKILL.md"));
+    const filename = screen.getByRole("textbox", {
+      name: translator("ui.sourceFilename")("name"),
+    });
+    fireEvent.change(filename, { target: { value: "uploaded-notes" } });
+    fireEvent.keyDown(filename, { key: "Enter" });
+    expect(source).toHaveValue(
+      BODY.replace("name: release-notes", "name: uploaded-notes"),
+    );
     // An uploaded file was not drafted, so it carries no drafting note.
     expect(screen.queryByTestId("draft-note")).toBeNull();
     fireEvent.click(primary());
     await screen.findByTestId("pr-branch");
     expect(
-      screen.getByText(".oxagen/skills/release-notes/examples/before.md"),
+      screen.getByText(".oxagen/skills/uploaded-notes/examples/before.md"),
     ).toBeTruthy();
 
     fireEvent.click(primary());
     await screen.findByTestId("pr-opened");
     expect(proposeSkill).toHaveBeenCalledWith("acme", "core-platform", {
       origin: "upload",
-      name: "release-notes",
-      body: BODY,
+      name: "uploaded-notes",
+      body: BODY.replace("name: release-notes", "name: uploaded-notes"),
       files: [{ path: "examples/before.md", content: "before" }],
       rationale: "",
     });

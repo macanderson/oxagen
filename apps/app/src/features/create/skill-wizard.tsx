@@ -12,6 +12,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { ActionResult } from "@/server/kernel";
+import { renameSkillSource, skillSourceName } from "@/shared/source-identity";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
@@ -351,10 +352,22 @@ function ReviewStep({ api, ctx }: StepProps<SkillDraft>) {
         {fm?.scope ? null : <span className={bad}>{t("noScope")}</span>}
         <span className={chip}>{t("tokens", { tokens })}</span>
       </p>
+      {skillSourceName(file.text) === null ? (
+        <FormAlert>{t("invalidName")}</FormAlert>
+      ) : null}
       <FileEditor
         path={`.oxagen/skills/${file.name}/SKILL.md`}
         value={file.text}
         onChange={file.set}
+        rename={{
+          name: file.name,
+          onRename: (name) => {
+            const source = renameSkillSource(file.text, name);
+            if (source === null) return false;
+            file.set(source);
+            return true;
+          },
+        }}
         bar={
           <button
             type="button"
@@ -515,7 +528,10 @@ function useSkillStep(props: StepProps<SkillDraft>): StepView {
       title: t("review.title"),
       subtitle: t("review.subtitle"),
       body: <ReviewStep {...props} />,
-      primary: { label: t("toPullRequest"), enabled: file.text.trim() !== "" },
+      primary: {
+        label: t("toPullRequest"),
+        enabled: skillSourceName(file.text) !== null,
+      },
     };
   if (d.submit.state === "opened")
     return {
@@ -525,6 +541,7 @@ function useSkillStep(props: StepProps<SkillDraft>): StepView {
     };
   const submit = async () => {
     if (d.path !== "describe" && d.path !== "upload") return;
+    if (skillSourceName(file.text) === null) return;
     api.update({ submit: { state: "pending" } });
     try {
       const result = await proposeSkill(ctx.org, ctx.ws, {
@@ -556,7 +573,10 @@ function useSkillStep(props: StepProps<SkillDraft>): StepView {
       label: t("pr.open"),
       pendingLabel: t("pr.opening"),
       pending: d.submit.state === "pending",
-      enabled: ctx.repo.state === "bound" && d.submit.state !== "pending",
+      enabled:
+        ctx.repo.state === "bound" &&
+        d.submit.state !== "pending" &&
+        skillSourceName(file.text) !== null,
       run: submit,
     },
   };
