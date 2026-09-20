@@ -159,26 +159,61 @@ describe("propose_skill", () => {
     ).toBe("new");
   });
 
-  it("resets a rejected branch and removes omitted files from a merged bundle", async () => {
+  it("removes omitted files inherited from the merged bundle", async () => {
     github = new FakeGitHub({
       "main:.oxagen/skills/release-notes/SKILL.md": skill("0.1.0"),
       "main:.oxagen/skills/release-notes/old.md": "old",
     });
-    const first = await handler()(input({ body: skill("0.2.0") }), ctx());
-    github.commit(first.branch, "unreviewed.md", "rejected content");
-    await github.closePullRequest(REPO, first.pullRequest.number);
-    const next = await handler()(input({ body: skill("0.2.0") }), ctx());
-    expect(next.pullRequest.number).not.toBe(first.pullRequest.number);
+    const proposal = await handler()(input({ body: skill("0.2.0") }), ctx());
     expect(
-      await github.readFile(REPO, "unreviewed.md", next.branch),
+      await github.readFile(
+        REPO,
+        ".oxagen/skills/release-notes/old.md",
+        proposal.branch,
+      ),
     ).toBeNull();
     expect(
       await github.readFile(
         REPO,
         ".oxagen/skills/release-notes/old.md",
-        next.branch,
+        "main",
       ),
-    ).toBeNull();
+    ).toBe("old");
+  });
+
+  it("preserves an open proposal targeting the former production branch", async () => {
+    const first = await handler()(input(), ctx());
+    github.repository = { ...REPO, defaultBranch: "production" };
+    await expect(handler()(input(), ctx())).rejects.toMatchObject({
+      reason: "proposal_branch_exists",
+    });
+    expect(github.pulls[0]?.state).toBe("open");
+    expect(github.pulls[0]?.number).toBe(first.pullRequest.number);
+    expect(github.deletedBranches).toEqual([]);
+  });
+
+  it("preserves a rejected branch until its owner explicitly removes it", async () => {
+    const first = await handler()(input(), ctx());
+    github.commit(first.branch, "unreviewed.md", "rejected content");
+    await github.closePullRequest(REPO, first.pullRequest.number);
+    await expect(handler()(input(), ctx())).rejects.toMatchObject({
+      reason: "proposal_branch_exists",
+    });
+    expect(await github.readFile(REPO, "unreviewed.md", first.branch)).toBe(
+      "rejected content",
+    );
+    expect(github.deletedBranches).toEqual([]);
+  });
+
+  it("preserves a preexisting branch with no proposal", async () => {
+    github.commit("skills/release-notes", "work.md", "unmerged work");
+    await expect(handler()(input(), ctx())).rejects.toMatchObject({
+      reason: "proposal_branch_exists",
+    });
+    expect(await github.readFile(REPO, "work.md", "skills/release-notes")).toBe(
+      "unmerged work",
+    );
+    expect(github.deletedBranches).toEqual([]);
   });
 
   it.each([

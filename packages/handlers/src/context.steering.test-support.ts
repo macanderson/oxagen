@@ -575,8 +575,22 @@ export class FakeGitHub implements SteeringGitHub {
   async readFile(_repo: SteeringRepository, path: string, ref: string) {
     return this.files.get(`${this.shaOf(ref)}:${path}`) ?? null;
   }
-  async ensureBranch(_repo: SteeringRepository, branch: string, from: string) {
-    if (this.heads.has(branch)) return;
+  async ensureBranch(
+    _repo: SteeringRepository,
+    branch: string,
+    from: string,
+    options?: { exclusive: boolean },
+  ) {
+    if (this.heads.has(branch)) {
+      if (options?.exclusive) {
+        const { HandlerError } = await import("@oxagen/oxagen");
+        throw new HandlerError({
+          code: "conflict",
+          reason: "proposal_branch_exists",
+        });
+      }
+      return;
+    }
     this.branches.push({ branch, from });
     this.heads.set(branch, this.shaOf(from));
   }

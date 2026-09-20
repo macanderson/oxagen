@@ -73,7 +73,6 @@ export type ProposeAgentDeps = {
     | "resolveRepository"
     | "readFile"
     | "ensureBranch"
-    | "deleteBranch"
     | "reconcileFiles"
     | "putFile"
     | "findOpenPullRequest"
@@ -120,7 +119,11 @@ function prBody(args: {
       : `- After merge, register \`${args.agentKey}\` under the same slug to create its identity and credential.`,
     `- Definition digest at open: \`${args.digest}\`.`,
     "- `tools` is a request, not a grant. What the agent can reach is that list intersected with the roles it holds and with the grants of the person it acts for.",
-    "- The subagent file is generated from the definition. Change the definition, not the generated file.",
+    ...(SUBAGENT_FILE_HARNESSES.includes(args.harness)
+      ? [
+          "- The subagent file is generated from the definition. Change the definition, not the generated file.",
+        ]
+      : []),
     "",
     "Files:",
     ...args.files.map((f) => `- \`${f}\``),
@@ -288,8 +291,9 @@ export function createProposeAgentHandler(
       head: branch,
       base,
     });
-    if (open === null) await deps.github.deleteBranch(repo, branch);
-    await deps.github.ensureBranch(repo, branch, base);
+    await deps.github.ensureBranch(repo, branch, base, {
+      exclusive: open === null,
+    });
     await deps.github.reconcileFiles(repo, {
       branch,
       roots: [path, generatedAgentPath(input.slug)],

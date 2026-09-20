@@ -79,6 +79,23 @@ function seam(
 }
 
 describe("the GitHub seam", () => {
+  it("refuses an existing proposal branch in exclusive mode without deleting it", async () => {
+    const deleteBranch = vi.fn<GitHubClient["deleteBranch"]>();
+    const { gh } = seam(
+      fakeClient({
+        createBranch: async () => {
+          throw new Error("Reference already exists");
+        },
+        deleteBranch,
+      }),
+    );
+    const repo = await gh.resolveRepository(SCOPE);
+    await expect(
+      gh.ensureBranch(repo, "skills/demo", "main", { exclusive: true }),
+    ).rejects.toMatchObject({ reason: "proposal_branch_exists" });
+    expect(deleteBranch).not.toHaveBeenCalled();
+  });
+
   it("deletes omitted files only within the proposal's owned paths", async () => {
     const deleteFile = vi.fn<GitHubClient["deleteFile"]>(async () => undefined);
     const { gh } = seam(

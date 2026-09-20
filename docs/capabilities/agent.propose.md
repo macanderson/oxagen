@@ -74,3 +74,5 @@ Org Owner or Admin, checked by the handler (INV-29) for the signed-in user. Merg
 ## Not built yet
 
 Merging the file does not create the principal yet. No handler reads `.oxagen/agents/` from a merge commit, so after the merge the operator registers the agent with `register_agent` under the same slug.
+
+An existing proposal branch is reused only when it has an open pull request into the configured production branch. Otherwise the handler refuses with `proposal_branch_exists`; preserve or remove that branch explicitly before retrying. It never deletes the branch automatically.

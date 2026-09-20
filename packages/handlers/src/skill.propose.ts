@@ -22,11 +22,9 @@
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import {
-  checkSkill,
   DEFAULT_SKILL_LOAD_BUDGET,
   estimateSkillTokens,
   readSearchBudget,
-  readSkillFrontmatter,
   SKILL_DIR,
   SKILLS_CONFIG_PATH,
   skillBranch,
@@ -37,6 +35,7 @@ import {
   createSteeringGitHub,
   type SteeringGitHub,
 } from "./context.steering.github";
+import { checkSkill, readSkillFrontmatter } from "./skill-validation";
 import { sha256Hex } from "./registry-digest";
 
 export type ProposeSkillDeps = {
@@ -45,7 +44,6 @@ export type ProposeSkillDeps = {
     | "resolveRepository"
     | "readFile"
     | "ensureBranch"
-    | "deleteBranch"
     | "reconcileFiles"
     | "putFile"
     | "findOpenPullRequest"
@@ -173,8 +171,9 @@ export function createProposeSkillHandler(
       head: branch,
       base,
     });
-    if (open === null) await deps.github.deleteBranch(repo, branch);
-    await deps.github.ensureBranch(repo, branch, base);
+    await deps.github.ensureBranch(repo, branch, base, {
+      exclusive: open === null,
+    });
     await deps.github.reconcileFiles(repo, {
       branch,
       roots: [`${SKILL_DIR}/${input.name}`],

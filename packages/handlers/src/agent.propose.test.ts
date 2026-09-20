@@ -180,15 +180,24 @@ describe("propose_agent", () => {
     },
   );
 
-  it("starts a new proposal from production after the previous one was rejected", async () => {
+  it("preserves a rejected branch until its owner explicitly removes it", async () => {
     const first = await handler()(input(), ctx());
     github.commit(first.branch, "rejected.md", "rejected content");
     await github.closePullRequest(REPO, first.pullRequest.number);
-    const next = await handler()(input({ harness: "codex" }), ctx());
-    expect(next.pullRequest.number).not.toBe(first.pullRequest.number);
-    expect(await github.readFile(REPO, "rejected.md", next.branch)).toBeNull();
-    expect(github.pulls.at(-1)?.body).toContain("After merge, register");
-    expect(github.pulls.at(-1)?.body).not.toContain(".claude/agents/");
+    await expect(
+      handler()(input({ harness: "codex" }), ctx()),
+    ).rejects.toMatchObject({ reason: "proposal_branch_exists" });
+    expect(await github.readFile(REPO, "rejected.md", first.branch)).toBe(
+      "rejected content",
+    );
+    expect(github.deletedBranches).toEqual([]);
+  });
+
+  it("does not claim a generated file for Codex", async () => {
+    await handler()(input({ harness: "codex" }), ctx());
+    expect(github.pulls.at(-1)?.body).not.toContain(
+      "The subagent file is generated",
+    );
   });
 
   it("digests the LF bytes a Windows editor sent as CRLF", async () => {

@@ -78,6 +78,7 @@ export interface SteeringGitHub {
     repo: SteeringRepository,
     branch: string,
     fromBranch: string,
+    options?: { exclusive: boolean },
   ): Promise<void>;
   /** Remove omitted files from a proposal's owned paths before writing its replacement. */
   reconcileFiles(
@@ -490,7 +491,7 @@ export function createSteeringGitHub(
         ref,
       });
     },
-    async ensureBranch(repo, branch, fromBranch) {
+    async ensureBranch(repo, branch, fromBranch, options) {
       try {
         await clientFor(repo).createBranch({
           owner: repo.owner,
@@ -502,8 +503,16 @@ export function createSteeringGitHub(
         if (
           err instanceof Error &&
           /Reference already exists/i.test(err.message)
-        )
+        ) {
+          if (options?.exclusive)
+            throw new HandlerError({
+              code: "conflict",
+              reason: "proposal_branch_exists",
+              message:
+                "The proposal branch already exists without a matching open proposal. Preserve or remove it explicitly before retrying.",
+            });
           return;
+        }
         throw githubRefused(err);
       }
     },
