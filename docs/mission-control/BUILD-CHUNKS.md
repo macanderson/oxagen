@@ -90,6 +90,8 @@ Done when:
 
 ## Session 1: decide and act
 
+Landed in PR https://github.com/macanderson/oxagen/pull/3516
+
 **Why P0.** Two pages draw the approval queue and neither can decide. The assistant flyout sends people to Fleet to approve, and nothing there approves. Fleet has no tier column while ADR-095 says the vocabulary rule applies now and Phase 4 is about to change what `gateway` means. Every piece is a component over a handler that already ships and a kernel seam that is already tested.
 
 Lanes:
