@@ -45,7 +45,7 @@
         "body": "Oxagen filled a template in from your description, in this tab. No model wrote it and no run was recorded. Every line below is yours to change before anybody reviews it."
       },
       "file": {
-        "header": "The definition is the record. Nothing here is written to a database by the wizard:\nthe agent is published when a person merges this pull request.",
+        "header": "The definition is the record. Nothing here is written to a database by the wizard:\nthe definition is published when a person merges this pull request. Register the agent afterward to create its identity.",
         "placeholder": "What this agent is for.",
         "stayInside": "Work inside the toolbelt you were given. When a step needs authority you do\nnot hold, stop and say which one. Do not route around it."
       },
@@ -84,7 +84,7 @@
     "pr": {
       "title": "Open the pull request",
       "subtitle": "An agent is a definition in a repository before it is a principal in a database.",
-      "lead": "Merging this publishes the definition of <code>{slug}</code> in {workspace}. Until then the agent does not exist and nothing can be attributed to it.",
+      "lead": "Merging this publishes the definition of <code>{slug}</code> in {workspace}. After merge, register it under the same slug to create its identity.",
       "fileDefinition": "the definition",
       "fileGenerated": "generated from the definition, read by Claude Code, Cursor, and Stella",
       "codex": "Codex documents no subagent file, so the pull request writes none for it.",
@@ -125,12 +125,12 @@
     },
     "opened": {
       "title": "Pull request opened",
-      "subtitle": "The agent exists when somebody merges it.",
-      "proposed": "{slug} is proposed. It is published when the pull request merges.",
+      "subtitle": "Register the agent after its definition merges.",
+      "proposed": "{slug} is proposed. After merge, register it under the same slug to create its identity and credential.",
       "key": "Its agent key will be {key}.",
       "link": "{repository}#{number}",
       "digest": "Definition digest at open: {digest}",
-      "register": "After the merge, issue its credential with Register an agent on the Agents page, under the same slug."
+      "register": "After the merge, create its identity and credential with Register an agent on the Agents page, under the same slug."
     },
     "failure": {
       "checkSchema": "The schema check failed: the file must parse, declare agent-definition/v0.1, carry the slug from the identity step, and name its model tier, tools, and instructions. Nothing was written.",

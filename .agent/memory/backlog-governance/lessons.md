@@ -1,0 +1,1 @@
+- [2026-09-19] Inspect retained PR heads and integration parents before attributing a loss to squash mechanics. A branch can contain the fix commit while its integration result discards the fix. (source: reflections/2026-09-19-stale-squash-audit.md)

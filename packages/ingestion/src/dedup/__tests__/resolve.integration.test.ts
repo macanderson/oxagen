@@ -219,3 +219,66 @@ describe("resolveEntity (integration, local Neo4j) — $orgId binding", () => {
     }
   });
 });
+
+describe("GitHub legacy identity (real Neo4j)", () => {
+  it("preserves a legacy node and its edge across backfill and repository rename", async (ctx) => {
+    if (!neo4jUp) return ctx.skip();
+    const originalUrl = "https://github.com/acme/old/issues/7";
+    const session = driver().session({ database: process.env.NEO4J_DATABASE });
+    try {
+      await session.run(
+        `MERGE (n:Task:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
+        SET n.publicId = 'legacy-identity-node', n.workspaceId = $workspaceId,
+            n.sourceRecordType = 'issue', n.properties = $properties, n.canonicalNaturalKey = null
+        MERGE (n)-[:TEST_IDENTITY_LINK]->(n)`,
+        {
+          naturalKey: NATURAL_KEY,
+          orgId: ORG_ID,
+          workspaceId: WORKSPACE_ID,
+          properties: JSON.stringify({ url: originalUrl }),
+        },
+      );
+      const canonical = "github:conn-oxa-2052:issue:id:101";
+      const mutation = makeMutation({
+        naturalKey: canonical,
+        legacyNaturalKey: NATURAL_KEY,
+        properties: { url: originalUrl },
+        sourceRef: {
+          connectorType: "github",
+          connectionId: "conn-oxa-2052",
+          externalId: "issue:id:101",
+          externalUrl: originalUrl,
+        },
+      });
+      for (const url of [
+        originalUrl,
+        "https://github.com/acme/renamed/issues/7",
+      ]) {
+        const result = await runInTenantScope(
+          { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+          () =>
+            resolveEntity(
+              {
+                ...mutation,
+                properties: { url },
+                sourceRef: { ...mutation.sourceRef, externalUrl: url },
+              },
+              ORG_ID,
+            ),
+        );
+        expect(result.principalNodeId).toBe("legacy-identity-node");
+        expect(result.action).toBe("updated_principal");
+      }
+      const result = await session.run(
+        `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})-[r:TEST_IDENTITY_LINK]->(n)
+        RETURN n.canonicalNaturalKey AS canonical, count(r) AS edges`,
+        { naturalKey: NATURAL_KEY, orgId: ORG_ID },
+      );
+      expect(result.records).toHaveLength(1);
+      expect(result.records[0]?.get("canonical")).toBe(canonical);
+      expect(result.records[0]?.get("edges").toNumber()).toBe(1);
+    } finally {
+      await session.close();
+    }
+  });
+});

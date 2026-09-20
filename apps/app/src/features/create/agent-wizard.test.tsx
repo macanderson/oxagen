@@ -93,23 +93,23 @@ function chooseHarness(value: string) {
   });
 }
 
-async function toDefinition() {
+async function toDefinition(harness = "cursor") {
   await toIdentity();
-  chooseHarness("cursor");
+  chooseHarness(harness);
   fireEvent.click(primary());
   return screen.findByTestId<HTMLTextAreaElement>("wizard-file");
 }
 
-async function toToolbelt() {
-  await toDefinition();
+async function toToolbelt(harness = "cursor") {
+  await toDefinition(harness);
   fireEvent.click(primary());
   await waitFor(() => {
     expect(currentStep()).toContain(shell("steps.toolbelt"));
   });
 }
 
-async function toPullRequest() {
-  await toToolbelt();
+async function toPullRequest(harness = "cursor") {
+  await toToolbelt(harness);
   await screen.findByTestId("belt");
   fireEvent.click(primary());
   await screen.findByTestId("pr-branch");
@@ -379,6 +379,12 @@ describe("the agent wizard: toolbelt", () => {
 });
 
 describe("the agent wizard: pull request", () => {
+  it("shows only the definition for Codex", async () => {
+    await toPullRequest("codex");
+    expect(screen.getByText(`.oxagen/agents/${SLUG}.toml`)).toBeTruthy();
+    expect(screen.queryByText(`.claude/agents/${SLUG}.md`)).toBeNull();
+  });
+
   it("plans the definition and the generated file, then opens the pull request with the file the person saw", async () => {
     proposeAgent.mockResolvedValue(opened());
     await toPullRequest();

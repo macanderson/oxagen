@@ -272,3 +272,7 @@ CHECK for the code that still writes it. It is applied before the deploy.
 The contract half folds whatever the old code accrued in the gap into the
 `consume_embedding` bucket and drops the column; it is a separate migration,
 applied once no node runs the old code.
+
+## Approved built-in calls
+
+ADR-118 adds a fresh evidence run for an approved built-in call. The original turn stays sealed. A durable worker submits the stored call through the kernel with fresh authorization and no model request.

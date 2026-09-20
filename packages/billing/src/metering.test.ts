@@ -107,6 +107,9 @@ vi.mock("./pricing", async (importOriginal) => {
 
 const {
   ASSISTANT_TOKEN_MARKUP,
+  InvalidUsageError,
+  creditsForCostUsd,
+  microCreditsForCostUsd,
   AssistantSpendCapError,
   assertCanStartTurn,
   assertUnderAssistantSpendCap,
@@ -126,6 +129,53 @@ const sonnetCall = {
   inputTokens: 10_000,
   outputTokens: 2_000,
 };
+
+describe("non-finite metering inputs", () => {
+  it.each([NaN, Infinity, -Infinity])(
+    "refuses cost %s with a typed error",
+    (cost) => {
+      for (const meter of [creditsForCostUsd, microCreditsForCostUsd]) {
+        expect(() => meter(cost, 1)).toThrow(InvalidUsageError);
+        expect(() => meter(cost, 1)).toThrow(
+          expect.objectContaining({ code: "invalid_usage" }),
+        );
+      }
+    },
+  );
+
+  it.each([NaN, Infinity, -Infinity])(
+    "refuses markup %s even for zero cost",
+    (markup) => {
+      expect(() => creditsForCostUsd(0, markup)).toThrow(InvalidUsageError);
+      expect(() => microCreditsForCostUsd(0, markup)).toThrow(
+        InvalidUsageError,
+      );
+    },
+  );
+
+  it("refuses finite inputs whose conversion overflows", () => {
+    expect(() => creditsForCostUsd(Number.MAX_VALUE, 2)).toThrow(
+      InvalidUsageError,
+    );
+    expect(() => microCreditsForCostUsd(Number.MAX_VALUE, 1)).toThrow(
+      InvalidUsageError,
+    );
+  });
+
+  it("does not debit a provider response with non-finite usage", async () => {
+    consumeCredits.mockClear();
+    await expect(
+      chargeUsageCredits({
+        ...sonnetCall,
+        inputTokens: NaN,
+        orgId: "org-1",
+        reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+        markup: 1,
+      }),
+    ).rejects.toThrow(InvalidUsageError);
+    expect(consumeCredits).not.toHaveBeenCalled();
+  });
+});
 
 describe("meterCreditsForUsage", () => {
   it("rounds credits up from provider cost × markup", () => {

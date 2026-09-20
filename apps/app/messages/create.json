@@ -31,8 +31,8 @@
     "chooser": {
       "title": "Create",
       "lead": "One shape for everything you create here: you describe it, Oxagen drafts the file, you read it, and a pull request publishes it.",
-      "note": "None of these writes a row. Each one ends on a pull request against {repository}, and the thing exists when somebody merges it. The merge is also the only place a reviewer can stop it.",
-      "noteUnknown": "None of these writes a row. Each one ends on a pull request against the workspace’s main repository, and the thing exists when somebody merges it. The merge is also the only place a reviewer can stop it."
+      "note": "None of these writes a row. Each one ends on a pull request against {repository}, where a reviewer decides whether to merge the files. Register a new agent after merge to create its identity.",
+      "noteUnknown": "None of these writes a row. Each one ends on a pull request against the workspace’s main repository, where a reviewer decides whether to merge the files. Register a new agent after merge to create its identity."
     },
     "kinds": {
       "agent": {
@@ -151,7 +151,7 @@
       "pr": {
         "title": "Open the pull request",
         "subtitle": "A skill an agent can find is a skill somebody merged.",
-        "lead": "Merging this makes <code>{name}</code> resolvable in {workspace}. The digest is taken at merge.",
+        "lead": "Merging this makes <code>{name}</code> resolvable in {workspace}. The digest covers the submitted bytes. Review later pushes before merging.",
         "fileSkill": "the skill",
         "fileBundle": "from the bundle",
         "replaces": "If this skill is already merged, the pull request replaces it, and the checks refuse a version that is not greater than the merged one. Runs in flight keep the version they resolved.",
@@ -166,7 +166,7 @@
           },
           "digest": {
             "name": "Digest",
-            "detail": "taken again over the canonical bytes at merge; it is what a run records when it loads this"
+            "detail": "computed over the submitted canonical bytes; later pushes need a new review"
           },
           "grants": {
             "name": "Grants",

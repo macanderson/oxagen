@@ -1,10 +1,8 @@
 #!/usr/bin/env tsx
 /**
- * Platform seed: inserts the Free/Build/Scale/Enterprise billing plans.
- * Idempotent (onConflictDoNothing). Called after `atlas migrate apply` on
- * every fresh database — local, preview, and production.
- *
- * Run via `pnpm db:seed-platform`.
+ * Idempotent platform defaults: the Free plan and book editions.
+ * Runs after local migrations and as a bundled production migration step.
+ * Paid plan identifiers remain managed by billing:stripe-sync.
  */
 import kleur from "kleur";
 import { seedPlatform } from "@oxagen/database/seed";

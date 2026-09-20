@@ -695,7 +695,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -713,7 +713,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Apply the migration directory without a superuser
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+      - name: Package the production platform seed
+        run: |
+          pnpm install --frozen-lockfile
+          node tools/scripts/build-platform-seed.mjs
+
+      - name: Apply migrations and platform defaults without a superuser
         env:
           PGHOST: postgres
           PGPORT: "5432"

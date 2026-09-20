@@ -2,13 +2,13 @@
 
 ## Scope and base
 
-Branch `fix/backlog-tenant-telemetry` starts from freshly fetched main `ec637f8e4`, then includes recovery PR #3543 at `2174aa7f7`. The recovery removes the unreviewed nullable-workspace migration. This branch does not restore it or include migrations from other open PRs. Atlas regenerated the checksum for this branch's partition migration.
+Branch `fix/backlog-tenant-telemetry` starts from freshly fetched main `ec637f8e4`, then includes recovery PR #3543 at `2174aa7f7`. The recovery removes the unreviewed nullable-workspace migration. A later refresh merges main at `6488e2b34`, including the reviewed RLS fix from #3562 and approval replay from #3549. Atlas regenerated the combined checksum.
 
 This change references #2972. It does not close the umbrella issue.
 
 ## Changes ready for CI
 
-- #1288 and #2197: shared and dedicated ClickHouse clients guard query, insert, command, exec, and ping at construction. Response bodies and streams settle breaker leases. Close remains available during an outage. Dedicated organization/configuration breakers are isolated.
+- #1288 and #2197: shared and dedicated ClickHouse clients guard query, insert, command, exec, and ping at construction. Response bodies and streams settle breaker leases. Close remains available during an outage. Cost-frame readers use the client guard directly so an outer lease cannot reject its own half-open probe. Dedicated organization/configuration breakers are isolated.
 - #2513: malformed tenant entry uses `invalid_tenant_scope` and a kernel error event. Missing scope retains `no_tenant_scope` and a denial event.
 - #2514: normalized async local storage uses an internal required-field scope type.
 - #2515: capability attribution requires a bounded identifier string. UUID checks reject coercible objects.
@@ -17,7 +17,7 @@ This change references #2972. It does not close the umbrella issue.
 
 ## Verification
 
-Only local test file: `pnpm --filter @oxagen/telemetry exec vitest run src/clickhouse-breaker-client.test.ts`. Result: 8 passed on 2026-09-19. No other local test file, suite, build, lint, or typecheck was run manually.
+Only local test file: `pnpm --filter @oxagen/telemetry exec vitest run src/clickhouse-breaker-client.test.ts`. Result: 9 passed on 2026-09-19. No other local test file, suite, build, lint, or typecheck was run manually.
 
 CI-only changes cover tenant scope validation, real kernel security-event classification, daily job refusal/result validation, partition metadata and role grants, DEFAULT movement, seven-year calendar cutoff, expired named partitions, repeated maintenance, and the advisory lock from another connection. The PostgreSQL fixture rolls back its rows and DDL.
 

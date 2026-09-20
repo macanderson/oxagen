@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
-import { eq, sql } from "drizzle-orm";
+import {
+  withTenantDb,
+  withSystemDb,
+  schema,
+  isUniqueViolation,
+} from "@oxagen/database";
+import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import {
   notifyOrgManagers,
   lowBalanceAlertTemplate,
@@ -11,6 +16,7 @@ import { CREDIT_REASONS } from "./constants";
 import { logger } from "./logger";
 import { getOrgBillingSettings } from "./billing-settings";
 import { readRecordedCustomerId } from "./recorded-customer";
+import { deterministicUuid } from "./internal/deterministic-uuid";
 
 // ---------------------------------------------------------------------------
 // Low balance detection
@@ -107,7 +113,19 @@ async function claimReloadEpisode(
         autoReloadEpisodeStartedAt: sql`COALESCE(${schema.orgBillingSettings.autoReloadEpisodeStartedAt}, ${now})`,
         updatedAt: now,
       })
-      .where(eq(schema.orgBillingSettings.orgId, orgId))
+      .where(
+        and(
+          eq(schema.orgBillingSettings.orgId, orgId),
+          eq(schema.orgBillingSettings.autoReloadEnabled, true),
+          or(
+            isNull(schema.orgBillingSettings.lastAutoReloadAt),
+            lt(
+              schema.orgBillingSettings.lastAutoReloadAt,
+              new Date(now.getTime() - 60 * 60 * 1000),
+            ),
+          ),
+        ),
+      )
       .returning({
         idempotencyKey: schema.orgBillingSettings.autoReloadEpisodeKey,
         startedAt: schema.orgBillingSettings.autoReloadEpisodeStartedAt,
@@ -123,7 +141,11 @@ async function claimReloadEpisode(
 }
 
 /** Close the episode: the credits are granted, so the next low balance is new. */
-async function closeReloadEpisode(orgId: string, now: Date): Promise<void> {
+async function closeReloadEpisode(
+  orgId: string,
+  now: Date,
+  idempotencyKey: string,
+): Promise<void> {
   await withTenantDb((tx) =>
     tx
       .update(schema.orgBillingSettings)
@@ -133,7 +155,12 @@ async function closeReloadEpisode(orgId: string, now: Date): Promise<void> {
         autoReloadEpisodeStartedAt: null,
         updatedAt: now,
       })
-      .where(eq(schema.orgBillingSettings.orgId, orgId)),
+      .where(
+        and(
+          eq(schema.orgBillingSettings.orgId, orgId),
+          eq(schema.orgBillingSettings.autoReloadEpisodeKey, idempotencyKey),
+        ),
+      ),
   );
 }
 
@@ -300,13 +327,7 @@ export async function maybeAutoReload(
   // paymentIntentId to compensate if it doesn't. The retry is bounded by
   // EPISODE_MAX_AGE_MS, past which it refuses rather than charging again.
   //
-  // One failure below is BENIGN, and the alert cannot tell it apart: two
-  // concurrent turns can both pass the lastAutoReloadAt check, both send the
-  // same idempotencyKey (so Stripe charges once), and both then try to grant
-  // against the same paymentIntentId. The credit_ledger idempotency index
-  // rejects the second insert, which lands here as "grant_failed_after_charge"
-  // even though the racer already granted the credits correctly. Check the
-  // ledger for the paymentIntentId before compensating on this alert.
+  const referenceId = deterministicUuid(chargeResult.paymentIntentId);
   const grantDate = now;
   const expiresAt = new Date(grantDate);
   expiresAt.setFullYear(expiresAt.getFullYear() + 1);
@@ -319,28 +340,62 @@ export async function maybeAutoReload(
       expiresAt,
       reason: CREDIT_REASONS.GRANT_AUTO_RELOAD,
       referenceType: "payment_intent",
-      referenceId: chargeResult.paymentIntentId,
+      referenceId,
     });
-
-    // The credits exist, so the episode is over: stamp the reload and release
-    // the key together. One write, so the rolling guard and the idempotency key
-    // can never disagree about whether a reload is still outstanding.
-    await closeReloadEpisode(orgId, now);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    let alreadyGranted = false;
+    if (isUniqueViolation(err)) {
+      try {
+        const grant = await withTenantDb((tx) =>
+          tx.query.creditLedger.findFirst({
+            where: and(
+              eq(schema.creditLedger.orgId, orgId),
+              eq(schema.creditLedger.referenceType, "payment_intent"),
+              eq(schema.creditLedger.referenceId, referenceId),
+              eq(schema.creditLedger.reason, CREDIT_REASONS.GRANT_AUTO_RELOAD),
+              eq(schema.creditLedger.deltaCents, BigInt(amountCents)),
+            ),
+            columns: { id: true },
+          }),
+        );
+        alreadyGranted = Boolean(grant);
+      } catch (lookupError) {
+        logger.error(
+          { orgId, err: lookupError },
+          "billing: could not verify the competing credit grant",
+        );
+      }
+    }
+    if (!alreadyGranted) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(
+        {
+          orgId,
+          customerId,
+          amountCents,
+          paymentIntentId: chargeResult.paymentIntentId,
+          err: message,
+          durationMs: Date.now() - start,
+          alert: "auto_reload_charged_but_not_granted",
+        },
+        "billing: auto-reload — CHARGED but credit grant failed; customer charged without credits, needs reconciliation (retries next turn)",
+      );
+      return { reloaded: false, reason: "grant_failed_after_charge" };
+    }
+  }
+
+  try {
+    await closeReloadEpisode(orgId, now, episode.idempotencyKey);
+  } catch (err) {
     logger.error(
       {
         orgId,
-        customerId,
-        amountCents,
+        err,
         paymentIntentId: chargeResult.paymentIntentId,
-        err: message,
-        durationMs: Date.now() - start,
-        alert: "auto_reload_charged_but_not_granted",
+        alert: "auto_reload_episode_cleanup_failed",
       },
-      "billing: auto-reload — CHARGED but credit grant failed; customer charged without credits, needs reconciliation (retries next turn)",
+      "billing: credits exist but reload episode cleanup failed; retry will reuse the payment key",
     );
-    return { reloaded: false, reason: "grant_failed_after_charge" };
   }
 
   logger.info(

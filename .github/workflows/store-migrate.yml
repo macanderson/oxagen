@@ -49,8 +49,7 @@ on:
         default: false
 
 # Two migration runs against one store must never overlap. The runner has a
-# same-process guard (#2637) and nothing beyond it, so two workflow runs would
-# race for real.
+# shared Postgres lock also coordinates callers outside this workflow.
 concurrency:
   group: store-migrate
   cancel-in-progress: false
@@ -156,6 +155,48 @@ jobs:
             echo "$key=$value" >> "$GITHUB_ENV"
           done
           echo "read 8 parameters"
+
+      # The lock must use the same Aurora database as migrations on the app
+      # node. Forward through that node; hosted runners cannot reach Aurora.
+      - name: Open the ClickHouse coordinator tunnel
+        if: inputs.apply && contains(inputs.stores, 'clickhouse')
+        run: |
+          set -euo pipefail
+          COORDINATOR_URL=$(aws ssm get-parameter --name "/oxagen/production/DATABASE_URL" \
+            --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$COORDINATOR_URL"
+          export COORDINATOR_URL
+          node --input-type=module <<'NODE'
+          import { appendFileSync, writeFileSync } from 'node:fs';
+          import { coordinatorTunnel } from './tools/scripts/store-migrate-coordinator.mjs';
+          const { host, port, url } = coordinatorTunnel(process.env.COORDINATOR_URL);
+          console.log(`::add-mask::${url}`);
+          appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL=${url}\n`);
+          writeFileSync('/tmp/coordinator-tunnel.json', JSON.stringify({
+            host: [host], portNumber: [port], localPortNumber: ['15432'],
+          }));
+          NODE
+          # Keep the original hostname for TLS certificate verification. Only
+          # this runner resolves it to the local forwarding socket; the SSM
+          # agent resolves the remote hostname from inside the VPC.
+          host=$(jq -r '.host[0]' /tmp/coordinator-tunnel.json)
+          printf '127.0.0.1 %s\n' "$host" | sudo tee -a /etc/hosts >/dev/null
+          aws ssm start-session \
+            --target "${{ steps.node.outputs.instance }}" \
+            --document-name AWS-StartPortForwardingSessionToRemoteHost \
+            --parameters file:///tmp/coordinator-tunnel.json \
+            > /tmp/tunnel-coordinator.log 2>&1 &
+          echo $! > /tmp/tunnel-coordinator.pid
+          for _ in $(seq 1 30); do
+            if timeout 1 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/15432' 2>/dev/null; then
+              echo "Coordinator tunnel is open"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Aurora coordinator tunnel did not open"
+          tail -3 /tmp/tunnel-coordinator.log
+          exit 1
 
       # The read-only half. `db-migrate.ts` has no status mode, so this asks
       # the ledger directly and diffs it against the files on disk — the same

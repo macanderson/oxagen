@@ -82,32 +82,35 @@ describe("github.poll — auth + request shape", () => {
 });
 
 describe("github.poll — record shaping + cursor filtering", () => {
-  it("yields pull_request records keyed by number", async () => {
+  it("yields pull_request records keyed by global provider ID", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
-        { number: 42, updated_at: "2026-03-01T00:00:00Z" },
-        { number: 41, updated_at: "2026-02-01T00:00:00Z" },
+        { id: 42, number: 42, updated_at: "2026-03-01T00:00:00Z" },
+        { id: 41, number: 41, updated_at: "2026-02-01T00:00:00Z" },
       ]),
     );
     const out = await collect(
       github.poll!(bearer, config, "pull_request", null),
     );
-    expect(out.map((r) => r.externalId)).toEqual(["42", "41"]);
+    expect(out.map((r) => r.externalId)).toEqual([
+      "pull_request:id:42",
+      "pull_request:id:41",
+    ]);
     expect(out[0]!.sourceRecordType).toBe("pull_request");
   });
 
   it("stops at the cursor for updated-desc lists", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
-        { number: 3, updated_at: "2026-03-01T00:00:00Z" },
-        { number: 2, updated_at: "2026-02-01T00:00:00Z" }, // == cursor → stop
-        { number: 1, updated_at: "2026-01-01T00:00:00Z" },
+        { id: 3, number: 3, updated_at: "2026-03-01T00:00:00Z" },
+        { id: 2, number: 2, updated_at: "2026-02-01T00:00:00Z" }, // == cursor → stop
+        { id: 1, number: 1, updated_at: "2026-01-01T00:00:00Z" },
       ]),
     );
     const out = await collect(
       github.poll!(bearer, config, "pull_request", "2026-02-01T00:00:00Z"),
     );
-    expect(out.map((r) => r.externalId)).toEqual(["3"]);
+    expect(out.map((r) => r.externalId)).toEqual(["pull_request:id:3"]);
   });
 
   it("drops PRs returned by the issues endpoint", async () => {
@@ -118,11 +121,11 @@ describe("github.poll — record shaping + cursor filtering", () => {
           updated_at: "2026-03-01T00:00:00Z",
           pull_request: { url: "x" },
         },
-        { number: 11, updated_at: "2026-03-02T00:00:00Z" },
+        { id: 11, number: 11, updated_at: "2026-03-02T00:00:00Z" },
       ]),
     );
     const out = await collect(github.poll!(bearer, config, "issue", null));
-    expect(out.map((r) => r.externalId)).toEqual(["11"]);
+    expect(out.map((r) => r.externalId)).toEqual(["issue:id:11"]);
   });
 
   it("throws on a non-ok response so Inngest retries", async () => {
@@ -167,5 +170,148 @@ describe("github.cursorOf", () => {
 
   it("returns null when the watermark field is absent", () => {
     expect(github.cursorOf!("pull_request", {})).toBeNull();
+  });
+});
+
+describe("GitHub organization polling", () => {
+  it("expands and deduplicates repositories while keeping equal issue numbers distinct", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/orgs/acme/repos"))
+        return Promise.resolve(
+          jsonResponse([{ full_name: "acme/one" }, { full_name: "acme/two" }]),
+        );
+      const one = url.includes("/repos/acme/one/");
+      return Promise.resolve(
+        jsonResponse([
+          {
+            id: one ? 101 : 202,
+            number: 7,
+            html_url: `https://github.com/acme/${one ? "one" : "two"}/issues/7`,
+          },
+        ]),
+      );
+    });
+    const rows = await collect(
+      github.poll!(
+        bearer,
+        {
+          organizations: ["acme"],
+          repositories: ["acme/one"],
+          syncDepthDays: 90,
+        },
+        "issue",
+        null,
+      ),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(rows.map((row) => row.externalId)).toEqual([
+      "issue:id:101",
+      "issue:id:202",
+    ]);
+    expect(
+      rows.map((row) => github.normalizeRecord("issue", row.raw).externalId),
+    ).toEqual(["issue:id:101", "issue:id:202"]);
+  });
+
+  it("reads beyond the first hundred records", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(
+          Array.from({ length: 100 }, (_, i) => ({ id: i + 1, number: i + 1 })),
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse([{ id: 101, number: 101 }]));
+    const rows = await collect(github.poll!(bearer, config, "issue", null));
+    expect(rows).toHaveLength(101);
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("&page=2");
+  });
+
+  it("fails an incomplete list when a later page disappears", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }))),
+      )
+      .mockResolvedValueOnce(jsonResponse({}, false, 404));
+    const yielded: RawRecord[] = [];
+    await expect(
+      (async () => {
+        for await (const row of github.poll!(bearer, config, "issue", null))
+          yielded.push(row);
+      })(),
+    ).rejects.toThrow("404");
+    expect(yielded).toHaveLength(100);
+  });
+
+  it("treats a first-page 404 as an unavailable repository", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}, false, 404));
+    expect(await collect(github.poll!(bearer, config, "issue", null))).toEqual(
+      [],
+    );
+  });
+});
+
+describe("incremental GitHub pagination", () => {
+  const cursor = "2026-02-01T00:00:00Z";
+  const changedAt = "2026-03-01T00:00:00Z";
+
+  it.each(["issue", "pull_request"])(
+    "stops %s with no changes after one full page",
+    async (kind) => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(
+          Array.from({ length: 100 }, (_, i) => ({
+            id: i + 1,
+            updated_at: cursor,
+          })),
+        ),
+      );
+      expect(await collect(github.poll!(bearer, config, kind, cursor))).toEqual(
+        [],
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["issue", "pull_request"])(
+    "reads all same-timestamp new %s records across pages",
+    async (kind) => {
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse(
+            Array.from({ length: 100 }, (_, i) => ({
+              id: i + 1,
+              updated_at: changedAt,
+            })),
+          ),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse(
+            Array.from({ length: 100 }, (_, i) => ({
+              id: i + 101,
+              updated_at: i === 0 ? changedAt : cursor,
+            })),
+          ),
+        );
+      const rows = await collect(github.poll!(bearer, config, kind, cursor));
+      expect(rows).toHaveLength(101);
+      expect(rows[100]?.externalId).toBe(`${kind}:id:101`);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("stops issue pagination at an excluded PR on the cursor boundary", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        Array.from({ length: 100 }, (_, i) => ({
+          id: i + 1,
+          updated_at: cursor,
+          pull_request: {},
+        })),
+      ),
+    );
+    expect(
+      await collect(github.poll!(bearer, config, "issue", cursor)),
+    ).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

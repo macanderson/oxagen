@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { digestBytes } from "../digest";
+import { MAX_CONTENT_REDACTIONS } from "../envelope";
 import { TACHO_MAX_BODY_BYTES } from "../wire";
 import {
   contentClassOf,
   jsonContent,
   prepareContent,
   retentionAllows,
-  TACHO_MAX_REDACTIONS,
   textContent,
 } from "./frame-body";
 import { redactionMarker } from "./redaction";
@@ -50,15 +50,51 @@ describe("prepareContent", () => {
     expect(prepared.digest).toBe(digestBytes(big));
   });
 
-  it("chains nothing when the redaction list would overflow the envelope", () => {
+  it("keeps the redacted body and total when the detail list reaches the cap", () => {
     const keys = Array.from(
-      { length: TACHO_MAX_REDACTIONS + 1 },
+      { length: MAX_CONTENT_REDACTIONS + 1 },
       (_, i) => `AKIA${String(i).padStart(16, "0")}`,
     ).join(" ");
     const prepared = prepareContent(textContent(keys));
-    expect(prepared.omitted).toBe("too_many_redactions");
-    expect(prepared.digest).toBeUndefined();
+    expect(prepared.omitted).toBeUndefined();
+    expect(prepared.redactions).toHaveLength(MAX_CONTENT_REDACTIONS);
+    expect(prepared.redactionsTotal).toBe(MAX_CONTENT_REDACTIONS + 1);
+    const expected = Array.from({ length: MAX_CONTENT_REDACTIONS + 1 }, () =>
+      redactionMarker("aws_access_key"),
+    ).join(" ");
+    expect(dec.decode(prepared.body?.bytes)).toBe(expected);
+    expect(prepared.digest).toBe(digestBytes(expected));
+  });
+
+  it("records every detail at the exact redaction cap", () => {
+    const keys = Array.from(
+      { length: MAX_CONTENT_REDACTIONS },
+      (_, i) => `AKIA${String(i).padStart(16, "0")}`,
+    ).join(" ");
+    const prepared = prepareContent(textContent(keys));
+    expect(prepared.redactions).toHaveLength(MAX_CONTENT_REDACTIONS);
+    expect(prepared.redactionsTotal).toBe(MAX_CONTENT_REDACTIONS);
+    expect(prepared.omitted).toBeUndefined();
+    expect(prepared.digest).toBe(
+      digestBytes(prepared.body?.bytes as Uint8Array),
+    );
+  });
+
+  it("retains the digest and full count when both limits are exceeded", () => {
+    const keys = Array.from(
+      { length: MAX_CONTENT_REDACTIONS + 1 },
+      (_, i) => `AKIA${String(i).padStart(16, "0")}`,
+    ).join(" ");
+    const padding = "x".repeat(TACHO_MAX_BODY_BYTES);
+    const prepared = prepareContent(textContent(`${keys} ${padding}`));
+    const redacted = Array.from({ length: MAX_CONTENT_REDACTIONS + 1 }, () =>
+      redactionMarker("aws_access_key"),
+    ).join(" ");
+    expect(prepared.omitted).toBe("too_large");
     expect(prepared.body).toBeUndefined();
+    expect(prepared.redactions).toHaveLength(MAX_CONTENT_REDACTIONS);
+    expect(prepared.redactionsTotal).toBe(MAX_CONTENT_REDACTIONS + 1);
+    expect(prepared.digest).toBe(digestBytes(`${redacted} ${padding}`));
   });
 
   it("carries canonical JSON as application/json", () => {

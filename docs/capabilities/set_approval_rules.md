@@ -67,3 +67,9 @@ every consequence the rules' tools carry.
 ## SPEC references
 
 - §6.9 part 2, App. E; ADR-070
+
+## External MCP tools
+
+Auto-approval is unavailable for external MCP tools because they have no trusted cost or consequence measures. Saving an auto-approval rule for one returns `external_auto_approval_unsupported`.
+
+Use the workspace decision-rules document for `deny` or `require_approval` rules instead. These match `mcp.<serverId>.<tool>` and `file-mcp.<serverName>.<tool>`, including server-prefix patterns such as `mcp.<serverId>.*`. Human approval applies to one exact call. A changed input or rule document requires a new decision. External calls by an agent principal remain refused until their mandate measures can be established. See ADR-122.

@@ -9,6 +9,7 @@
  * @oxagen/ingestion/sync.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
 import type { RawRecord } from "@oxagen/ingestion/connectors";
 
 const mocks = vi.hoisted(() => ({
@@ -247,4 +248,46 @@ describe("ingestion-connection-poll — failure path", () => {
     ];
     expect(rows[0]!.event_type).toBe("connector.poll.failed");
   });
+});
+
+describe("poll batch boundary", () => {
+  it.each([200, 201])(
+    "does not advance over a truncated batch of %i records",
+    async (count) => {
+      const oldCursor = { issue: "2026-01-01T00:00:00Z" };
+      const exec = setupDb(
+        {
+          cursor: oldCursor,
+          consecutive_failure_count: 0,
+          status: "connected",
+        },
+        ["issue"],
+      );
+      mocks.getConnector.mockReturnValue(
+        makeConnector((rt) =>
+          yieldRecords(
+            rt,
+            Array.from({ length: count }, () => "2026-05-01T00:00:00Z"),
+          ),
+        ),
+      );
+      const result = await capturedHandler!({
+        event: { data: eventData },
+        step: makeStep(),
+      });
+      const emitted = sentEvents
+        .filter((e) => e.id.startsWith("emit-"))
+        .flatMap((e) => e.events as unknown[]);
+      expect(result).toMatchObject({ ok: count === 200 });
+      expect(emitted).toHaveLength(count === 200 ? 200 : 0);
+      const update = exec.mock.calls.at(-1)?.[0];
+      if (!update) throw new Error("Expected the poll state update");
+      const query = new PgDialect().sqlToQuery(update);
+      expect(query.params).toContain(
+        JSON.stringify(
+          count === 200 ? { issue: "2026-05-01T00:00:00Z" } : oldCursor,
+        ),
+      );
+    },
+  );
 });

@@ -62,6 +62,7 @@ function makeGithubEvent(
     sourceRecordType: "pull_request",
     idempotencyKey: "github:conn-integration-1:pull_request:99",
     payload: {
+      id: 9900,
       number: 99,
       title: "Add user onboarding flow",
       body: "This PR implements the onboarding wizard described in the product spec.",
@@ -100,6 +101,10 @@ const PRINCIPAL_NODE_ID = "uuid-principal-integration-1";
 /** Set up Neo4j session mocks for a successful dedup + upsert flow. */
 function setupNeo4jMocks() {
   // Pass A: naturalKey lookup — no existing node (triggers Pass B)
+  mocks.sessionRun.mockResolvedValueOnce({ records: [] });
+
+  // Canonical alias and legacy URL lookup both miss.
+  mocks.sessionRun.mockResolvedValueOnce({ records: [] });
   mocks.sessionRun.mockResolvedValueOnce({ records: [] });
 
   // embedText (called during Pass B dedup)
@@ -171,7 +176,9 @@ describe("runPipeline — full 6-stage integration", () => {
     const result = (await runPipeline(event, ctx)) as PipelineResult;
 
     expect(result).not.toBeNull();
-    expect(result.naturalKey).toBe("github:conn-integration-1:99");
+    expect(result.naturalKey).toBe(
+      "github:conn-integration-1:pull_request:id:9900",
+    );
     expect(result.operation).toBe("insert");
     expect(result.embedded).toBe(true);
     expect(typeof result.dedup.principalNodeId).toBe("string");
@@ -206,7 +213,9 @@ describe("runPipeline — full 6-stage integration", () => {
     expect(cypher).toContain(
       "MERGE (n:`CodeChange`:`EntityNode` {naturalKey: $naturalKey, orgId: $orgId})",
     );
-    expect(params["naturalKey"]).toBe("github:conn-integration-1:99");
+    expect(params["naturalKey"]).toBe(
+      "github:conn-integration-1:pull_request:id:9900",
+    );
     expect(params["entityType"]).toBe("code_change");
     // upsertEntityNode binds $orgId explicitly in its params, rather than
     // relying on scopedSession's own orgId/workspaceId injection. This mock

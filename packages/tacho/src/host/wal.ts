@@ -8,8 +8,8 @@
  * Frame bodies (the prompt, the tool input and result, the assistant
  * message) live in a second file beside the session's events,
  * `<session>.bodies.jsonl`, one base64 line per event that carries one. They
- * are kept apart because the event file is the chain and is read whole on
- * every tick, and a body can be a megabyte; the shipped cursor covers both,
+ * are kept apart because the event file is the chain and a body can be a
+ * megabyte. Reads decode one line at a time; the shipped cursor covers both,
  * since a body only ever ships with its event.
  *
  * NDJSON rather than SQLite keeps the package free of native modules and keeps
@@ -25,13 +25,20 @@
  */
 import {
   appendFileSync,
+  closeSync,
+  fsyncSync,
+  openSync,
   existsSync,
   readdirSync,
-  readFileSync,
+  readSync,
+  renameSync,
   statSync,
   unlinkSync,
+  writeSync,
 } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import type { TachoEvent } from "../envelope";
 import {
   contentClassOf,
@@ -46,12 +53,43 @@ import {
   writeSensitiveFileAtomic,
 } from "./fs";
 
+/** Decode one line at a time, including UTF-8 characters split across reads. */
+function* readLines(path: string): Generator<string> {
+  const fd = openSync(path, "r");
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  const decoder = new StringDecoder("utf8");
+  let pending = "";
+  try {
+    let size: number;
+    while ((size = readSync(fd, buffer, 0, buffer.length, null)) > 0) {
+      pending += decoder.write(buffer.subarray(0, size));
+      let start = 0;
+      let end: number;
+      while ((end = pending.indexOf("\n", start)) !== -1) {
+        yield pending.slice(start, end);
+        start = end + 1;
+      }
+      pending = pending.slice(start);
+    }
+    pending += decoder.end();
+    if (pending.length > 0) yield pending;
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** One line of a session's body file. */
 interface StoredBody {
   event_id_idem: string;
   seq: number;
   content_type: string;
   bytes_base64: string;
+}
+
+export interface WalBodyFailure {
+  session_uuid: string;
+  operation: "append" | "read";
+  code: string;
 }
 
 export interface WalStats {
@@ -80,7 +118,12 @@ export class Wal {
    */
   private readonly lastSeq = new Map<string, number>();
 
-  constructor(dir: string) {
+  constructor(
+    dir: string,
+    private readonly reportBodyFailure: (failure: WalBodyFailure) => void = (
+      failure,
+    ) => console.warn("WAL body unavailable", failure),
+  ) {
     this.dir = dir;
     ensureDir(dir);
     this.cursorPath = join(dir, "cursor.json");
@@ -106,11 +149,9 @@ export class Wal {
   }
 
   /**
-   * Append sealed events, each to its own session's file, and the bodies of
-   * those that carry one to the session's body file. The bodies go first:
-   * a crash between the two writes then leaves an event without a body,
-   * which ships as digest-only, rather than a body without an event, which
-   * nothing would ever ship.
+   * Bodies go first so ordinary writes ship content with its event. A crash
+   * between files can leave an orphan body, which retention sweeps remove.
+   * A failed body write must still permit the sealed event to persist.
    */
   append(
     events: readonly TachoEvent[],
@@ -129,9 +170,14 @@ export class Wal {
       bodyLines.set(body.session_uuid, lines);
     }
     for (const [session, lines] of bodyLines) {
-      appendFileSync(this.bodyFileFor(session), `${lines.join("\n")}\n`, {
-        mode: 0o600,
-      });
+      try {
+        // Separate a prior torn tail from this batch, including after restart.
+        appendFileSync(this.bodyFileFor(session), `\n${lines.join("\n")}\n`, {
+          mode: 0o600,
+        });
+      } catch (error) {
+        this.bodyFailure(session, "append", error);
+      }
     }
     const bySession = new Map<string, string[]>();
     for (const event of events) {
@@ -155,6 +201,26 @@ export class Wal {
     }
   }
 
+  private bodyFailure(
+    session: string,
+    operation: WalBodyFailure["operation"],
+    error: unknown,
+  ): void {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      /^[A-Za-z0-9_]+$/.test(error.code)
+        ? error.code
+        : "body_io_failed";
+    try {
+      this.reportBodyFailure({ session_uuid: session, operation, code });
+    } catch {
+      // A diagnostic sink cannot prevent persistence of the sealed event.
+    }
+  }
+
   sessions(): string[] {
     return readdirSync(this.dir)
       .filter((name) => name.endsWith(".ndjson"))
@@ -167,7 +233,7 @@ export class Wal {
     const path = this.fileFor(sessionUuid);
     if (!existsSync(path)) return [];
     const out: TachoEvent[] = [];
-    for (const line of readFileSync(path, "utf8").split("\n")) {
+    for (const line of readLines(path)) {
       if (line.trim().length === 0) continue;
       out.push(JSON.parse(line) as TachoEvent);
     }
@@ -194,16 +260,40 @@ export class Wal {
     for (const [session, idems] of wanted) {
       const path = this.bodyFileFor(session);
       if (!existsSync(path)) continue;
-      for (const line of readFileSync(path, "utf8").split("\n")) {
-        if (line.trim().length === 0) continue;
-        const stored = JSON.parse(line) as StoredBody;
-        if (stored.seq < minSeq || !idems.has(stored.event_id_idem)) continue;
-        if (found.has(stored.event_id_idem)) continue;
-        found.set(stored.event_id_idem, {
-          event_id_idem: stored.event_id_idem,
-          content_type: stored.content_type,
-          bytes_base64: stored.bytes_base64,
-        });
+      let reportedInvalid = false;
+      try {
+        for (const line of readLines(path)) {
+          if (line.trim().length === 0) continue;
+          let stored: StoredBody;
+          try {
+            stored = JSON.parse(line) as StoredBody;
+            if (
+              !stored ||
+              typeof stored.event_id_idem !== "string" ||
+              !Number.isSafeInteger(stored.seq) ||
+              typeof stored.content_type !== "string" ||
+              typeof stored.bytes_base64 !== "string"
+            )
+              throw new Error("Invalid body record");
+          } catch {
+            if (!reportedInvalid) {
+              this.bodyFailure(session, "read", {
+                code: "invalid_body_record",
+              });
+              reportedInvalid = true;
+            }
+            continue;
+          }
+          if (stored.seq < minSeq || !idems.has(stored.event_id_idem)) continue;
+          if (found.has(stored.event_id_idem)) continue;
+          found.set(stored.event_id_idem, {
+            event_id_idem: stored.event_id_idem,
+            content_type: stored.content_type,
+            bytes_base64: stored.bytes_base64,
+          });
+        }
+      } catch (error) {
+        this.bodyFailure(session, "read", error);
       }
     }
     const out: TachoBody[] = [];
@@ -443,23 +533,40 @@ export class Wal {
   ): number {
     const path = this.bodyFileFor(sessionUuid);
     if (!existsSync(path)) return 0;
-    const kept: string[] = [];
+    const tmp = `${path}.${randomUUID()}.tmp`;
+    const fd = openSync(tmp, "wx", 0o600);
     let cut = 0;
-    for (const line of readFileSync(path, "utf8").split("\n")) {
-      if (line.trim().length === 0) continue;
-      let stored: StoredBody | undefined;
+    let kept = 0;
+    try {
       try {
-        stored = JSON.parse(line) as StoredBody;
-      } catch {
-        stored = undefined;
+        for (const line of readLines(path)) {
+          if (line.trim().length === 0) continue;
+          let stored: StoredBody | undefined;
+          try {
+            stored = JSON.parse(line) as StoredBody;
+          } catch {
+            stored = undefined;
+          }
+          if (keep(stored)) {
+            const bytes = Buffer.from(`${line}\n`);
+            let offset = 0;
+            while (offset < bytes.length) {
+              offset += writeSync(fd, bytes, offset, bytes.length - offset);
+            }
+            kept += 1;
+          } else cut += 1;
+        }
+        if (cut > 0 && kept > 0) fsyncSync(fd);
+      } finally {
+        closeSync(fd);
       }
-      if (keep(stored)) kept.push(line);
-      else cut += 1;
+      if (cut === 0) return 0;
+      if (kept === 0) unlinkSync(path);
+      else renameSync(tmp, path);
+      return cut;
+    } finally {
+      if (existsSync(tmp)) unlinkSync(tmp);
     }
-    if (cut === 0) return 0;
-    if (kept.length === 0) unlinkSync(path);
-    else writeSensitiveFileAtomic(path, `${kept.join("\n")}\n`);
-    return cut;
   }
 
   /**

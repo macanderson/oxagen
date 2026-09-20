@@ -4,8 +4,10 @@ import type { ClickHouseClient } from "@clickhouse/client";
 import {
   CircuitBreaker,
   CircuitOpenError,
+  getBreaker,
   __resetBreakerRegistry,
 } from "./circuit-breaker";
+import { readModelCallFrames } from "./cost-frames";
 import { guardClickhouseClient } from "./clickhouse-breaker-client";
 
 const h = vi.hoisted(() => ({ create: vi.fn() }));
@@ -49,6 +51,32 @@ beforeEach(async () => {
 });
 
 describe("ClickHouse client breaker", () => {
+  it("lets a cost-frame read recover through the single client probe", async () => {
+    vi.useFakeTimers();
+    try {
+      const raw = rawClient();
+      h.create.mockReturnValue(raw);
+      clickhouse();
+      const breaker = getBreaker("clickhouse");
+      breaker.begin().fail("down");
+      breaker.begin().fail("down");
+      vi.advanceTimersByTime(101);
+      await expect(
+        readModelCallFrames({
+          orgId: "00000000-0000-4000-8000-000000000001",
+          run: {
+            kind: "ledger",
+            runUuid: "00000000-0000-4000-8000-000000000002",
+          },
+        }),
+      ).resolves.toEqual([]);
+      expect(raw.query).toHaveBeenCalledOnce();
+      expect(breaker.getState()).toBe("closed");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("guards shared query, insert, and command paths at construction", async () => {
     const raw = rawClient();
     raw.insert.mockRejectedValue(new Error("store down"));

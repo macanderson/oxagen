@@ -59,18 +59,11 @@ function rejectedResult(
   };
 }
 
-/**
- * Resolve an EntityMutation against the existing graph.
- *
- * @param opts Optional schema-validation context (pinned active vocabulary
- *   + source metadata) threaded from the pipeline into the node write.
- * @returns DeduplicationResult describing what happened and which node to embed.
- */
-export async function resolveEntity(
+/** Find an existing identity without writing, preserving its stored natural key. */
+export async function resolveNaturalKey(
   mutation: EntityMutation,
   orgId: string,
-  opts: UpsertEntityOptions = {},
-): Promise<DeduplicationResult> {
+): Promise<{ nodeId: string | null; mutation: EntityMutation }> {
   // ── Pass A: exact naturalKey lookup ─────────────────────────────────────────
   const session = scopedSession();
   let passANodeId: string | null = null;
@@ -84,9 +77,89 @@ export async function resolveEntity(
     if (record) {
       passANodeId = record.get("nodeId") as string;
     }
+    if (!passANodeId && mutation.legacyNaturalKey) {
+      const canonical = await session.run(
+        `MATCH (n:EntityNode {canonicalNaturalKey: $canonicalNaturalKey, orgId: $orgId, workspaceId: $workspaceId})
+         RETURN n.publicId AS nodeId, n.naturalKey AS naturalKey`,
+        {
+          canonicalNaturalKey: mutation.naturalKey,
+          orgId,
+          workspaceId: mutation.workspaceId,
+        },
+      );
+      const canonicalRow =
+        canonical.records.length === 1 ? canonical.records[0] : undefined;
+      if (canonicalRow) {
+        passANodeId = canonicalRow.get("nodeId") as string;
+        mutation = {
+          ...mutation,
+          canonicalNaturalKey: mutation.naturalKey,
+          naturalKey: canonicalRow.get("naturalKey") as string,
+        };
+      }
+    }
+    if (
+      !passANodeId &&
+      mutation.legacyNaturalKey &&
+      mutation.sourceRef.externalUrl
+    ) {
+      const legacy = await session.run(
+        `MATCH (n:EntityNode {naturalKey: $legacyNaturalKey, orgId: $orgId, workspaceId: $workspaceId})
+         WHERE n.sourceRecordType = $sourceRecordType
+         RETURN n.publicId AS nodeId, n.properties AS properties`,
+        {
+          legacyNaturalKey: mutation.legacyNaturalKey,
+          orgId,
+          workspaceId: mutation.workspaceId,
+          sourceRecordType: mutation.sourceRecordType,
+        },
+      );
+      // A repository-local number may already represent another repository.
+      // Preserve an old public ID only when its recorded URL proves identity.
+      const matches = legacy.records.filter((row) => {
+        try {
+          const properties: unknown = JSON.parse(String(row.get("properties")));
+          return (
+            properties !== null &&
+            typeof properties === "object" &&
+            (properties as Record<string, unknown>).url ===
+              mutation.sourceRef.externalUrl
+          );
+        } catch {
+          return false;
+        }
+      });
+      if (legacy.records.length === 1 && matches.length === 1) {
+        passANodeId = matches[0]!.get("nodeId") as string;
+        mutation = {
+          ...mutation,
+          canonicalNaturalKey: mutation.naturalKey,
+          naturalKey: mutation.legacyNaturalKey,
+        };
+      }
+    }
   } finally {
     await session.close();
   }
+
+  return { nodeId: passANodeId, mutation };
+}
+
+/**
+ * Resolve an EntityMutation against the existing graph.
+ *
+ * @param opts Optional schema-validation context (pinned active vocabulary
+ *   + source metadata) threaded from the pipeline into the node write.
+ * @returns DeduplicationResult describing what happened and which node to embed.
+ */
+export async function resolveEntity(
+  mutation: EntityMutation,
+  orgId: string,
+  opts: UpsertEntityOptions = {},
+): Promise<DeduplicationResult> {
+  const match = await resolveNaturalKey(mutation, orgId);
+  mutation = match.mutation;
+  const passANodeId = match.nodeId;
 
   if (passANodeId) {
     // Node already exists; upsertEntityNode will update it (ON MATCH SET).

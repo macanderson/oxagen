@@ -406,6 +406,8 @@ export type PlanTier = "free" | "build" | "scale" | "enterprise";
 export const ORG_ONLY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
 
 export interface CapabilityContext {
+  /** Run correlation inherited by nested capability calls. */
+  runId?: string | null;
   orgId: string;
   workspaceId: string;
   userId: string | null;

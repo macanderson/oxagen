@@ -399,8 +399,16 @@ async function unenrollLocked(
   for (const failure of baseUrls.failed) {
     incomplete = true;
     warnings.push(
-      `could not take the model base URL out: ${failure}. While it is there the agent sends its model calls to a port nothing listens on. Remove it by hand, or fix the file and run \`tacho unenroll\` again`,
+      `could not take the model base URL out: ${failure}. The gateway remains installed so the agent can still make model calls. Remove the base URL by hand, or fix the file and run \`tacho unenroll\` again`,
     );
+  }
+
+  if (baseUrls.failed.length > 0) {
+    warnings.push(
+      "Unenrollment stopped before removing hooks, service, or credentials. Fix the named config files, then retry.",
+    );
+    for (const warning of warnings) deps.err(`warning: ${warning}`);
+    return { ok: false, settingsChanged: false, revoked: false, warnings };
   }
 
   deps.out(`[1/4] Removing Tacho hooks from ${deps.paths.claudeSettings}`);
@@ -446,6 +454,13 @@ async function unenrollLocked(
     warnings.push(
       `service removal failed: ${error instanceof Error ? error.message : String(error)}`,
     );
+    for (const warning of warnings) deps.err(`warning: ${warning}`);
+    return {
+      ok: false,
+      settingsChanged: stripped.settingsChanged,
+      revoked: false,
+      warnings,
+    };
   }
 
   let revoked = false;
