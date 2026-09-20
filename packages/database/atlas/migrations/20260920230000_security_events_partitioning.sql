@@ -63,12 +63,14 @@ BEGIN
   ALTER TABLE security.security_events_default RENAME CONSTRAINT security_events_id_occurred_at_pk TO security_events_default_id_occurred_at_pk;
   ALTER INDEX security.security_events_org_occurred_idx RENAME TO security_events_default_org_occurred_idx;
   ALTER INDEX security.security_events_type_occurred_idx RENAME TO security_events_default_type_occurred_idx;
+  ALTER INDEX security.security_events_request_id_idx RENAME TO security_events_default_request_id_idx;
   CREATE TABLE security.security_events (LIKE security.security_events_default
     INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING GENERATED INCLUDING STORAGE INCLUDING COMMENTS)
     PARTITION BY RANGE (occurred_at);
   ALTER TABLE security.security_events ADD CONSTRAINT security_events_id_occurred_at_pk PRIMARY KEY (id, occurred_at);
   CREATE INDEX security_events_org_occurred_idx ON security.security_events (org_id, occurred_at);
   CREATE INDEX security_events_type_occurred_idx ON security.security_events (event_type, occurred_at);
+  CREATE INDEX security_events_request_id_idx ON security.security_events (request_id);
   PERFORM security.copy_audit_table_security('security.security_events_default', 'security.security_events', true);
   EXECUTE format('ALTER TABLE security.security_events OWNER TO %I', original_owner);
   FOR acl_row IN SELECT DISTINCT acl.grantee FROM pg_catalog.pg_class c,

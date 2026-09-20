@@ -141,6 +141,18 @@ describe("audit partition maintenance", () => {
         WHERE i.inhparent = 'security.security_events'::regclass
       `;
         expect(protectedChildren.length).toBeGreaterThanOrEqual(4);
+        const unindexed = await tx`
+          SELECT c.relname FROM pg_catalog.pg_class c
+          WHERE (c.oid = 'security.security_events'::regclass OR c.oid IN (
+            SELECT inhrelid FROM pg_catalog.pg_inherits WHERE inhparent = 'security.security_events'::regclass
+          )) AND NOT EXISTS (
+            SELECT 1 FROM pg_catalog.pg_index i JOIN pg_catalog.pg_attribute a
+              ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+            WHERE i.indrelid = c.oid AND a.attname = 'request_id' AND i.indisvalid
+          )
+        `;
+        expect(unindexed).toEqual([]);
+
         for (const child of protectedChildren)
           expect(child).toMatchObject({
             relrowsecurity: true,
