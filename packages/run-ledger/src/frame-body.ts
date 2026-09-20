@@ -111,6 +111,22 @@ export interface RunBodyStore {
     contentType: string;
     bytes: Uint8Array;
   }): Promise<{ ref: string }>;
+  /**
+   * Where the body's REASSEMBLY goes: the message a recorded model stream
+   * folded into, derived once at write (`content-blocks.ts`) and stored
+   * beside the wire so no viewer ever folds it again.
+   *
+   * Optional, because it is derived and not evidence. A store without one
+   * records the run exactly as before, and a reader folds the wire itself.
+   */
+  putAssembly?(input: {
+    orgId: string;
+    workspaceId: string;
+    runId: string;
+    /** The body reference the assembly belongs to. */
+    bodyRef: string;
+    bytes: Uint8Array;
+  }): Promise<void>;
 }
 
 /** Where a seal's archive segment is written once, and read back from. */
