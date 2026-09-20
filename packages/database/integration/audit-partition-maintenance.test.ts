@@ -11,6 +11,17 @@ describe("audit partition maintenance", () => {
     const [parent] =
       await sql`SELECT relkind FROM pg_catalog.pg_class WHERE oid = 'security.security_events'::regclass`;
     expect(parent?.relkind).toBe("p");
+    const checks = await sql`
+      SELECT conrelid::regclass::text AS relation, convalidated, pg_get_constraintdef(oid) AS definition
+      FROM pg_catalog.pg_constraint
+      WHERE conrelid IN ('security.security_events'::regclass, 'security.security_events_default'::regclass)
+        AND conname = 'security_events_event_type_check'
+      ORDER BY conrelid::regclass::text
+    `;
+    expect(checks).toHaveLength(2);
+    expect(checks.every((check) => check.convalidated === false)).toBe(true);
+    expect(checks[0]?.definition).toBe(checks[1]?.definition);
+
     const [definition] = await sql`
       SELECT p.prosecdef, p.proconfig, pg_has_role('oxagen_app', p.proowner, 'MEMBER') AS app_can_assume_owner,
         has_function_privilege('oxagen_app', p.oid, 'EXECUTE') AS app_can_execute,

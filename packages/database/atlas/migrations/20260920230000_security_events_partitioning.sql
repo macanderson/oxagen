@@ -48,7 +48,7 @@ $function$;
 REVOKE ALL ON FUNCTION security.copy_audit_table_security(regclass, regclass, boolean) FROM PUBLIC;
 
 DO $migration$
-DECLARE original_oid oid := 'security.security_events'::regclass; original_owner text; acl_row record; relation_kind "char";
+DECLARE original_oid oid := 'security.security_events'::regclass; original_owner text; acl_row record; check_row record; relation_kind "char";
 BEGIN
   SELECT relkind, pg_get_userbyid(relowner) INTO relation_kind, original_owner FROM pg_catalog.pg_class WHERE oid = original_oid;
   IF relation_kind <> 'r' THEN RAISE EXCEPTION 'security_events must match the Atlas heap baseline before conversion'; END IF;
@@ -65,8 +65,14 @@ BEGIN
   ALTER INDEX security.security_events_type_occurred_idx RENAME TO security_events_default_type_occurred_idx;
   ALTER INDEX security.security_events_request_id_idx RENAME TO security_events_default_request_id_idx;
   CREATE TABLE security.security_events (LIKE security.security_events_default
-    INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING GENERATED INCLUDING STORAGE INCLUDING COMMENTS)
+    INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING STORAGE INCLUDING COMMENTS)
     PARTITION BY RANGE (occurred_at);
+  -- LIKE validates copied checks. Keep the source validation state so legacy
+  -- event types can remain in DEFAULT without changing the new-row constraint.
+  FOR check_row IN SELECT conname, pg_get_constraintdef(oid) AS definition
+    FROM pg_catalog.pg_constraint WHERE conrelid = original_oid AND contype = 'c' LOOP
+    EXECUTE format('ALTER TABLE security.security_events ADD CONSTRAINT %I %s', check_row.conname, check_row.definition);
+  END LOOP;
   ALTER TABLE security.security_events ADD CONSTRAINT security_events_id_occurred_at_pk PRIMARY KEY (id, occurred_at);
   CREATE INDEX security_events_org_occurred_idx ON security.security_events (org_id, occurred_at);
   CREATE INDEX security_events_type_occurred_idx ON security.security_events (event_type, occurred_at);
