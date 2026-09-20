@@ -458,7 +458,7 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
 `,
         { mode: 0o755 },
       );
-      const run = () =>
+      const run = (...args: string[]) =>
         spawnSync(
           process.execPath,
           [
@@ -470,6 +470,7 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
             "--version",
             V,
             "--resume",
+            ...args,
           ],
           {
             encoding: "utf8",
@@ -517,6 +518,22 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
       };
       expect(refused.objects["index.html"]).toBeUndefined();
       expect(refused.writes).not.toContain("index.html");
+      const beforePreview = readFileSync(statePath, "utf8");
+      const preview = run("--dry-run");
+      expect(preview.status, preview.stderr).toBe(0);
+      expect(preview.stdout).toContain(
+        `[dry-run] aws s3 cp ${join(source, file)}`,
+      );
+      expect(preview.stdout).toContain("/index.html");
+      expect(preview.stdout).toContain("/fonts/");
+      expect(preview.stdout).toContain(
+        "[dry-run] aws cloudfront create-invalidation",
+      );
+      expect(preview.stdout).toContain(`${file}  15 bytes`);
+      expect(preview.stdout).toContain(
+        "installer recovery and page publication planned",
+      );
+      expect(readFileSync(statePath, "utf8")).toBe(beforePreview);
       const resumed = run();
       expect(resumed.status, resumed.stderr).toBe(0);
       const complete = JSON.parse(readFileSync(statePath, "utf8")) as {

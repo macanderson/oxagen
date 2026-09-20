@@ -289,8 +289,11 @@ function listPublishedObjects() {
 }
 
 /** Refuse incomplete releases before replacing the public download page. */
-async function redrawFromBucket({ probeCliRelease }) {
-  const objects = listPublishedObjects();
+async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
+  const objects = [
+    ...listPublishedObjects(),
+    ...(dryRun ? plannedObjects : []),
+  ];
   if (objects.length === 0) {
     console.error(
       `✖ nothing is published under ${prefix}/; --page-only needs a published version`,
@@ -524,6 +527,7 @@ if (resuming) {
     process.exit(1);
   }
   const keys = new Set(listPublishedObjects().map((object) => object.Key));
+  const plannedObjects = [];
   for (const entry of entries) {
     if (!keys.has(`${keyPrefix}${entry.file}`)) {
       upload(
@@ -532,10 +536,20 @@ if (resuming) {
         entry.contentType,
         immutable,
       );
+      if (dryRun) {
+        plannedObjects.push({
+          Key: `${keyPrefix}${entry.file}`,
+          Size: entry.bytes,
+        });
+      }
     }
   }
-  await redrawFromBucket({ probeCliRelease: false });
-  console.log(`${version} has every installer; page redrawn.`);
+  await redrawFromBucket({ probeCliRelease: false, plannedObjects });
+  console.log(
+    dryRun
+      ? `[dry-run] ${version} installer recovery and page publication planned.`
+      : `${version} has every installer; page redrawn.`,
+  );
   rmSync(work, { recursive: true, force: true });
   process.exit(0);
 }
