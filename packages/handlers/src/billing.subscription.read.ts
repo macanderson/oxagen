@@ -3,6 +3,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
 import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { effectiveBalance } from "@oxagen/billing";
 import { sumTokenUsage } from "@oxagen/telemetry";
 import { and, eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
@@ -65,12 +66,7 @@ export const billingSubscriptionReadHandler: CapabilityHandler<
           },
         }) as Promise<SubscriptionWithPlan | undefined>,
     ),
-    withTenantDb((tx) =>
-      tx.query.creditBalances.findFirst({
-        where: eq(schema.creditBalances.orgId, ctx.orgId),
-        columns: { balanceCents: true },
-      }),
-    ),
+    effectiveBalance(ctx.orgId),
   ]);
 
   const sub = subWithPlan ?? null;
@@ -126,7 +122,7 @@ export const billingSubscriptionReadHandler: CapabilityHandler<
             seatCount: sub.seatCount,
           }
         : null,
-    creditBalanceCents: Number(balance?.balanceCents ?? 0n),
+    creditBalanceCents: Number(balance),
     periodUsage,
   };
 };

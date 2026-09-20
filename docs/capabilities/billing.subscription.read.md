@@ -34,11 +34,11 @@ Empty object. Tenant scope is resolved from the request context.
 | `subscription.currentPeriodEnd`    | `string` (ISO 8601)               |                                             |
 | `subscription.cancelAtPeriodEnd`   | `boolean`                         |                                             |
 | `subscription.seatCount`           | `number` (non-negative integer)   |                                             |
-| `creditBalanceCents`               | `number` (integer)                | From `billing.credit_balances`.             |
+| `creditBalanceCents`               | `number` (integer)                | Sum of unexpired `billing.credit_lots` through `effectiveBalance`.             |
 
 ## Side effects
 
-- Postgres: read-only on `billing.subscriptions`, `billing.plans`, `billing.credit_balances`.
+- Postgres: read-only on `billing.subscriptions`, `billing.plans`, `billing.credit_lots`.
 - ClickHouse: none.
 - Neo4j: none.
 
@@ -53,3 +53,5 @@ Empty object. Tenant scope is resolved from the request context.
 
 - §6.13 — `billing` schema
 - §2.3 (6) — billing suite acceptance criteria
+
+The credit balance excludes expired lots. A failed balance read fails the request rather than substituting the cached mirror. See ADR-131.

@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 // vi.hoisted runs before module resolution, so these refs are safe to use
 // inside vi.mock factories (which are also hoisted).
-const { subFindFirst, planFindFirst, balanceFindFirst, tenant } = vi.hoisted(
-  () => ({
+const { subFindFirst, planFindFirst, balanceFindFirst, liveBalance, tenant } =
+  vi.hoisted(() => ({
     subFindFirst: vi.fn(),
     planFindFirst: vi.fn().mockResolvedValue({ slug: "pro" }),
     balanceFindFirst: vi.fn().mockResolvedValue({ balanceCents: 0n }),
+    liveBalance: vi.fn().mockResolvedValue(0n),
     /** The actor's org principal and role, as assertOrgRole reads them. */
     tenant: {
       principalId: "prn_1" as string | null,
@@ -15,8 +16,7 @@ const { subFindFirst, planFindFirst, balanceFindFirst, tenant } = vi.hoisted(
       /** The creator an API key resolves to, or none. */
       keyCreator: "u-creator" as string | null,
     },
-  }),
-);
+  }));
 
 // ── module mocks ──────────────────────────────────────────────────────────────
 
@@ -61,6 +61,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
+
+vi.mock("@oxagen/billing", () => ({ effectiveBalance: liveBalance }));
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/telemetry")>();
@@ -112,6 +114,7 @@ beforeEach(() => {
   // Restore defaults after clearAllMocks() clears return values.
   planFindFirst.mockResolvedValue({ slug: "pro" });
   balanceFindFirst.mockResolvedValue({ balanceCents: 0n });
+  liveBalance.mockResolvedValue(0n);
   tenant.principalId = "prn_1";
   tenant.roleName = "Owner";
   tenant.keyCreator = "u-creator";
@@ -280,5 +283,26 @@ describe("billingSubscriptionReadHandler — ClickHouse failure path", () => {
       costMicros: 5000,
       executions: 10,
     });
+  });
+});
+
+describe("live credit display", () => {
+  it("returns live-lot credit even when the cached mirror is higher", async () => {
+    subFindFirst.mockResolvedValue(null);
+    balanceFindFirst.mockResolvedValue({ balanceCents: 999n });
+    liveBalance.mockResolvedValue(50n);
+    const result = await billingSubscriptionReadHandler({}, ctx);
+    expect(result.creditBalanceCents).toBe(50);
+    expect(liveBalance).toHaveBeenCalledWith(ctx.orgId);
+    expect(balanceFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("does not substitute the stale mirror when the authoritative read fails", async () => {
+    subFindFirst.mockResolvedValue(null);
+    liveBalance.mockRejectedValueOnce(new Error("lot store unavailable"));
+    await expect(billingSubscriptionReadHandler({}, ctx)).rejects.toThrow(
+      "lot store unavailable",
+    );
+    expect(balanceFindFirst).not.toHaveBeenCalled();
   });
 });
