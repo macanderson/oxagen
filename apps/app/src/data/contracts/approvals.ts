@@ -113,6 +113,14 @@ export type ApprovalQueue = z.infer<typeof ApprovalQueue>;
 // the resolution: when it happened, who or what made it, and, when a
 // decision rule released the call with no person, the rule that did.
 export const ResolvedApprovalItem = z.object({
+  execution: z
+    .object({
+      status: z.string(),
+      runId: z.string().nullable(),
+      reason: z.string().nullable(),
+    })
+    .optional(),
+
   id: PublicId,
   runId: PublicId.nullable(),
   tool: z.string().min(1),
