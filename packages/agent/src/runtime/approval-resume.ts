@@ -11,10 +11,7 @@ import {
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import {
   bootstrapDecisionRulesRuntime,
-  autoApproveParkedCall,
-  createDecisionRulesGate,
   inputDigest,
-  ruleSetSchema,
   DecisionRuleDeniedError,
   DecisionRuleApprovalRequiredError,
 } from "@oxagen/rules";
@@ -260,33 +257,9 @@ export async function resumeApprovedCall(
         const budgets = await getSpendBudgetStatuses();
         if (budgets.some((status) => status.budget.enabled && status.overLimit))
           throw new ApprovalResumeError("budget_exhausted");
-        await withTenantDb(async (tx) => {
-          const [workspace] = await tx
-            .select({ settings: schema.workspaces.settings })
-            .from(schema.workspaces)
-            .where(
-              and(
-                eq(schema.workspaces.orgId, ref.orgId),
-                eq(schema.workspaces.id, ref.workspaceId),
-              ),
-            )
-            .for("share");
-          if (!workspace) throw new ApprovalResumeError("workspace_removed");
-          const raw = (workspace.settings as Record<string, unknown> | null)
-            ?.decisionRules;
-          const rules = raw == null ? null : ruleSetSchema.parse(raw);
-          await createDecisionRulesGate({
-            loadRuleSet: async () => rules,
-            autoApprove: autoApproveParkedCall,
-            onError: (error) => {
-              throw error;
-            },
-          })({
-            capability: cap.name,
-            input: parsed.data,
-            ctx,
-          });
-        });
+        // invoke owns the fresh decision-rule check and its approval receipt.
+        // A preflight gate would commit before run admission and commit again
+        // when the canonical invocation evaluates the same standing rule.
         run = await openAssistantRun({
           orgId: ref.orgId,
           workspaceId: ref.workspaceId,
