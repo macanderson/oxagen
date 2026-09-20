@@ -27,6 +27,7 @@ import type { ReactNode } from "react";
 import { TranscriptZoom } from "@/data/contracts/run";
 import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
+import type { MandateRow } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import { ApprovalsPanel } from "@/features/fleet";
 import type { WsCtx } from "@/server/viewer";
@@ -99,7 +100,15 @@ function Tabs({
 }
 
 /**
- * The run's pending approvals and the instant their clocks start from.
+ * The run's pending approvals, the mandates their cards draw a bar from, and
+ * the instant their clocks start from.
+ *
+ * The ledger is read only when a parked call names a mandate, the same rule
+ * `readFleet` follows, so a run whose approvals drew on none makes one read and
+ * a viewer who may not read the ledger sees the cards without their bars. It
+ * used to pass an empty map here, which made every card on this page say the
+ * mandate could not be read: the card showed a mandate id and no authority, on
+ * the one page where the call's own run is in front of you.
  *
  * `Date.now()` lives here rather than in the page or the component body: a
  * component's render must be pure, and the route's render is a render too, so
@@ -116,7 +125,17 @@ async function readApprovals(
   fixed: number | undefined,
 ) {
   const approvals = await source.approvals.pending(ctx, { runId });
-  return { approvals, at: fixed ?? Date.now() };
+  const named =
+    approvals.ok &&
+    approvals.value.items.some((item) => item.mandateId !== null);
+  const mandates = new Map<string, MandateRow>();
+  if (named) {
+    const read = await source.mandates.list(ctx, { agentId: null });
+    if (read.ok)
+      for (const mandate of read.value.mandates)
+        mandates.set(mandate.id, mandate);
+  }
+  return { approvals, mandates, at: fixed ?? Date.now() };
 }
 
 export async function Run({
@@ -221,7 +240,7 @@ export async function Run({
       );
       break;
     case "approvals": {
-      const { approvals, at } = await readApprovals(
+      const { approvals, mandates, at } = await readApprovals(
         source,
         ctx,
         detail.run.id,
@@ -234,10 +253,7 @@ export async function Run({
         <div className="flex flex-col gap-6">
           <ApprovalsPanel
             approvals={approvals}
-            // A mandate bar needs `list_mandates`, which the Fleet page reads for
-            // its own cards. The Run page does not read it, so a card names the
-            // mandate it drew on rather than drawing a bar from nothing.
-            mandates={new Map()}
+            mandates={mandates}
             now={at}
             on="run"
             org={place.org}

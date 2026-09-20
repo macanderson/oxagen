@@ -16,6 +16,7 @@
  * receive is refused instead of queued (§7.3).
  */
 import { z } from "zod";
+import { STEER_TEXT_MAX, COMMAND_REASON_MAX } from "../tacho/command-limits";
 import { registerCapability } from "../registry";
 import { tachoDeliveryModeSchema } from "../tacho/schemas";
 import { runPublicIdSchema } from "./run.list";
@@ -50,7 +51,7 @@ export const commandTargetSchema = z.discriminatedUnion("kind", [
 ]);
 export type CommandTarget = z.output<typeof commandTargetSchema>;
 
-export const STEER_TEXT_MAX = 16_384;
+export { STEER_TEXT_MAX, COMMAND_REASON_MAX } from "../tacho/command-limits";
 
 export const commandPayloadSchema = z
   .object({
@@ -73,7 +74,7 @@ export const dispatchCommandFieldsSchema = z
     /** Required for `steer` and `message`; refused on the others. */
     payload: commandPayloadSchema.optional(),
     /** Read by the model on resume, and shown on the pause banner. */
-    reason: z.string().min(1).max(512).optional(),
+    reason: z.string().min(1).max(COMMAND_REASON_MAX).optional(),
     /** 10 s to 24 h. A command with no expiry could never reach `expired`. */
     expiresInMs: z
       .number()

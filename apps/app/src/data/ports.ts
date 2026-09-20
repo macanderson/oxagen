@@ -12,7 +12,10 @@ import type {
   IncidentPage,
   Toolbelt,
 } from "./contracts/agents";
-import type { ApprovalItem, ResolvedApprovalItem } from "./contracts/approvals";
+import type {
+  ApprovalQueue,
+  ResolvedApprovalItem,
+} from "./contracts/approvals";
 import type {
   AuditExport,
   AuditExportQuery,
@@ -170,10 +173,16 @@ export interface DataSource {
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {
+    /**
+     * The whole pending queue, walked to the end of its cursor under a bound,
+     * with `more` set when the bound stopped the walk. The Fleet waiting tile
+     * counts it, so one page read as the whole queue was a figure that read as
+     * a fact.
+     */
     pending(
       ctx: WsCtx,
       q: { runId: string | null },
-    ): Promise<Read<ApprovalItem[]>>;
+    ): Promise<Read<ApprovalQueue>>;
     /**
      * list_resolved_approvals, narrowed to one run: the Run page's Approvals
      * tab reads back a resolved decision, including one a decision rule

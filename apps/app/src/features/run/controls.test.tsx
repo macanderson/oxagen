@@ -104,7 +104,7 @@ describe("run controls", () => {
     expect(screen.queryByTestId("queued-command")).toBeNull();
   });
 
-  it("sends the steer text and says it reaches the model at the next delivery point", async () => {
+  it("sends the steer text at the default delivery mode and says it reaches the model at the next delivery point", async () => {
     steerRun.mockResolvedValue({ ok: true, value: { commandIds: ["tcm_9"] } });
     const user = userEvent.setup();
     renderControls();
@@ -113,6 +113,9 @@ describe("run controls", () => {
       screen.getByLabelText("What to tell the agent"),
       "use the 3.2 branch",
     );
+    // The contract's own default, offered checked so a person who does not
+    // choose sends the mode every connection point can carry.
+    expect(screen.getByTestId("steer-mode-next_step")).toBeChecked();
     await user.click(screen.getByRole("button", { name: "Send it" }));
     await waitFor(() => {
       expect(screen.getByTestId("queued-command")).toHaveTextContent("tcm_9");
@@ -122,7 +125,65 @@ describe("run controls", () => {
       "core-platform",
       RUN,
       "use the 3.2 branch",
+      "next_step",
     );
+  });
+
+  it("carries the delivery mode the person picked, and says what each one costs the run in flight", async () => {
+    steerRun.mockResolvedValue({ ok: true, value: { commandIds: ["tcm_9"] } });
+    const user = userEvent.setup();
+    const { container } = renderControls();
+    await user.click(screen.getByTestId("run-steer"));
+    await expectNoAxe(container);
+    for (const mode of ["next_step", "interrupt", "turn_boundary"]) {
+      expect(screen.getByTestId(`steer-mode-${mode}`)).toBeTruthy();
+    }
+    expect(
+      screen.getByText(/cut short so your text lands sooner/),
+    ).toBeTruthy();
+    await user.click(screen.getByTestId("steer-mode-interrupt"));
+    await user.type(
+      screen.getByLabelText("What to tell the agent"),
+      "stop and read the failing job",
+    );
+    await user.click(screen.getByRole("button", { name: "Send it" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("queued-command")).toBeTruthy();
+    });
+    expect(steerRun).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      RUN,
+      "stop and read the failing job",
+      "interrupt",
+    );
+  });
+
+  it("names a delivery mode the action refused and queues nothing (negative)", async () => {
+    steerRun.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "delivery_mode",
+      field: "requestedMode",
+    });
+    const user = userEvent.setup();
+    renderControls();
+    await user.click(screen.getByTestId("run-steer"));
+    await user.type(screen.getByLabelText("What to tell the agent"), "go on");
+    await user.click(screen.getByRole("button", { name: "Send it" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("run-steer-failure")).toHaveTextContent(
+        "Pick one of the three delivery modes.",
+      );
+    });
+    expect(screen.queryByTestId("queued-command")).toBeNull();
+  });
+
+  it("offers no delivery mode on a halt, which the contract refuses a payload on (negative)", async () => {
+    const user = userEvent.setup();
+    renderControls();
+    await user.click(screen.getByTestId("run-pause"));
+    expect(screen.queryByTestId("steer-mode-next_step")).toBeNull();
   });
 
   it("names the handler's own reason on a refusal and queues nothing (negative)", async () => {
@@ -195,6 +256,40 @@ describe("run controls", () => {
     await user.click(screen.getByTestId("run-pause"));
     expect(screen.queryByTestId("run-pause-dialog")).toBeNull();
     expect(haltRun).not.toHaveBeenCalled();
+  });
+
+  // An observe-tier session records what an agent did and gives Oxagen no
+  // connection point, so a queued command would have nowhere to travel. The
+  // tier is read before the ledger and the role branches, because it holds
+  // whatever those two say (#3285).
+  it("disables every control, with the reason, on an observe-tier run (negative)", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          status="live"
+          source="tacho"
+          enforcementTier="observe"
+          orgRole="owner"
+          wsRole="owner"
+        />
+      </IntlProvider>,
+    );
+    for (const command of ["pause", "resume", "steer", "cancel"]) {
+      expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
+    }
+    expect(screen.getByTestId("observe-no-control")).toHaveTextContent(
+      "Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel.",
+    );
+    expect(screen.queryByTestId("ledger-no-control")).toBeNull();
+    expect(screen.queryByTestId("role-no-control")).toBeNull();
+    await user.click(screen.getByTestId("run-pause"));
+    expect(screen.queryByTestId("run-pause-dialog")).toBeNull();
+    expect(haltRun).not.toHaveBeenCalled();
+    expect(steerRun).not.toHaveBeenCalled();
   });
 
   it("admits a workspace Member who is only an organization Viewer, as dispatch_command does", () => {

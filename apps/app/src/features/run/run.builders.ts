@@ -14,9 +14,10 @@ import type {
   TranscriptZoom,
 } from "@/data/contracts/run";
 import type {
-  ApprovalItem,
+  ApprovalQueue,
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
+import type { MandateList } from "@/data/contracts/mandates";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
@@ -60,6 +61,7 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
       model: "z-ai/glm-flash-latest",
     },
     replayGrade: "fork",
+    verdict: "flipped",
     enforcementTier: "harness",
     completenessGaps: [],
     canSummarize: true,
@@ -478,9 +480,15 @@ type RunReads = {
   /** Only read when the Chain and seal tab is open; refused when absent. */
   chain?: Read<RunChain>;
   /** Only read when the Approvals tab is open; refused when absent. */
-  approvals?: Read<ApprovalItem[]>;
+  approvals?: Read<ApprovalQueue>;
   /** Only read when the Approvals tab is open; refused when absent (#3153). */
   resolvedApprovals?: Read<ResolvedApprovalItem[]>;
+  /**
+   * Only read when a parked call on this run names a mandate, the same rule
+   * Fleet follows; refused when absent, which is what a run whose approvals
+   * drew on none must not reach.
+   */
+  mandates?: Read<MandateList>;
 };
 
 /** A DataSource answering the Run page's reads; `calls` records their arguments. */
@@ -493,6 +501,7 @@ export function runSource(reads: RunReads) {
     approvals: unknown[][];
     resolvedApprovals: unknown[][];
     chain: unknown[][];
+    mandates: unknown[][];
   } = {
     get: [],
     frameBody: [],
@@ -501,6 +510,7 @@ export function runSource(reads: RunReads) {
     approvals: [],
     resolvedApprovals: [],
     chain: [],
+    mandates: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -565,7 +575,7 @@ export function runSource(reads: RunReads) {
       apiKeys: refuse,
       modelCredential: refuse,
     },
-    mandates: { list: refuse, get: refuse },
+    mandates: { list: answer("mandates", reads.mandates), get: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: {

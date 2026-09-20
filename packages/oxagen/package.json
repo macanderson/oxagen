@@ -23,6 +23,7 @@
     "./iam": "./src/iam/index.ts",
     "./contracts": "./src/contracts/index.ts",
     "./plugins": "./src/plugins/index.ts",
+    "./tacho/command-limits": "./src/tacho/command-limits.ts",
     "./tacho/schemas": "./src/tacho/schemas.ts",
     "./mandates/schemas": "./src/mandates/schemas.ts",
     "./approval-rules/schemas": "./src/approval-rules/schemas.ts",

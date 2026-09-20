@@ -134,24 +134,44 @@ describe("haltRun", () => {
 });
 
 describe("steerRun", () => {
-  it("sends the trimmed text as the command's payload", async () => {
+  it("sends the trimmed text and the delivery mode as the command's payload", async () => {
     invoke.mockResolvedValue({ commandIds: ["tcm_3"] });
     expect(
-      await steerRun("acme", "core-platform", RUN, "  use the 3.2 branch  "),
+      await steerRun(
+        "acme",
+        "core-platform",
+        RUN,
+        "  use the 3.2 branch  ",
+        "next_step",
+      ),
     ).toEqual({ ok: true, value: { commandIds: ["tcm_3"] } });
     expect(invoke).toHaveBeenCalledWith(
       "dispatch_command",
       {
         target: { kind: "run", id: RUN },
         command: "steer",
-        payload: { text: "use the 3.2 branch" },
+        payload: { text: "use the 3.2 branch", requestedMode: "next_step" },
       },
       expect.objectContaining(TENANT),
     );
   });
 
+  it("carries a mode other than the default through to the command", async () => {
+    invoke.mockResolvedValue({ commandIds: ["tcm_4"] });
+    await steerRun("acme", "core-platform", RUN, "stop", "turn_boundary");
+    expect(invoke).toHaveBeenCalledWith(
+      "dispatch_command",
+      expect.objectContaining({
+        payload: { text: "stop", requestedMode: "turn_boundary" },
+      }),
+      expect.objectContaining(TENANT),
+    );
+  });
+
   it("refuses empty text before the kernel runs (negative)", async () => {
-    expect(await steerRun("acme", "core-platform", RUN, "   ")).toEqual({
+    expect(
+      await steerRun("acme", "core-platform", RUN, "   ", "next_step"),
+    ).toEqual({
       ok: false,
       reason: "invalid",
       code: "steer_text",
@@ -167,8 +187,22 @@ describe("steerRun", () => {
         "core-platform",
         RUN,
         "x".repeat(STEER_TEXT_MAX + 1),
+        "next_step",
       ),
     ).toMatchObject({ ok: false, reason: "invalid", code: "steer_text" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a delivery mode outside the contract's three before the kernel runs (negative)", async () => {
+    // A server action is an endpoint: the form is typed, the request is not.
+    expect(
+      await steerRun("acme", "core-platform", RUN, "go on", "immediately"),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "delivery_mode",
+      field: "requestedMode",
+    });
     expect(invoke).not.toHaveBeenCalled();
   });
 });

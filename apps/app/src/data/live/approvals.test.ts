@@ -37,6 +37,7 @@ const item = {
   tool: "create_release",
   requester: null,
   mandateId: null,
+  autoEligibility: null,
   createdAt: "2026-09-15T08:57:30.000Z",
   expiresAt: "2026-09-15T09:07:30.000Z",
   chain: { agentKey: null, rule: null },
@@ -48,21 +49,45 @@ beforeEach(() => {
 });
 
 describe("approvals.pending", () => {
-  it("reads the workspace's pending approvals for Fleet and maps them", async () => {
-    kernelRead.mockResolvedValue(readOk({ items: [item], nextCursor: null }));
+  it("reads the workspace's pending approvals for Fleet, with both chain hops and the recorded evaluation", async () => {
+    const judged = {
+      ...item,
+      mandateId: "mnd_4f2a9c",
+      chain: {
+        agentKey: "acme.core.release-bot",
+        rule: "mandate:mnd_4f2a9c:human_above:amount",
+      },
+      autoEligibility: {
+        ruleId: "small-vendor-payments",
+        ok: false,
+        reasons: ["measure_above_ceiling:amount"],
+        floor: false,
+      },
+    };
+    kernelRead.mockResolvedValue(readOk({ items: [judged], nextCursor: null }));
     expect(await approvals.pending(ctx, { runId: null })).toEqual(
-      readOk([
-        {
-          id: "apr_q8t1",
-          runId: null,
-          tool: "create_release",
-          agentKey: null,
-          requester: null,
-          mandateId: null,
-          createdAt: "2026-09-15T08:57:30.000Z",
-          expiresAt: "2026-09-15T09:07:30.000Z",
-        },
-      ]),
+      readOk({
+        items: [
+          {
+            id: "apr_q8t1",
+            runId: null,
+            tool: "create_release",
+            agentKey: "acme.core.release-bot",
+            requester: null,
+            mandateId: "mnd_4f2a9c",
+            rule: "mandate:mnd_4f2a9c:human_above:amount",
+            autoEligibility: {
+              ruleRef: "small-vendor-payments",
+              ok: false,
+              reasons: ["measure_above_ceiling:amount"],
+              floor: false,
+            },
+            createdAt: "2026-09-15T08:57:30.000Z",
+            expiresAt: "2026-09-15T09:07:30.000Z",
+          },
+        ],
+        more: false,
+      }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: agentApprovalList,
@@ -82,10 +107,42 @@ describe("approvals.pending", () => {
     });
   });
 
-  it("passes a failed read through (negative)", async () => {
+  // The Fleet waiting tile counts what this returns, so one page read as the
+  // whole queue is a figure an operator staffs against.
+  it("walks every page the queue hands back and combines them into one list", async () => {
+    kernelRead
+      .mockResolvedValueOnce(readOk({ items: [item], nextCursor: "c2" }))
+      .mockResolvedValueOnce(
+        readOk({ items: [{ ...item, id: "apr_next" }], nextCursor: null }),
+      );
+    const out = await approvals.pending(ctx, { runId: null });
+    expect(out.ok && out.value.items.map((i) => i.id)).toEqual([
+      "apr_q8t1",
+      "apr_next",
+    ]);
+    expect(out.ok && out.value.more).toBe(false);
+    expect(kernelRead).toHaveBeenNthCalledWith(2, ctx, {
+      contract: agentApprovalList,
+      input: { limit: 100, cursor: "c2" },
+      page: "fleet",
+    });
+  });
+
+  it("stops at the page bound and says the count is short of the queue (negative)", async () => {
+    kernelRead.mockImplementation(() =>
+      Promise.resolve(readOk({ items: [item], nextCursor: "more" })),
+    );
+    const out = await approvals.pending(ctx, { runId: null });
+    expect(kernelRead).toHaveBeenCalledTimes(10);
+    expect(out.ok && out.value.items).toHaveLength(10);
+    expect(out.ok && out.value.more).toBe(true);
+  });
+
+  it("passes a failed read through, without paging further (negative)", async () => {
     const down = readError("run_index_unavailable", 503);
     kernelRead.mockResolvedValue(down);
     expect(await approvals.pending(ctx, { runId: null })).toEqual(down);
+    expect(kernelRead).toHaveBeenCalledOnce();
   });
 
   it("answers record_unmappable and reports once for a record the view refuses (negative)", async () => {

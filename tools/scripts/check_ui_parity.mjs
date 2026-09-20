@@ -19,6 +19,15 @@
  *     script verifies the static half; CI e2e + the committed proof verify the
  *     runtime half.)
  *
+ *     One capability can be operable from more than one page: a run is paused
+ *     from the run's own page and from its row on Fleet, and both are surfaces
+ *     a person uses. The registry holds one object per capability, so the
+ *     second page and every page after it go in that object's `also` array,
+ *     and each entry is held to the same bar as the primary binding: a `page`
+ *     that exists on disk and a `proof`. Without that, a second surface is
+ *     either invisible to the gate or forces a duplicate key the registry
+ *     cannot hold.
+ *
  *   REVERSE (advisory — always warn-only):
  *     A registered capability that apps/app actually invokes (a literal
  *     invoke("<name>") call) but that does NOT declare the "app" layer is

@@ -43,9 +43,9 @@ describe("expectedAssets", () => {
       join(import.meta.dirname, "../../.github/workflows/desktop.yml"),
       "utf8",
     );
-    const matrix = [
-      ...workflow.matchAll(/^\s*triple:\s*(\S+)\s*$/gm),
-    ].map((m) => m[1]);
+    const matrix = [...workflow.matchAll(/^\s*triple:\s*(\S+)\s*$/gm)].map(
+      (m) => m[1],
+    );
     expect(matrix.length).toBeGreaterThan(0);
     expect([...RELEASE_TARGETS.map((t) => t.triple)].sort()).toEqual(
       [...new Set(matrix)].sort(),

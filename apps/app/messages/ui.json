@@ -55,6 +55,11 @@
         "help": "You can run the recording again and get the same frames."
       }
     },
+    "enforcementTier": {
+      "gateway": "observed at the gateway",
+      "harness": "observed at the harness",
+      "observe": "observed from the side"
+    },
     "readFailure": {
       "denied": "You cannot see {section} in this workspace. Your roles do not include {permission}; an organization owner can grant it.",
       "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",
