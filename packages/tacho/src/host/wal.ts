@@ -8,8 +8,8 @@
  * Frame bodies (the prompt, the tool input and result, the assistant
  * message) live in a second file beside the session's events,
  * `<session>.bodies.jsonl`, one base64 line per event that carries one. They
- * are kept apart because the event file is the chain and is read whole on
- * every tick, and a body can be a megabyte; the shipped cursor covers both,
+ * are kept apart because the event file is the chain and a body can be a
+ * megabyte. Reads decode one line at a time; the shipped cursor covers both,
  * since a body only ever ships with its event.
  *
  * NDJSON rather than SQLite keeps the package free of native modules and keeps
@@ -25,13 +25,20 @@
  */
 import {
   appendFileSync,
+  closeSync,
+  fsyncSync,
+  openSync,
   existsSync,
   readdirSync,
-  readFileSync,
+  readSync,
+  renameSync,
   statSync,
   unlinkSync,
+  writeSync,
 } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import type { TachoEvent } from "../envelope";
 import {
   contentClassOf,
@@ -45,6 +52,31 @@ import {
   readJsonFileIfExists,
   writeSensitiveFileAtomic,
 } from "./fs";
+
+/** Decode one line at a time, including UTF-8 characters split across reads. */
+function* readLines(path: string): Generator<string> {
+  const fd = openSync(path, "r");
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  const decoder = new StringDecoder("utf8");
+  let pending = "";
+  try {
+    let size: number;
+    while ((size = readSync(fd, buffer, 0, buffer.length, null)) > 0) {
+      pending += decoder.write(buffer.subarray(0, size));
+      let start = 0;
+      let end: number;
+      while ((end = pending.indexOf("\n", start)) !== -1) {
+        yield pending.slice(start, end);
+        start = end + 1;
+      }
+      pending = pending.slice(start);
+    }
+    pending += decoder.end();
+    if (pending.length > 0) yield pending;
+  } finally {
+    closeSync(fd);
+  }
+}
 
 /** One line of a session's body file. */
 interface StoredBody {
@@ -167,7 +199,7 @@ export class Wal {
     const path = this.fileFor(sessionUuid);
     if (!existsSync(path)) return [];
     const out: TachoEvent[] = [];
-    for (const line of readFileSync(path, "utf8").split("\n")) {
+    for (const line of readLines(path)) {
       if (line.trim().length === 0) continue;
       out.push(JSON.parse(line) as TachoEvent);
     }
@@ -194,7 +226,7 @@ export class Wal {
     for (const [session, idems] of wanted) {
       const path = this.bodyFileFor(session);
       if (!existsSync(path)) continue;
-      for (const line of readFileSync(path, "utf8").split("\n")) {
+      for (const line of readLines(path)) {
         if (line.trim().length === 0) continue;
         const stored = JSON.parse(line) as StoredBody;
         if (stored.seq < minSeq || !idems.has(stored.event_id_idem)) continue;
@@ -443,23 +475,40 @@ export class Wal {
   ): number {
     const path = this.bodyFileFor(sessionUuid);
     if (!existsSync(path)) return 0;
-    const kept: string[] = [];
+    const tmp = `${path}.${randomUUID()}.tmp`;
+    const fd = openSync(tmp, "wx", 0o600);
     let cut = 0;
-    for (const line of readFileSync(path, "utf8").split("\n")) {
-      if (line.trim().length === 0) continue;
-      let stored: StoredBody | undefined;
+    let kept = 0;
+    try {
       try {
-        stored = JSON.parse(line) as StoredBody;
-      } catch {
-        stored = undefined;
+        for (const line of readLines(path)) {
+          if (line.trim().length === 0) continue;
+          let stored: StoredBody | undefined;
+          try {
+            stored = JSON.parse(line) as StoredBody;
+          } catch {
+            stored = undefined;
+          }
+          if (keep(stored)) {
+            const bytes = Buffer.from(`${line}\n`);
+            let offset = 0;
+            while (offset < bytes.length) {
+              offset += writeSync(fd, bytes, offset, bytes.length - offset);
+            }
+            kept += 1;
+          } else cut += 1;
+        }
+        if (cut > 0 && kept > 0) fsyncSync(fd);
+      } finally {
+        closeSync(fd);
       }
-      if (keep(stored)) kept.push(line);
-      else cut += 1;
+      if (cut === 0) return 0;
+      if (kept === 0) unlinkSync(path);
+      else renameSync(tmp, path);
+      return cut;
+    } finally {
+      if (existsSync(tmp)) unlinkSync(tmp);
     }
-    if (cut === 0) return 0;
-    if (kept.length === 0) unlinkSync(path);
-    else writeSensitiveFileAtomic(path, `${kept.join("\n")}\n`);
-    return cut;
   }
 
   /**
