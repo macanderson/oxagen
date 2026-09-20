@@ -90,14 +90,17 @@ describe("parseTomlSubset", () => {
   it("decodes every basic-string escape the tacho writer emits, in one-line and multi-line strings", () => {
     // `tomlBasicString` in packages/tacho/src/host/stella-writer.ts is
     // JSON.stringify, so its escapes are JSON's: this is the set it can send.
-    const value = 'tab\tnl\ncr\rbs\bff\fq"sl\\acute\u00e9smile\u{1F600}del\u007f';
+    const value =
+      'tab\tnl\ncr\rbs\bff\fq"sl\\acute\u00e9smile\u{1F600}del\u007f';
     const written = JSON.stringify(value).split("\u007f").join("\\u007F");
     expect(parseTomlSubset(`s = ${written}`)).toEqual({
       ok: true,
       doc: { s: value },
     });
     expect(
-      parseTomlSubset('s = "\\u00E9 \\U0001F600 \\b\\f"\nm = """\n\\u00e9\\f\\b\\\n"""\n'),
+      parseTomlSubset(
+        's = "\\u00E9 \\U0001F600 \\b\\f"\nm = """\n\\u00e9\\f\\b\\\n"""\n',
+      ),
     ).toEqual({
       ok: true,
       doc: { s: "\u00e9 \u{1F600} \b\f", m: "\u00e9\f\b" },
@@ -137,9 +140,9 @@ describe("parseTomlSubset", () => {
   });
 
   it("trims the CRLF after an opening fence, so a CRLF file's instructions do not start with a blank line", () => {
-    expect(
-      parseTomlSubset('body = """\r\nfirst\r\nsecond\r\n"""\r\n'),
-    ).toEqual({ ok: true, doc: { body: "first\r\nsecond\r\n" } });
+    expect(parseTomlSubset('body = """\r\nfirst\r\nsecond\r\n"""\r\n')).toEqual(
+      { ok: true, doc: { body: "first\r\nsecond\r\n" } },
+    );
   });
 
   it("an empty file and a file of comments are an empty table", () => {

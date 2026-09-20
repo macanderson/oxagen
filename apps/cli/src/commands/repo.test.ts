@@ -390,7 +390,10 @@ describe("oxagen repo tree", () => {
     ]);
     (apiPostOrThrow as Mock).mockResolvedValueOnce({
       ...bare,
-      initPullRequest: { number: 7, htmlUrl: "https://github.com/acme/control/pull/7" },
+      initPullRequest: {
+        number: 7,
+        htmlUrl: "https://github.com/acme/control/pull/7",
+      },
     });
     const second = memoryWriter();
     await repoTree("rpb_main", {}, second.writer);
@@ -484,7 +487,10 @@ describe("oxagen repo init", () => {
     fullName: "acme/control",
     branch: "oxagen/init",
     base: "main",
-    pullRequest: { number: 12, htmlUrl: "https://github.com/acme/control/pull/12" },
+    pullRequest: {
+      number: 12,
+      htmlUrl: "https://github.com/acme/control/pull/12",
+    },
     files: [".oxagen/workspace.toml", ".oxagen/rules/governance.toml"],
     reused: false,
     openedAt: "2026-09-19T00:00:00.000Z",
@@ -563,7 +569,9 @@ describe("oxagen repo init", () => {
 describe("draftGovernanceToml", () => {
   it("declares the mode and turns separation of duties on only for regulated", () => {
     expect(draftGovernanceToml("team")).toContain('mode = "team"');
-    expect(draftGovernanceToml("team")).toContain("separation_of_duties = false");
+    expect(draftGovernanceToml("team")).toContain(
+      "separation_of_duties = false",
+    );
     expect(draftGovernanceToml("regulated")).toContain(
       "separation_of_duties = true",
     );

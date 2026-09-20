@@ -67,6 +67,24 @@ module "web" {
   url_rewrite_mode       = "directory_index"
   not_found_path         = "/index.html"
 
+  # Carried over from the `redirects` block of the site's old `vercel.json`,
+  # which the cutover to S3 + CloudFront dropped: a static export ships no
+  # server, so a redirect only exists if the edge implements it. Both paths
+  # had been answering 404 in production since the cutover.
+  #
+  # One prefix entry replaces two rules each. The old config spelled the bare
+  # path and its subtree separately (`/field-manual` and `/field-manual/(.*)`);
+  # `prefix_redirects` matches the prefix itself and everything beneath it, so
+  # `/research/<slug>/index.html` is covered without its own line.
+  #
+  # These answer 308 rather than the old config's temporary 307. The
+  # destinations are stable aliases, and the edge function caps the response
+  # at `max-age=3600`, so a changed destination is picked up within the hour.
+  prefix_redirects = {
+    "/field-manual"                                               = "/read?e=field-manual"
+    "/research/deterministic-systems-optimizations-for-ai-agents" = "/read?e=page-flip-reader"
+  }
+
   tags = { Brand = local.brand }
 }
 

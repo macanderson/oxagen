@@ -82,9 +82,12 @@ jobs:
       - uses: ./.github/actions/pnpm-install
 
       # --no-git: this job commits and pushes itself, to a branch, below.
-      # --no-vercel: production runs on AWS; PLATFORM_VERSION there is read
-      # from the tree at build time. --no-npm: the tag job publishes the CLI
-      # once the version is on main.
+      # --no-npm: the tag job publishes the CLI once the version is on main.
+      #
+      # There is no longer a --no-vercel to pass. The step it skipped wrote
+      # PLATFORM_VERSION into the Vercel projects; production runs on AWS and
+      # nothing writes the var there, so `platformVersion()` answers "0.0.0" in
+      # production until the deploy injects it from SSM.
       - name: Bump the version and write the notes
         id: bump
         env:
@@ -94,7 +97,7 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
-          args=("$BUMP" --no-git --no-vercel --no-npm)
+          args=("$BUMP" --no-git --no-npm)
           if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
           pnpm exec tsx tools/scripts/release.ts "${args[@]}"
           if [ "$DRY_RUN" = "true" ]; then exit 0; fi
