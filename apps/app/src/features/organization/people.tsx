@@ -13,7 +13,14 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
-import { mono } from "@/ui/control-styles";
+import {
+  mono,
+  panel,
+  panelBody,
+  panelHeader,
+  panelTitle,
+} from "@/ui/control-styles";
+import { cell, headCell } from "@/ui/table";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { InviteDialog } from "./invite-dialog";
 import { MemberRowActions } from "./member-row-actions";
@@ -34,10 +41,8 @@ export async function People({
   return <PeopleView orgSlug={ctx.orgSlug} orgRole={ctx.orgRole} read={read} />;
 }
 
-const sectionTitle = "text-base font-semibold text-foreground";
-const table = "w-full text-left text-sm";
-const headCell = "px-3 py-2 text-xs font-medium text-muted-foreground";
-const cell = "px-3 py-2.5 align-top";
+/* The two lists are the mockup's `.panel` with a `.panel-h`, on the shared table recipe. */
+const table = "w-full text-left";
 
 function PeopleView({
   orgSlug,
@@ -114,12 +119,14 @@ function Members({
 }) {
   const t = useTranslations("organization");
   return (
-    <section aria-labelledby="people-members" className="flex flex-col gap-3">
-      <h2 id="people-members" className={sectionTitle}>
-        {t("people.title")}
-      </h2>
+    <section aria-labelledby="people-members" className={panel}>
+      <div className={panelHeader}>
+        <h2 id="people-members" className={panelTitle}>
+          {t("people.title")}
+        </h2>
+      </div>
       {members.length === 0 ? (
-        <p className={emptyLine}>{t("people.empty")}</p>
+        <p className={`${emptyLine} ${panelBody}`}>{t("people.empty")}</p>
       ) : (
         <table className={table}>
           <thead>
@@ -143,7 +150,7 @@ function Members({
               <tr
                 key={member.id}
                 data-member={member.id}
-                className="border-b border-border last:border-0"
+                className="border-b border-border transition-colors last:border-0 hover:bg-hl"
               >
                 <td className={cell}>
                   <div className="font-medium text-foreground">
@@ -191,12 +198,9 @@ function Invitations({
 }) {
   const t = useTranslations("organization");
   return (
-    <section
-      aria-labelledby="people-invitations"
-      className="flex flex-col gap-3"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="people-invitations" className={sectionTitle}>
+    <section aria-labelledby="people-invitations" className={panel}>
+      <div className={panelHeader}>
+        <h2 id="people-invitations" className={panelTitle}>
           {t("invitations.title")}
         </h2>
         <InviteDialog
@@ -207,7 +211,7 @@ function Invitations({
         />
       </div>
       {invitations.length === 0 ? (
-        <p className={emptyLine}>{t("invitations.empty")}</p>
+        <p className={`${emptyLine} ${panelBody}`}>{t("invitations.empty")}</p>
       ) : (
         <table className={table}>
           <thead>
@@ -231,7 +235,7 @@ function Invitations({
               <tr
                 key={invitation.id}
                 data-invitation={invitation.id}
-                className="border-b border-border last:border-0"
+                className="border-b border-border transition-colors last:border-0 hover:bg-hl"
               >
                 <td className={`${cell} ${mono}`}>{invitation.email}</td>
                 <td className={cell}>{t(`roles.${invitation.role}`)}</td>

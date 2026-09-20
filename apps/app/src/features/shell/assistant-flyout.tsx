@@ -732,7 +732,7 @@ export function AssistantFlyout() {
                 aria-label={t("composer.send")}
                 aria-disabled={pending || draft.trim() === "" || undefined}
                 data-testid="assistant-send"
-                className="mb-0.5 grid size-8 flex-none place-items-center rounded-md bg-primary text-primary-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60"
+                className="mb-0.5 grid size-8 flex-none place-items-center rounded-md bg-gold text-on-gold focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60"
               >
                 <Send aria-hidden="true" className="size-4" />
               </button>

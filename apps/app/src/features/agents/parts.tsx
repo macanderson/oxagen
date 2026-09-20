@@ -5,7 +5,15 @@ import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import type { AgentStatus } from "@/data/contracts/agents";
 import type { SafePath } from "@/shared/safe-path";
-import { linkText, panel, panelHeader } from "@/ui/control-styles";
+import {
+  linkText,
+  panel,
+  panelHeader,
+  statNote,
+  statTerm,
+  statTile,
+  statValue,
+} from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { useFormatter } from "@/ui/formatter";
 
@@ -70,11 +78,11 @@ export function Tile({
   return (
     <dl
       data-testid="tile"
-      className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-data-surface p-4"
+      className={statTile}
     >
-      <dt className="text-xs font-medium text-muted-foreground">{title}</dt>
-      <dd className="text-2xl font-semibold tabular-nums">{value}</dd>
-      <dd className="text-xs text-muted-foreground">{basis}</dd>
+      <dt className={statTerm}>{title}</dt>
+      <dd className={statValue}>{value}</dd>
+      <dd className={statNote}>{basis}</dd>
     </dl>
   );
 }

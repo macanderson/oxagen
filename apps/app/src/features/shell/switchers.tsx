@@ -16,7 +16,7 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 type Choice = { slug: string; name: string; href: SafePath };
 
 const tileClass =
-  "mb-2 flex w-full items-center gap-2.5 rounded-lg border border-sidebar-border bg-app-panel-bg px-2.5 py-2 text-left text-app-panel-fg hover:bg-sidebar-nav-link-hover-bg focus-visible:outline-2 focus-visible:outline-ring";
+  "mb-[7px] flex w-full items-center gap-[9px] rounded-[10px] border border-border bg-card px-2.5 py-2 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring";
 
 function Tile({ text, mono }: { text: string; mono?: boolean }) {
   return (
@@ -24,8 +24,8 @@ function Tile({ text, mono }: { text: string; mono?: boolean }) {
       aria-hidden="true"
       className={
         mono
-          ? "grid size-6 flex-none place-items-center rounded-md border border-input bg-muted font-mono text-[11px] text-foreground"
-          : "grid size-6 flex-none place-items-center rounded-md bg-primary text-[11px] font-bold text-primary-foreground"
+          ? "grid size-6 flex-none place-items-center rounded-md border border-rule bg-hl font-mono text-[11px] text-foreground"
+          : "grid size-6 flex-none place-items-center rounded-md bg-gold text-[11px] font-bold text-on-gold"
       }
     >
       {text}

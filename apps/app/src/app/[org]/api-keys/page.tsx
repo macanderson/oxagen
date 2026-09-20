@@ -41,7 +41,10 @@ export default async function ApiKeysPage({
       id="main"
       className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader title={t("apiKeys")} />
+      <PageHeader
+        eyebrow={t("organizationEyebrow", { organization: orgCtx.orgName })}
+        title={t("apiKeys")}
+      />
       <ApiKeys ctx={ctx} source={source} workspaces={workspaces} view={view} />
     </main>
   );

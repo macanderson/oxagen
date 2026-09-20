@@ -35,7 +35,10 @@ export default async function RegisterPage({
       {/* The record here is the agent being registered, not the step: the path
           segment after the route is `name`, `wrap` or `run`. */}
       <PageRecord route="register" id={registerAgent} />
-      <PageHeader title={t("register")} />
+      <PageHeader
+        eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
+        title={t("register")}
+      />
       <RegisterAgent
         ctx={ctx}
         source={dataSource()}

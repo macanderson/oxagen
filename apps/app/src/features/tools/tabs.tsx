@@ -3,6 +3,7 @@
 // waits on a person — the switches that are denying right now.
 import { useTranslations } from "next-intl";
 import { SafeLink } from "@/ui/navigation";
+import { tabCount, tabLink } from "@/ui/route-tabs";
 import { TOOLS_TABS, type ToolsAt, type ToolsTab, toolsLink } from "./view";
 
 export function ToolsTabs({
@@ -27,7 +28,7 @@ export function ToolsTabs({
   return (
     <nav
       aria-label={t("label")}
-      className="flex flex-wrap gap-1 border-b border-border"
+      className="flex flex-wrap gap-0.5 border-b border-border"
     >
       {TOOLS_TABS.map((tab) => (
         <SafeLink
@@ -35,13 +36,13 @@ export function ToolsTabs({
           to={toolsLink(at, { tab })}
           data-tab={tab}
           aria-current={tab === current ? "page" : undefined}
-          className="-mb-px inline-flex min-h-11 items-center gap-2 border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
+          className={tabLink}
         >
           {t(tab)}
           {tab === "switches" && switchesOn !== null && switchesOn > 0 ? (
             <span
               data-count="switches-on"
-              className="rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-medium tabular-nums text-foreground"
+              className={`${tabCount} text-error-ink`}
             >
               {switchesOnIsFloor
                 ? t("switchesOnAtLeast", { count: switchesOn })

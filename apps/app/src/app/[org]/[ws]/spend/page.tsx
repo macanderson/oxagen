@@ -27,7 +27,10 @@ export default async function SpendPage({
       id="main"
       className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader title={t("spend")} />
+      <PageHeader
+        eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
+        title={t("spend")}
+      />
       <Spend ctx={ctx} source={dataSource()} searchParams={query} />
     </main>
   );
