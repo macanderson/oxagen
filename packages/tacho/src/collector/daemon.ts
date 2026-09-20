@@ -332,7 +332,11 @@ export async function startDaemon(
     host: { hostname_digest: digestText(host.hostname || osHostname()) },
     now,
   };
-  const wal = new Wal(paths.wal);
+  const wal = new Wal(paths.wal, (failure) => {
+    log(
+      `WAL body unavailable for session ${failure.session_uuid}: ${failure.operation} ${failure.code}`,
+    );
+  });
   const registry = new SessionRegistry({
     context,
     scope: host.host_enrollment_id,
