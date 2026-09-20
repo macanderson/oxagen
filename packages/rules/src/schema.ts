@@ -49,10 +49,10 @@ const decisionRuleSchema = z
     capability: z
       .string()
       .min(1)
-      .max(128)
+      .max(267)
       .regex(
-        /^[a-z0-9_]+\*?$|^\*$/,
-        "an exact capability name, a prefix ending in *, or *",
+        /^[a-z0-9_]+\*?$|^\*$|^(?:mcp|file-mcp)\.(?:\*|[A-Za-z0-9][A-Za-z0-9_-]{0,127}\.(?:\*|[A-Za-z0-9][A-Za-z0-9._-]{0,127}\*?))$/,
+        "a capability pattern or canonical external tool pattern",
       ),
     priority: z.number().int().min(-1000).max(1000).optional(),
     when: conditionSchema.optional(),

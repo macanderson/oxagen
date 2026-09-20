@@ -322,6 +322,8 @@ export type DecisionRulesKernelGateFn = (args: {
     /** The run an auto-approval receipt attaches to (#3153), or null. */
     runId?: string | null;
   };
+  /** External tools have no declared measures or mandate settlement contract. */
+  external?: { approvedDigest?: string };
   /** The IAM-resolved acting principal, or null (the non-enterprise fast-path). */
   principal: ResolvedPrincipal | null;
 }) => Promise<void | DecisionSettlement>;
@@ -609,6 +611,8 @@ async function applyDecisionSettlement(
 }
 
 export type CapabilityErrorCode =
+  | "external_rules_unavailable"
+  | "external_settlement_unsupported"
   | "unknown_capability"
   | "no_handler"
   | "surface_denied"
@@ -676,6 +680,10 @@ export type KernelSecurityOutcome = "allow" | "deny" | "error";
  * handler's typed refusal (HandlerError).
  */
 export type KernelFailureCode =
+  | "decision_rule_denied"
+  | "decision_rule_approval_required"
+  | "external_tool_authority_unavailable"
+  | "external_decision_refused"
   | CapabilityErrorCode
   | "no_tenant_scope"
   | "invalid_tenant_scope"
@@ -870,6 +878,8 @@ async function resolveHandler(name: string): Promise<CapabilityHandlerFn> {
 }
 
 export interface InvokeOptions {
+  /** Internal replay invariant, checked on the exact parsed value before admission or dispatch. */
+  assertValidatedInput?: (input: unknown) => void | Promise<void>;
   /**
    * Surface the call arrives on. When set, the kernel enforces the
    * contract's `surfaces` allowlist — e.g. an `agent`-only capability
@@ -1162,6 +1172,8 @@ async function _invokeCoreInner(
       `Input validation failed for "${name}": ${inputResult.error.message}`,
     );
   }
+
+  await opts.assertValidatedInput?.(inputResult.data);
 
   // ── Scope wrapper helper ──────────────────────────────────────────────────
   // For SCOPED capabilities, the IAM check, billing admission gate, and handler
@@ -1506,9 +1518,9 @@ async function _invokeCoreInner(
             // is read fresh at call time by a caller whose own run id can
             // change after `ctx` was built (the in-app assistant opens its
             // run only after materializing tools) and takes priority;
-            // ctx.agentRun?.runId is the fallback for an Agent RBAC call,
-            // which carries no separate opts.runId of its own.
-            runId: opts?.runId ?? ctx.agentRun?.runId ?? null,
+            // Nested calls inherit ctx.runId from the outer handler context.
+            // Agent RBAC calls fall back to ctx.agentRun?.runId.
+            runId: opts?.runId ?? ctx.runId ?? ctx.agentRun?.runId ?? null,
           },
           principal: resolvedPrincipal,
         });
@@ -1525,6 +1537,7 @@ async function _invokeCoreInner(
       // capabilities). isUuid guards the fail-closed scope validation.
       const checkedCtx: CheckedContext = {
         ...ctx,
+        runId: opts?.runId ?? ctx.runId ?? ctx.agentRun?.runId ?? null,
         principal: resolvedPrincipal,
         // Attached ONLY here, only from the IAM runtime's own insert, and only
         // on the allow path — the handler is the one consumer downstream of a
@@ -1773,6 +1786,8 @@ async function _invokeCoreInner(
 // caller can apply the appropriate error shape for its transport.
 
 export interface AuthorizeExternalCapabilityResult {
+  /** Resolved by IAM, used by subsequent external authority gates. */
+  principal?: ResolvedPrincipal | null;
   /** True when the IAM check passed (outcome === "allow" OR enforcement is off). */
   allowed: boolean;
   /** The IAM outcome string: "allow" | "deny" | "pending_approval". */
@@ -1927,10 +1942,106 @@ export async function authorizeExternalCapability(
       `[kernel:external] IAM would-deny "${name}" (outcome=${outcome}, ` +
         `reason=${reason ?? "none"}) — IAM_ENFORCEMENT_ENABLED=false, allowing.`,
     );
-    return { allowed: true, outcome, reason: reason ?? outcome, decision };
+    return {
+      allowed: true,
+      outcome,
+      reason: reason ?? outcome,
+      decision,
+      ...(iamResult?.principal ? { principal: iamResult.principal } : {}),
+    };
   }
 
-  return { allowed: true, outcome: "allow", reason: null, decision };
+  return {
+    allowed: true,
+    outcome: "allow",
+    reason: null,
+    decision,
+    ...(iamResult?.principal ? { principal: iamResult.principal } : {}),
+  };
+}
+
+/** Apply the injected decision gate immediately before an external transport call. */
+export async function enforceExternalDecisionRules(
+  name: string,
+  input: unknown,
+  ctx: CapabilityContext,
+  options: {
+    approvedDigest?: string;
+    runId?: string | null;
+    principal?: ResolvedPrincipal | null;
+  } = {},
+): Promise<void> {
+  const started = Date.now();
+  try {
+    if (!_decisionRulesGate)
+      throw new CapabilityError(
+        name,
+        "external_rules_unavailable",
+        "External tool rules are not initialized",
+      );
+    const settlement = await _decisionRulesGate({
+      capability: name,
+      input,
+      ctx: {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        surface: ctx.surface,
+        requestId: ctx.requestId,
+        runId: options.runId ?? ctx.agentRun?.runId ?? null,
+      },
+      principal: options.principal ?? ctx.agentRun?.agentPrincipal ?? null,
+      external: { approvedDigest: options.approvedDigest },
+    });
+    if (settlement) {
+      await settlement.release();
+      throw new CapabilityError(
+        name,
+        "external_settlement_unsupported",
+        "External tool costs cannot be settled against a mandate",
+      );
+    }
+    emitSecurityEvent({
+      capability: name,
+      outcome: "allow",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: null,
+      durationMs: Date.now() - started,
+    });
+  } catch (error) {
+    const reported =
+      error && typeof error === "object" && "code" in error
+        ? error.code
+        : undefined;
+    const code: KernelFailureCode =
+      error instanceof CapabilityError
+        ? error.code
+        : reported === "decision_rule_denied" ||
+            reported === "decision_rule_approval_required" ||
+            reported === "external_tool_authority_unavailable"
+          ? reported
+          : "external_decision_refused";
+    emitSecurityEvent({
+      capability: name,
+      outcome:
+        code === "external_rules_unavailable" ||
+        code === "external_decision_refused"
+          ? "error"
+          : "deny",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: code,
+      durationMs: Date.now() - started,
+    });
+    throw error;
+  }
 }
 
 /**

@@ -395,3 +395,92 @@ describe("the evaluation the dialog reads again", () => {
     );
   });
 });
+
+describe("approval refusal recovery", () => {
+  it.each([
+    ["no_principal", "Sign in again"],
+    ["no_role_covers_all_tags", "No single organization role"],
+    ["not_an_approver", "you are not one of them"],
+    ["agent_cannot_resolve_own_mandate", "A person answers"],
+    ["new_policy_refusal", "The decision was refused (new_policy_refusal)"],
+  ])("explains refusal %s without changing the call", async (code, copy) => {
+    resolveApprovalAction.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code,
+    });
+    draw();
+    const user = await open();
+    await user.click(within(dialog()).getByTestId("approve"));
+    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
+      copy,
+    );
+    expect(router.refresh).not.toHaveBeenCalled();
+    expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
+      "aria-disabled",
+    );
+  });
+
+  it("reports a generic invalid decision without asking for a denial note", async () => {
+    resolveApprovalAction.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+    });
+    draw();
+    const user = await open();
+    await user.click(within(dialog()).getByTestId("approve"));
+    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
+      "The decision was refused before it was sent.",
+    );
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it("names the access request holding a decision", async () => {
+    resolveApprovalAction.mockResolvedValue({
+      ok: false,
+      reason: "pending_approval",
+      accessRequestId: "arq_waiting",
+    });
+    draw();
+    const user = await open();
+    await user.click(within(dialog()).getByTestId("approve"));
+    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
+      "Your access request arq_waiting is still waiting.",
+    );
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it("recovers from a rejected decision transport and permits retry", async () => {
+    resolveApprovalAction.mockRejectedValueOnce(new Error("connection lost"));
+    draw();
+    const user = await open();
+    await user.click(within(dialog()).getByTestId("approve"));
+    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
+      "action_failed",
+    );
+    expect(router.refresh).not.toHaveBeenCalled();
+    expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
+      "aria-disabled",
+    );
+    await user.click(within(dialog()).getByTestId("approve"));
+    expect(resolveApprovalAction).toHaveBeenCalledTimes(2);
+    expect(router.refresh).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a decision available when the freshness read itself waits for access", async () => {
+    readApprovalEligibility.mockResolvedValue({
+      ok: false,
+      reason: "pending_approval",
+      accessRequestId: "arq_waiting",
+    });
+    draw();
+    await open();
+    expect(screen.getByTestId("eligibility-unread")).toHaveTextContent(
+      "pending_approval",
+    );
+    expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
+      "aria-disabled",
+    );
+  });
+});

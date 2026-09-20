@@ -169,6 +169,15 @@ export interface GitHubClient {
     branch?: string;
   }): Promise<{ commitSha: string; htmlUrl: string }>;
 
+  /** Delete a file from a branch using its current blob SHA. */
+  deleteFile(args: {
+    owner: string;
+    repo: string;
+    path: string;
+    branch: string;
+    message: string;
+  }): Promise<void>;
+
   /**
    * Fork a repository into the authenticated user's account or into `org`.
    * Polls until the fork is reachable (up to 10 attempts).
@@ -398,6 +407,12 @@ export interface GitHubClient {
 
 /** Options accepted by createGitHubClient. */
 export interface GitHubClientOptions {
+  /** Per-attempt timeout, including the response body. Defaults to 30 seconds. */
+  timeoutMs?: number;
+  /** Cancels requests and prevents further retries. */
+  signal?: AbortSignal;
+  /** Refuse longer server waits instead of retrying early. Defaults to two minutes. */
+  maxRateLimitWaitMs?: number;
   /** Personal access token or GitHub App installation token. */
   token: string;
   /** Override the GitHub API base URL (e.g. for GitHub Enterprise). */

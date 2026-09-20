@@ -78,6 +78,12 @@ export interface SteeringGitHub {
     repo: SteeringRepository,
     branch: string,
     fromBranch: string,
+    options?: { exclusive: boolean },
+  ): Promise<void>;
+  /** Remove omitted files from a proposal's owned paths before writing its replacement. */
+  reconcileFiles(
+    repo: SteeringRepository,
+    args: { branch: string; roots: string[]; files: string[] },
   ): Promise<void>;
   putFile(
     repo: SteeringRepository,
@@ -485,7 +491,7 @@ export function createSteeringGitHub(
         ref,
       });
     },
-    async ensureBranch(repo, branch, fromBranch) {
+    async ensureBranch(repo, branch, fromBranch, options) {
       try {
         await clientFor(repo).createBranch({
           owner: repo.owner,
@@ -497,8 +503,44 @@ export function createSteeringGitHub(
         if (
           err instanceof Error &&
           /Reference already exists/i.test(err.message)
-        )
+        ) {
+          if (options?.exclusive)
+            throw new HandlerError({
+              code: "conflict",
+              reason: "proposal_branch_exists",
+              message:
+                "The proposal branch already exists without a matching open proposal. Preserve or remove it explicitly before retrying.",
+            });
           return;
+        }
+        throw githubRefused(err);
+      }
+    },
+    async reconcileFiles(repo, args) {
+      try {
+        const gh = clientFor(repo);
+        const paths = await gh.getTree({
+          owner: repo.owner,
+          repo: repo.repo,
+          ref: args.branch,
+        });
+        for (const path of paths) {
+          if (
+            args.roots.some(
+              (root) => path === root || path.startsWith(`${root}/`),
+            ) &&
+            !args.files.includes(path)
+          ) {
+            await gh.deleteFile({
+              owner: repo.owner,
+              repo: repo.repo,
+              path,
+              branch: args.branch,
+              message: `Remove omitted proposal file ${path}`,
+            });
+          }
+        }
+      } catch (err) {
         throw githubRefused(err);
       }
     },

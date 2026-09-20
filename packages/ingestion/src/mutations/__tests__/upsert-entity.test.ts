@@ -97,6 +97,24 @@ describe("upsertEntityNode", () => {
     });
   });
 
+  it("records a canonical provider key without replacing a legacy natural key", async () => {
+    mocks.sessionRun.mockResolvedValueOnce({
+      records: [{ get: () => "original-node" }],
+    });
+    await upsertEntityNode(
+      makeMutation({ canonicalNaturalKey: "github:conn-1:issue:id:101" }),
+      "org-1",
+    );
+    const [cypher, params] = mocks.sessionRun.mock.calls[0]!;
+    expect(cypher).toContain(
+      "n.canonicalNaturalKey = coalesce($canonicalNaturalKey, n.canonicalNaturalKey)",
+    );
+    expect(params).toMatchObject({
+      naturalKey: "github:conn-1:42",
+      canonicalNaturalKey: "github:conn-1:issue:id:101",
+    });
+  });
+
   it("canonicalises a multi-word snake entityType to a PascalCase label, slug kept on entityType", async () => {
     mocks.sessionRun.mockResolvedValueOnce({
       records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],

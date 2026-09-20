@@ -8,7 +8,21 @@ const run = vi.fn(
   ) => ({ records: [] }),
 );
 const close = vi.fn(async () => undefined);
-vi.mock("./client", () => ({ session: () => ({ run, close }) }));
+const executeRead = vi.fn(
+  async (
+    work: (tx: { run: typeof run }) => Promise<unknown>,
+    _config?: { timeout: number },
+  ) => work({ run }),
+);
+const executeWrite = vi.fn(
+  async (
+    work: (tx: { run: typeof run }) => Promise<unknown>,
+    _config?: { timeout: number },
+  ) => work({ run }),
+);
+vi.mock("./client", () => ({
+  session: () => ({ run, close, executeRead, executeWrite }),
+}));
 
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "./tenant";
@@ -138,8 +152,10 @@ describe("scopedSession with GraphScope", () => {
     expect(run).toHaveBeenCalledWith(
       expect.stringContaining("RETURN n"),
       expect.objectContaining({ orgId: ORG }),
-      { timeout: 250 },
     );
+    expect(executeRead).toHaveBeenCalledWith(expect.any(Function), {
+      timeout: 250,
+    });
   });
 
   it("rejects write clauses under read mode (defense in depth)", async () => {
@@ -188,6 +204,56 @@ describe("scopedSession with GraphScope", () => {
     expect(run).toHaveBeenCalledWith(
       expect.stringContaining(`$${SCOPE_LABELS_PARAM}`),
       expect.objectContaining({ [SCOPE_LABELS_PARAM]: ["Doc", "Case"] }),
+    );
+  });
+});
+
+describe("graph transaction retry safety", () => {
+  it("retries reads but never sends writes or unknown procedures to managed transactions", async () => {
+    executeRead.mockClear();
+    executeWrite.mockClear();
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+      const s = scopedSession();
+      await s.run("MATCH (n {orgId: $orgId}) RETURN n");
+      await s.run(
+        "MATCH (owner {orgId: $orgId}) CREATE (n:Node {orgId: $orgId, id: randomUUID()}) RETURN n",
+      );
+      await s.run("MATCH (n {orgId: $orgId}) CALL custom.mutate(n) RETURN n");
+    });
+    expect(executeRead).toHaveBeenCalledTimes(1);
+    expect(executeWrite).not.toHaveBeenCalled();
+  });
+
+  it("propagates a transient write error without replaying the mutation", async () => {
+    const failure = Object.assign(new Error("commit acknowledgement lost"), {
+      code: "Neo.TransientError.Transaction.Terminated",
+    });
+    run.mockClear();
+    executeWrite.mockClear();
+    run.mockRejectedValueOnce(failure);
+    await expect(
+      runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+        await scopedSession().run(
+          "MATCH (owner {orgId: $orgId}) CREATE (n:Node {orgId: $orgId, id: randomUUID()}) RETURN n",
+        );
+      }),
+    ).rejects.toBe(failure);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0]?.[1]).toEqual({ orgId: ORG, workspaceId: WS });
+    expect(executeWrite).not.toHaveBeenCalled();
+  });
+
+  it("keeps scoped write deadlines on the non-retrying transaction", async () => {
+    run.mockClear();
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+      await scopedSession({ budget: { maxTraversalMs: 250 } }).run(
+        "MATCH (n) WHERE n.orgId = $orgId SET n.count = n.count + 1 RETURN n",
+      );
+    });
+    expect(run).toHaveBeenCalledWith(
+      expect.stringContaining("SET n.count"),
+      expect.objectContaining({ orgId: ORG, workspaceId: WS }),
+      { timeout: 250 },
     );
   });
 });

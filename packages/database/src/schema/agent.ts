@@ -177,6 +177,19 @@ export const approvalRequests = agentSchema.table(
     // key. Null when no run was in scope when the call was parked; a null
     // means "not recorded", never "some other run".
     runPublicId: text("run_public_id"),
+    resumePayload: jsonb("resume_payload"),
+    resumeKey: text("resume_key"),
+    resumeStatus: text("resume_status"),
+    resumeStartedAt: timestamp("resume_started_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    resumeFinishedAt: timestamp("resume_finished_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    resumeRunPublicId: text("resume_run_public_id"),
+    resumeError: text("resume_error"),
     capabilityName: text("capability_name").notNull(),
     inputPreview: jsonb("input_preview").notNull(),
     riskLevel: text("risk_level").notNull(),
@@ -217,6 +230,17 @@ export const approvalRequests = agentSchema.table(
     }).notNull(),
   },
   (t) => ({
+    resumeQueueIdx: index("approval_requests_resume_queue_idx")
+      .on(t.resumeStatus, t.createdAt)
+      .where(sql`resume_payload IS NOT NULL`),
+    resumeKeyIdx: index("approval_requests_resume_key_idx").on(
+      t.workspaceId,
+      t.resumeKey,
+    ),
+    resumeStatusCheck: check(
+      "approval_requests_resume_status_check",
+      sql`${t.resumeStatus} IS NULL OR ${t.resumeStatus} IN ('waiting', 'queued', 'running', 'succeeded', 'dispatched', 'failed', 'indeterminate', 'denied', 'expired')`,
+    ),
     orgResolutionIdx: index("approval_requests_org_resolution_idx").on(
       t.orgId,
       t.workspaceId,

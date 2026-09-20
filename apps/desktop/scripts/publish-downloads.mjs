@@ -23,8 +23,8 @@
  * --resume is for a re-run of the workflow's publish job after something
  * downstream of the upload failed: when the version is already published,
  * the installers on disk are hashed and compared with the published
- * SHA256SUMS.txt, and an identical set means the upload is done, so the page
- * is redrawn from the bucket and the job carries on. A different set is still
+ * SHA256SUMS.txt. Missing objects are uploaded before the page is redrawn
+ * from the bucket and the job carries on. A different set is still
  * refused: that is a new build under an old version's URLs.
  *
  * --page-only rewrites the listing page (and its fonts) for a version that is
@@ -266,13 +266,8 @@ function readPublishedDigests() {
   );
 }
 
-/**
- * Redraw the page for a version that is already in the bucket, from the
- * bucket: sizes from a listing of its prefix, digests from its
- * SHA256SUMS.txt, the published date from that file. Returns the digests by
- * file name so a caller can compare them with a build on disk.
- */
-async function redrawFromBucket({ probeCliRelease }) {
+/** List every object under this release prefix. */
+function listPublishedObjects() {
   const listing = JSON.parse(
     sh(
       "aws",
@@ -290,7 +285,15 @@ async function redrawFromBucket({ probeCliRelease }) {
       { capture: true },
     ) || "{}",
   );
-  const objects = Array.isArray(listing.Contents) ? listing.Contents : [];
+  return Array.isArray(listing.Contents) ? listing.Contents : [];
+}
+
+/** Refuse incomplete releases before replacing the public download page. */
+async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
+  const objects = [
+    ...listPublishedObjects(),
+    ...(dryRun ? plannedObjects : []),
+  ];
   if (objects.length === 0) {
     console.error(
       `✖ nothing is published under ${prefix}/; --page-only needs a published version`,
@@ -298,6 +301,16 @@ async function redrawFromBucket({ probeCliRelease }) {
     process.exit(1);
   }
   const digests = readPublishedDigests();
+  const keys = new Set(objects.map((object) => object.Key));
+  const missing = [...digests.keys()].filter(
+    (file) => !keys.has(`${keyPrefix}${file}`),
+  );
+  if (missing.length > 0) {
+    console.error(
+      `Installers are missing from ${prefix}/: ${missing.join(", ")}. Resume the upload before publishing.`,
+    );
+    process.exit(1);
+  }
   const published = [];
   for (const object of objects) {
     const name = String(object.Key).split("/").pop();
@@ -492,8 +505,8 @@ for (const installer of installers) {
 const sums = join(work, "SHA256SUMS.txt");
 writeFileSync(sums, sha256SumsText(entries));
 
-// A re-run after the upload succeeded: the same files under the same URLs is
-// a finished upload, so redraw the page and let the job's later steps run.
+// A retry must use the same build before it can repair missing objects.
+// Verify the complete bucket listing before the job's later steps run.
 // Anything else is a different build asking for an old version's immutable
 // URLs, which is what the refusal above exists to stop.
 if (resuming) {
@@ -513,9 +526,29 @@ if (resuming) {
     );
     process.exit(1);
   }
-  await redrawFromBucket({ probeCliRelease: false });
+  const keys = new Set(listPublishedObjects().map((object) => object.Key));
+  const plannedObjects = [];
+  for (const entry of entries) {
+    if (!keys.has(`${keyPrefix}${entry.file}`)) {
+      upload(
+        entry.path,
+        `${prefix}/${entry.file}`,
+        entry.contentType,
+        immutable,
+      );
+      if (dryRun) {
+        plannedObjects.push({
+          Key: `${keyPrefix}${entry.file}`,
+          Size: entry.bytes,
+        });
+      }
+    }
+  }
+  await redrawFromBucket({ probeCliRelease: false, plannedObjects });
   console.log(
-    `${version} is already published with these exact files; page redrawn, nothing else to upload.`,
+    dryRun
+      ? `[dry-run] ${version} installer recovery and page publication planned.`
+      : `${version} has every installer; page redrawn.`,
   );
   rmSync(work, { recursive: true, force: true });
   process.exit(0);

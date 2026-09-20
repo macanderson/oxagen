@@ -33,7 +33,10 @@
       "resolution": "Resolution",
       "resolvedBy": "Resolved by",
       "resolvedAt": "Resolved at",
-      "empty": "Nothing resolved for this run yet."
+      "empty": "Nothing resolved for this run yet.",
+      "execution": "Execution",
+      "reason": "Reason",
+      "resumedRun": "Resumed run"
     },
     "tabs": {
       "label": "Run sections",

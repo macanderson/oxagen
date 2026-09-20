@@ -1,4 +1,14 @@
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  fsyncSync,
+  renameSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { FrameBody } from "../evidence/frame-body";
@@ -6,7 +16,108 @@ import { minimalSession } from "../test-helpers";
 import { scratchPaths } from "./test-support";
 import { Wal } from "./wal";
 
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    readFileSync: vi.fn(actual.readFileSync),
+    writeSync: vi.fn(actual.writeSync),
+    fsyncSync: vi.fn(actual.fsyncSync),
+    renameSync: vi.fn(actual.renameSync),
+  };
+});
+
 describe("Wal", () => {
+  it("reads and rewrites bodies without converting the whole file to a string", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const session = minimalSession();
+    const uuid = session[0]?.session_uuid as string;
+    const path = join(paths.wal, `${uuid}.bodies.jsonl`);
+    const stored = session.slice(0, 3).map((event, index) => ({
+      event_id_idem: event.event_id_idem,
+      seq: event.seq,
+      content_type: "text/plain; charset=utf-8",
+      bytes_base64: Buffer.from(`${index}:${"x".repeat(90_000)}`).toString(
+        "base64",
+      ),
+    }));
+    wal.append(session);
+    // Split a multi-byte character at the 64 KiB read boundary. The final
+    // record deliberately has no newline, as after an interrupted append.
+    const prefix = '{"content_type":"';
+    const firstBody = stored[0]!;
+    firstBody.content_type = `${"x".repeat(65_536 - prefix.length - 1)}é`;
+    const { content_type, ...rest } = firstBody;
+    const first = JSON.stringify({ content_type, ...rest });
+    writeFileSync(
+      path,
+      [first, "", ...stored.slice(1).map((body) => JSON.stringify(body))].join(
+        "\n",
+      ),
+    );
+    const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
+    vi.mocked(writeSync).mockImplementationOnce((fd, data) => {
+      if (typeof data === "string") throw new Error("expected a buffer");
+      return actualFs.writeSync(fd, data, 0, 7);
+    });
+    const wholeFileRead = vi.mocked(readFileSync);
+    wholeFileRead.mockImplementation(() => {
+      throw new Error("whole-file read exceeds the string limit");
+    });
+    try {
+      expect(wal.bodiesFor(session)).toEqual(
+        stored.map(({ seq: _seq, ...body }) => body),
+      );
+      expect(wal.read(uuid)).toEqual(session);
+      expect(wal.dropBodies(session.slice(1, 2))).toBe(1);
+      expect(wal.bodiesFor(session).map((body) => body.event_id_idem)).toEqual([
+        stored[0]?.event_id_idem,
+        stored[2]?.event_id_idem,
+      ]);
+      expect(statSync(path).mode & 0o777).toBe(0o600);
+      expect(wal.dropBodies(session.slice(1, 2))).toBe(0);
+      expect(
+        readdirSync(paths.wal).filter((name) => name.endsWith(".tmp")),
+      ).toEqual([]);
+    } finally {
+      wholeFileRead.mockRestore();
+    }
+  });
+
+  it.each(["write", "sync", "rename"])(
+    "keeps the original body file after a %s failure",
+    (stage) => {
+      const paths = scratchPaths();
+      const wal = new Wal(paths.wal);
+      const session = minimalSession();
+      const uuid = session[0]?.session_uuid as string;
+      const path = join(paths.wal, `${uuid}.bodies.jsonl`);
+      const original = session
+        .slice(0, 2)
+        .map((event) =>
+          JSON.stringify({
+            event_id_idem: event.event_id_idem,
+            seq: event.seq,
+            content_type: "text/plain",
+            bytes_base64: "YQ==",
+          }),
+        )
+        .join("\n");
+      writeFileSync(path, original);
+      const fail = () => {
+        throw new Error("disk full");
+      };
+      if (stage === "write") vi.mocked(writeSync).mockImplementationOnce(fail);
+      if (stage === "sync") vi.mocked(fsyncSync).mockImplementationOnce(fail);
+      if (stage === "rename")
+        vi.mocked(renameSync).mockImplementationOnce(fail);
+      expect(() => wal.dropBodies(session.slice(0, 1))).toThrow("disk full");
+      expect(readFileSync(path, "utf8")).toBe(original);
+      expect(readdirSync(paths.wal)).toEqual([`${uuid}.bodies.jsonl`]);
+    },
+  );
+
   it("appends per session, reads in order, and tracks the shipped cursor", () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);

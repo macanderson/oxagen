@@ -1295,6 +1295,11 @@ describe("approvals on the run", () => {
             expiresAt: new Date(NOW + 3_600_000).toISOString(),
             resolvedAt: new Date(NOW - 30_000).toISOString(),
             resolution: "approved",
+            execution: {
+              status: "succeeded",
+              runId: "arun_resumed",
+              reason: null,
+            },
             resolvedBy: "policy:small-vendor-payments",
             autoRuleRef: "small-vendor-payments",
           },
@@ -1302,10 +1307,44 @@ describe("approvals on the run", () => {
       },
       { tab: "approvals" },
     );
+    expect(screen.getByTestId("approval-execution")).toHaveTextContent(
+      "succeeded",
+    );
+    expect(screen.getByText("arun_resumed")).toBeInTheDocument();
     const [card] = screen.getAllByTestId("resolved-approval");
     expect(card).toHaveTextContent("stripe__create_payment");
     expect(screen.getByTestId("resolved-approver")).toHaveTextContent(
       "small-vendor-payments",
+    );
+  });
+
+  it("labels an expired approval without guessing its cause", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok({ items: [], more: false }),
+        resolvedApprovals: ok([
+          {
+            id: "apr_expired",
+            runId: "tse_7k2m9q",
+            tool: "delete_workspace",
+            requester: null,
+            createdAt: new Date(NOW - 600_000).toISOString(),
+            expiresAt: new Date(NOW - 300_000).toISOString(),
+            resolvedAt: new Date(NOW - 300_000).toISOString(),
+            resolution: "expired",
+            resolvedBy: null,
+            autoRuleRef: null,
+          },
+        ]),
+      },
+      { tab: "approvals" },
+    );
+    expect(screen.getByTestId("resolved-approver")).toHaveTextContent(
+      /^system$/,
+    );
+    expect(screen.getByTestId("resolved-approver")).not.toHaveTextContent(
+      "unknown",
     );
   });
 

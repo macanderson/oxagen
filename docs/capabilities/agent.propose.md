@@ -10,7 +10,7 @@
 
 ## Intent
 
-Write an agent that does not exist yet, as a pull request against the workspace's main repository (MC spec §6.2, §10.2; roadmap creation-spec §1). The agent is the file `.oxagen/agents/<slug>.toml`. The call writes no row. It cuts the branch `agents/<slug>` from the production branch the repository binding recorded, commits the definition and the subagent file generated from it, and opens the pull request, or lands on the branch's open one. The agent exists when a person merges it.
+Write an agent that does not exist yet, as a pull request against the workspace's main repository (MC spec §6.2, §10.2; roadmap creation-spec §1). The definition is the file `.oxagen/agents/<slug>.toml`. The call writes no row. It cuts the branch `agents/<slug>` from the production branch the repository binding recorded, commits the definition and the subagent file generated from it, and opens the pull request, or lands on the branch's open one. After merge, register the agent under the same slug to create its identity and credential.
 
 This is New agent, not Register an agent. `register_agent` mints an identity for an agent that already runs on a machine or in CI. `propose_agent` writes the definition of one that does not run anywhere yet.
 
@@ -40,8 +40,9 @@ The checks are pure functions exported from the contract module (`checkAgentDefi
 
 | Field | Type | Notes |
 |---|---|---|
-| `slug`, `path`, `generatedPath`, `branch` | `string` | `.oxagen/agents/<slug>.toml` and `.claude/agents/<slug>.md` on `agents/<slug>`. |
-| `agentKey` | `string \| null` | `org_ns.ws_ns.slug` as it will be on merge; null while a namespace is unset. |
+| `slug`, `path`, `branch` | `string` | `.oxagen/agents/<slug>.toml` on `agents/<slug>`. |
+| `generatedPath` | `string \| null` | `.claude/agents/<slug>.md` for Claude Code, Cursor, and Stella. Null for other harnesses. |
+| `agentKey` | `string \| null` | `org_ns.ws_ns.slug` to use when registering after merge; null while a namespace is unset. |
 | `repository`, `baseRef` | `string` | The main repository and its production branch. |
 | `digest` | `string` | `sha256:<hex>` of the committed definition (LF line ends). |
 | `checks` | `{ name, passed, code }[]` | The six checks, all passed. |
@@ -73,3 +74,5 @@ Org Owner or Admin, checked by the handler (INV-29) for the signed-in user. Merg
 ## Not built yet
 
 Merging the file does not create the principal yet. No handler reads `.oxagen/agents/` from a merge commit, so after the merge the operator registers the agent with `register_agent` under the same slug.
+
+An existing proposal branch is reused only when it has an open pull request into the configured production branch. Otherwise the handler refuses with `proposal_branch_exists`; preserve or remove that branch explicitly before retrying. It never deletes the branch automatically.

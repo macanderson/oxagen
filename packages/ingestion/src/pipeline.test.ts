@@ -45,6 +45,7 @@ function makeEvent(overrides: Partial<RawIngestEvent> = {}): RawIngestEvent {
     sourceRecordType: "pull_request",
     idempotencyKey: "github:conn-abc:pull_request:42",
     payload: {
+      id: 4200,
       number: 42,
       title: "Add login",
       body: "implements SSO",
@@ -91,7 +92,7 @@ describe("runPipeline", () => {
     expect(result).not.toBeNull();
     // Narrow: no deliveryConfig set, so result is a PipelineResult (not FilteredResult)
     const pr = result as PipelineResult;
-    expect(pr.naturalKey).toBe("github:conn-abc:42");
+    expect(pr.naturalKey).toBe("github:conn-abc:pull_request:id:4200");
     expect(pr.operation).toBe("insert");
     expect(pr.dedup.principalNodeId).toBe("node-principal-1");
     expect(pr.dedup.action).toBe("created_principal");
@@ -129,7 +130,8 @@ describe("runPipeline", () => {
         connectionId: "conn-abc",
         entityType: "code_change",
         sourceRecordType: "pull_request",
-        naturalKey: "github:conn-abc:42",
+        naturalKey: "github:conn-abc:pull_request:id:4200",
+        legacyNaturalKey: "github:conn-abc:42",
       }),
       "org-1",
       // The pipeline threads the schema-validation opts (pinnedSchema +

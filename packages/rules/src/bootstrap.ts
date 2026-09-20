@@ -14,7 +14,7 @@ import { setDecisionRulesGate } from "@oxagen/oxagen/kernel";
 import { autoApproveParkedCall } from "./auto-approval-path";
 import { createDecisionRulesGate } from "./gate";
 import { checkMandate } from "./mandates";
-import { loadWorkspaceRuleSet } from "./rule-store";
+import { loadWorkspaceRuleSet, loadExternalRuleSet } from "./rule-store";
 import { logger } from "./logger";
 
 let booted = false;
@@ -24,7 +24,10 @@ export function bootstrapDecisionRulesRuntime(): void {
   booted = true;
   setDecisionRulesGate(
     createDecisionRulesGate({
-      loadRuleSet: loadWorkspaceRuleSet,
+      loadRuleSet: (args) =>
+        args.externalTool
+          ? loadExternalRuleSet(args)
+          : loadWorkspaceRuleSet(args),
       // The mandate check for agent principals (ADR-059 decision 4).
       checkMandate,
       // The auto-approval clause of the same rule set (ADR-070): a call a rule
