@@ -59,18 +59,11 @@ function rejectedResult(
   };
 }
 
-/**
- * Resolve an EntityMutation against the existing graph.
- *
- * @param opts Optional schema-validation context (pinned active vocabulary
- *   + source metadata) threaded from the pipeline into the node write.
- * @returns DeduplicationResult describing what happened and which node to embed.
- */
-export async function resolveEntity(
+/** Find an existing identity without writing, preserving its stored natural key. */
+export async function resolveNaturalKey(
   mutation: EntityMutation,
   orgId: string,
-  opts: UpsertEntityOptions = {},
-): Promise<DeduplicationResult> {
+): Promise<{ nodeId: string | null; mutation: EntityMutation }> {
   // ── Pass A: exact naturalKey lookup ─────────────────────────────────────────
   const session = scopedSession();
   let passANodeId: string | null = null;
@@ -148,6 +141,25 @@ export async function resolveEntity(
   } finally {
     await session.close();
   }
+
+  return { nodeId: passANodeId, mutation };
+}
+
+/**
+ * Resolve an EntityMutation against the existing graph.
+ *
+ * @param opts Optional schema-validation context (pinned active vocabulary
+ *   + source metadata) threaded from the pipeline into the node write.
+ * @returns DeduplicationResult describing what happened and which node to embed.
+ */
+export async function resolveEntity(
+  mutation: EntityMutation,
+  orgId: string,
+  opts: UpsertEntityOptions = {},
+): Promise<DeduplicationResult> {
+  const match = await resolveNaturalKey(mutation, orgId);
+  mutation = match.mutation;
+  const passANodeId = match.nodeId;
 
   if (passANodeId) {
     // Node already exists; upsertEntityNode will update it (ON MATCH SET).
