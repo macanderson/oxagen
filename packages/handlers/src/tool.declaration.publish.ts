@@ -5,7 +5,7 @@ import {
 } from "@oxagen/oxagen";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
 import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
-import { withTenantDb } from "@oxagen/database";
+import type { Tx } from "@oxagen/database";
 import {
   assertConsequenceRole,
   loadConsequenceRoles,
@@ -83,6 +83,7 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
   // `active` is the version the gate reads today; null for a fresh tool.
   const assertClassificationRole = async (
     active: ActiveClassification | null,
+    tx: Tx,
   ) => {
     const before = active ?? {
       consequenceTags: [],
@@ -105,10 +106,13 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
       ]),
     ];
     if (tags.length === 0) return;
-    const overrides = await withTenantDb((tx) =>
-      loadConsequenceRoles(tx, workspaceId),
+    const overrides = await loadConsequenceRoles(tx, workspaceId);
+    await assertConsequenceRole(
+      { ...ctx, userId: actingUserId, apiKeyId: null },
+      tags,
+      overrides,
+      tx,
     );
-    await assertConsequenceRole(ctx, tags, overrides);
   };
 
   const published = await publishTool({

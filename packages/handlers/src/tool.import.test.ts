@@ -430,6 +430,16 @@ describe("import_tools when a publish partway through throws", () => {
     });
   });
 
+  it("attributes every import publish to the shared invalidation writer", async () => {
+    const reg = memoryRegistry(PINS);
+    stubRole("Owner", null);
+    const publish = vi.spyOn(reg.deps, "publish");
+    await createToolImportHandler(reg.deps)({ serverId: "mcs_github" }, ctx());
+    expect(publish).toHaveBeenCalled();
+    for (const [args] of publish.mock.calls)
+      expect(args.capability).toBe("import_tools");
+  });
+
   it("writes no stamp when the first publish throws", async () => {
     const reg = memoryRegistry(PINS);
     reg.deps.publish = async () => {

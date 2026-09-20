@@ -4,6 +4,7 @@ import {
   fsyncSync,
   renameSync,
   readFileSync,
+  readSync,
   readdirSync,
   statSync,
   writeFileSync,
@@ -21,6 +22,7 @@ vi.mock("node:fs", async (importOriginal) => {
   return {
     ...actual,
     readFileSync: vi.fn(actual.readFileSync),
+    readSync: vi.fn(actual.readSync),
     writeSync: vi.fn(actual.writeSync),
     fsyncSync: vi.fn(actual.fsyncSync),
     renameSync: vi.fn(actual.renameSync),
@@ -83,6 +85,42 @@ describe("Wal", () => {
     } finally {
       wholeFileRead.mockRestore();
     }
+  });
+
+  it("reports a streaming read failure and reads bodies on the next attempt", () => {
+    const paths = scratchPaths();
+    const report = vi.fn();
+    const wal = new Wal(paths.wal, report);
+    const session = minimalSession();
+    const event = session[0];
+    if (!event) throw new Error("Missing session event");
+    wal.append(session, [
+      {
+        event_id_idem: event.event_id_idem,
+        session_uuid: event.session_uuid,
+        seq: event.seq,
+        content_type: "text/plain",
+        bytes: new TextEncoder().encode("retained body"),
+        content_class: "model_call",
+      },
+    ]);
+    vi.mocked(readSync).mockImplementationOnce(() => {
+      throw Object.assign(new Error("read failed"), { code: "EIO" });
+    });
+    expect(() => wal.bodiesFor(session)).toThrow("read failed");
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith({
+      session_uuid: event.session_uuid,
+      operation: "read",
+      code: "EIO",
+    });
+    expect(wal.bodiesFor(session)).toEqual([
+      {
+        event_id_idem: event.event_id_idem,
+        content_type: "text/plain",
+        bytes_base64: Buffer.from("retained body").toString("base64"),
+      },
+    ]);
   });
 
   it.each(["write", "sync", "rename"])(
