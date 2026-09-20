@@ -27,7 +27,12 @@
 //      insert after a revoke would conflict and silently no-op).
 //   9. Emit the IAM audit event with principal_kind='agent' (fire-and-forget).
 
-import { withTenantDb, schema } from "@oxagen/database";
+import {
+  withTenantDb,
+  withTransactionOrgScope,
+  type Tx,
+  schema,
+} from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull } from "drizzle-orm";
 import pino from "pino";
@@ -79,6 +84,7 @@ export async function agentRoleAssignHandler(
       ctx.workspaceId,
     );
     if (!agent.principalId) throw new AgentPrincipalMissingError(input.agentId);
+    const principalId = agent.principalId;
 
     const role = await resolveRoleByName(tx, ctx.orgId, input.roleName);
 
@@ -116,7 +122,7 @@ export async function agentRoleAssignHandler(
       .from(schema.principalRoleAssignments)
       .where(
         and(
-          eq(schema.principalRoleAssignments.principalId, agent.principalId),
+          eq(schema.principalRoleAssignments.principalId, principalId),
           eq(schema.principalRoleAssignments.roleId, role.id),
           eq(schema.principalRoleAssignments.orgId, ctx.orgId),
           praWorkspaceId
@@ -127,37 +133,41 @@ export async function agentRoleAssignHandler(
       .limit(1);
 
     let alreadyAssigned = false;
-    if (existing && existing.deletedAt === null) {
-      alreadyAssigned = true;
-    } else if (existing) {
-      // Resurrect the soft-deleted row: the partial unique indexes on
-      // (principal, role, org[, workspace]) include soft-deleted rows, so a
-      // fresh insert would conflict and silently no-op after a revoke.
-      await tx
-        .update(schema.principalRoleAssignments)
-        .set({
-          deletedAt: null,
-          deletedById: null,
-          assignedBy: assignerUserId,
-          assignedAt: new Date(),
-          updatedAt: new Date(),
-          updatedById: assignerUserId,
-        })
-        .where(eq(schema.principalRoleAssignments.id, existing.id));
-    } else {
-      await tx
-        .insert(schema.principalRoleAssignments)
-        .values({
-          principalId: agent.principalId,
-          roleId: role.id,
-          orgId: ctx.orgId,
-          workspaceId: praWorkspaceId,
-          assignedBy: assignerUserId,
-          createdById: assignerUserId,
-          updatedById: assignerUserId,
-        })
-        .onConflictDoNothing();
-    }
+    const assign = async (tx: Tx) => {
+      if (existing && existing.deletedAt === null) {
+        alreadyAssigned = true;
+      } else if (existing) {
+        // Resurrect the soft-deleted row: the partial unique indexes on
+        // (principal, role, org[, workspace]) include soft-deleted rows, so a
+        // fresh insert would conflict and silently no-op after a revoke.
+        await tx
+          .update(schema.principalRoleAssignments)
+          .set({
+            deletedAt: null,
+            deletedById: null,
+            assignedBy: assignerUserId,
+            assignedAt: new Date(),
+            updatedAt: new Date(),
+            updatedById: assignerUserId,
+          })
+          .where(eq(schema.principalRoleAssignments.id, existing.id));
+      } else {
+        await tx
+          .insert(schema.principalRoleAssignments)
+          .values({
+            principalId,
+            roleId: role.id,
+            orgId: ctx.orgId,
+            workspaceId: praWorkspaceId,
+            assignedBy: assignerUserId,
+            createdById: assignerUserId,
+            updatedById: assignerUserId,
+          })
+          .onConflictDoNothing();
+      }
+    };
+    if (praWorkspaceId === null) await withTransactionOrgScope(tx, assign);
+    else await assign(tx);
 
     return {
       agent,

@@ -1,3 +1,4 @@
+import { withTransactionOrgScope } from "@oxagen/database";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createFakeTx } from "../test-utils/fake-tx";
 
@@ -14,6 +15,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   // a suite that counts seam calls must see one identity, not two.
   const dbMock = {
     ...real,
+    withTransactionOrgScope: vi.fn(
+      async (tx: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(tx),
+    ),
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fake.tx),
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
@@ -88,6 +92,7 @@ const INPUT = { agentId: "agt_1", roleName: "Agent Contributor" };
 
 beforeEach(() => {
   fake.reset();
+  vi.mocked(withTransactionOrgScope).mockClear();
   mocks.emitAudit.mockClear();
 });
 
@@ -102,6 +107,10 @@ describe("agent.role.revoke handler", () => {
     expect(out.revoked).toBe(true);
     expect(out.agentId).toBe("agt_1");
     expect(fake.mutations.update).toBe(1);
+    expect(withTransactionOrgScope).toHaveBeenCalledWith(
+      fake.tx,
+      expect.any(Function),
+    );
     expect(fake.mutations.delete).toBe(0); // soft delete, never a hard DELETE
     expect(mocks.emitAudit).toHaveBeenCalledTimes(1);
     const args = mocks.emitAudit.mock.calls[0]?.[0] as Record<string, unknown>;

@@ -8,7 +8,12 @@
 // org Owner or Admin (assertOrgRole, INV-29), for the signed-in user or the
 // creator of the API key (resolveActingUserId), who is recorded as the actor.
 
-import { withTenantDb, schema } from "@oxagen/database";
+import {
+  withTenantDb,
+  withTransactionOrgScope,
+  type Tx,
+  schema,
+} from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull } from "drizzle-orm";
 import pino from "pino";
@@ -54,26 +59,36 @@ export async function agentRoleRevokeHandler(
       ctx.workspaceId,
     );
     if (!agent.principalId) throw new AgentPrincipalMissingError(input.agentId);
+    const principalId = agent.principalId;
 
     const role = await resolveRoleByName(tx, ctx.orgId, input.roleName);
 
-    const revokedRows = await tx
-      .update(schema.principalRoleAssignments)
-      .set({
-        deletedAt: new Date(),
-        deletedById: actorUserId,
-        updatedAt: new Date(),
-        updatedById: actorUserId,
-      })
-      .where(
-        and(
-          eq(schema.principalRoleAssignments.principalId, agent.principalId),
-          eq(schema.principalRoleAssignments.roleId, role.id),
-          eq(schema.principalRoleAssignments.orgId, ctx.orgId),
-          isNull(schema.principalRoleAssignments.deletedAt),
-        ),
-      )
-      .returning({ id: schema.principalRoleAssignments.id });
+    const revoke = (tx: Tx) =>
+      tx
+        .update(schema.principalRoleAssignments)
+        .set({
+          deletedAt: new Date(),
+          deletedById: actorUserId,
+          updatedAt: new Date(),
+          updatedById: actorUserId,
+        })
+        .where(
+          and(
+            eq(schema.principalRoleAssignments.principalId, principalId),
+            eq(schema.principalRoleAssignments.roleId, role.id),
+            eq(schema.principalRoleAssignments.orgId, ctx.orgId),
+            isNull(schema.principalRoleAssignments.deletedAt),
+            role.scopeKind === "workspace"
+              ? eq(schema.principalRoleAssignments.workspaceId, ctx.workspaceId)
+              : isNull(schema.principalRoleAssignments.workspaceId),
+          ),
+        )
+        .returning({ id: schema.principalRoleAssignments.id });
+
+    const revokedRows =
+      role.scopeKind === "workspace"
+        ? await revoke(tx)
+        : await withTransactionOrgScope(tx, revoke);
 
     return { agent, role, actorUserId, revoked: revokedRows.length > 0 };
   });
