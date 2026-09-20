@@ -10,11 +10,19 @@
  * never reaches the code that would have issued it.
  */
 import type { DecisionSettlement, ResolvedPrincipal } from "@oxagen/oxagen";
-import { evaluateRules, requiredFactKeys } from "./evaluate";
-import type { DecisionSubject, FactResolver, RuleSet, Verdict } from "./types";
+import { inputDigest } from "./call-facts";
+import { capabilityMatches, evaluateRules, requiredFactKeys } from "./evaluate";
+import type {
+  Condition,
+  DecisionSubject,
+  FactResolver,
+  RuleSet,
+  Verdict,
+} from "./types";
 
 /** A rule refused the call. `verdict.ruleId` is the audit citation. */
 export class DecisionRuleDeniedError extends Error {
+  readonly code = "decision_rule_denied";
   constructor(readonly verdict: Verdict) {
     super(
       `refused by decision rule "${verdict.ruleId}": ${verdict.description}`,
@@ -29,6 +37,8 @@ export class DecisionRuleDeniedError extends Error {
  * whose message says exactly which rule wants a human.
  */
 export class DecisionRuleApprovalRequiredError extends Error {
+  readonly code = "decision_rule_approval_required";
+  approvalDigest?: string;
   constructor(readonly verdict: Verdict) {
     super(
       `decision rule "${verdict.ruleId}" requires approval: ${verdict.description}`,
@@ -41,6 +51,7 @@ export class DecisionRuleApprovalRequiredError extends Error {
 export type RuleSetLoader = (ctx: {
   orgId: string;
   workspaceId: string | null;
+  externalTool?: boolean;
 }) => Promise<RuleSet | null>;
 
 /**
@@ -110,7 +121,12 @@ export interface DecisionRulesGateOptions {
   onError?: (error: unknown) => void;
 }
 
+export class ExternalToolAuthorityError extends Error {
+  readonly code = "external_tool_authority_unavailable";
+}
+
 export interface DecisionGateArgs {
+  external?: { approvedDigest?: string };
   capability: string;
   input: unknown;
   ctx: {
@@ -135,11 +151,21 @@ export type DecisionRulesGateFn = (
 export function createDecisionRulesGate(
   options: DecisionRulesGateOptions,
 ): DecisionRulesGateFn {
-  return async ({ capability, input, ctx, principal }) => {
+  return async ({ capability, input, ctx, principal, external }) => {
+    if (external && principal?.kind === "agent") {
+      throw new ExternalToolAuthorityError(
+        "External tool measures cannot establish an agent mandate. Use a governed capability with declared measures.",
+      );
+    }
     // The rules decide first, and an auto-approval they release is only
     // EVALUATED here: `commit` writes the receipt, and it is called at the
     // end, once nothing later can still send the call to a person.
-    const commit = await judgeRules(options, { capability, input, ctx });
+    const commit = await judgeRules(options, {
+      capability,
+      input,
+      ctx,
+      external,
+    });
     // The mandate check binds an agent acting under delegated authority; a
     // person under their own role needs no mandate (spec §6.9 part 3), and
     // the check needs a workspace to read the tool registry from.
@@ -275,6 +301,14 @@ async function record(
   }
 }
 
+function conditionFacts(condition: Condition | undefined): string[] {
+  if (!condition) return [];
+  if ("all" in condition) return condition.all.flatMap(conditionFacts);
+  if ("any" in condition) return condition.any.flatMap(conditionFacts);
+  if ("not" in condition) return conditionFacts(condition.not);
+  return condition.fact.startsWith("facts.") ? [condition.fact.slice(6)] : [];
+}
+
 /**
  * Evaluate the workspace's rule set; throws on a deny, and on a
  * require_approval verdict no auto-approval rule released. Returns the
@@ -286,22 +320,36 @@ async function judgeRules(
     capability,
     input,
     ctx,
-  }: Pick<DecisionGateArgs, "capability" | "input" | "ctx">,
+    external,
+  }: Pick<DecisionGateArgs, "capability" | "input" | "ctx" | "external">,
 ): Promise<AutoApprovalCommit> {
   let ruleSet: RuleSet | null;
   try {
     ruleSet = await options.loadRuleSet({
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
+      ...(external ? { externalTool: true } : {}),
     });
   } catch (error) {
+    if (external) throw error;
     options.onError?.(error);
     return undefined;
   }
   if (ruleSet === null || ruleSet.rules.length === 0) return undefined;
 
   let facts: Record<string, unknown> = {};
-  const keys = requiredFactKeys(ruleSet, capability);
+  const keys = [
+    ...new Set([
+      ...requiredFactKeys(ruleSet, capability),
+      ...(external
+        ? ruleSet.rules
+            .filter((rule) => capabilityMatches(rule.capability, capability))
+            .flatMap((rule) => conditionFacts(rule.when))
+        : []),
+    ]),
+  ];
+  if (external && keys.length > 0 && !options.resolveFacts)
+    throw new ExternalToolAuthorityError("External rule facts are unavailable");
   if (keys.length > 0 && options.resolveFacts) {
     try {
       facts = await options.resolveFacts({
@@ -315,11 +363,30 @@ async function judgeRules(
         },
       });
     } catch (error) {
+      if (external) throw error;
       // A dead fact source degrades those rules to no-match (their leaves
       // read absent keys); it does not skip evaluation — capability- and
       // input-shaped rules still bind.
       options.onError?.(error);
     }
+  }
+
+  if (
+    external &&
+    keys.some(
+      (key) =>
+        key
+          .split(".")
+          .reduce<unknown>(
+            (value, part) =>
+              value !== null && typeof value === "object"
+                ? (value as Record<string, unknown>)[part]
+                : undefined,
+            facts,
+          ) === undefined,
+    )
+  ) {
+    throw new ExternalToolAuthorityError("External rule facts are incomplete");
   }
 
   const subject: DecisionSubject = {
@@ -335,6 +402,20 @@ async function judgeRules(
   const verdict = evaluateRules(ruleSet, subject);
   if (verdict === null || verdict.effect === "allow") return undefined;
   if (verdict.effect === "require_approval") {
+    if (external) {
+      const digest = inputDigest({
+        capability,
+        input,
+        rules: ruleSet.rules,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        orgId: ctx.orgId,
+      });
+      if (external.approvedDigest === digest) return undefined;
+      const required = new DecisionRuleApprovalRequiredError(verdict);
+      required.approvalDigest = digest;
+      throw required;
+    }
     const commit = await skipsThePerson(options, {
       capability,
       input,

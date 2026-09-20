@@ -1505,3 +1505,22 @@ describe("invoke() platformOnly enforcement", () => {
     expect(handlerRan).toBe(false);
   });
 });
+
+describe("stored input invariant", () => {
+  it("refuses a changed final parse before the handler runs", async () => {
+    const cap = echoCap();
+    const handler = vi.fn(async (input: unknown) => input);
+    registerHandler(cap.name, async () => handler);
+    const assertValidatedInput = vi.fn(async (input: unknown) => {
+      expect(input).toEqual({ value: "changed" });
+      throw new Error("approved input changed");
+    });
+    await expect(
+      invoke(cap.name, { value: "changed" }, ctx, { assertValidatedInput }),
+    ).rejects.toThrow("approved input changed");
+    expect(assertValidatedInput).toHaveBeenCalledOnce();
+    expect(handler).not.toHaveBeenCalled();
+    clearHandlersForTests();
+    clearRegistryForTests();
+  });
+});

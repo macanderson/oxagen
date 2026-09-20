@@ -99,9 +99,9 @@ Put these in the repo-root `.env.local`; `pnpm env:manager` loads it.
 - Vercel's CLI can't set "all preview branches" non-interactively; this tool uses
   the REST API, which can (`target:["preview"]`, no `gitBranch`).
 - The catalog is **read-only at runtime** — all routing metadata lives in the registry.
-- A push replaces a var by deleting the old entry and then creating a new one. Vercel
-  has no transaction for this, so if the create half fails the variable is left unset
-  rather than rolled back — check the log lines and re-push anything that errored.
+- A push uses Vercel’s `upsert=true` operation for the selected project and target.
+  It does not delete the existing entry before submitting its replacement. Failed
+  updates appear in the sync results. Provider response bodies are not logged.
 
 ## Local access
 
