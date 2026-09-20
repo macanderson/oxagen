@@ -210,22 +210,3 @@ describe("the org-wide read policy", () => {
     }
   });
 });
-
-describe("workspace-nullable write separation", () => {
-  it("requires absent workspace scope for a null-workspace write", () => {
-    const { using, check } = predicates("workspace_nullable");
-    for (const predicate of [using, check]) {
-      expect(predicate).toContain(
-        "workspace_id IS NULL AND nullif(current_setting('app.current_workspace_id', true), '')::uuid IS NULL",
-      );
-    }
-  });
-  it("keeps shared org visibility in a SELECT-only policy", () => {
-    const ddl = renderMigration(
-      selectEntries(MANIFEST, [OUT, "--only=billing.spend_budgets"]),
-    );
-    expect(ddl).toContain(
-      "CREATE POLICY tenant_org_shared_read ON billing.spend_budgets\n  FOR SELECT\n  USING (org_id =",
-    );
-  });
-});

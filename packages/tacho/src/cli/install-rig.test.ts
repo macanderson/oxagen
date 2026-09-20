@@ -452,10 +452,16 @@ describe("install rig: failure injection", () => {
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
   });
 
-  it("unenrolls everything else when one settings file has since been broken", async () => {
+  it("preserves the gateway until broken settings can be restored on retry", async () => {
     const seed = seedHome();
     const rig = buildRig(seed);
     expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    const enrolledSettings = readFileSync(
+      rig.deps.paths.claudeSettings,
+      "utf8",
+    );
+    const retainedHost = readFileSync(rig.deps.paths.hostFile, "utf8");
+    const retainedKey = readFileSync(rig.deps.paths.deviceKey);
     const broken = '{ "hooks": ';
     writeFileSync(rig.deps.paths.claudeSettings, broken);
     const result = await unenroll({ purge: true }, rig.deps);
@@ -464,14 +470,24 @@ describe("install rig: failure injection", () => {
     expect(result.warnings.join("\n")).toContain(rig.deps.paths.claudeSettings);
     // The file it could not parse is exactly as the user left it.
     expect(text(seed.home, ".claude", "settings.json")).toBe(broken);
-    // Everything else was still removed: service, revoke, the other harnesses.
-    expect(rig.serviceLoaded()).toBe(false);
-    expect(result.revoked).toBe(true);
-    expect(text(seed.home, ".codex", "hooks.json")).not.toContain(
+    // Keep the gateway and credentials while a harness may still depend on them.
+    expect(rig.serviceLoaded()).toBe(true);
+    expect(result.revoked).toBe(false);
+    expect(readFileSync(rig.deps.paths.hostFile, "utf8")).toBe(retainedHost);
+    expect(readFileSync(rig.deps.paths.deviceKey)).toEqual(retainedKey);
+    expect(text(seed.home, ".codex", "hooks.json")).toContain(TEST_ENROLLMENT);
+    expect(text(seed.home, ".stella", "stella.toml")).toContain(
       TEST_ENROLLMENT,
     );
-    expect(text(seed.home, ".stella", "stella.toml")).not.toContain(
-      TEST_ENROLLMENT,
+    writeFileSync(rig.deps.paths.claudeSettings, enrolledSettings);
+    const retried = await unenroll({ purge: true }, rig.deps);
+    expect(retried.ok).toBe(true);
+    expect(retried.revoked).toBe(true);
+    expect(rig.serviceLoaded()).toBe(false);
+    expect(existsSync(rig.deps.paths.hostFile)).toBe(false);
+    expect(existsSync(rig.deps.paths.deviceKey)).toBe(false);
+    expect(text(seed.home, ".claude", "settings.json")).toBe(
+      USER_CLAUDE_SETTINGS,
     );
   });
 
