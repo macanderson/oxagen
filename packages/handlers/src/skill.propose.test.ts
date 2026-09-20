@@ -60,6 +60,15 @@ beforeEach(() => {
 });
 
 describe("propose_skill", () => {
+  it("refuses to reset or write the production branch", async () => {
+    github.repository = { ...REPO, defaultBranch: "skills/release-notes" };
+    await expect(handler()(input(), ctx())).rejects.toMatchObject({
+      reason: "production_branch_is_proposal_branch",
+    });
+    expect(github.deletedBranches).toEqual([]);
+    expect(github.commits).toEqual([]);
+  });
+
   it("cuts skills/<name> from the production branch, commits SKILL.md and opens the pull request", async () => {
     const out = await handler()(input(), ctx());
 
@@ -122,6 +131,113 @@ describe("propose_skill", () => {
       ".oxagen/skills/release-notes/LICENSE",
     ]);
     expect(github.pulls[0]!.body).toContain("uploaded bundle");
+  });
+
+  it("removes omitted bundle files while retaining the open pull request", async () => {
+    const first = await handler()(
+      input({ files: [{ path: "old.md", content: "old" }] }),
+      ctx(),
+    );
+    const next = await handler()(
+      input({ files: [{ path: "new.md", content: "new" }] }),
+      ctx(),
+    );
+    expect(next.pullRequest.number).toBe(first.pullRequest.number);
+    expect(
+      await github.readFile(
+        REPO,
+        ".oxagen/skills/release-notes/old.md",
+        next.branch,
+      ),
+    ).toBeNull();
+    expect(
+      await github.readFile(
+        REPO,
+        ".oxagen/skills/release-notes/new.md",
+        next.branch,
+      ),
+    ).toBe("new");
+  });
+
+  it("removes omitted files inherited from the merged bundle", async () => {
+    github = new FakeGitHub({
+      "main:.oxagen/skills/release-notes/SKILL.md": skill("0.1.0"),
+      "main:.oxagen/skills/release-notes/old.md": "old",
+    });
+    const proposal = await handler()(input({ body: skill("0.2.0") }), ctx());
+    expect(
+      await github.readFile(
+        REPO,
+        ".oxagen/skills/release-notes/old.md",
+        proposal.branch,
+      ),
+    ).toBeNull();
+    expect(
+      await github.readFile(
+        REPO,
+        ".oxagen/skills/release-notes/old.md",
+        "main",
+      ),
+    ).toBe("old");
+  });
+
+  it("preserves an open proposal targeting the former production branch", async () => {
+    const first = await handler()(input(), ctx());
+    github.repository = { ...REPO, defaultBranch: "production" };
+    await expect(handler()(input(), ctx())).rejects.toMatchObject({
+      reason: "proposal_branch_exists",
+    });
+    expect(github.pulls[0]?.state).toBe("open");
+    expect(github.pulls[0]?.number).toBe(first.pullRequest.number);
+    expect(github.deletedBranches).toEqual([]);
+  });
+
+  it("preserves a rejected branch until its owner explicitly removes it", async () => {
+    const first = await handler()(input(), ctx());
+    github.commit(first.branch, "unreviewed.md", "rejected content");
+    await github.closePullRequest(REPO, first.pullRequest.number);
+    await expect(handler()(input(), ctx())).rejects.toMatchObject({
+      reason: "proposal_branch_exists",
+    });
+    expect(await github.readFile(REPO, "unreviewed.md", first.branch)).toBe(
+      "rejected content",
+    );
+    expect(github.deletedBranches).toEqual([]);
+  });
+
+  it("preserves a preexisting branch with no proposal", async () => {
+    github.commit("skills/release-notes", "work.md", "unmerged work");
+    await expect(handler()(input(), ctx())).rejects.toMatchObject({
+      reason: "proposal_branch_exists",
+    });
+    expect(await github.readFile(REPO, "work.md", "skills/release-notes")).toBe(
+      "unmerged work",
+    );
+    expect(github.deletedBranches).toEqual([]);
+  });
+
+  it.each([
+    '"allowed-tools": Bash',
+    "'allowed-tools': [Bash]",
+    '"allowed\\u002Dtools": Bash',
+  ])("refuses YAML grant keys: %s", async (grant) => {
+    await expect(
+      handler()(input({ body: skill("0.1.0", grant) }), ctx()),
+    ).rejects.toMatchObject({ reason: "skill_check_grants" });
+    expect(github.commits).toEqual([]);
+  });
+
+  it.each([
+    "name: duplicate",
+    "tools: [unterminated",
+    "<<: *missing",
+    "<<: {allowed-tools: Bash}",
+    '"<<": {allowed-tools: Bash}',
+  ])("refuses malformed or ambiguous YAML: %s", async (line) => {
+    await expect(
+      handler()(input({ body: skill("0.1.0", line) }), ctx()),
+    ).rejects.toMatchObject({ reason: "skill_check_frontmatter" });
+    expect(github.commits).toEqual([]);
   });
 
   it("replaces a merged skill only with a strictly greater version", async () => {

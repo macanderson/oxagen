@@ -472,6 +472,25 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     };
   }
 
+  async function deleteFile(args: {
+    owner: string;
+    repo: string;
+    path: string;
+    branch: string;
+    message: string;
+  }): Promise<void> {
+    const path = `/repos/${seg(args.owner)}/${seg(args.repo)}/contents/${filePath(args.path)}`;
+    const existing = await request<GHFileContent>(
+      "GET",
+      `${path}?ref=${encodeURIComponent(args.branch)}`,
+    );
+    await request("DELETE", path, {
+      sha: existing.sha,
+      branch: args.branch,
+      message: args.message,
+    });
+  }
+
   async function createBranch(args: {
     owner: string;
     repo: string;
@@ -955,6 +974,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     getRepoInfo,
     createRepoInOrg,
     putFile,
+    deleteFile,
     forkRepo,
     createBranch,
     openPullRequest,

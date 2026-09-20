@@ -169,6 +169,15 @@ export interface GitHubClient {
     branch?: string;
   }): Promise<{ commitSha: string; htmlUrl: string }>;
 
+  /** Delete a file from a branch using its current blob SHA. */
+  deleteFile(args: {
+    owner: string;
+    repo: string;
+    path: string;
+    branch: string;
+    message: string;
+  }): Promise<void>;
+
   /**
    * Fork a repository into the authenticated user's account or into `org`.
    * Polls until the fork is reachable (up to 10 attempts).

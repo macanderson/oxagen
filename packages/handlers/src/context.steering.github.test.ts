@@ -79,6 +79,73 @@ function seam(
 }
 
 describe("the GitHub seam", () => {
+  it("refuses an existing proposal branch in exclusive mode without deleting it", async () => {
+    const deleteBranch = vi.fn<GitHubClient["deleteBranch"]>();
+    const { gh } = seam(
+      fakeClient({
+        createBranch: async () => {
+          throw new Error("Reference already exists");
+        },
+        deleteBranch,
+      }),
+    );
+    const repo = await gh.resolveRepository(SCOPE);
+    await expect(
+      gh.ensureBranch(repo, "skills/demo", "main", { exclusive: true }),
+    ).rejects.toMatchObject({ reason: "proposal_branch_exists" });
+    expect(deleteBranch).not.toHaveBeenCalled();
+  });
+
+  it("deletes omitted files only within the proposal's owned paths", async () => {
+    const deleteFile = vi.fn<GitHubClient["deleteFile"]>(async () => undefined);
+    const { gh } = seam(
+      fakeClient({
+        getTree: async () => [
+          ".oxagen/skills/demo/SKILL.md",
+          ".oxagen/skills/demo/old.md",
+          ".oxagen/skills/demo/nested/old.md",
+          ".oxagen/skills/demo-other/keep.md",
+          "README.md",
+        ],
+        deleteFile,
+      }),
+    );
+    const repo = await gh.resolveRepository(SCOPE);
+    await gh.reconcileFiles(repo, {
+      branch: "skills/demo",
+      roots: [".oxagen/skills/demo"],
+      files: [".oxagen/skills/demo/SKILL.md"],
+    });
+    expect(deleteFile.mock.calls.map(([args]) => args)).toEqual([
+      expect.objectContaining({
+        path: ".oxagen/skills/demo/old.md",
+        branch: "skills/demo",
+      }),
+      expect.objectContaining({
+        path: ".oxagen/skills/demo/nested/old.md",
+        branch: "skills/demo",
+      }),
+    ]);
+  });
+
+  it("refuses reconciliation when the branch tree cannot be read", async () => {
+    const { gh } = seam(
+      fakeClient({
+        getTree: async () => {
+          throw new Error("GitHub unavailable");
+        },
+      }),
+    );
+    const repo = await gh.resolveRepository(SCOPE);
+    await expect(
+      gh.reconcileFiles(repo, {
+        branch: "skills/demo",
+        roots: [".oxagen/skills/demo"],
+        files: [],
+      }),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+  });
+
   it("resolves the workspace's connected repository with its default branch, using the workspace's token", async () => {
     const { gh, resolveToken } = seam(fakeClient());
     const repo = await gh.resolveRepository(SCOPE);
