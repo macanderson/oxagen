@@ -20,6 +20,29 @@ import { logger } from "./logger";
 // Admission gate: the pre-turn guard
 // ---------------------------------------------------------------------------
 
+export class InvalidUsageError extends Error {
+  readonly code = "invalid_usage" as const;
+
+  constructor() {
+    super("Cannot meter a non-finite cost or markup.");
+    this.name = "InvalidUsageError";
+  }
+}
+
+function assertFiniteCost(
+  costUsd: number,
+  markup: number,
+  result: number,
+): void {
+  if (
+    !Number.isFinite(costUsd) ||
+    !Number.isFinite(markup) ||
+    !Number.isFinite(result)
+  ) {
+    throw new InvalidUsageError();
+  }
+}
+
 export class InsufficientCreditsError extends Error {
   readonly code = "insufficient_credits" as const;
 
@@ -227,6 +250,7 @@ export function microCreditsForCostUsd(
 ): bigint {
   const micros =
     ((costUsd * markup) / CREDIT_VALUE_USD) * Number(MICRO_CREDITS_PER_CREDIT);
+  assertFiniteCost(costUsd, markup, micros);
   return micros <= 0 ? 0n : BigInt(Math.round(micros));
 }
 
@@ -243,6 +267,7 @@ export function creditsForCostUsd(
   markup: number = resolveMeterMarkup(),
 ): bigint {
   const creditsExact = (costUsd * markup) / CREDIT_VALUE_USD;
+  assertFiniteCost(costUsd, markup, creditsExact);
   return creditsExact <= 0 ? 0n : BigInt(Math.ceil(creditsExact));
 }
 

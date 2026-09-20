@@ -1,3 +1,14 @@
+import { spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   classifyInstaller,
@@ -392,5 +403,150 @@ describe("reportPublicationDecision", () => {
     const couldNotCheck = reportPublicationDecision(unknown, { dryRun: true });
     expect(couldNotCheck.message).toContain("unknown");
     expect(couldNotCheck.message).toContain("the planned uploads follow");
+  });
+});
+
+describe("resuming an interrupted publish", () => {
+  it("uploads missing installers before publishing the page", () => {
+    const dir = mkdtempSync(join(tmpdir(), "downloads-resume-test-"));
+    try {
+      const source = join(dir, "installers");
+      const bin = join(dir, "bin");
+      mkdirSync(source);
+      mkdirSync(bin);
+      const file = "Oxagen_2.1.1_aarch64.dmg";
+      writeFileSync(join(source, file), "installer bytes");
+      const statePath = join(dir, "bucket.json");
+      writeFileSync(
+        statePath,
+        JSON.stringify({ objects: {}, interrupted: false, writes: [] }),
+      );
+      writeFileSync(
+        join(bin, "aws"),
+        `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const path = process.env.TEST_BUCKET_STATE;
+const state = JSON.parse(fs.readFileSync(path, "utf8"));
+const save = () => fs.writeFileSync(path, JSON.stringify(state));
+const arg = (name) => args[args.indexOf(name) + 1];
+if (args[0] === "s3api" && args[1] === "list-objects-v2") {
+  const keys = Object.keys(state.objects).filter((key) => key.startsWith(arg("--prefix")));
+  console.log(JSON.stringify({ KeyCount: keys.length, Contents: keys.map((Key) => ({ Key, Size: state.objects[Key].length, LastModified: "2026-09-19" })) }));
+} else if (args[0] === "s3api" && args[1] === "put-object") {
+  state.objects[arg("--key")] = fs.readFileSync(arg("--body"), "utf8");
+  save();
+} else if (args[0] === "s3" && args[1] === "cp") {
+  if (args[3] === "-") {
+    process.stdout.write(state.objects[args[2].replace(/^s3:\\/\\/[^/]+\\//, "")]);
+  } else {
+    const key = args[3].replace(/^s3:\\/\\/[^/]+\\//, "");
+    if (key.endsWith(".dmg") && !state.interrupted) {
+      state.interrupted = true;
+      save();
+      process.exit(1);
+    }
+    state.objects[key] = fs.readFileSync(args[2], "utf8");
+    state.writes.push(key);
+    save();
+  }
+} else if (args[0] === "cloudfront") {
+  console.log("None");
+} else {
+  throw new Error("Unexpected AWS request: " + args.join(" "));
+}
+`,
+        { mode: 0o755 },
+      );
+      const run = (...args: string[]) =>
+        spawnSync(
+          process.execPath,
+          [
+            fileURLToPath(
+              new URL("../scripts/publish-downloads.mjs", import.meta.url),
+            ),
+            "--dir",
+            source,
+            "--version",
+            V,
+            "--resume",
+            ...args,
+          ],
+          {
+            encoding: "utf8",
+            env: {
+              ...process.env,
+              PATH: `${bin}:${process.env.PATH ?? ""}`,
+              TEST_BUCKET_STATE: statePath,
+            },
+          },
+        );
+      const first = run();
+      expect(first.status, first.stderr).toBe(1);
+      const interrupted = JSON.parse(readFileSync(statePath, "utf8")) as {
+        objects: Record<string, string>;
+      };
+      expect(interrupted.objects[`desktop/${V}/SHA256SUMS.txt`]).toContain(
+        file,
+      );
+      expect(interrupted.objects[`desktop/${V}/${file}`]).toBeUndefined();
+      expect(interrupted.objects["index.html"]).toBeUndefined();
+      const pageOnly = spawnSync(
+        process.execPath,
+        [
+          fileURLToPath(
+            new URL("../scripts/publish-downloads.mjs", import.meta.url),
+          ),
+          "--page-only",
+          "--version",
+          V,
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH ?? ""}`,
+            TEST_BUCKET_STATE: statePath,
+          },
+        },
+      );
+      expect(pageOnly.status, pageOnly.stderr).toBe(1);
+      expect(pageOnly.stderr).toContain("Installers are missing");
+      const refused = JSON.parse(readFileSync(statePath, "utf8")) as {
+        objects: Record<string, string>;
+        writes: string[];
+      };
+      expect(refused.objects["index.html"]).toBeUndefined();
+      expect(refused.writes).not.toContain("index.html");
+      const beforePreview = readFileSync(statePath, "utf8");
+      const preview = run("--dry-run");
+      expect(preview.status, preview.stderr).toBe(0);
+      expect(preview.stdout).toContain(
+        `[dry-run] aws s3 cp ${join(source, file)}`,
+      );
+      expect(preview.stdout).toContain("/index.html");
+      expect(preview.stdout).toContain("/fonts/");
+      expect(preview.stdout).toContain(
+        "[dry-run] aws cloudfront create-invalidation",
+      );
+      expect(preview.stdout).toContain(`${file}  15 bytes`);
+      expect(preview.stdout).toContain(
+        "installer recovery and page publication planned",
+      );
+      expect(readFileSync(statePath, "utf8")).toBe(beforePreview);
+      const resumed = run();
+      expect(resumed.status, resumed.stderr).toBe(0);
+      const complete = JSON.parse(readFileSync(statePath, "utf8")) as {
+        objects: Record<string, string>;
+        writes: string[];
+      };
+      expect(complete.objects[`desktop/${V}/${file}`]).toBe("installer bytes");
+      expect(complete.objects["index.html"]).toContain(file);
+      expect(complete.writes.indexOf(`desktop/${V}/${file}`)).toBeLessThan(
+        complete.writes.indexOf("index.html"),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

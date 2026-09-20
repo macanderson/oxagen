@@ -86,11 +86,14 @@ contains "$DRY" "set +x" "dry run: tracing is turned off around the secret"
 
 # A dry run must not apply.
 lacks "$DRY" "atlas migrate apply --env ci" "dry run: does not apply"
+lacks "$DRY" "platform-seed.mjs" "dry run: does not seed"
 contains "$DRY" "atlas migrate status --env ci" "dry run: reports status"
 
 APPLY=$(render_remote_migration \
   "test-bucket" "clus.example.rds.amazonaws.com" "5432" "oxagen" "oxagen" "1" "0")
 contains "$APPLY" "atlas migrate apply --env ci" "apply: applies"
+contains "$APPLY" "node /seed/src/platform-seed.mjs" "apply: seeds platform defaults"
+contains "$APPLY" "--env DATABASE_URL" "apply: passes credential by name"
 # The apply is the run that actually meets the seed, so it is the one that must
 # carry the bypass. Asserted separately from the dry run because the two are
 # rendered down different branches.

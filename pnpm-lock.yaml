@@ -1375,6 +1375,9 @@ importers:
       smol-toml:
         specifier: 1.8.0
         version: 1.8.0
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -1954,6 +1957,9 @@ importers:
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -2144,6 +2150,9 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
     devDependencies:
+      esbuild:
+        specifier: 0.28.0
+        version: 0.28.0
       '@types/node':
         specifier: 25.9.1
         version: 25.9.1

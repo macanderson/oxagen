@@ -111,18 +111,13 @@ ${env}
 `;
 }
 
-/**
- * A systemd unit value. Besides the quoting, `%` starts a specifier (`%h`,
- * `%u`) and `$` starts an environment expansion in `ExecStart`, so a home
- * directory or a PATH entry holding either was rewritten by systemd. Both are
- * doubled, which is systemd's own escape for a literal one.
- */
-function systemdQuote(value: string): string {
-  return `"${value
+/** Escape specifiers in unit values and variable expansion only in commands. */
+function systemdQuote(value: string, command = false): string {
+  const escaped = value
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
-    .replace(/%/g, "%%")
-    .replace(/\$/g, "$$$$")}"`;
+    .replace(/%/g, "%%");
+  return `"${command ? escaped.replace(/\$/g, "$$$$") : escaped}"`;
 }
 
 export function renderSystemdUnit(spec: ServiceSpec): string {
@@ -135,7 +130,7 @@ After=default.target
 
 [Service]
 Type=simple
-ExecStart=${spec.command.map(systemdQuote).join(" ")}
+ExecStart=${spec.command.map((value) => systemdQuote(value, true)).join(" ")}
 WorkingDirectory=${spec.workingDirectory}
 ${env}
 Restart=always
@@ -270,17 +265,43 @@ function systemdManager(options: ServiceManagerOptions): ServiceManager {
       if (enable.status !== 0) {
         throw new Error(`systemctl enable failed: ${enable.stderr.trim()}`);
       }
-      options.exec("systemctl", ["--user", "restart", "tachod.service"]);
+      const restart = options.exec("systemctl", [
+        "--user",
+        "restart",
+        "tachod.service",
+      ]);
+      if (restart.status !== 0)
+        throw new Error(`systemctl restart failed: ${restart.stderr.trim()}`);
     },
     uninstall: () => {
-      options.exec("systemctl", [
+      const disabled = options.exec("systemctl", [
         "--user",
         "disable",
         "--now",
         "tachod.service",
       ]);
+      const active = options.exec("systemctl", [
+        "--user",
+        "is-active",
+        "tachod.service",
+      ]);
+      // Inactive (3) and unknown (4) are the only stopped states. A bus
+      // failure or a still-active service must retain the unit for retry.
+      const stopped =
+        (active.status === 3 &&
+          ["inactive", "failed"].includes(active.stdout.trim())) ||
+        (active.status === 4 && active.stdout.trim() === "unknown");
+      if (!stopped || (disabled.status !== 0 && active.status !== 4)) {
+        throw new Error(
+          `systemctl could not remove tachod.service: ${disabled.stderr.trim() || active.stderr.trim() || active.stdout.trim() || "service state is unknown"}`,
+        );
+      }
       if (existsSync(unitPath)) unlinkSync(unitPath);
-      options.exec("systemctl", ["--user", "daemon-reload"]);
+      const reload = options.exec("systemctl", ["--user", "daemon-reload"]);
+      if (reload.status !== 0)
+        throw new Error(
+          `systemctl daemon-reload failed: ${reload.stderr.trim()}`,
+        );
     },
     status: () => {
       const installed = existsSync(unitPath);
@@ -348,9 +369,11 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
       "/FO",
       "CSV",
     ]);
-    return query.status === 0 && query.stdout.includes(`"${pid}"`)
-      ? pid
-      : undefined;
+    if (query.status !== 0)
+      throw new Error(
+        `Cannot inspect daemon pid ${pid}: ${query.stderr.trim() || "tasklist failed"}`,
+      );
+    return query.stdout.includes(`"${pid}"`) ? pid : undefined;
   };
   /**
    * Stop whatever the task started: end the task instance (harmless when
@@ -363,7 +386,17 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
     options.exec("schtasks", ["/End", "/TN", SCHTASKS_NAME]);
     const pid = livePid();
     if (pid !== undefined) {
-      options.exec("taskkill", ["/PID", String(pid), "/T", "/F"]);
+      const killed = options.exec("taskkill", [
+        "/PID",
+        String(pid),
+        "/T",
+        "/F",
+      ]);
+      if (killed.status !== 0 || livePid() !== undefined) {
+        throw new Error(
+          `The daemon could not be stopped: ${killed.stderr.trim() || `pid ${pid} is still running`}`,
+        );
+      }
     }
   };
   return {
@@ -400,7 +433,20 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
     },
     uninstall: () => {
       stopDaemon();
-      options.exec("schtasks", ["/Delete", "/TN", SCHTASKS_NAME, "/F"]);
+      const deleted = options.exec("schtasks", [
+        "/Delete",
+        "/TN",
+        SCHTASKS_NAME,
+        "/F",
+      ]);
+      if (
+        deleted.status !== 0 &&
+        !/cannot find|not found/i.test(deleted.stderr)
+      ) {
+        throw new Error(
+          `schtasks /Delete failed: ${deleted.stderr.trim() || "task removal was not confirmed"}`,
+        );
+      }
       if (existsSync(launcher)) unlinkSync(launcher);
     },
     status: () => {

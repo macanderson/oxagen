@@ -85,6 +85,10 @@ export interface EntityMutation {
    * Example:    `github:conn_abc:42`
    */
   naturalKey: string;
+  /** Compatibility lookup only. Never reuse without matching source URL and record type. */
+  legacyNaturalKey?: string;
+  /** Stable provider key retained when an existing graph node keeps its legacy key. */
+  canonicalNaturalKey?: string;
   operation: EntityOperation;
   displayName?: string;
   properties: Record<string, unknown>;

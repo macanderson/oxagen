@@ -122,6 +122,33 @@ describe("kernel decision-rules gate", () => {
     expect(seenRunIds).toEqual(["arun_live"]);
   });
 
+  it("preserves run correlation through a nested invoke", async () => {
+    registerRefund();
+    const receipts: Array<{
+      runId: string | null | undefined;
+      amount: number;
+    }> = [];
+    setDecisionRulesGate(async ({ ctx: gateCtx, input }) => {
+      receipts.push({
+        runId: gateCtx.runId,
+        amount: (input as { amount_usd: number }).amount_usd,
+      });
+    });
+    registerHandler("test.refund", async () => async (input, checkedCtx) => {
+      if ((input as { amount_usd: number }).amount_usd === 10) {
+        return invoke("test.refund", { amount_usd: 5 }, checkedCtx);
+      }
+      return { ok: true };
+    });
+    await invoke("test.refund", { amount_usd: 10 }, ctx, {
+      runId: "arun_live",
+    });
+    expect(receipts).toEqual([
+      { runId: "arun_live", amount: 10 },
+      { runId: "arun_live", amount: 5 },
+    ]);
+  });
+
   it("a passing gate lets the handler run and return", async () => {
     registerRefund();
     registerHandler("test.refund", async () => async () => ({ ok: true }));

@@ -15,6 +15,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fileURLToPath } from "node:url";
 
+vi.mock("./migration-lock", () => ({
+  withMigrationLock: (run: () => Promise<unknown>) => run(),
+}));
+
 // ── Mock factories ─────────────────────────────────────────────────────────────
 // vi.hoisted() runs before vi.mock(), making refs available to the factories.
 

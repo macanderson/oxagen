@@ -13,7 +13,11 @@ export type {
   GitHubInstallationRepo,
   GitHubInstallationRepositories,
 } from "./types";
-export { createGitHubClient, GitHubApiError } from "./fetch-client";
+export {
+  createGitHubClient,
+  GitHubApiError,
+  GitHubRateLimitedError,
+} from "./fetch-client";
 export type {
   AppInstallationTokenArgs,
   InstallationTokenResult,
