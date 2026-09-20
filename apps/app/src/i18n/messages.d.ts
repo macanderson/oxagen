@@ -1842,7 +1842,6 @@ type Messages = {
         started: string;
         controls: string;
       };
-      noSummary: string;
       notRecorded: string;
       basisNotRecorded: string;
       unpriced: string;
@@ -3091,7 +3090,6 @@ type Messages = {
     notRecorded: string;
     basisNotRecorded: string;
     noSummary: string;
-    witnessed: string;
     source: {
       ledger: string;
       tacho: string;
@@ -3130,7 +3128,6 @@ type Messages = {
       transcript: string;
       frames: string;
       cost: string;
-      chain: string;
       approvals: string;
     };
     transcript: {
@@ -3174,7 +3171,6 @@ type Messages = {
       speedLabel: string;
       speed: string;
       transportNote: string;
-      transportNoteGraded: string;
       frameHead: string;
       fidelity: {
         full: string;

@@ -1085,7 +1085,11 @@ describe("AssistantFlyout", () => {
 describe("cost recommendation handoff", () => {
   it("opens a closed composer without sending the draft", () => {
     render(tree());
-    expect(screen.queryByTestId("assistant-composer")).toBeNull();
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute(
+      "data-state",
+      "closed",
+    );
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
     act(() => {
       openAssistantDraft({
         org: "acme",
@@ -1093,6 +1097,11 @@ describe("cost recommendation handoff", () => {
         content: "Review this code correction.",
       });
     });
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute(
+      "data-state",
+      "open",
+    );
+    expect(screen.getByTestId("assistant-flyout")).not.toHaveAttribute("inert");
     expect(screen.getByTestId("assistant-composer")).toHaveValue(
       "Review this code correction.",
     );

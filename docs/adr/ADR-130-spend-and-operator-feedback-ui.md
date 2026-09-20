@@ -29,4 +29,4 @@ This decision changes product presentation and the recommendation handoff. It do
 
 ### Retained UI code
 
-The chain and replay components are registered in `DEREGISTERED.md` rather than deleted. INV-16 has a bounded exception for these three files and three tagged exports. Knip retains its empty baseline and reports unregistered unreachable code normally. This preserves the excluded implementation without offering it on a page.
+The chain and replay components are registered in `DEREGISTERED.md` rather than deleted. INV-16 has a bounded exception for these three files and three tagged exports. INV-17 explicitly retains only `runs.chain` without an active UI caller; all other ports still require callers. Knip retains its empty baseline and reports unregistered unreachable code normally. This preserves the excluded implementation without offering it on a page.

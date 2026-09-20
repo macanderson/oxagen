@@ -102,7 +102,6 @@
         "started": "Started",
         "controls": "Controls"
       },
-      "noSummary": "No summary yet. Open the run to read its frames.",
       "notRecorded": "not recorded",
       "basisNotRecorded": "basis not recorded",
       "unpriced": "{count, plural, one {# run on this page has no cost recorded} other {# runs on this page have no cost recorded}}. A total over this column leaves them out.",

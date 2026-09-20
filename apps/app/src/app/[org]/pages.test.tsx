@@ -18,6 +18,7 @@
 // run id and the tab, zoom and frames cursor the URL carries to the Run feature
 // (WL-35).
 import { screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
 import {
@@ -59,7 +60,11 @@ const {
     Audit: vi.fn((_props: Record<string, unknown>) => null),
     Billing: vi.fn((_props: Record<string, unknown>) => null),
     BillingActions: vi.fn((_props: Record<string, unknown>) => null),
-    Fleet: vi.fn((_props: Record<string, unknown>) => null),
+    Fleet: vi.fn(
+      (props: Record<string, unknown> & { spendTiles?: ReactNode }) => (
+        <>{props.spendTiles}</>
+      ),
+    ),
     Agents: vi.fn((_props: Record<string, unknown>) => null),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
     AgentSource: vi.fn((_props: Record<string, unknown>) => null),
@@ -386,9 +391,14 @@ describe("the Fleet page", () => {
       ctx,
       source,
       cursor: "c2",
+      spendTiles: <FleetSpendTiles ctx={ctx} source={source} embedded />,
     });
     expect(FleetSpendTiles).toHaveBeenCalledOnce();
-    expect(FleetSpendTiles.mock.calls[0]?.[0]).toEqual({ ctx, source });
+    expect(FleetSpendTiles.mock.calls[0]?.[0]).toEqual({
+      ctx,
+      source,
+      embedded: true,
+    });
     expect(screen.getByTestId("fleet-spend")).toBeInTheDocument();
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
