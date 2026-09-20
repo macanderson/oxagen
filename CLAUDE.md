@@ -94,16 +94,20 @@ The current assistant flyout and the retained API chat transport are separate su
 
 ## Issue titles
 
-An issue title says its priority, where it bites, and what is wrong, in that order, so a
-backlog reads without opening anything:
+After triage, an issue title says its priority, where it bites, and what is wrong, in
+that order, so a backlog reads without opening anything:
 
 ```
 P<n> · <area>/<surface> · <what is wrong or missing>
 ```
 
+Before triage, use `Queued · <area>/<surface> · <what is wrong or missing>` and apply
+only `triage`. The area and surface in the title are provisional. The triage identity
+replaces `Queued` with the assigned priority and aligns the area with its label.
+
 - **`P<n>`** repeats the issue's `P0`-`P4` label. The label is the source of truth; the
   prefix is what a list, a search result, and a notification show. Retitle when the triage
-  identity changes the priority.
+  identity assigns or changes the priority.
 - **`<area>`** is the `area:` label without its prefix: `app`, `surfaces`, `kernel`,
   `auth`, `billing`, `knowledge`, `evidence`, `data`, `platform`, `ops`.
 - **`<surface>`** is where a person meets the defect: an app page (`Fleet`, `Run`,
@@ -132,8 +136,10 @@ One issue carries one full change. Include context, paths, reproduction steps wh
 - Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
 - Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block.
 
-Four issue fields carry what a label cannot. Set them when you open an issue and correct
-them when you learn better:
+Four issue fields carry what a label cannot. When these fields are available in GitHub,
+set them when you open an issue and correct them when you learn better. Until they are
+provisioned, add an `Issue metadata` section to the issue body with each field name and
+its value. Keep those values current, then copy them into the fields when available:
 
 | Field | Type | What it records |
 |---|---|---|
