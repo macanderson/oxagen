@@ -37,10 +37,7 @@ describe("check-prose", () => {
     for (const [text, kind] of [
       ["Fewer tokens, same answers.", "avoid: Fewer tokens, same answers"],
       ["Stop wasting money on AI.", "avoid: Stop wasting money"],
-      [
-        "Can you explain your AI bill?",
-        "avoid: explain your AI bill",
-      ],
+      ["Can you explain your AI bill?", "avoid: explain your AI bill"],
       [
         "Mission Control for your autonomous agents.",
         "avoid: Mission Control for your autonomous agents",
@@ -52,10 +49,7 @@ describe("check-prose", () => {
 
   it("flags an unqualified key-custody claim", () => {
     for (const [text, kind] of [
-      [
-        "The agent never sees the key.",
-        "avoid: The agent never sees the key",
-      ],
+      ["The agent never sees the key.", "avoid: The agent never sees the key"],
       ["The key never moves.", "avoid: The key never moves"],
       [
         "There is nothing for the agent to leak.",
@@ -76,10 +70,7 @@ describe("check-prose", () => {
       ),
     ).toEqual([]);
     expect(
-      findHits(
-        "The agent never receives a connection credential.",
-        ".html",
-      ),
+      findHits("The agent never receives a connection credential.", ".html"),
     ).toEqual([]);
   });
 

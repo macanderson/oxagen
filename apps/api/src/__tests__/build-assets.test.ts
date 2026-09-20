@@ -1,11 +1,11 @@
 /**
  * build-assets tests — guard the runtime data assets apps/api's esbuild build
- * copies next to the serverless function.
+ * copies next to the bundle.
  *
  * Regression context: esbuild inlines JS/TS but NOT data files. The built-in
  * connector schema YAMLs are read at runtime by @oxagen/ingestion's
  * loadBuiltInSchema (plugin.schema.get → connector install / "Configure" forms).
- * If build.mjs stops copying them, every connector "Configure" click 500s in
+ * If build-node.mjs stops copying them, every connector "Configure" click 500s in
  * prod while passing locally (tsx reads source directly). These tests lock the
  * copy plan in place.
  */

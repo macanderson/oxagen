@@ -116,13 +116,7 @@
         "!**/.storybook/**",
         "!**/e2e/**"
       ],
-      "outputs": [
-        "dist/**",
-        ".xmcp/**",
-        ".vercel/output/**",
-        ".next/**",
-        "!.next/cache/**"
-      ],
+      "outputs": ["dist/**", ".xmcp/**", ".next/**", "!.next/cache/**"],
       "passThroughEnv": [
         "VERCEL",
         "VERCEL_URL",

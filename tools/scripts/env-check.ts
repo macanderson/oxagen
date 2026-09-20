@@ -206,6 +206,11 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "STANDALONE",
   "WRITE_MANIFEST_IMAGE",
   "NPM_TOKEN",
+  // Desktop build signing, read by tauri and by tools/scripts/dist-local.mjs
+  // (see apps/desktop/README.md); CI holds them as secrets, never a service.
+  "TAURI_SIGNING_PRIVATE_KEY",
+  "TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
+  "APPLE_SIGNING_IDENTITY",
   "OXAGEN_INSTALL_BASE",
   "OXAGEN_INSTALL_DIR",
   "ADMIN_DATABASE_URL",

@@ -106,7 +106,12 @@ describe("tomlSet", () => {
     expect(parsed.ok && parsed.doc.instructions).toEqual({ body });
     // The escaped fence inside the body is not where the value ends: a
     // second edit replaces the whole string, and leaves nothing of the old one.
-    const twice = tomlSet(once, "instructions", "body", tomlMultiline("Short."));
+    const twice = tomlSet(
+      once,
+      "instructions",
+      "body",
+      tomlMultiline("Short."),
+    );
     expect(twice).toBe(
       FILE.replace(
         'body = """\nCut the release.\n"""',
@@ -129,7 +134,12 @@ describe("tomlSet", () => {
       'body = "Go."',
       "",
     ].join("\n");
-    const next = tomlSet(src, "harness.claude-code", "color", tomlLiteral("gold"));
+    const next = tomlSet(
+      src,
+      "harness.claude-code",
+      "color",
+      tomlLiteral("gold"),
+    );
     expect(next).toBe(
       src.replace('color = "blue" # hue', 'color = "gold" # hue'),
     );
@@ -151,9 +161,11 @@ describe("tomlSet", () => {
     ).toBe('[harness]\nclaude-code.color = "red"\n');
     expect(
       tomlSet(nested, "harness.claude-code", "label", tomlLiteral("bot")),
-    ).toBe('[harness]\nclaude-code.color = "blue"\nclaude-code.label = "bot"\n');
+    ).toBe(
+      '[harness]\nclaude-code.color = "blue"\nclaude-code.label = "bot"\n',
+    );
     // The form spells the budget key dotted at the root; both spellings meet the same line.
-    const budget = 'budget.per_run_micros = 1\nbudget.hard = true\n';
+    const budget = "budget.per_run_micros = 1\nbudget.hard = true\n";
     expect(tomlSet(budget, null, "budget.per_run_micros", "5")).toBe(
       "budget.per_run_micros = 5\nbudget.hard = true\n",
     );
@@ -173,7 +185,8 @@ describe("tomlSet", () => {
   });
 
   it("patches the line the parser's value comes from when a key is named twice, and ignores a key inside a multi-line body", () => {
-    const src = 'name = "one"\nname = "two"\nbody = """\nname = "not a key"\n[not-a-table]\n"""\n';
+    const src =
+      'name = "one"\nname = "two"\nbody = """\nname = "not a key"\n[not-a-table]\n"""\n';
     const next = tomlSet(src, null, "name", tomlLiteral("three"));
     expect(next).toBe(
       'name = "one"\nname = "three"\nbody = """\nname = "not a key"\n[not-a-table]\n"""\n',
@@ -204,11 +217,11 @@ describe("tomlTableForm", () => {
     expect(tomlTableForm("[budget]\nper_run_micros = 1\n", "budget")).toBe(
       "header",
     );
-    expect(tomlTableForm("budget.mode = \"hard\"\n", "budget")).toBe("dotted");
+    expect(tomlTableForm('budget.mode = "hard"\n', "budget")).toBe("dotted");
     expect(tomlTableForm("budget = { per_run_micros = 1 }\n", "budget")).toBe(
       "none",
     );
-    expect(tomlTableForm("name = \"x\"\n", "budget")).toBe("none");
+    expect(tomlTableForm('name = "x"\n', "budget")).toBe("none");
     expect(
       tomlTableForm(
         'budget = { per_run_micros = 1 }\nbody = """\n[budget]\nprose\n"""\n',
@@ -216,8 +229,8 @@ describe("tomlTableForm", () => {
       ),
     ).toBe("none");
     // A key under a [budget] header is the header form, not the dotted one.
-    expect(
-      tomlTableForm("[budget]\nlimits.per_day = 2\n", "budget"),
-    ).toBe("header");
+    expect(tomlTableForm("[budget]\nlimits.per_day = 2\n", "budget")).toBe(
+      "header",
+    );
   });
 });

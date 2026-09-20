@@ -107,8 +107,6 @@ import {
 import { type RetentionDecision, Shipper } from "./spool";
 import { TranscriptTailer } from "./transcript-tailer";
 
-export const TACHO_WRAPPER_VERSION = "2.1.1";
-
 export interface DaemonTimers {
   shipMs: number;
   bundleRefreshMs: number;

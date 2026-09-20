@@ -268,7 +268,12 @@ export type RepositoryChange = {
   proposalId: string;
   statement: string;
   kind: "context_record";
-  pullRequest: { number: number; url: string; repository: string; branch: string };
+  pullRequest: {
+    number: number;
+    url: string;
+    repository: string;
+    branch: string;
+  };
   /** Who opened it, as the proposal recorded its source. */
   openedBy: string;
   status:
