@@ -6,6 +6,7 @@
 // The mandate ledger is read only when a parked call names a mandate (#2957),
 // so a workspace whose approvals draw on none makes no third read, and a
 // viewer who may not read the ledger sees the cards without their bars.
+import type { ReactNode } from "react";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
@@ -41,9 +42,11 @@ export async function Fleet({
   ctx,
   source,
   cursor,
+  spendTiles,
 }: {
   ctx: WsCtx;
   source: DataSource;
+  spendTiles?: ReactNode;
   /** The runs page the URL asked for; null is the newest. */
   cursor: string | null;
 }) {
@@ -53,8 +56,13 @@ export async function Fleet({
     cursor,
   );
   return (
-    <div className="flex flex-col gap-6">
-      <StatStrip runs={runs} approvals={approvals} now={now} />
+    <div className="flex flex-col gap-3.5">
+      <StatStrip
+        runs={runs}
+        approvals={approvals}
+        now={now}
+        spendTiles={spendTiles}
+      />
       <ApprovalsPanel
         approvals={approvals}
         mandates={mandates}

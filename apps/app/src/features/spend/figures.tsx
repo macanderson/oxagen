@@ -99,9 +99,21 @@ export function Tile({
   );
 }
 
-export function TileStrip({ children }: { children: ReactNode }) {
+export function TileStrip({
+  children,
+  embedded = false,
+}: {
+  children: ReactNode;
+  embedded?: boolean;
+}) {
   return (
-    <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{children}</dl>
+    <dl
+      className={
+        embedded ? "contents" : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      }
+    >
+      {children}
+    </dl>
   );
 }
 

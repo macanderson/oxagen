@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
 import { sumMoney, type Money as MoneyValue } from "@/data/contracts/money";
@@ -131,18 +132,29 @@ export function StatStrip({
   runs,
   approvals,
   now,
+  spendTiles,
 }: {
+  spendTiles?: ReactNode;
   runs: Read<RunPage>;
   approvals: Read<ApprovalQueue>;
   now: number;
 }) {
   const t = useTranslations("fleet.stats");
-  if (!runs.ok && !approvals.ok) return null;
+  if (!runs.ok && !approvals.ok && spendTiles === undefined) return null;
   return (
-    <section aria-label={t("label")} className="grid gap-3 sm:grid-cols-3">
+    <section
+      aria-label={t("label")}
+      className={`grid gap-3.5 sm:grid-cols-2 ${spendTiles === undefined ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}
+    >
       {runs.ok ? <LiveRuns page={runs.value} /> : null}
       {approvals.ok ? <Waiting queue={approvals.value} now={now} /> : null}
-      {runs.ok ? <SpendShown page={runs.value} /> : null}
+      {spendTiles === undefined ? (
+        runs.ok ? (
+          <SpendShown page={runs.value} />
+        ) : null
+      ) : (
+        spendTiles
+      )}
     </section>
   );
 }

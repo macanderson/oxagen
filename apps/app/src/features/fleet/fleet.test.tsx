@@ -733,3 +733,20 @@ describe("Fleet approvals › the mandate bar", () => {
     expect(line.textContent).not.toContain("amount");
   });
 });
+
+it("places supplied spend metrics with activity and omits a duplicate spend total", async () => {
+  const { source } = fleetSource({ runs: NO_RUNS, approvals: NO_APPROVALS });
+  const element = await Fleet({
+    ctx,
+    source,
+    cursor: null,
+    spendTiles: <div>Recorded spend metrics</div>,
+  });
+  render(<IntlProvider>{element}</IntlProvider>);
+  expect(
+    within(screen.getByRole("region", { name: "Fleet summary" })).getByText(
+      "Recorded spend metrics",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Spend, runs shown")).not.toBeInTheDocument();
+});
