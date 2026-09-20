@@ -265,6 +265,9 @@ import { repositoryMainGetRoute } from "./routes/v1/repository.main.get";
 import { repositoryLinkRoute } from "./routes/v1/repository.link";
 import { repositoryUnlinkRoute } from "./routes/v1/repository.unlink";
 import { repositoryListRoute } from "./routes/v1/repository.list";
+import { repositoryTreeGetRoute } from "./routes/v1/repository.tree.get";
+import { repositoryProductionBranchSetRoute } from "./routes/v1/repository.production_branch.set";
+import { repositoryInitPrOpenRoute } from "./routes/v1/repository.init_pr.open";
 import { repositoryInstallationListRoute } from "./routes/v1/repository.installation.list";
 import { repositoryInstallationCandidatesRoute } from "./routes/v1/repository.installation.candidates";
 import { repositoryInstallationAttachRoute } from "./routes/v1/repository.installation.attach";
@@ -574,6 +577,13 @@ orgScoped.route("/repository/main", repositoryMainGetRoute);
 orgScoped.route("/repositories", repositoryListRoute);
 orgScoped.route("/repository/link", repositoryLinkRoute);
 orgScoped.route("/repository/unlink", repositoryUnlinkRoute);
+// The Repositories page (MC spec §10.1, §10.2, §11.4).
+orgScoped.route("/repository/tree", repositoryTreeGetRoute);
+orgScoped.route(
+  "/repository/production-branch",
+  repositoryProductionBranchSetRoute,
+);
+orgScoped.route("/repository/init-pr", repositoryInitPrOpenRoute);
 orgScoped.route(
   "/repository/installation/repositories",
   repositoryInstallationListRoute,

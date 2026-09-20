@@ -634,7 +634,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
         // An Owner is accountable for money and may still author it, so the
         // gate refuses the unaccountable caller rather than the tool.
-        await expect(set(ownerUserId, [RULE], [RULE.id])).resolves.toBeDefined();
+        await expect(
+          set(ownerUserId, [RULE], [RULE.id]),
+        ).resolves.toBeDefined();
       } finally {
         await withSystemDb((tx) =>
           tx

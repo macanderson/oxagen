@@ -1271,6 +1271,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "get_repository_tree",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "router",
       "name": "get_routing_policy",
       "reads": [],
@@ -2252,6 +2263,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "open_init_pr",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "parse_memory_import",
       "reads": [],
@@ -3013,6 +3035,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "set_production_branch",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "iam",
       "name": "set_role_grants",
       "reads": [],
@@ -3516,7 +3549,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e432af90491a90dcbb3139c4e0fa17b4bb8486bddb025e367dd57f541c6f92d0",
+  "contentHash": "82f194cb52b0fa2ecddea65fe179a2b966944edd2ca5e5b9b1ba7525428bdca9",
   "domains": [
     {
       "name": "agent",
