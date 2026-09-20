@@ -186,6 +186,11 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/features/fleet/reads.ts", expect: "platform" },
     { at: "src/server/tenancy-lookups.ts", expect: null },
   ],
+  "oxagen-command-limits.ts": [
+    { at: "src/features/fleet/run-row-controls.tsx", expect: null },
+    { at: "src/ui/command-failure.ts", expect: null },
+    { at: "src/ui/probe.ts", expect: "platform" },
+  ],
   // INV-03: one probe per @oxagen/oxagen subpath.
   "oxagen-barrel.ts": [
     { at: "src/data/live/runs.ts", expect: "platform" },
