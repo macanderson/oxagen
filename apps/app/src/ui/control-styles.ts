@@ -25,18 +25,8 @@ const buttonBase =
  */
 export const buttonPrimary = `${buttonBase} border border-button-primary-border bg-button-primary-bg font-semibold text-button-primary-fg hover:bg-button-primary-hover-bg hover:border-button-primary-hover-bg active:bg-button-primary-active-bg`;
 
-/** The same recipe under the name the creation lanes import. */
-export const buttonGold = buttonPrimary;
-
 /** `.btn` at rest: panel fill, hairline border, the wash on hover. */
 export const buttonSecondary = `${buttonBase} border border-border bg-card text-foreground hover:border-rule hover:bg-hl active:bg-hl`;
-
-/** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` for a row action. */
-export const buttonSmall =
-  "min-h-7 max-md:min-h-11 rounded-[7px] px-[9px] py-1 text-xs";
-
-/** `.btn.danger`: the failed hue on the word and the border, a tint on hover. */
-export const buttonDanger = `${buttonBase} border border-error/40 bg-card text-error-ink hover:bg-error/10 active:bg-error/15`;
 
 /** `a { color:var(--accent-text) }` — gold as ink, underlined on hover. */
 export const linkText =
@@ -54,12 +44,10 @@ export const panel =
 /**
  * `.eyebrow { font-size:12px; letter-spacing:.14em; text-transform:uppercase;
  * color:var(--accent-text); font-weight:600 }` — the scope line over an h1,
- * in gold-as-ink. `.eyebrow.q` is the muted variant for a quiet caption.
+ * in gold-as-ink.
  */
 export const eyebrow =
   "text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-text";
-export const eyebrowQuiet =
-  "text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground";
 
 export const mono = "font-mono text-[0.92em]";
 

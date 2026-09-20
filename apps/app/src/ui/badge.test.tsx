@@ -1,9 +1,12 @@
+// @vitest-environment jsdom
 // The one state badge: a tone is a state hue on the ink, the border and the
 // wash; the dot is on by default and off for a fact; a data attribute the
 // caller passes reaches the element, because every page reads the state off it.
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { Badge } from "./badge";
+
+afterEach(cleanup);
 
 describe("Badge", () => {
   it("draws the tone on the ink, the border and the wash, with a dot", () => {
@@ -33,6 +36,13 @@ describe("Badge", () => {
     expect(pill.querySelector("[aria-hidden]")).toBeNull();
   });
 
+  it("`.b` is a bordered pill: the hairline and 6px corners (INV-32)", () => {
+    render(<Badge tone="allowed">live</Badge>);
+    const pill = screen.getByText("live");
+    expect(pill.className).toContain("border");
+    expect(pill.className).toContain("rounded-md");
+  });
+
   it("never paints a state with the gold", () => {
     for (const tone of [
       "allowed",
@@ -43,9 +53,9 @@ describe("Badge", () => {
       "critical",
       "quiet",
     ] as const) {
-      const { unmount } = render(<Badge tone={tone}>{tone}</Badge>);
+      render(<Badge tone={tone}>{tone}</Badge>);
       expect(screen.getByText(tone).className).not.toMatch(/gold|brand|ember/);
-      unmount();
+      cleanup();
     }
   });
 });

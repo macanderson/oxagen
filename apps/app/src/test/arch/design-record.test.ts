@@ -2,7 +2,8 @@
 // mockup's, rule for rule. The design of record is `mockups/src/engine.css` in
 // the roadmap repository; `src/ui/control-styles.ts`, `src/ui/table.tsx`,
 // `src/ui/route-tabs.tsx`, `src/ui/badge.tsx` and `src/app/globals.css` carry
-// its rules as recipes, each naming the rule it draws. This test holds those
+// its rules as recipes, each naming the rule it draws. `.b` is held to its
+// rule by `src/ui/badge.test.tsx`, off a rendered badge. This test holds those
 // recipes to the rules that drifted between 2026-09-17 and 2026-09-20:
 // gold that became ink, flat headers that became grey bands, an eyebrow that
 // lost its colour, tiles and badges that each page drew its own way.
@@ -26,7 +27,6 @@ import {
 } from "@/ui/control-styles";
 import { tabLink } from "@/ui/route-tabs";
 import { headCell } from "@/ui/table";
-import { badgeBase } from "@/ui/badge";
 import { APP_DIR, listFiles, WHOLE_TREE_TIMEOUT_MS } from "./parse";
 
 const RULE = "design-record";
@@ -87,10 +87,8 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(statValue).toContain("tabular-nums");
   });
 
-  it("`.btn` at rest is the panel fill; `.b` is a bordered pill", () => {
+  it("`.btn` at rest is the panel fill", () => {
     expect(buttonSecondary).toContain("bg-card");
-    expect(badgeBase).toContain("border");
-    expect(badgeBase).toContain("rounded-md");
   });
 });
 
@@ -101,23 +99,26 @@ describe("design record: the recipes carry the mockup's rules", () => {
  * other fill is a wash or a state hue. A `bg-primary` under src/ is the drift
  * this file names, whichever way it drifted.
  */
-const INK_PRIMARY = /\b(bg|text|border|ring|shadow-\[inset[^\]]*)-primary\b|var\(--primary\)/;
+const INK_PRIMARY =
+  /\b(bg|text|border|ring|shadow-\[inset[^\]]*)-primary\b|var\(--primary\)/;
 
 /** A tile drawn by hand instead of from `statTile`. */
 const HAND_TILE = /rounded-xl border border-border bg-(data-surface|muted)\b/;
 
 const SELF = "src/test/arch/design-record.test.ts";
-const RECIPES = new Set([
-  "src/ui/control-styles.ts",
-  "src/app/globals.css",
-]);
+const RECIPES = new Set(["src/ui/control-styles.ts", "src/app/globals.css"]);
 
-function hits(files: readonly string[], pattern: RegExp, name: string): string[] {
+function hits(
+  files: readonly string[],
+  pattern: RegExp,
+  name: string,
+): string[] {
   const out: string[] = [];
   for (const file of files) {
     const lines = read(file).split("\n");
     lines.forEach((line, index) => {
-      if (pattern.test(line)) out.push(`${RULE} ${file}:${String(index + 1)} ${name}`);
+      if (pattern.test(line))
+        out.push(`${RULE} ${file}:${String(index + 1)} ${name}`);
     });
   }
   return out;
@@ -153,20 +154,41 @@ describe("design record: no page draws around the recipes", () => {
     "every app page names its scope in an eyebrow over the h1 (`.phead .eyebrow`)",
     () => {
       const pages = listFiles("src/app/[org]").filter(
-        (file) => file.endsWith("/page.tsx") && read(file).includes("<PageHeader"),
+        (file) =>
+          file.endsWith("/page.tsx") && read(file).includes("<PageHeader"),
       );
       expect(pages.length).toBeGreaterThan(0);
-      const bare = pages.filter((file) => !/<PageHeader[\s\S]*?eyebrow=/.test(read(file)));
+      const bare = pages.filter(
+        (file) => !/<PageHeader[\s\S]*?eyebrow=/.test(read(file)),
+      );
       expect(bare).toEqual([]);
     },
     WHOLE_TREE_TIMEOUT_MS,
   );
 
   it("the scan reads the probe the way it reads a page", () => {
-    expect(hits(["src/test/arch/probes/design-record/ink.tsx"], INK_PRIMARY, "ink-primary")).toEqual([
+    expect(
+      hits(
+        ["src/test/arch/probes/design-record/ink.tsx"],
+        INK_PRIMARY,
+        "ink-primary",
+      ),
+    ).toEqual([
       `${RULE} src/test/arch/probes/design-record/ink.tsx:3 ink-primary`,
     ]);
-    expect(hits(["src/test/arch/probes/design-record/clean.tsx"], INK_PRIMARY, "ink-primary")).toEqual([]);
-    expect(hits(["src/test/arch/probes/design-record/clean.tsx"], HAND_TILE, "hand-tile")).toEqual([]);
+    expect(
+      hits(
+        ["src/test/arch/probes/design-record/clean.tsx"],
+        INK_PRIMARY,
+        "ink-primary",
+      ),
+    ).toEqual([]);
+    expect(
+      hits(
+        ["src/test/arch/probes/design-record/clean.tsx"],
+        HAND_TILE,
+        "hand-tile",
+      ),
+    ).toEqual([]);
   });
 });
