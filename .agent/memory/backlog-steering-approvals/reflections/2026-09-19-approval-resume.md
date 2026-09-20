@@ -6,13 +6,15 @@ Complete #3127's stored-call continuation under fresh authorization.
 
 ### What I actually did
 
-Added encrypted stored arguments, conversation-scoped deduplication, a durable claim, a periodic worker, current admission checks, linked run evidence, and execution readback. Added 16 isolated worker regressions plus PostgreSQL, kernel, resolver, and component checks for CI.
+Added encrypted stored arguments, conversation-scoped deduplication, a durable claim, a periodic worker, current admission checks, linked run evidence, and execution readback. Added 17 isolated worker regressions plus PostgreSQL, kernel, resolver, and component checks for CI.
 
 ### Quality of my decisions
 
 The durable claim precedes dispatch. A crash cannot cause the worker to repeat the invocation. The weakest early design stopped at checking a preflight parse. The kernel now checks the exact final parsed value against the stored digest too.
 
 ### What I could have done better
+
+I should have checked dedicated-plane discovery before the first commit. A shared system scan cannot discover rows on a dedicated tenant database.
 
 I should have checked the encryption key format before the first test run. The fixture initially supplied hex to a base64 loader.
 

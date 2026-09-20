@@ -4,6 +4,8 @@ import { z } from "zod";
 
 const h = vi.hoisted(() => ({
   row: {} as Record<string, unknown>,
+  dedicatedOrgIds: [] as string[],
+  seams: [] as string[],
   invoke: vi.fn(),
   roles: vi.fn(),
   tools: vi.fn(),
@@ -24,22 +26,27 @@ vi.mock("drizzle-orm", () => ({
     (row[key] as Date) > value,
   lt: (key: string, value: Date) => (row: Record<string, unknown>) =>
     (row[key] as Date) < value,
+  notInArray:
+    (key: string, values: unknown[]) => (row: Record<string, unknown>) =>
+      !values.includes(row[key]),
   inArray: (key: string, values: unknown[]) => (row: Record<string, unknown>) =>
     values.includes(row[key]),
   isNull: (key: string) => (row: Record<string, unknown>) => row[key] == null,
   isNotNull: (key: string) => (row: Record<string, unknown>) =>
     row[key] != null,
   and:
-    (...predicates: Predicate[]) =>
+    (...predicates: Array<Predicate | undefined>) =>
     (row: Record<string, unknown>) =>
-      predicates.every((p) => p(row)),
+      predicates.every((p) => p === undefined || p(row)),
   or:
-    (...predicates: Predicate[]) =>
+    (...predicates: Array<Predicate | undefined>) =>
     (row: Record<string, unknown>) =>
-      predicates.some((p) => p(row)),
+      predicates.some((p) => p !== undefined && p(row)),
 }));
 vi.mock("@oxagen/database", () => {
   const columns = new Proxy({}, { get: (_, key) => String(key) });
+  const dataPlanes = new Proxy({}, { get: (_, key) => String(key) });
+  const workspaces = new Proxy({}, { get: (_, key) => String(key) });
   const tx = {
     update: () => ({
       set: (values: Record<string, unknown>) => ({
@@ -52,14 +59,37 @@ vi.mock("@oxagen/database", () => {
         },
       }),
     }),
-    select: () => ({
-      from: () => ({ where: () => ({ for: async () => [{ settings: {} }] }) }),
+    select: (projection: Record<string, unknown>) => ({
+      from: (table: unknown) => ({
+        where: (predicate: Predicate) => {
+          const rows =
+            table === dataPlanes
+              ? h.dedicatedOrgIds.map((orgId) => ({ orgId }))
+              : table === workspaces
+                ? projection.settings
+                  ? [{ settings: {} }]
+                  : [{ orgId: h.row.orgId, workspaceId: h.row.workspaceId }]
+                : predicate(h.row)
+                  ? [{ ...h.row }]
+                  : [];
+          return Object.assign(Promise.resolve(rows), {
+            for: async () => rows,
+            orderBy: () => ({ limit: async () => rows }),
+          });
+        },
+      }),
     }),
   };
   return {
-    schema: { approvalRequests: columns, workspaces: columns },
-    withTenantDb: async (fn: (arg: typeof tx) => unknown) => fn(tx),
-    withSystemDb: async (fn: (arg: typeof tx) => unknown) => fn(tx),
+    schema: { approvalRequests: columns, workspaces, dataPlanes },
+    withTenantDb: async (fn: (arg: typeof tx) => unknown) => {
+      h.seams.push("tenant");
+      return fn(tx);
+    },
+    withSystemDb: async (fn: (arg: typeof tx) => unknown) => {
+      h.seams.push("system");
+      return fn(tx);
+    },
   };
 });
 vi.mock("@oxagen/tenancy", () => ({
@@ -102,7 +132,11 @@ vi.mock("./kill-switch-gate", () => ({
 }));
 vi.mock("./assistant-run", () => ({ openAssistantRun: h.open }));
 
-import { resumeApprovedCall } from "./approval-resume";
+import {
+  resumeApprovedCall,
+  listApprovalResumes,
+  listDedicatedApprovalResumeScopes,
+} from "./approval-resume";
 import {
   decryptApprovalResume,
   encryptApprovalResume,
@@ -129,6 +163,8 @@ const payload: ApprovalResumePayload = {
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  h.dedicatedOrgIds = [];
+  h.seams = [];
   vi.stubEnv(
     "AUTH_TOKEN_ENCRYPTION_KEY",
     Buffer.alloc(32, 17).toString("base64"),
@@ -161,6 +197,17 @@ beforeEach(async () => {
 });
 
 describe("approved call resumption", () => {
+  it("discovers dedicated workspaces on the control plane and scans their tenant plane", async () => {
+    h.dedicatedOrgIds = [ref.orgId];
+    expect(await listDedicatedApprovalResumeScopes()).toEqual([
+      { orgId: ref.orgId, workspaceId: ref.workspaceId },
+    ]);
+    expect(h.seams).toEqual(["system", "system"]);
+    h.seams = [];
+    expect(await listApprovalResumes(ref)).toHaveLength(1);
+    expect(h.seams).toEqual(["tenant"]);
+    expect(await listApprovalResumes()).toEqual([]);
+  });
   it("encrypts exact inputs and dispatches one claimed attempt under the original human", async () => {
     expect(JSON.stringify(h.row.resumePayload)).not.toContain(
       "exact stored secret",

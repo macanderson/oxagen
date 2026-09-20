@@ -24,7 +24,17 @@ import {
   type CapabilityContext,
 } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, eq, gt, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  notInArray,
+} from "drizzle-orm";
 import {
   ApprovalResumeError,
   decryptApprovalResume,
@@ -40,15 +50,58 @@ export interface ApprovalResumeRef {
   workspaceId: string;
 }
 
-/** The worker scans references only. Payloads are read under tenant scope. */
-export function listApprovalResumes() {
+async function dedicatedResumeOrganizations(): Promise<string[]> {
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({ orgId: schema.dataPlanes.orgId })
+      .from(schema.dataPlanes)
+      .where(
+        and(
+          eq(schema.dataPlanes.kind, "postgres"),
+          eq(schema.dataPlanes.mode, "dedicated"),
+          isNull(schema.dataPlanes.deletedAt),
+        ),
+      ),
+  );
+  return rows.map((row) => row.orgId);
+}
+
+/** Workspace references live on the control plane, including dedicated tenants. */
+export async function listDedicatedApprovalResumeScopes() {
+  const orgIds = await dedicatedResumeOrganizations();
+  if (orgIds.length === 0) return [];
   return withSystemDb((tx) =>
+    tx
+      .select({
+        orgId: schema.workspaces.orgId,
+        workspaceId: schema.workspaces.id,
+      })
+      .from(schema.workspaces)
+      .where(inArray(schema.workspaces.orgId, orgIds)),
+  );
+}
+
+/** Scan one data plane without exporting stored arguments to the scheduler. */
+export async function listApprovalResumes(scope?: {
+  orgId: string;
+  workspaceId: string;
+}) {
+  const dedicatedOrgIds = scope ? [] : await dedicatedResumeOrganizations();
+  const select = (tx: Parameters<Parameters<typeof withTenantDb>[0]>[0]) =>
     tx
       .select({ id: a.id, orgId: a.orgId, workspaceId: a.workspaceId })
       .from(a)
       .where(
         and(
           isNotNull(a.resumePayload),
+          scope
+            ? and(
+                eq(a.orgId, scope.orgId),
+                eq(a.workspaceId, scope.workspaceId),
+              )
+            : dedicatedOrgIds.length
+              ? notInArray(a.orgId, dedicatedOrgIds)
+              : undefined,
           or(
             eq(a.resumeStatus, "queued"),
             and(eq(a.resumeStatus, "waiting"), lt(a.expiresAt, new Date())),
@@ -60,8 +113,10 @@ export function listApprovalResumes() {
         ),
       )
       .orderBy(a.createdAt)
-      .limit(100),
-  );
+      .limit(100);
+  return scope
+    ? runInTenantScope(scope, () => withTenantDb(select))
+    : withSystemDb(select);
 }
 
 /** One durable claim precedes all work. Running attempts are never reclaimed. */
