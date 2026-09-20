@@ -10,6 +10,7 @@ describe("parseSteeringView", () => {
       kind: null,
       offset: 0,
       proposal: null,
+      cursor: null,
     });
   });
 
@@ -19,6 +20,17 @@ describe("parseSteeringView", () => {
       kind: "constraint",
       offset: 50,
       proposal: null,
+      cursor: null,
+    });
+  });
+
+  it("opens Skills with the inventory page the URL names", () => {
+    expect(parseSteeringView({ tab: "skills", cursor: "c2" })).toEqual({
+      tab: "skills",
+      kind: null,
+      offset: 0,
+      proposal: null,
+      cursor: "c2",
     });
   });
 
@@ -40,6 +52,13 @@ describe("parseSteeringView", () => {
       { offset: 0 },
     ],
     ["a proposal off Context PRs", { proposal: "prp_1" }, { proposal: null }],
+    ["a cursor off Skills", { cursor: "c2" }, { cursor: null }],
+    ["an empty cursor", { tab: "skills", cursor: "" }, { cursor: null }],
+    [
+      "a cursor longer than a URL carries",
+      { tab: "skills", cursor: "c".repeat(513) },
+      { cursor: null },
+    ],
     [
       "a malformed proposal",
       { tab: "prs", proposal: "prp_1/../x" },

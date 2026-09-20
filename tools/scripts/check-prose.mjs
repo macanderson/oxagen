@@ -128,7 +128,7 @@ export const AVOID = [
   "stop wasting money",
   "explain your ai bill",
   "mission control for your autonomous agents",
-  // Retired as the product name on 2026-09-19 (ADR-112): GitHub now ships a
+  // Retired as the product name on 2026-09-19 (ADR-113): GitHub now ships a
   // control-plane product called Mission Control. Say Oxagen for the app and
   // the operator console in prose. A citation of a document by its title
   // ("Mission Control spec", "Mission Control mockup") names a file, not the

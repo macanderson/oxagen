@@ -1,6 +1,6 @@
 # Oxagen Mission Control
 
-> The product name Mission Control was retired on 2026-09-19 by [ADR-112](../../adr/ADR-112-workforce-management-leads-mission-control-is-retired.md); this folder keeps its name as a path, and the documents in it keep their text.
+> The product name Mission Control was retired on 2026-09-19 by [ADR-113](../../adr/ADR-113-workforce-management-leads-mission-control-is-retired.md); this folder keeps its name as a path, and the documents in it keep their text.
 
 The specification and implementation plan for the `apps/app` rebuild (the
 Mission Control app), carried in the repo so they survive the mockups
@@ -37,5 +37,10 @@ Sources and copies:
   build-time decision log and traceability over this spec; they do not restate it.
 - `docs/mission-control/GAP-INVENTORY.md` is the 2026-09-19 page-by-page gap
   inventory of `apps/app` against the canonical roadmap §14. Prefer it over
-  `PLAN.md` / `TRACEABILITY.md` for what is built today.
+  `PLAN.md` / `TRACEABILITY.md` for what is built today, and read
+  `docs/audits/2026-09-19-mission-control-gap-inventory-review.md` beside it:
+  the review corrects the rows five same-day PRs made stale.
+- `docs/mission-control/BUILD-CHUNKS.md` is the build plan that follows from
+  the review: six sessions, each a `/mc-<n>-<name>` command over a workflow in
+  `.claude/workflows/`.
 - Build tracking: integration branch `app-rebuild`, PR #2894.

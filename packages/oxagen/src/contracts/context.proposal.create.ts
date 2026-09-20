@@ -15,7 +15,7 @@ export const contextProposalCreate = registerCapability({
     "Open a proposal on a lineage: the record it should become (kind, force, constraint effect, scope, statement), the rationale and the supporting runs, agents, records and evidence. Steers nothing until its Context PR merges.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

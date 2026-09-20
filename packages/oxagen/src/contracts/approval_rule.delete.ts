@@ -15,7 +15,7 @@ export const approvalRuleDelete = registerCapability({
   description: "Remove one auto-approval rule from the workspace's rule set",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

@@ -79,7 +79,7 @@ single wedge where a platform of Oxagen's exact shape can credibly be #1:
 **Workforce management for every agent an enterprise runs, whoever built it, on an agent control plane.**
 
 Workforce management is the product and the agent control plane is the category
-(ADR-112, superseding the product name in ADR-067, which in turn superseded
+(ADR-113, superseding the product name in ADR-067, which in turn superseded
 ADR-066's two names). The operator's job is the lead: define an agent's identity and
 authority, equip it with tools, skills and the business context its work requires,
 and review what it does, whether the work is a bounded task or an ongoing
@@ -164,7 +164,7 @@ enforce or record it:
   operator takes on it (answer a routed request, fund, hold, stop), each a governed,
   metered action. Spend lives on the fleet page beside the agent (ADR-066, ADR-067).
 - **The operator review (rate):** one page per person, read from the record and
-  never estimated (ADR-112). It shows spend by operator, agent and workspace, the
+  never estimated (ADR-113). It shows spend by operator, agent and workspace, the
   same rows the Spend page prices, cut by the person who started the run; outcome
   per dollar for bounded tasks; and prompt habits drawn from the recorded turns,
   meaning turns to completion, restarts on the same task, steering overridden by

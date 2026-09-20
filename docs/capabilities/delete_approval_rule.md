@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp, agent
 **Sensitivity:** high
 **Metering:** none (`noBillingGate`, a settings write)
+**App:** Tools › Auto-approvals › Delete on a row.
 
 ## Intent
 

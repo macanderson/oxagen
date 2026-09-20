@@ -134,6 +134,11 @@ async function upsertLeadTx(tx: Tx, input: LeadInput): Promise<LeadRow> {
         ...(typeof input.marketingConsent === "boolean"
           ? { marketingConsent: input.marketingConsent }
           : {}),
+        // A resubmission is a version of the lead the CRM has not seen:
+        // clear the sync marker so the row is pending again (and the
+        // backfill finds it if the post-response sync never lands). The
+        // record id stays, so the next sync updates the same person.
+        crmSyncedAt: null,
         updatedAt: sql`now()`,
       },
     })

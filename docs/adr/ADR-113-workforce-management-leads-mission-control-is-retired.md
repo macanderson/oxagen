@@ -1,4 +1,4 @@
-# ADR-112: Workforce management leads, and Mission Control is retired as a product name
+# ADR-113: Workforce management leads, and Mission Control is retired as a product name
 
 - **Status:** Accepted
 - **Date:** 2026-09-19

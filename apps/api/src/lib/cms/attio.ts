@@ -1,0 +1,320 @@
+/**
+ * Minimal Attio REST client for the website lead sync.
+ *
+ * Five calls, idempotent from the caller's point of view: people and
+ * companies are asserted by their one unique attribute (`email_addresses`
+ * and `domains`), a list entry is asserted by its parent record, and a
+ * multi-select append ignores a repeat, so a retry after a lost response
+ * updates the same objects instead of creating more. Notes are the
+ * exception (a note is a new object every time), so the sync writes one
+ * only after the record asserts succeed.
+ *
+ * Transient failures (429 and 5xx) are retried with backoff, honouring
+ * `Retry-After`, and every attempt carries a deadline so a stalled
+ * connection cannot hold the sync (or the backfill's loop) open. A lost
+ * connection is retried for the idempotent calls only: a `POST /notes`
+ * whose response never arrived may already have created the note, and
+ * Attio offers no idempotency key for it, so that one is reported instead
+ * of repeated. Anything else is an `AttioRequestError` carrying the status
+ * and the response body, which the sync records on the lead row.
+ *
+ * API reference: https://docs.attio.com/rest-api/endpoint-reference
+ */
+
+export const ATTIO_BASE_URL = "https://api.attio.com/v2";
+
+export class AttioRequestError extends Error {
+  readonly code = "attio_request_failed";
+  constructor(
+    readonly status: number,
+    readonly path: string,
+    readonly body: string,
+  ) {
+    super(`Attio ${path} answered ${status}: ${body.slice(0, 300)}`);
+    this.name = "AttioRequestError";
+  }
+}
+
+export interface AttioPersonInput {
+  email: string;
+  firstName: string;
+  lastName: string;
+  jobTitle?: string | null;
+  /** E.164 only (`+15558675309`); anything else is dropped by the caller. */
+  phone?: string | null;
+  /** Attio record id of the company to link, from `assertCompany`. */
+  companyRecordId?: string | null;
+}
+
+export interface AttioCompanyInput {
+  domain: string;
+  name: string;
+}
+
+export interface AttioNoteInput {
+  parentObject: "people" | "companies";
+  parentRecordId: string;
+  title: string;
+  content: string;
+}
+
+export interface AttioListEntryInput {
+  /** List slug or id. */
+  list: string;
+  parentObject: "people" | "companies";
+  parentRecordId: string;
+}
+
+export interface AttioListEntryValuesInput {
+  list: string;
+  entryId: string;
+  /**
+   * Attribute slug → values. A multi-select value is appended to what the
+   * entry already holds (PATCH semantics); Attio ignores a repeat.
+   */
+  values: Record<string, unknown>;
+}
+
+export interface AttioClient {
+  assertPerson(input: AttioPersonInput): Promise<{ recordId: string }>;
+  assertCompany(input: AttioCompanyInput): Promise<{ recordId: string }>;
+  createNote(input: AttioNoteInput): Promise<{ noteId: string }>;
+  /**
+   * Find or create the list entry for a record. Sends no values, so an
+   * existing entry keeps everything it holds; `appendListEntryValues` adds
+   * to it. (A PUT with values would overwrite a multi-select, which is how
+   * a second form would erase the first asset.)
+   */
+  assertListEntry(input: AttioListEntryInput): Promise<{ entryId: string }>;
+  appendListEntryValues(input: AttioListEntryValuesInput): Promise<void>;
+  /**
+   * Remove a record's entry from a list, if it has one. Lists are
+   * identified by id here because the record's entries endpoint reports
+   * list ids, not slugs.
+   */
+  removeListEntry(input: {
+    listId: string;
+    listSlug: string;
+    parentObject: "people" | "companies";
+    parentRecordId: string;
+  }): Promise<{ removed: boolean }>;
+}
+
+export interface AttioClientOptions {
+  apiKey: string;
+  baseUrl?: string;
+  fetch?: typeof fetch;
+  /** Attempts per call, including the first. Default 3. */
+  maxAttempts?: number;
+  /** Base backoff in ms; doubles per attempt. Default 250. */
+  backoffMs?: number;
+  /** Injected for tests so retries do not sleep. */
+  sleep?: (ms: number) => Promise<void>;
+  /** Deadline per attempt in ms. Default 15 000. */
+  timeoutMs?: number;
+}
+
+interface RequestOptions {
+  /**
+   * Whether a failed connection (no response at all) may be retried. True
+   * for asserts and updates, which match on a key; false for a create with
+   * no key, where the first attempt may have succeeded unseen.
+   */
+  retryOnNetworkError: boolean;
+}
+
+interface RecordResponse {
+  data?: { id?: { record_id?: string } };
+}
+
+interface NoteResponse {
+  data?: { id?: { note_id?: string } };
+}
+
+interface EntryResponse {
+  data?: { id?: { entry_id?: string } };
+}
+
+interface RecordEntriesResponse {
+  data?: Array<{ list_id?: string; entry_id?: string }>;
+}
+
+const RETRYABLE = (status: number) => status === 429 || status >= 500;
+
+function retryAfterMs(res: Response): number | null {
+  const header = res.headers.get("retry-after");
+  if (!header) return null;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
+}
+
+export function createAttioClient(opts: AttioClientOptions): AttioClient {
+  const baseUrl = (opts.baseUrl ?? ATTIO_BASE_URL).replace(/\/$/, "");
+  const doFetch = opts.fetch ?? globalThis.fetch;
+  const maxAttempts = opts.maxAttempts ?? 3;
+  const backoffMs = opts.backoffMs ?? 250;
+  const sleep =
+    opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const timeoutMs = opts.timeoutMs ?? 15_000;
+
+  async function request<T>(
+    method: "GET" | "PUT" | "POST" | "PATCH" | "DELETE",
+    path: string,
+    body: unknown,
+    { retryOnNetworkError }: RequestOptions = { retryOnNetworkError: true },
+  ): Promise<T> {
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      let res: Response;
+      try {
+        res = await doFetch(`${baseUrl}${path}`, {
+          method,
+          headers: {
+            authorization: `Bearer ${opts.apiKey}`,
+            "content-type": "application/json",
+            accept: "application/json",
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch (err) {
+        // No response at all (refused, reset, or past the deadline).
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (retryOnNetworkError && attempt < maxAttempts) {
+          await sleep(backoffMs * 2 ** (attempt - 1));
+          continue;
+        }
+        throw lastError;
+      }
+      if (res.ok) {
+        return (await res.json()) as T;
+      }
+      const text = await res.text();
+      lastError = new AttioRequestError(res.status, path, text);
+      if (RETRYABLE(res.status) && attempt < maxAttempts) {
+        await sleep(retryAfterMs(res) ?? backoffMs * 2 ** (attempt - 1));
+        continue;
+      }
+      throw lastError;
+    }
+    // Unreachable: every loop exit above returns or throws.
+    throw lastError ?? new Error("Attio request failed");
+  }
+
+  function recordId(path: string, res: RecordResponse): string {
+    const id = res.data?.id?.record_id;
+    if (!id) {
+      throw new AttioRequestError(200, path, "response carried no record_id");
+    }
+    return id;
+  }
+
+  return {
+    async assertPerson(input) {
+      const path = "/objects/people/records?matching_attribute=email_addresses";
+      const values: Record<string, unknown> = {
+        email_addresses: [{ email_address: input.email }],
+        name: [
+          {
+            first_name: input.firstName,
+            last_name: input.lastName,
+            full_name: `${input.firstName} ${input.lastName}`.trim(),
+          },
+        ],
+      };
+      if (input.jobTitle) values.job_title = [{ value: input.jobTitle }];
+      if (input.phone) {
+        values.phone_numbers = [{ original_phone_number: input.phone }];
+      }
+      if (input.companyRecordId) {
+        values.company = [
+          {
+            target_object: "companies",
+            target_record_id: input.companyRecordId,
+          },
+        ];
+      }
+      const res = await request<RecordResponse>("PUT", path, {
+        data: { values },
+      });
+      return { recordId: recordId(path, res) };
+    },
+
+    async assertCompany(input) {
+      const path = "/objects/companies/records?matching_attribute=domains";
+      const res = await request<RecordResponse>("PUT", path, {
+        data: {
+          values: {
+            domains: [{ domain: input.domain }],
+            name: [{ value: input.name }],
+          },
+        },
+      });
+      return { recordId: recordId(path, res) };
+    },
+
+    async createNote(input) {
+      const path = "/notes";
+      const res = await request<NoteResponse>(
+        "POST",
+        path,
+        {
+          data: {
+            parent_object: input.parentObject,
+            parent_record_id: input.parentRecordId,
+            title: input.title,
+            format: "plaintext",
+            content: input.content,
+          },
+        },
+        // A note has no matching key: a lost response is not retried.
+        { retryOnNetworkError: false },
+      );
+      const noteId = res.data?.id?.note_id;
+      if (!noteId) {
+        throw new AttioRequestError(200, path, "response carried no note_id");
+      }
+      return { noteId };
+    },
+
+    async assertListEntry(input) {
+      const path = `/lists/${encodeURIComponent(input.list)}/entries`;
+      const res = await request<EntryResponse>("PUT", path, {
+        data: {
+          parent_record_id: input.parentRecordId,
+          parent_object: input.parentObject,
+          entry_values: {},
+        },
+      });
+      const entryId = res.data?.id?.entry_id;
+      if (!entryId) {
+        throw new AttioRequestError(200, path, "response carried no entry_id");
+      }
+      return { entryId };
+    },
+
+    async appendListEntryValues(input) {
+      const path = `/lists/${encodeURIComponent(input.list)}/entries/${encodeURIComponent(input.entryId)}`;
+      await request<EntryResponse>("PATCH", path, {
+        data: { entry_values: input.values },
+      });
+    },
+
+    async removeListEntry(input) {
+      const listPath = `/objects/${input.parentObject}/records/${encodeURIComponent(input.parentRecordId)}/entries?limit=50`;
+      const res = await request<RecordEntriesResponse>(
+        "GET",
+        listPath,
+        undefined,
+      );
+      const entry = (res.data ?? []).find((e) => e.list_id === input.listId);
+      if (!entry?.entry_id) return { removed: false };
+      await request<unknown>(
+        "DELETE",
+        `/lists/${encodeURIComponent(input.listSlug)}/entries/${encodeURIComponent(entry.entry_id)}`,
+        undefined,
+      );
+      return { removed: true };
+    },
+  };
+}

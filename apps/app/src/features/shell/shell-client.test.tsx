@@ -253,7 +253,6 @@ describe("sidebar", () => {
       ["Fleet", "/acme/core-platform"],
       ["Agent IAM", "/acme/core-platform/agents"],
       ["Tools", "/acme/core-platform/tools"],
-      ["Skills", "/acme/core-platform/skills"],
       ["Steering", "/acme/core-platform/steering"],
       ["Spend", "/acme/core-platform/spend"],
       ["Organization", "/acme"],
@@ -277,7 +276,7 @@ describe("sidebar", () => {
     nav.pathname = "/acme/billing";
     renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
-    expect(within(main).getAllByRole("link")).toHaveLength(9);
+    expect(within(main).getAllByRole("link")).toHaveLength(8);
     expect(within(main).getByRole("link", { name: "Billing" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -345,7 +344,6 @@ describe("command menu", () => {
       "Fleet",
       "Agent IAM",
       "Tools",
-      "Skills",
       "Steering",
       "Spend",
       "Organization",
@@ -354,6 +352,10 @@ describe("command menu", () => {
       "Model funding",
       "Billing",
       "Audit",
+      "Create anything",
+      "New agent",
+      "Add a skill",
+      "Write a context record",
     ]);
     expect(within(menu).queryAllByRole("group")).toEqual([]);
     await user.type(input, "api keys");
