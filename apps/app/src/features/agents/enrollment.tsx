@@ -25,6 +25,7 @@ export function EnrollmentSection({
   ws,
   agentId,
   agentName,
+  retired,
   here,
 }: {
   hosts: AgentDetail["hosts"];
@@ -35,6 +36,8 @@ export function EnrollmentSection({
   agentId: string;
   /** Named in the Enroll a host dialog, so it is clear which agent the machine joins. */
   agentName: string;
+  /** A retired identity is archived, so `create_enrollment_token` cannot find it. */
+  retired: boolean;
   /** This tab, re-read after a revoke. */
   here: SafePath;
 }) {
@@ -45,10 +48,20 @@ export function EnrollmentSection({
         Enroll a host sits above the table and stays there when the table is
         empty: the empty state prints the command a person would run from a
         checkout, and this is the same path for a machine they are sitting at.
+        A retired identity is archived, and `create_enrollment_token` selects
+        on `deletedAt is null`, so the control would only ever answer
+        "agent_not_found". The header hides its writes for the same reason.
       */}
-      <div className="flex flex-wrap justify-end gap-2">
-        <EnrollHost org={org} ws={ws} agentId={agentId} agentName={agentName} />
-      </div>
+      {retired ? null : (
+        <div className="flex flex-wrap justify-end gap-2">
+          <EnrollHost
+            org={org}
+            ws={ws}
+            agentId={agentId}
+            agentName={agentName}
+          />
+        </div>
+      )}
       {hosts.length === 0 ? (
         <div data-testid="hosts-empty" className="flex flex-col gap-2 text-sm">
           <p className="font-medium">{t("empty.title")}</p>

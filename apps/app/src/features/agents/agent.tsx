@@ -181,6 +181,7 @@ export async function Agent({
           ws={place.ws}
           agentId={identity.id}
           agentName={identity.name}
+          retired={identity.status === "retired"}
           here={routes.agent(place.org, place.ws, place.agent, {
             tab: "enrollment",
           })}

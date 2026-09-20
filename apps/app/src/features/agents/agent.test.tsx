@@ -591,6 +591,20 @@ describe("Enrollment", () => {
     expect(calls.toolbelt).toEqual([]);
   });
 
+  it("offers Enroll a host on the tab, and none for a retired identity (negative)", async () => {
+    await renderAgent({ get: readOk(agentDetail()) }, "enrollment");
+    expect(screen.getByTestId("enroll-host")).toBeInTheDocument();
+    cleanup();
+
+    // A retired identity is archived, so create_enrollment_token selects it
+    // out and the control would only ever answer agent_not_found.
+    await renderAgent(
+      { get: readOk(agentDetail({ identity: { status: "retired" } })) },
+      "enrollment",
+    );
+    expect(screen.queryByTestId("enroll-host")).not.toBeInTheDocument();
+  });
+
   it("says an enrollment past its expiry has expired, over the status column alone (negative)", async () => {
     // tacho-host.ts refuses a host whose enrollment has expired, and the table
     // prints no expiry column, so the stored status is all a person would see.
