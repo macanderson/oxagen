@@ -100,7 +100,15 @@ function Tabs({
 }
 
 /**
- * The run's pending approvals and the instant their clocks start from.
+ * The run's pending approvals, the mandates their cards draw a bar from, and
+ * the instant their clocks start from.
+ *
+ * The ledger is read only when a parked call names a mandate, the same rule
+ * `readFleet` follows, so a run whose approvals drew on none makes one read and
+ * a viewer who may not read the ledger sees the cards without their bars. It
+ * used to pass an empty map here, which made every card on this page say the
+ * mandate could not be read: the card showed a mandate id and no authority, on
+ * the one page where the call's own run is in front of you.
  *
  * `Date.now()` lives here rather than in the page or the component body: a
  * component's render must be pure, and the route's render is a render too, so
@@ -109,16 +117,6 @@ function Tabs({
  * the same shape `readFleet` uses in features/fleet.
  *
  * `fixed` is how a test pins the countdown.
- */
-/**
- * The run's pending approvals, and the mandates their cards draw a bar from.
- *
- * The ledger is read only when a parked call names a mandate, the same rule
- * `readFleet` follows, so a run whose approvals drew on none makes one read and
- * a viewer who may not read the ledger sees the cards without their bars. It
- * used to pass an empty map here, which made every card on this page say the
- * mandate could not be read: the card showed a mandate id and no authority, on
- * the one page where the call's own run is in front of you.
  */
 async function readApprovals(
   source: DataSource,
