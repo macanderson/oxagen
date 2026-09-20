@@ -13,16 +13,20 @@ export const PORTS = {
 } as const;
 
 // Lockstep platform version. Every workspace package is released at one version
-// (see `pnpm release:<patch|minor|major>`), and the release script propagates
-// that value to Vercel as the `PLATFORM_VERSION` env var across every
-// environment. At runtime, prefer the injected env tag; fall back to "0.0.0"
-// when unset (local processes that never loaded it) so callers always get a
-// string. Surface it in UIs/telemetry instead of hardcoding a version anywhere.
+// (see `pnpm release:<patch|minor|major>`). At runtime, prefer the injected env
+// tag; fall back to "0.0.0" when unset so callers always get a string. Surface
+// it in UIs/telemetry instead of hardcoding a version anywhere.
+//
+// Nothing injects it in production today. The release script used to write the
+// tag into every Vercel project's environment; that propagation went with the
+// Vercel deploy configuration, and the AWS deploy does not yet put the var in
+// SSM `/oxagen/production`. So the fallback is what production reports — treat
+// a "0.0.0" in telemetry as "unset", not as a genuine pre-1.0 build.
 //
 // PLATFORM_VERSION is deliberately absent from baseEnvSchema (it is a release
 // tag, not a service secret), so it cannot go through normalizeEnv(). We reuse
-// stripOneQuotePair() to handle values pasted into the Vercel dashboard with
-// surrounding quotes — same rule, one place.
+// stripOneQuotePair() to handle values that arrive with surrounding quotes —
+// same rule, one place.
 export function platformVersion(): string {
   const raw = process.env.PLATFORM_VERSION;
   if (!raw) return "0.0.0";

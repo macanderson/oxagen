@@ -166,10 +166,16 @@ Keep production URLs isolated to env vars — never hard-code domains.
 
 ## Release Process
 
-Only for maintainers. Releases run from GitHub: Actions, Release, Run
-workflow, then pick `patch`, `minor` or `major`. That run:
+Only for maintainers. There are two ways to cut a release and one way to try
+a build. They write the same version into every tracked manifest in the tree,
+whatever its language (`package.json`, `Cargo.toml`, `Cargo.lock`);
+`pnpm check:versions` holds them in lockstep in CI and `--fix` writes them.
 
-1. bumps every package to the next version and has a model write the release
+### From GitHub, the usual way
+
+Actions, Release, Run workflow, then pick `patch`, `minor` or `major`. That run:
+
+1. bumps every manifest to the next version and has a model write the release
    notes from the diff since the last tag, under the `clear-prose` and
    `oxagen-branding` skills, checked by `check:prose`;
 2. writes `releases/v<version>.md`, the top of `CHANGELOG.md`, and the docs
@@ -190,12 +196,51 @@ access token for this repository with contents, pull requests and workflows
 set to write. The workflow's own token cannot open a PR that CI runs on.
 `dry_run: true` previews the version and the notes without it.
 
-The same script runs locally for a preview or a manual release:
+### From a laptop, when you want to watch it land
+
+```bash
+pnpm release:patch:publish      # 2.1.1 -> 2.1.2, then build every platform in CI and upload
+pnpm release:minor:publish      # 2.1.1 -> 2.2.0
+pnpm release:major:publish      # 2.1.1 -> 3.0.0
+```
+
+`release:<bump>:publish` (`tools/scripts/release-publish.ts`) diffs the notes
+from the last published GitHub release rather than the newest tag, so a tag
+that never shipped is not a release boundary, and ends them with a link to
+every installer and executable of the version by its published name. It then
+commits on `release/vX.Y.Z`, tags `vX.Y.Z` and `desktop-vX.Y.Z`, opens the
+pull request, waits for `desktop.yml` to build the four targets, uploads the
+installers to downloads.oxagen.sh and `@oxagen/cli` to npm, checks that every
+file the notes link to is on the GitHub release, and publishes it.
+
+The uploads are the same ones `desktop.yml` does on the tag, so on a healthy
+run this reports them already done. Every step skips a version that is
+already on downloads.oxagen.sh, on npm, or published on GitHub, which is what
+makes it safe beside the Release workflow and what lets an interrupted run
+resume with `--publish-only`. `--dry-run` previews the version and the notes.
+
+### A build with no release
+
+```bash
+pnpm dist:local                 # tacho, oxagen, and the desktop app from this tree; the installer lands on ~/Desktop
+pnpm dist:local --out /tmp/x    # somewhere else
+```
+
+`dist:local` builds what is on your machine, for your OS and architecture
+only (the sidecars embed the running `node` and are not cross-compiled),
+signed with the updater key when `~/.tauri/oxagen-desktop.key` is present. It
+bumps nothing and uploads nothing. It is the way to try an installer before a
+release.
+
+`pnpm release:<bump>` alone (`tools/scripts/release.ts`) is the bump, the
+notes, and a local commit and tag, with no CI wait and no uploads:
 
 ```bash
 tsx tools/scripts/release.ts patch --dry-run   # the bump and the notes, nothing written
-pnpm release:patch                              # bump, notes, commit and tag on your branch
+pnpm release:patch                             # bump, notes, commit and tag on your branch
 ```
+
+See the header of each script for its flags.
 
 ## Security
 

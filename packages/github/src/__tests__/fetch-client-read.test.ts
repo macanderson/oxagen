@@ -515,13 +515,11 @@ describe("listBranches", () => {
 
 describe("getBranch", () => {
   it("answers the branch's head commit by name", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        makeResponse({
-          commit: { sha: "abc123", commit: { tree: { sha: "t" } } },
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        commit: { sha: "abc123", commit: { tree: { sha: "t" } } },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
     const out = await client.getBranch({
