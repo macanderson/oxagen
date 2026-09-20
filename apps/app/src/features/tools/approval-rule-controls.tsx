@@ -16,7 +16,7 @@
 // Each one reloads the tab on success and names a refusal where the person
 // acted.
 import { useTranslations } from "next-intl";
-import { type ReactNode, type SyntheticEvent, useState } from "react";
+import { type ReactNode, type SyntheticEvent, useRef, useState } from "react";
 import type { ApprovalRule } from "@/data/contracts/tools";
 import type { ActionResult } from "@/server/kernel";
 import {
@@ -197,6 +197,7 @@ export function RuleEditor({
   const [hoursOn, setHoursOn] = useState(
     existing !== null && existing.businessHours !== null,
   );
+  const rendered = useRef<ApprovalRuleDraft | null>(null);
   const creating = existing === null;
   const hours = existing?.businessHours ?? null;
   /** A rule the fields cannot write back as stored: shown, never saved here. */
@@ -204,7 +205,11 @@ export function RuleEditor({
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
+<<<<<<< ours
     if (pending || refused) return;
+=======
+    if (pending) return;
+>>>>>>> theirs
     const parsed = draftOf(
       new FormData(event.currentTarget),
       existing,
@@ -222,7 +227,7 @@ export function RuleEditor({
         at.ws,
         creating ? "create" : "edit",
         parsed.draft,
-        existing === null ? null : renderedDraft(existing),
+        rendered.current,
       );
       if (result.ok) {
         setOpen(false);
@@ -246,6 +251,7 @@ export function RuleEditor({
         }
         className={creating ? buttonPrimary : buttonSecondary}
         onClick={() => {
+          rendered.current = existing === null ? null : renderedDraft(existing);
           setOpen(true);
         }}
       >
