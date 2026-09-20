@@ -8,7 +8,8 @@ Revoke a Tacho host. The host's API key is soft-deleted, the host row becomes `r
 
 ## Surface
 
-- API only: `POST /v1/:org_slug/:workspace_slug/tacho/enrollments/revoke`
+- API: `POST /v1/:org_slug/:workspace_slug/tacho/enrollments/revoke`
+- App: Agents › one agent › Enrollment — Revoke on a host row, confirmed by hostname, with the optional reason (`apps/app/src/features/agents/enrollment-controls.tsx`). `app` is a layer, not a `CapabilitySurface`: the app reaches the kernel through its own seam, which passes surface `app` and never consults the allowlist above
 - Authentication: org Owner or Admin, by session or by the API key `oxagen login` minted for them (what `tacho unenroll` sends); a key bound to an enrolled machine is refused (ADR-079)
 - Capability name: `revoke_tacho_enrollment`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity for the enrollment, ingest, bundle, and command capabilities, medium for the reads

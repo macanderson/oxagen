@@ -68,7 +68,8 @@
         "enrollment": "Enrollment",
         "incidents": "Tamper incidents",
         "definition": "Configuration",
-        "mandates": "Mandates"
+        "mandates": "Mandates",
+        "budgets": "Budgets"
       },
       "identity": {
         "title": "Identity",
@@ -206,7 +207,8 @@
           "hooks": "Hooks",
           "bundle": "Policy bundle",
           "deviceKey": "Device key",
-          "lastSeen": "Last seen"
+          "lastSeen": "Last seen",
+          "actions": "Actions"
         },
         "hooks": {
           "ok": "in place",
@@ -221,6 +223,31 @@
           "title": "No host is enrolled under this agent",
           "body": "Enroll the host it runs on, from the repository it works in:",
           "command": "oxagen agent enroll"
+        },
+        "enroll": {
+          "open": "Enroll a host",
+          "title": "Enroll a host under {name}",
+          "body": "Mint a single-use token, then run the command below on the machine. The token is shown once and is consumed the first time it is presented.",
+          "confirm": "Mint a token",
+          "pending": "Minting",
+          "again": "Mint another",
+          "token": "Enrollment token",
+          "once": "Shown once. Mint another if it is lost or expires unused.",
+          "expires": "Expires {at}",
+          "command": "Run this on the host",
+          "copy": "Copy",
+          "copied": "Copied",
+          "copyFailed": "Copying is blocked in this browser. Select the text and copy it."
+        },
+        "revoke": {
+          "open": "Revoke",
+          "label": "Revoke {hostname}",
+          "title": "Revoke {hostname}",
+          "body": "The host's key is retired and every session on it is denied at its next prompt or tool boundary. Enrolling the machine again mints a new key. This cannot be undone.",
+          "reason": "Reason",
+          "reasonHint": "Recorded on the host row and on the revoke command. Optional.",
+          "confirm": "Revoke",
+          "pending": "Revoking"
         }
       },
       "incidents": {
@@ -339,6 +366,37 @@
           },
           "note": "Deleting an agent is a pull request that removes the file. The principal is retired, never deleted, so its runs keep their identity."
         }
+      },
+      "budgets": {
+        "title": "Budgets",
+        "lead": "The spend ceilings this agent runs under. They are set on Spend and enforced across every agent in their scope.",
+        "columns": {
+          "scope": "Scope",
+          "period": "Period",
+          "limit": "Limit",
+          "spent": "Spent",
+          "position": "Position"
+        },
+        "scope": {
+          "org": "Organization",
+          "workspace": "This workspace"
+        },
+        "monthly": "Monthly",
+        "rolling": "Rolling {days} days",
+        "noLimit": "No ceiling",
+        "disabled": "Not enforced",
+        "position": "{ratio} · {state}",
+        "state": {
+          "ok": "under the ceiling",
+          "threshold_50": "past 50%",
+          "threshold_80": "past 80%",
+          "threshold_95": "past 95%",
+          "exceeded": "over the ceiling"
+        },
+        "basis": "Spent is metered from priced model calls over the period named in each row. A run Oxagen did not price is in no figure here.",
+        "empty": "No spend ceiling is set for this workspace or its organization.",
+        "agentScope": "Oxagen records no ceiling for one agent. get_spend_budget reads the organization and workspace scopes only, so this agent is bounded by the rows above and by the per-run budget its definition sets. A per-agent ceiling waits on an ADR for the scopes billing.budgets accepts.",
+        "link": "Set ceilings on Spend"
       }
     },
     "actions": {

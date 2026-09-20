@@ -14,10 +14,12 @@
 import { useLocale, useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import { credentialState } from "@/shared/credential-state";
+import type { SafePath } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { useExpiryClock } from "@/ui/expiry-clock";
 import { formatCount } from "@/ui/money-format";
 import { cell } from "@/ui/table";
+import { RevokeHost } from "./enrollment-controls";
 import { Instant, NotRecordedValue } from "./parts";
 
 type Host = AgentDetail["hosts"][number];
@@ -27,7 +29,20 @@ function hooksKey(ok: boolean | null) {
   return ok ? "ok" : "missing";
 }
 
-export function HostRow({ host, now }: { host: Host; now: number }) {
+export function HostRow({
+  host,
+  now,
+  org,
+  ws,
+  here,
+}: {
+  host: Host;
+  now: number;
+  org: string;
+  ws: string;
+  /** The Enrollment tab, re-read after a revoke. */
+  here: SafePath;
+}) {
   const t = useTranslations("agents.detail.enrollment");
   const locale = useLocale();
   // The server's instant until this host has an expiry to cross, the browser's
@@ -85,6 +100,24 @@ export function HostRow({ host, now }: { host: Host; now: number }) {
           t("never")
         ) : (
           <Instant at={host.lastSeenAt} />
+        )}
+      </td>
+      <td className={cell}>
+        {/*
+          A revoked host has nothing left to revoke, so the cell is empty
+          rather than carrying a control that would answer `conflict`. An
+          expired one keeps it: expiry is judged from a date and revocation is
+          recorded, and the accountable office asking for the record is the
+          point.
+        */}
+        {state === "revoked" ? null : (
+          <RevokeHost
+            org={org}
+            ws={ws}
+            hostEnrollmentId={host.hostEnrollmentId}
+            hostname={host.hostname}
+            here={here}
+          />
         )}
       </td>
     </tr>

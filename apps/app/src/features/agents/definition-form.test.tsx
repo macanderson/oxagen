@@ -360,7 +360,10 @@ describe("DefinitionForm", () => {
 
   it("shows every stored micro, leaves the file alone when the field is left as drawn, and keeps a sub-cent amount", async () => {
     renderForm(
-      DEFINITION_SOURCE.replace("per_run_micros = 2500000", "per_run_micros = 2500001"),
+      DEFINITION_SOURCE.replace(
+        "per_run_micros = 2500000",
+        "per_run_micros = 2500001",
+      ),
     );
     expect(budgetField()).toHaveValue(2.500001);
     expect(budgetField()).toHaveAttribute("step", "any");

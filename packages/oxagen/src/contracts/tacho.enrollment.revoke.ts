@@ -14,8 +14,14 @@ export const tachoEnrollmentRevoke = registerCapability({
   description:
     "Revoke a Tacho host enrollment: retire its API key and deny every session on the host at its next boundary.",
   mode: "sync",
+  // `app` is a layer, not a surface: CapabilitySurface is api | mcp | agent |
+  // cli, and apps/app reaches the kernel through its own seam
+  // (apps/app/src/server/kernel.ts), which passes surface "app" and never
+  // consults this allowlist. The Enrollment tab of an agent's page revokes a
+  // host through it, so the layer is claimed and bound in
+  // apps/app/capability-ui-map.json; the surface stays the HTTP one.
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   sensitivity: "high",

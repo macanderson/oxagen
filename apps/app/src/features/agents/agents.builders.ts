@@ -9,6 +9,7 @@ import type {
   Toolbelt,
 } from "@/data/contracts/agents";
 import type { MandateList } from "@/data/contracts/mandates";
+import type { SpendBudgets } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
 
@@ -201,12 +202,33 @@ export function incident(
   };
 }
 
+/** The ceilings an agent runs under, as the Budgets tab reads them (get_spend_budget). */
+export function spendBudgets(
+  overrides: Partial<SpendBudgets[number]> = {},
+): SpendBudgets {
+  return [
+    {
+      scope: "workspace",
+      enabled: true,
+      period: "monthly",
+      windowDays: null,
+      limit: { micros: "500000000", currency: "USD" },
+      spent: { micros: "125000000", currency: "USD" },
+      ratio: 0.25,
+      state: "ok",
+      ...overrides,
+    },
+  ];
+}
+
 type AgentReads = {
   list?: Read<AgentPage>;
   get?: Read<AgentDetail>;
   toolbelt?: Read<Toolbelt>;
   incidents?: Read<IncidentPage>;
   mandates?: Read<MandateList>;
+  /** The Budgets tab's read; it is `spend.budgets`, not an agents port method. */
+  budgets?: Read<SpendBudgets>;
 };
 
 /** A DataSource answering the agents reads it was handed; `calls` records each read's arguments. */
@@ -217,6 +239,7 @@ export function agentsSource(reads: AgentReads) {
     toolbelt: [],
     incidents: [],
     mandates: [],
+    budgets: [],
   };
   const refuse = () => Promise.reject(new Error("not an Agents read"));
   const answer =
@@ -258,7 +281,7 @@ export function agentsSource(reads: AgentReads) {
       fleet: refuse,
       drill: refuse,
       waste: refuse,
-      budgets: refuse,
+      budgets: answer(reads.budgets, "budgets"),
       findings: refuse,
       findingEvidence: refuse,
       priceBook: refuse,

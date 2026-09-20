@@ -99,6 +99,77 @@ describe("computeParity — forward gate", () => {
   });
 });
 
+describe("computeParity — also, the second page a capability is bound on", () => {
+  const pageExists = (p: string) =>
+    p === "apps/app/.../real-page.tsx" || p === "apps/app/.../second-page.tsx";
+  const primary = {
+    page: "apps/app/.../real-page.tsx",
+    proof: "apps/app/src/features/x/x.test.tsx",
+  };
+  const gaps = (also: unknown) =>
+    computeParity({
+      caps: CAPS,
+      bindings: { create_api_key: { ...primary, also } },
+      invoked: new Set(),
+      pageExists,
+    }).forward;
+
+  it("passes a binding whose also entry has a page on disk and a proof", () => {
+    expect(
+      gaps([
+        { page: "apps/app/.../second-page.tsx", proof: "apps/app/b.test.tsx" },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("flags an also entry whose page is missing on disk", () => {
+    const [gap] = gaps([
+      { page: "apps/app/.../ghost.tsx", proof: "apps/app/b.test.tsx" },
+    ]);
+    expect(gap).toMatchObject({ capability: "create_api_key" });
+    expect(gap!.reason).toContain("binding.also[0].page missing on disk");
+  });
+
+  it("flags an also entry that carries no runtime proof", () => {
+    const [gap] = gaps([{ page: "apps/app/.../second-page.tsx" }]);
+    expect(gap!.reason).toContain("binding.also[0] has no runtime `proof`");
+  });
+
+  it("reports the index of the failing entry, not the first one", () => {
+    const [gap] = gaps([
+      { page: "apps/app/.../second-page.tsx", proof: "apps/app/b.test.tsx" },
+      { page: "apps/app/.../ghost.tsx", proof: "apps/app/c.test.tsx" },
+    ]);
+    expect(gap!.reason).toContain("binding.also[1]");
+  });
+
+  it("flags a mistyped also rather than skipping it (negative)", () => {
+    expect(gaps("apps/app/.../second-page.tsx")[0]!.reason).toContain(
+      "binding.also is not an array",
+    );
+    expect(gaps(["apps/app/.../second-page.tsx"])[0]!.reason).toContain(
+      "binding.also[0] is not an object",
+    );
+  });
+
+  it("judges the primary binding first: a broken primary hides nothing", () => {
+    const { forward } = computeParity({
+      caps: CAPS,
+      bindings: {
+        create_api_key: {
+          page: "apps/app/.../ghost.tsx",
+          proof: "p",
+          also: [{ page: "apps/app/.../second-page.tsx", proof: "q" }],
+        },
+      },
+      invoked: new Set(),
+      pageExists,
+    });
+    expect(forward).toHaveLength(1);
+    expect(forward[0]!.reason).toContain("binding.page missing on disk");
+  });
+});
+
 describe("computeParity — ratchet baseline", () => {
   const pageExists = () => false; // every binding.page is missing → gaps
 
