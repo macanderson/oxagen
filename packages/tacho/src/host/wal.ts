@@ -260,41 +260,38 @@ export class Wal {
     for (const [session, idems] of wanted) {
       const path = this.bodyFileFor(session);
       if (!existsSync(path)) continue;
-      let contents: string;
+      let reportedInvalid = false;
       try {
-        contents = readFileSync(path, "utf8");
+        for (const line of readLines(path)) {
+          if (line.trim().length === 0) continue;
+          let stored: StoredBody;
+          try {
+            stored = JSON.parse(line) as StoredBody;
+            if (
+              !stored ||
+              typeof stored.event_id_idem !== "string" ||
+              !Number.isSafeInteger(stored.seq) ||
+              typeof stored.content_type !== "string" ||
+              typeof stored.bytes_base64 !== "string"
+            )
+              throw new Error("Invalid body record");
+          } catch {
+            if (!reportedInvalid) {
+              this.bodyFailure(session, "read", { code: "invalid_body_record" });
+              reportedInvalid = true;
+            }
+            continue;
+          }
+          if (stored.seq < minSeq || !idems.has(stored.event_id_idem)) continue;
+          if (found.has(stored.event_id_idem)) continue;
+          found.set(stored.event_id_idem, {
+            event_id_idem: stored.event_id_idem,
+            content_type: stored.content_type,
+            bytes_base64: stored.bytes_base64,
+          });
+        }
       } catch (error) {
         this.bodyFailure(session, "read", error);
-        continue;
-      }
-      let reportedInvalid = false;
-      for (const line of contents.split("\n")) {
-        if (line.trim().length === 0) continue;
-        let stored: StoredBody;
-        try {
-          stored = JSON.parse(line) as StoredBody;
-          if (
-            !stored ||
-            typeof stored.event_id_idem !== "string" ||
-            !Number.isSafeInteger(stored.seq) ||
-            typeof stored.content_type !== "string" ||
-            typeof stored.bytes_base64 !== "string"
-          )
-            throw new Error("Invalid body record");
-        } catch {
-          if (!reportedInvalid) {
-            this.bodyFailure(session, "read", { code: "invalid_body_record" });
-            reportedInvalid = true;
-          }
-          continue;
-        }
-        if (stored.seq < minSeq || !idems.has(stored.event_id_idem)) continue;
-        if (found.has(stored.event_id_idem)) continue;
-        found.set(stored.event_id_idem, {
-          event_id_idem: stored.event_id_idem,
-          content_type: stored.content_type,
-          bytes_base64: stored.bytes_base64,
-        });
       }
     }
     const out: TachoBody[] = [];
