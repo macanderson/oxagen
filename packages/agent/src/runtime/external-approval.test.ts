@@ -93,6 +93,7 @@ vi.mock("@oxagen/database", () => {
       approvalRequests: columns(),
     },
     withTenantDb: async (fn: (tx: unknown) => unknown) => fn(tx),
+    withOrgDb: async (fn: (tx: unknown) => unknown) => fn(tx),
   };
 });
 vi.mock("@oxagen/rules/approval-notify", () => ({
