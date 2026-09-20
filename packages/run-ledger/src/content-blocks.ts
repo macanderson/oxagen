@@ -146,7 +146,7 @@ export interface MessageAssembly {
   wire: WireShape;
 }
 
-export const MESSAGE_ASSEMBLY_VERSION = 1;
+export const MESSAGE_ASSEMBLY_VERSION = 2;
 
 export const MESSAGE_ASSEMBLY_CONTENT_TYPE =
   "application/vnd.oxagen.assembly+json";
@@ -190,12 +190,18 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function str(source: Record<string, unknown> | null, key: string): string | null {
+function str(
+  source: Record<string, unknown> | null,
+  key: string,
+): string | null {
   const value = source?.[key];
   return typeof value === "string" ? value : null;
 }
 
-function num(source: Record<string, unknown> | null, key: string): number | null {
+function num(
+  source: Record<string, unknown> | null,
+  key: string,
+): number | null {
   const value = source?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -248,12 +254,25 @@ function* sseEvents(wire: string): Generator<Record<string, unknown>> {
  * renders its text as it always did.
  */
 export function looksLikeModelStream(wire: string): boolean {
-  const head = wire.slice(0, 4096);
+  const head = responseWire(wire).slice(0, 4096);
   return (
     head.includes("event: content_block_delta") ||
     head.includes("event: message_start") ||
     /^\s*(event|data):/.test(head)
   );
+}
+
+function responseWire(wire: string): string {
+  if (!wire.trimStart().startsWith("{")) return wire;
+  try {
+    const exchange = asRecord(JSON.parse(wire));
+    return typeof exchange?.request === "string" &&
+      typeof exchange.response === "string"
+      ? exchange.response
+      : wire;
+  } catch {
+    return wire;
+  }
 }
 
 function blockKindOf(type: string | null): ContentBlock["kind"] {
@@ -274,7 +293,9 @@ function blockKindOf(type: string | null): ContentBlock["kind"] {
 /** The one-line `summary` a tool result carries: its first line, clamped. */
 function summarize(text: string): string {
   const line = text.trim().split("\n", 1)[0] ?? "";
-  return line.length > SUMMARY_MAX ? `${line.slice(0, SUMMARY_MAX - 1)}…` : line;
+  return line.length > SUMMARY_MAX
+    ? `${line.slice(0, SUMMARY_MAX - 1)}…`
+    : line;
 }
 
 function parseJson(raw: string): { value: BlockJson; raw: boolean } {
@@ -365,10 +386,124 @@ export function assembleModelStream(
     return made;
   };
 
-  for (const event of sseEvents(wire)) {
+  // Responses identifies a part by its output item and content index.
+  const responseIndices = new Map<string, number>();
+  const responseAt = (
+    output: number,
+    part: number,
+    kind: ContentBlock["kind"],
+  ): Draft => {
+    const key = `${output}:${part}`;
+    let index = responseIndices.get(key);
+    if (index === undefined) {
+      index = responseIndices.size;
+      responseIndices.set(key, index);
+    }
+    return at(index, kind);
+  };
+  const responseItem = (
+    item: Record<string, unknown> | null,
+    output: number,
+    closed: boolean,
+  ) => {
+    if (item === null) return;
+    if (item.type === "function_call") {
+      const held = responseAt(output, 0, "tool_use");
+      held.name = str(item, "name") ?? held.name;
+      held.callKey = str(item, "call_id") ?? held.callKey;
+      held.json = str(item, "arguments") ?? held.json;
+      held.closed = closed;
+    } else {
+      const parts = item.type === "reasoning" ? item.summary : item.content;
+      if (!Array.isArray(parts)) return;
+      parts.forEach((part: unknown, index: number) => {
+        const record = asRecord(part);
+        const text = str(record, "text") ?? str(record, "refusal");
+        if (text === null) return;
+        const held = responseAt(
+          output,
+          index,
+          item.type === "reasoning" ? "thinking" : "text",
+        );
+        held.text = text;
+        held.closed = closed;
+      });
+    }
+  };
+
+  for (const event of sseEvents(responseWire(wire))) {
     events += 1;
     const type = str(event, "type");
     switch (type) {
+      case "response.created":
+      case "response.in_progress":
+        sawMessage = true;
+        break;
+      case "response.output_item.added":
+      case "response.output_item.done": {
+        const output = num(event, "output_index");
+        if (output !== null)
+          responseItem(asRecord(event.item), output, type.endsWith(".done"));
+        break;
+      }
+      case "response.output_text.delta":
+      case "response.output_text.done":
+      case "response.refusal.delta":
+      case "response.refusal.done":
+      case "response.reasoning_summary_text.delta":
+      case "response.reasoning_summary_text.done":
+      case "response.function_call_arguments.delta":
+      case "response.function_call_arguments.done": {
+        const output = num(event, "output_index");
+        if (output === null) break;
+        const tool = type.startsWith("response.function_call_arguments.");
+        const thinking = type.startsWith("response.reasoning_summary_text.");
+        const held = responseAt(
+          output,
+          num(event, thinking ? "summary_index" : "content_index") ?? 0,
+          tool ? "tool_use" : thinking ? "thinking" : "text",
+        );
+        if (type.endsWith(".delta")) {
+          if (tool) held.json += str(event, "delta") ?? "";
+          else held.text += str(event, "delta") ?? "";
+        } else {
+          if (tool) held.json = str(event, "arguments") ?? held.json;
+          else
+            held.text =
+              str(event, "text") ?? str(event, "refusal") ?? held.text;
+          held.closed = true;
+        }
+        break;
+      }
+      case "response.completed":
+      case "response.incomplete":
+      case "response.failed": {
+        sawMessage = true;
+        ended = type === "response.completed";
+        const response = asRecord(event.response);
+        stopReason =
+          str(asRecord(response?.incomplete_details), "reason") ??
+          str(response, "status");
+        const reported = asRecord(response?.usage);
+        const cached = num(
+          asRecord(reported?.input_tokens_details),
+          "cached_tokens",
+        );
+        const input = num(reported, "input_tokens");
+        usage.inputTokens = input === null ? null : input - (cached ?? 0);
+        usage.cacheReadTokens = cached;
+        usage.outputTokens = num(reported, "output_tokens");
+        if (Array.isArray(response?.output)) {
+          response.output.forEach((item: unknown, index: number) =>
+            responseItem(
+              asRecord(item),
+              index,
+              ended || asRecord(item)?.status === "completed",
+            ),
+          );
+        }
+        break;
+      }
       case "message_start": {
         sawMessage = true;
         const message = asRecord(event.message);
@@ -453,7 +588,20 @@ export function assembleModelStream(
 
   const held = order
     .slice()
-    .sort((a, b) => a - b)
+    .sort((a, b) => {
+      const keys = [...responseIndices.entries()];
+      const left = keys
+        .find(([, index]) => index === a)?.[0]
+        .split(":")
+        .map(Number);
+      const right = keys
+        .find(([, index]) => index === b)?.[0]
+        .split(":")
+        .map(Number);
+      return left && right
+        ? left[0]! - right[0]! || left[1]! - right[1]!
+        : a - b;
+    })
     .flatMap((index) => {
       const entry = drafts.get(index);
       return entry === undefined ? [] : [entry];

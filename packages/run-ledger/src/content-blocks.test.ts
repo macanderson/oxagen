@@ -29,7 +29,10 @@ const START: [string, unknown] = [
   },
 ];
 
-function textDeltas(index: number, chunks: readonly string[]): Array<[string, unknown]> {
+function textDeltas(
+  index: number,
+  chunks: readonly string[],
+): Array<[string, unknown]> {
   return chunks.map((text) => [
     "content_block_delta",
     { type: "content_block_delta", index, delta: { type: "text_delta", text } },
@@ -37,12 +40,226 @@ function textDeltas(index: number, chunks: readonly string[]): Array<[string, un
 }
 
 describe("assembleModelStream", () => {
+  it("unwraps a retained exchange after a long request", () => {
+    const response = sse(START, ...textDeltas(0, ["answer"]), [
+      "message_stop",
+      { type: "message_stop" },
+    ]);
+    const wire = JSON.stringify({ request: "x".repeat(8000), response });
+    expect(looksLikeModelStream(wire)).toBe(true);
+    expect(assembleModelStream(wire)?.blocks[0]).toMatchObject({
+      kind: "text",
+      text: "answer",
+    });
+    expect(assembleModelStream(wire)?.wire.bytes).toBe(Buffer.byteLength(wire));
+  });
+
+  it("folds Responses text, reasoning, tools, completion, and cached usage", () => {
+    const events = [
+      { type: "response.created", response: {} },
+      {
+        type: "response.output_item.added",
+        output_index: 2,
+        item: {
+          type: "function_call",
+          name: "read",
+          call_id: "call1",
+          arguments: "",
+        },
+      },
+      {
+        type: "response.function_call_arguments.delta",
+        output_index: 2,
+        delta: '{"path":',
+      },
+      {
+        type: "response.function_call_arguments.delta",
+        output_index: 2,
+        delta: '"a"}',
+      },
+      {
+        type: "response.function_call_arguments.done",
+        output_index: 2,
+        arguments: '{"path":"a"}',
+      },
+      {
+        type: "response.output_text.delta",
+        output_index: 1,
+        content_index: 0,
+        delta: "Hello",
+      },
+      {
+        type: "response.output_text.done",
+        output_index: 1,
+        content_index: 0,
+        text: "Hello",
+      },
+      {
+        type: "response.reasoning_summary_text.delta",
+        output_index: 0,
+        summary_index: 0,
+        delta: "Think",
+      },
+      {
+        type: "response.reasoning_summary_text.done",
+        output_index: 0,
+        summary_index: 0,
+        text: "Think",
+      },
+      {
+        type: "response.completed",
+        response: {
+          status: "completed",
+          usage: {
+            input_tokens: 100,
+            input_tokens_details: { cached_tokens: 60 },
+            output_tokens: 20,
+          },
+        },
+      },
+    ];
+    const assembly = assembleModelStream(
+      sse(...events.map((event): [string, unknown] => [event.type, event])),
+    );
+    expect(assembly?.blocks).toMatchObject([
+      { kind: "thinking", text: "Think", partial: false },
+      { kind: "text", text: "Hello", partial: false },
+      {
+        kind: "tool_use",
+        name: "read",
+        callKey: "call1",
+        input: { path: "a" },
+        partial: false,
+      },
+    ]);
+    expect(assembly?.usage).toEqual({
+      inputTokens: 40,
+      cacheReadTokens: 60,
+      cacheWriteTokens: null,
+      outputTokens: 20,
+    });
+    expect(assembly?.stopReason).toBe("completed");
+    expect(assembly?.partial).toBe(false);
+  });
+
+  it("recovers completed output snapshots without duplicating deltas", () => {
+    const assembly = assembleModelStream(
+      sse(
+        [
+          "response.output_text.delta",
+          {
+            type: "response.output_text.delta",
+            output_index: 0,
+            content_index: 0,
+            delta: "Hi",
+          },
+        ],
+        [
+          "response.completed",
+          {
+            type: "response.completed",
+            response: {
+              status: "completed",
+              output: [
+                {
+                  type: "message",
+                  content: [{ type: "output_text", text: "Hi there" }],
+                },
+                {
+                  type: "function_call",
+                  name: "read",
+                  call_id: "c",
+                  arguments: "{}",
+                },
+              ],
+            },
+          },
+        ],
+      ),
+    );
+    expect(assembly?.blocks).toMatchObject([
+      { text: "Hi there", partial: false },
+      { name: "read", input: {}, partial: false },
+    ]);
+  });
+
+  it("retains a refusal when the response fails", () => {
+    const assembly = assembleModelStream(
+      sse(
+        [
+          "response.refusal.delta",
+          {
+            type: "response.refusal.delta",
+            output_index: 0,
+            content_index: 0,
+            delta: "Cannot",
+          },
+        ],
+        [
+          "response.refusal.done",
+          {
+            type: "response.refusal.done",
+            output_index: 0,
+            content_index: 0,
+            refusal: "Cannot answer.",
+          },
+        ],
+        [
+          "response.failed",
+          { type: "response.failed", response: { status: "failed" } },
+        ],
+      ),
+    );
+    expect(assembly?.blocks[0]).toMatchObject({
+      kind: "text",
+      text: "Cannot answer.",
+      partial: false,
+    });
+    expect(assembly?.partial).toBe(true);
+    expect(assembly?.stopReason).toBe("failed");
+  });
+
+  it("keeps interrupted Responses calls partial", () => {
+    const assembly = assembleModelStream(
+      sse(
+        [
+          "response.function_call_arguments.delta",
+          {
+            type: "response.function_call_arguments.delta",
+            output_index: 0,
+            delta: '{"path":',
+          },
+        ],
+        [
+          "response.incomplete",
+          {
+            type: "response.incomplete",
+            response: {
+              status: "incomplete",
+              incomplete_details: { reason: "max_output_tokens" },
+            },
+          },
+        ],
+      ),
+    );
+    expect(assembly?.blocks[0]).toMatchObject({
+      inputRaw: true,
+      partial: true,
+    });
+    expect(assembly?.partial).toBe(true);
+    expect(assembly?.stopReason).toBe("max_output_tokens");
+  });
+
   it("folds text deltas into one block and keeps the reported usage split", () => {
     const wire = sse(
       START,
       [
         "content_block_start",
-        { type: "content_block_start", index: 0, content_block: { type: "text" } },
+        {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "text" },
+        },
       ],
       ...textDeltas(0, ["I'll write ", "the filing ", "plan."]),
       ["content_block_stop", { type: "content_block_stop", index: 0 }],
@@ -57,7 +274,10 @@ describe("assembleModelStream", () => {
       ["message_stop", { type: "message_stop" }],
     );
 
-    const assembly = assembleModelStream(wire, { ttftMs: 310, durationMs: 4200 });
+    const assembly = assembleModelStream(wire, {
+      ttftMs: 310,
+      durationMs: 4200,
+    });
 
     expect(assembly).not.toBeNull();
     expect(assembly?.blocks).toHaveLength(1);
@@ -86,11 +306,19 @@ describe("assembleModelStream", () => {
       START,
       [
         "content_block_start",
-        { type: "content_block_start", index: 0, content_block: { type: "text" } },
+        {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "text" },
+        },
       ],
       [
         "content_block_start",
-        { type: "content_block_start", index: 1, content_block: { type: "text" } },
+        {
+          type: "content_block_start",
+          index: 1,
+          content_block: { type: "text" },
+        },
       ],
       ...textDeltas(1, ["second"]),
       ...textDeltas(0, ["first"]),
@@ -124,7 +352,10 @@ describe("assembleModelStream", () => {
         {
           type: "content_block_delta",
           index: 0,
-          delta: { type: "input_json_delta", partial_json: '{"file_path":"/a/' },
+          delta: {
+            type: "input_json_delta",
+            partial_json: '{"file_path":"/a/',
+          },
         },
       ],
       [
@@ -132,7 +363,10 @@ describe("assembleModelStream", () => {
         {
           type: "content_block_delta",
           index: 0,
-          delta: { type: "input_json_delta", partial_json: 'b.ts","content":"x"}' },
+          delta: {
+            type: "input_json_delta",
+            partial_json: 'b.ts","content":"x"}',
+          },
         },
       ],
       ["content_block_stop", { type: "content_block_stop", index: 0 }],
@@ -184,7 +418,11 @@ describe("assembleModelStream", () => {
       START,
       [
         "content_block_start",
-        { type: "content_block_start", index: 0, content_block: { type: "text" } },
+        {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "text" },
+        },
       ],
       ...textDeltas(0, ["half a senten"]),
     );
@@ -206,7 +444,11 @@ describe("assembleModelStream", () => {
       START,
       [
         "content_block_start",
-        { type: "content_block_start", index: 0, content_block: { type: "text" } },
+        {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "text" },
+        },
       ],
       ...textDeltas(0, ["kept"]),
     )}event: content_block_delta\ndata: {"type":"content_bl`;
@@ -222,7 +464,11 @@ describe("assembleModelStream", () => {
       START,
       [
         "content_block_start",
-        { type: "content_block_start", index: 0, content_block: { type: "thinking" } },
+        {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "thinking" },
+        },
       ],
       [
         "content_block_delta",
@@ -235,13 +481,21 @@ describe("assembleModelStream", () => {
       ["content_block_stop", { type: "content_block_stop", index: 0 }],
       [
         "content_block_start",
-        { type: "content_block_start", index: 1, content_block: { type: "text" } },
+        {
+          type: "content_block_start",
+          index: 1,
+          content_block: { type: "text" },
+        },
       ],
       ...textDeltas(1, ["y".repeat(100)]),
       ["content_block_stop", { type: "content_block_stop", index: 1 }],
       [
         "message_delta",
-        { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { output_tokens: 100 } },
+        {
+          type: "message_delta",
+          delta: { stop_reason: "tool_use" },
+          usage: { output_tokens: 100 },
+        },
       ],
       ["message_stop", { type: "message_stop" }],
     );
@@ -260,11 +514,16 @@ describe("assembleModelStream", () => {
   });
 
   it("answers null for SSE framing that carries no message", () => {
-    expect(assembleModelStream("event: ping\ndata: {\"type\":\"ping\"}\n\n")).toBeNull();
+    expect(
+      assembleModelStream('event: ping\ndata: {"type":"ping"}\n\n'),
+    ).toBeNull();
   });
 
   it("round-trips through the stored encoding and refuses another version", () => {
-    const wire = sse(START, ...textDeltas(0, ["hi"]), ["message_stop", { type: "message_stop" }]);
+    const wire = sse(START, ...textDeltas(0, ["hi"]), [
+      "message_stop",
+      { type: "message_stop" },
+    ]);
     const assembly = assembleModelStream(wire);
     expect(assembly).not.toBeNull();
 
@@ -281,7 +540,10 @@ describe("assembleModelStream", () => {
   });
 
   it("leaves the recorded bytes alone: the fold reads, it never rewrites", () => {
-    const wire = sse(START, ...textDeltas(0, ["a"]), ["message_stop", { type: "message_stop" }]);
+    const wire = sse(START, ...textDeltas(0, ["a"]), [
+      "message_stop",
+      { type: "message_stop" },
+    ]);
     const before = Buffer.from(wire, "utf8").toString("base64");
 
     assembleModelStream(wire);
