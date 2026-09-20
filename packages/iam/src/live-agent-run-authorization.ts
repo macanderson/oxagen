@@ -27,7 +27,7 @@
 // the same answer.
 
 import { schema, type Tx } from "@oxagen/database";
-import { withRepeatableReadTenantDb } from "@oxagen/database/tenant";
+import { withOrgDb, withRepeatableReadTenantDb } from "@oxagen/database/tenant";
 import { and, eq, isNull, or } from "drizzle-orm";
 import {
   agentRunLiveCacheKey,
@@ -431,7 +431,10 @@ export const persistAuthorizationDecision: PersistAuthorizationDecisionFn = (
     decided_at: decidedAt.toISOString(),
   });
 
-  return withRepeatableReadTenantDb(async (tx) => {
+  // Org decisions carry no workspace and must use the explicit org write seam.
+  const writeDecision =
+    args.workspaceId === null ? withOrgDb : withRepeatableReadTenantDb;
+  return writeDecision(async (tx) => {
     const [row] = await tx
       .insert(schema.authorizationDecisions)
       .values({
