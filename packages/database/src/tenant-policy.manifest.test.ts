@@ -199,14 +199,21 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 112: both sides of this merge added a table. `tacho.gateway_chains`
-    // (#3221) is the control plane's record of each authorised
-    // local-MCP-gateway call and the daemon chain it was serving; it landed
-    // unregistered on its first push, because the migration installs standard
-    // tenant RLS and the table carries both org columns while the manifest is
-    // where that is DECLARED — so it read as unscoped and would have failed
-    // `rls-integration` once the migration applied, and been left out of every
-    // generated RLS migration after.
+    // 113: `org.assistant_model_keys` (ADR-131) is the OpenRouter key
+    // Oxagen mints for one organisation at signup. One row per
+    // organisation, carrying the enveloped key and the vendor's key hash,
+    // with org_id and no workspace_id, so org_only. It is read and written
+    // through withTenantDb and nothing resolves through it, which makes
+    // RLS the filter here, exactly as for org.model_credentials beside it.
+    //
+    // Was 112 as of both sides of that merge adding a table.
+    // `tacho.gateway_chains` (#3221) is the control plane's record of each
+    // authorised local-MCP-gateway call and the daemon chain it was serving;
+    // it landed unregistered on its first push, because the migration
+    // installs standard tenant RLS and the table carries both org columns
+    // while the manifest is where that is DECLARED — so it read as unscoped
+    // and would have failed `rls-integration` once the migration applied, and
+    // been left out of every generated RLS migration after.
     //
     // `billing.gau_reversals` (ADR-085) is the record of a refunded or disputed
     // GAU block purchase.
@@ -232,7 +239,7 @@ describe("tenant policy manifest", () => {
     // said 91, so it had already drifted from the number it was describing — a
     // count nobody can check against its own comment is a pin with no ratchet
     // behind it.
-    expect(POLICY_MANIFEST.length).toBe(112);
+    expect(POLICY_MANIFEST.length).toBe(113);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {
