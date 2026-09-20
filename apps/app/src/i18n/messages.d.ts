@@ -1599,21 +1599,80 @@ type Messages = {
         title: string;
         oldest: string;
         none: string;
+        more: string;
+        moreBasis: string;
       };
     };
     approvals: {
       title: string;
       parked: string;
+      more: string;
       empty: string;
       emptyDetail: string;
-      agent: string;
-      requester: string;
       timesOut: string;
       notRecorded: string;
       openRun: string;
       mandateUnread: string;
       mandatePeriodBasis: string;
       mandatePerCallOnly: string;
+      chain: {
+        title: string;
+        who: string;
+        agent: string;
+        action: string;
+        rule: string;
+        underMandate: string;
+      };
+      eligibility: {
+        title: string;
+        none: string;
+        ok: string;
+        blocked: string;
+        floor: string;
+        recorded: string;
+        reasons: {
+          tool_not_declared: string;
+          tainted_input: string;
+          critical_hazard: string;
+          irreversible_consequence: string;
+          measure_above_ceiling: string;
+          measure_unreadable: string;
+          target_not_allowed: string;
+          target_unreadable: string;
+          no_standing_approval: string;
+          outside_business_hours: string;
+          consequences_changed: string;
+        };
+        unknownReason: string;
+      };
+      decide: {
+        open: string;
+        title: string;
+        body: string;
+        note: string;
+        noteHint: string;
+        approve: string;
+        deny: string;
+        approving: string;
+        denying: string;
+        checking: string;
+        settled: string;
+        eligibilityUnread: string;
+        failure: {
+          noteRequired: string;
+          noPrincipal: string;
+          orgRoleRequired: string;
+          noRoleCoversAllTags: string;
+          notAnApprover: string;
+          agentCannotResolveOwnMandate: string;
+          approvalExpired: string;
+          invalid: string;
+          pendingApproval: string;
+          exhausted: string;
+          refused: string;
+          unavailable: string;
+        };
+      };
     };
     runs: {
       title: string;

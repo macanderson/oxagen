@@ -1113,7 +1113,7 @@ describe("approvals on the run", () => {
     const { calls } = await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok([]),
+        approvals: ok({ items: [], more: false }),
         resolvedApprovals: ok([]),
       },
       { tab: "approvals" },
@@ -1127,7 +1127,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok([]),
+        approvals: ok({ items: [], more: false }),
         resolvedApprovals: ok([]),
       },
       { tab: "approvals" },
@@ -1140,18 +1140,23 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok([
-          {
-            id: "apr_1",
-            runId: "tse_7k2m9q",
-            tool: "create_release",
-            agentKey: "acme.core.release-bot",
-            requester: "usr_marcusbell",
-            mandateId: null,
-            createdAt: new Date(NOW - 60_000).toISOString(),
-            expiresAt: new Date(NOW + 3_600_000).toISOString(),
-          },
-        ]),
+        approvals: ok({
+          items: [
+            {
+              id: "apr_1",
+              runId: "tse_7k2m9q",
+              tool: "create_release",
+              agentKey: "acme.core.release-bot",
+              requester: "usr_marcusbell",
+              mandateId: null,
+              rule: null,
+              autoEligibility: null,
+              createdAt: new Date(NOW - 60_000).toISOString(),
+              expiresAt: new Date(NOW + 3_600_000).toISOString(),
+            },
+          ],
+          more: false,
+        }),
         resolvedApprovals: ok([]),
       },
       { tab: "approvals" },
@@ -1166,7 +1171,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok([]),
+        approvals: ok({ items: [], more: false }),
         resolvedApprovals: ok([
           {
             id: "apr_2",
@@ -1195,7 +1200,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok([]),
+        approvals: ok({ items: [], more: false }),
         resolvedApprovals: DOWN,
       },
       { tab: "approvals" },
