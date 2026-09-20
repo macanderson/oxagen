@@ -11,6 +11,8 @@ import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
+import { tachoEnrollmentRevoke } from "@oxagen/oxagen/contracts/tacho.enrollment.revoke";
+import { tachoEnrollmentTokenCreate } from "@oxagen/oxagen/contracts/tacho.enrollment_token.create";
 import {
   consequenceTagsOf,
   listOf,
@@ -64,6 +66,81 @@ export async function retireAgent(
   const result = await kernelWrite(ctx, agentRetire, { agentId });
   return result.ok
     ? { ok: true, value: { retiredAt: result.value.retiredAt } }
+    : result;
+}
+
+// ── Enrollment: the hosts an agent runs on ──────────────────────────────────
+// Both writes are the Enrollment tab's (#2953). `revoke_tacho_enrollment` and
+// `create_enrollment_token` are `noBillingGate` and admit an org Owner or
+// Admin in their handlers, so a Member's click comes back `denied` with
+// nothing written, named in the dialog.
+
+/**
+ * Revokes one host enrollment: its API key is soft-deleted, the row becomes
+ * `revoked`, and a revoke command is queued so a collector mid-poll learns now
+ * rather than at its next bundle refresh.
+ *
+ * The reason is recorded on the row and on the command. A blank box sends no
+ * reason at all rather than an empty string, because the contract's input is
+ * `.strict()` with `reason` optional and an empty string is a recorded reason
+ * that says nothing.
+ */
+export async function revokeHostEnrollment(
+  org: string,
+  ws: string,
+  hostEnrollmentId: string,
+  reason: string,
+): Promise<ActionResult<{ revokedAt: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const trimmed = reason.trim();
+  const result = await kernelWrite(ctx, tachoEnrollmentRevoke, {
+    hostEnrollmentId,
+    ...(trimmed === "" ? {} : { reason: trimmed }),
+  });
+  return result.ok
+    ? { ok: true, value: { revokedAt: result.value.revokedAt } }
+    : result;
+}
+
+/** A minted enrollment token. Shown once; a token that expires unused is replaced by minting another. */
+export type EnrollmentToken = {
+  token: string;
+  expiresAt: string;
+  /** `oxagen agent enroll --token …`, the scripted path (spec §14.1). */
+  enrollCommand: string;
+};
+
+/**
+ * Mints the single-use token a machine presents to `enroll_host` to become one
+ * of this agent's hosts.
+ *
+ * The register flow mints the same token from `features/onboarding/actions.ts`
+ * through the same contract and the same seam. The two are not one function
+ * because a lane may not import another lane's internals (the eslint rule on
+ * feature paths) and the onboarding barrel exports server components, which a
+ * client component here must not pull into its bundle. What matters is that
+ * neither mints differently: both call `create_enrollment_token` with the
+ * agent id and show what it answered, and this one drops the `agentKey` the
+ * register flow's SDK panel needs and the agent page does not.
+ */
+export async function issueAgentEnrollmentToken(
+  org: string,
+  ws: string,
+  agentId: string,
+): Promise<ActionResult<EnrollmentToken>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, tachoEnrollmentTokenCreate, {
+    agentId,
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          token: result.value.token,
+          expiresAt: result.value.expiresAt,
+          enrollCommand: result.value.enrollCommand,
+        },
+      }
     : result;
 }
 
