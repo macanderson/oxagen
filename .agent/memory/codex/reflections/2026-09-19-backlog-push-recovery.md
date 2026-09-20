@@ -6,7 +6,7 @@ Fix the P0/P1 defect backlog in isolated branches cut from freshly fetched main.
 
 ### What I actually did
 
-Prepared multiple reviewed fix branches. A new RLS worktree still tracked origin/main with push.default=upstream. I failed to verify the destination and pushed merge ec637f8e4 to main. I cancelled its queued deployment pipeline and prepared recovery PR3543, whose six restored paths match reviewed main394ee6ae2 exactly. No production RLS migration was applied. Recovery CI and merge were still pending when this note was written.
+Prepared multiple reviewed fix branches. A new RLS worktree still tracked origin/main with push.default=upstream. I failed to verify the destination and pushed merge ec637f8e4 to main. I cancelled its queued deployment pipeline and prepared recovery PR3543, whose six restored paths match reviewed main394ee6ae2 exactly. No production RLS migration was applied. Recovery PR3543 merged as 276b92d999 on 2026-09-20 at 03:32 UTC. Its latest CI was still pending when the merge was observed.
 
 ### Quality of my decisions
 
@@ -25,8 +25,8 @@ A worktree branch created from origin/main inherited that upstream. The reposito
 
 ### Risks remaining
 
-The backlog and recovery are not complete. Pending CI, live verification, and maintainer decisions remain recorded in the individual PRs and backlog evidence. This note does not claim the recovery merged.
+The recovery merged. The backlog is not complete. Pending CI, live verification, and maintainer decisions remain recorded in the individual PRs and backlog evidence.
 
 ### Confidence
 
-High in the exact recovery diff and cancellation evidence. Incomplete in recovery completion and the overall backlog.
+High in the exact recovery diff and cancellation evidence. Incomplete in CI verification and the overall backlog.
