@@ -162,6 +162,7 @@ vi.mock("./kill-switch-gate", async (importOriginal) => {
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: vi.fn(async () => ({ ok: true })),
+  emitExternalCapabilityOutcome: vi.fn(),
   authorizeExternalCapability: vi.fn(async () => ({
     allowed: true,
     outcome: "allow",
@@ -326,7 +327,11 @@ import {
 import { decideCapabilityForBelt } from "./toolbelt";
 import type { ActiveEmergencyDeny } from "@oxagen/iam";
 import type { RegistryCapability } from "../registry-loader";
-import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
+import {
+  invoke,
+  authorizeExternalCapability,
+  emitExternalCapabilityOutcome,
+} from "@oxagen/oxagen/kernel";
 import {
   createAgentRunResolution,
   resolveAgentRunCapability,
@@ -359,6 +364,7 @@ describe("materializeTools", () => {
     dbMocks.rowsByTable.clear();
     vi.mocked(invoke).mockClear();
     vi.mocked(authorizeExternalCapability).mockClear();
+    vi.mocked(emitExternalCapabilityOutcome).mockClear();
     vi.mocked(authorizeExternalCapability).mockResolvedValue({
       allowed: true,
       outcome: "allow",
@@ -826,6 +832,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
 
   beforeEach(() => {
     vi.mocked(authorizeExternalCapability).mockClear();
+    vi.mocked(emitExternalCapabilityOutcome).mockClear();
     vi.mocked(authorizeExternalCapability).mockResolvedValue({
       allowed: true,
       outcome: "allow",
@@ -867,9 +874,20 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       `mcp.${MCP_SERVER.id}.list_pull_requests`,
       CTX,
       "allow",
+      { audit: false },
     );
-    // Transport must have run on allow.
+    // Repeated preflights produce one final invocation event.
     expect(fakeExecute).toHaveBeenCalledTimes(1);
+    expect(authorizeExternalCapability).toHaveBeenCalledTimes(2);
+    expect(externalRulesMock).toHaveBeenCalledTimes(3);
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledOnce();
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+      CTX,
+      "allow",
+      expect.any(Number),
+      undefined,
+    );
   });
 
   it.each([1, 2, 3])(
@@ -926,6 +944,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     });
     expect(onApprovalRequired).toHaveBeenCalledOnce();
     expect(fakeExecute).not.toHaveBeenCalled();
+    expect(emitExternalCapabilityOutcome).not.toHaveBeenCalled();
   });
 
   it("refuses IAM revoked during an external approval or consent wait", async () => {
@@ -949,6 +968,62 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     expect(await t.execute({})).toContain("revoked_during_wait");
     expect(fakeExecute).not.toHaveBeenCalled();
     expect(authorizeExternalCapability).toHaveBeenCalledTimes(2);
+    expect(mocks.insertToolInvocation).toHaveBeenCalledOnce();
+    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", error_class: "IamDenied" }),
+    );
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledOnce();
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+      CTX,
+      "deny",
+      expect.any(Number),
+      undefined,
+    );
+  });
+
+  it("records one error outcome when the external transport throws", async () => {
+    const error = new Error("transport failed");
+    fakeExecute.mockRejectedValueOnce(error);
+    const { tools } = await materializeTools(CTX);
+    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as unknown as {
+      execute: (input: unknown) => Promise<unknown>;
+    };
+    await expect(t.execute({})).rejects.toBe(error);
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledOnce();
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledWith(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+      CTX,
+      "error",
+      expect.any(Number),
+      error,
+    );
+  });
+
+  it("keeps final IAM denial fail-closed when telemetry insertion fails", async () => {
+    vi.mocked(authorizeExternalCapability)
+      .mockResolvedValueOnce({
+        allowed: true,
+        outcome: "allow",
+        reason: null,
+        decision: null,
+      })
+      .mockResolvedValueOnce({
+        allowed: false,
+        outcome: "deny",
+        reason: "revoked",
+        decision: null,
+      });
+    mocks.insertToolInvocation.mockRejectedValueOnce(
+      new Error("telemetry unavailable"),
+    );
+    const { tools } = await materializeTools(CTX);
+    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as unknown as {
+      execute: (input: unknown) => Promise<unknown>;
+    };
+    expect(await t.execute({})).toContain("revoked");
+    expect(fakeExecute).not.toHaveBeenCalled();
+    expect(emitExternalCapabilityOutcome).toHaveBeenCalledTimes(1);
   });
 
   it("runs the IAM gate inside the turn's tenant scope (regression: fetchAuthz needs withTenantDb)", async () => {
@@ -1188,6 +1263,7 @@ describe("materializeTools — kill switches (spec §6.11)", () => {
     killSwitchMocks.check.mockReset().mockResolvedValue(null);
     vi.mocked(invoke).mockClear();
     vi.mocked(authorizeExternalCapability).mockClear();
+    vi.mocked(emitExternalCapabilityOutcome).mockClear();
     fakeExecute.mockClear();
     mocks.insertToolInvocation.mockClear();
     mocks.insertToolInvocation.mockResolvedValue(undefined);
@@ -1373,6 +1449,7 @@ describe("materializeTools — first-use consent gate", () => {
 
   beforeEach(() => {
     vi.mocked(authorizeExternalCapability).mockClear();
+    vi.mocked(emitExternalCapabilityOutcome).mockClear();
     vi.mocked(authorizeExternalCapability).mockResolvedValue({
       allowed: true,
       outcome: "allow",
@@ -2096,6 +2173,7 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
 
   beforeEach(() => {
     vi.mocked(authorizeExternalCapability).mockClear();
+    vi.mocked(emitExternalCapabilityOutcome).mockClear();
     vi.mocked(authorizeExternalCapability).mockResolvedValue({
       allowed: true,
       outcome: "allow",

@@ -16,11 +16,16 @@ import {
 } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "../types";
 
-const mocks = vi.hoisted(() => ({ create: vi.fn(), wait: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  create: vi.fn(),
+  wait: vi.fn(),
+  external: vi.fn(),
+}));
 vi.mock("./approval", () => ({
   createApprovalRequest: mocks.create,
   waitForApproval: mocks.wait,
 }));
+vi.mock("./external-approval", () => ({ externalApproval: mocks.external }));
 import { externalDecisionCheck } from "./external-tool-rules";
 
 const ctx: CapabilityContext = {
@@ -186,6 +191,117 @@ describe("external decision admission", () => {
     expect(mocks.create).toHaveBeenCalledOnce();
     expect(mocks.wait).not.toHaveBeenCalled();
   });
+  it("recovers parked proof in a rebuilt checker and consumes it once", async () => {
+    rule("require_approval");
+    const parked = new Error("parked");
+    const expiresAt = new Date(Date.now() + 60_000);
+    mocks.external.mockResolvedValue({
+      approvalId: "approval-1",
+      expiresAt,
+      status: "pending",
+    });
+    const event = vi.fn(() => {
+      throw parked;
+    });
+    const rebuild = () =>
+      externalDecisionCheck({
+        name,
+        input: { amount: 5 },
+        ctx,
+        approvalMode: "park",
+        onApprovalRequired: event,
+      });
+    await expect(rebuild()()).rejects.toBe(parked);
+    const originalDigest = mocks.external.mock.calls[0]?.[0].approvalDigest;
+    mocks.external.mockResolvedValueOnce({
+      approvalId: "approval-1",
+      expiresAt,
+      status: "approved",
+    });
+    const retry = rebuild();
+    await retry();
+    await retry({ interactive: false });
+    expect(mocks.external.mock.calls[1]?.[0].approvalDigest).toBe(
+      originalDigest,
+    );
+    expect(mocks.external).toHaveBeenCalledTimes(2);
+    expect(event).toHaveBeenCalledOnce();
+    expect(mocks.wait).not.toHaveBeenCalled();
+    mocks.external.mockResolvedValue({
+      approvalId: "approval-1",
+      expiresAt,
+      status: "refused",
+    });
+    await expect(rebuild()()).rejects.toMatchObject({
+      code: "decision_rule_approval_required",
+    });
+  });
+  it("requires a different persisted proof after the input or rules change", async () => {
+    rule("require_approval");
+    const parked = new Error("parked");
+    mocks.external.mockResolvedValue({
+      approvalId: "approval-1",
+      expiresAt: new Date(Date.now() + 60_000),
+      status: "pending",
+    });
+    const input = { amount: 5 };
+    const retry = () =>
+      externalDecisionCheck({
+        name,
+        input,
+        ctx,
+        approvalMode: "park",
+        onApprovalRequired: () => {
+          throw parked;
+        },
+      })();
+    await expect(retry()).rejects.toBe(parked);
+    input.amount = 10;
+    await expect(retry()).rejects.toBe(parked);
+    rules.rules[0]!.description = "Changed rule";
+    await expect(retry()).rejects.toBe(parked);
+    expect(
+      new Set(mocks.external.mock.calls.map(([arg]) => arg.approvalDigest))
+        .size,
+    ).toBe(3);
+  });
+  it("refuses a parked proof that expires during its claim", async () => {
+    rule("require_approval");
+    mocks.external.mockResolvedValue({
+      approvalId: "approval-1",
+      expiresAt: new Date(Date.now() - 1),
+      status: "approved",
+    });
+    await expect(
+      externalDecisionCheck({
+        name,
+        input: {},
+        ctx,
+        approvalMode: "park",
+        onApprovalRequired: vi.fn(),
+      })(),
+    ).rejects.toMatchObject({ code: "decision_rule_approval_required" });
+  });
+  it("rechecks current denial after claiming parked proof", async () => {
+    rule("require_approval");
+    mocks.external.mockImplementation(async () => {
+      rule("deny");
+      return {
+        approvalId: "approval-1",
+        expiresAt: new Date(Date.now() + 60_000),
+        status: "approved",
+      };
+    });
+    await expect(
+      externalDecisionCheck({
+        name,
+        input: {},
+        ctx,
+        approvalMode: "park",
+        onApprovalRequired: vi.fn(),
+      })(),
+    ).rejects.toMatchObject({ code: "decision_rule_denied" });
+  });
   it("reports infrastructure failures as security errors", async () => {
     const emit = vi.fn();
     setSecurityEventEmitter(emit);
@@ -266,29 +382,17 @@ describe("external decision admission", () => {
       }),
     ).rejects.toMatchObject({ code: "external_tool_authority_unavailable" });
   });
-  it("emits allow and deny security events with tenant and tool identity", async () => {
+  it("does not emit invocation outcomes for repeated rule preflights", async () => {
     const emit = vi.fn();
     setSecurityEventEmitter(emit);
-    await check()();
+    const admit = check();
+    await admit();
+    await admit();
     rule("deny");
     await expect(check()()).rejects.toMatchObject({
       code: "decision_rule_denied",
     });
-    expect(emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        capability: name,
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        outcome: "allow",
-      }),
-    );
-    expect(emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        capability: name,
-        outcome: "deny",
-        errorCode: "decision_rule_denied",
-      }),
-    );
+    expect(emit).not.toHaveBeenCalled();
   });
   it("does not retain an expired approval across a later consent wait", async () => {
     vi.useFakeTimers();

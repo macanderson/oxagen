@@ -448,6 +448,36 @@ describe("authorizeExternalCapability", () => {
     });
   });
 
+  it("can defer IAM audit emission to the final external invocation", async () => {
+    const emit = vi.fn();
+    setSecurityEventEmitter(emit);
+    setKernelIAMRuntime(allowFn, true);
+    expect(
+      (
+        await authorizeExternalCapability("mcp.github.list", extCtx, "deny", {
+          audit: false,
+        })
+      ).allowed,
+    ).toBe(true);
+    setKernelIAMRuntime(denyFn, true);
+    expect(
+      (
+        await authorizeExternalCapability("mcp.github.list", extCtx, "deny", {
+          audit: false,
+        })
+      ).allowed,
+    ).toBe(false);
+    setKernelIAMRuntime(throwFn, true);
+    expect(
+      (
+        await authorizeExternalCapability("mcp.github.list", extCtx, "deny", {
+          audit: false,
+        })
+      ).allowed,
+    ).toBe(false);
+    expect(emit).not.toHaveBeenCalled();
+  });
+
   it("blocks (fail-closed) and emits a deny event when the resolver denies AND enforcement is on", async () => {
     const events: KernelSecurityEvent[] = [];
     setSecurityEventEmitter((e) => events.push(e));
