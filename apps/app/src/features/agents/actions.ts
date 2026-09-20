@@ -215,6 +215,10 @@ export async function revokeAgentRole(
         value: {
           roleName: result.value.roleName,
           revoked: result.value.revoked,
+        },
+      }
+    : result;
+}
 
 // ── Enrollment: the hosts an agent runs on ──────────────────────────────────
 // Both writes are the Enrollment tab's (#2953). `revoke_tacho_enrollment` and
