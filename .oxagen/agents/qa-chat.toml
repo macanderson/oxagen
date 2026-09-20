@@ -1,0 +1,4 @@
+schema = "agent-definition/v0.1"
+slug = "qa-chat"
+name = "Coding Agent"
+description = "The default coding agent used by software developers on the product team. This identity is optimized for software engineering tasks. We recommend using the test engineer when writing unit tests."
