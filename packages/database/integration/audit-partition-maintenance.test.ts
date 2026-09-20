@@ -19,7 +19,8 @@ describe("audit partition maintenance", () => {
       ORDER BY conrelid::regclass::text
     `;
     expect(checks).toHaveLength(2);
-    expect(checks.every((check) => check.convalidated === false)).toBe(true);
+    // The approval-rule migration validates the event-type check before partitioning.
+    expect(checks.map((check) => check.convalidated)).toEqual([true, true]);
     expect(checks[0]?.definition).toBe(checks[1]?.definition);
 
     const [definition] = await sql`
