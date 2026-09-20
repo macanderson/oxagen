@@ -18,6 +18,8 @@ Every `migrate()` call takes a Postgres transaction advisory lock before any Cli
 
 `DATABASE_URL` is the coordination database and is required. Every operator targeting the same ClickHouse deployment must use the same coordination database. Missing credentials or a failed lock stops the migration before ClickHouse DDL. The dedicated connection holds only the advisory lock and closes after success or failure. It accesses no tenant tables. The telemetry package uses the Postgres driver directly to avoid a dependency cycle through `@oxagen/database`.
 
+The manual production store workflow reads `/oxagen/production/DATABASE_URL` and opens an SSM remote-host tunnel through the app node to that same Aurora database when applying ClickHouse migrations. It retains the database hostname for TLS verification and changes only the runner-side port. The deploy role in `infra/stacks-new/ci-deploy` grants the remote-host port-forwarding document; the `infra` workflow must apply that grant before running production store migrations. Read-only dispatches and Neo4j-only applies do not need this coordinator tunnel.
+
 ## Consequences
 
 ClickHouse-only migration invocations now also need Postgres. A Postgres outage blocks migration rather than allowing concurrent DDL. The lock serializes different ClickHouse targets sharing the coordinator, which trades migration throughput for a stable coordination identity.
