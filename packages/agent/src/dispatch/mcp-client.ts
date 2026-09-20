@@ -14,6 +14,15 @@ const logger = pino({
   base: { app: "agent.mcp-client" },
 });
 
+export class McpToolExecutionError extends Error {
+  readonly code = "mcp_tool_execution_failed";
+
+  constructor(readonly content: unknown) {
+    super("The external MCP tool reported a failure.");
+    this.name = "McpToolExecutionError";
+  }
+}
+
 export interface McpConnectArgs {
   endpointUrl: string;
   authStrategy: "none" | "bearer" | "header";
@@ -192,6 +201,7 @@ export function materializePinnedMcpTools(
         name: d.name,
         arguments: input as Record<string, unknown>,
       });
+      if (res.isError === true) throw new McpToolExecutionError(res.content);
       return res.content;
     },
   }));
@@ -219,6 +229,7 @@ export async function materializeMcpTools(
           name: t.name,
           arguments: input as Record<string, unknown>,
         });
+        if (res.isError === true) throw new McpToolExecutionError(res.content);
         return res.content;
       },
     });

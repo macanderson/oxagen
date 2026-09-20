@@ -79,6 +79,7 @@ import {
   closeStdioMcpTransports,
   listMcpTools,
   materializeMcpTools,
+  materializePinnedMcpTools,
   healthcheck,
 } from "./mcp-client";
 
@@ -138,6 +139,31 @@ describe("mcp-client", () => {
     });
     expect(res).toEqual([{ type: "text", text: "ok" }]);
   });
+
+  it.each(["pinned", "file"])(
+    "rejects MCP error results from %s tools",
+    async (kind) => {
+      const client = await connectMcp({
+        endpointUrl: "https://example.test/mcp",
+        authStrategy: "none",
+      });
+      const content = [{ type: "text", text: "Remote operation refused" }];
+      mocks.fakeCallTool.mockResolvedValueOnce({ isError: true, content });
+      const execute =
+        kind === "pinned"
+          ? materializePinnedMcpTools(client, "ext", [
+              { name: "search", description: null, inputSchema: {} },
+            ])[0]!.execute
+          : (await materializeMcpTools(client, "ext"))["ext.search"]!.execute!;
+      await expect(
+        execute({}, { toolCallId: "test", messages: [], context: {} }),
+      ).rejects.toMatchObject({
+        name: "McpToolExecutionError",
+        code: "mcp_tool_execution_failed",
+        content,
+      });
+    },
+  );
 
   it("healthcheck returns healthy when the client responds", async () => {
     const res = await healthcheck({

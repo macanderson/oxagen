@@ -8,7 +8,12 @@ import {
 } from "@oxagen/telemetry";
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import type { CapabilityContext } from "../types";
-import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
+import {
+  invoke,
+  authorizeExternalCapability,
+  emitExternalCapabilityOutcome,
+  type KernelSecurityOutcome,
+} from "@oxagen/oxagen/kernel";
 import {
   type AgentRunIAMResolution,
   type EffectiveMcpScope,
@@ -860,122 +865,32 @@ export async function materializeTools(
             const invocationId = crypto.randomUUID();
             const startedAt = Date.now();
 
-            // ── Kill switch (spec §6.11) ────────────────────────────────────
-            // A switch on this version, its server, the connection it was
-            // reached with, a class its version carries, the agent, the
-            // operator, the workspace or the organisation stops the call. An
-            // external tool's semantics are unknown, so every call re-reads
-            // the deny generation (§7.4: non-read-only). Checked again before
-            // the transport when the call waited on a person (an agent-consent
-            // or first-use consent card), so a switch flipped during the wait
-            // stops the call.
-            const refuseIfKilled = async (): Promise<string | null> => {
-              const killed = await killSwitches.check({
-                capabilityId: capturedKey,
-                serverId: externalServerId,
-                connectionId: raw.externalConnectionId ?? null,
-                readOnly: false,
-              });
-              if (killed === null) return null;
-              // The capability path throws and the generic catch records
-              // `err.name`. This path returns a message to the model instead
-              // of throwing, so it records the same class off the same object
-              // — one `error_class` counts every kill-switch refusal.
-              const denied = new KillSwitchDeniedError(killed);
-              try {
-                await insertToolInvocation(
-                  buildInvocationPayload(
-                    {
-                      invocationId,
-                      ctx,
-                      capabilityName: capturedKey,
-                      externalServerId,
-                      inputBytes: byteSize(input),
-                    },
-                    {
-                      status: "failed",
-                      outputBytes: 0,
-                      latencyMs: Date.now() - startedAt,
-                      errorClass: denied.name,
-                    },
-                  ),
-                );
-              } catch {
-                /* telemetry must never fail the call */
-              }
-              return denied.message;
-            };
-            const killedBeforeGates = await refuseIfKilled();
-            if (killedBeforeGates !== null) return killedBeforeGates;
-            let waitedOnPerson = false;
-
-            // ── IAM gate (GAP-4) ────────────────────────────────────────────
-            // capturedKey is the synthetic capability id, e.g.
-            // `mcp.<serverId>.<toolName>`. Same IAM gate as invoke();
-            // defaultEffect="allow" — the admin intentionally installed +
-            // enabled this plugin, but an explicit deny/require_approval policy
-            // against the synthetic id is honoured when IAM is enforced.
-            // The IAM check's fetchAuthz reads tenant tables via withTenantDb,
-            // which requires an active ALS tenant scope. Like the approval write
-            // above, this MCP execute() closure runs mid-stream OUTSIDE the
-            // route's runInTenantScope, so re-enter scope here. (In apps/app the
-            // IAM checkFn is currently null and short-circuits to "allow" before
-            // any DB call, but this keeps the gate correct if IAM enforcement is
-            // ever enabled on the agent surface.)
-            const iamResult = await runInTenantScope(
-              { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-              () => authorizeExternalCapability(capturedKey, ctx, "allow"),
-            );
-            if (!iamResult.allowed) {
-              try {
-                await insertToolInvocation(
-                  buildInvocationPayload(
-                    {
-                      invocationId,
-                      ctx,
-                      capabilityName: capturedKey,
-                      externalServerId,
-                      inputBytes: byteSize(input),
-                    },
-                    {
-                      status: "failed",
-                      outputBytes: 0,
-                      latencyMs: Date.now() - startedAt,
-                      errorClass: "IamDenied",
-                    },
-                  ),
-                );
-              } catch {
-                /* telemetry must never fail the call */
-              }
-              const reason = iamResult.reason ?? iamResult.outcome;
-              return `Tool blocked by workspace policy: ${reason}`;
-            }
-            // ── End IAM gate ────────────────────────────────────────────────
-            const admitExternalDecision = externalDecisionCheck({
-              name: capturedKey,
-              input,
-              ctx,
-              principal: iamResult.principal,
-              runId: opts.runIdRef?.current ?? ctx.agentRun?.runId ?? null,
-              onApprovalRequired: opts.onApprovalRequired
-                ? (event) => {
-                    opts.onApprovalRequired?.(event);
-                    if (opts.approvalMode === "park")
-                      throw new ApprovalPendingError(
-                        event.capability,
-                        event.approvalId,
-                        event.expiresAt,
-                      );
-                  }
-                : undefined,
-            });
-            const checkDecisionRules: typeof admitExternalDecision = async (
-              options,
-            ) => {
-              try {
-                await admitExternalDecision(options);
-              } catch (error) {
+            let outcome: KernelSecurityOutcome = "deny";
+            let auditError: unknown;
+            let parked = false;
+            try {
+              // ── Kill switch (spec §6.11) ────────────────────────────────────
+              // A switch on this version, its server, the connection it was
+              // reached with, a class its version carries, the agent, the
+              // operator, the workspace or the organisation stops the call. An
+              // external tool's semantics are unknown, so every call re-reads
+              // the deny generation (§7.4: non-read-only). Checked again before
+              // the transport when the call waited on a person (an agent-consent
+              // or first-use consent card), so a switch flipped during the wait
+              // stops the call.
+              const refuseIfKilled = async (): Promise<string | null> => {
+                const killed = await killSwitches.check({
+                  capabilityId: capturedKey,
+                  serverId: externalServerId,
+                  connectionId: raw.externalConnectionId ?? null,
+                  readOnly: false,
+                });
+                if (killed === null) return null;
+                // The capability path throws and the generic catch records
+                // `err.name`. This path returns a message to the model instead
+                // of throwing, so it records the same class off the same object
+                // — one `error_class` counts every kill-switch refusal.
+                const denied = new KillSwitchDeniedError(killed);
                 try {
                   await insertToolInvocation(
                     buildInvocationPayload(
@@ -990,42 +905,33 @@ export async function materializeTools(
                         status: "failed",
                         outputBytes: 0,
                         latencyMs: Date.now() - startedAt,
-                        errorClass:
-                          error instanceof Error
-                            ? error.name
-                            : "ExternalDecisionRefused",
+                        errorClass: denied.name,
                       },
                     ),
                   );
                 } catch {
                   /* telemetry must never fail the call */
                 }
-                throw error;
-              }
-            };
-            await checkDecisionRules();
+                return denied.message;
+              };
+              const killedBeforeGates = await refuseIfKilled();
+              if (killedBeforeGates !== null) return killedBeforeGates;
+              let waitedOnPerson = false;
 
-            // ── Agent RBAC MCP rule gate (Phase 4a, spec §3.7) ─────────────
-            // Defense-in-depth twin of the listing filter above: even if this
-            // tool was materialized before the run's rules bound (or reached
-            // the model any other way), the call itself re-evaluates the
-            // run's effective resourceScope.mcp rules from the SAME cached
-            // resolution. deny → blocked + audited (principal_kind='agent',
-            // server:tool dimension). ask → the EXISTING mcp_consents
-            // first-use consent flow, with the AGENT PRINCIPAL as the consent
-            // subject (subject_kind='agent'). allow → fall through to the
-            // unchanged gates below. ctx.agentRun is read at CALL time — the
-            // resolution slot is written by the run's first IAM check, which
-            // may postdate materialization.
-            let agentAskConsentHandled = false;
-            const callAgentRun = ctx.agentRun;
-            if (callAgentRun?.principalKind === "agent") {
-              const serverTool = mcpServerToolKey(
-                capturedServerName,
-                capturedToolName,
-              );
-              const callResolution = callAgentRun.resolution ?? null;
-              const meterRbacBlock = async (errorClass: string) => {
+              // ── IAM gate (GAP-4) ────────────────────────────────────────────
+              // capturedKey is the synthetic capability id, e.g.
+              // `mcp.<serverId>.<toolName>`. Same IAM gate as invoke();
+              // defaultEffect="allow" — the admin intentionally installed +
+              // enabled this plugin, but an explicit deny/require_approval policy
+              // against the synthetic id is honoured when IAM is enforced.
+              // The IAM check's fetchAuthz reads tenant tables via withTenantDb,
+              // which requires an active ALS tenant scope. Like the approval write
+              // above, this MCP execute() closure runs mid-stream OUTSIDE the
+              // route's runInTenantScope, so re-enter scope here. (In apps/app the
+              // IAM checkFn is currently null and short-circuits to "allow" before
+              // any DB call, but this keeps the gate correct if IAM enforcement is
+              // ever enabled on the agent surface.)
+              const recordIamDenial = async () => {
                 try {
                   await insertToolInvocation(
                     buildInvocationPayload(
@@ -1040,7 +946,7 @@ export async function materializeTools(
                         status: "failed",
                         outputBytes: 0,
                         latencyMs: Date.now() - startedAt,
-                        errorClass,
+                        errorClass: "IamDenied",
                       },
                     ),
                   );
@@ -1048,253 +954,290 @@ export async function materializeTools(
                   /* telemetry must never fail the call */
                 }
               };
-              if (callResolution === null) {
-                // Same fail-closed rule as the listing seams: a run context
-                // without its resolution has no computed ceiling — block.
-                logger.error(
-                  { capability: capturedKey, runId: callAgentRun.runId },
-                  "[agent-rbac] MCP tool call with agentRun but no resolution — failing closed",
+              const iamResult = await runInTenantScope(
+                { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                () =>
+                  authorizeExternalCapability(capturedKey, ctx, "allow", {
+                    audit: false,
+                  }),
+              );
+              if (!iamResult.allowed) {
+                await recordIamDenial();
+                const reason = iamResult.reason ?? iamResult.outcome;
+                return `Tool blocked by workspace policy: ${reason}`;
+              }
+              // ── End IAM gate ────────────────────────────────────────────────
+              const admitExternalDecision = externalDecisionCheck({
+                approvalMode: opts.approvalMode,
+                name: capturedKey,
+                input,
+                ctx,
+                principal: iamResult.principal,
+                runId: opts.runIdRef?.current ?? ctx.agentRun?.runId ?? null,
+                onApprovalRequired: opts.onApprovalRequired
+                  ? (event) => {
+                      opts.onApprovalRequired?.(event);
+                      if (opts.approvalMode === "park")
+                        throw new ApprovalPendingError(
+                          event.capability,
+                          event.approvalId,
+                          event.expiresAt,
+                        );
+                    }
+                  : undefined,
+              });
+              const checkDecisionRules: typeof admitExternalDecision = async (
+                options,
+              ) => {
+                try {
+                  await admitExternalDecision(options);
+                } catch (error) {
+                  try {
+                    await insertToolInvocation(
+                      buildInvocationPayload(
+                        {
+                          invocationId,
+                          ctx,
+                          capabilityName: capturedKey,
+                          externalServerId,
+                          inputBytes: byteSize(input),
+                        },
+                        {
+                          status: "failed",
+                          outputBytes: 0,
+                          latencyMs: Date.now() - startedAt,
+                          errorClass:
+                            error instanceof Error
+                              ? error.name
+                              : "ExternalDecisionRefused",
+                        },
+                      ),
+                    );
+                  } catch {
+                    /* telemetry must never fail the call */
+                  }
+                  throw error;
+                }
+              };
+              await checkDecisionRules();
+
+              // ── Agent RBAC MCP rule gate (Phase 4a, spec §3.7) ─────────────
+              // Defense-in-depth twin of the listing filter above: even if this
+              // tool was materialized before the run's rules bound (or reached
+              // the model any other way), the call itself re-evaluates the
+              // run's effective resourceScope.mcp rules from the SAME cached
+              // resolution. deny → blocked + audited (principal_kind='agent',
+              // server:tool dimension). ask → the EXISTING mcp_consents
+              // first-use consent flow, with the AGENT PRINCIPAL as the consent
+              // subject (subject_kind='agent'). allow → fall through to the
+              // unchanged gates below. ctx.agentRun is read at CALL time — the
+              // resolution slot is written by the run's first IAM check, which
+              // may postdate materialization.
+              let agentAskConsentHandled = false;
+              const callAgentRun = ctx.agentRun;
+              if (callAgentRun?.principalKind === "agent") {
+                const serverTool = mcpServerToolKey(
+                  capturedServerName,
+                  capturedToolName,
                 );
-                await meterRbacBlock("McpRuleDenied");
-                return `Tool blocked: agent run carries no IAM resolution for ${capturedKey}`;
-              }
-              const callScope = effectiveMcpScopeForRun(
-                callAgentRun,
-                callResolution,
-                agentRunScope,
-                new Date(),
-                ctx.clientIp ?? null,
-              );
-              const effect = decideMcpToolEffect(
-                callScope,
-                capturedServerName,
-                capturedToolName,
-              );
-              if (effect === "deny") {
-                emitMcpRuleAudit({
-                  ctx,
-                  agentRun: callAgentRun,
-                  capability: capturedKey,
-                  serverTool,
-                  effect: "deny",
-                });
-                await meterRbacBlock("McpRuleDenied");
-                return `Tool blocked by agent role policy: mcp rule deny for ${serverTool}`;
-              }
-              if (effect === "ask") {
-                const agentSubjectId = callAgentRun.agentPrincipal.id;
-                const askParts = parseMcpSyntheticId(capturedKey);
-                if (!askParts) {
-                  // No durable consent identity (e.g. file-based server keys
-                  // carry no mcp_servers uuid) — an "ask" that cannot be
-                  // consented fails closed.
+                const callResolution = callAgentRun.resolution ?? null;
+                const meterRbacBlock = async (errorClass: string) => {
+                  try {
+                    await insertToolInvocation(
+                      buildInvocationPayload(
+                        {
+                          invocationId,
+                          ctx,
+                          capabilityName: capturedKey,
+                          externalServerId,
+                          inputBytes: byteSize(input),
+                        },
+                        {
+                          status: "failed",
+                          outputBytes: 0,
+                          latencyMs: Date.now() - startedAt,
+                          errorClass,
+                        },
+                      ),
+                    );
+                  } catch {
+                    /* telemetry must never fail the call */
+                  }
+                };
+                if (callResolution === null) {
+                  // Same fail-closed rule as the listing seams: a run context
+                  // without its resolution has no computed ceiling — block.
+                  logger.error(
+                    { capability: capturedKey, runId: callAgentRun.runId },
+                    "[agent-rbac] MCP tool call with agentRun but no resolution — failing closed",
+                  );
+                  await meterRbacBlock("McpRuleDenied");
+                  return `Tool blocked: agent run carries no IAM resolution for ${capturedKey}`;
+                }
+                const callScope = effectiveMcpScopeForRun(
+                  callAgentRun,
+                  callResolution,
+                  agentRunScope,
+                  new Date(),
+                  ctx.clientIp ?? null,
+                );
+                const effect = decideMcpToolEffect(
+                  callScope,
+                  capturedServerName,
+                  capturedToolName,
+                );
+                if (effect === "deny") {
                   emitMcpRuleAudit({
                     ctx,
                     agentRun: callAgentRun,
                     capability: capturedKey,
                     serverTool,
-                    effect: "ask",
+                    effect: "deny",
                   });
-                  await meterRbacBlock("ConsentRequired");
-                  return `Tool blocked: agent consent required for ${serverTool}, but this server supports no durable consent`;
+                  await meterRbacBlock("McpRuleDenied");
+                  return `Tool blocked by agent role policy: mcp rule deny for ${serverTool}`;
                 }
-                const agentDecision = await runInTenantScope(
+                if (effect === "ask") {
+                  const agentSubjectId = callAgentRun.agentPrincipal.id;
+                  const askParts = parseMcpSyntheticId(capturedKey);
+                  if (!askParts) {
+                    // No durable consent identity (e.g. file-based server keys
+                    // carry no mcp_servers uuid) — an "ask" that cannot be
+                    // consented fails closed.
+                    emitMcpRuleAudit({
+                      ctx,
+                      agentRun: callAgentRun,
+                      capability: capturedKey,
+                      serverTool,
+                      effect: "ask",
+                    });
+                    await meterRbacBlock("ConsentRequired");
+                    return `Tool blocked: agent consent required for ${serverTool}, but this server supports no durable consent`;
+                  }
+                  const agentDecision = await runInTenantScope(
+                    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                    () =>
+                      checkConsent(
+                        ctx,
+                        agentSubjectId,
+                        askParts.serverId,
+                        askParts.toolName,
+                        "agent",
+                      ),
+                  );
+                  if (agentDecision?.status === "denied") {
+                    await meterRbacBlock("ConsentDenied");
+                    return `Tool blocked: agent consent denied for ${capturedKey}`;
+                  }
+                  if (agentDecision === null) {
+                    // Ask-escalation: audit it, then solicit through the SAME
+                    // HITL approval-card machinery the user consent flow uses.
+                    emitMcpRuleAudit({
+                      ctx,
+                      agentRun: callAgentRun,
+                      capability: capturedKey,
+                      serverTool,
+                      effect: "ask",
+                    });
+                    if (!ctx.messageId) {
+                      // Unattended surface (durable runner turn): nothing can
+                      // render a consent card — fail closed, no row written, so
+                      // an interactive surface can grant it later.
+                      await meterRbacBlock("ConsentRequired");
+                      return `Tool blocked: agent consent required for ${serverTool} (no interactive surface to ask)`;
+                    }
+                    const askExpiresAt = new Date(
+                      Date.now() + CONSENT_PROMPT_TTL_MS,
+                    ).toISOString();
+                    const { approvalId } = await runInTenantScope(
+                      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                      () =>
+                        createApprovalRequest({
+                          orgId: ctx.orgId,
+                          workspaceId: ctx.workspaceId,
+                          messageId: ctx.messageId!,
+                          runId: callAgentRun?.runId ?? null,
+                          capabilityName: capturedKey,
+                          inputPreview: input,
+                          riskLevel: "medium",
+                          ttlMs: CONSENT_PROMPT_TTL_MS,
+                        }),
+                    );
+                    opts.onConsentRequired?.({
+                      approvalId,
+                      capability: capturedKey,
+                      serverId: askParts.serverId,
+                      toolName: askParts.toolName,
+                      inputPreview: input,
+                      expiresAt: askExpiresAt,
+                    });
+                    const askResolution = await waitForApproval(
+                      approvalId,
+                      CONSENT_PROMPT_TTL_MS,
+                    );
+                    waitedOnPerson = true;
+                    const askGranted = askResolution.resolution === "approved";
+                    await runInTenantScope(
+                      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                      () =>
+                        recordConsent({
+                          orgId: ctx.orgId,
+                          workspaceId: ctx.workspaceId,
+                          // AGENT principal as the consent subject, labeled
+                          // distinctly via subject_kind (spec §3.7).
+                          userId: agentSubjectId,
+                          subjectKind: "agent",
+                          serverId: askParts.serverId,
+                          toolName: askParts.toolName,
+                          status: askGranted ? "granted" : "denied",
+                          ttlMs: DEFAULT_CONSENT_TTL_MS,
+                        }),
+                    ).catch(() => {
+                      /* a failed grant write must not crash the turn — re-prompt next time */
+                    });
+                    if (!askGranted) {
+                      await meterRbacBlock("ConsentDenied");
+                      return `Tool blocked: agent consent ${askResolution.resolution} for ${capturedKey}`;
+                    }
+                  }
+                  // An active or freshly-granted agent consent covers this
+                  // call — the user-scoped first-use gate below is skipped so
+                  // one human answer isn't solicited twice for the same call.
+                  agentAskConsentHandled = true;
+                }
+              }
+              // ── End agent RBAC MCP rule gate ───────────────────────────────
+
+              // ── First-use consent gate ────────────────────────────
+              // The FIRST time this (workspace, user, server, tool) is invoked we
+              // pause and render a consent card; the decision is durable so the
+              // second call runs inline. Only fires on the chat surface (messageId
+              // + userId present) — direct API/MCP callers are governed by their
+              // own auth surface. A workspace pre-grant (tool_name='*') and any
+              // unexpired prior grant short-circuit without prompting. Skipped
+              // when the agent-RBAC "ask" flow above already secured an
+              // agent-subject consent for this exact call (never for plain
+              // user turns — agentAskConsentHandled stays false without an
+              // agentRun, keeping this gate byte-identical).
+              const mcpParts = parseMcpSyntheticId(capturedKey);
+              if (
+                mcpParts &&
+                ctx.messageId &&
+                ctx.userId &&
+                !agentAskConsentHandled
+              ) {
+                const consentUserId = ctx.userId;
+                const decision = await runInTenantScope(
                   { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
                   () =>
                     checkConsent(
                       ctx,
-                      agentSubjectId,
-                      askParts.serverId,
-                      askParts.toolName,
-                      "agent",
+                      consentUserId,
+                      mcpParts.serverId,
+                      mcpParts.toolName,
                     ),
                 );
-                if (agentDecision?.status === "denied") {
-                  await meterRbacBlock("ConsentDenied");
-                  return `Tool blocked: agent consent denied for ${capturedKey}`;
-                }
-                if (agentDecision === null) {
-                  // Ask-escalation: audit it, then solicit through the SAME
-                  // HITL approval-card machinery the user consent flow uses.
-                  emitMcpRuleAudit({
-                    ctx,
-                    agentRun: callAgentRun,
-                    capability: capturedKey,
-                    serverTool,
-                    effect: "ask",
-                  });
-                  if (!ctx.messageId) {
-                    // Unattended surface (durable runner turn): nothing can
-                    // render a consent card — fail closed, no row written, so
-                    // an interactive surface can grant it later.
-                    await meterRbacBlock("ConsentRequired");
-                    return `Tool blocked: agent consent required for ${serverTool} (no interactive surface to ask)`;
-                  }
-                  const askExpiresAt = new Date(
-                    Date.now() + CONSENT_PROMPT_TTL_MS,
-                  ).toISOString();
-                  const { approvalId } = await runInTenantScope(
-                    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-                    () =>
-                      createApprovalRequest({
-                        orgId: ctx.orgId,
-                        workspaceId: ctx.workspaceId,
-                        messageId: ctx.messageId!,
-                        runId: callAgentRun?.runId ?? null,
-                        capabilityName: capturedKey,
-                        inputPreview: input,
-                        riskLevel: "medium",
-                        ttlMs: CONSENT_PROMPT_TTL_MS,
-                      }),
-                  );
-                  opts.onConsentRequired?.({
-                    approvalId,
-                    capability: capturedKey,
-                    serverId: askParts.serverId,
-                    toolName: askParts.toolName,
-                    inputPreview: input,
-                    expiresAt: askExpiresAt,
-                  });
-                  const askResolution = await waitForApproval(
-                    approvalId,
-                    CONSENT_PROMPT_TTL_MS,
-                  );
-                  waitedOnPerson = true;
-                  const askGranted = askResolution.resolution === "approved";
-                  await runInTenantScope(
-                    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-                    () =>
-                      recordConsent({
-                        orgId: ctx.orgId,
-                        workspaceId: ctx.workspaceId,
-                        // AGENT principal as the consent subject, labeled
-                        // distinctly via subject_kind (spec §3.7).
-                        userId: agentSubjectId,
-                        subjectKind: "agent",
-                        serverId: askParts.serverId,
-                        toolName: askParts.toolName,
-                        status: askGranted ? "granted" : "denied",
-                        ttlMs: DEFAULT_CONSENT_TTL_MS,
-                      }),
-                  ).catch(() => {
-                    /* a failed grant write must not crash the turn — re-prompt next time */
-                  });
-                  if (!askGranted) {
-                    await meterRbacBlock("ConsentDenied");
-                    return `Tool blocked: agent consent ${askResolution.resolution} for ${capturedKey}`;
-                  }
-                }
-                // An active or freshly-granted agent consent covers this
-                // call — the user-scoped first-use gate below is skipped so
-                // one human answer isn't solicited twice for the same call.
-                agentAskConsentHandled = true;
-              }
-            }
-            // ── End agent RBAC MCP rule gate ───────────────────────────────
-
-            // ── First-use consent gate ────────────────────────────
-            // The FIRST time this (workspace, user, server, tool) is invoked we
-            // pause and render a consent card; the decision is durable so the
-            // second call runs inline. Only fires on the chat surface (messageId
-            // + userId present) — direct API/MCP callers are governed by their
-            // own auth surface. A workspace pre-grant (tool_name='*') and any
-            // unexpired prior grant short-circuit without prompting. Skipped
-            // when the agent-RBAC "ask" flow above already secured an
-            // agent-subject consent for this exact call (never for plain
-            // user turns — agentAskConsentHandled stays false without an
-            // agentRun, keeping this gate byte-identical).
-            const mcpParts = parseMcpSyntheticId(capturedKey);
-            if (
-              mcpParts &&
-              ctx.messageId &&
-              ctx.userId &&
-              !agentAskConsentHandled
-            ) {
-              const consentUserId = ctx.userId;
-              const decision = await runInTenantScope(
-                { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-                () =>
-                  checkConsent(
-                    ctx,
-                    consentUserId,
-                    mcpParts.serverId,
-                    mcpParts.toolName,
-                  ),
-              );
-              if (decision?.status === "denied") {
-                try {
-                  await insertToolInvocation(
-                    buildInvocationPayload(
-                      {
-                        invocationId,
-                        ctx,
-                        capabilityName: capturedKey,
-                        externalServerId,
-                        inputBytes: byteSize(input),
-                      },
-                      {
-                        status: "failed",
-                        outputBytes: 0,
-                        latencyMs: Date.now() - startedAt,
-                        errorClass: "ConsentDenied",
-                      },
-                    ),
-                  );
-                } catch {
-                  /* telemetry must never fail the call */
-                }
-                return `Tool blocked: consent denied for ${capturedKey}`;
-              }
-              if (decision === null) {
-                // No active grant — solicit consent via the HITL approval row,
-                // emit the consent-required event, then block until resolved.
-                const expiresAt = new Date(
-                  Date.now() + CONSENT_PROMPT_TTL_MS,
-                ).toISOString();
-                const { approvalId } = await runInTenantScope(
-                  { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-                  () =>
-                    createApprovalRequest({
-                      orgId: ctx.orgId,
-                      workspaceId: ctx.workspaceId,
-                      messageId: ctx.messageId!,
-                      capabilityName: capturedKey,
-                      inputPreview: input,
-                      riskLevel: "medium",
-                      ttlMs: CONSENT_PROMPT_TTL_MS,
-                    }),
-                );
-                opts.onConsentRequired?.({
-                  approvalId,
-                  capability: capturedKey,
-                  serverId: mcpParts.serverId,
-                  toolName: mcpParts.toolName,
-                  inputPreview: input,
-                  expiresAt,
-                });
-                const resolution = await waitForApproval(
-                  approvalId,
-                  CONSENT_PROMPT_TTL_MS,
-                );
-                waitedOnPerson = true;
-                const granted = resolution.resolution === "approved";
-                // Persist the durable grant/denial so the next call is inline.
-                await runInTenantScope(
-                  { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-                  () =>
-                    recordConsent({
-                      orgId: ctx.orgId,
-                      workspaceId: ctx.workspaceId,
-                      userId: consentUserId,
-                      serverId: mcpParts.serverId,
-                      toolName: mcpParts.toolName,
-                      status: granted ? "granted" : "denied",
-                      ttlMs: DEFAULT_CONSENT_TTL_MS,
-                    }),
-                ).catch(() => {
-                  /* a failed grant write must not crash the turn — re-prompt next time */
-                });
-                if (!granted) {
+                if (decision?.status === "denied") {
                   try {
                     await insertToolInvocation(
                       buildInvocationPayload(
@@ -1316,110 +1259,214 @@ export async function materializeTools(
                   } catch {
                     /* telemetry must never fail the call */
                   }
-                  return `Tool blocked: consent ${resolution.resolution} for ${capturedKey}`;
+                  return `Tool blocked: consent denied for ${capturedKey}`;
+                }
+                if (decision === null) {
+                  // No active grant — solicit consent via the HITL approval row,
+                  // emit the consent-required event, then block until resolved.
+                  const expiresAt = new Date(
+                    Date.now() + CONSENT_PROMPT_TTL_MS,
+                  ).toISOString();
+                  const { approvalId } = await runInTenantScope(
+                    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                    () =>
+                      createApprovalRequest({
+                        orgId: ctx.orgId,
+                        workspaceId: ctx.workspaceId,
+                        messageId: ctx.messageId!,
+                        capabilityName: capturedKey,
+                        inputPreview: input,
+                        riskLevel: "medium",
+                        ttlMs: CONSENT_PROMPT_TTL_MS,
+                      }),
+                  );
+                  opts.onConsentRequired?.({
+                    approvalId,
+                    capability: capturedKey,
+                    serverId: mcpParts.serverId,
+                    toolName: mcpParts.toolName,
+                    inputPreview: input,
+                    expiresAt,
+                  });
+                  const resolution = await waitForApproval(
+                    approvalId,
+                    CONSENT_PROMPT_TTL_MS,
+                  );
+                  waitedOnPerson = true;
+                  const granted = resolution.resolution === "approved";
+                  // Persist the durable grant/denial so the next call is inline.
+                  await runInTenantScope(
+                    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                    () =>
+                      recordConsent({
+                        orgId: ctx.orgId,
+                        workspaceId: ctx.workspaceId,
+                        userId: consentUserId,
+                        serverId: mcpParts.serverId,
+                        toolName: mcpParts.toolName,
+                        status: granted ? "granted" : "denied",
+                        ttlMs: DEFAULT_CONSENT_TTL_MS,
+                      }),
+                  ).catch(() => {
+                    /* a failed grant write must not crash the turn — re-prompt next time */
+                  });
+                  if (!granted) {
+                    try {
+                      await insertToolInvocation(
+                        buildInvocationPayload(
+                          {
+                            invocationId,
+                            ctx,
+                            capabilityName: capturedKey,
+                            externalServerId,
+                            inputBytes: byteSize(input),
+                          },
+                          {
+                            status: "failed",
+                            outputBytes: 0,
+                            latencyMs: Date.now() - startedAt,
+                            errorClass: "ConsentDenied",
+                          },
+                        ),
+                      );
+                    } catch {
+                      /* telemetry must never fail the call */
+                    }
+                    return `Tool blocked: consent ${resolution.resolution} for ${capturedKey}`;
+                  }
                 }
               }
-            }
-            // ── End consent gate ────────────────────────────────────────────
+              // ── End consent gate ────────────────────────────────────────────
 
-            if (waitedOnPerson) {
-              const killedDuringWait = await refuseIfKilled();
-              if (killedDuringWait !== null) return killedDuringWait;
-            }
-
-            // Consent may have waited while rules or kill switches changed.
-            await checkDecisionRules();
-            const freshIam = await runInTenantScope(
-              { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
-              () => authorizeExternalCapability(capturedKey, ctx, "allow"),
-            );
-            if (!freshIam.allowed)
-              return `Tool blocked by workspace policy: ${freshIam.reason ?? freshIam.outcome}`;
-            // No interactive wait follows the final IAM check.
-            await checkDecisionRules({
-              principal: freshIam.principal,
-              interactive: false,
-            });
-            const killedBeforeTransport = await refuseIfKilled();
-            if (killedBeforeTransport !== null) return killedBeforeTransport;
-
-            // ── OTEL span: covers external MCP tool call duration ──────────
-            // Started inside any active kernel/stream span so the parent
-            // context propagates automatically. Attributes are PII-safe:
-            // tool name only, no input/output content.
-            const _otelToolSpan = trace
-              .getTracer("oxagen.agent.tools")
-              .startSpan("tool.external", {
-                kind: SpanKind.CLIENT,
-                attributes: {
-                  "tool.name": capturedKey,
-                  "tool.risk_level": "low",
-                },
-              });
-            try {
-              const result = await capturedExecute(input, {
-                toolCallId: invocationId,
-                messages: [],
-              });
-              _otelToolSpan.setAttributes({
-                "tool.status": "completed",
-                "tool.latency_ms": Date.now() - startedAt,
-                "tool.input_size_bytes": byteSize(input),
-                "tool.output_size_bytes": byteSize(result),
-              });
-              _otelToolSpan.setStatus({ code: SpanStatusCode.OK });
-              _otelToolSpan.end();
-              try {
-                await insertToolInvocation(
-                  buildInvocationPayload(
-                    {
-                      invocationId,
-                      ctx,
-                      capabilityName: capturedKey,
-                      externalServerId,
-                      inputBytes: byteSize(input),
-                    },
-                    {
-                      status: "completed",
-                      outputBytes: byteSize(result),
-                      latencyMs: Date.now() - startedAt,
-                    },
-                  ),
-                );
-              } catch {
-                /* telemetry must never fail the call */
+              if (waitedOnPerson) {
+                const killedDuringWait = await refuseIfKilled();
+                if (killedDuringWait !== null) return killedDuringWait;
               }
-              return result;
-            } catch (err) {
-              _otelToolSpan.setAttributes({ "tool.status": "failed" });
-              _otelToolSpan.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: err instanceof Error ? err.message : String(err),
-              });
-              _otelToolSpan.end();
-              try {
-                await insertToolInvocation(
-                  buildInvocationPayload(
-                    {
-                      invocationId,
-                      ctx,
-                      capabilityName: capturedKey,
-                      externalServerId,
-                      inputBytes: byteSize(input),
-                    },
-                    {
-                      status: "failed",
-                      outputBytes: 0,
-                      latencyMs: Date.now() - startedAt,
-                      errorClass:
-                        err instanceof Error ? err.name : "UnknownError",
-                    },
-                  ),
-                );
-              } catch {
-                /* swallow */
+
+              // Consent may have waited while rules or kill switches changed.
+              await checkDecisionRules();
+              const freshIam = await runInTenantScope(
+                { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                () =>
+                  authorizeExternalCapability(capturedKey, ctx, "allow", {
+                    audit: false,
+                  }),
+              );
+              if (!freshIam.allowed) {
+                await recordIamDenial();
+                return `Tool blocked by workspace policy: ${freshIam.reason ?? freshIam.outcome}`;
               }
-              throw err;
+              // No interactive wait follows the final IAM check.
+              await checkDecisionRules({
+                principal: freshIam.principal,
+                interactive: false,
+              });
+              const killedBeforeTransport = await refuseIfKilled();
+              if (killedBeforeTransport !== null) return killedBeforeTransport;
+
+              // ── OTEL span: covers external MCP tool call duration ──────────
+              // Started inside any active kernel/stream span so the parent
+              // context propagates automatically. Attributes are PII-safe:
+              // tool name only, no input/output content.
+              const _otelToolSpan = trace
+                .getTracer("oxagen.agent.tools")
+                .startSpan("tool.external", {
+                  kind: SpanKind.CLIENT,
+                  attributes: {
+                    "tool.name": capturedKey,
+                    "tool.risk_level": "low",
+                  },
+                });
+              try {
+                outcome = "allow";
+                const result = await capturedExecute(input, {
+                  toolCallId: invocationId,
+                  messages: [],
+                });
+                _otelToolSpan.setAttributes({
+                  "tool.status": "completed",
+                  "tool.latency_ms": Date.now() - startedAt,
+                  "tool.input_size_bytes": byteSize(input),
+                  "tool.output_size_bytes": byteSize(result),
+                });
+                _otelToolSpan.setStatus({ code: SpanStatusCode.OK });
+                _otelToolSpan.end();
+                try {
+                  await insertToolInvocation(
+                    buildInvocationPayload(
+                      {
+                        invocationId,
+                        ctx,
+                        capabilityName: capturedKey,
+                        externalServerId,
+                        inputBytes: byteSize(input),
+                      },
+                      {
+                        status: "completed",
+                        outputBytes: byteSize(result),
+                        latencyMs: Date.now() - startedAt,
+                      },
+                    ),
+                  );
+                } catch {
+                  /* telemetry must never fail the call */
+                }
+                return result;
+              } catch (err) {
+                _otelToolSpan.setAttributes({ "tool.status": "failed" });
+                _otelToolSpan.setStatus({
+                  code: SpanStatusCode.ERROR,
+                  message: err instanceof Error ? err.message : String(err),
+                });
+                _otelToolSpan.end();
+                try {
+                  await insertToolInvocation(
+                    buildInvocationPayload(
+                      {
+                        invocationId,
+                        ctx,
+                        capabilityName: capturedKey,
+                        externalServerId,
+                        inputBytes: byteSize(input),
+                      },
+                      {
+                        status: "failed",
+                        outputBytes: 0,
+                        latencyMs: Date.now() - startedAt,
+                        errorClass:
+                          err instanceof Error ? err.name : "UnknownError",
+                      },
+                    ),
+                  );
+                } catch {
+                  /* swallow */
+                }
+                throw err;
+              }
+            } catch (error) {
+              parked = error instanceof ApprovalPendingError;
+              auditError = error;
+              const code =
+                error && typeof error === "object" && "code" in error
+                  ? error.code
+                  : undefined;
+              outcome =
+                code === "decision_rule_denied" ||
+                code === "decision_rule_approval_required" ||
+                code === "external_tool_authority_unavailable"
+                  ? "deny"
+                  : "error";
+              throw error;
+            } finally {
+              // A parked approval has no final invocation outcome yet.
+              if (!parked)
+                emitExternalCapabilityOutcome(
+                  capturedKey,
+                  ctx,
+                  outcome,
+                  Date.now() - startedAt,
+                  auditError,
+                );
             }
           },
         }),

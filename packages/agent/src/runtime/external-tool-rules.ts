@@ -7,6 +7,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import type { CapabilityContext } from "../types";
 import type { ApprovalRequiredEvent } from "./materialize-tools";
 import { createApprovalRequest, waitForApproval } from "./approval";
+import { externalApproval } from "./external-approval";
 
 /** One invocation owns its approval proof; it is never a standing external-tool grant. */
 export function externalDecisionCheck(args: {
@@ -14,6 +15,7 @@ export function externalDecisionCheck(args: {
   input: unknown;
   ctx: CapabilityContext;
   runId?: string | null;
+  approvalMode?: "park" | "wait";
   principal?: AuthorizeExternalCapabilityResult["principal"];
   onApprovalRequired?: (event: ApprovalRequiredEvent) => void;
 }) {
@@ -51,6 +53,36 @@ export function externalDecisionCheck(args: {
             !args.onApprovalRequired
           )
             throw error;
+          if (args.approvalMode === "park") {
+            if (!args.ctx.userId) throw error;
+            const approval = await externalApproval({
+              orgId: args.ctx.orgId,
+              workspaceId: args.ctx.workspaceId,
+              userId: args.ctx.userId,
+              messageId: args.ctx.messageId,
+              capabilityName: args.name,
+              input: args.input,
+              approvalDigest: error.approvalDigest,
+              runId: args.runId,
+            });
+            if (approval.status === "approved") {
+              if (Date.now() >= approval.expiresAt.getTime()) throw error;
+              approvedDigest = error.approvalDigest;
+              approvedUntil = approval.expiresAt.getTime();
+              await check();
+              return;
+            }
+            if (approval.status === "pending") {
+              args.onApprovalRequired({
+                approvalId: approval.approvalId,
+                capability: args.name,
+                inputPreview: args.input,
+                riskLevel: "high",
+                expiresAt: approval.expiresAt.toISOString(),
+              });
+            }
+            throw error;
+          }
           const ttlMs = 5 * 60_000;
           const expiresAt = new Date(Date.now() + ttlMs).toISOString();
           const { approvalId } = await createApprovalRequest({
