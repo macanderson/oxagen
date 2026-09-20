@@ -1,5 +1,6 @@
-import { and, eq } from "drizzle-orm";
-import { schema, withTenantDb } from "@oxagen/database";
+import { and, eq, isNull } from "drizzle-orm";
+import { schema, withOrgDb, withTenantDb } from "@oxagen/database";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
@@ -33,18 +34,27 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   }
 
   try {
-    await withTenantDb(async (tx) => {
-      await tx
+    const ownership = and(
+      eq(schema.notifications.publicId, id),
+      eq(schema.notifications.userId, ctx.userId),
+      eq(schema.notifications.orgId, ctx.orgId),
+    );
+    const shared = await withOrgDb((tx) =>
+      tx
         .update(schema.notifications)
         .set(updates)
-        .where(
-          and(
-            eq(schema.notifications.publicId, id),
-            eq(schema.notifications.userId, ctx.userId!),
-            eq(schema.notifications.orgId, ctx.orgId!),
-          ),
-        );
-    });
+        .where(and(ownership, isNull(schema.notifications.workspaceId)))
+        .returning({ id: schema.notifications.id }),
+    );
+    if (
+      shared.length === 0 &&
+      ctx.workspaceId &&
+      ctx.workspaceId !== ORG_ONLY_WORKSPACE_ID
+    ) {
+      await withTenantDb((tx) =>
+        tx.update(schema.notifications).set(updates).where(ownership),
+      );
+    }
   } catch (err) {
     logger.error(
       { err, id, orgId: ctx.orgId, userId: ctx.userId },

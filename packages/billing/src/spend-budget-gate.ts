@@ -19,7 +19,7 @@
  * IAM-gated, audited override.
  */
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
-import { withTenantDb, schema } from "@oxagen/database";
+import { withTenantDb, withOrgDb, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import { sumSpendCounter } from "./spend-counter";
 import {
@@ -308,7 +308,8 @@ async function deliverBudgetThresholdNotification(
   );
   if (admins.length === 0) return;
 
-  await withTenantDb((tx) =>
+  const write = budget.workspaceId === null ? withOrgDb : withTenantDb;
+  await write((tx) =>
     tx.insert(schema.notifications).values(
       budgetThresholdNotificationRows(
         notice,
