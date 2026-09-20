@@ -76,7 +76,7 @@ export function SheetDialog({
         >
           <SheetHandle />
           <div
-            className={`border-b border-border bg-data-surface px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
+            className={`border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
           >
             <Dialog.Title className="text-base font-semibold">
               {title}
@@ -96,7 +96,7 @@ export function SheetDialog({
               sits under the thumb (src/ui/phone.css). */}
           <div
             data-sheet-footer=""
-            className="flex flex-wrap justify-end gap-2 border-t border-border bg-data-surface px-4 py-3"
+            className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3"
           >
             <Dialog.Close data-touch-target="" className={buttonSecondary}>
               {closeLabel ?? t("close")}

@@ -25,6 +25,7 @@ export default async function AgentsPage({
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
       <PageHeader
+        eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
         title={t("agents")}
         actions={<AgentsCreate org={org} ws={ws} />}
       />

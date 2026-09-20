@@ -1,39 +1,94 @@
-// Class recipes for plain controls (buttons, links, inputs, panels) that are not
-// yet their own component. House tokens only (packages/ui globals.css component
-// tokens), so a reskin in the kit reaches every screen that uses them.
-
-const buttonBase =
-  "inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
-  "disabled:cursor-not-allowed disabled:bg-button-disabled-bg disabled:text-muted-foreground aria-disabled:cursor-not-allowed";
-
-export const buttonPrimary = `${buttonBase} border border-button-primary-border bg-button-primary-bg text-button-primary-fg hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg`;
+// Class recipes for plain controls (buttons, links, inputs, panels, tiles,
+// eyebrows) that are not their own component. Each recipe is one rule of the
+// design of record, `mockups/src/engine.css` in the roadmap repository, named
+// in the comment above it (ADR-132); the values are house tokens, so a reskin
+// in the kit reaches every screen and the shape stays the mockup's.
+//
+// `design-record.test.ts` holds these recipes to the rules they cite. Change a
+// recipe with the rule, never around it.
 
 /**
- * The one gold action a screen may carry (creation-spec §6: gold is identity,
- * never state). Ink on gold is 9.5:1 in both themes.
+ * `.btn { border:1px solid var(--border); background:var(--panel);
+ * border-radius:9px; padding:7px 13px; font-size:13px; font-weight:500 }`.
+ * A phone keeps the 44px touch target the mockup's sheet buttons have.
  */
-export const buttonGold = `${buttonBase} border border-brand bg-brand text-brand-foreground hover:bg-brand/90 active:bg-brand/80`;
+const buttonBase =
+  "inline-flex min-h-8 max-md:min-h-11 items-center justify-center gap-1.5 rounded-[9px] px-[13px] py-1.5 text-[13px] font-medium transition-colors " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
+  "disabled:cursor-not-allowed disabled:opacity-45 aria-disabled:cursor-not-allowed";
 
-export const buttonSecondary = `${buttonBase} border border-button-default-border bg-button-default-bg text-button-default-fg hover:bg-button-default-hover-bg active:bg-button-default-active-bg`;
+/**
+ * `.btn.primary { background:var(--gold); border-color:var(--gold);
+ * color:var(--on-gold); font-weight:600 }` — the one gold action a screen
+ * carries (creation-spec §6: gold is identity, never state). The tokens
+ * resolve to the gold in both themes (globals.css). Ink on gold is 9.5:1.
+ */
+export const buttonPrimary = `${buttonBase} border border-button-primary-border bg-button-primary-bg font-semibold text-button-primary-fg hover:bg-button-primary-hover-bg hover:border-button-primary-hover-bg active:bg-button-primary-active-bg`;
 
+/** The same recipe under the name the creation lanes import. */
+export const buttonGold = buttonPrimary;
+
+/** `.btn` at rest: panel fill, hairline border, the wash on hover. */
+export const buttonSecondary = `${buttonBase} border border-border bg-card text-foreground hover:border-rule hover:bg-hl active:bg-hl`;
+
+/** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` for a row action. */
+export const buttonSmall =
+  "min-h-7 max-md:min-h-11 rounded-[7px] px-[9px] py-1 text-xs";
+
+/** `.btn.danger`: the failed hue on the word and the border, a tint on hover. */
+export const buttonDanger = `${buttonBase} border border-error/40 bg-card text-error-ink hover:bg-error/10 active:bg-error/15`;
+
+/** `a { color:var(--accent-text) }` — gold as ink, underlined on hover. */
 export const linkText =
   "font-medium text-link underline-offset-4 hover:text-link-hover hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-sm";
 
 export const inputBase =
-  "block w-full min-w-0 rounded-md border border-input-border bg-input-bg px-3 py-2.5 text-sm text-input-fg placeholder:text-input-placeholder " +
+  "block w-full min-w-0 rounded-md border border-input-border bg-input-bg px-3 py-2 text-[13px] text-input-fg placeholder:text-input-placeholder " +
   "hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring " +
   "disabled:bg-input-disabled-bg disabled:text-input-disabled-fg aria-invalid:border-input-invalid-border aria-invalid:outline-input-invalid-ring";
 
+/** `.panel { background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden }` */
 export const panel =
-  "app-panel min-w-0 rounded-xl border border-border bg-card text-card-foreground";
+  "app-panel min-w-0 overflow-hidden rounded-xl border border-border bg-card text-card-foreground";
 
+/**
+ * `.eyebrow { font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+ * color:var(--accent-text); font-weight:600 }` — the scope line over an h1,
+ * in gold-as-ink. `.eyebrow.q` is the muted variant for a quiet caption.
+ */
 export const eyebrow =
-  "text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground";
+  "text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-text";
+export const eyebrowQuiet =
+  "text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground";
 
 export const mono = "font-mono text-[0.92em]";
 
+/**
+ * `.panel-h { padding:12px 16px; border-bottom:1px solid var(--border) }` and
+ * `.panel-h h3 { font-size:13.5px }` — flat on the panel, no band. The same
+ * hairline closes a footer.
+ */
 export const panelHeader =
-  "flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b border-border bg-data-surface px-4 py-3";
+  "flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3";
+export const panelTitle = "text-[13.5px] font-semibold text-foreground";
 export const panelFooter =
-  "flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-border bg-data-surface px-4 py-3 text-xs text-muted-foreground";
+  "flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground";
+/** `.panel-b { padding:14px 16px }` */
+export const panelBody = "px-4 py-3.5";
+
+/**
+ * `.stat { background:var(--panel); border:1px solid var(--border);
+ * border-radius:12px; padding:13px 15px }`, `.stat .k` (10.5px caps, dim),
+ * `.stat .v` (23px, 700, tabular) and `.stat .s` (11.5px, muted). One tile of
+ * a figure strip; every strip on every page draws these four.
+ */
+export const statTile =
+  "flex min-w-0 flex-col rounded-xl border border-border bg-card px-[15px] py-[13px] text-card-foreground";
+export const statTerm =
+  "mb-[5px] text-[10.5px] font-semibold uppercase tracking-[0.1em] text-dim";
+export const statValue =
+  "text-[23px] font-bold leading-[1.15] tracking-[-0.02em] tabular-nums";
+export const statNote = "mt-[3px] text-[11.5px] text-muted-foreground";
+/** `.grid.g4 { grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px }` */
+export const statStrip =
+  "grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(175px,1fr))]";

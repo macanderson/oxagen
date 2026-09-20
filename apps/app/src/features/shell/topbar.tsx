@@ -12,7 +12,7 @@ import { UserMenu } from "./user-menu";
 import { SafeLink } from "@/ui/navigation";
 
 const iconButton =
-  "relative grid size-8 place-items-center rounded-md border border-app-topbar-border text-app-link-fg hover:text-app-link-hover-fg focus-visible:outline-2 focus-visible:outline-ring";
+  "relative grid size-8 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
 
 function Breadcrumbs({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
@@ -76,7 +76,7 @@ export function Topbar({ data }: { data: ShellData }) {
     >
       <a
         href="#main"
-        className="sr-only rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50"
+        className="sr-only rounded-md bg-foreground px-3 py-1.5 text-sm text-background focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50"
       >
         {tShell("skipToContent")}
       </a>
@@ -98,13 +98,13 @@ export function Topbar({ data }: { data: ShellData }) {
         }}
         aria-keyshortcuts="Meta+K Control+K"
         aria-label={t("search")}
-        className="flex items-center gap-2 rounded-md border border-app-topbar-border px-2.5 py-1.5 text-sm text-app-link-fg hover:text-app-link-hover-fg focus-visible:outline-2 focus-visible:outline-ring"
+        className="flex items-center gap-2 rounded-[9px] border border-border bg-card px-2.5 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:min-w-[190px]"
       >
         <Search aria-hidden="true" className="size-3.5" />
         <span className="hidden lg:inline">{t("search")}</span>
         <kbd
           aria-hidden="true"
-          className="hidden rounded border border-app-topbar-border px-1 font-mono text-[11px] sm:inline"
+          className="ml-auto hidden rounded border border-border bg-hl px-[5px] font-mono text-[10.5px] text-dim sm:inline"
         >
           {t("searchShortcut")}
         </kbd>

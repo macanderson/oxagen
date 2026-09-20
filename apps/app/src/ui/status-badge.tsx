@@ -1,26 +1,21 @@
-// A run's status as a dot and a word, so it survives greyscale; the hue sits on
-// the dot only, and the word stays on the ink.
+// A run's status as a dot and a word in the mockup's state pill (`statusBadge`
+// in engine.js draws `.b.b-<state>`): live is the allowed hue, halted the
+// denied hue, and a sealed run is quiet. The hue never reaches the gold.
 import { useTranslations } from "next-intl";
 import type { RunStatus } from "@/data/contracts/runs";
+import { Badge, type BadgeTone } from "./badge";
 
-const DOT: Record<RunStatus, string> = {
-  live: "bg-info",
-  sealed: "bg-muted-foreground",
-  halted: "bg-warning",
+const TONE: Record<RunStatus, BadgeTone> = {
+  live: "allowed",
+  sealed: "quiet",
+  halted: "denied",
 };
 
 export function StatusBadge({ status }: { status: RunStatus }) {
   const t = useTranslations("ui.runStatus");
   return (
-    <span
-      data-status={status}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
-    >
-      <span
-        aria-hidden="true"
-        className={`size-2 rounded-full ${DOT[status]}`}
-      />
+    <Badge tone={TONE[status]} data-status={status}>
       {t(status)}
-    </span>
+    </Badge>
   );
 }

@@ -44,13 +44,13 @@ export function AssistantLauncher({
       aria-expanded={assistantOpen}
       data-touch-target=""
       data-testid="assistant-launcher"
-      className={`mb-2 flex w-full items-center gap-2.5 rounded-lg border bg-app-panel-bg px-2.5 py-2 text-left text-app-panel-fg transition-colors hover:border-input focus-visible:outline-2 focus-visible:outline-ring ${
-        assistantOpen ? "border-primary" : "border-sidebar-border"
+      className={`mb-2 flex w-full items-center gap-2.5 rounded-[10px] border bg-card px-2.5 py-2 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring ${
+        assistantOpen ? "border-gold" : "border-border"
       }`}
     >
       <span
         aria-hidden="true"
-        className="grid size-6 flex-none place-items-center rounded-md bg-primary text-primary-foreground"
+        className="grid size-6 flex-none place-items-center rounded-md bg-gold text-on-gold"
       >
         <Sparkles className="size-3.5" />
       </span>
@@ -64,7 +64,7 @@ export function AssistantLauncher({
         aria-hidden="true"
         className={`size-3.5 flex-none transition-transform motion-reduce:transition-none ${
           assistantOpen
-            ? "rotate-180 text-primary"
+            ? "rotate-180 text-accent-text"
             : "text-sidebar-nav-label-fg"
         }`}
       />
