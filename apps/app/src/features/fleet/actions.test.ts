@@ -1,0 +1,264 @@
+// The approval decision through the real kernel seam: the viewer resolution and
+// the kernel's invoke() are the only fakes, so each case shows what the operator
+// gets back, whether the capability ran, and with which input (INV-19).
+//
+// Two rules belong to this file rather than to the markup.
+//
+// A denial carries a reason. The contract's `note` is optional, because an API
+// caller approving a routine call has nothing to add, and a `required`
+// attribute on a textarea is a courtesy to the person typing rather than a
+// rule. The note is the whole record of why a call an agent was authorised to
+// make was refused, so the refusal happens before the kernel and names the
+// field.
+//
+// The gate is the handler's, not this action's. `resolve_approval` runs
+// `assertOrgRole`, then, on a row a mandate parked, `assertConsequenceRole`
+// and `assertApprover`, and refuses an agent principal, all before it touches
+// a row (INV-29). What the app owes is that each refusal comes back as a
+// refusal with the handler's reason in `code`, and that a decision the kernel
+// refused sends exactly one call, so no ledger row could have moved.
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { invoke, requireViewer } = vi.hoisted(() => ({
+  invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
+  requireViewer: vi.fn(),
+}));
+vi.mock("@oxagen/oxagen", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/oxagen")>()),
+  invoke,
+}));
+vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
+vi.mock("@oxagen/handlers/register", () => ({}));
+vi.mock("@oxagen/agent/register", () => ({}));
+vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+vi.mock("@/server/viewer", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/server/viewer")>()),
+  requireViewer,
+}));
+
+const kernel =
+  await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
+const { WsCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
+const { readApprovalEligibility, resolveApprovalAction } = await import(
+  "./actions"
+);
+
+const ctx = unsafeMint(WsCtx, {
+  userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "owner",
+  workspaceId: "7b000000-0000-4000-8000-000000000001",
+  wsSlug: "core-platform",
+  wsName: "Core platform",
+  wsRole: "member",
+});
+
+const APPROVAL = "apr_q8t1";
+
+/** The settlement `resolve_approval` answers on a row the mandate gate parked. */
+const settled = {
+  approvalId: APPROVAL,
+  resolution: "approved",
+  mandate: {
+    mandateId: "mnd_4f2a9c",
+    reserved: [
+      { measure: "amount", value: "180000000", unitOrCurrency: "USD" },
+    ],
+    outcome: "held",
+  },
+} as const;
+
+/** A HandlerError as the kernel raises it: the refusal is in `reason`. */
+const handlerError = (code: string, reason: string) =>
+  Object.assign(new Error(reason), { code, reason });
+
+/** The one `resolve_approval` call's input. */
+function written(): unknown {
+  const call = invoke.mock.calls.find(([name]) => name === "resolve_approval");
+  if (!call) throw new Error("resolve_approval was not called");
+  return call[1];
+}
+
+beforeEach(() => {
+  invoke.mockReset();
+  requireViewer.mockReset();
+  requireViewer.mockResolvedValue(ctx);
+});
+
+describe("resolveApprovalAction", () => {
+  it("approves, carrying the note when there is one and the settlement back", async () => {
+    invoke.mockResolvedValue(settled);
+    const result = await resolveApprovalAction("acme", "core-platform", {
+      approvalId: APPROVAL,
+      decision: "approved",
+      note: "  release window is open  ",
+    });
+    expect(result).toEqual({ ok: true, value: settled });
+    expect(written()).toEqual({
+      approvalId: APPROVAL,
+      decision: "approved",
+      note: "release window is open",
+    });
+  });
+
+  it("approves with no note at all rather than an empty one", async () => {
+    invoke.mockResolvedValue({ ...settled, mandate: null });
+    const result = await resolveApprovalAction("acme", "core-platform", {
+      approvalId: APPROVAL,
+      decision: "approved",
+      note: "   ",
+    });
+    expect(result.ok).toBe(true);
+    expect(written()).toEqual({ approvalId: APPROVAL, decision: "approved" });
+  });
+
+  it("refuses a denial with no reason before the kernel, naming the field (negative)", async () => {
+    const result = await resolveApprovalAction("acme", "core-platform", {
+      approvalId: APPROVAL,
+      decision: "denied",
+      note: "   ",
+    });
+    expect(result).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "note_required",
+      field: "note",
+    });
+    // Nothing reached the kernel, so nothing was billed and no row moved.
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("denies with the reason, and the mandate releases what the call reserved", async () => {
+    invoke.mockResolvedValue({
+      approvalId: APPROVAL,
+      resolution: "denied",
+      mandate: { ...settled.mandate, outcome: "released" },
+    });
+    const result = await resolveApprovalAction("acme", "core-platform", {
+      approvalId: APPROVAL,
+      decision: "denied",
+      note: "vendor is not on the approved list",
+    });
+    expect(result.ok && result.value.mandate?.outcome).toBe("released");
+    expect(written()).toEqual({
+      approvalId: APPROVAL,
+      decision: "denied",
+      note: "vendor is not on the approved list",
+    });
+  });
+
+  it("carries the handler's own reason when the roles do not cover the decision (negative)", async () => {
+    invoke.mockRejectedValue(handlerError("forbidden", "org_role_required"));
+    const result = await resolveApprovalAction("acme", "core-platform", {
+      approvalId: APPROVAL,
+      decision: "approved",
+      note: "",
+    });
+    expect(result).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries approval_expired for an id that matches no pending row (negative)", async () => {
+    invoke.mockRejectedValue(handlerError("conflict", "approval_expired"));
+    const result = await resolveApprovalAction("acme", "core-platform", {
+      approvalId: APPROVAL,
+      decision: "approved",
+      note: "",
+    });
+    expect(result).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "approval_expired",
+    });
+  });
+
+  // ADR-113: the decision is the one billed action of this surface, so the
+  // billing admission gate can refuse it where it refuses no read here.
+  it("carries the exhausted code the billing gate raised (negative)", async () => {
+    invoke.mockRejectedValue(
+      Object.assign(new Error("gau exhausted"), { code: "gau_exhausted" }),
+    );
+    const result = await resolveApprovalAction("acme", "core-platform", {
+      approvalId: APPROVAL,
+      decision: "approved",
+      note: "",
+    });
+    expect(result).toEqual({
+      ok: false,
+      reason: "exhausted",
+      code: "gau_exhausted",
+    });
+  });
+});
+
+describe("readApprovalEligibility", () => {
+  it("reads the recorded evaluation and who resolved the call", async () => {
+    const eligibility = {
+      ruleId: "small-vendor-payments",
+      ok: false,
+      reasons: ["measure_above_ceiling:amount"],
+      floor: false,
+    };
+    invoke.mockResolvedValue({
+      approvalId: APPROVAL,
+      resolvedBy: "policy:small-vendor-payments",
+      eligibility,
+    });
+    const result = await readApprovalEligibility(
+      "acme",
+      "core-platform",
+      APPROVAL,
+      "fleet",
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: { resolvedBy: "policy:small-vendor-payments", eligibility },
+    });
+    expect(invoke.mock.calls[0]?.[0]).toBe("get_auto_eligibility");
+    expect(invoke.mock.calls[0]?.[1]).toEqual({ approvalId: APPROVAL });
+  });
+
+  it("answers null on a call no rule covered", async () => {
+    invoke.mockResolvedValue({
+      approvalId: APPROVAL,
+      resolvedBy: null,
+      eligibility: null,
+    });
+    const result = await readApprovalEligibility(
+      "acme",
+      "core-platform",
+      APPROVAL,
+      "fleet",
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: { resolvedBy: null, eligibility: null },
+    });
+  });
+
+  it("carries a refused read across as a denial, naming the asking page's permission (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.CapabilityError(
+        "get_auto_eligibility",
+        "authz_denied",
+        "denied",
+      ),
+    );
+    const result = await readApprovalEligibility(
+      "acme",
+      "core-platform",
+      APPROVAL,
+      "run",
+    );
+    // A card on the Run page reports the Run page's permission, not Fleet's.
+    expect(result).toEqual({ ok: false, reason: "denied", code: "run.read" });
+  });
+});

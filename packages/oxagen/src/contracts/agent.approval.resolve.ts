@@ -42,7 +42,7 @@ export const agentApprovalResolve = registerCapability({
     "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "approval" },
   sensitivity: "medium",

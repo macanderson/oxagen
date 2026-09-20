@@ -23,7 +23,8 @@ async function readFleet(
     source.approvals.pending(ctx, { runId: null }),
   ]);
   const named =
-    approvals.ok && approvals.value.some((item) => item.mandateId !== null);
+    approvals.ok &&
+    approvals.value.items.some((item) => item.mandateId !== null);
   const mandates = new Map<string, MandateRow>();
   if (named) {
     const read = await source.mandates.list(ctx, { agentId: null });

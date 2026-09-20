@@ -24,7 +24,7 @@ export const approvalAutoEligibilityGet = registerCapability({
     "The auto-approval evaluation recorded for one approval request, and who resolved it",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

@@ -14,7 +14,7 @@ import type {
   TranscriptZoom,
 } from "@/data/contracts/run";
 import type {
-  ApprovalItem,
+  ApprovalQueue,
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
 import type { RunRow } from "@/data/contracts/runs";
@@ -478,7 +478,7 @@ type RunReads = {
   /** Only read when the Chain and seal tab is open; refused when absent. */
   chain?: Read<RunChain>;
   /** Only read when the Approvals tab is open; refused when absent. */
-  approvals?: Read<ApprovalItem[]>;
+  approvals?: Read<ApprovalQueue>;
   /** Only read when the Approvals tab is open; refused when absent (#3153). */
   resolvedApprovals?: Read<ResolvedApprovalItem[]>;
 };
