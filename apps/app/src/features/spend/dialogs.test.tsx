@@ -238,7 +238,10 @@ describe("Fix a finding", () => {
   }
 
   it("bounds a long finding handoff to the downstream rationale limit", async () => {
-    const listener = vi.fn((event: Event) => createRequestOf(event));
+    const events: Event[] = [];
+    const listener = (event: Event) => {
+      events.push(event);
+    };
     window.addEventListener("oxagen:create", listener);
     try {
       const description =
@@ -255,7 +258,8 @@ describe("Fix a finding", () => {
       await userEvent.click(
         screen.getByRole("button", { name: "Draft a context PR" }),
       );
-      const request = listener.mock.results[0]?.value;
+      const event = events[0];
+      const request = event === undefined ? null : createRequestOf(event);
       expect(request?.prefill?.description).toBe(description.slice(0, 1000));
       expect(request?.prefill?.description).toHaveLength(1000);
       expect(recordFindingFixAction).not.toHaveBeenCalled();
