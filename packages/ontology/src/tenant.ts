@@ -429,7 +429,7 @@ export function assertAnchorsTenant(cypher: string): void {
  *  5. Rejects write clauses when `mode` is `read` (defense in depth).
  *
  * Omitting the optional scope leaves the query unchanged after tenant checks.
- * Each query runs in a managed transaction so transient failures can retry.
+ * Read queries use managed retries. Writes execute once without replay.
  */
 export function scopedSession(scope?: GraphScope): {
   run: (
@@ -468,22 +468,24 @@ export function scopedSession(scope?: GraphScope): {
     return s;
   }
 
-  function managedRun(
+  function runQuery(
     sess: Session,
     cypher: string,
     params: Record<string, unknown>,
     config?: Parameters<Session["executeRead"]>[1],
   ) {
-    // Unknown procedures use the writer. A read transaction would reject a
-    // procedure that mutates data even when its name contains no write verb.
+    // Writes and unknown procedures must not retry: an acknowledgement can
+    // be lost after a committed mutation with no caller-stable idempotency key.
     const text = stripLiteralsAndComments(cypher);
     const writes = /\b(?:CREATE|MERGE|SET|DELETE|REMOVE|FOREACH|CALL)\b/i.test(
       text,
     );
-    const execute = writes
-      ? sess.executeWrite.bind(sess)
-      : sess.executeRead.bind(sess);
-    return execute(async (tx) => await tx.run(cypher, params), config);
+    if (writes) {
+      return config
+        ? sess.run(cypher, params, config)
+        : sess.run(cypher, params);
+    }
+    return sess.executeRead(async (tx) => await tx.run(cypher, params), config);
   }
 
   return {
@@ -495,15 +497,15 @@ export function scopedSession(scope?: GraphScope): {
       assertAnchorsTenant(cypher);
       const sess = await ensureSession();
 
-      // Without an agent scope, execute the authored query in a managed
-      // transaction. Guard the shared Neo4j driver with the circuit
+      // Without an agent scope, execute the authored query with read-only
+      // retries. Guard the shared Neo4j driver with the circuit
       // breaker: a degraded AuraDB fails fast (CircuitOpenError) instead of
       // every scoped query piling handshake attempts onto a down cluster. The
       // TenantScopeError guard above is deliberately OUTSIDE the breaker — a
       // programming error must never count toward tripping it.
       if (scope === undefined) {
         return neo4jBreaker().exec(() =>
-          managedRun(sess, cypher, { ...params, orgId, workspaceId }),
+          runQuery(sess, cypher, { ...params, orgId, workspaceId }),
         );
       }
 
@@ -541,7 +543,7 @@ export function scopedSession(scope?: GraphScope): {
       assertAnchorsTenant(applied.cypher);
       const finalParams = { ...applied.params, orgId, workspaceId };
       return neo4jBreaker().exec(() =>
-        managedRun(sess, applied.cypher, finalParams, applied.txConfig),
+        runQuery(sess, applied.cypher, finalParams, applied.txConfig),
       );
     },
     // A session that never ran opened no connection, so there is nothing to

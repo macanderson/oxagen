@@ -208,32 +208,52 @@ describe("scopedSession with GraphScope", () => {
   });
 });
 
-describe("managed graph transactions", () => {
-  it("routes reads and writes through managed transactions, never auto-commit", async () => {
+describe("graph transaction retry safety", () => {
+  it("retries reads but never sends writes or unknown procedures to managed transactions", async () => {
     executeRead.mockClear();
     executeWrite.mockClear();
     await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
       const s = scopedSession();
       await s.run("MATCH (n {orgId: $orgId}) RETURN n");
-      await s.run("MERGE (n:Node {orgId: $orgId}) SET n.value = $value", {
-        value: 1,
-      });
+      await s.run(
+        "MATCH (owner {orgId: $orgId}) CREATE (n:Node {orgId: $orgId, id: randomUUID()}) RETURN n",
+      );
+      await s.run("MATCH (n {orgId: $orgId}) CALL custom.mutate(n) RETURN n");
     });
     expect(executeRead).toHaveBeenCalledTimes(1);
-    expect(executeWrite).toHaveBeenCalledTimes(1);
+    expect(executeWrite).not.toHaveBeenCalled();
   });
 
-  it("lets a managed callback retry the same tenant-scoped write", async () => {
-    executeWrite.mockImplementationOnce(async (work) => {
-      await work({ run });
-      return work({ run });
+  it("propagates a transient write error without replaying the mutation", async () => {
+    const failure = Object.assign(new Error("commit acknowledgement lost"), {
+      code: "Neo.TransientError.Transaction.Terminated",
     });
     run.mockClear();
-    await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
-      await scopedSession().run("MERGE (n:Node {orgId: $orgId}) RETURN n");
-    });
-    expect(run).toHaveBeenCalledTimes(2);
-    expect(run.mock.calls[0]).toEqual(run.mock.calls[1]);
+    executeWrite.mockClear();
+    run.mockRejectedValueOnce(failure);
+    await expect(
+      runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+        await scopedSession().run(
+          "MATCH (owner {orgId: $orgId}) CREATE (n:Node {orgId: $orgId, id: randomUUID()}) RETURN n",
+        );
+      }),
+    ).rejects.toBe(failure);
+    expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0]?.[1]).toEqual({ orgId: ORG, workspaceId: WS });
+    expect(executeWrite).not.toHaveBeenCalled();
+  });
+
+  it("keeps scoped write deadlines on the non-retrying transaction", async () => {
+    run.mockClear();
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+      await scopedSession({ budget: { maxTraversalMs: 250 } }).run(
+        "MATCH (n) WHERE n.orgId = $orgId SET n.count = n.count + 1 RETURN n",
+      );
+    });
+    expect(run).toHaveBeenCalledWith(
+      expect.stringContaining("SET n.count"),
+      expect.objectContaining({ orgId: ORG, workspaceId: WS }),
+      { timeout: 250 },
+    );
   });
 });
