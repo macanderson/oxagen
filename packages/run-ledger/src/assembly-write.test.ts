@@ -28,10 +28,9 @@ describe("writeAssembly", () => {
 
     expect(outcome).toBe("stored");
     expect(putAssembly).toHaveBeenCalledTimes(1);
-    const written = putAssembly.mock.calls[0]?.[0] as unknown as {
-      bodyRef: string;
-      bytes: Uint8Array;
-    };
+    const written = (putAssembly.mock.calls as unknown as Array<
+      [{ bodyRef: string; bytes: Uint8Array }]
+    >)[0]?.[0] as { bodyRef: string; bytes: Uint8Array };
     expect(written.bodyRef).toBe(REF);
     const assembly = decodeAssembly(written.bytes);
     expect(assembly?.blocks).toHaveLength(1);

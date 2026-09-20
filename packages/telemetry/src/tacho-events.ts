@@ -96,6 +96,10 @@ export interface TachoFrameRow {
   /** Null when the frame carried no cost record. */
   costUsdMicros: number | null;
   turnSeq: number | null;
+  /** Milliseconds to the provider's first token; null when it was not timed. */
+  ttftMs?: number | null;
+  /** The provider call's wall time; null when it was not timed. */
+  apiDurationMs?: number | null;
 }
 
 interface RawTachoFrameRow {
@@ -117,6 +121,8 @@ interface RawTachoFrameRow {
   policy_decision: string;
   cost_usd_micros: string | number | null;
   turn_seq: string | number | null;
+  ttft_ms: string | number | null;
+  api_duration_ms: string | number | null;
 }
 
 /**
@@ -125,6 +131,13 @@ interface RawTachoFrameRow {
  * collapses a redelivered row so a sequence appears once. Tenant-filtered by
  * the ambient scope through chSelect.
  */
+/** A nullable ClickHouse count as a number, or null. */
+function nullableCount(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function selectTachoEvents(args: {
   sessionUuid: string;
   afterSeq: number;
@@ -135,7 +148,7 @@ export async function selectTachoEvents(args: {
       SELECT
         seq, toString(ts) AS ts, event_id, kind, prev_hash, hash, content_digest, bytes_ref,
         redactions, body, tool_name, tool_status, tool_use_id, model, provider,
-        policy_decision, cost_usd_micros, turn_seq
+        policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms
       FROM ${TACHO_EVENTS_TABLE} FINAL
       WHERE org_id = {orgId:UUID}
         AND workspace_id = {workspaceId:UUID}
@@ -175,5 +188,9 @@ export async function selectTachoEvents(args: {
       r.turn_seq === null || r.turn_seq === undefined
         ? null
         : Number(r.turn_seq),
+    // What the host timed about the model call. The recorded stream carries
+    // no clock, so a reassembly's time to first token comes from here.
+    ttftMs: nullableCount(r.ttft_ms),
+    apiDurationMs: nullableCount(r.api_duration_ms),
   }));
 }

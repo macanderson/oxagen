@@ -73,7 +73,8 @@ function harness(
     readRunRollups: stores.readRunRollups,
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames(SESSION_UUID, rows),
-    bodies: { getBody },
+    bodies: { getBody, getAssembly: () => Promise.resolve(null) },
+    priceBook: () => Promise.resolve([]),
   };
   return { transcript: createRunTranscriptGetHandler(deps), getBody };
 }
@@ -523,7 +524,9 @@ describe("get_run_transcript", () => {
       tachoFrames: memoryTachoFrames(SESSION_UUID, []),
       bodies: {
         getBody: () => Promise.reject(new Error("no bodies in this test")),
+        getAssembly: () => Promise.resolve(null),
       },
+      priceBook: () => Promise.resolve([]),
     };
     const transcript = createRunTranscriptGetHandler(deps);
     const first = await transcript(
@@ -590,5 +593,175 @@ describe("foldPageStart", () => {
   it("falls through to opening.seq when the cursor sits between folds", () => {
     const folds = [fold("1", "1"), fold("5", "5")];
     expect(foldPageStart(folds, "3")).toBe(1);
+  });
+});
+
+// ── Reassembly (spec §14) ───────────────────────────────────────────────────
+
+/** A recorded model stream: what a streaming provider actually writes down. */
+function modelStream(chunks: readonly string[], stopReason = "end_turn"): string {
+  const events: string[] = [
+    JSON.stringify({
+      type: "message_start",
+      message: {
+        usage: {
+          input_tokens: 41,
+          cache_read_input_tokens: 21_000,
+          cache_creation_input_tokens: 512,
+          output_tokens: 1,
+        },
+      },
+    }),
+    JSON.stringify({
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "text" },
+    }),
+    ...chunks.map((text) =>
+      JSON.stringify({
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "text_delta", text },
+      }),
+    ),
+    JSON.stringify({ type: "content_block_stop", index: 0 }),
+    JSON.stringify({
+      type: "content_block_start",
+      index: 1,
+      content_block: { type: "tool_use", id: "toolu_a", name: "Write" },
+    }),
+    JSON.stringify({
+      type: "content_block_delta",
+      index: 1,
+      delta: {
+        type: "input_json_delta",
+        partial_json: JSON.stringify({ file_path: "/p/notes.md", content: "x".repeat(900) }),
+      },
+    }),
+    JSON.stringify({ type: "content_block_stop", index: 1 }),
+    JSON.stringify({
+      type: "message_delta",
+      delta: { stop_reason: stopReason },
+      usage: { output_tokens: 400 },
+    }),
+    JSON.stringify({ type: "message_stop" }),
+  ];
+  return events.map((data) => `event: e\ndata: ${data}\n\n`).join("");
+}
+
+describe("get_run_transcript reassembly", () => {
+  it("answers the message, not the stream, and leaves the wire off the page", async () => {
+    const wire = modelStream(["I'll write ", "the filing plan."]);
+    const { transcript } = harness([
+      tachoRow(1, {
+        kind: "llm_call",
+        model: "claude-opus-5",
+        provider: "anthropic",
+        ttftMs: 290,
+        apiDurationMs: 8000,
+        ...stored(wire, "text/event-stream"),
+      }),
+    ]);
+
+    const page = await transcript(input({ zoom: "everything" }), ctx());
+    const body = page.entries[0]?.response ?? page.entries[0]?.request;
+
+    expect(body?.text).toBeNull();
+    const assembly = body?.assembly;
+    expect(assembly).not.toBeNull();
+    expect(assembly?.blocks.map((b) => b.kind)).toEqual(["text", "tool_use"]);
+    const text = assembly?.blocks[0];
+    expect(text?.kind === "text" && text.text).toBe("I'll write the filing plan.");
+    expect(assembly?.precis).toBe("Wrote the filing plan, then asked for Write.");
+    expect(assembly?.stopReason).toBe("end_turn");
+    expect(assembly?.ttftMs).toBe(290);
+    expect(assembly?.durationMs).toBe(8000);
+    expect(assembly?.tokensPerSecond).toBe(50);
+    expect(assembly?.usage).toEqual({
+      inputTokens: 41,
+      cacheReadTokens: 21_000,
+      cacheWriteTokens: 512,
+      outputTokens: 400,
+    });
+    expect(assembly?.partial).toBe(false);
+    expect(assembly?.wire.bytes).toBe(Buffer.byteLength(wire, "utf8"));
+    // The point of the change: the page is a fraction of the transport.
+    expect(JSON.stringify(page).length).toBeLessThan(assembly?.wire.bytes ?? 0);
+  });
+
+  it("folds a long field in a tool call's input to its length", async () => {
+    const { transcript } = harness([
+      tachoRow(1, {
+        kind: "llm_call",
+        model: "claude-opus-5",
+        provider: "anthropic",
+        ...stored(modelStream(["done."]), "text/event-stream"),
+      }),
+    ]);
+
+    const page = await transcript(input({ zoom: "everything" }), ctx());
+    const call = (page.entries[0]?.response ?? page.entries[0]?.request)?.assembly
+      ?.blocks[1];
+
+    expect(call?.kind).toBe("tool_use");
+    if (call?.kind !== "tool_use") throw new Error("expected a tool call");
+    expect(call.inputFolded).toBe(true);
+    expect(call.input).toEqual({
+      file_path: "/p/notes.md",
+      content: "…900 characters",
+    });
+  });
+
+  it("renders the blocks of a stream that was cut off, and says it was", async () => {
+    const cut = modelStream(["half a senten"]).split("event: e\ndata: {\"type\":\"content_block_stop")[0] as string;
+    const { transcript } = harness([
+      tachoRow(1, {
+        kind: "llm_call",
+        model: "claude-opus-5",
+        provider: "anthropic",
+        ...stored(cut, "text/event-stream"),
+      }),
+    ]);
+
+    const page = await transcript(input({ zoom: "everything" }), ctx());
+    const assembly = (page.entries[0]?.response ?? page.entries[0]?.request)?.assembly;
+
+    expect(assembly?.partial).toBe(true);
+    expect(assembly?.blocks).toHaveLength(1);
+    const only = assembly?.blocks[0];
+    expect(only?.kind === "text" && only.text).toBe("half a senten");
+    expect(only?.partial).toBe(true);
+  });
+
+  it("leaves a body that is not a model stream reading exactly as before", async () => {
+    const { transcript } = harness([
+      tachoRow(1, { kind: "tool_call", ...stored("the tool's result") }),
+    ]);
+
+    const page = await transcript(input({ zoom: "everything" }), ctx());
+    const body = page.entries[0]?.response ?? page.entries[0]?.request;
+
+    expect(body?.assembly).toBeNull();
+    expect(body?.text).toBe("the tool's result");
+  });
+
+  it("prices each block at the model's output rate when the book has one", async () => {
+    const { transcript } = harness([
+      tachoRow(1, {
+        kind: "llm_call",
+        model: "claude-opus-5",
+        provider: "anthropic",
+        ...stored(modelStream(["priced."]), "text/event-stream"),
+      }),
+    ]);
+    const page = await transcript(input({ zoom: "everything" }), ctx());
+    const assembly = (page.entries[0]?.response ?? page.entries[0]?.request)?.assembly;
+
+    // The harness's book prices nothing, so every block's cost is left out
+    // rather than drawn as a zero.
+    expect(assembly?.blocks.every((b) => b.cost === null)).toBe(true);
+    expect(
+      assembly?.blocks.reduce((sum, b) => sum + b.tokens, 0),
+    ).toBe(400);
   });
 });
