@@ -4,9 +4,8 @@
 // Two jobs:
 //   - parseEnvFile: read creds.txt (markdown `- KEY=value` bullets) and .env.local
 //     (standard `KEY=value`) into an upper-cased key→value map.
-//   - reconcile: pick the freshest value for a GCP secret. creds.txt is the named
-//     source of truth, but its values are LOCAL/DEV, so it only overrides
-//     unsuffixed/dev secrets — never a -production/-staging GCP variant.
+//   - reconcile: preserve the remote value and flag local duplicates. Local
+//     values fill missing development secrets only.
 import { readFileSync } from "node:fs";
 import type { ValueSource } from "./secrets-db";
 import { canonicalize } from "./secrets-meta";
@@ -51,9 +50,8 @@ export interface Reconciled {
 }
 
 /**
- * Decide the freshest value. creds.txt wins for unsuffixed/dev secrets; for
- * -production/-staging variants the GCP value is authoritative even though the
- * duplicate is still flagged. .env.local fills gaps GCP can't.
+ * Keep the GCP value when present. A local duplicate does not prove freshness.
+ * Missing stage-specific secrets stay missing instead of taking dev credentials.
  */
 export function reconcile(
   gcpName: string,
@@ -78,9 +76,8 @@ export function reconcile(
   const isStage = STAGE_SUFFIX.test(gcpName);
   const isDuplicate = Boolean(credsVal || envVal);
 
-  if (credsVal && !isStage)
-    return { value: credsVal, source: "creds.txt", isDuplicate };
   if (gcpValue !== null) return { value: gcpValue, source: "gcp", isDuplicate };
+  if (isStage) return { value: null, source: "missing", isDuplicate };
   if (credsVal) return { value: credsVal, source: "creds.txt", isDuplicate };
   if (envVal) return { value: envVal, source: ".env.local", isDuplicate };
   return { value: null, source: "missing", isDuplicate };

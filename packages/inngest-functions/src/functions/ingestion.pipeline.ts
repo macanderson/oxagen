@@ -171,6 +171,7 @@ export const [ingestionPipeline] = createFunction(
         };
 
         // Apply property renames from the customer-configured mapping.
+        let legacyUrlProperty = "url";
         const mappedProperties: Record<string, unknown> = {
           ...normalized.properties,
         };
@@ -179,6 +180,8 @@ export const [ingestionPipeline] = createFunction(
         )) {
           if (sourceField in mappedProperties) {
             mappedProperties[canonicalName] = mappedProperties[sourceField];
+            if (sourceField === legacyUrlProperty)
+              legacyUrlProperty = canonicalName;
             if (canonicalName !== sourceField)
               delete mappedProperties[sourceField];
           }
@@ -201,6 +204,7 @@ export const [ingestionPipeline] = createFunction(
           ...(normalized.legacyExternalId
             ? {
                 legacyNaturalKey: `${connectorType}:${connectionId}:${normalized.legacyExternalId}`,
+                legacyUrlProperty,
               }
             : {}),
           operation: "insert",

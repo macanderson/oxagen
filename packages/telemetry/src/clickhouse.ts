@@ -3,41 +3,12 @@ import { requireEnv } from "@oxagen/config/env";
 import { getPrincipalAttribution } from "@oxagen/tenancy";
 import { currentTraceIds } from "./tracer";
 import {
-  getBreaker,
-  type BreakerTransition,
-  type CircuitBreaker,
-} from "./circuit-breaker";
-import { breakerEnvConfig } from "./breaker-config";
+  clickhouseClientBreaker,
+  guardClickhouseClient,
+} from "./clickhouse-breaker-client";
 
-/**
- * Circuit breaker for the shared ClickHouse client. A degraded ClickHouse must
- * fail fast instead of every append/query piling onto a down store.
- *
- * Unlike the Neo4j/Stripe breakers (breaker-clients.ts), this one CANNOT record
- * its own transitions in ClickHouse — that is the very dependency that is down —
- * so it logs trips to stderr only.
- *
- * Degradation semantics, stated plainly: on an open breaker every guarded write
- * rejects with `CircuitOpenError`, and every insert caller in this repo swallows
- * that rejection. There is no queue, dead-letter, or retry behind this boundary,
- * so the row is lost permanently. For log/trace/event streams that is the right
- * trade. It is NOT free for `token_usage` — those rows are the metering ledger
- * `sumTokenUsage` bills from, so a ClickHouse outage silently drops billable
- * usage with no counter recording how much. Read paths degrade at the
- * caller: a caller on a critical path catches the rejection and fails OPEN, so
- * a down telemetry store never blocks an invocation.
- */
-function clickhouseBreaker(): CircuitBreaker {
-  return getBreaker("clickhouse", {
-    ...breakerEnvConfig(),
-    onTransition: (t: BreakerTransition) =>
-      process.stderr.write(
-        `[circuit-breaker] ${t.key} ${t.from}->${t.to} (failures=${t.failureCount})` +
-          (t.error ? ` err=${t.error}` : "") +
-          "\n",
-      ),
-  });
-}
+// The client guards every remote operation, including streamed response bodies.
+// Callers still own durable delivery. A breaker is not a telemetry outbox.
 
 // Singleton client per process. ClickHouse Cloud handles concurrency
 // upstream; we just reuse a single keepalive connection pool.
@@ -51,24 +22,27 @@ export function clickhouse(): ClickHouseClient {
     "CLICKHOUSE_PASSWORD",
     "CLICKHOUSE_DATABASE",
   ] as const);
-  _client = createClient({
-    url: env.CLICKHOUSE_URL,
-    username: env.CLICKHOUSE_USERNAME,
-    password: env.CLICKHOUSE_PASSWORD,
-    database: env.CLICKHOUSE_DATABASE,
-    clickhouse_settings: {
-      // Every caller stamps timestamps with `new Date().toISOString()`
-      // (`2026-06-05T12:00:00.000Z`). ClickHouse's default `basic`
-      // date_time_input_format rejects the ISO `T`/`Z` form against a
-      // DateTime64 column, surfacing as "Cannot parse input ... created_at"
-      // on every insert (token_usage, tool_invocations, traces, spans,
-      // events, audit_events) and on the DateTime64 query params in
-      // sumTokenUsage. `best_effort` parses ISO-8601 with millisecond
-      // precision into DateTime64(3). Set once on the singleton so all
-      // datetime columns ingest correctly — no per-row format conversion.
-      date_time_input_format: "best_effort",
-    },
-  });
+  _client = guardClickhouseClient(
+    createClient({
+      url: env.CLICKHOUSE_URL,
+      username: env.CLICKHOUSE_USERNAME,
+      password: env.CLICKHOUSE_PASSWORD,
+      database: env.CLICKHOUSE_DATABASE,
+      clickhouse_settings: {
+        // Every caller stamps timestamps with `new Date().toISOString()`
+        // (`2026-06-05T12:00:00.000Z`). ClickHouse's default `basic`
+        // date_time_input_format rejects the ISO `T`/`Z` form against a
+        // DateTime64 column, surfacing as "Cannot parse input ... created_at"
+        // on every insert (token_usage, tool_invocations, traces, spans,
+        // events, audit_events) and on the DateTime64 query params in
+        // sumTokenUsage. `best_effort` parses ISO-8601 with millisecond
+        // precision into DateTime64(3). Set once on the singleton so all
+        // datetime columns ingest correctly — no per-row format conversion.
+        date_time_input_format: "best_effort",
+      },
+    }),
+    clickhouseClientBreaker("clickhouse"),
+  );
   return _client;
 }
 
@@ -104,9 +78,8 @@ export async function sumTokenUsage(args: {
   // Aggregating in ClickHouse rather than pulling raw rows keeps the
   // payload bounded regardless of usage volume. Breaker-guarded so a degraded
   // store fails fast rather than stalling the billing rollup.
-  const result = await clickhouseBreaker().exec(() =>
-    ch.query({
-      query: `
+  const result = await ch.query({
+    query: `
       SELECT
         sum(input_tokens)  AS input_tokens,
         sum(output_tokens) AS output_tokens,
@@ -119,14 +92,13 @@ export async function sumTokenUsage(args: {
         AND created_at >= {periodStart:DateTime64(3)}
         AND created_at <  {periodEnd:DateTime64(3)}
     `,
-      query_params: {
-        orgId: args.orgId,
-        periodStart: args.periodStart.toISOString().replace("Z", ""),
-        periodEnd: args.periodEnd.toISOString().replace("Z", ""),
-      },
-      format: "JSONEachRow",
-    }),
-  );
+    query_params: {
+      orgId: args.orgId,
+      periodStart: args.periodStart.toISOString().replace("Z", ""),
+      periodEnd: args.periodEnd.toISOString().replace("Z", ""),
+    },
+    format: "JSONEachRow",
+  });
   type Row = {
     input_tokens: string;
     output_tokens: string;
@@ -300,9 +272,7 @@ async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
   // Batched JSONEachRow keeps a single round-trip per insert call;
   // callers should accumulate rows before invoking. Guarded by the ClickHouse
   // breaker so a down store fails fast instead of being hammered.
-  await clickhouseBreaker().exec(() =>
-    clickhouse().insert({ table, values: rows, format: "JSONEachRow" }),
-  );
+  await clickhouse().insert({ table, values: rows, format: "JSONEachRow" });
 }
 
 /**
@@ -400,9 +370,8 @@ export async function sumTokenUsageByExecutionStep(args: {
   if (ids.length === 0) return result;
 
   const ch = clickhouse();
-  const queryResult = await clickhouseBreaker().exec(() =>
-    ch.query({
-      query: `
+  const queryResult = await ch.query({
+    query: `
       SELECT
         execution_step_id,
         sum(cost_usd_micros) AS cost_micros,
@@ -418,10 +387,9 @@ export async function sumTokenUsageByExecutionStep(args: {
         AND execution_step_id IN {ids:Array(UUID)}
       GROUP BY execution_step_id
     `,
-      query_params: { orgId: args.orgId, ids },
-      format: "JSONEachRow",
-    }),
-  );
+    query_params: { orgId: args.orgId, ids },
+    format: "JSONEachRow",
+  });
   type Row = {
     execution_step_id: string;
     cost_micros: string;
@@ -926,9 +894,8 @@ export async function latestAuditChainHash(args: {
   capability: string;
 }): Promise<string> {
   const ch = clickhouse();
-  const result = await clickhouseBreaker().exec(() =>
-    ch.query({
-      query: `
+  const result = await ch.query({
+    query: `
       SELECT chain_hash
       FROM audit_events FINAL
       WHERE org_id = {orgId:UUID}
@@ -936,10 +903,9 @@ export async function latestAuditChainHash(args: {
       ORDER BY occurred_at DESC
       LIMIT 1
     `,
-      query_params: { orgId: args.orgId, capability: args.capability },
-      format: "JSONEachRow",
-    }),
-  );
+    query_params: { orgId: args.orgId, capability: args.capability },
+    format: "JSONEachRow",
+  });
   type Row = { chain_hash: string };
   const rows = (await result.json()) as Row[];
   return rows[0]?.chain_hash ?? "";

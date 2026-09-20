@@ -539,6 +539,75 @@ describe("GitHub legacy record identity", () => {
     });
   });
 
+  it("preserves a legacy node whose URL property was renamed", async () => {
+    legacyRows([
+      {
+        nodeId: "original-node",
+        properties: JSON.stringify({ link: sourceUrl }),
+      },
+    ]);
+    const result = await resolveEntity(
+      { ...mutation, legacyUrlProperty: "link" },
+      "org-1",
+    );
+    expect(result.principalNodeId).toBe("original-node");
+    expect(result.action).toBe("updated_principal");
+    expect(mocks.upsertEntityNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        naturalKey: mutation.legacyNaturalKey,
+        canonicalNaturalKey: mutation.naturalKey,
+      }),
+      "org-1",
+      {},
+    );
+    expect(mocks.embedText).not.toHaveBeenCalled();
+  });
+
+  it("uses the separately stored source URL after property mappings change", async () => {
+    legacyRows([
+      {
+        nodeId: "original-node",
+        sourceExternalUrl: sourceUrl,
+        properties: "broken",
+      },
+    ]);
+    const result = await resolveEntity(
+      { ...mutation, legacyUrlProperty: "newLink" },
+      "org-1",
+    );
+    expect(result.principalNodeId).toBe("original-node");
+    expect(result.action).toBe("updated_principal");
+  });
+
+  it("does not reuse another repository's node through a mapped URL", async () => {
+    legacyRows([
+      {
+        nodeId: "foreign",
+        properties: JSON.stringify({
+          link: "https://github.com/acme/two/issues/7",
+          url: sourceUrl,
+        }),
+      },
+    ]);
+    const result = await resolveEntity(
+      { ...mutation, legacyUrlProperty: "link" },
+      "org-1",
+    );
+    expect(result.action).toBe("created_principal");
+  });
+
+  it("does not let mapped properties override a different stored source URL", async () => {
+    legacyRows([
+      {
+        nodeId: "foreign",
+        sourceExternalUrl: "https://github.com/acme/two/issues/7",
+        properties: JSON.stringify({ url: sourceUrl }),
+      },
+    ]);
+    const result = await resolveEntity(mutation, "org-1");
+    expect(result.action).toBe("created_principal");
+  });
+
   it.each([
     [
       "another repository",

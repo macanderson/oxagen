@@ -18,11 +18,11 @@
  * NOTE ON SUPERUSER: superusers bypass RLS and always pass privilege checks, so
  * the isolation assertions run under a non-superuser role via SET LOCAL ROLE,
  * exactly as integration/rls.test.ts does. Privilege assertions read the real
- * `oxagen_app` role's grants out of the catalog when that role exists.
+ * `oxagen_app` role's grants out of the catalog. Missing role provisioning fails.
  *
  * CI: rls-integration job (TENANT_RLS_ENFORCEMENT_ENABLED=true, clean DB).
  * Local: DATABASE_URL=postgres://oxagen:oxagen@localhost:5433/oxagen \
- *          pnpm --filter @oxagen/database test:integration -- integration/authorization-foundation.test.ts
+ *          pnpm --filter @oxagen/database test:integration integration/authorization-foundation.test.ts
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
@@ -190,7 +190,12 @@ async function privilegeRole(): Promise<string> {
   const rows = await sql<{ exists: boolean }[]>`
     SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oxagen_app') AS exists
   `;
-  return rows[0]?.exists ? "oxagen_app" : APP_ROLE;
+  if (!rows[0]?.exists) {
+    throw new Error(
+      "Authorization privilege proof requires the migrated oxagen_app role",
+    );
+  }
+  return "oxagen_app";
 }
 
 /**
