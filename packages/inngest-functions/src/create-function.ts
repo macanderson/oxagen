@@ -114,14 +114,35 @@ export const MAX_BATCH_SIZE = 5;
  */
 export const MAX_BATCH_TIMEOUT_SECONDS = 30;
 
-/** Seconds in each unit Inngest's `TimeStr` admits. */
-const BATCH_TIMEOUT_UNIT_SECONDS: Readonly<Record<string, number>> = {
-  w: 604_800,
-  d: 86_400,
-  h: 3_600,
-  m: 60,
-  s: 1,
-};
+/**
+ * Seconds in one `<number><unit>` component of an Inngest duration, or `null`
+ * for a unit `TimeStr` does not admit.
+ *
+ * Total over every input, `undefined` included, because a capture group is
+ * optional to the type checker however certain the pattern is — which is what
+ * keeps this free of a cast that would outlive the reason for it.
+ */
+function componentSeconds(
+  digits: string | undefined,
+  unit: string | undefined,
+): number | null {
+  const value = Number(digits);
+  if (!Number.isFinite(value)) return null;
+  switch (unit) {
+    case "w":
+      return value * 604_800;
+    case "d":
+      return value * 86_400;
+    case "h":
+      return value * 3_600;
+    case "m":
+      return value * 60;
+    case "s":
+      return value;
+    default:
+      return null;
+  }
+}
 
 /**
  * Seconds in an Inngest duration string, composites included (`"30s"`,
@@ -153,8 +174,10 @@ function batchTimeoutSeconds(timeout: string): number | null {
   if (text === "") return null;
   let total = 0;
   let consumed = 0;
-  for (const [component, value, unit] of text.matchAll(/(\d+)([wdhms])/g)) {
-    total += Number(value) * (BATCH_TIMEOUT_UNIT_SECONDS[unit] as number);
+  for (const [component, digits, unit] of text.matchAll(/(\d+)([wdhms])/g)) {
+    const seconds = componentSeconds(digits, unit);
+    if (seconds === null) return null;
+    total += seconds;
     consumed += component.length;
   }
   // Every character has to belong to a component; otherwise this is a
