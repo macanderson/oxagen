@@ -54,6 +54,12 @@ interface StoredBody {
   bytes_base64: string;
 }
 
+export interface WalBodyFailure {
+  session_uuid: string;
+  operation: "append" | "read";
+  code: string;
+}
+
 export interface WalStats {
   sessions: number;
   unshipped: number;
@@ -80,7 +86,12 @@ export class Wal {
    */
   private readonly lastSeq = new Map<string, number>();
 
-  constructor(dir: string) {
+  constructor(
+    dir: string,
+    private readonly reportBodyFailure: (failure: WalBodyFailure) => void = (
+      failure,
+    ) => console.warn("WAL body unavailable", failure),
+  ) {
     this.dir = dir;
     ensureDir(dir);
     this.cursorPath = join(dir, "cursor.json");
@@ -106,11 +117,9 @@ export class Wal {
   }
 
   /**
-   * Append sealed events, each to its own session's file, and the bodies of
-   * those that carry one to the session's body file. The bodies go first:
-   * a crash between the two writes then leaves an event without a body,
-   * which ships as digest-only, rather than a body without an event, which
-   * nothing would ever ship.
+   * Bodies go first so ordinary writes ship content with its event. A crash
+   * between files can leave an orphan body, which retention sweeps remove.
+   * A failed body write must still permit the sealed event to persist.
    */
   append(
     events: readonly TachoEvent[],
@@ -129,9 +138,14 @@ export class Wal {
       bodyLines.set(body.session_uuid, lines);
     }
     for (const [session, lines] of bodyLines) {
-      appendFileSync(this.bodyFileFor(session), `${lines.join("\n")}\n`, {
-        mode: 0o600,
-      });
+      try {
+        // Separate a prior torn tail from this batch, including after restart.
+        appendFileSync(this.bodyFileFor(session), `\n${lines.join("\n")}\n`, {
+          mode: 0o600,
+        });
+      } catch (error) {
+        this.bodyFailure(session, "append", error);
+      }
     }
     const bySession = new Map<string, string[]>();
     for (const event of events) {
@@ -152,6 +166,26 @@ export class Wal {
     }
     if (events.some((event) => event.kind === "agent_stop")) {
       this.persistCursor();
+    }
+  }
+
+  private bodyFailure(
+    session: string,
+    operation: WalBodyFailure["operation"],
+    error: unknown,
+  ): void {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      /^[A-Za-z0-9_]+$/.test(error.code)
+        ? error.code
+        : "body_io_failed";
+    try {
+      this.reportBodyFailure({ session_uuid: session, operation, code });
+    } catch {
+      // A diagnostic sink cannot prevent persistence of the sealed event.
     }
   }
 
@@ -194,9 +228,34 @@ export class Wal {
     for (const [session, idems] of wanted) {
       const path = this.bodyFileFor(session);
       if (!existsSync(path)) continue;
-      for (const line of readFileSync(path, "utf8").split("\n")) {
+      let contents: string;
+      try {
+        contents = readFileSync(path, "utf8");
+      } catch (error) {
+        this.bodyFailure(session, "read", error);
+        continue;
+      }
+      let reportedInvalid = false;
+      for (const line of contents.split("\n")) {
         if (line.trim().length === 0) continue;
-        const stored = JSON.parse(line) as StoredBody;
+        let stored: StoredBody;
+        try {
+          stored = JSON.parse(line) as StoredBody;
+          if (
+            !stored ||
+            typeof stored.event_id_idem !== "string" ||
+            !Number.isSafeInteger(stored.seq) ||
+            typeof stored.content_type !== "string" ||
+            typeof stored.bytes_base64 !== "string"
+          )
+            throw new Error("Invalid body record");
+        } catch {
+          if (!reportedInvalid) {
+            this.bodyFailure(session, "read", { code: "invalid_body_record" });
+            reportedInvalid = true;
+          }
+          continue;
+        }
         if (stored.seq < minSeq || !idems.has(stored.event_id_idem)) continue;
         if (found.has(stored.event_id_idem)) continue;
         found.set(stored.event_id_idem, {
