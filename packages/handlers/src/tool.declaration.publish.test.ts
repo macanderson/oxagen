@@ -32,11 +32,14 @@ import { canonicalJson, sha256Hex } from "./registry-digest";
 //   - a classification on a name no capability is registered under is
 //     refused conflict / consequence_not_gated before anything is read; the
 //     same name with no classification publishes
-// Every select shares one queue; the transaction call gets a builder whose
+// Tool/version selects share one queue; workspace locking has its own fixture.
+// The transaction call gets a builder whose
 // inserts/updates resolve via dedicated spies so ordering and shapes can be
 // asserted (same seam as skill.workspace.install.test.ts).
 const mocks = vi.hoisted(() => ({
   selectResults: [] as Array<() => Promise<unknown>>,
+  workspaceExists: true,
+  workspaceLocks: [] as string[],
   insertReturning: [] as Array<() => Promise<unknown>>,
   insertedValues: [] as Array<Record<string, unknown>>,
   updateSets: [] as Array<Record<string, unknown>>,
@@ -77,12 +80,21 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const makeTx = () => ({
     query: {
       workspaces: {
-        findFirst: async () => ({ consequenceRoles: mocks.consequenceRoles }),
+        findFirst: async () => ({
+          consequenceRoles: mocks.consequenceRoles,
+          settings: {}, // No approval rules in this declaration/role-gate fixture.
+        }),
       },
     },
     select: () => ({
-      from: () => ({
+      from: (table: unknown) => ({
         where: () => ({
+          for: async (mode: string) => {
+            if (table !== real.schema.workspaces)
+              throw new Error("Unexpected locked table in declaration fixture");
+            mocks.workspaceLocks.push(mode);
+            return mocks.workspaceExists ? [{ id: "ws_1" }] : [];
+          },
           limit: () => {
             const next = mocks.selectResults.shift();
             return next ? next() : Promise.resolve([]);
@@ -184,6 +196,8 @@ beforeEach(() => {
   mocks.roles = { org: "Owner", workspace: null };
   mocks.consequenceRoles = {};
   mocks.selectResults.length = 0;
+  mocks.workspaceExists = true;
+  mocks.workspaceLocks.length = 0;
   mocks.insertReturning.length = 0;
   mocks.insertedValues.length = 0;
   mocks.updateSets.length = 0;
@@ -210,6 +224,7 @@ describe("tool.declaration.publish handler", () => {
       checksum: EXPECTED_CHECKSUM,
       published: true,
     });
+    expect(mocks.workspaceLocks).toEqual(["update"]);
     // The name is lowercased into the slug; the version row carries the facts.
     expect(mocks.insertedValues[0]).toMatchObject({ slug: "read_file" });
     expect(mocks.insertedValues[1]).toMatchObject({
@@ -274,6 +289,21 @@ describe("tool.declaration.publish handler", () => {
       checksum: EXPECTED_CHECKSUM,
     });
     expect(mocks.updateSets[1]).toMatchObject({ activeVersionId: "v3-uuid" });
+  });
+
+  it("refuses publication when the workspace lock finds no row", async () => {
+    mocks.workspaceExists = false;
+    queueSelects([]);
+    await expect(
+      toolDeclarationPublishHandler(INPUT, CTX),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      reason: "workspace_not_found",
+    });
+    expect(mocks.workspaceLocks).toEqual(["update"]);
+    expect(mocks.selectResults).toHaveLength(1); // No tool lookup after refusal.
+    expect(mocks.insertedValues).toEqual([]);
+    expect(mocks.updateSets).toEqual([]);
   });
 
   it("requires a workspace scope", async () => {
