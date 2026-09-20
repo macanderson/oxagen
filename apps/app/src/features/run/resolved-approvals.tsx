@@ -10,7 +10,11 @@ import { mono, panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { ReadFailure } from "@/ui/read-failure";
 
-function approverLabel(resolvedBy: string | null): string {
+function approverLabel({
+  resolvedBy,
+  resolution,
+}: ResolvedApprovalItem): string {
+  if (resolvedBy === null && resolution === "expired") return "system";
   if (resolvedBy === null) return "unknown";
   if (resolvedBy.startsWith("policy:")) {
     return `rule ${resolvedBy.slice("policy:".length)} (no person looked)`;
@@ -32,7 +36,7 @@ function ResolvedApprovalRow({ item }: { item: ResolvedApprovalItem }) {
         <dd>{item.resolution}</dd>
         <dt className="text-muted-foreground">{t("resolvedBy")}</dt>
         <dd data-testid="resolved-approver" className={`${mono} break-all`}>
-          {approverLabel(item.resolvedBy)}
+          {approverLabel(item)}
         </dd>
         <dt className="text-muted-foreground">{t("resolvedAt")}</dt>
         <dd>

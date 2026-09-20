@@ -170,6 +170,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
               tokenUsedAt: inMinutes(-5),
               expiresAt: inMinutes(5),
             },
+            // The expiry job persists this shape for a non-mandate timeout.
+            {
+              orgId: orgA,
+              workspaceId: wsA1,
+              capabilityName: "ordinary_timeout",
+              inputPreview: {},
+              riskLevel: "high",
+              resolution: "expired",
+              resolvedAt: inMinutes(-1),
+              expiresAt: inMinutes(-1),
+            },
             // Still pending: the resolved listing must not show it.
             {
               orgId: orgA,
@@ -218,6 +229,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(item!.resolution).toBe("approved");
       expect(item!.resolvedBy).toBe("policy:small-vendor-payments");
       expect(item!.autoRuleId).toBe("small-vendor-payments");
+    });
+
+    it("returns an ordinary timeout with its stable expiry time and no invented approver", async () => {
+      const out = await list(orgA, wsA1);
+      expect(
+        out.items.find((item) => item.tool === "ordinary_timeout"),
+      ).toMatchObject({
+        resolution: "expired",
+        resolvedAt: inMinutes(-1).toISOString(),
+        expiresAt: inMinutes(-1).toISOString(),
+        resolvedBy: null,
+        mandateId: null,
+      });
     });
 
     it("does not return the still-pending row (negative)", async () => {
