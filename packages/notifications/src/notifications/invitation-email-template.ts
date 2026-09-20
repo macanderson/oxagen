@@ -18,6 +18,8 @@ export interface InvitationEmailTemplateInput {
   role: string;
   /** Invitee's email address. */
   email: string;
+  /** Optional note from the person sending the invitation. */
+  message?: string;
 }
 
 /**
@@ -32,6 +34,8 @@ export function invitationEmailTemplate(input: InvitationEmailTemplateInput): {
 } {
   const { inviteUrl, inviterName, orgName, role, email } = input;
 
+  const message = input.message?.trim();
+
   const subject = `You've been invited to join ${orgName} on Oxagen`;
 
   const text = [
@@ -39,6 +43,7 @@ export function invitationEmailTemplate(input: InvitationEmailTemplateInput): {
     ``,
     `${inviterName} has invited you (${email}) to join ${orgName} on Oxagen as a ${role}.`,
     ``,
+    ...(message ? [`Note from ${inviterName}:`, message, ``] : []),
     `Accept your invitation here: ${inviteUrl}`,
     ``,
     `This invitation expires in 7 days. If you were not expecting this invitation, you can safely ignore this email.`,
@@ -58,6 +63,7 @@ export function invitationEmailTemplate(input: InvitationEmailTemplateInput): {
         (<strong>${esc(email)}</strong>) to join
         <strong>${esc(orgName)}</strong> on Oxagen as a <strong>${esc(role)}</strong>.
       </p>
+      ${message ? `<p style="font-size:14px;color:#374151;margin:0 0 16px"><strong>Note from ${esc(inviterName)}:</strong><br>${esc(message).replace(/\r\n|\r|\n/g, "<br>")}</p>` : ""}
       <p style="margin:0 0 24px">
         <a href="${esc(inviteUrl)}"
            style="display:inline-block;background:#6366f1;color:#ffffff;font-size:14px;font-weight:600;padding:10px 20px;border-radius:6px;text-decoration:none">
