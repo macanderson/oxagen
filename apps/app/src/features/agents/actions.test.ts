@@ -37,9 +37,12 @@ const kernel =
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
+  assignAgentRole,
   commitAgentDefinition,
+  readAssignableRoles,
   requestMandate,
   retireAgent,
+  revokeAgentRole,
   rotateAgentCredential,
   setAgentSuspended,
 } = await import("./actions");
@@ -746,5 +749,236 @@ describe("requestMandate", () => {
       ok: false,
       reason: "denied",
     });
+  });
+});
+
+/** One row of `list_iam_roles`, with the fields the offer reads. */
+const roleRow = (
+  name: string,
+  over: Partial<{
+    kind: "human" | "agent";
+    scopeKind: "org" | "workspace";
+    isSystemDefault: boolean;
+  }> = {},
+) => ({
+  id: `rol_${name.toLowerCase().replaceAll(" ", "_")}`,
+  name,
+  description: null,
+  scopeKind: "org" as const,
+  kind: "agent" as const,
+  isSystemDefault: false,
+  version: "1",
+  memberCount: 0,
+  createdBy: null,
+  permissions: [],
+  ...over,
+});
+
+const catalogue = (
+  roles: ReturnType<typeof roleRow>[],
+  over: Partial<{ hasMore: boolean; enforced: boolean; tier: string }> = {},
+) => ({
+  ok: true,
+  value: {
+    roles,
+    total: roles.length,
+    hasMore: over.hasMore ?? false,
+    limit: 200,
+    offset: 0,
+    catalog: [],
+    enforcement: {
+      tier: over.tier ?? "enterprise",
+      enforced: over.enforced ?? true,
+    },
+  },
+});
+
+describe("readAssignableRoles", () => {
+  it("offers the roles an agent may hold and drops the human ones", async () => {
+    kernelRead.mockResolvedValue(
+      catalogue([
+        roleRow("Agent Contributor", { isSystemDefault: true }),
+        roleRow("Release deputy", { scopeKind: "workspace" }),
+        roleRow("Owner", { kind: "human", isSystemDefault: true }),
+      ]),
+    );
+    expect(await readAssignableRoles("acme", "core-platform")).toEqual({
+      ok: true,
+      value: {
+        roles: [
+          { name: "Agent Contributor", scope: "org", builtIn: true },
+          { name: "Release deputy", scope: "workspace", builtIn: false },
+        ],
+        enforced: true,
+        tier: "enterprise",
+        more: false,
+      },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: expect.objectContaining({ name: "list_iam_roles" }),
+      input: { includeGrants: false, limit: 200, offset: 0 },
+      page: "agents",
+    });
+  });
+
+  // The picker says so rather than presenting a page as the catalogue.
+  it("carries the tier that does not enforce, and a page that is not the whole catalogue", async () => {
+    kernelRead.mockResolvedValue(
+      catalogue([roleRow("Agent Observer", { isSystemDefault: true })], {
+        hasMore: true,
+        enforced: false,
+        tier: "build",
+      }),
+    );
+    expect(await readAssignableRoles("acme", "core-platform")).toMatchObject({
+      ok: true,
+      value: { enforced: false, tier: "build", more: true },
+    });
+  });
+
+  it("carries a refused read across as denied (negative)", async () => {
+    kernelRead.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      permission: "org.admin",
+    });
+    expect(await readAssignableRoles("acme", "core-platform")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "org.admin",
+    });
+  });
+});
+
+describe("assignAgentRole", () => {
+  it("assigns the named role for the workspace viewer", async () => {
+    invoke.mockResolvedValue({
+      assigned: true,
+      alreadyAssigned: false,
+      agentId: "agt_releasebot",
+      roleId: "rol_contributor",
+      roleName: "Agent Contributor",
+    });
+    expect(
+      await assignAgentRole(
+        "acme",
+        "core-platform",
+        "agt_releasebot",
+        "Agent Contributor",
+      ),
+    ).toEqual({
+      ok: true,
+      value: { roleName: "Agent Contributor", alreadyAssigned: false },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "assign_agent_role",
+      { agentId: "agt_releasebot", roleName: "Agent Contributor" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("reports a role the agent already held, which wrote nothing", async () => {
+    invoke.mockResolvedValue({
+      assigned: true,
+      alreadyAssigned: true,
+      agentId: "agt_releasebot",
+      roleId: "rol_contributor",
+      roleName: "Agent Contributor",
+    });
+    expect(
+      await assignAgentRole(
+        "acme",
+        "core-platform",
+        "agt_releasebot",
+        "Agent Contributor",
+      ),
+    ).toMatchObject({ ok: true, value: { alreadyAssigned: true } });
+  });
+
+  it("refuses a blank role before the kernel runs (negative)", async () => {
+    expect(
+      await assignAgentRole("acme", "core-platform", "agt_releasebot", "   "),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "roleName",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("assign_agent_role"));
+    expect(
+      await assignAgentRole(
+        "acme",
+        "core-platform",
+        "agt_releasebot",
+        "Agent Operator",
+      ),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+describe("revokeAgentRole", () => {
+  it("revokes the named role for the workspace viewer", async () => {
+    invoke.mockResolvedValue({
+      revoked: true,
+      agentId: "agt_releasebot",
+      roleName: "Agent Operator",
+    });
+    expect(
+      await revokeAgentRole(
+        "acme",
+        "core-platform",
+        "agt_releasebot",
+        "Agent Operator",
+      ),
+    ).toEqual({
+      ok: true,
+      value: { roleName: "Agent Operator", revoked: true },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "revoke_agent_role",
+      { agentId: "agt_releasebot", roleName: "Agent Operator" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  // A second click on a page whose rows are stale: idempotent, not an error.
+  it("reports a role the agent did not hold as revoked false", async () => {
+    invoke.mockResolvedValue({
+      revoked: false,
+      agentId: "agt_releasebot",
+      roleName: "Agent Operator",
+    });
+    expect(
+      await revokeAgentRole(
+        "acme",
+        "core-platform",
+        "agt_releasebot",
+        "Agent Operator",
+      ),
+    ).toMatchObject({ ok: true, value: { revoked: false } });
+  });
+
+  it("refuses a blank role before the kernel runs (negative)", async () => {
+    expect(
+      await revokeAgentRole("acme", "core-platform", "agt_releasebot", ""),
+    ).toMatchObject({ ok: false, reason: "invalid", field: "roleName" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("revoke_agent_role"));
+    expect(
+      await revokeAgentRole(
+        "acme",
+        "core-platform",
+        "agt_releasebot",
+        "Agent Operator",
+      ),
+    ).toMatchObject({ ok: false, reason: "denied" });
   });
 });

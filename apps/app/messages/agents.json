@@ -90,13 +90,34 @@
           "role": "Role",
           "scope": "Scope",
           "assigned": "Assigned",
-          "expires": "Expires"
+          "expires": "Expires",
+          "actions": "Actions"
         },
         "scope": {
           "org": "organization",
           "workspace": "workspace"
         },
-        "standing": "standing"
+        "standing": "standing",
+        "assign": {
+          "open": "Assign a role",
+          "title": "Assign a role",
+          "body": "The role attaches to this agent's own principal. You cannot assign a role that grants more than you hold yourself.",
+          "field": "Role",
+          "builtIn": "{name} (seeded)",
+          "loading": "Reading the role catalogue.",
+          "empty": "This organization has no role an agent may hold. Write one on the Roles page, then assign it here.",
+          "notEnforced": "On the {tier} tier the kernel allows every capability, so this role records intent and governs nothing until the organization moves to a tier that enforces it.",
+          "partial": "This organization has more roles than the 200 listed here. Assign one of the rest over the API.",
+          "confirm": "Assign",
+          "pending": "Assigning"
+        },
+        "revoke": {
+          "open": "Revoke {role}",
+          "title": "Revoke {role}",
+          "body": "The agent stops holding {role} at its next call. The assignment stays in the audit trail.",
+          "confirm": "Revoke",
+          "pending": "Revoking"
+        }
       },
       "credentials": {
         "title": "Run credentials",

@@ -58,10 +58,12 @@ async function renderAgent(
   reads: Parameters<typeof agentsSource>[0],
   tab: string | null = null,
   cursor: string | null = null,
+  /** The viewer, for the cases that turn on the organization role it holds. */
+  viewer = ctx,
 ) {
   const { source, calls } = agentsSource(reads);
   const element = await Agent({
-    ctx,
+    ctx: viewer,
     source,
     agent: "release-bot",
     tab,
@@ -182,6 +184,34 @@ describe("Agent header and tabs", () => {
 });
 
 describe("Identity", () => {
+  // assign_agent_role and revoke_agent_role are org Owner or Admin writes
+  // their handlers check, and a retired principal holds no authority to
+  // change, so the panel offers a control neither reader could use.
+  it.each([
+    ["a member", { detail: agentDetail(), role: "member" as const }],
+    [
+      "a retired identity",
+      {
+        detail: agentDetail({ identity: { status: "retired" } }),
+        role: "owner" as const,
+      },
+    ],
+  ])("offers no role control to %s (negative)", async (_name, at) => {
+    await renderAgent(
+      { get: readOk(at.detail) },
+      null,
+      null,
+      unsafeMint(WsCtx, { ...ctx, orgRole: at.role }),
+    );
+    const roles = region("Roles");
+    expect(within(roles).queryAllByRole("button")).toEqual([]);
+    expect(
+      within(roles)
+        .getAllByRole("columnheader")
+        .map((h) => h.textContent),
+    ).toEqual(["Role", "Scope", "Assigned", "Expires"]);
+  });
+
   it("draws the principal, its roles and its credentials, and reads nothing else", async () => {
     const calls = await renderAgent({ get: readOk(agentDetail()) });
     expect(current()).toEqual(["Identity"]);
@@ -192,7 +222,17 @@ describe("Identity", () => {
       within(region("Roles"))
         .getAllByRole("cell")
         .map((c) => c.textContent),
-    ).toEqual(["CI writer", "workspace", "Sep 2, 2026, 10:00 AM", "standing"]);
+    ).toEqual([
+      "CI writer",
+      "workspace",
+      "Sep 2, 2026, 10:00 AM",
+      "standing",
+      // The owner reading this page may change the agent's roles (#2956).
+      "Revoke CI writer",
+    ]);
+    expect(
+      within(region("Roles")).getByRole("button", { name: "Assign a role" }),
+    ).toBeInTheDocument();
     expect(
       within(region("Run credentials"))
         .getAllByRole("cell")
