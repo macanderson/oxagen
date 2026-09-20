@@ -265,6 +265,8 @@ export async function readUnpricedModels(args: {
       priceBookBoundaries(book, {
         models,
         tokenClasses: OBSERVED_TOKEN_CLASSES,
+        since: args.since,
+        until: args.at,
       }).map((t) => new Date(t)),
   });
   return findUnpricedModels({
