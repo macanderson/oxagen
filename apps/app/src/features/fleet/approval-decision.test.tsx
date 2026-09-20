@@ -181,7 +181,9 @@ describe("the decision", () => {
         note: "vendor is not on the approved list",
       },
     );
-    await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalledOnce();
+    });
   });
 
   it("says a denial needs a reason, and the call is untouched (negative)", async () => {
@@ -281,12 +283,8 @@ describe("the decision", () => {
   });
 
   it("names the decision in flight while the write is out", async () => {
-    let settle: (value: unknown) => void = () => undefined;
-    resolveApprovalAction.mockReturnValue(
-      new Promise((resolve) => {
-        settle = resolve;
-      }),
-    );
+    const decision = Promise.withResolvers<unknown>();
+    resolveApprovalAction.mockReturnValue(decision.promise);
     draw();
     const user = await open();
     await user.type(within(dialog()).getByLabelText("Reason"), "no");
@@ -294,11 +292,12 @@ describe("the decision", () => {
     const deny = within(dialog()).getByTestId("deny");
     expect(deny).toHaveTextContent("Denying");
     expect(deny).toHaveAttribute("aria-disabled", "true");
-    await act(() => {
-      settle({
+    await act(async () => {
+      decision.resolve({
         ok: true,
         value: { approvalId: APPROVAL, resolution: "denied", mandate: null },
       });
+      await decision.promise;
     });
   });
 });
@@ -488,7 +487,9 @@ describe("approval refusal recovery", () => {
     );
     await user.click(within(dialog()).getByTestId("approve"));
     expect(resolveApprovalAction).toHaveBeenCalledTimes(2);
-    await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalledOnce();
+    });
   });
 
   it("keeps a decision available when the freshness read itself waits for access", async () => {
