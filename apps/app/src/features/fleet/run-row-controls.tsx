@@ -40,7 +40,8 @@ import { buttonSecondary, inputBase, linkText } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { dispatchRunCommand, ROW_COMMANDS, type RowCommand } from "./actions";
+import { ROW_COMMANDS, type RowCommand } from "@/shared/row-commands";
+import { dispatchRunCommand } from "./actions";
 
 /** Why a live run draws no controls, in the words the run page already uses. */
 function NoRowControls({

@@ -35,8 +35,9 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
-// The three server actions are stubbed and the module's own constants kept:
-// the row controls read ROW_COMMANDS from here to draw their buttons.
+// The three server actions are stubbed. The module's other exports are kept:
+// a "use server" module exports async functions alone, so the row's command
+// list sits in @/shared/row-commands and needs no stub.
 vi.mock("./actions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./actions")>()),
   resolveApprovalAction: vi.fn(),

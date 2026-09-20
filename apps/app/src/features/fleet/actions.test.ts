@@ -196,7 +196,7 @@ describe("resolveApprovalAction", () => {
     });
   });
 
-  // ADR-113: the decision is the one billed action of this surface, so the
+  // ADR-114: the decision is the one billed action of this surface, so the
   // billing admission gate can refuse it where it refuses no read here.
   it("carries the exhausted code the billing gate raised (negative)", async () => {
     invoke.mockRejectedValue(

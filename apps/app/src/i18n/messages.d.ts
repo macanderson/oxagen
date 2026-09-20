@@ -1727,6 +1727,7 @@ type Messages = {
           invalid: string;
           pendingApproval: string;
           exhausted: string;
+          billingLink: string;
           refused: string;
           unavailable: string;
         };

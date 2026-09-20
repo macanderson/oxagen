@@ -18,6 +18,7 @@
 // rather than swallowing it.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutoEligibility } from "@/data/contracts/approvals";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -31,6 +32,13 @@ const { router, resolveApprovalAction, readApprovalEligibility } = vi.hoisted(
   }),
 );
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
+// The exhausted refusal carries a link out of it (INV-14), and `next/link`
+// wants a router this render does not mount.
+vi.mock("next/link", () => ({
+  default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
+    <a {...rest}>{children}</a>
+  ),
+}));
 vi.mock("./actions", () => ({
   resolveApprovalAction,
   readApprovalEligibility,
@@ -212,19 +220,41 @@ describe("the decision", () => {
     );
   });
 
-  // ADR-113: the decision is the one billed action of this surface.
-  it("names the exhausted credit the billing gate raised (negative)", async () => {
+  // ADR-114: the decision is the one billed action of this surface, and
+  // INV-14 has the refusal carry the way out of it.
+  it.each(["gau_exhausted", "billing_suspended", "budget_exceeded"] as const)(
+    "names the exhausted credit the billing gate raised and links to billing: %s (negative)",
+    async (code) => {
+      resolveApprovalAction.mockResolvedValue({
+        ok: false,
+        reason: "exhausted",
+        code,
+      });
+      draw();
+      const user = await open();
+      await user.click(within(dialog()).getByTestId("approve"));
+      const alert = screen.getByTestId("approval-decision-failure");
+      expect(alert).toHaveTextContent(`(${code})`);
+      expect(
+        within(alert).getByTestId("approval-decision-billing"),
+      ).toHaveAttribute("href", "/acme/billing");
+    },
+  );
+
+  it("carries no billing link on a refusal credit had nothing to do with (negative)", async () => {
     resolveApprovalAction.mockResolvedValue({
       ok: false,
-      reason: "exhausted",
-      code: "gau_exhausted",
+      reason: "denied",
+      code: "org_role_required",
     });
     draw();
     const user = await open();
     await user.click(within(dialog()).getByTestId("approve"));
-    expect(screen.getByTestId("approval-decision-failure")).toHaveTextContent(
-      "this organization's credit is exhausted (gau_exhausted)",
-    );
+    expect(
+      within(screen.getByTestId("approval-decision-failure")).queryByTestId(
+        "approval-decision-billing",
+      ),
+    ).toBeNull();
   });
 
   it("names the decision in flight while the write is out", async () => {

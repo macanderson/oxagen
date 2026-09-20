@@ -3,7 +3,7 @@
 // the dialog makes beside it, and the commands an operator sends to a run from
 // its row. Every one runs for the workspace viewer the URL names.
 //
-// **`resolve_approval` is the one billed action of this surface (ADR-113).**
+// **`resolve_approval` is the one billed action of this surface (ADR-114).**
 // The contract carries no `noBillingGate`, so the billing admission gate fires
 // after IAM and before the handler, and an exhausted organization gets
 // `exhausted` with the code the gate raised. The reads around it
@@ -46,6 +46,7 @@ import { AutoEligibility } from "@/data/contracts/approvals";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import { isRowCommand } from "@/shared/row-commands";
 
 /** What the decision answered: the resolution, and the mandate settlement when a mandate parked the call. */
 export type ApprovalDecision = {
@@ -165,15 +166,7 @@ export async function readApprovalEligibility(
   };
 }
 
-/** The commands a row sends. `dispatch_command` refuses a payload on all three. */
-export const ROW_COMMANDS = ["pause", "resume", "cancel"] as const;
-export type RowCommand = (typeof ROW_COMMANDS)[number];
-
 export type QueuedRowCommand = { commandIds: string[] };
-
-function isRowCommand(value: string): value is RowCommand {
-  return (ROW_COMMANDS as readonly string[]).includes(value);
-}
 
 /**
  * Queue a pause, resume or cancel for one run. The reason is optional and

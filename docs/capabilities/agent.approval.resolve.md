@@ -34,7 +34,7 @@ Org Owner or Admin, or workspace Owner or Member, checked by the handler (`asser
 
 ## Billing
 
-This is the one billed action of the approvals surface (ADR-113, #2950 decision
+This is the one billed action of the approvals surface (ADR-114, #2950 decision
 1). The contract carries no `noBillingGate`, so the billing admission gate fires
 after IAM and before the handler, and an organization out of credit gets
 `gau_exhausted`, `billing_suspended`, or `budget_exceeded`. The reads beside it

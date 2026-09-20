@@ -21,9 +21,15 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { AutoEligibility } from "@/data/contracts/approvals";
 import type { ActionResult } from "@/server/kernel";
-import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
+import { routes } from "@/shared/safe-path";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  inputBase,
+  linkText,
+} from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
-import { useNavigate } from "@/ui/navigation";
+import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { readApprovalEligibility, resolveApprovalAction } from "./actions";
 
@@ -196,7 +202,13 @@ export function ApprovalDecision({
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [pending, setPending] = useState<"approved" | "denied" | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  /**
+   * The refusal itself, not a rendered sentence. INV-14 has an exhausted
+   * refusal carry the way out of it, and this is the invariant's one rev1
+   * producer: a decision is the one billed action of the surface (ADR-114), so
+   * the dialog holds the failure and draws the billing link beside the code.
+   */
+  const [failure, setFailure] = useState<Failure | null>(null);
   /** What the dialog read when it opened: null while it is reading. */
   const [fresh, setFresh] = useState<{
     resolvedBy: string | null;
@@ -237,10 +249,10 @@ export function ApprovalDecision({
         reset();
         navigate.refresh();
       } else {
-        setFailure(failureText(result));
+        setFailure(result);
       }
     } catch {
-      setFailure(failureText(UNANSWERED));
+      setFailure(UNANSWERED);
     } finally {
       setPending(null);
     }
@@ -312,7 +324,21 @@ export function ApprovalDecision({
             <p className="text-xs text-muted-foreground">{t("noteHint")}</p>
           </div>
           {failure === null ? null : (
-            <FormAlert testId="approval-decision-failure">{failure}</FormAlert>
+            <FormAlert testId="approval-decision-failure">
+              {failureText(failure)}
+              {failure.reason === "exhausted" ? (
+                <>
+                  {" "}
+                  <SafeLink
+                    to={routes.billing(org)}
+                    data-testid="approval-decision-billing"
+                    className={linkText}
+                  >
+                    {t("failure.billingLink")}
+                  </SafeLink>
+                </>
+              ) : null}
+            </FormAlert>
           )}
           <div className="flex flex-wrap gap-2">
             <button

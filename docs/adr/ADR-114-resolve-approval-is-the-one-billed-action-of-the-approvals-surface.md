@@ -1,4 +1,4 @@
-# ADR-113: `resolve_approval` is the one billed action of the approvals surface
+# ADR-114: `resolve_approval` is the one billed action of the approvals surface
 
 - **Status:** Accepted
 - **Date:** 2026-09-19

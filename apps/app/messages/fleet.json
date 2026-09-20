@@ -80,6 +80,7 @@
           "invalid": "The decision was refused before it was sent. The call is untouched.",
           "pendingApproval": "Your access request {accessRequestId} is still waiting. The call is untouched.",
           "exhausted": "A decision is the one billed action here, and this organization's credit is exhausted ({code}). The call is untouched.",
+          "billingLink": "Open billing",
           "refused": "The decision was refused ({code}). The call is untouched.",
           "unavailable": "The decision did not reach the kernel ({code}). The call is untouched, so it is safe to try again."
         }
