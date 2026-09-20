@@ -41,6 +41,9 @@ export interface VersionReading extends VersionManifest {
 const SEMVER = /^\d+\.\d+\.\d+$/;
 
 function tracked(root: string, patterns: string[]): string[] {
+  // `git ls-files` with no pathspec lists the whole index, so an empty pattern
+  // list has to mean nothing, not everything. Caller bug, not a valid query.
+  if (patterns.length === 0) return [];
   // `:(glob)` makes `*` stop at a slash, so `apps/*/package.json` is the
   // workspace member's manifest and not a fixture two directories down.
   const specs = patterns.map((p) => `:(glob)${p}`);
@@ -89,9 +92,18 @@ function cargoPackageName(text: string): string | null {
 export function discoverManifests(root: string): VersionManifest[] {
   const manifests: VersionManifest[] = [];
 
-  const workspacePatterns = workspaceGlobs(root)
-    .filter((g) => g.endsWith("/*"))
-    .map((g) => `${g.slice(0, -2)}/*/package.json`);
+  // Only `dir/*` is understood. Anything else (an exact path, `packages/**`)
+  // would be dropped by the filter below and silently leave those members out
+  // of the gate, so it stops the run instead.
+  const globs = workspaceGlobs(root);
+  const unhandled = globs.filter((g) => !g.endsWith("/*"));
+  if (unhandled.length > 0)
+    throw new Error(
+      `pnpm-workspace.yaml lists a package glob this script cannot map to manifests: ${unhandled.join(", ")}. Teach discoverManifests the shape or the members it covers leave the version gate.`,
+    );
+  const workspacePatterns = globs.map(
+    (g) => `${g.slice(0, -2)}/*/package.json`,
+  );
   for (const file of ["package.json", ...tracked(root, workspacePatterns)]) {
     manifests.push({
       file,
@@ -156,29 +168,42 @@ export function readManifestVersion(
   }
 }
 
-export function writeManifestVersion(
-  root: string,
+/**
+ * The manifest's text with `version` written into it, or the text unchanged
+ * when it already says that. Throws when the version line cannot be found, so
+ * `setAllVersions` can learn that before it writes anything.
+ */
+function rewriteManifest(
   manifest: VersionManifest,
+  text: string,
+  current: string | null,
   version: string,
-): void {
-  if (!SEMVER.test(version))
-    throw new Error(`"${version}" is not a release version (X.Y.Z)`);
-  const path = join(root, manifest.file);
-  const text = readFileSync(path, "utf8");
+): string {
   let next = text;
   switch (manifest.kind) {
     case "package.json": {
-      next = text.replace(
-        /^(\s*)"version":\s*"[^"]*"/m,
-        `$1"version": "${version}"`,
-      );
-      if (next === text && readManifestVersion(root, manifest) !== version) {
-        // No top-level version key: add one after "name".
+      if (current === null) {
+        // No top-level version key: add one after "name". The blind
+        // `"version":` replace below would otherwise hit the first one at any
+        // depth (under `pnpm.overrides`, `volta`, a dependency pin) and
+        // corrupt it while leaving the top level still unversioned.
         next = text.replace(
           /^(\s*)("name":\s*"[^"]*",)/m,
           `$1$2\n$1"version": "${version}",`,
         );
+      } else {
+        next = text.replace(
+          /^(\s*)"version":\s*"[^"]*"/m,
+          `$1"version": "${version}"`,
+        );
       }
+      // The version is one key of a document that has to stay parseable, and
+      // the write is a text replace. Read it back the way every consumer will.
+      const parsed = JSON.parse(next) as { version?: string };
+      if (parsed.version !== version)
+        throw new Error(
+          `rewriting ${manifest.file} left its version at ${String(parsed.version)}, not ${version}`,
+        );
       break;
     }
     case "Cargo.toml":
@@ -198,9 +223,28 @@ export function writeManifestVersion(
       break;
     }
   }
-  if (next === text && readManifestVersion(root, manifest) !== version)
-    throw new Error(`could not find the version line in ${manifest.file}`);
-  writeFileSync(path, next);
+  if (next === text && current !== version)
+    throw new Error(
+      current === null
+        ? `could not find the version line in ${manifest.file}`
+        : `could not rewrite the version line in ${manifest.file} (it says ${current})`,
+    );
+  return next;
+}
+
+export function writeManifestVersion(
+  root: string,
+  manifest: VersionManifest,
+  version: string,
+): void {
+  if (!SEMVER.test(version))
+    throw new Error(`"${version}" is not a release version (X.Y.Z)`);
+  const path = join(root, manifest.file);
+  const text = readFileSync(path, "utf8");
+  writeFileSync(
+    path,
+    rewriteManifest(manifest, text, readManifestVersion(root, manifest), version),
+  );
 }
 
 export function readRootVersion(root: string): string {
@@ -229,14 +273,34 @@ export function versionDrift(root: string): {
   };
 }
 
-/** Write `version` into every manifest; returns what each one said before. */
+/**
+ * Write `version` into every manifest; returns what each one said before.
+ *
+ * Two phases. Every rewrite is computed and checked first, so a manifest this
+ * script cannot edit stops the release with the tree untouched, rather than
+ * half the repo bumped and half not.
+ */
 export function setAllVersions(
   root: string,
   version: string,
 ): Array<VersionReading & { from: string | null }> {
-  return discoverManifests(root).map((manifest) => {
+  if (!SEMVER.test(version))
+    throw new Error(`"${version}" is not a release version (X.Y.Z)`);
+  const planned = discoverManifests(root).map((manifest) => {
     const from = readManifestVersion(root, manifest);
-    writeManifestVersion(root, manifest, version);
-    return { ...manifest, version, from };
+    const path = join(root, manifest.file);
+    return {
+      manifest,
+      from,
+      path,
+      text: rewriteManifest(
+        manifest,
+        readFileSync(path, "utf8"),
+        from,
+        version,
+      ),
+    };
   });
+  for (const p of planned) writeFileSync(p.path, p.text);
+  return planned.map((p) => ({ ...p.manifest, version, from: p.from }));
 }

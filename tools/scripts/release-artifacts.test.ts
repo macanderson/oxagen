@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   RELEASE_TARGETS,
@@ -33,13 +35,21 @@ describe("expectedAssets", () => {
     expect(assets.checksums).toEqual(assets.binaries.map((b) => `${b}.sha256`));
   });
 
-  it("covers the four targets desktop.yml builds", () => {
-    expect(RELEASE_TARGETS.map((t) => t.triple)).toEqual([
-      "aarch64-apple-darwin",
-      "x86_64-apple-darwin",
-      "x86_64-pc-windows-msvc",
-      "x86_64-unknown-linux-gnu",
-    ]);
+  it("covers exactly the targets desktop.yml builds", () => {
+    // Read the workflow rather than a second copy of the list, so a target
+    // added to the matrix fails here instead of going unnamed in the notes
+    // and unchecked by release-publish.ts's completeness check.
+    const workflow = readFileSync(
+      join(import.meta.dirname, "../../.github/workflows/desktop.yml"),
+      "utf8",
+    );
+    const matrix = [
+      ...workflow.matchAll(/^\s*triple:\s*(\S+)\s*$/gm),
+    ].map((m) => m[1]);
+    expect(matrix.length).toBeGreaterThan(0);
+    expect([...RELEASE_TARGETS.map((t) => t.triple)].sort()).toEqual(
+      [...new Set(matrix)].sort(),
+    );
   });
 });
 

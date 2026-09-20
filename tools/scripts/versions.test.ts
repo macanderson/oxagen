@@ -95,8 +95,19 @@ beforeEach(() => {
     "scratch/Cargo.toml",
     '[package]\nname = "scratch"\nversion = "0.0.1"\n',
   );
+  // No ambient git config: a machine whose core.excludesFile ignores `apps/`
+  // or `tools/` would fail `git add` here for reasons unrelated to the code.
   const git = (args: string[]) =>
-    execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: "pipe" });
+    execFileSync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+      stdio: "pipe",
+      env: {
+        ...process.env,
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_SYSTEM: "/dev/null",
+      },
+    });
   git(["init", "-q"]);
   git([
     "add",
@@ -181,6 +192,43 @@ describe("setAllVersions", () => {
     expect(injected).toBe(
       '{\n  "name": "@oxagen/noversion",\n  "version": "2.2.0",\n  "private": true\n}\n',
     );
+  });
+
+  it("adds the missing key rather than rewriting a nested one", () => {
+    // The blind replace this guards against would find `"version": "4.1.0"`
+    // under `pnpm.overrides` first, corrupt it, and still leave the manifest
+    // with no top-level version while reporting success.
+    write(
+      "packages/noversion/package.json",
+      '{\n  "name": "@oxagen/noversion",\n  "pnpm": {\n    "overrides": {\n      "version": "4.1.0"\n    }\n  }\n}\n',
+    );
+    setAllVersions(root, "2.2.0");
+    const manifest = JSON.parse(
+      readFileSync(join(root, "packages/noversion/package.json"), "utf8"),
+    ) as { version?: string; pnpm?: { overrides?: { version?: string } } };
+    expect(manifest.version).toBe("2.2.0");
+    expect(manifest.pnpm?.overrides?.version).toBe("4.1.0");
+  });
+
+  it("writes nothing when one manifest cannot be rewritten", () => {
+    // A Cargo.toml whose version comes from the workspace has no version line
+    // of its own. The run has to stop with the tree as it was, not with the
+    // manifests before it in the order already bumped.
+    write(
+      "apps/desktop/src-tauri/Cargo.toml",
+      '[package]\nname = "oxagen-desktop"\nedition = "2021"\n',
+    );
+    expect(() => setAllVersions(root, "2.2.0")).toThrow(
+      /could not find the version line in apps\/desktop\/src-tauri\/Cargo\.toml/,
+    );
+    expect(versionDrift(root).version).toBe("2.1.1");
+    expect(
+      readManifestVersion(root, {
+        file: "apps/cli/package.json",
+        kind: "package.json",
+        name: "@oxagen/cli",
+      }),
+    ).toBe("2.1.1");
   });
 
   it("refuses a version that is not X.Y.Z", () => {
