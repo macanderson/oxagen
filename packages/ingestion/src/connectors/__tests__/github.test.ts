@@ -79,7 +79,7 @@ describe("github connector – normalizeRecord", () => {
         updated_at: "2024-01-02T00:00:00Z",
       };
       const result = github.normalizeRecord("pull_request", raw);
-      expect(result.externalId).toBe("42");
+      expect(result.externalId).toBe("pull_request:id:999");
       expect(result.displayName).toBe("Add OAuth login");
       expect(result.properties["state"]).toBe("open");
       expect(result.properties["author"]).toBe("macanderson");
@@ -87,9 +87,9 @@ describe("github connector – normalizeRecord", () => {
     });
 
     it("handles empty object gracefully", () => {
-      const result = github.normalizeRecord("pull_request", {});
-      expect(result.externalId).toBe("");
-      expect(result.properties["state"]).toBeUndefined();
+      expect(() => github.normalizeRecord("pull_request", {})).toThrow(
+        /no global ID/,
+      );
     });
   });
 
@@ -108,7 +108,9 @@ describe("github connector – normalizeRecord", () => {
         updated_at: "2024-02-01T12:00:00Z",
       };
       const result = github.normalizeRecord("issue", raw);
-      expect(result.externalId).toBe("7");
+      expect(result.externalId).toBe(
+        "issue:url:https://github.com/org/repo/issues/7",
+      );
       expect(result.displayName).toBe("Bug: crash on load");
       expect(result.properties["state"]).toBe("closed");
       expect(result.properties["author"]).toBe("alice");
@@ -116,8 +118,7 @@ describe("github connector – normalizeRecord", () => {
     });
 
     it("handles empty object gracefully", () => {
-      const result = github.normalizeRecord("issue", {});
-      expect(result.externalId).toBe("");
+      expect(() => github.normalizeRecord("issue", {})).toThrow(/no global ID/);
     });
   });
 
@@ -323,7 +324,7 @@ describe("github connector – parseWebhookEvent", () => {
     expect(out[0]?.sourceRecordType).toBe("pull_request");
     // The unwrapped record is what normalizeRecord("pull_request") consumes.
     const norm = github.normalizeRecord("pull_request", out[0]!.record);
-    expect(norm.externalId).toBe("7");
+    expect(norm.externalId).toBe("pull_request:url:https://gh/pr/7");
     expect(norm.displayName).toBe("Add feature");
   });
 

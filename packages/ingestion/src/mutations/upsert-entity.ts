@@ -184,6 +184,7 @@ export async function upsertEntityNode(
        WITH n, n._isNew AS isNew, n.properties AS previousProperties
        SET
          n:GraphNode,
+         n.canonicalNaturalKey = coalesce($canonicalNaturalKey, n.canonicalNaturalKey),
          n.entityType       = $entityType,
          n.sourceRecordType = $sourceRecordType,
          n.label            = $label,
@@ -200,6 +201,7 @@ export async function upsertEntityNode(
        RETURN n.publicId AS nodeId, isNew, previousProperties`,
       {
         naturalKey: mutation.naturalKey,
+        canonicalNaturalKey: mutation.canonicalNaturalKey ?? null,
         orgId,
         entityType: mutation.entityType,
         sourceRecordType: mutation.sourceRecordType,

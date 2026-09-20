@@ -77,7 +77,8 @@ vi.mock("@oxagen/ontology/tenant", () => ({
   scopedSession: mocks.scopedSession,
 }));
 
-vi.mock("@oxagen/ingestion/dedup", () => ({
+vi.mock("@oxagen/ingestion/dedup", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/ingestion/dedup")>()),
   resolveEntity: mocks.resolveEntity,
 }));
 
@@ -487,6 +488,79 @@ describe("ingestion.pipeline Inngest function", () => {
   });
 
   describe("dedup pass A (naturalKey found)", () => {
+    it.each(["legacy", "canonical"])(
+      "preserves %s identity through durable step replay",
+      async (identity) => {
+        mocks.getConnector.mockReturnValue({
+          normalizeRecord: () => ({
+            ...NORMALIZED,
+            externalId: "pull_request:id:9001",
+            legacyExternalId: "42",
+          }),
+        });
+        mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+          fn({
+            execute: vi
+              .fn()
+              .mockResolvedValue([
+                { oxagen_entity_type: "task", property_mappings: {} },
+              ]),
+          }),
+        );
+        const storedKey = "github:conn-abc:42";
+        const canonicalKey = "github:conn-abc:pull_request:id:9001";
+        const row = {
+          get: (key: string) =>
+            (
+              ({
+                nodeId: "legacy-node",
+                naturalKey: storedKey,
+                properties: JSON.stringify({ url: NORMALIZED.externalUrl }),
+              }) as Record<string, string>
+            )[key],
+        };
+        mocks.scopedSessionRun.mockResolvedValueOnce({ records: [] });
+        mocks.scopedSessionRun.mockResolvedValueOnce({
+          records: identity === "canonical" ? [row] : [],
+        });
+        if (identity === "legacy")
+          mocks.scopedSessionRun.mockResolvedValueOnce({ records: [row] });
+        mocks.upsertEntityNode.mockResolvedValueOnce({
+          nodeId: "legacy-node",
+          previousProperties: { state: "open" },
+        });
+        const step = makeStep({
+          run: vi.fn(
+            async (_name: string, fn: () => unknown) =>
+              JSON.parse(JSON.stringify(await fn())) as unknown,
+          ),
+        });
+        await capturedHandler!({ event: { data: BASE_EVENT }, step });
+        expect(mocks.resolveEntity).not.toHaveBeenCalled();
+        expect(mocks.upsertEntityNode).toHaveBeenCalledTimes(1);
+        expect(mocks.upsertEntityNode).toHaveBeenCalledWith(
+          expect.objectContaining({
+            naturalKey: storedKey,
+            canonicalNaturalKey: canonicalKey,
+            legacyNaturalKey: storedKey,
+          }),
+          "org-123",
+          { runId: undefined },
+        );
+        expect(step.sendEvent).toHaveBeenCalledWith(
+          "schedule-change-event",
+          expect.objectContaining({
+            name: "ingestion/entity.updated",
+            data: expect.objectContaining({
+              nodeId: "legacy-node",
+              naturalKey: storedKey,
+              previousProperties: { state: "open" },
+            }),
+          }),
+        );
+      },
+    );
+
     it("returns updated_principal action when pass A finds an existing node", async () => {
       mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
       mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
