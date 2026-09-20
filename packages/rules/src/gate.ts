@@ -52,6 +52,7 @@ export type RuleSetLoader = (ctx: {
   orgId: string;
   workspaceId: string | null;
   externalTool?: boolean;
+  requireFreshRules?: boolean;
 }) => Promise<RuleSet | null>;
 
 /**
@@ -125,7 +126,16 @@ export class ExternalToolAuthorityError extends Error {
   readonly code = "external_tool_authority_unavailable";
 }
 
+export class DecisionRuleUnavailableError extends Error {
+  readonly code = "decision_rules_unavailable";
+  constructor() {
+    super("Current decision rules are unavailable");
+    this.name = "DecisionRuleUnavailableError";
+  }
+}
+
 export interface DecisionGateArgs {
+  requireFreshRules?: boolean;
   external?: { approvedDigest?: string };
   capability: string;
   input: unknown;
@@ -151,7 +161,14 @@ export type DecisionRulesGateFn = (
 export function createDecisionRulesGate(
   options: DecisionRulesGateOptions,
 ): DecisionRulesGateFn {
-  return async ({ capability, input, ctx, principal, external }) => {
+  return async ({
+    capability,
+    input,
+    ctx,
+    principal,
+    external,
+    requireFreshRules,
+  }) => {
     if (external && principal?.kind === "agent") {
       throw new ExternalToolAuthorityError(
         "External tool measures cannot establish an agent mandate. Use a governed capability with declared measures.",
@@ -165,6 +182,7 @@ export function createDecisionRulesGate(
       input,
       ctx,
       external,
+      requireFreshRules,
     });
     // The mandate check binds an agent acting under delegated authority; a
     // person under their own role needs no mandate (spec §6.9 part 3), and
@@ -321,7 +339,11 @@ async function judgeRules(
     input,
     ctx,
     external,
-  }: Pick<DecisionGateArgs, "capability" | "input" | "ctx" | "external">,
+    requireFreshRules,
+  }: Pick<
+    DecisionGateArgs,
+    "capability" | "input" | "ctx" | "external" | "requireFreshRules"
+  >,
 ): Promise<AutoApprovalCommit> {
   let ruleSet: RuleSet | null;
   try {
@@ -329,8 +351,10 @@ async function judgeRules(
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       ...(external ? { externalTool: true } : {}),
+      ...(requireFreshRules ? { requireFreshRules: true } : {}),
     });
   } catch (error) {
+    if (requireFreshRules) throw new DecisionRuleUnavailableError();
     if (external) throw error;
     options.onError?.(error);
     return undefined;
@@ -348,6 +372,8 @@ async function judgeRules(
         : []),
     ]),
   ];
+  if (requireFreshRules && keys.length > 0 && !options.resolveFacts)
+    throw new DecisionRuleUnavailableError();
   if (external && keys.length > 0 && !options.resolveFacts)
     throw new ExternalToolAuthorityError("External rule facts are unavailable");
   if (keys.length > 0 && options.resolveFacts) {
@@ -363,6 +389,7 @@ async function judgeRules(
         },
       });
     } catch (error) {
+      if (requireFreshRules) throw new DecisionRuleUnavailableError();
       if (external) throw error;
       // A dead fact source degrades those rules to no-match (their leaves
       // read absent keys); it does not skip evaluation — capability- and
@@ -372,7 +399,7 @@ async function judgeRules(
   }
 
   if (
-    external &&
+    (external || requireFreshRules) &&
     keys.some(
       (key) =>
         key
@@ -386,6 +413,7 @@ async function judgeRules(
           ) === undefined,
     )
   ) {
+    if (requireFreshRules) throw new DecisionRuleUnavailableError();
     throw new ExternalToolAuthorityError("External rule facts are incomplete");
   }
 

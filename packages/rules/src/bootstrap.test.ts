@@ -1,6 +1,7 @@
 /** Immediate rule reloads, malformed-document handling, and bootstrap wiring. */
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { RuleSet } from "./types";
+import type { DecisionRulesGateFn } from "./gate";
 
 const findFirst = vi.fn();
 const setDecisionRulesGate = vi.fn();
@@ -13,7 +14,7 @@ vi.mock("@oxagen/database", () => {
   // seam (ADR-086): a handler's role gate reads through withOrgDb, and
   // a suite that counts seam calls must see one identity, not two.
   const dbMock = {
-    schema: { workspaces: { id: "workspaces.id" } },
+    schema: { workspaces: { id: "workspaces.id", orgId: "workspaces.orgId" } },
     withTenantDb: (fn: (tx: unknown) => unknown) =>
       fn({ query: { workspaces: { findFirst } } }),
   };
@@ -179,5 +180,76 @@ describe("bootstrapDecisionRulesRuntime", () => {
 
     expect(loggerWarn).toHaveBeenCalledTimes(1);
     expect(loggerWarn.mock.calls[0]?.[1]).toContain("failing open");
+  });
+});
+
+describe("fresh resumption rule admission", () => {
+  test.each([null, { schema: "oxagen.decision-rules.v1", rules: [] }])(
+    "bypasses a cached permissive result: %j",
+    async (cachedRules) => {
+      const { bootstrapDecisionRulesRuntime, loadWorkspaceRuleSet } =
+        await freshModule();
+      findFirst.mockResolvedValue({ settings: { decisionRules: cachedRules } });
+      await loadWorkspaceRuleSet(WS);
+      findFirst.mockResolvedValue({ settings: { decisionRules: RULES } });
+      bootstrapDecisionRulesRuntime();
+      const gate = setDecisionRulesGate.mock
+        .calls[0]?.[0] as DecisionRulesGateFn;
+      await expect(
+        gate({
+          capability: "issue_refund",
+          input: { amount_usd: 900 },
+          ctx: { ...WS, userId: null },
+          requireFreshRules: true,
+        }),
+      ).rejects.toMatchObject({ code: "decision_rule_denied" });
+      expect(findFirst).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  test.each(["missing", "malformed", "offline"])(
+    "refuses %s current rules despite a cached absence",
+    async (failure) => {
+      const { bootstrapDecisionRulesRuntime, loadWorkspaceRuleSet } =
+        await freshModule();
+      findFirst.mockResolvedValue({ settings: {} });
+      await loadWorkspaceRuleSet(WS);
+      if (failure === "offline")
+        findFirst.mockRejectedValue(new Error("offline"));
+      else
+        findFirst.mockResolvedValue(
+          failure === "missing"
+            ? undefined
+            : { settings: { decisionRules: { schema: "invalid" } } },
+        );
+      bootstrapDecisionRulesRuntime();
+      const gate = setDecisionRulesGate.mock
+        .calls[0]?.[0] as DecisionRulesGateFn;
+      await expect(
+        gate({
+          capability: "issue_refund",
+          input: { amount_usd: 900 },
+          ctx: { ...WS, userId: null },
+          requireFreshRules: true,
+        }),
+      ).rejects.toMatchObject({ code: "decision_rules_unavailable" });
+      expect(findFirst).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  test("admits a current workspace with no authored rules", async () => {
+    const { bootstrapDecisionRulesRuntime } = await freshModule();
+    findFirst.mockResolvedValue({ settings: {} });
+    bootstrapDecisionRulesRuntime();
+    const gate = setDecisionRulesGate.mock.calls[0]?.[0] as DecisionRulesGateFn;
+    await expect(
+      gate({
+        capability: "issue_refund",
+        input: { amount_usd: 10 },
+        ctx: { ...WS, userId: null },
+        requireFreshRules: true,
+      }),
+    ).resolves.toBeUndefined();
+    expect(findFirst).toHaveBeenCalledOnce();
   });
 });

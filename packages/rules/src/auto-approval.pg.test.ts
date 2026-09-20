@@ -754,6 +754,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row?.runPublicId).toBe(runPublicId);
     });
 
+    // This integration cold-loads the capability kernel under coverage, then
+    // commits two nested Postgres receipts. Keep its budget local to this case.
     it("records the same public run id for outer and nested auto-approvals", async () => {
       registerCapability({
         name: "stripe__create_payment",
@@ -810,7 +812,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         clearHandlersForTests();
         clearRegistryForTests();
       }
-    });
+    }, 30_000);
 
     it("leaves run_public_id null for a call with no run in scope, never a fabricated one", async () => {
       const decision = await autoApprove(CALL, [RULE], null);
