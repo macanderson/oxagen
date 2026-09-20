@@ -149,31 +149,39 @@ export const [mandateExpiry] = createFunction(
 
     const lapsed = await step.run("find-lapsed-approvals", async () => {
       const now = new Date();
-      return withSystemDb((tx) =>
-        tx
-          .select({
-            id: schema.approvalRequests.id,
-            mandateId: schema.approvalRequests.mandateId,
-            toolCallId: schema.approvalRequests.toolCallId,
-            orgId: schema.approvalRequests.orgId,
-            workspaceId: schema.approvalRequests.workspaceId,
-          })
-          .from(schema.approvalRequests)
-          .where(
-            and(
-              isNull(schema.approvalRequests.tokenUsedAt),
-              lt(schema.approvalRequests.expiresAt, now),
-              or(
-                isNull(schema.approvalRequests.resolution),
-                and(
-                  isNotNull(schema.approvalRequests.mandateId),
-                  eq(schema.approvalRequests.resolution, "approved"),
+      return withSystemDb(async (tx) => {
+        const findBatch = (hasMandate: boolean) =>
+          tx
+            .select({
+              id: schema.approvalRequests.id,
+              mandateId: schema.approvalRequests.mandateId,
+              toolCallId: schema.approvalRequests.toolCallId,
+              orgId: schema.approvalRequests.orgId,
+              workspaceId: schema.approvalRequests.workspaceId,
+            })
+            .from(schema.approvalRequests)
+            .where(
+              and(
+                hasMandate
+                  ? isNotNull(schema.approvalRequests.mandateId)
+                  : isNull(schema.approvalRequests.mandateId),
+                isNull(schema.approvalRequests.tokenUsedAt),
+                lt(schema.approvalRequests.expiresAt, now),
+                or(
+                  isNull(schema.approvalRequests.resolution),
+                  and(
+                    isNotNull(schema.approvalRequests.mandateId),
+                    eq(schema.approvalRequests.resolution, "approved"),
+                  ),
                 ),
               ),
-            ),
-          )
-          .limit(BATCH_SIZE),
-      );
+            )
+            .limit(BATCH_SIZE);
+        // Separate limits keep ordinary timeouts from starving held authority.
+        const mandates = await findBatch(true);
+        const ordinary = await findBatch(false);
+        return [...mandates, ...ordinary];
+      });
     });
 
     const voided =

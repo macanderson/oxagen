@@ -1309,7 +1309,7 @@ describe("approvals on the run", () => {
     );
   });
 
-  it("labels a clock-expired approval as a system resolution", async () => {
+  it("labels an expired approval without guessing its cause", async () => {
     await renderRun(
       {
         detail: ok(runDetail()),
@@ -1332,7 +1332,7 @@ describe("approvals on the run", () => {
       { tab: "approvals" },
     );
     expect(screen.getByTestId("resolved-approver")).toHaveTextContent(
-      "system: expiry",
+      /^system$/,
     );
     expect(screen.getByTestId("resolved-approver")).not.toHaveTextContent(
       "unknown",

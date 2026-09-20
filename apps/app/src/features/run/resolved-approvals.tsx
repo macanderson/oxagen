@@ -14,7 +14,7 @@ function approverLabel({
   resolvedBy,
   resolution,
 }: ResolvedApprovalItem): string {
-  if (resolvedBy === null && resolution === "expired") return "system: expiry";
+  if (resolvedBy === null && resolution === "expired") return "system";
   if (resolvedBy === null) return "unknown";
   if (resolvedBy.startsWith("policy:")) {
     return `rule ${resolvedBy.slice("policy:".length)} (no person looked)`;

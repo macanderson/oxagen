@@ -117,17 +117,30 @@ type Lapsed = {
   workspaceId: string;
 };
 
-/** The two cross-tenant scans, in the order the job runs them; returns each scan's WHERE spy. */
+/** Record the mandate scan and the two independently bounded approval scans. */
 function scans(due: Due[], lapsed: Lapsed[] = []) {
-  return [due, lapsed].map((rows) => {
+  const rowsByScan = [
+    due,
+    lapsed.filter((row) => row.mandateId !== null),
+    lapsed.filter((row) => row.mandateId === null),
+  ];
+  const selects = rowsByScan.map((rows) => {
     const limit = vi.fn().mockResolvedValue(rows);
     const where = vi.fn().mockReturnValue({ limit });
     const from = vi.fn().mockReturnValue({ where });
-    mocks.withSystemDb.mockImplementationOnce(
-      async (fn: (tx: unknown) => unknown) => fn({ select: () => ({ from }) }),
-    );
-    return where;
+    return { where, from, limit };
   });
+  mocks.withSystemDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => unknown) =>
+      fn({ select: () => ({ from: selects[0]!.from }) }),
+  );
+  mocks.withSystemDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => unknown) => {
+      let index = 1;
+      return fn({ select: () => ({ from: selects[index++]!.from }) });
+    },
+  );
+  return selects;
 }
 
 /** A tenant tx whose updates record their SET values and WHERE predicates. */
@@ -191,15 +204,16 @@ beforeEach(() => {
 
 describe("mandate/expiry", () => {
   it("scans for active mandates past valid_to, and for parked approvals never used, past expires_at, unresolved or approved", async () => {
-    const [dueWhere, lapsedWhere] = scans([]);
+    const [dueWhere, lapsedWhere, ordinaryWhere] = scans([]);
     await capturedHandler!({ step });
-    expect(dueWhere).toHaveBeenCalledWith([
+    expect(dueWhere?.where).toHaveBeenCalledWith([
       "and",
       ["eq", "status", "active"],
       ["lt", "valid_to", expect.any(Date)],
     ]);
-    expect(lapsedWhere).toHaveBeenCalledWith([
+    expect(lapsedWhere?.where).toHaveBeenCalledWith([
       "and",
+      ["isNotNull", "mandate_id"],
       ["isNull", "token_used_at"],
       ["lt", "expires_at", expect.any(Date)],
       [
@@ -208,6 +222,35 @@ describe("mandate/expiry", () => {
         ["and", ["isNotNull", "mandate_id"], ["eq", "resolution", "approved"]],
       ],
     ]);
+    expect(ordinaryWhere?.where).toHaveBeenCalledWith(
+      expect.arrayContaining([["isNull", "mandate_id"]]),
+    );
+    expect(lapsedWhere?.limit).toHaveBeenCalledWith(500);
+    expect(ordinaryWhere?.limit).toHaveBeenCalledWith(500);
+  });
+
+  it("releases mandate authority even when ordinary timeouts fill their batch", async () => {
+    const ordinary = Array.from({ length: 500 }, (_, index) => ({
+      ...L2,
+      id: `ordinary-${index}`,
+      mandateId: null,
+    }));
+    scans([], [...ordinary, L1]);
+    mocks.lockMandate.mockResolvedValueOnce({
+      id: L1.mandateId,
+      status: "active",
+    });
+    await expect(capturedHandler!({ step })).resolves.toEqual({
+      expired: 0,
+      voided: 501,
+    });
+    expect(mocks.expireApproval).toHaveBeenCalledTimes(1);
+    expect(mocks.expireApproval).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      L1,
+      expect.any(Date),
+    );
   });
 
   it("does nothing when no mandate is past its validity window and no approval lapsed", async () => {
