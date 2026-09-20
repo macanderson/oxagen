@@ -72,4 +72,4 @@ for (const { src, dest } of connectorSchemaAssets()) {
   await copyFile(src, destPath);
 }
 
-console.log(`api: bundled ${OUT}/server.cjs`);
+console.log(`api: bundled ${BUNDLES.map((b) => b.outfile).join(", ")}`);
