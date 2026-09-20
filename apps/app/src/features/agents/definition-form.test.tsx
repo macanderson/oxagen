@@ -105,6 +105,9 @@ async function committedSource(): Promise<string> {
 describe("DefinitionForm", () => {
   it("patches a text field on blur, keeps the rest of the file, and offers Discard and Save", async () => {
     const container = renderForm();
+    expect(
+      screen.getByText(/Stored as budget = \{ per_run_micros = 2500000 \}/),
+    ).toBeInTheDocument();
     await expectNoAxe(container);
     expect(dirtyBar()).toBeNull();
 

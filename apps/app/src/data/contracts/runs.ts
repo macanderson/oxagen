@@ -37,7 +37,7 @@ export type RunSummary = z.infer<typeof RunSummary>;
  * a null reads "not recorded", never `unverified`, which is itself a recorded
  * answer a runner reached.
  */
-export const ProofVerdict = z.enum([
+const ProofVerdict = z.enum([
   "flipped",
   "failing",
   "unmoved",
@@ -46,7 +46,6 @@ export const ProofVerdict = z.enum([
   "unverified",
   "waived",
 ]);
-export type ProofVerdict = z.infer<typeof ProofVerdict>;
 
 /**
  * Where the run's actions were observed from (spec §8.4). `observe` records
