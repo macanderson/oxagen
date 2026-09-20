@@ -12,13 +12,13 @@
 // anomaly detection, SOC2 CC6/CC7 evidence.
 //
 // PARTITION MANAGEMENT:
-//   The table is a RANGE-partitioned heap on occurred_at (monthly, DDL in
-//   0002_security_events_partitioning.sql). The composite PK (id, occurred_at)
-//   is required by Postgres declarative partitioning. Monthly child partitions
-//   are created and expired by the `security.audit-partition-rollover` Inngest
-//   cron (packages/inngest-functions). 7-year retention matches ClickHouse
-//   audit_events TTL. DO NOT add event types here without also updating the
-//   CHECK constraint DDL in the migration file.
+//   ADR-125 restores RANGE partitions on occurred_at in
+//   20260920230000_security_events_partitioning.sql. The daily Inngest cron
+//   calls a no-argument database function to prepare the current and next two
+//   UTC months and expire data after seven calendar years. The preserved
+//   DEFAULT heap drains expired rows in batches of 10,000. Application access
+//   goes through the parent because direct child grants are withheld.
+//   Add event types in the compliance taxonomy and a new CHECK migration.
 
 import {
   boolean,

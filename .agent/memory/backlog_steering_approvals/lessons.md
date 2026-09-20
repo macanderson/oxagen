@@ -1,0 +1,1 @@
+- [2026-09-19] When restoring partitions, inventory default grants and direct child access before copying parent policies. Later parent policy changes do not update child policies. (source: reflections/2026-09-19-tenant-telemetry-follow-up.md, agent: backlog_steering_approvals)

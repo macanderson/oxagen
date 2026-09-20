@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { requireScope, runInTenantScope } from "@oxagen/tenancy";
 import type { CapabilityContext } from "./types";
 import type { AuthorizationDecisionRef } from "./iam/agent-run";
 import { clearRegistryForTests, registerCapability } from "./registry";
@@ -234,6 +235,37 @@ describe("kernel security event emitter", () => {
       }),
     );
   });
+
+  it.each(["no_tenant_scope", "invalid_tenant_scope"] as const)(
+    "classifies %s using the real tenancy entry points",
+    async (code) => {
+      const emitter = vi.fn();
+      setSecurityEventEmitter(emitter);
+      registerCapability({
+        ...echoCap(),
+        name: "test.scope_errors",
+        scoped: false,
+      });
+      registerHandler("test.scope_errors", async () => async () => {
+        if (code === "no_tenant_scope") requireScope();
+        else
+          runInTenantScope(
+            { orgId: "invalid", workspaceId: ctx.workspaceId! },
+            () => undefined,
+          );
+        throw new Error("Tenant entry unexpectedly accepted");
+      });
+      await expect(
+        invoke("test.scope_errors", { value: "x" }, ctx),
+      ).rejects.toMatchObject({ code });
+      expect(emitter).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outcome: code === "no_tenant_scope" ? "deny" : "error",
+          errorCode: code,
+        }),
+      );
+    },
+  );
 
   it("emits a 'deny' event when the capability is unknown", async () => {
     const emitter = vi.fn();
