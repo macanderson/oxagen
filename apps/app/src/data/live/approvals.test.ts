@@ -77,7 +77,7 @@ describe("approvals.pending", () => {
             mandateId: "mnd_4f2a9c",
             rule: "mandate:mnd_4f2a9c:human_above:amount",
             autoEligibility: {
-              ruleId: "small-vendor-payments",
+              ruleRef: "small-vendor-payments",
               ok: false,
               reasons: ["measure_above_ceiling:amount"],
               floor: false,

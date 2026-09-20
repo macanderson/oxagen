@@ -18,8 +18,15 @@ import { PublicId } from "./common";
  * an unmapped code as recorded rather than inventing a sentence for it.
  */
 export const AutoEligibility = z.object({
-  /** The rule that was evaluated. */
-  ruleId: z.string().min(1),
+  /**
+   * The rule that was evaluated, as the store recorded it
+   * (`mandate:<id>:human_above:<measure>`, or a workspace rule's own slug).
+   *
+   * A `Ref` rather than an `Id` because Oxagen neither mints it nor can
+   * validate it as a public id (INV-11), the same reason `ApprovalItem.rule`
+   * beside it carries the bare noun.
+   */
+  ruleRef: z.string().min(1),
   /** True when every condition held and no floor applied. */
   ok: z.boolean(),
   /** Every reason it did not qualify; empty when `ok`. */
@@ -28,6 +35,32 @@ export const AutoEligibility = z.object({
   floor: z.boolean(),
 });
 export type AutoEligibility = z.infer<typeof AutoEligibility>;
+
+/**
+ * The recorded evaluation as `list_approvals` and `get_auto_eligibility` carry
+ * it, under the name the view model gives it.
+ *
+ * The contract calls the rule `ruleId`. Two callers read it, a live mapper and
+ * a server action, and a feature may not import a mapper, so the rename lives
+ * here where both may reach it rather than in two copies that drift.
+ */
+export function toAutoEligibility(
+  recorded: {
+    ruleId: string;
+    ok: boolean;
+    reasons: readonly string[];
+    floor: boolean;
+  } | null,
+): AutoEligibility | null {
+  return recorded === null
+    ? null
+    : {
+        ruleRef: recorded.ruleId,
+        ok: recorded.ok,
+        reasons: [...recorded.reasons],
+        floor: recorded.floor,
+      };
+}
 
 export const ApprovalItem = z.object({
   id: PublicId,

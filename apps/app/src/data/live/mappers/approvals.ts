@@ -12,6 +12,7 @@
 import type { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.list";
 import type { agentApprovalListResolved } from "@oxagen/oxagen/contracts/agent.approval.list_resolved";
 import type { z } from "zod";
+import { toAutoEligibility } from "@/data/contracts/approvals";
 import type {
   ApprovalItem,
   ResolvedApprovalItem,
@@ -29,7 +30,7 @@ export function toApprovalItems(
     requester: item.requester,
     mandateId: item.mandateId,
     rule: item.chain.rule,
-    autoEligibility: item.autoEligibility,
+    autoEligibility: toAutoEligibility(item.autoEligibility),
     createdAt: item.createdAt,
     expiresAt: item.expiresAt,
   }));

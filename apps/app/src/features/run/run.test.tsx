@@ -1185,7 +1185,7 @@ describe("approvals on the run", () => {
               mandateId: null,
               rule: null,
               autoEligibility: {
-                ruleId: "small-vendor-payments",
+                ruleRef: "small-vendor-payments",
                 ok: false,
                 reasons: ["measure_above_ceiling:amount"],
                 floor: false,

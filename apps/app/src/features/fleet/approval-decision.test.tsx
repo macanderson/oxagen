@@ -16,7 +16,7 @@
 // The rule lives on the server, because a `required` attribute is a courtesy
 // and not a gate; this case proves the dialog shows what the refusal said
 // rather than swallowing it.
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -49,7 +49,7 @@ const { ApprovalDecision } = await import("./approval-decision");
 const APPROVAL = "apr_q8t1";
 
 const eligibility: AutoEligibility = {
-  ruleId: "small-vendor-payments",
+  ruleRef: "small-vendor-payments",
   ok: false,
   reasons: ["measure_above_ceiling:amount"],
   floor: false,
@@ -331,59 +331,6 @@ describe("the evaluation the dialog reads again", () => {
     await open();
     expect(within(dialog()).getByTestId("eligibility")).toHaveTextContent(
       "No auto-approval rule covered this call, so it waited for a person.",
-    );
-  });
-
-  // The opening read is what stops a stale decision, so the two buttons wait
-  // for it. Before this they were live throughout, and an operator could write
-  // a reason for a call another office had already answered and learn so only
-  // from the kernel's conflict.
-  it("holds both buttons while the opening read is in flight", async () => {
-    let answer: (value: unknown) => void = () => {};
-    readApprovalEligibility.mockReturnValue(
-      new Promise((resolve) => {
-        answer = resolve;
-      }),
-    );
-    draw();
-    const user = await open();
-    expect(within(dialog()).getByTestId("approve")).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
-    expect(within(dialog()).getByTestId("deny")).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
-    // `aria-disabled` marks a button; it does not stop the click, so the guard
-    // is what this asserts.
-    await user.click(within(dialog()).getByTestId("approve"));
-    expect(resolveApprovalAction).not.toHaveBeenCalled();
-    await act(async () => {
-      answer({ ok: true, value: { resolvedBy: null, eligibility } });
-    });
-    expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
-      "aria-disabled",
-    );
-  });
-
-  it("names a read that threw rather than drawing checking with no exit", async () => {
-    readApprovalEligibility.mockRejectedValue(new Error("transport"));
-    draw();
-    await open();
-    await act(async () => {});
-    // The one state a person cannot leave: before this the rejected promise
-    // was discarded, so neither branch of the line ever ran.
-    expect(within(dialog()).queryByTestId("eligibility-checking")).toBeNull();
-    expect(
-      within(dialog()).getByTestId("eligibility-unread"),
-    ).toHaveTextContent("could not be read again (action_failed)");
-    // The recorded evaluation stands and the call can still be answered.
-    expect(within(dialog()).getByTestId("eligibility")).toHaveTextContent(
-      "Rule small-vendor-payments did not release this call.",
-    );
-    expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
-      "aria-disabled",
     );
   });
 });

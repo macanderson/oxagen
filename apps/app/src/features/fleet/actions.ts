@@ -42,7 +42,7 @@ import {
   tachoCommandDispatch,
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { captureError } from "@oxagen/telemetry";
-import { AutoEligibility } from "@/data/contracts/approvals";
+import { AutoEligibility, toAutoEligibility } from "@/data/contracts/approvals";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -150,7 +150,9 @@ export async function readApprovalEligibility(
     page,
   });
   if (!read.ok) return readToActionResult(read);
-  const view = AutoEligibility.nullable().safeParse(read.value.eligibility);
+  const view = AutoEligibility.nullable().safeParse(
+    toAutoEligibility(read.value.eligibility),
+  );
   if (!view.success) {
     captureError({
       error: view.error,

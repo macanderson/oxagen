@@ -225,7 +225,7 @@ describe("approvals panel", () => {
       approvals: approvalQueue([
         approvalItem({
           autoEligibility: {
-            ruleId: "small-vendor-payments",
+            ruleRef: "small-vendor-payments",
             ok: false,
             reasons: [
               "measure_above_ceiling:amount",
@@ -263,7 +263,7 @@ describe("approvals panel", () => {
       approvals: approvalQueue([
         approvalItem({
           autoEligibility: {
-            ruleId: "small-vendor-payments",
+            ruleRef: "small-vendor-payments",
             ok: true,
             reasons: [],
             floor: false,

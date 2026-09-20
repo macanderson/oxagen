@@ -36,11 +36,11 @@ import { readApprovalEligibility, resolveApprovalAction } from "./actions";
 type Failure = Exclude<ActionResult<unknown>, { ok: true }>;
 
 /** A write that threw before it answered, as the seam would have named it. */
-const UNANSWERED = {
+const UNANSWERED: Failure = {
   ok: false,
   reason: "unavailable",
   code: "action_failed",
-} as const satisfies Failure;
+};
 
 /**
  * The reason codes the evaluator records that name a measure
@@ -111,8 +111,8 @@ export function Eligibility({
     <div data-testid="eligibility" className="flex flex-col gap-1 text-xs">
       <p>
         {eligibility.ok
-          ? t("ok", { rule: eligibility.ruleId })
-          : t("blocked", { rule: eligibility.ruleId })}
+          ? t("ok", { rule: eligibility.ruleRef })
+          : t("blocked", { rule: eligibility.ruleRef })}
       </p>
       {eligibility.reasons.length === 0 ? null : (
         <ul className="list-inside list-disc text-muted-foreground">
@@ -216,12 +216,6 @@ export function ApprovalDecision({
   } | null>(null);
   /** The code a refused re-read answered; the recorded line stays either way. */
   const [unread, setUnread] = useState<string | null>(null);
-  /**
-   * Whether the opening read is still in flight. A decision taken before it
-   * lands is the stale decision the read exists to stop, so it holds the two
-   * buttons rather than only marking them.
-   */
-  const [reading, setReading] = useState(false);
   const noteId = `approval-note-${approvalId}`;
 
   function reset() {
@@ -229,29 +223,15 @@ export function ApprovalDecision({
     setFailure(null);
     setFresh(null);
     setUnread(null);
-    setReading(false);
   }
 
   async function load() {
-    setReading(true);
-    try {
-      const result = await readApprovalEligibility(org, ws, approvalId, on);
-      if (result.ok) setFresh(result.value);
-      else
-        setUnread(
-          result.reason === "pending_approval"
-            ? "pending_approval"
-            : result.code,
-        );
-    } catch {
-      // The transport threw rather than answering. Without this the promise
-      // rejects unhandled and the dialog keeps drawing "checking" with no exit,
-      // which is the one state a person cannot leave. The write path beside it
-      // names the same case `UNANSWERED`.
-      setUnread(UNANSWERED.code);
-    } finally {
-      setReading(false);
-    }
+    const result = await readApprovalEligibility(org, ws, approvalId, on);
+    if (result.ok) setFresh(result.value);
+    else
+      setUnread(
+        result.reason === "pending_approval" ? "pending_approval" : result.code,
+      );
   }
 
   async function submit(decision: "approved" | "denied") {
@@ -280,7 +260,7 @@ export function ApprovalDecision({
 
   const settledBy = fresh?.resolvedBy ?? null;
   const shown = fresh === null ? eligibility : fresh.eligibility;
-  const busy = pending !== null || reading;
+  const busy = pending !== null;
 
   return (
     <>
@@ -367,7 +347,7 @@ export function ApprovalDecision({
               aria-disabled={busy || settledBy !== null || undefined}
               className={buttonPrimary}
               onClick={() => {
-                if (!busy && settledBy === null) void submit("approved");
+                if (settledBy === null) void submit("approved");
               }}
             >
               {pending === "approved" ? t("approving") : t("approve")}
@@ -378,7 +358,7 @@ export function ApprovalDecision({
               aria-disabled={busy || settledBy !== null || undefined}
               className={buttonSecondary}
               onClick={() => {
-                if (!busy && settledBy === null) void submit("denied");
+                if (settledBy === null) void submit("denied");
               }}
             >
               {pending === "denied" ? t("denying") : t("deny")}

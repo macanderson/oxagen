@@ -42,21 +42,6 @@ import { Clock } from "./clock";
 
 type Place = { org: string; ws: string };
 
-/**
- * The figure the header and the waiting tile both stand behind: the count the
- * read took, marked `+` when the read stopped before the end of the queue.
- * Writing the bare length there read as the whole queue, which is the figure an
- * operator staffs against.
- */
-function parked(
-  queue: ApprovalQueue,
-  locale: string,
-  t: (key: "more", values: { count: string }) => string,
-): string {
-  const count = formatCount(queue.items.length, locale);
-  return queue.more ? t("more", { count }) : count;
-}
-
 function ApprovalCard({
   item,
   mandate,
@@ -216,7 +201,22 @@ export function ApprovalsPanel({
         </h2>
         {approvals.ok ? (
           <span className="text-xs text-muted-foreground">
-            {t("parked", { count: parked(approvals.value, locale, t) })}
+            {/*
+              The figure the header and the waiting tile both stand behind: the
+              count the read took, marked `+` when the read stopped before the
+              end of the queue. Writing the bare length here read as the whole
+              queue, which is the figure an operator staffs against. The `more`
+              call sits in the component rather than in a helper the translator
+              is passed to, because INV-12 follows a translator to its calls
+              and a key it cannot see is a key it reports as unused.
+            */}
+            {t("parked", {
+              count: approvals.value.more
+                ? t("more", {
+                    count: formatCount(approvals.value.items.length, locale),
+                  })
+                : formatCount(approvals.value.items.length, locale),
+            })}
           </span>
         ) : null}
       </div>

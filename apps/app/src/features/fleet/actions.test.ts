@@ -217,8 +217,16 @@ describe("resolveApprovalAction", () => {
 
 describe("readApprovalEligibility", () => {
   it("reads the recorded evaluation and who resolved the call", async () => {
-    const eligibility = {
+    // The contract names the rule `ruleId`; the view model names it `ruleRef`,
+    // because Oxagen neither mints nor validates a rule id (INV-11).
+    const recorded = {
       ruleId: "small-vendor-payments",
+      ok: false,
+      reasons: ["measure_above_ceiling:amount"],
+      floor: false,
+    };
+    const eligibility = {
+      ruleRef: "small-vendor-payments",
       ok: false,
       reasons: ["measure_above_ceiling:amount"],
       floor: false,
@@ -226,7 +234,7 @@ describe("readApprovalEligibility", () => {
     invoke.mockResolvedValue({
       approvalId: APPROVAL,
       resolvedBy: "policy:small-vendor-payments",
-      eligibility,
+      eligibility: recorded,
     });
     const result = await readApprovalEligibility(
       "acme",

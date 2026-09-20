@@ -35,7 +35,6 @@
         "underMandate": "under mandate {mandate}"
       },
       "eligibility": {
-        "title": "Auto-approval",
         "none": "No auto-approval rule covered this call, so it waited for a person.",
         "ok": "Rule {rule} would have released this call. A mandate asked for a person anyway.",
         "blocked": "Rule {rule} did not release this call.",

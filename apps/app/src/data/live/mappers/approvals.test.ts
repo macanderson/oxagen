@@ -109,7 +109,7 @@ describe("the rule hop and the recorded evaluation", () => {
     expect(items[0]).toMatchObject({
       rule: "mandate:mnd_4f2a9c:human_above:amount",
       autoEligibility: {
-        ruleId: "small-vendor-payments",
+        ruleRef: "small-vendor-payments",
         ok: false,
         reasons: ["measure_above_ceiling:amount", "tainted_input"],
         floor: true,

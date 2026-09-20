@@ -1682,7 +1682,6 @@ type Messages = {
         underMandate: string;
       };
       eligibility: {
-        title: string;
         none: string;
         ok: string;
         blocked: string;
