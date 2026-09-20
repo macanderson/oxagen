@@ -119,8 +119,16 @@ describe("audit partition maintenance", () => {
         });
         await tx`SET LOCAL ROLE oxagen_app`;
         await tx`CREATE TEMP TABLE pg_class (oid oid, relkind "char") ON COMMIT DROP`;
+        await tx`SELECT set_config('app.rls_bypass', 'off', true), set_config('app.current_org_id', ${org}, true), set_config('app.current_workspace_id', ${currentId}, true)`;
         const [first] =
           await tx`SELECT security.maintain_audit_partitions() AS result`;
+        const [afterMaintenance] =
+          await tx`SELECT current_setting('app.rls_bypass') AS bypass, current_setting('app.current_org_id') AS org, current_setting('app.current_workspace_id') AS workspace`;
+        expect(afterMaintenance).toMatchObject({
+          bypass: "off",
+          org,
+          workspace: currentId,
+        });
         expect(first?.result.created).toHaveLength(3);
         expect(first?.result.dropped).toContain(expiredPartition);
         expect(first?.result.expiredDefaultRows).toBeGreaterThanOrEqual(1);

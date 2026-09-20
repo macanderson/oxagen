@@ -37,7 +37,7 @@ import {
   type KillSwitchTarget,
 } from "@oxagen/oxagen/contracts/kill_switch.set";
 import type { DenyGenerationVector } from "@oxagen/oxagen/iam";
-import { schema, type Tx, withTenantDb } from "@oxagen/database";
+import { schema, type Tx, withTenantDb, withOrgDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import {
@@ -406,8 +406,11 @@ async function flipInTransaction(
 
 interface KillSwitchSetDeps {
   lookups: KillSwitchTargetLookups;
-  /** Run `fn` in one tenant transaction. */
-  transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T>;
+  /** Write through the seam matching the switch row's workspace. */
+  transaction<T>(
+    fn: (tx: Tx) => Promise<T>,
+    workspaceId: string | null,
+  ): Promise<T>;
 }
 
 export function createKillSwitchSetHandler(
@@ -434,16 +437,18 @@ export function createKillSwitchSetHandler(
           ),
         }
       : { on: false };
-    const result = await deps.transaction((tx) =>
-      flipInTransaction(tx, {
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        switchWorkspaceId,
-        target: input.target,
-        flip,
-        reason: input.reason,
-        userId: actingUserId,
-      }),
+    const result = await deps.transaction(
+      (tx) =>
+        flipInTransaction(tx, {
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          switchWorkspaceId,
+          target: input.target,
+          flip,
+          reason: input.reason,
+          userId: actingUserId,
+        }),
+      switchWorkspaceId,
     );
 
     if (result.changed) {
@@ -466,5 +471,6 @@ export function createKillSwitchSetHandler(
 
 export const killSwitchSetHandler = createKillSwitchSetHandler({
   lookups: postgresKillSwitchTargetLookups,
-  transaction: (fn) => withTenantDb(fn),
+  transaction: (fn, workspaceId) =>
+    workspaceId === null ? withOrgDb(fn) : withTenantDb(fn),
 });

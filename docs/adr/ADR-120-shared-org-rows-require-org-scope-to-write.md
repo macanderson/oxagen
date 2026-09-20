@@ -20,6 +20,8 @@ A separate SELECT-only policy keeps organization rows visible to workspaces in t
 
 Generate a new migration for the ten nullable-workspace tables from the policy manifest. Preserve previous migrations. Verify the behavior as the real non-superuser application role: refuse promotion into organization scope, refuse organization-row insertion and deletion from a workspace, and permit writes within the selected workspace. Existing tests cover explicit organization writes, cross-organization isolation, shared reads, and the invalid organization-only workspace sentinel.
 
+For authorized operations that create a workspace agent and its organization role assignment atomically, `withTransactionOrgScope` narrows only the role-assignment mutation to an empty workspace setting inside the existing transaction. It keeps the organization fence and bypass setting unchanged. A savepoint restores the previous workspace on failure; success restores it explicitly before workspace writes resume. This exception requires the caller’s existing authorization and does not permit writes to other workspaces.
+
 ## Consequences
 
 A writer of organization-level rows must use the organization seam deliberately. A writer that relied on workspace scope to mutate those rows will now fail. The migration changes policies and does not rewrite table data. Production application remains a separate operational step after CI and review.

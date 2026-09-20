@@ -11,7 +11,13 @@
 //      and the long-lived credential. No version row: the definition is a
 //      file in git, written by `commit_agent_definition`.
 //   3. One security event for the key, and the secret returned once.
-import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import {
+  schema,
+  withTenantDb,
+  withTransactionOrgScope,
+  type Tx,
+  isUniqueViolation,
+} from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { agentKeysFor } from "@oxagen/agent/handlers/_agent-identity";
 import { DEFAULT_AGENT_ROLE_NAME } from "@oxagen/agent/handlers/_agent-role";
@@ -108,19 +114,22 @@ export const agentRegisterHandler: CapabilityHandler<
       )
       .limit(1);
     if (defaultRole) {
-      await tx
-        .insert(schema.principalRoleAssignments)
-        .values({
-          principalId: principal.id,
-          roleId: defaultRole.id,
-          orgId: ctx.orgId,
-          workspaceId:
-            defaultRole.scopeKind === "workspace" ? ctx.workspaceId : null,
-          assignedBy: userId,
-          createdById: userId,
-          updatedById: userId,
-        })
-        .onConflictDoNothing();
+      const assign = (tx: Tx) =>
+        tx
+          .insert(schema.principalRoleAssignments)
+          .values({
+            principalId: principal.id,
+            roleId: defaultRole.id,
+            orgId: ctx.orgId,
+            workspaceId:
+              defaultRole.scopeKind === "workspace" ? ctx.workspaceId : null,
+            assignedBy: userId,
+            createdById: userId,
+            updatedById: userId,
+          })
+          .onConflictDoNothing();
+      if (defaultRole.scopeKind === "workspace") await assign(tx);
+      else await withTransactionOrgScope(tx, assign);
     } else {
       logger.warn(
         { orgId: ctx.orgId, agentId: agent.publicId },

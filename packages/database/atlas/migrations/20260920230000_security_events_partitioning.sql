@@ -94,14 +94,17 @@ $migration$;
 CREATE FUNCTION security.maintain_audit_partitions()
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
-SET "app.rls_bypass" = 'on'
-SET "app.current_org_id" = ''
-SET "app.current_workspace_id" = ''
 AS $function$
 DECLARE month_offset integer; month_start timestamp; month_end timestamp; child_name text; child_table regclass;
   partition_row record; default_table regclass; deleted_count integer := 0; cutoff timestamptz;
-  created_names text[] := '{}'; dropped_names text[] := '{}'; still_expired boolean := false;
+  created_names text[] := '{}'; dropped_names text[] := '{}'; still_expired boolean := false; saved_bypass text; saved_org text; saved_workspace text;
 BEGIN
+  saved_bypass := current_setting('app.rls_bypass', true);
+  saved_org := current_setting('app.current_org_id', true);
+  saved_workspace := current_setting('app.current_workspace_id', true);
+  PERFORM set_config('app.rls_bypass', 'on', true);
+  PERFORM set_config('app.current_org_id', '', true);
+  PERFORM set_config('app.current_workspace_id', '', true);
   PERFORM pg_advisory_xact_lock(1869768558, 2840);
   IF (SELECT relkind FROM pg_catalog.pg_class WHERE oid = 'security.security_events'::regclass) <> 'p' THEN
     RAISE EXCEPTION 'security_events partitioning is unavailable';
@@ -150,6 +153,9 @@ BEGIN
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
     EXECUTE format('SELECT EXISTS (SELECT 1 FROM %s WHERE occurred_at < $1)', default_table) INTO still_expired USING cutoff;
   END IF;
+  PERFORM set_config('app.rls_bypass', coalesce(saved_bypass, ''), true);
+  PERFORM set_config('app.current_org_id', coalesce(saved_org, ''), true);
+  PERFORM set_config('app.current_workspace_id', coalesce(saved_workspace, ''), true);
   RETURN jsonb_build_object('created', created_names, 'dropped', dropped_names,
     'expiredDefaultRows', deleted_count, 'hasExpiredDefaultRows', still_expired);
 END

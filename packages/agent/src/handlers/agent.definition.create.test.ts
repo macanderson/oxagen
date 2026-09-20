@@ -1,3 +1,4 @@
+import { withTransactionOrgScope } from "@oxagen/database";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createFakeTx } from "../test-utils/fake-tx";
 
@@ -10,6 +11,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   // a suite that counts seam calls must see one identity, not two.
   const dbMock = {
     ...real,
+    withTransactionOrgScope: vi.fn(
+      async (tx: unknown, fn: (tx: unknown) => Promise<unknown>) => fn(tx),
+    ),
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(fake.tx),
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
@@ -145,6 +149,10 @@ describe("agent.definition.create handler", () => {
     expect(out.version).toBe(1);
     // agents + principals + agent_versions + principal_role_assignments.
     expect(fake.mutations.insert).toBe(4);
+    expect(withTransactionOrgScope).toHaveBeenCalledWith(
+      fake.tx,
+      expect.any(Function),
+    );
   });
 
   it("skips the default role assignment gracefully when the role is not seeded (dev DB)", async () => {

@@ -161,7 +161,10 @@ describe("assertWithinSpendBudget — threshold notifications", () => {
     await assertWithinSpendBudget(args, d);
     await new Promise((r) => setTimeout(r, 0)); // let the fire-and-forget resolve
     expect(claimThreshold).toHaveBeenCalledWith(
-      expect.objectContaining({ threshold: 80 }),
+      expect.objectContaining({
+        threshold: 80,
+        workspaceId: budgetRow().workspaceId,
+      }),
     );
     expect(notify).toHaveBeenCalledTimes(1);
   });

@@ -55,6 +55,7 @@ export interface SpendGateDeps {
    *  true when THIS caller won the flip and should deliver the notification. */
   claimThreshold: (args: {
     budgetId: string;
+    workspaceId: string | null;
     threshold: number;
     periodStart: Date;
   }) => Promise<boolean>;
@@ -258,6 +259,7 @@ export async function assertWithinSpendBudget(
       void deps
         .claimThreshold({
           budgetId: budget.id,
+          workspaceId: budget.workspaceId,
           threshold,
           periodStart: anchor,
         })

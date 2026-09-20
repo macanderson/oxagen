@@ -24,6 +24,7 @@ export * from "./types";
 export {
   withTenantDb,
   withOrgDb,
+  withTransactionOrgScope,
   withSystemDb,
   withOrgPlaneSystemDb,
   setTransactionWorkspaceScope,
