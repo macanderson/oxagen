@@ -3,6 +3,7 @@
 // the freshness panel's read,
 // and a DataSource that answers the three Steering reads with what a test
 // hands it. Importable from tests only.
+import { refusingSource } from "@/test/refusing-source";
 import type { DataSource } from "@/data/ports";
 import type {
   ContextPr,
@@ -194,54 +195,8 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     contextPr: [],
     freshness: [],
   };
-  const refuse = () => Promise.reject(new Error("not a Steering read"));
-  const source: DataSource = {
-    pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
-    runs: {
-      list: refuse,
-      get: refuse,
-      frameBody: refuse,
-      cost: refuse,
-      transcript: refuse,
-      chain: refuse,
-    },
-    approvals: { pending: refuse, resolved: refuse },
-    agents: {
-      list: refuse,
-      get: refuse,
-      toolbelt: refuse,
-      incidents: refuse,
-    },
-    billing: {
-      plan: refuse,
-      usageCredits: refuse,
-      bucket: refuse,
-      contractRate: refuse,
-      invoices: refuse,
-    },
-    spend: {
-      byGroup: refuse,
-      fleet: refuse,
-      drill: refuse,
-      waste: refuse,
-      budgets: refuse,
-      findings: refuse,
-      findingEvidence: refuse,
-      priceBook: refuse,
-      unpricedModels: refuse,
-    },
-    onboarding: { state: refuse, firstFrame: refuse },
-    org: {
-      members: refuse,
-      roles: refuse,
-      workspaces: refuse,
-      apiKeys: refuse,
-      modelCredential: refuse,
-    },
-    mandates: { list: refuse, get: refuse },
-    audit: { events: refuse, exportEvents: refuse },
-    skills: { inventory: refuse },
+
+  const source: DataSource = refusingSource("Steering", {
     steering: {
       records: (...args) => {
         calls.records.push(args);
@@ -260,14 +215,6 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
         return Promise.resolve(reads.freshness);
       },
     },
-    tools: {
-      versions: refuse,
-      grants: refuse,
-      killSwitches: refuse,
-      approvalRules: refuse,
-      connections: refuse,
-      mcpServers: refuse,
-    },
-  };
+  });
   return { source, calls };
 }

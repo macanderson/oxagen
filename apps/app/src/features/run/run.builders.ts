@@ -2,6 +2,7 @@
 // detail read, its frames, the cost rollup, a transcript, and a DataSource
 // that answers the Run page's reads with what a test hands it. Importable from
 // tests only (`testOnlyTarget` in src/test/arch/layers.ts).
+import { refusingSource } from "@/test/refusing-source";
 import type {
   RunChain,
   RunCost,
@@ -512,7 +513,7 @@ export function runSource(reads: RunReads) {
     chain: [],
     mandates: [],
   };
-  const refuse = () => Promise.reject(new Error("not a Run read"));
+
   const answer = <T>(
     name: keyof typeof calls,
     read: Read<T> | undefined,
@@ -524,11 +525,8 @@ export function runSource(reads: RunReads) {
         : Promise.resolve(read);
     };
   };
-  const source: DataSource = {
-    pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+  const source: DataSource = refusingSource("Run", {
     runs: {
-      list: refuse,
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
       cost: answer("cost", reads.cost),
@@ -548,51 +546,10 @@ export function runSource(reads: RunReads) {
       pending: answer("approvals", reads.approvals),
       resolved: answer("resolvedApprovals", reads.resolvedApprovals),
     },
-    agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
-    billing: {
-      plan: refuse,
-      usageCredits: refuse,
-      bucket: refuse,
-      contractRate: refuse,
-      invoices: refuse,
+    mandates: {
+      list: answer("mandates", reads.mandates),
     },
-    spend: {
-      byGroup: refuse,
-      fleet: refuse,
-      drill: refuse,
-      waste: refuse,
-      budgets: refuse,
-      findings: refuse,
-      findingEvidence: refuse,
-      priceBook: refuse,
-      unpricedModels: refuse,
-    },
-    onboarding: { state: refuse, firstFrame: refuse },
-    org: {
-      members: refuse,
-      roles: refuse,
-      workspaces: refuse,
-      apiKeys: refuse,
-      modelCredential: refuse,
-    },
-    mandates: { list: answer("mandates", reads.mandates), get: refuse },
-    audit: { events: refuse, exportEvents: refuse },
-    skills: { inventory: refuse },
-    steering: {
-      records: refuse,
-      proposals: refuse,
-      contextPr: refuse,
-      freshness: refuse,
-    },
-    tools: {
-      versions: refuse,
-      grants: refuse,
-      killSwitches: refuse,
-      approvalRules: refuse,
-      connections: refuse,
-      mcpServers: refuse,
-    },
-  };
+  });
   return { source, calls };
 }
 

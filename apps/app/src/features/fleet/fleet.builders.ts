@@ -2,6 +2,7 @@
 // rows, pending approvals and a DataSource that answers Fleet's reads with
 // what a test hands it. Importable from tests only (`testOnlyTarget` in
 // src/test/arch/layers.ts).
+import { refusingSource } from "@/test/refusing-source";
 import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
 import type { MandateList } from "@/data/contracts/mandates";
 import type { RunPage } from "@/data/contracts/runs";
@@ -108,61 +109,19 @@ export function fleetSource(reads: FleetReads) {
     approvals: [],
     mandates: [],
   };
-  const refuse = () => Promise.reject(new Error("not a Fleet read"));
-  const source: DataSource = {
-    pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
+
+  const source: DataSource = refusingSource("Fleet", {
     runs: {
       list: (...args) => {
         calls.runs.push(args);
         return Promise.resolve(reads.runs);
       },
-      get: refuse,
-      frameBody: refuse,
-      cost: refuse,
-      chain: refuse,
-      transcript: refuse,
     },
     approvals: {
       pending: (...args) => {
         calls.approvals.push(args);
         return Promise.resolve(reads.approvals);
       },
-      // Fleet reads only the pending approvals; the resolved ledger is a Run
-      // page read (#3153).
-      resolved: refuse,
-    },
-    agents: {
-      list: refuse,
-      get: refuse,
-      toolbelt: refuse,
-      incidents: refuse,
-    },
-    billing: {
-      plan: refuse,
-      usageCredits: refuse,
-      bucket: refuse,
-      contractRate: refuse,
-      invoices: refuse,
-    },
-    spend: {
-      byGroup: refuse,
-      fleet: refuse,
-      drill: refuse,
-      waste: refuse,
-      budgets: refuse,
-      findings: refuse,
-      findingEvidence: refuse,
-      priceBook: refuse,
-      unpricedModels: refuse,
-    },
-    onboarding: { state: refuse, firstFrame: refuse },
-    org: {
-      members: refuse,
-      roles: refuse,
-      workspaces: refuse,
-      apiKeys: refuse,
-      modelCredential: refuse,
     },
     mandates: {
       list: (...args) => {
@@ -171,24 +130,7 @@ export function fleetSource(reads: FleetReads) {
           ? Promise.reject(new Error("mandates.list was not expected"))
           : Promise.resolve(reads.mandates);
       },
-      get: refuse,
     },
-    audit: { events: refuse, exportEvents: refuse },
-    skills: { inventory: refuse },
-    steering: {
-      records: refuse,
-      proposals: refuse,
-      contextPr: refuse,
-      freshness: refuse,
-    },
-    tools: {
-      versions: refuse,
-      grants: refuse,
-      killSwitches: refuse,
-      approvalRules: refuse,
-      connections: refuse,
-      mcpServers: refuse,
-    },
-  };
+  });
   return { source, calls };
 }

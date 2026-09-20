@@ -2,6 +2,7 @@
 // Fleet's spend tiles in each state: today's spend with its basis and the cache
 // hit rate, a day the rollup has not priced, a day with no input tokens, and a
 // read that failed. axe checks the state each test ends in (INV-26).
+import { refusingSource } from "@/test/refusing-source";
 import { cleanup, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,69 +35,12 @@ const TODAY = new Date("2026-09-15T12:00:00.000Z");
 const DAY = { from: "2026-09-15", to: "2026-09-15" };
 
 const fleet = vi.fn<DataSource["spend"]["fleet"]>();
-const refuse = () => Promise.reject(new Error("not a Fleet spend read"));
-const source: DataSource = {
-  pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse, preferences: refuse },
-  billing: {
-    plan: refuse,
-    usageCredits: refuse,
-    bucket: refuse,
-    contractRate: refuse,
-    invoices: refuse,
-  },
-  runs: {
-    list: refuse,
-    get: refuse,
-    frameBody: refuse,
-    cost: refuse,
-    transcript: refuse,
-    chain: refuse,
-  },
-  approvals: { pending: refuse, resolved: refuse },
-  agents: {
-    list: refuse,
-    get: refuse,
-    toolbelt: refuse,
-    incidents: refuse,
-  },
+
+const source: DataSource = refusingSource("Fleet spend", {
   spend: {
-    byGroup: refuse,
     fleet,
-    drill: refuse,
-    waste: refuse,
-    budgets: refuse,
-    findings: refuse,
-    findingEvidence: refuse,
-    priceBook: refuse,
-    unpricedModels: refuse,
   },
-  onboarding: { state: refuse, firstFrame: refuse },
-  org: {
-    members: refuse,
-    roles: refuse,
-    workspaces: refuse,
-    apiKeys: refuse,
-    modelCredential: refuse,
-  },
-  mandates: { list: refuse, get: refuse },
-  audit: { events: refuse, exportEvents: refuse },
-  skills: { inventory: refuse },
-  steering: {
-    records: refuse,
-    proposals: refuse,
-    contextPr: refuse,
-    freshness: refuse,
-  },
-  tools: {
-    versions: refuse,
-    grants: refuse,
-    killSwitches: refuse,
-    approvalRules: refuse,
-    connections: refuse,
-    mcpServers: refuse,
-  },
-};
+});
 
 function spend(over: Partial<FleetSpend> = {}): Read<FleetSpend> {
   return readOk({

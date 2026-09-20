@@ -3,6 +3,7 @@
 // bucket, a negotiated and a published-tier rate, invoice rows and a
 // DataSource that answers the five Billing reads with what a test hands it.
 // Importable from tests only.
+import { refusingSource } from "@/test/refusing-source";
 import type {
   ContractRate,
   GauBucket,
@@ -196,25 +197,8 @@ export function billingSource(
     invoices: [],
     usageCredits: [],
   };
-  const refuse = () => Promise.reject(new Error("not a Billing read"));
-  const source: DataSource = {
-    pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
-    runs: {
-      list: refuse,
-      get: refuse,
-      frameBody: refuse,
-      cost: refuse,
-      transcript: refuse,
-      chain: refuse,
-    },
-    approvals: { pending: refuse, resolved: refuse },
-    agents: {
-      list: refuse,
-      get: refuse,
-      toolbelt: refuse,
-      incidents: refuse,
-    },
+
+  const source: DataSource = refusingSource("Billing", {
     billing: {
       plan: (...args) => {
         calls.plan.push(args);
@@ -241,42 +225,6 @@ export function billingSource(
         return Promise.resolve(reads.usageCredits);
       },
     },
-    spend: {
-      byGroup: refuse,
-      fleet: refuse,
-      drill: refuse,
-      waste: refuse,
-      budgets: refuse,
-      findings: refuse,
-      findingEvidence: refuse,
-      priceBook: refuse,
-      unpricedModels: refuse,
-    },
-    onboarding: { state: refuse, firstFrame: refuse },
-    org: {
-      members: refuse,
-      roles: refuse,
-      workspaces: refuse,
-      apiKeys: refuse,
-      modelCredential: refuse,
-    },
-    mandates: { list: refuse, get: refuse },
-    audit: { events: refuse, exportEvents: refuse },
-    skills: { inventory: refuse },
-    steering: {
-      records: refuse,
-      proposals: refuse,
-      contextPr: refuse,
-      freshness: refuse,
-    },
-    tools: {
-      versions: refuse,
-      grants: refuse,
-      killSwitches: refuse,
-      approvalRules: refuse,
-      connections: refuse,
-      mcpServers: refuse,
-    },
-  };
+  });
   return { source, calls };
 }

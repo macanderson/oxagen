@@ -1,6 +1,7 @@
 // Fixtures and a DataSource for the Tools tests: the view models the page
 // renders, each built from the contract-parsed record through the same mapper
 // the live port uses, so a fixture cannot drift from the contract.
+import { refusingSource } from "@/test/refusing-source";
 import {
   toApprovalRuleSet,
   toConnectionList,
@@ -158,7 +159,7 @@ export function toolsSource(reads: ToolsReads) {
     connections: [],
     mcpServers: [],
   };
-  const refuse = () => Promise.reject(new Error("not a Tools read"));
+
   const answer =
     <T>(read: Read<T> | undefined, name: keyof ToolsReads) =>
     (...args: unknown[]): Promise<Read<T>> => {
@@ -167,69 +168,18 @@ export function toolsSource(reads: ToolsReads) {
         ? Promise.reject(new Error(`tools.${name} was not expected`))
         : Promise.resolve(read);
     };
-  const source: DataSource = {
-    pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
-    billing: {
-      plan: refuse,
-      usageCredits: refuse,
-      bucket: refuse,
-      contractRate: refuse,
-      invoices: refuse,
-    },
-    runs: {
-      list: refuse,
-      get: refuse,
-      frameBody: refuse,
-      cost: refuse,
-      transcript: refuse,
-      chain: refuse,
-    },
-    approvals: { pending: refuse, resolved: refuse },
+  const source: DataSource = refusingSource("Tools", {
     agents: {
       list: answer(
         reads.agents ?? readOk(agentPage([agentPageRow("invoice-bot")])),
         "agents",
       ),
-      get: refuse,
-      toolbelt: refuse,
-      incidents: refuse,
-    },
-    spend: {
-      byGroup: refuse,
-      fleet: refuse,
-      drill: refuse,
-      waste: refuse,
-      budgets: refuse,
-      findings: refuse,
-      findingEvidence: refuse,
-      priceBook: refuse,
-      unpricedModels: refuse,
-    },
-    onboarding: { state: refuse, firstFrame: refuse },
-    org: {
-      // Defaulted below the object literal, once `source` exists to reassign.
-      members: refuse,
-      roles: refuse,
-      workspaces: refuse,
-      apiKeys: refuse,
-      modelCredential: refuse,
-    },
-    skills: { inventory: refuse },
-    audit: { events: refuse, exportEvents: refuse },
-    steering: {
-      records: refuse,
-      proposals: refuse,
-      contextPr: refuse,
-      freshness: refuse,
     },
     tools: {
       versions: answer(reads.versions, "versions"),
       grants: answer(reads.grants, "grants"),
       killSwitches: answer(reads.killSwitches, "killSwitches"),
       approvalRules: answer(reads.approvalRules, "approvalRules"),
-      // Both tabs make these reads on every load beside the one under test,
-      // so they default rather than making every test supply one.
       connections: answer(
         reads.connections ?? readOk(connectionList()),
         "connections",
@@ -239,8 +189,10 @@ export function toolsSource(reads: ToolsReads) {
         "mcpServers",
       ),
     },
-    mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
-  };
+    mandates: {
+      list: answer(reads.mandates, "mandates"),
+    },
+  });
   // The switches tab reads the org roster on every load, for the operator
   // level's picker (#3147): the same as the switch board itself, which every
   // test in this file already supplies. Defaulting to an empty roster here,

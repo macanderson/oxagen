@@ -624,6 +624,11 @@ Each invariant is one sentence with a named mechanism. Architecture tests live i
 
 ---
 
+Feature builders and inline test sources use `refusingSource(feature, overrides)` from `src/test/refusing-source.ts`. Supply only the methods the test reads. The helper merges overrides within each port, so overriding one method leaves its siblings as refusals. Every unused method rejects with the feature name. An omitted or `undefined` override cannot turn a refusal into an empty answer.
+
+The helper contains the one exhaustive default `DataSource`, checked against the port type. When adding a method to `DataSource`, add its refusing default there. Unrelated feature builders need no change. `SourceOverrides` maps each port to optional methods and retains each method's argument and return types. Keep real answers and call recording in the feature's builder. Do not copy the complete port list into another test or use an unconfigured `vi.fn()` as an unused read.
+
+
 ## 6. Testing policy
 
 ### 6.1 The pyramid

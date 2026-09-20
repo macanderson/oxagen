@@ -5,6 +5,7 @@
 // is read. What the record does not carry is asserted absent rather than blank:
 // no tiles, no severity, no reference column. axe checks the state each test
 // ends in (INV-26).
+import { refusingSource } from "@/test/refusing-source";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuditEvent, AuditPage } from "@/data/contracts/audit";
@@ -71,69 +72,19 @@ const events = vi.fn<DataSource["audit"]["events"]>();
 const preferences = vi.fn<DataSource["shell"]["preferences"]>();
 const exportEvents = vi.fn<DataSource["audit"]["exportEvents"]>();
 const members = vi.fn<DataSource["org"]["members"]>();
-const refuse = () => Promise.reject(new Error("not an Audit read"));
-const source: DataSource = {
-  pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse, preferences },
-  runs: {
-    list: refuse,
-    get: refuse,
-    frameBody: refuse,
-    cost: refuse,
-    transcript: refuse,
-    chain: refuse,
-  },
-  approvals: { pending: refuse, resolved: refuse },
-  agents: {
-    list: refuse,
-    get: refuse,
-    toolbelt: refuse,
-    incidents: refuse,
-  },
-  billing: {
-    plan: refuse,
-    usageCredits: refuse,
-    bucket: refuse,
-    contractRate: refuse,
-    invoices: refuse,
-  },
-  spend: {
-    byGroup: refuse,
-    fleet: refuse,
-    drill: refuse,
-    waste: refuse,
-    budgets: refuse,
-    findings: refuse,
-    findingEvidence: refuse,
-    priceBook: refuse,
-    unpricedModels: refuse,
+
+const source: DataSource = refusingSource("Audit", {
+  shell: {
+    preferences,
   },
   org: {
     members,
-    roles: refuse,
-    workspaces: refuse,
-    apiKeys: refuse,
-    modelCredential: refuse,
   },
-  audit: { events, exportEvents },
-  onboarding: { state: refuse, firstFrame: refuse },
-  skills: { inventory: refuse },
-  mandates: { list: refuse, get: refuse },
-  steering: {
-    records: refuse,
-    proposals: refuse,
-    contextPr: refuse,
-    freshness: refuse,
+  audit: {
+    events,
+    exportEvents,
   },
-  tools: {
-    versions: refuse,
-    grants: refuse,
-    killSwitches: refuse,
-    approvalRules: refuse,
-    connections: refuse,
-    mcpServers: refuse,
-  },
-};
+});
 
 async function renderAudit(
   searchParams: Record<string, string | string[]> = {},

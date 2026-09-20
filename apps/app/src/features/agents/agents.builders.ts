@@ -2,6 +2,7 @@
 // identity rows, one agent, a toolbelt, incidents, and a DataSource that
 // answers the agents reads with what a test hands it. Importable from tests
 // only (`testOnlyTarget` in src/test/arch/layers.ts).
+import { refusingSource } from "@/test/refusing-source";
 import type {
   AgentDetail,
   AgentPage,
@@ -257,7 +258,7 @@ export function agentsSource(reads: AgentReads) {
     mandates: [],
     budgets: [],
   };
-  const refuse = () => Promise.reject(new Error("not an Agents read"));
+
   const answer =
     <T>(read: Read<T> | undefined, name: keyof AgentReads) =>
     (...args: unknown[]): Promise<Read<T>> => {
@@ -266,67 +267,19 @@ export function agentsSource(reads: AgentReads) {
         ? Promise.reject(new Error(`agents.${name} was not expected`))
         : Promise.resolve(read);
     };
-  const source: DataSource = {
-    pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse, preferences: refuse },
-    billing: {
-      plan: refuse,
-      usageCredits: refuse,
-      bucket: refuse,
-      contractRate: refuse,
-      invoices: refuse,
-    },
-    runs: {
-      list: refuse,
-      get: refuse,
-      frameBody: refuse,
-      cost: refuse,
-      transcript: refuse,
-      chain: refuse,
-    },
-    approvals: { pending: refuse, resolved: refuse },
+  const source: DataSource = refusingSource("Agents", {
     agents: {
       list: answer(reads.list, "list"),
       get: answer(reads.get, "get"),
       toolbelt: answer(reads.toolbelt, "toolbelt"),
       incidents: answer(reads.incidents, "incidents"),
     },
-    mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
+    mandates: {
+      list: answer(reads.mandates, "mandates"),
+    },
     spend: {
-      byGroup: refuse,
-      fleet: refuse,
-      drill: refuse,
-      waste: refuse,
       budgets: answer(reads.budgets, "budgets"),
-      findings: refuse,
-      findingEvidence: refuse,
-      priceBook: refuse,
-      unpricedModels: refuse,
     },
-    onboarding: { state: refuse, firstFrame: refuse },
-    org: {
-      members: refuse,
-      roles: refuse,
-      workspaces: refuse,
-      apiKeys: refuse,
-      modelCredential: refuse,
-    },
-    audit: { events: refuse, exportEvents: refuse },
-    skills: { inventory: refuse },
-    steering: {
-      records: refuse,
-      proposals: refuse,
-      contextPr: refuse,
-      freshness: refuse,
-    },
-    tools: {
-      versions: refuse,
-      grants: refuse,
-      killSwitches: refuse,
-      approvalRules: refuse,
-      connections: refuse,
-      mcpServers: refuse,
-    },
-  };
+  });
   return { source, calls };
 }

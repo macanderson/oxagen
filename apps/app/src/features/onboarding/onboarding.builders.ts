@@ -2,6 +2,7 @@
 // (ARCHITECTURE.md §5): a gate row, a first-frame read, and a DataSource that
 // answers the onboarding and agents reads with what a test hands it.
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
+import { refusingSource } from "@/test/refusing-source";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { FirstFrame, OnboardingGate } from "@/data/contracts/onboarding";
 import type { DataSource } from "@/data/ports";
@@ -61,14 +62,12 @@ export function onboardingSource(reads: Reads): {
   calls: Calls;
 } {
   const calls: Calls = { state: [], firstFrame: [], agent: [] };
-  const refuse = (port: string) => () => {
-    throw new Error(`${port} is not part of this test`);
-  };
+
   const answer = <T>(read: Read<T> | undefined, port: string): Read<T> => {
     if (read === undefined) throw new Error(`${port} has no answer`);
     return read;
   };
-  const source: DataSource = {
+  const source: DataSource = refusingSource("Onboarding", {
     onboarding: {
       state: (...args: Parameters<DataSource["onboarding"]["state"]>) => {
         calls.state.push(args);
@@ -88,78 +87,7 @@ export function onboardingSource(reads: Reads): {
         calls.agent.push(args);
         return Promise.resolve(answer(reads.agent, "agents.get"));
       },
-      list: refuse("agents.list"),
-      toolbelt: refuse("agents.toolbelt"),
-      incidents: refuse("agents.incidents"),
     },
-    pretenant: {
-      orgs: refuse("pretenant.orgs"),
-      workspaces: refuse("pretenant.workspaces"),
-    },
-    mandates: {
-      list: refuse("mandates.list"),
-      get: refuse("mandates.get"),
-    },
-    shell: {
-      context: refuse("shell.context"),
-      preferences: refuse("shell.preferences"),
-    },
-    runs: {
-      list: refuse("runs.list"),
-      get: refuse("runs.get"),
-      frameBody: refuse("runs.frameBody"),
-      cost: refuse("runs.cost"),
-      transcript: refuse("runs.transcript"),
-      chain: refuse("runs.transcript"),
-    },
-    approvals: {
-      pending: refuse("approvals.pending"),
-      resolved: refuse("approvals.resolved"),
-    },
-    billing: {
-      plan: refuse("billing.plan"),
-      usageCredits: refuse("billing.usageCredits"),
-      bucket: refuse("billing.bucket"),
-      contractRate: refuse("billing.contractRate"),
-      invoices: refuse("billing.invoices"),
-    },
-    spend: {
-      byGroup: refuse("spend.byGroup"),
-      fleet: refuse("spend.fleet"),
-      drill: refuse("spend.drill"),
-      waste: refuse("spend.waste"),
-      budgets: refuse("spend.budgets"),
-      findings: refuse("spend.findings"),
-      findingEvidence: refuse("spend.findingEvidence"),
-      priceBook: refuse("spend.priceBook"),
-      unpricedModels: refuse("spend.unpricedModels"),
-    },
-    audit: {
-      events: refuse("audit.events"),
-      exportEvents: refuse("audit.exportEvents"),
-    },
-    org: {
-      members: refuse("org.members"),
-      roles: refuse("org.roles"),
-      workspaces: refuse("org.workspaces"),
-      apiKeys: refuse("org.apiKeys"),
-      modelCredential: refuse("org.modelCredential"),
-    },
-    skills: { inventory: refuse("skills.inventory") },
-    steering: {
-      records: refuse("steering.records"),
-      proposals: refuse("steering.proposals"),
-      contextPr: refuse("steering.contextPr"),
-      freshness: refuse("steering.freshness"),
-    },
-    tools: {
-      versions: refuse("tools.versions"),
-      grants: refuse("tools.grants"),
-      killSwitches: refuse("tools.killSwitches"),
-      approvalRules: refuse("tools.approvalRules"),
-      connections: refuse("tools.connections"),
-      mcpServers: refuse("tools.mcpServers"),
-    },
-  };
+  });
   return { source, calls };
 }

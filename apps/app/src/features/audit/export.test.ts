@@ -1,6 +1,7 @@
 // The audit export route handler: who it answers a file to, who it refuses,
 // and what the file carries. The export reads through the audit port alone, so
 // the test hands it a fake DataSource and asserts the call it makes.
+import { refusingSource } from "@/test/refusing-source";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DataSource } from "@/data/ports";
 import type { AuditExportDeps } from "./export";
@@ -29,67 +30,17 @@ const file = {
   rowCount: 1,
 };
 
-const refuse = () => Promise.reject(new Error("not the audit export read"));
 const exportEvents = vi.fn();
 const preferences = vi.fn<DataSource["shell"]["preferences"]>();
 const resolveViewer = vi.fn();
-const source: DataSource = {
-  pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse, preferences },
-  runs: {
-    list: refuse,
-    get: refuse,
-    frameBody: refuse,
-    cost: refuse,
-    transcript: refuse,
-    chain: refuse,
+const source: DataSource = refusingSource("Audit", {
+  shell: {
+    preferences,
   },
-  approvals: { pending: refuse, resolved: refuse },
-  agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
-  billing: {
-    plan: refuse,
-    usageCredits: refuse,
-    bucket: refuse,
-    contractRate: refuse,
-    invoices: refuse,
+  audit: {
+    exportEvents,
   },
-  spend: {
-    byGroup: refuse,
-    fleet: refuse,
-    drill: refuse,
-    waste: refuse,
-    budgets: refuse,
-    findings: refuse,
-    findingEvidence: refuse,
-    priceBook: refuse,
-    unpricedModels: refuse,
-  },
-  org: {
-    members: refuse,
-    roles: refuse,
-    workspaces: refuse,
-    apiKeys: refuse,
-    modelCredential: refuse,
-  },
-  audit: { events: refuse, exportEvents },
-  onboarding: { state: refuse, firstFrame: refuse },
-  skills: { inventory: refuse },
-  mandates: { list: refuse, get: refuse },
-  steering: {
-    records: refuse,
-    proposals: refuse,
-    contextPr: refuse,
-    freshness: refuse,
-  },
-  tools: {
-    versions: refuse,
-    grants: refuse,
-    killSwitches: refuse,
-    approvalRules: refuse,
-    connections: refuse,
-    mcpServers: refuse,
-  },
-};
+});
 const deps: AuditExportDeps = { resolveViewer, dataSource: () => source };
 
 const request = (search = "") =>

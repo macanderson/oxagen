@@ -4,6 +4,7 @@
 // nothing unpriced. A rate prints as money per million units, never as the
 // micros the contract carried; a model with no price prints as unpriced, never
 // as $0.00 (INV-09). Axe checks the state each test ends in (INV-26).
+import { refusingSource } from "@/test/refusing-source";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
@@ -52,68 +53,12 @@ const AT = "2026-09-15T12:00:00.000Z";
 
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
-const source: DataSource = {
-  pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context: vi.fn(), preferences: vi.fn() },
-  billing: {
-    plan: vi.fn(),
-    usageCredits: vi.fn(),
-    bucket: vi.fn(),
-    contractRate: vi.fn(),
-    invoices: vi.fn(),
-  },
-  runs: {
-    list: vi.fn(),
-    get: vi.fn(),
-    frameBody: vi.fn(),
-    cost: vi.fn(),
-    transcript: vi.fn(),
-    chain: vi.fn(),
-  },
-  approvals: { pending: vi.fn(), resolved: vi.fn() },
-  agents: {
-    list: vi.fn(),
-    get: vi.fn(),
-    toolbelt: vi.fn(),
-    incidents: vi.fn(),
-  },
+const source: DataSource = refusingSource("Pricing", {
   spend: {
-    byGroup: vi.fn(),
-    fleet: vi.fn(),
-    drill: vi.fn(),
-    waste: vi.fn(),
-    budgets: vi.fn(),
-    findings: vi.fn(),
-    findingEvidence: vi.fn(),
     priceBook,
     unpricedModels,
   },
-  onboarding: { state: vi.fn(), firstFrame: vi.fn() },
-  org: {
-    members: vi.fn(),
-    roles: vi.fn(),
-    workspaces: vi.fn(),
-    apiKeys: vi.fn(),
-    modelCredential: vi.fn(),
-  },
-  mandates: { list: vi.fn(), get: vi.fn() },
-  audit: { events: vi.fn(), exportEvents: vi.fn() },
-  skills: { inventory: vi.fn() },
-  steering: {
-    records: vi.fn(),
-    proposals: vi.fn(),
-    contextPr: vi.fn(),
-    freshness: vi.fn(),
-  },
-  tools: {
-    versions: vi.fn(),
-    grants: vi.fn(),
-    killSwitches: vi.fn(),
-    approvalRules: vi.fn(),
-    connections: vi.fn(),
-    mcpServers: vi.fn(),
-  },
-};
+});
 
 const entry = (
   over: Partial<PriceBook["entries"][number]> = {},

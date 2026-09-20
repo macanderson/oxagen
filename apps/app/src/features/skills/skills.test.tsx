@@ -5,6 +5,7 @@
 // reported it out of the window's sessions, its harnesses and when it was last
 // seen, and nothing the record does not carry; axe checks the state each test
 // ends in (INV-26).
+import { refusingSource } from "@/test/refusing-source";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
@@ -69,68 +70,11 @@ function inventory(over: Partial<SkillInventory> = {}): SkillInventory {
 }
 
 const read = vi.fn<DataSource["skills"]["inventory"]>();
-const source: DataSource = {
-  pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context: vi.fn(), preferences: vi.fn() },
-  billing: {
-    plan: vi.fn(),
-    usageCredits: vi.fn(),
-    bucket: vi.fn(),
-    contractRate: vi.fn(),
-    invoices: vi.fn(),
+const source: DataSource = refusingSource("Skills", {
+  skills: {
+    inventory: read,
   },
-  runs: {
-    list: vi.fn(),
-    get: vi.fn(),
-    frameBody: vi.fn(),
-    cost: vi.fn(),
-    transcript: vi.fn(),
-    chain: vi.fn(),
-  },
-  approvals: { pending: vi.fn(), resolved: vi.fn() },
-  agents: {
-    list: vi.fn(),
-    get: vi.fn(),
-    toolbelt: vi.fn(),
-    incidents: vi.fn(),
-  },
-  spend: {
-    byGroup: vi.fn(),
-    fleet: vi.fn(),
-    drill: vi.fn(),
-    waste: vi.fn(),
-    budgets: vi.fn(),
-    findings: vi.fn(),
-    findingEvidence: vi.fn(),
-    priceBook: vi.fn(),
-    unpricedModels: vi.fn(),
-  },
-  onboarding: { state: vi.fn(), firstFrame: vi.fn() },
-  org: {
-    members: vi.fn(),
-    roles: vi.fn(),
-    workspaces: vi.fn(),
-    apiKeys: vi.fn(),
-    modelCredential: vi.fn(),
-  },
-  skills: { inventory: read },
-  mandates: { list: vi.fn(), get: vi.fn() },
-  audit: { events: vi.fn(), exportEvents: vi.fn() },
-  steering: {
-    records: vi.fn(),
-    proposals: vi.fn(),
-    contextPr: vi.fn(),
-    freshness: vi.fn(),
-  },
-  tools: {
-    versions: vi.fn(),
-    grants: vi.fn(),
-    killSwitches: vi.fn(),
-    approvalRules: vi.fn(),
-    connections: vi.fn(),
-    mcpServers: vi.fn(),
-  },
-};
+});
 
 function withIntl(element: ReactNode) {
   return render(
