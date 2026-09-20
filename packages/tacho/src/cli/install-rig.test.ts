@@ -452,30 +452,43 @@ describe("install rig: failure injection", () => {
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
   });
 
-  it("retains enrollment when a broken settings file prevents URL restoration, then completes a retry", async () => {
+  it("preserves the gateway until broken settings can be restored on retry", async () => {
     const seed = seedHome();
-    const before = snapshotTree(seed.home);
     const rig = buildRig(seed);
     expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
-    const installed = text(seed.home, ".claude", "settings.json");
+    const enrolledSettings = readFileSync(
+      rig.deps.paths.claudeSettings,
+      "utf8",
+    );
+    const retainedHost = readFileSync(rig.deps.paths.hostFile, "utf8");
+    const retainedKey = readFileSync(rig.deps.paths.deviceKey);
     const broken = '{ "hooks": ';
     writeFileSync(rig.deps.paths.claudeSettings, broken);
     const result = await unenroll({ purge: true }, rig.deps);
+    // It says it did not finish, and names the file it could not clean.
     expect(result.ok).toBe(false);
     expect(result.warnings.join("\n")).toContain(rig.deps.paths.claudeSettings);
+    // The file it could not parse is exactly as the user left it.
     expect(text(seed.home, ".claude", "settings.json")).toBe(broken);
+    // Keep the gateway and credentials while a harness may still depend on them.
     expect(rig.serviceLoaded()).toBe(true);
     expect(result.revoked).toBe(false);
-    expect(existsSync(rig.deps.paths.hostFile)).toBe(true);
-    expect(existsSync(rig.deps.paths.deviceKey)).toBe(true);
+    expect(readFileSync(rig.deps.paths.hostFile, "utf8")).toBe(retainedHost);
+    expect(readFileSync(rig.deps.paths.deviceKey)).toEqual(retainedKey);
     expect(text(seed.home, ".codex", "hooks.json")).toContain(TEST_ENROLLMENT);
     expect(text(seed.home, ".stella", "stella.toml")).toContain(
       TEST_ENROLLMENT,
     );
-    writeFileSync(rig.deps.paths.claudeSettings, installed);
-    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    writeFileSync(rig.deps.paths.claudeSettings, enrolledSettings);
+    const retried = await unenroll({ purge: true }, rig.deps);
+    expect(retried.ok).toBe(true);
+    expect(retried.revoked).toBe(true);
     expect(rig.serviceLoaded()).toBe(false);
-    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+    expect(existsSync(rig.deps.paths.hostFile)).toBe(false);
+    expect(existsSync(rig.deps.paths.deviceKey)).toBe(false);
+    expect(text(seed.home, ".claude", "settings.json")).toBe(
+      USER_CLAUDE_SETTINGS,
+    );
   });
 
   it("leaves a read-only settings file alone and says the harness was not hooked", async () => {
