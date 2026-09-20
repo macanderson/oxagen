@@ -123,7 +123,11 @@ export interface InitPrResult {
 }
 
 export type GovernanceMode = "solo" | "team" | "regulated";
-const GOVERNANCE_MODES: readonly GovernanceMode[] = ["solo", "team", "regulated"];
+const GOVERNANCE_MODES: readonly GovernanceMode[] = [
+  "solo",
+  "team",
+  "regulated",
+];
 
 /** `.oxagen/rules/governance.toml` for a mode, as the Repositories page drafts it. */
 export function draftGovernanceToml(mode: GovernanceMode): string {
@@ -436,5 +440,7 @@ export async function repoInit(
       ? `An init pull request is already open on ${result.fullName}: ${result.pullRequest.htmlUrl}`
       : `Opened ${result.pullRequest.htmlUrl} on ${result.fullName}: ${result.branch} → ${result.base}, ${result.files.length} files`,
   );
-  writer.write("Nothing reaches the production branch until a person merges it.");
+  writer.write(
+    "Nothing reaches the production branch until a person merges it.",
+  );
 }
