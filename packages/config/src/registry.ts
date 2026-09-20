@@ -1956,9 +1956,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   PRODUCTION_DATABASE_URL: {
     group: "Operator scripts",
     description:
-      "Migration connection for tools/scripts/vercel-migrate.sh, holding a role that may " +
-      "run DDL against pre-existing schemas. The app role may only CREATE in schemas it " +
-      "owns, so migrating through DATABASE_URL fails 42501 on billing and friends.",
+      "Migration connection for Atlas's `prod` env (packages/database/atlas.hcl), read by " +
+      "db-migrate.yml and no other workflow. Holds a role that may run DDL against " +
+      "pre-existing schemas: the app role may only CREATE in schemas it owns, so " +
+      "migrating through DATABASE_URL fails 42501 on billing and friends.",
     secret: true,
     clientExposed: false,
     services: [],
