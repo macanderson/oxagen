@@ -2,7 +2,7 @@
 
 ## Scope and base
 
-Branch `fix/backlog-tenant-telemetry` starts from freshly fetched main `ec637f8e4`, then includes recovery PR #3543 at `2174aa7f7`. The recovery removes the unreviewed nullable-workspace migration. A later refresh merges main at `6488e2b34` and preserves concurrent remote merge `d20fc7119`. Main had lost the reviewed RLS fix from #3562 when #3549 landed. This branch restores those five source/test/ADR files and its migration exactly from #3562 (`96e819341`), and Atlas regenerates the combined checksum.
+Branch `fix/backlog-tenant-telemetry` starts from freshly fetched main `ec637f8e4`, then includes recovery PR #3543 at `2174aa7f7`. The recovery removes the unreviewed nullable-workspace migration. A later refresh merges main at `6488e2b34` and preserves concurrent remote merge `d20fc7119`. Main had lost the reviewed RLS fix from #3562 when #3549 landed. The migration, generator, generator tests, and ADR match #3562 (`96e819341`). The restored integration tests also retain one additional remote regression for shared-row updates. Atlas regenerated the combined checksum.
 
 This change references #2972. It does not close the umbrella issue.
 
