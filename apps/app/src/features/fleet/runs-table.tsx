@@ -4,7 +4,13 @@ import type { RunPage } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
-import { linkText, mono, panel } from "@/ui/control-styles";
+import {
+  linkText,
+  mono,
+  panel,
+  panelHeader,
+  panelFooter,
+} from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -157,37 +163,42 @@ function RunsPageView({
           </tr>
         ))}
       </Table>
-      {unpriced === 0 ? null : (
-        <p
-          data-testid="runs-unpriced"
-          className="max-w-prose pt-1 text-xs text-muted-foreground"
-        >
-          {t("unpriced", { count: unpriced })}{" "}
-          <SafeLink
-            to={routes.spend(org, ws, { tab: "findings" })}
-            className={linkText}
+      <footer className={panelFooter}>
+        <span>
+          {t("rowsShown", { count: formatCount(page.runs.length, locale) })}
+        </span>
+        {unpriced === 0 ? null : (
+          <p
+            data-testid="runs-unpriced"
+            className="max-w-prose pt-1 text-xs text-muted-foreground"
           >
-            {t("unpricedLink")}
-          </SafeLink>
-        </p>
-      )}
-      {page.nextCursor === null && cursor === null ? null : (
-        <nav aria-label={t("pager")} className="flex gap-4 pt-3 text-sm">
-          {cursor === null ? null : (
-            <SafeLink to={routes.fleet(org, ws)} className={linkText}>
-              {t("newest")}
-            </SafeLink>
-          )}
-          {page.nextCursor === null ? null : (
+            {t("unpriced", { count: unpriced })}{" "}
             <SafeLink
-              to={routes.fleet(org, ws, { cursor: page.nextCursor })}
+              to={routes.spend(org, ws, { tab: "findings" })}
               className={linkText}
             >
-              {t("older")}
+              {t("unpricedLink")}
             </SafeLink>
-          )}
-        </nav>
-      )}
+          </p>
+        )}
+        {page.nextCursor === null && cursor === null ? null : (
+          <nav aria-label={t("pager")} className="flex gap-4 pt-3 text-sm">
+            {cursor === null ? null : (
+              <SafeLink to={routes.fleet(org, ws)} className={linkText}>
+                {t("newest")}
+              </SafeLink>
+            )}
+            {page.nextCursor === null ? null : (
+              <SafeLink
+                to={routes.fleet(org, ws, { cursor: page.nextCursor })}
+                className={linkText}
+              >
+                {t("older")}
+              </SafeLink>
+            )}
+          </nav>
+        )}
+      </footer>
     </>
   );
 }
@@ -209,8 +220,8 @@ export function RunsTable({
 } & Place) {
   const t = useTranslations("fleet.runs");
   return (
-    <section aria-labelledby="fleet-runs" className={`${panel} p-4`}>
-      <h2 id="fleet-runs" className="pb-3 text-base font-semibold">
+    <section aria-labelledby="fleet-runs" className={panel}>
+      <h2 id="fleet-runs" className={`${panelHeader} text-sm font-semibold`}>
         {t("title")}
       </h2>
       {!runs.ok ? (

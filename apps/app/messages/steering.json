@@ -5,7 +5,8 @@
       "records": "Records",
       "skills": "Skills",
       "proposals": "Proposals",
-      "prs": "Context PRs"
+      "prs": "Context PRs",
+      "settings": "Settings"
     },
     "failure": {
       "denied": "You cannot see {section} in this workspace. The roles you hold do not include {permission}. An owner can grant it.",

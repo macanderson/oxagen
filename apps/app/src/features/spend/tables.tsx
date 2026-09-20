@@ -9,7 +9,13 @@ import type {
   SpendReport,
 } from "@/data/contracts/spend";
 import { routes } from "@/shared/safe-path";
-import { linkText, mono, panel } from "@/ui/control-styles";
+import {
+  linkText,
+  mono,
+  panel,
+  panelHeader,
+  panelFooter,
+} from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -23,6 +29,7 @@ export function Panel({
   title,
   note,
   action,
+  footer,
   children,
 }: {
   id: string;
@@ -31,11 +38,13 @@ export function Panel({
   note?: string;
   /** A control that belongs to the panel as a whole, beside its heading. */
   action?: ReactNode;
+  /** Existing explanatory or dated metadata below the data. */
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section aria-labelledby={id} className={`${panel} overflow-x-auto`}>
-      <div className="flex flex-wrap items-start justify-between gap-2 px-4 pt-4 pb-2">
+      <div className={panelHeader}>
         <div className="flex min-w-0 flex-col gap-1">
           <h2 id={id} className="text-sm font-semibold">
             {title}
@@ -47,12 +56,15 @@ export function Panel({
         {action}
       </div>
       {children}
+      {footer === undefined ? null : (
+        <div className={panelFooter}>{footer}</div>
+      )}
     </section>
   );
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <p className="px-4 pb-4 text-sm text-muted-foreground">{children}</p>;
+  return <p className="p-4 text-sm text-muted-foreground">{children}</p>;
 }
 
 export function HeaderCell({

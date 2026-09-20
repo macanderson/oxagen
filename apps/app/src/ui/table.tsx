@@ -25,7 +25,7 @@ export function Table({
   children: ReactNode;
 }) {
   return (
-    <div className="min-w-0 overflow-x-auto">
+    <div className="min-w-0 overflow-x-auto bg-data-surface">
       <table
         aria-label={label}
         className="w-full min-w-[560px] border-collapse text-[13px]"
@@ -36,7 +36,7 @@ export function Table({
               <th
                 key={column.label}
                 scope="col"
-                className={`whitespace-nowrap bg-muted/40 px-3 py-2 text-[11px] font-semibold ${column.numeric === true ? "text-right" : "text-left"}`}
+                className={`whitespace-nowrap bg-data-surface px-3 py-2 text-[11px] font-semibold ${column.numeric === true ? "text-right" : "text-left"}`}
               >
                 {column.label}
               </th>

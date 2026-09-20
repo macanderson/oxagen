@@ -12,7 +12,14 @@ import type {
   SpendFindings,
 } from "@/data/contracts/spend";
 import { routes } from "@/shared/safe-path";
-import { eyebrow, linkText, mono, panel } from "@/ui/control-styles";
+import {
+  eyebrow,
+  linkText,
+  mono,
+  panel,
+  panelHeader,
+  panelFooter,
+} from "@/ui/control-styles";
 import { formatCount, formatMoney, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import {
@@ -211,7 +218,7 @@ function FindingCard({
           <Instant iso={finding.window.to} />
         </p>
       </div>
-      <div className="flex flex-none flex-col items-start gap-2 sm:items-end">
+      <div className="flex flex-none flex-col items-start gap-2 rounded-lg bg-data-surface p-3 sm:items-end">
         <span className="text-xs text-muted-foreground">
           {t("findings.saving")}
         </span>
@@ -280,77 +287,79 @@ export function FindingsSection({
     <>
       <section
         aria-labelledby="spend-findings-hero"
-        className={`${panel} flex flex-col gap-4 p-4`}
+        className={`${panel} flex flex-col overflow-hidden`}
       >
-        <div className="flex flex-col gap-1">
+        <div className={panelHeader}>
           <p className={eyebrow}>{t("findings.eyebrow")}</p>
           <h2 id="spend-findings-hero" className="sr-only">
             {t("findings.heroTitle")}
           </h2>
         </div>
-        <dl className="grid gap-6 lg:grid-cols-[minmax(240px,1.3fr)_repeat(3,minmax(0,1fr))]">
-          <div className="flex flex-col gap-2">
-            <dt className="text-sm text-muted-foreground">
-              {t("findings.saving")}
-            </dt>
-            <dd className="font-mono text-4xl font-semibold tracking-tight tabular-nums">
-              <MoneyFigure money={findings.saving} />
-              <EstimateBasis cost={findings.saving} />
-            </dd>
-            <dd className="text-xs text-muted-foreground">
-              {t("findings.savingNote")}
-            </dd>
-          </div>
-          <div className="flex flex-col gap-2">
-            <dt className="text-xs text-muted-foreground">
-              {t("findings.share")}
-            </dt>
-            <dd className="font-mono text-xl tabular-nums">
-              <RatioFigure ratio={findings.share} />
-            </dd>
-            <dd className="text-xs text-muted-foreground">
-              {t("findings.shareNote")}
-            </dd>
-          </div>
-          <div className="flex flex-col gap-2">
-            <dt className="text-xs text-muted-foreground">
-              {t("findings.annualised")}
-            </dt>
-            <dd className="font-mono text-xl tabular-nums">
-              <MoneyFigure money={findings.annualised} />
-              <EstimateBasis cost={findings.annualised} />
-            </dd>
-            <dd className="text-xs text-muted-foreground">
-              {t("findings.annualisedNote")}
-            </dd>
-          </div>
-          <div className="flex flex-col gap-2">
-            <dt className="text-xs text-muted-foreground">
-              {t("findings.spend")}
-            </dt>
-            <dd className="font-mono text-xl tabular-nums">
-              <CostFigure cost={findings.spend} />
-            </dd>
-            <dd className="text-xs text-muted-foreground">
-              {t("findings.spendNote")}
-            </dd>
-          </div>
-        </dl>
-        {findings.findings.length === 0 ? null : (
-          <>
-            <CompositionStrip findings={findings.findings} shares={shares} />
-            <Legend findings={findings.findings} shares={shares} />
-          </>
-        )}
-        <p className="text-sm text-muted-foreground">
-          {t("findings.facts", {
-            findings: formatCount(findings.counts.findings, locale),
-            operators: formatCount(findings.counts.operators, locale),
-            high: formatCount(findings.counts.high, locale),
-            medium: formatCount(findings.counts.medium, locale),
-          })}
-        </p>
-        <p className="text-sm text-muted-foreground">{t("findings.note")}</p>
+        <div className="flex flex-col gap-4 p-4">
+          <dl className="grid gap-6 rounded-lg bg-data-surface p-4 lg:grid-cols-[minmax(240px,1.3fr)_repeat(3,minmax(0,1fr))]">
+            <div className="flex flex-col gap-2">
+              <dt className="text-sm text-muted-foreground">
+                {t("findings.saving")}
+              </dt>
+              <dd className="font-mono text-4xl font-semibold tracking-tight tabular-nums">
+                <MoneyFigure money={findings.saving} />
+                <EstimateBasis cost={findings.saving} />
+              </dd>
+              <dd className="text-xs text-muted-foreground">
+                {t("findings.savingNote")}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-2">
+              <dt className="text-xs text-muted-foreground">
+                {t("findings.share")}
+              </dt>
+              <dd className="font-mono text-xl tabular-nums">
+                <RatioFigure ratio={findings.share} />
+              </dd>
+              <dd className="text-xs text-muted-foreground">
+                {t("findings.shareNote")}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-2">
+              <dt className="text-xs text-muted-foreground">
+                {t("findings.annualised")}
+              </dt>
+              <dd className="font-mono text-xl tabular-nums">
+                <MoneyFigure money={findings.annualised} />
+                <EstimateBasis cost={findings.annualised} />
+              </dd>
+              <dd className="text-xs text-muted-foreground">
+                {t("findings.annualisedNote")}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-2">
+              <dt className="text-xs text-muted-foreground">
+                {t("findings.spend")}
+              </dt>
+              <dd className="font-mono text-xl tabular-nums">
+                <CostFigure cost={findings.spend} />
+              </dd>
+              <dd className="text-xs text-muted-foreground">
+                {t("findings.spendNote")}
+              </dd>
+            </div>
+          </dl>
+          {findings.findings.length === 0 ? null : (
+            <>
+              <CompositionStrip findings={findings.findings} shares={shares} />
+              <Legend findings={findings.findings} shares={shares} />
+            </>
+          )}
+          <p className="text-sm text-muted-foreground">
+            {t("findings.facts", {
+              findings: formatCount(findings.counts.findings, locale),
+              operators: formatCount(findings.counts.operators, locale),
+              high: formatCount(findings.counts.high, locale),
+              medium: formatCount(findings.counts.medium, locale),
+            })}
+          </p>
+        </div>
+        <p className={panelFooter}>{t("findings.note")}</p>
       </section>
       {findings.findings.length === 0 ? (
         <section
@@ -442,7 +451,11 @@ export function FindingEvidenceSection({
           <MoneyFigure money={evidence.counterfactual} />
         </Tile>
       </TileStrip>
-      <Panel id="spend-finding-runs" title={t("findings.evidence.runs")}>
+      <Panel
+        id="spend-finding-runs"
+        title={t("findings.evidence.runs")}
+        footer={t("findings.evidence.note")}
+      >
         {evidence.runs.length === 0 ? (
           <Empty>{t("findings.evidence.runsEmpty")}</Empty>
         ) : (
@@ -491,9 +504,6 @@ export function FindingEvidenceSection({
           </table>
         )}
       </Panel>
-      <p className="max-w-prose text-sm text-muted-foreground">
-        {t("findings.evidence.note")}
-      </p>
     </>
   );
 }

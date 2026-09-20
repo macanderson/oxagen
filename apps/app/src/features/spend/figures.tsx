@@ -7,7 +7,6 @@ import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Cost, Money as MoneyValue } from "@/data/contracts/money";
 import type { DayRange, SpendFigure } from "@/data/contracts/spend";
-import { panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import type { MoneyPrecision } from "@/ui/money-format";
@@ -106,7 +105,7 @@ export function Tile({
   children: ReactNode;
 }) {
   return (
-    <div className={`${panel} flex flex-col gap-1 p-4`}>
+    <div className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-data-surface p-4 text-card-foreground">
       <dt className="text-xs text-muted-foreground">{term}</dt>
       <dd className="font-mono text-2xl font-semibold tabular-nums">
         {children}

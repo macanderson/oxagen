@@ -1879,6 +1879,7 @@ type Messages = {
         agent: string;
         service: string;
       };
+      rowsShown: string;
     };
   };
   mandate: {
@@ -4191,6 +4192,7 @@ type Messages = {
       skills: string;
       proposals: string;
       prs: string;
+      settings: string;
     };
     failure: {
       denied: string;

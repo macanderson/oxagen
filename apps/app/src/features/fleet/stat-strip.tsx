@@ -9,7 +9,7 @@ import { Money } from "@/ui/money";
 import { Clock } from "./clock";
 
 const TILE =
-  "flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-card p-4";
+  "flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-data-surface px-4 py-3.5";
 
 function LiveRuns({ page }: { page: RunPage }) {
   const t = useTranslations("fleet.stats.live");

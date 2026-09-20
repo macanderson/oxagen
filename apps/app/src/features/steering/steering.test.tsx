@@ -100,8 +100,7 @@ describe("tabs", () => {
       records: [[ctx, { kind: null, offset: 0 }]],
       proposals: [],
       contextPr: [],
-      // The freshness panel is above the tabs, so it is read on every tab.
-      freshness: [[ctx]],
+      freshness: [],
     });
     const tabs = screen.getByRole("navigation", { name: "Steering views" });
     expect(
@@ -117,7 +116,52 @@ describe("tabs", () => {
       ["Skills", `${BASE}?tab=skills`, null],
       ["Proposals", `${BASE}?tab=proposals`, null],
       ["Context PRs", `${BASE}?tab=prs`, null],
+      ["Settings", `${BASE}?tab=settings`, null],
     ]);
+  });
+
+  it("opens Settings from the URL and reads only its workspace controls", async () => {
+    const calls = await renderSteering({ tab: "settings" });
+    expect(calls).toEqual({
+      records: [],
+      proposals: [],
+      contextPr: [],
+      freshness: [[ctx]],
+    });
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(section("Steering freshness")).toBeVisible();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
+    expect(
+      screen.queryByRole("region", { name: "Published records" }),
+    ).toBeNull();
+  });
+
+  it.each(["records", "skills", "proposals", "prs"])(
+    "keeps workspace settings off the %s tab",
+    async (tab) => {
+      const calls = await renderSteering({ tab });
+      expect(calls.freshness).toEqual([]);
+      expect(
+        screen.queryByRole("region", { name: "Steering freshness" }),
+      ).toBeNull();
+      expect(screen.queryByRole("checkbox")).toBeNull();
+    },
+  );
+
+  it("shows settings read failures inside the selected tab", async () => {
+    await renderSteering({ tab: "settings" }, { freshness: DOWN });
+    expect(
+      screen.getByText(
+        "Settings could not be loaded: record_index_unavailable. Nothing was changed.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("opens Skills, hands the inventory the page the URL names, and reads no record or proposal", async () => {
@@ -313,7 +357,7 @@ describe("Proposals", () => {
       records: [],
       proposals: [[ctx, { offset: 0 }]],
       contextPr: [],
-      freshness: [[ctx]],
+      freshness: [],
     });
     const card = within(section("Proposals")).getByRole("article");
     expect(card.querySelector("[data-status]")).toHaveTextContent(

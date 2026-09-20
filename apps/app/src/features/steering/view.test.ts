@@ -34,6 +34,26 @@ describe("parseSteeringView", () => {
     });
   });
 
+  it("opens Settings from its URL without carrying another tab's selection", () => {
+    expect(
+      parseSteeringView({
+        tab: "settings",
+        kind: "constraint",
+        proposal: "prp_1",
+        cursor: "c2",
+      }),
+    ).toEqual({
+      tab: "settings",
+      kind: null,
+      offset: 0,
+      proposal: null,
+      cursor: null,
+    });
+    expect(steeringLink(AT, { tab: "settings" })).toBe(
+      "/acme/core-platform/steering?tab=settings",
+    );
+  });
+
   it("reads the selected proposal on Context PRs, from the first value of a repeated param", () => {
     expect(
       parseSteeringView({ tab: "prs", proposal: ["prp_01k5ru4a", "prp_x"] }),

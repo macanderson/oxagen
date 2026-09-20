@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import type { AgentStatus } from "@/data/contracts/agents";
 import type { SafePath } from "@/shared/safe-path";
-import { linkText, panel } from "@/ui/control-styles";
+import { linkText, panel, panelHeader } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { useFormatter } from "@/ui/formatter";
 
@@ -26,8 +26,10 @@ export function Panel({
       aria-labelledby={id}
       className={`${panel} flex min-w-0 flex-col gap-3 p-4`}
     >
-      <div className="flex flex-col gap-0.5">
-        <h2 id={id} className="text-base font-semibold">
+      <div
+        className={`${panelHeader} -mx-4 -mt-4 flex-col items-start gap-0.5`}
+      >
+        <h2 id={id} className="text-sm font-semibold">
           {title}
         </h2>
         {lead === undefined ? null : (
@@ -68,7 +70,7 @@ export function Tile({
   return (
     <dl
       data-testid="tile"
-      className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-card p-4"
+      className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-data-surface p-4"
     >
       <dt className="text-xs font-medium text-muted-foreground">{title}</dt>
       <dd className="text-2xl font-semibold tabular-nums">{value}</dd>

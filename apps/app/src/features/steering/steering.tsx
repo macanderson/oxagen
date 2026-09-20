@@ -6,6 +6,9 @@
 // promotion thresholds are not in this release. Each tab makes only the reads
 // it shows.
 import { Suspense } from "react";
+import { useTranslations } from "next-intl";
+import type { Read } from "@/data/read";
+import type { SteeringFreshness } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import { PageRecord } from "@/features/shell";
 import { Skills, SkillsLoading } from "@/features/skills";
@@ -17,6 +20,23 @@ import { ReadFailure } from "./read-failure";
 import { Records } from "./records";
 import { SteeringTabs } from "./tabs";
 import { parseSteeringView, type SteeringAt, type SteeringView } from "./view";
+
+function SettingsPanel({
+  read,
+  at,
+  canEdit,
+}: {
+  read: Read<SteeringFreshness>;
+  at: SteeringAt;
+  canEdit: boolean;
+}) {
+  const t = useTranslations("steering.tabs");
+  return read.ok ? (
+    <Freshness at={at} read={read.value} canEdit={canEdit} />
+  ) : (
+    <ReadFailure read={read} section={t("settings")} />
+  );
+}
 
 async function TabBody({
   ctx,
@@ -30,6 +50,14 @@ async function TabBody({
   at: SteeringAt;
 }) {
   switch (view.tab) {
+    case "settings":
+      return (
+        <SettingsPanel
+          read={await source.steering.freshness(ctx)}
+          at={at}
+          canEdit={canEditGates(ctx)}
+        />
+      );
     case "records": {
       const read = await source.steering.records(ctx, {
         kind: view.kind,
@@ -82,21 +110,11 @@ export async function Steering({
 }) {
   const view = parseSteeringView(searchParams);
   const at: SteeringAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
-  // The freshness panel sits above the tabs, not inside one: the two gates
-  // govern every tab's records at once, and a person looking for "why did my
-  // agent refuse to run" should not have to guess which tab holds the
-  // answer. It is read on every tab for the same reason.
-  const freshness = await source.steering.freshness(ctx);
   return (
     <div className="flex flex-col gap-6">
       {/* `proposal` selects nothing off the Context PRs tab, so the parse
           decides this, not the query string. */}
       <PageRecord route="steering" id={view.proposal} />
-      {freshness.ok ? (
-        <Freshness at={at} read={freshness.value} canEdit={canEditGates(ctx)} />
-      ) : (
-        <ReadFailure read={freshness} section="freshness" />
-      )}
       <SteeringTabs at={at} current={view.tab} />
       {await TabBody({ ctx, source, view, at })}
     </div>

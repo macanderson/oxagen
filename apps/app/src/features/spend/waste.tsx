@@ -46,7 +46,7 @@ export function WasteSection({
         {waste.causes.length === 0 ? (
           <Empty>{t("waste.none")}</Empty>
         ) : (
-          <ul className="flex flex-col gap-4 px-4 pb-4">
+          <ul className="flex flex-col gap-4 p-4">
             {waste.causes.map((cause) => (
               <li
                 key={cause.cause}
