@@ -3274,9 +3274,48 @@ type Messages = {
         keyA: string;
         keyB: string;
         noFrame: string;
+        searchPlaceholder: string;
+        harnessFilter: string;
+        allHarnesses: string;
+        statusFilter: string;
+        allStatuses: string;
+        repositoryFilter: string;
+        resultsLabel: string;
+        unknownHarness: string;
+        searchLoading: string;
+        searchDenied: string;
+        searchApproval: string;
+        searchError: string;
+        retrySearch: string;
+        noResults: string;
+        loadMore: string;
+        selectedRun: string;
+        changeRun: string;
       };
     };
     loading: string;
+    context: {
+      harness: string;
+      repository: string;
+      directory: string;
+      branch: string;
+      commit: string;
+      notRecorded: string;
+    };
+    diff: {
+      title: string;
+      scope: string;
+      loading: string;
+      denied: string;
+      approval: string;
+      error: string;
+      retry: string;
+      incomplete: string;
+      missing: string;
+      empty: string;
+      truncated: string;
+      baseCommit: string;
+    };
   };
   shell: {
     skipToContent: string;

@@ -42,6 +42,7 @@ import {
   type RunItem,
   runList,
   type RunListOutput,
+  type RunListInput,
 } from "@oxagen/oxagen/contracts/run.list";
 import {
   hidesWitnessRuns,
@@ -69,6 +70,8 @@ import {
   desc,
   eq,
   inArray,
+  ilike,
+  ne,
   isNull,
   lt,
   notInArray,
@@ -165,6 +168,10 @@ export type PageQuery = {
   limit: number;
   /** Leave out every run a verdict names as its witness run: true for an API-key caller. */
   withoutWitnessRuns: boolean;
+  filters?: Pick<
+    RunListInput,
+    "search" | "harness" | "status" | "repository" | "excludeRunId"
+  >;
 };
 
 /**
@@ -182,6 +189,65 @@ function hideWitnessRuns(
 ): SQL | undefined {
   if (!q.withoutWitnessRuns) return undefined;
   return notWitnessRun(run);
+}
+
+/** Escape LIKE metacharacters: a pasted path or run id is literal text. */
+function containsText(value: string): string {
+  return `%${value.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
+function runSearchPredicate(
+  filters: PageQuery["filters"],
+  source: "ledger" | "tacho",
+): SQL | undefined {
+  if (!filters) return undefined;
+  const tacho = source === "tacho";
+  const id = tacho ? sessions.publicId : runs.publicId;
+  const status = tacho
+    ? sql`case when ${sessions.outcome} = 'running' then 'live' when ${sessions.outcome} = 'aborted' then 'halted' else 'sealed' end`
+    : sql`case when ${runs.status} in ('pending', 'running') then 'live' when ${runs.status} = 'cancelled' then 'halted' else 'sealed' end`;
+  const fields = tacho
+    ? [
+        sessions.publicId,
+        sessions.name,
+        sessions.title,
+        sessions.agentKey,
+        sessions.cwd,
+        sessions.projectDir,
+        sessions.gitBranch,
+        sessions.gitHeadShaStart,
+        sessions.harness,
+        sessions.modelInitial,
+        sessions.modelFinal,
+        hosts.hostname,
+        schema.users.displayName,
+      ]
+    : [
+        runs.publicId,
+        runs.name,
+        sql`${runs.spec}->>'goal'`,
+        schema.agents.slug,
+        schema.users.displayName,
+      ];
+  return and(
+    filters.excludeRunId ? ne(id, filters.excludeRunId) : undefined,
+    filters.status ? eq(status, filters.status) : undefined,
+    filters.harness
+      ? tacho
+        ? eq(sessions.harness, filters.harness)
+        : sql`false`
+      : undefined,
+    filters.repository
+      ? tacho
+        ? ilike(sessions.projectDir, containsText(filters.repository))
+        : sql`false`
+      : undefined,
+    filters.search
+      ? or(
+          ...fields.map((field) => ilike(field, containsText(filters.search!))),
+        )
+      : undefined,
+  );
 }
 
 // `operatorUserJoin` (the principal-to-user cross-domain join, agent/Tacho
@@ -257,6 +323,7 @@ export function ledgerPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
         notInArray(runs.surface, [...IN_APP_AGENT_SURFACES]),
         beforeCursor(ledgerStartedAt, runs.publicId, q.cursor),
         hideWitnessRuns(q, runs),
+        runSearchPredicate(q.filters, "ledger"),
       ),
     )
     .orderBy(desc(ms(ledgerStartedAt)), desc(byteOrder(runs.publicId)))
@@ -503,6 +570,11 @@ const tachoColumns = {
     summaryModel: sessions.summaryModel,
     modelInitial: sessions.modelInitial,
     modelFinal: sessions.modelFinal,
+    harness: sessions.harness,
+    cwd: sessions.cwd,
+    projectDir: sessions.projectDir,
+    gitBranch: sessions.gitBranch,
+    gitHeadShaStart: sessions.gitHeadShaStart,
   },
   operatorPublicId: schema.principals.publicId,
   operatorKind: schema.principals.kind,
@@ -544,6 +616,7 @@ export function tachoPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
         isNull(sessions.parentSessionUuid),
         beforeCursor(sql`${sessions.startedAt}`, sessions.publicId, q.cursor),
         hideWitnessRuns(q, sessions),
+        runSearchPredicate(q.filters, "tacho"),
       ),
     )
     .orderBy(desc(ms(sessions.startedAt)), desc(byteOrder(sessions.publicId)))
@@ -684,6 +757,11 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   /** The model the session started on and the one it ended on; either may be unrecorded. */
   modelInitial: string | null;
   modelFinal: string | null;
+  harness?: string | null;
+  cwd?: string | null;
+  projectDir?: string | null;
+  gitBranch?: string | null;
+  gitHeadShaStart?: string | null;
   /** Written by the seal at `agent_stop`; null while the session is open. */
   replayGrade: string | null;
   completenessGaps: unknown;
@@ -907,6 +985,9 @@ export function toLedgerRunItem(
     // being reconstructed from a frame that may not be there.
     model: null,
     machine: null,
+    harness: null,
+    workingDirectory: null,
+    repository: null,
     name: run.name,
     summary: generatedSummary(run),
   };
@@ -925,6 +1006,29 @@ export function tachoRunStatus(outcome: string): RunItem["status"] {
     default:
       return "sealed";
   }
+}
+
+/** Repository identity comes from the recorded Git root, not a credential-bearing remote. */
+export function runRepository(
+  session: Pick<
+    TachoSessionColumns,
+    "projectDir" | "gitBranch" | "gitHeadShaStart"
+  >,
+): RunItem["repository"] {
+  const root = session.projectDir ?? null;
+  const branch = session.gitBranch ?? null;
+  const commit = session.gitHeadShaStart ?? null;
+  if (!root && !branch && !commit) return null;
+  return {
+    root,
+    name:
+      root
+        ?.replace(/[\\/]+$/, "")
+        .split(/[\\/]/)
+        .at(-1) || null,
+    branch,
+    commit,
+  };
 }
 
 export function toTachoRunItem(
@@ -959,6 +1063,9 @@ export function toTachoRunItem(
     // only the one it started on.
     model: modelFactsOf(session.modelFinal ?? session.modelInitial),
     machine: toRunMachine(row.host),
+    harness: session.harness ?? null,
+    workingDirectory: session.cwd ?? null,
+    repository: runRepository(session),
     // The model-written name when `summarize_run` has produced one, and the
     // derived title until then. A run always has something to be called.
     name: session.name ?? session.title ?? null,
@@ -1166,6 +1273,13 @@ export function createRunListHandler(
       cursor,
       limit: input.limit,
       withoutWitnessRuns: hidesWitnessRuns(ctx),
+      filters: {
+        ...(input.search ? { search: input.search } : {}),
+        ...(input.harness ? { harness: input.harness } : {}),
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.repository ? { repository: input.repository } : {}),
+        ...(input.excludeRunId ? { excludeRunId: input.excludeRunId } : {}),
+      },
     };
 
     const [ledger, tacho] = await Promise.all([

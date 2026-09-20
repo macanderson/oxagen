@@ -60,7 +60,7 @@ describe("agent roster", () => {
       now: clock.now,
     });
     registry.ensure("tachod-01J000", { pid: 1 });
-    registry.ensure("claude-1");
+    registry.ensure("claude-1", { harness: "claude-code" });
     registry.ensure("codex-1", { harness: "codex" });
     clock.advance(1_000);
     registry.ensure("stella-10", { harness: "stella", pid: 10 });
@@ -186,7 +186,13 @@ describe("agent roster", () => {
     });
     // OTel saw the session before any hook named its owner.
     const ambient = registry.ensure("sess-amb", { ambient: true, pid: 77 });
-    start(ambient.record);
+    const unknown = ambient.record.recorder.sealCollectorEvent("agent_start", {
+      session_start_source: "startup",
+    });
+    expect(unknown.agent).toMatchObject({
+      runtime: "proxy",
+      harness: "unknown",
+    });
     const uuid = ambient.record.recorder.sessionUuid;
     clock.advance(1_000);
     const claimed = registry.ensure("sess-amb", { harness: "stella" });

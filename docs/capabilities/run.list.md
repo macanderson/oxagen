@@ -23,6 +23,16 @@ The in-app agent's turns are excluded. Each turn is a run of its own (MC spec §
 | `limit` | integer | no | 1-100, default 50 |
 | `cursor` | string | no | the `nextCursor` of an earlier page; a cursor this capability did not write is `invalid_input` |
 
+Search and filters apply in each tenant-scoped database query before pagination. Reset the cursor when changing filters. Search treats `%`, `_`, and path separators literally, and matches recorded run IDs, titles, agent labels, operator names, repositories, branches, working directories, models and machine names.
+
+| Field | Type | Required | Constraint |
+|---|---|---|---|
+| `search` | string | no | trimmed, at most 200 characters |
+| `harness` | string | no | exact recorded harness, at most 100 characters |
+| `status` | enum | no | `live`, `sealed`, `halted` |
+| `repository` | string | no | substring of recorded repository root, at most 500 characters |
+| `excludeRunId` | run ID | no | omit this run from results, such as the current bisect run |
+
 ## Output
 
 | Field | Type | Description |
@@ -54,6 +64,8 @@ Each row:
 | `verdict` | enum or null | the run's witness verdict as its `cost.run_totals` row recorded it (spec §8.5, §12.8; ADR-064): `flipped`, `failing`, `unmoved`, `unsatisfied`, `tampered`, `unverified` or `waived`; null when no witness reported on the run or the rollup has not rebuilt it. Only `flipped` marks a run proven |
 | `name` | string or null | the generated name (`summarize_run`), null until written |
 | `summary` | `{ text, generatedAt, model }` or null | the generated summary with the model that wrote it and the instant; labelled generated wherever it renders |
+
+Each row also carries `harness`, `workingDirectory`, and `repository` (`name`, `root`, `branch`, `commit`). Repository name is the basename of the recorded project root; no remote URL or credentials are exposed. Missing facts are null. Ledger runs currently do not record these facts and return null. These fields are also returned by `get_run`; retained diff content is fetched separately with `includeDiff` on that capability.
 
 ## Honesty
 

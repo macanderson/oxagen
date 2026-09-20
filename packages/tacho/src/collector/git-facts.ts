@@ -51,6 +51,7 @@ import type { ExecAsync, ExecResult } from "../host/service";
 
 /** Repository facts for one working directory, all optional. */
 export interface GitFacts {
+  project_dir?: string;
   head_sha?: string;
   branch?: string;
   dirty?: boolean;
@@ -174,12 +175,17 @@ export async function readGitFacts(
   exec: ExecAsync,
   cwd: string,
 ): Promise<GitFacts | undefined> {
-  const head = firstLine(await git(exec, cwd, ["rev-parse", "HEAD"]));
-  if (head === undefined) return undefined;
-  const facts: GitFacts = { head_sha: head };
-  // `HEAD` gates the other three: a directory that cannot answer it is not a
-  // repository, and there is nothing to ask it. The three that follow answer
-  // independent questions, so they are asked at once rather than in series.
+  const [head, root] = await Promise.all([
+    git(exec, cwd, ["rev-parse", "HEAD"]).then(firstLine),
+    git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
+  ]);
+  if (head === undefined && root === undefined) return undefined;
+  const facts: GitFacts = {
+    ...(head !== undefined ? { head_sha: head } : {}),
+    ...(root !== undefined ? { project_dir: root } : {}),
+  };
+  // A root without HEAD is an unborn repository. Remaining facts are
+  // independent reads and stay available before the first commit.
   const [branch, status, remote] = await Promise.all([
     git(exec, cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).then(firstLine),
     git(exec, cwd, ["status", "--porcelain"]),
@@ -601,5 +607,43 @@ export function worktreeReconciledBody(
     observed_changes: sorted.slice(0, MAX_OBSERVED_CHANGES),
     observed_changes_total: sorted.length,
     observed_changes_truncated: sorted.length > MAX_OBSERVED_CHANGES,
+  };
+}
+
+/** Tracked worktree snapshot against the first observed commit, not ownership of edits. */
+export interface GitPatch {
+  patch: string;
+  truncated: boolean;
+  baseSha?: string;
+  scope: "tracked_worktree";
+}
+export const MAX_PATCH_BYTES = 128 * 1024;
+
+export async function readWorkingTreePatch(
+  exec: ExecAsync,
+  cwd: string,
+  baselineCommit?: string,
+): Promise<GitPatch | undefined> {
+  // A missing baseline cannot establish what this run changed. Do not silently
+  // fall back to a newer HEAD and claim a complete comparison.
+  if (baselineCommit === undefined) return undefined;
+  const patch = await git(exec, cwd, [
+    "diff",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--unified=3",
+    baselineCommit,
+    "--",
+  ]);
+  if (patch === undefined) return undefined;
+  const bytes = Buffer.from(patch, "utf8");
+  const truncated = bytes.byteLength > MAX_PATCH_BYTES;
+  return {
+    patch: truncated
+      ? bytes.subarray(0, MAX_PATCH_BYTES).toString("utf8")
+      : patch,
+    truncated,
+    baseSha: baselineCommit,
+    scope: "tracked_worktree",
   };
 }

@@ -93,6 +93,25 @@ beforeEach(() => {
 });
 
 describe("runs.list", () => {
+  it("forwards search filters, exclusion, and pagination to the workspace index", async () => {
+    kernelRead.mockResolvedValue(readOk({ runs: [], nextCursor: null }));
+    const query = {
+      cursor: "older",
+      search: "release",
+      harness: "codex",
+      repository: "oxagen",
+      excludeRunId: "tse_current",
+      limit: 20,
+      status: "sealed",
+    } as const;
+    await runs.list(ctx, query);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runList,
+      input: query,
+      page: "fleet",
+    });
+  });
+
   it("reads the newest page with no cursor and maps it", async () => {
     kernelRead.mockResolvedValue(readOk({ runs: [run], nextCursor: "c2" }));
     const read = await runs.list(ctx, { cursor: null });

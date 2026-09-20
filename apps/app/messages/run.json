@@ -383,18 +383,57 @@
       "bisect": {
         "open": "Bisect",
         "title": "Bisect {run} against another run",
-        "body": "Both recordings are read frame by frame, and each frame is reduced to its kind and the identity of what it did. The first position whose keys differ is the divergence. Bodies are not read, so this works on any recording.",
+        "body": "Select a recording to find the first frame where the two runs differ.",
         "otherLabel": "The other run",
-        "otherHelp": "A run id from this workspace, such as arun_01k4qj9e or tse_7k2m9q.",
+        "otherHelp": "Search this workspace by run name, ID, task, operator, repository, branch, or working directory. Select a result to compare.",
         "confirm": "Find the divergence",
         "pending": "Comparing",
         "same": "The two runs agree at every frame. {aligned} frames were compared.",
         "diverged": "The runs diverge at frame {seq}, after {aligned} frames that agreed.",
         "keyA": "This run",
         "keyB": "The other run",
-        "noFrame": "no frame at this position"
+        "noFrame": "no frame at this position",
+        "searchPlaceholder": "Search runs",
+        "harnessFilter": "Harness",
+        "allHarnesses": "All harnesses",
+        "statusFilter": "Status",
+        "allStatuses": "All statuses",
+        "repositoryFilter": "Repository or path",
+        "resultsLabel": "Matching runs",
+        "unknownHarness": "harness not recorded",
+        "searchLoading": "Searching runs…",
+        "searchDenied": "You do not have permission to search runs in this workspace.",
+        "searchApproval": "Run search is waiting for approval: {request}.",
+        "searchError": "Runs could not be loaded. Try again.",
+        "retrySearch": "Retry search",
+        "noResults": "No matching runs. Try a different search or clear the filters.",
+        "loadMore": "Load more runs",
+        "selectedRun": "Selected: {run}",
+        "changeRun": "Choose another run"
       }
     },
-    "loading": "Loading this run"
+    "loading": "Loading this run",
+    "context": {
+      "harness": "Harness",
+      "repository": "Repository",
+      "directory": "Working directory",
+      "branch": "Branch",
+      "commit": "Commit",
+      "notRecorded": "not recorded"
+    },
+    "diff": {
+      "title": "Tracked worktree diff",
+      "scope": "Recorded tracked-file changes from the captured base commit. This snapshot can include edits made before the run; untracked files and binary content are excluded.",
+      "loading": "Loading recorded diff…",
+      "denied": "You do not have permission to read this diff.",
+      "approval": "Reading this diff is waiting for approval: {request}.",
+      "error": "The diff could not be loaded. Try again.",
+      "retry": "Retry diff",
+      "incomplete": "The recording is too long to locate its latest diff in this read. No earlier snapshot is shown.",
+      "missing": "No readable diff was retained for this run.",
+      "empty": "The snapshot recorded no tracked-file changes.",
+      "truncated": "The recorded patch was truncated.",
+      "baseCommit": "Compared with commit {commit}"
+    }
   }
 }

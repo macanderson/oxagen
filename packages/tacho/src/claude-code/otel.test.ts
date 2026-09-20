@@ -926,3 +926,33 @@ describe("sealing an OTLP export", () => {
     });
   });
 });
+
+describe("OTel harness identity", () => {
+  it.each(["claude-code", "codex", "cursor", "stella"] as const)(
+    "identifies %s from service.name",
+    (harness) => {
+      const payload = log("api_request", { "session.id": "session-identity" });
+      payload.resourceLogs[0]!.resource.attributes.push(
+        kv("service.name", harness),
+      );
+      expect(normalizeOtlp(payload).drafts[0]?.standard.harness).toBe(harness);
+    },
+  );
+  it("does not infer Claude Code for an unidentified telemetry producer", () => {
+    const payload = log("api_request", { "session.id": "unknown" });
+    payload.resourceLogs[0]!.scopeLogs[0]!.logRecords[0]!.body.stringValue =
+      "api_request";
+    expect(normalizeOtlp(payload).drafts[0]?.standard.harness).toBeUndefined();
+  });
+  it("recognizes native Codex event prefixes and conversation ids", () => {
+    const payload = log("api_request", {
+      "conversation.id": "codex-conversation",
+    });
+    payload.resourceLogs[0]!.scopeLogs[0]!.logRecords[0]!.body.stringValue =
+      "codex.api_request";
+    expect(normalizeOtlp(payload).drafts[0]?.standard).toMatchObject({
+      harness: "codex",
+      session_id: "codex-conversation",
+    });
+  });
+});

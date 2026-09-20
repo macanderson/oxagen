@@ -24,22 +24,7 @@ import {
   type WrappedHarness,
 } from "../wire";
 
-/**
- * The recorder context for a session's harness. The daemon's context is
- * Claude Code's; a Codex or Stella session keeps every other fact and
- * relabels the agent with its own runtime. `runtime` is the control plane's
- * checked enum (`TACHO_RUNTIMES`), so every harness this map admits must
- * also be a member there: the fleet page filters on `runtime`, and a
- * harness that had to borrow `custom` could not be told apart from a custom
- * agent.
- */
-/**
- * Only *wrapped* harnesses appear here. A connected one (ADR-078) never opens
- * a session: it has no hook, so nothing marks a session's start or end, and
- * its gateway calls are sealed on the daemon's own chain instead. Giving it a
- * runtime would invite a caller to open a chain for a session that does not
- * exist.
- */
+/** Explicit wrapped-harness claims map to checked control-plane runtimes. */
 const RUNTIME_FOR_HARNESS: Record<WrappedHarness, TachoRuntime> = {
   "claude-code": "claude-code",
   codex: "codex",
@@ -63,12 +48,12 @@ export function contextForHarness(
       agent: { ...context.agent, harness: customAgent, runtime: "custom" },
     };
   }
-  if (harness === undefined || harness === "claude-code") return context;
-  // A connected harness has no session to label: its gateway calls are sealed
-  // on the daemon's chain, never on one of these. Reaching here with one means
-  // a caller opened a session for it, which is a bug, so the context is left
-  // as the daemon's rather than inventing a runtime for it.
-  if (!isWrappedHarness(harness)) return context;
+  if (harness === undefined || !isWrappedHarness(harness)) {
+    return {
+      ...context,
+      agent: { ...context.agent, runtime: "proxy", harness: "unknown" },
+    };
+  }
   return {
     ...context,
     agent: { ...context.agent, harness, runtime: RUNTIME_FOR_HARNESS[harness] },
@@ -113,7 +98,7 @@ export interface SessionFacts {
   transcriptPath?: string;
   cwd?: string;
   pid?: number;
-  /** Which harness runs the session; fixed at first sight, Claude Code by default. */
+  /** Which harness runs the session; claimed explicitly; absent until a source identifies it. */
   harness?: TachoHarness;
   /** A custom agent's name (`--agent`); fixed at first sight. */
   customAgent?: string;
@@ -250,10 +235,10 @@ export function sessionMapKey(
   if (facts.customAgent !== undefined) {
     return `custom:${facts.customAgent} ${harnessSessionId}`;
   }
-  const named = facts.harness ?? "claude-code";
-  const harness: WrappedHarness = isWrappedHarness(named)
-    ? named
-    : "claude-code";
+  const named = facts.harness;
+  if (named === undefined || !isWrappedHarness(named))
+    return `proxy:unknown ${harnessSessionId}`;
+  const harness = named;
   return `${RUNTIME_FOR_HARNESS[harness]}:${harness} ${harnessSessionId}`;
 }
 
@@ -319,10 +304,16 @@ export class SessionRegistry {
         label: record.customAgent,
       };
     }
-    const named = record.harness ?? "claude-code";
-    const harness: WrappedHarness = isWrappedHarness(named)
-      ? named
-      : "claude-code";
+    const named = record.harness;
+    if (named === undefined || !isWrappedHarness(named)) {
+      return {
+        key: "proxy:unknown",
+        runtime: "proxy",
+        harness: "unknown",
+        label: "Unknown harness",
+      };
+    }
+    const harness = named;
     const runtime = RUNTIME_FOR_HARNESS[harness];
     return {
       key: `${runtime}:${harness}`,
@@ -406,7 +397,7 @@ export class SessionRegistry {
     );
     this.sessions.set(this.key(harnessSessionId, facts), record);
     if (!isInternalSession(harnessSessionId)) {
-      // The session was counted against Claude Code when it opened
+      // The session was counted as unknown when it opened
       // unclaimed; it was this agent's session all along. An entry left with
       // nothing to its name is dropped, or the roster would list an agent
       // this host never ran.

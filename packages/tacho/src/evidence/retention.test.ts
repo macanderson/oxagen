@@ -13,27 +13,22 @@ const exact = (classes: string[]): RetentionMandate => ({
 });
 
 describe("retainsBody", () => {
-  it("keeps no bytes for a worktree reconciliation, at any mandate", () => {
-    // The frame carries file paths, and a path is not content in the sense
-    // this mandate governs: `tool_target` has always travelled on the body
-    // of a `file_io` frame under `digest_only`, and the observed list is the
-    // same class of fact read from git rather than from a tool. What the
-    // mandate governs is the exact BYTES of a prompt, a response or a tool
-    // result, which this frame has none of. It maps to no content class, so
-    // it retains nothing whatever the mandate says, and there is nothing for
-    // it to retain.
+  it("retains worktree patch bytes only under an exact tool-call mandate", () => {
     expect(
       retainsBody("oxagen:worktree_reconciled", exact(["tool_call"])),
+    ).toBe(true);
+    expect(
+      retainsBody("oxagen:worktree_reconciled", exact(["model_call"])),
     ).toBe(false);
     expect(
-      retainsBody(
-        "oxagen:worktree_reconciled",
-        exact(["model_call", "tool_call", "change_receipt"]),
-      ),
+      retainsBody("oxagen:worktree_reconciled", {
+        mode: "digest_only",
+        classes: ["tool_call"],
+      }),
     ).toBe(false);
-    expect(
-      RETENTION_CLASS_BY_KIND["oxagen:worktree_reconciled"],
-    ).toBeUndefined();
+    expect(RETENTION_CLASS_BY_KIND["oxagen:worktree_reconciled"]).toBe(
+      "tool_call",
+    );
   });
 
   it("keeps nothing under digest_only, whatever the classes say", () => {

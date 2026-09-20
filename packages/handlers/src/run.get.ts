@@ -19,12 +19,22 @@ import {
   type RunFrame as RunFrameOut,
   runGet,
   type RunGetOutput,
+  RUN_DIFF_TEXT_MAX,
 } from "@oxagen/oxagen/contracts/run.get";
 import type { RunFrame } from "@oxagen/run-ledger";
-import { invalidCursor, microsString } from "./run.list";
+import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
+import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
+import { digestBytes } from "@oxagen/tacho";
+import {
+  invalidCursor,
+  microsString,
+  runScope,
+  type RunScope,
+} from "./run.list";
 import {
   defaultRunReadDeps,
   readFrames,
+  readAllFrames,
   resolveRun,
   type ResolvedRun,
   type RunReadDeps,
@@ -97,10 +107,73 @@ export function toFrame(frame: RunFrame): RunFrameOut {
 // ---- Dependencies ---------------------------------------------------------------------
 
 export type RunGetDeps = RunReadDeps & {
+  bodies?: Pick<EvidenceStore, "getBody">;
   /** The long poll's clock, injectable so a test does not wait. */
   now: () => number;
   sleep: (ms: number) => Promise<void>;
 };
+
+/** A capped scan must never present an older reconciliation as the latest. */
+export const RUN_DIFF_FRAME_CAP = 10_000;
+const DIFF_BODY_BYTES_MAX = 1_048_576;
+const diffDecoder = new TextDecoder("utf-8", { fatal: true });
+
+async function readDiff(
+  deps: RunGetDeps,
+  run: ResolvedRun,
+  scope: RunScope,
+): Promise<NonNullable<RunGetOutput["diff"]>> {
+  const read = await readAllFrames(deps, run, RUN_DIFF_FRAME_CAP);
+  const unavailable = {
+    patch: null,
+    truncated: false,
+    complete: read.complete,
+    seq: null,
+  };
+  if (!read.complete) return unavailable;
+  const frame = [...read.frames]
+    .reverse()
+    .find((f) => f.type === "oxagen:worktree_reconciled");
+  if (!frame) return unavailable;
+  const base = { ...unavailable, seq: frame.seq };
+  const { bodyRef, bodyDigest, fidelity } = frame.body;
+  if (
+    !deps.bodies ||
+    fidelity !== "full" ||
+    bodyRef === null ||
+    bodyDigest === null
+  )
+    return base;
+  // The reference comes from the tenant-scoped frame, never from input or host paths.
+  try {
+    const stored = await deps.bodies.getBody(scope, bodyRef);
+    if (
+      stored.bytes.length > DIFF_BODY_BYTES_MAX ||
+      digestBytes(stored.bytes) !== bodyDigest
+    )
+      return base;
+    const captured: unknown = JSON.parse(diffDecoder.decode(stored.bytes));
+    if (captured === null || typeof captured !== "object") return base;
+    const value = captured as Record<string, unknown>;
+    if (
+      typeof value.patch !== "string" ||
+      typeof value.truncated !== "boolean" ||
+      value.scope !== "tracked_worktree"
+    )
+      return base;
+    return {
+      ...base,
+      patch: value.patch.slice(0, RUN_DIFF_TEXT_MAX),
+      ...(typeof value.baseSha === "string" && value.baseSha.length <= 128
+        ? { baseSha: value.baseSha }
+        : {}),
+      truncated: value.truncated || value.patch.length > RUN_DIFF_TEXT_MAX,
+    };
+  } catch {
+    // Expired bodies and redaction can make content unavailable. Never infer an empty diff.
+    return base;
+  }
+}
 
 export function createRunGetHandler(
   deps: RunGetDeps,
@@ -150,6 +223,9 @@ export function createRunGetHandler(
         cursor: last && !ended ? encodeFrameCursor(last.seq) : null,
       },
       witnessFor: run.witnessFor,
+      ...(input.includeDiff
+        ? { diff: await readDiff(deps, run, runScope(ctx)) }
+        : {}),
     };
   };
 }
@@ -157,6 +233,9 @@ export function createRunGetHandler(
 export function defaultRunGetDeps(): RunGetDeps {
   return {
     ...defaultRunReadDeps(),
+    get bodies() {
+      return evidenceStore();
+    },
     now: () => Date.now(),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };

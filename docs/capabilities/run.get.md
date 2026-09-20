@@ -20,6 +20,7 @@ The Run page's header and one page of its frames (`apps/app/ARCHITECTURE.md` §1
 |---|---|---|---|
 | `runId` | string | yes | `arun_…` or `tse_…` |
 | `framesAfter` | string | no | a frame or page cursor from an earlier read; omitted reads from the start; a cursor this capability did not write is `invalid_input` |
+| `includeDiff` | boolean | no | opt in to the latest retained tracked-worktree patch; omitted skips patch scanning and body reads |
 | `frameLimit` | integer | no | 1-500, default 200 |
 | `waitMs` | integer | no | 0-20000, default 0; the handler waits inside the tenant scope, re-reading the store every 500 ms, until a frame past the cursor lands or the budget runs out |
 
@@ -32,6 +33,7 @@ The Run page's header and one page of its frames (`apps/app/ARCHITECTURE.md` §1
 | `frames.frames[].body` | object | `{ digest, bytesRef, redactions, fidelity }`: the sha256 of the redacted bytes (null when the frame carried no content), where they were retained (null under `digest_only` and whenever no body was retained: a wrapped frame's reference is the one the control plane wrote, never one the host set), the redactions made before write, and `full` or `digest_only` |
 | `frames.frames[].cost` | `{ micros, currency, basis }` or null | the frame's own cost record; a wrapped session's `llm_call` frames carry one (`client_attested`), ledger frames carry none |
 | `frames.cursor` | string or null | the point to continue from, past every frame this read consumed; null when nothing lay past `framesAfter`, so the caller keeps its cursor, and null on a sealed run whose page had nothing behind it (the handler reads one frame past the page to know); a live run keeps its cursor on every non-empty page |
+| `diff` | object, optional | present only with `includeDiff`: `{ patch, baseSha?, truncated, complete, seq }`. Patch text is capped at 65,536 characters; null means unavailable, while an empty string means an explicitly captured empty patch. `truncated` includes capture and response limits. `complete: false` means the scan exceeded 10,000 frames and no patch is returned. `seq` identifies the reconciliation frame; `baseSha`, when captured, is this patch’s actual Git comparison base. |
 | `witnessFor` | string or null | the worker run this run witnessed, by the first `proof.observed` verdict naming it (spec §8.5 "Stamping", ADR-064); a witness run renders its own tab set. Null for every other run |
 
 A read that starts at the page cursor or at any frame's own cursor repeats nothing and skips nothing. `summary` is a short label built from identifiers in the frame's receipt (engine, model, tool, outcome, policy decision); an encrypted payload shows the event type and nothing it cannot read. A wrapped frame's `stage` is the stage its kind belongs to (`session`, `turn`, `model`, `tool`, `policy`, `effect`, `proof`, `control`, `chain`).
@@ -59,3 +61,7 @@ Every invoke runs the IAM check and the audit and security emissions once, befor
 **Resuming.** `EventSource` sends the last `id` back as `Last-Event-ID`; a client that is not `EventSource` passes `?after=<cursor>`. A read that starts at either repeats nothing and skips nothing, so a dropped connection costs a round trip and no frames.
 
 **Cost.** Each read long-polls inside the handler for up to 20 s (`waitMs`), so an idle stream costs one invoke per 20 s rather than one per client tick. `noBillingGate: true` keeps every one of them off the meter.
+
+## Captured diff
+
+The diff describes tracked worktree changes against the captured Git base, including changes already present when the run started. It does not attribute every change to the agent or include untracked file contents. Only the latest reconciliation is used; an unavailable latest body never falls back to an older patch. Content follows evidence retention, redaction, tenant scope, and digest verification. Missing, expired, malformed, or unverifiable content answers a null patch. Historical runs without captured patch content remain unavailable. Run lists never load patch bodies.

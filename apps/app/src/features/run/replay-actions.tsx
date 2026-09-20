@@ -20,11 +20,17 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { RunRow } from "@/data/contracts/runs";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  inputBase,
+  mono,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { bisectRuns, forkRun } from "./actions";
 import { UNANSWERED, useActionFailure } from "./command-failure";
+import { RunSelector } from "./run-selector";
 
 type Divergence = {
   divergentSeq: string | null;
@@ -151,10 +157,9 @@ function BisectDialog({
 }) {
   const t = useTranslations("run.replay.bisect");
   const failureText = useActionFailure();
-  const fieldId = useId();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
-  const [other, setOther] = useState("");
+  const [other, setOther] = useState<RunRow | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [result, setResult] = useState<Divergence | null>(null);
 
@@ -163,17 +168,17 @@ function BisectDialog({
     if (!next) {
       setFailure(null);
       setResult(null);
-      setOther("");
+      setOther(null);
     }
   }
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
+    if (pending || other === null) return;
     setPending(true);
     setFailure(null);
     try {
-      const answer = await bisectRuns(org, ws, runId, other);
+      const answer = await bisectRuns(org, ws, runId, other.id);
       if (answer.ok) setResult(answer.value);
       else setFailure(failureText(answer));
     } catch {
@@ -199,6 +204,7 @@ function BisectDialog({
         open={open}
         onOpenChange={openChange}
         title={t("title", { run: runId })}
+        wide
         testId="run-bisect-dialog"
       >
         {result === null ? (
@@ -207,28 +213,23 @@ function BisectDialog({
             className="flex flex-col gap-3"
           >
             <p className="text-sm text-muted-foreground">{t("body")}</p>
-            <label htmlFor={fieldId} className="text-sm font-medium">
-              {t("otherLabel")}
-            </label>
-            <input
-              id={fieldId}
-              name="runB"
-              required
-              value={other}
-              onChange={(event) => {
-                setOther(event.target.value);
-              }}
-              className={inputBase}
+            <RunSelector
+              org={org}
+              ws={ws}
+              runId={runId}
+              selected={other}
+              onSelect={setOther}
             />
-            <p className="text-xs text-muted-foreground">{t("otherHelp")}</p>
             {failure === null ? null : (
               <FormAlert testId="run-bisect-failure">{failure}</FormAlert>
             )}
-            <SubmitButton
-              pending={pending}
-              label={t("confirm")}
-              pendingLabel={t("pending")}
-            />
+            <button
+              type="submit"
+              disabled={other === null || pending}
+              className={`${buttonPrimary} w-full`}
+            >
+              {pending ? t("pending") : t("confirm")}
+            </button>
           </form>
         ) : (
           <div role="status" className="flex flex-col gap-2 text-sm">

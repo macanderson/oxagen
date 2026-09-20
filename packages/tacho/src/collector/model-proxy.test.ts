@@ -755,6 +755,25 @@ describe("the loopback model proxy", () => {
     });
   });
 
+  it("adopts an unknown ambient run as Codex from its native header across providers", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, frames } = await boot(fake.url);
+    const ambient = handle.registry.ensure("codex-ambient", {
+      ambient: true,
+    }).record;
+    const uuid = ambient.recorder.sessionUuid;
+    await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["session-id", "codex-ambient"],
+      body: JSON.stringify({ model: "m" }),
+    });
+    expect(handle.registry.get("codex-ambient")).toBe(ambient);
+    expect(frames(uuid).at(-1)?.agent).toMatchObject({
+      runtime: "codex",
+      harness: "codex",
+    });
+  });
+
   it("routes Codex by its credential, correlates by session-id, and forwards a zstd body untouched", async () => {
     const completed = `event: response.completed\ndata: ${JSON.stringify({ type: "response.completed", response: { id: "resp_1", model: "gpt-5-codex", status: "completed", usage: { input_tokens: 1000, input_tokens_details: { cached_tokens: 400 }, output_tokens: 100, output_tokens_details: { reasoning_tokens: 60 } } } })}\n\n`;
     const fake = await vendor((_req, res) => {
@@ -974,9 +993,9 @@ describe("the loopback model proxy", () => {
     expect(hostFrames.at(-1)!.attrs["oxagen.correlation"]).toBe("unattributed");
   });
 
-  it("correlates by the session id inside metadata.user_id, and by the one live session", async () => {
+  it("correlates by request metadata and leaves a provider-only request unattributed", async () => {
     const fake = await vendor(streamingAnthropic(1));
-    const { port, session, frames } = await boot(fake.url);
+    const { handle, port, session, frames } = await boot(fake.url);
     const uuid = await session("9d1f6a54-0000-4000-8000-00000000abcd");
     await call(port, {
       path: "/anthropic/v1/messages",
@@ -1007,8 +1026,13 @@ describe("the loopback model proxy", () => {
     expect(frames(uuid).map((f) => f.attrs["oxagen.correlation"])).toEqual([
       "request_metadata",
       "request_metadata",
-      "sole_live_session",
     ]);
+    expect(frames(handle.hostRecorder.sessionUuid).at(-1)?.agent).toMatchObject(
+      {
+        runtime: "proxy",
+        harness: "unknown",
+      },
+    );
   });
 
   it("interrupts in-flight calls on pause, refuses new ones, and resumes", async () => {

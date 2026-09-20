@@ -70,6 +70,7 @@ export function toRunDetail(
 ): z.input<typeof RunDetail> {
   return {
     run: toRunRow(out.run),
+    diff: out.diff,
     frames: {
       frames: out.frames.frames.map((frame) => ({
         cursor: frame.cursor,

@@ -25,6 +25,8 @@ import { formatCount } from "@/ui/money-format";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { NoValue } from "./parts";
+import { RunDiff } from "./run-diff";
+import { RunContext } from "./run-context";
 import { RecordActions } from "./record-actions";
 import { ReplayActions } from "./replay-actions";
 import { RunControls } from "./run-controls";
@@ -264,6 +266,8 @@ export function RunHeader({
           )}
         </div>
       </div>
+      <RunContext run={run} />
+      <RunDiff key={run.id} org={org} ws={ws} runId={run.id} />
       <div
         data-testid="run-facts"
         className="grid gap-x-8 gap-y-3 rounded-lg border border-border px-4 py-3 sm:grid-cols-2 lg:grid-cols-3"

@@ -2,6 +2,7 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
 import type { AttemptEventReadRecord } from "@oxagen/run-ledger";
+import { digestBytes } from "@oxagen/tacho";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -9,6 +10,7 @@ import {
   decodeFrameCursor,
   encodeFrameCursor,
   POLL_INTERVAL_MS,
+  RUN_DIFF_FRAME_CAP,
   type RunGetDeps,
 } from "./run.get";
 import { encodeRunCursor } from "./run.list";
@@ -33,6 +35,7 @@ const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const SESSION_UUID = "0192d4a8-7c1e-7a00-8000-00000000c0de";
 
 type Over = {
+  bodies?: RunGetDeps["bodies"];
   ledger?: Parameters<typeof memoryStores>[0];
   tacho?: Parameters<typeof memoryStores>[1];
   events?: AttemptEventReadRecord[];
@@ -77,6 +80,7 @@ function harness(over: Over = {}) {
           : null,
       ),
     tachoFrames: memoryTachoFrames(SESSION_UUID, over.tachoRows ?? []),
+    bodies: over.bodies,
     now: () => clock,
     sleep: (ms) => {
       sleeps.push(ms);
@@ -516,5 +520,224 @@ describe("get_run witnessFor (ADR-064)", () => {
       (e: unknown) => e,
     );
     expect(isHandlerError(err) && err.code).toBe("not_found");
+  });
+});
+
+describe("get_run retained diff", () => {
+  const patch = "diff --git a/index.ts b/index.ts\n-old\n+new";
+  function fixture(
+    value: unknown = { patch, truncated: false, scope: "tracked_worktree" },
+  ) {
+    const bytes = new TextEncoder().encode(JSON.stringify(value));
+    const digest = digestBytes(bytes);
+    const ref = `evb:v1:k:${digest.slice(7)}`;
+    const getBody = vi.fn(async () => ({
+      bytes,
+      contentType: "application/json",
+      digestHex: digest.slice(7),
+    }));
+    const row = tachoRow(1, {
+      kind: "oxagen:worktree_reconciled",
+      contentDigest: digest,
+      bytesRef: ref,
+    });
+    return { bytes, ref, row, getBody };
+  }
+
+  it("loads the latest reconciliation on demand beyond the frame page and verifies tenant scope", async () => {
+    const f = fixture();
+    const { get } = harness({
+      tachoRows: [tachoRow(0), f.row],
+      bodies: { getBody: f.getBody },
+    });
+    const ordinary = await get(
+      input({ runId: TACHO_ID, frameLimit: 1 }),
+      ctx(),
+    );
+    expect(ordinary.diff).toBeUndefined();
+    expect(f.getBody).not.toHaveBeenCalled();
+    const out = await get(
+      input({ runId: TACHO_ID, frameLimit: 1, includeDiff: true }),
+      ctx(),
+    );
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.diff).toEqual({
+      patch,
+      truncated: false,
+      complete: true,
+      seq: "1",
+    });
+    expect(f.getBody).toHaveBeenCalledWith(
+      { orgId: ctx().orgId, workspaceId: ctx().workspaceId },
+      f.ref,
+    );
+  });
+
+  it("distinguishes an old recording without patch frames from an empty patch", async () => {
+    const f = fixture();
+    const { get } = harness({
+      tachoRows: [tachoRow(0)],
+      bodies: { getBody: f.getBody },
+    });
+    const out = await get(input({ runId: TACHO_ID, includeDiff: true }), ctx());
+    expect(out.diff).toEqual({
+      patch: null,
+      truncated: false,
+      complete: true,
+      seq: null,
+    });
+    expect(f.getBody).not.toHaveBeenCalled();
+  });
+
+  it("refuses oversized retained bodies before parsing", async () => {
+    const f = fixture({
+      patch: "x".repeat(1_048_576),
+      truncated: true,
+      scope: "tracked_worktree",
+    });
+    const { get } = harness({
+      tachoRows: [f.row],
+      bodies: { getBody: f.getBody },
+    });
+    const out = await get(input({ runId: TACHO_ID, includeDiff: true }), ctx());
+    expect(out.diff?.patch).toBeNull();
+  });
+
+  it("returns the actual captured patch base", async () => {
+    const f = fixture({
+      patch,
+      truncated: false,
+      scope: "tracked_worktree",
+      baseSha: "a".repeat(40),
+    });
+    const { get } = harness({
+      tachoRows: [f.row],
+      bodies: { getBody: f.getBody },
+    });
+    const out = await get(input({ runId: TACHO_ID, includeDiff: true }), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.diff?.baseSha).toBe("a".repeat(40));
+  });
+
+  it("never falls back to an older patch when the latest body was not retained", async () => {
+    const f = fixture();
+    const { get } = harness({
+      tachoRows: [
+        f.row,
+        tachoRow(2, {
+          kind: "oxagen:worktree_reconciled",
+          contentDigest: "sha256:" + "c".repeat(64),
+          bytesRef: "",
+        }),
+      ],
+      bodies: { getBody: f.getBody },
+    });
+    const out = await get(input({ runId: TACHO_ID, includeDiff: true }), ctx());
+    expect(out.diff).toEqual({
+      patch: null,
+      truncated: false,
+      complete: true,
+      seq: "2",
+    });
+    expect(f.getBody).not.toHaveBeenCalled();
+  });
+
+  it("does not read bodies outside the workspace", async () => {
+    const f = fixture();
+    const { get } = harness({
+      tacho: [tachoSession({ publicId: TACHO_ID, scope: OTHER_WORKSPACE })],
+      tachoRows: [f.row],
+      bodies: { getBody: f.getBody },
+    });
+    await expect(
+      get(input({ runId: TACHO_ID, includeDiff: true }), ctx()),
+    ).rejects.toMatchObject({ code: "not_found" });
+    expect(f.getBody).not.toHaveBeenCalled();
+  });
+
+  it.each(["mismatch", "expired", "malformed", "wrong-scope"])(
+    "reports %s content as unavailable, never an empty diff",
+    async (failure) => {
+      const f = fixture(
+        failure === "malformed"
+          ? { patch }
+          : failure === "wrong-scope"
+            ? { patch, truncated: false, scope: "unknown" }
+            : undefined,
+      );
+      if (failure === "mismatch")
+        f.getBody.mockResolvedValue({
+          bytes: new TextEncoder().encode("wrong bytes"),
+          contentType: "application/json",
+          digestHex: "bad",
+        });
+      if (failure === "expired")
+        f.getBody.mockRejectedValue(new Error("body expired"));
+      const { get } = harness({
+        tachoRows: [f.row],
+        bodies: { getBody: f.getBody },
+      });
+      const out = await get(
+        input({ runId: TACHO_ID, includeDiff: true }),
+        ctx(),
+      );
+      expect(out.diff?.patch).toBeNull();
+    },
+  );
+
+  it.each([false, true])(
+    "preserves capture truncation (%s)",
+    async (truncated) => {
+      const f = fixture({ patch, truncated, scope: "tracked_worktree" });
+      const { get } = harness({
+        tachoRows: [f.row],
+        bodies: { getBody: f.getBody },
+      });
+      const out = await get(
+        input({ runId: TACHO_ID, includeDiff: true }),
+        ctx(),
+      );
+      expect(out.diff?.truncated).toBe(truncated);
+    },
+  );
+
+  it("bounds returned patch text and preserves an explicitly captured empty patch", async () => {
+    for (const text of ["", "x".repeat(70_000)]) {
+      const f = fixture({
+        patch: text,
+        truncated: false,
+        scope: "tracked_worktree",
+      });
+      const { get } = harness({
+        tachoRows: [f.row],
+        bodies: { getBody: f.getBody },
+      });
+      const out = await get(
+        input({ runId: TACHO_ID, includeDiff: true }),
+        ctx(),
+      );
+      expect(runGet.output.parse(out)).toEqual(out);
+      expect(out.diff?.patch).toBe(text.slice(0, 65_536));
+      expect(out.diff?.truncated).toBe(text.length > 65_536);
+    }
+  });
+
+  it("reports an incomplete scan and never serves a prefix's patch as the latest", async () => {
+    const f = fixture();
+    const rows = Array.from({ length: RUN_DIFF_FRAME_CAP + 1 }, (_, i) =>
+      i === 1 ? f.row : tachoRow(i),
+    );
+    const { get } = harness({
+      tachoRows: rows,
+      bodies: { getBody: f.getBody },
+    });
+    const out = await get(input({ runId: TACHO_ID, includeDiff: true }), ctx());
+    expect(out.diff).toEqual({
+      patch: null,
+      truncated: false,
+      complete: false,
+      seq: null,
+    });
+    expect(f.getBody).not.toHaveBeenCalled();
   });
 });

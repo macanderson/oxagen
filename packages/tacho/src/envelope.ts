@@ -431,6 +431,9 @@ export type ObservedChange = z.infer<typeof observedChangeSchema>;
  * handler's `rollupFiles` says the same thing where it applies them.
  */
 export const observationFacts = z.object({
+  diff_truncated: bool.optional(),
+  diff_base_sha: short.optional(),
+  diff_scope: z.literal("tracked_worktree").optional(),
   observed_changes: z
     .array(observedChangeSchema)
     .max(MAX_OBSERVED_CHANGES)

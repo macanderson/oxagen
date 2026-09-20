@@ -56,6 +56,10 @@ vi.mock("./actions", () => ({
   summarizeRun: vi.fn(),
   exportRun: vi.fn(),
 }));
+vi.mock("./search-actions", () => ({
+  searchBisectRuns: vi.fn(),
+  readRunDiff: vi.fn(),
+}));
 vi.mock("next-intl/server", async () => {
   const { translator } = await import("@/test/intl");
   return { getTranslations: (namespace?: string) => translator(namespace) };

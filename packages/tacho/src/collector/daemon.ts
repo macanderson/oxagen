@@ -20,7 +20,11 @@ import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
 import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
-import { type FrameBody, retentionAllows } from "../evidence/frame-body";
+import {
+  type FrameBody,
+  jsonContent,
+  retentionAllows,
+} from "../evidence/frame-body";
 import { verifyBundle } from "../host/bundle";
 import {
   ControlError,
@@ -69,6 +73,8 @@ import {
 import { Detector } from "./detector";
 import {
   type GitFacts,
+  type GitPatch,
+  readWorkingTreePatch,
   type GitWorkingTreeChange,
   readGitFacts,
   readWorkingTreeChanges,
@@ -324,8 +330,8 @@ export async function startDaemon(
     agent: {
       agent_key: host.agent_key,
       fleet_id: host.workspace_id,
-      runtime: "claude-code",
-      harness: "claude-code",
+      runtime: "proxy",
+      harness: "unknown",
       wrapper_version: host.wrapper_version,
       host_enrollment_id: host.host_enrollment_id,
     },
@@ -1146,6 +1152,7 @@ export async function startDaemon(
    */
   function gitContextOf(facts: GitFacts): Record<string, unknown> {
     return {
+      project_dir: facts.project_dir,
       git_head_sha: facts.head_sha,
       git_branch: facts.branch,
       git_dirty: facts.dirty,
@@ -1181,6 +1188,7 @@ export async function startDaemon(
       // describe but does have a worktree to reconcile.
       facts?: GitFacts;
       changes?: GitWorkingTreeChange[];
+      patch?: GitPatch;
     }> = [];
     for (const harnessSessionId of work) {
       const want = gitPending.get(harnessSessionId);
@@ -1227,7 +1235,19 @@ export async function startDaemon(
                 cwd,
                 session.baselineCommit,
               );
-              return changes === undefined ? {} : { changes };
+              const patch = retentionAllows(
+                retentionInForce().mandate,
+                "tool_call",
+              )
+                ? await readWorkingTreePatch(
+                    execAsync,
+                    cwd,
+                    session.baselineCommit,
+                  )
+                : undefined;
+              return changes === undefined
+                ? {}
+                : { changes, ...(patch !== undefined ? { patch } : {}) };
             })()
           : {}),
       });
@@ -1235,7 +1255,7 @@ export async function startDaemon(
     if (found.length === 0) return;
     await serial.run(async () => {
       const events: TachoEvent[] = [];
-      for (const { session, cwd, facts, changes } of found) {
+      for (const { session, cwd, facts, changes, patch } of found) {
         if (session.sealed) continue;
         // The session moved while the probe ran, so this answer describes a
         // repository it is no longer in. A later turn reads the new one.
@@ -1246,11 +1266,26 @@ export async function startDaemon(
         events.push(
           session.recorder.sealCollectorEvent(
             "oxagen:worktree_reconciled",
-            worktreeReconciledBody(changes),
+            {
+              ...worktreeReconciledBody(changes),
+              ...(patch !== undefined
+                ? {
+                    diff_truncated: patch.truncated,
+                    diff_base_sha: patch.baseSha,
+                    diff_scope: patch.scope,
+                  }
+                : {}),
+            },
+            patch === undefined
+              ? {}
+              : { content: jsonContent(JSON.stringify(patch)) },
           ),
         );
       }
-      record(events);
+      record(
+        events,
+        found.flatMap(({ session }) => session.recorder.takeBodies()),
+      );
     });
   }
 
@@ -1676,15 +1711,19 @@ export async function startDaemon(
         lastOtlpAt = now();
         if (signal === "traces") return;
         const { drafts, metrics } = normalizeOtlp(payload as OtlpPayload);
-        const sessionIds = new Set<string>();
-        for (const draft of drafts)
-          if (draft.standard.session_id !== undefined)
-            sessionIds.add(draft.standard.session_id);
-        for (const metric of metrics)
-          if (metric.standard.session_id !== undefined)
-            sessionIds.add(metric.standard.session_id);
-        for (const sessionId of sessionIds) {
+        const sessionIds = new Map<
+          string,
+          (typeof drafts)[number]["standard"]["harness"]
+        >();
+        for (const item of [...drafts, ...metrics])
+          if (item.standard.session_id !== undefined)
+            sessionIds.set(
+              item.standard.session_id,
+              item.standard.harness ?? sessionIds.get(item.standard.session_id),
+            );
+        for (const [sessionId, harness] of sessionIds) {
           const { record: session, created } = registry.ensure(sessionId, {
+            ...(harness !== undefined ? { harness } : {}),
             ambient: true,
           });
           if (created)

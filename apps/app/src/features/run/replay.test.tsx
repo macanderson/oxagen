@@ -14,11 +14,16 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { runRow } from "./run.builders";
 
-const { forkRun, bisectRuns } = vi.hoisted(() => ({
-  forkRun: vi.fn(),
-  bisectRuns: vi.fn(),
-}));
+const { forkRun, bisectRuns, searchBisectRuns, readRunDiff } = vi.hoisted(
+  () => ({
+    forkRun: vi.fn(),
+    bisectRuns: vi.fn(),
+    searchBisectRuns: vi.fn(),
+    readRunDiff: vi.fn(),
+  }),
+);
 vi.mock("./actions", () => ({ forkRun, bisectRuns }));
+vi.mock("./search-actions", () => ({ searchBisectRuns, readRunDiff }));
 
 const { ReplayActions } = await import("./replay-actions");
 
@@ -33,6 +38,27 @@ function renderReplay(run: RunRow) {
 beforeEach(() => {
   forkRun.mockReset();
   bisectRuns.mockReset();
+  searchBisectRuns.mockReset().mockResolvedValue({
+    ok: true,
+    value: {
+      runs: [
+        runRow({
+          id: "tse_other1",
+          name: "Fix the release",
+          harness: "codex",
+          workingDirectory: "/work/oxagen",
+          repository: {
+            name: "oxagen",
+            root: "/work/oxagen",
+            branch: "fix/release",
+            commit: "aabbcc",
+          },
+        }),
+      ],
+      nextCursor: null,
+    },
+  });
+  readRunDiff.mockReset().mockResolvedValue({ ok: true, value: null });
 });
 
 afterEach(cleanup);
@@ -44,7 +70,11 @@ describe("Fork", () => {
       value: { attemptId: "arun_9x2k", attemptNumber: 2 },
     });
     const user = userEvent.setup();
-    const run = runRow({ id: "tse_7k2m9q", source: "ledger", replayGrade: "fork" });
+    const run = runRow({
+      id: "tse_7k2m9q",
+      source: "ledger",
+      replayGrade: "fork",
+    });
     renderReplay(run);
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "120");
@@ -206,8 +236,13 @@ describe("Bisect", () => {
     const user = userEvent.setup();
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
-    await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.type(screen.getByLabelText("The other run"), "release");
+    await user.click(
+      await screen.findByRole("option", { name: /Fix the release/ }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-diverged")).toHaveTextContent(
         "The runs diverge at frame 42, after 41 frames that agreed.",
@@ -225,8 +260,13 @@ describe("Bisect", () => {
     const user = userEvent.setup();
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
-    await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.type(screen.getByLabelText("The other run"), "release");
+    await user.click(
+      await screen.findByRole("option", { name: /Fix the release/ }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-same")).toHaveTextContent(
         "The two runs agree at every frame. 431 frames were compared.",
@@ -247,8 +287,13 @@ describe("Bisect", () => {
     const user = userEvent.setup();
     renderReplay(runRow());
     await user.click(screen.getByTestId("run-bisect"));
-    await user.type(screen.getByLabelText("The other run"), "tse_other1");
-    await user.click(screen.getByRole("button", { name: "Find the divergence" }));
+    await user.type(screen.getByLabelText("The other run"), "release");
+    await user.click(
+      await screen.findByRole("option", { name: /Fix the release/ }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("bisect-diverged")).toBeInTheDocument();
     });
@@ -259,4 +304,238 @@ describe("Bisect", () => {
     const keyBLabel = screen.getByText("The other run");
     expect(keyBLabel.nextElementSibling).toHaveTextContent("tool_call:xyz");
   });
+});
+
+describe("Bisect run search", () => {
+  it("searches names and filters the workspace index, then compares the selected ID", async () => {
+    bisectRuns.mockResolvedValue({
+      ok: true,
+      value: { divergentSeq: null, keyA: null, keyB: null, aligned: 0 },
+    });
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    expect(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    ).toBeDisabled();
+    await user.type(
+      screen.getByRole("combobox", { name: "The other run" }),
+      "release",
+    );
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Harness" }),
+      "codex",
+    );
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Status" }),
+      "sealed",
+    );
+    await user.type(screen.getByLabelText("Repository or path"), "oxagen");
+    await screen.findByRole("option", { name: /Fix the release/ });
+    expect(searchBisectRuns).toHaveBeenLastCalledWith(
+      "acme",
+      "core-platform",
+      "tse_7k2m9q",
+      {
+        cursor: null,
+        search: "release",
+        harness: "codex",
+        status: "sealed",
+        repository: "oxagen",
+      },
+    );
+    await user.click(screen.getByRole("combobox", { name: "The other run" }));
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(screen.getByTestId("bisect-selection")).toHaveTextContent(
+      "/work/oxagen",
+    );
+    expect(screen.getByTestId("bisect-selection")).toHaveTextContent(
+      "fix/release",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    );
+    await waitFor(() =>
+      expect(bisectRuns).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        "tse_7k2m9q",
+        "tse_other1",
+      ),
+    );
+  });
+
+  it("loads another cursor page, excludes the current run, and clears a selection when the search changes", async () => {
+    searchBisectRuns.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        runs: [runRow(), runRow({ id: "tse_page1", name: "First result" })],
+        nextCursor: "older-page",
+      },
+    });
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await screen.findByRole("option", { name: /First result/ });
+    expect(
+      screen
+        .getAllByRole("option")
+        .filter((option) => option.tagName === "BUTTON"),
+    ).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Load more runs" }));
+    await user.click(
+      await screen.findByRole("option", { name: /Fix the release/ }),
+    );
+    expect(searchBisectRuns).toHaveBeenLastCalledWith(
+      "acme",
+      "core-platform",
+      "tse_7k2m9q",
+      { cursor: "older-page" },
+    );
+    await user.type(
+      screen.getByRole("combobox", { name: "The other run" }),
+      " changed",
+    );
+    expect(screen.queryByTestId("bisect-selection")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    ).toBeDisabled();
+  });
+
+  it("shows loading, an empty search, and a retryable failure", async () => {
+    searchBisectRuns.mockResolvedValueOnce({
+      ok: false,
+      reason: "error",
+      code: "unavailable",
+      status: 503,
+    });
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    expect(screen.getByText("Searching runs…")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Runs could not be loaded",
+    );
+    searchBisectRuns.mockResolvedValueOnce({
+      ok: true,
+      value: { runs: [], nextCursor: null },
+    });
+    await user.click(screen.getByRole("button", { name: "Retry search" }));
+    expect(await screen.findByText(/No matching runs/)).toBeInTheDocument();
+  });
+
+  it.each([
+    { ok: false, reason: "denied", permission: "workspace.read" },
+    { ok: false, reason: "pending_approval", accessRequestId: "apr_wait" },
+  ])("preserves a search refusal: $reason", async (failure) => {
+    searchBisectRuns.mockResolvedValue(failure);
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      failure.reason === "denied" ? "permission" : "approval",
+    );
+    expect(screen.queryByRole("button", { name: "Retry search" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Find the divergence" }),
+    ).toBeDisabled();
+  });
+
+  it("ignores an older search response after the query changes", async () => {
+    let resolveOld: (answer: unknown) => void = () => {};
+    searchBisectRuns.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await waitFor(() => expect(searchBisectRuns).toHaveBeenCalledTimes(1));
+    await user.type(
+      screen.getByRole("combobox", { name: "The other run" }),
+      "release",
+    );
+    await screen.findByRole("option", { name: /Fix the release/ });
+    resolveOld({
+      ok: true,
+      value: {
+        runs: [runRow({ id: "tse_stale", name: "Stale result" })],
+        nextCursor: null,
+      },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("option", { name: /Fix the release/ }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("option", { name: /Stale result/ })).toBeNull();
+  });
+
+  it("announces accessible search results and supports escape without closing the dialog", async () => {
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await screen.findByRole("option", { name: /Fix the release/ });
+    await expectNoAxe(screen.getByTestId("run-bisect-dialog"));
+    await user.click(screen.getByRole("combobox", { name: "The other run" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.getByTestId("run-bisect-dialog")).toBeInTheDocument();
+  });
+
+  it("loads the selected run diff on request and escapes the patch as text", async () => {
+    const patch = "diff --git a/file b/file\n+<script>alert('unsafe')</script>";
+    readRunDiff.mockResolvedValue({
+      ok: true,
+      value: { patch, truncated: true, complete: true, seq: "12" },
+    });
+    const user = userEvent.setup();
+    renderReplay(runRow());
+    await user.click(screen.getByTestId("run-bisect"));
+    await user.click(
+      await screen.findByRole("option", { name: /Fix the release/ }),
+    );
+    expect(readRunDiff).not.toHaveBeenCalled();
+    await user.click(
+      screen.getByRole("button", { name: "Tracked worktree diff" }),
+    );
+    expect(await screen.findByText(/<script>alert/)).toBeInTheDocument();
+    expect(
+      screen.getByText("The recorded patch was truncated."),
+    ).toBeInTheDocument();
+    expect(readRunDiff).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "tse_other1",
+    );
+  });
+
+  it.each([
+    [null, "No readable diff was retained for this run."],
+    [
+      { patch: "", truncated: false, complete: true, seq: "2" },
+      "The snapshot recorded no tracked-file changes.",
+    ],
+    [
+      { patch: null, truncated: false, complete: false, seq: null },
+      "The recording is too long to locate its latest diff in this read. No earlier snapshot is shown.",
+    ],
+  ])(
+    "distinguishes missing, empty, and incomplete diff snapshots",
+    async (diff, message) => {
+      readRunDiff.mockResolvedValue({ ok: true, value: diff });
+      const user = userEvent.setup();
+      renderReplay(runRow());
+      await user.click(screen.getByTestId("run-bisect"));
+      await user.click(
+        await screen.findByRole("option", { name: /Fix the release/ }),
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Tracked worktree diff" }),
+      );
+      expect(await screen.findByText(message)).toBeInTheDocument();
+    },
+  );
 });

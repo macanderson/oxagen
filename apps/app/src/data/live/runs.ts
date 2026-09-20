@@ -70,7 +70,7 @@ export const runs: DataSource["runs"] = {
   async list(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: runList,
-      input: q.cursor === null ? {} : { cursor: q.cursor },
+      input: { ...q, cursor: q.cursor ?? undefined },
       page: "fleet",
     });
     if (!read.ok) return read;
@@ -79,15 +79,13 @@ export const runs: DataSource["runs"] = {
   async get(ctx, runId, q) {
     const read = await kernelRead(ctx, {
       contract: runGet,
-      input:
-        q.framesAfter === null
-          ? { runId, frameLimit: FRAME_PAGE, waitMs: 0 }
-          : {
-              runId,
-              framesAfter: q.framesAfter,
-              frameLimit: FRAME_PAGE,
-              waitMs: 0,
-            },
+      input: {
+        runId,
+        frameLimit: FRAME_PAGE,
+        waitMs: 0,
+        ...(q.framesAfter === null ? {} : { framesAfter: q.framesAfter }),
+        ...(q.includeDiff ? { includeDiff: true } : {}),
+      },
       page: "run",
     });
     if (!read.ok) return read;

@@ -49,6 +49,7 @@ import {
   TACHO_METERING_OBSERVED,
   type TachoEvent,
   verifyChain,
+  WRAPPED_HARNESSES,
 } from "@oxagen/tacho";
 import {
   insertTachoEvents,
@@ -679,10 +680,14 @@ function genesisRow(
   // the caller derives it to build that guard, and a second derivation here is
   // two values that have to agree.
   genesisHash: string | null,
+  chainVerified: boolean,
 ) {
   const first = events[0] as TachoEvent;
   const genesis = events.find((event) => event.kind === "agent_start") ?? first;
   const body = genesis.body as Body;
+  // A telemetry-first batch may carry place only on a later hook.
+  const place = firstRecordedPlace(chainVerified ? events : [genesis]);
+  const claim = chainVerified ? recordedHarnessClaim(events) : null;
   const context = genesis.context ?? {};
   const anthropic = genesis.anthropic ?? {};
   const subagent = genesis.subagent;
@@ -693,7 +698,7 @@ function genesisRow(
     sessionUuid: first.session_uuid,
     harnessSessionId: first.session_id,
     hostId: host.id,
-    agentKey: first.agent.agent_key,
+    agentKey: claim?.agentKey ?? first.agent.agent_key,
     // The registered agent the host enrolled as (enroll_host, #2967); null
     // for an operator-enrolled host.
     agentId: host.agentId,
@@ -710,8 +715,8 @@ function genesisRow(
     anthropicAccountId: anthropic.account_id ?? null,
     anthropicOrgUuid: anthropic.org_uuid ?? null,
     apiKeySource: anthropic.api_key_source ?? null,
-    runtime: first.agent.runtime,
-    harness: first.agent.harness,
+    runtime: claim?.runtime ?? first.agent.runtime,
+    harness: claim?.harness ?? first.agent.harness,
     harnessVersion: first.agent.harness_version ?? null,
     wrapperVersion: first.agent.wrapper_version,
     entrypoint: context.entrypoint ?? null,
@@ -728,13 +733,13 @@ function genesisRow(
     startSource: str(body["session_start_source"]),
     startedAt: isNaN(ingestedAt.getTime()) ? now : ingestedAt,
     lastEventAt: now,
-    cwd: context.cwd ?? null,
-    projectDir: context.project_dir ?? null,
+    cwd: place.cwd ?? null,
+    projectDir: place.projectDir ?? null,
     transcriptPath: str(body["transcript_path"]),
     gitRemoteDigest: context.git_remote_digest ?? null,
-    gitBranch: context.git_branch ?? null,
-    gitHeadShaStart: context.git_head_sha ?? null,
-    gitDirtyStart: context.git_dirty ?? null,
+    gitBranch: place.gitBranch ?? null,
+    gitHeadShaStart: place.gitHeadShaStart ?? null,
+    gitDirtyStart: place.gitDirtyStart ?? null,
     worktreePath: context.worktree_path ?? null,
     worktreeBranch: context.worktree_branch ?? null,
     toolsAvailable: body["tools_available"] ?? null,
@@ -1226,7 +1231,35 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           : {}),
         pullRequests: sql`${schema.tachoSessions.pullRequests} + ${delta.pullRequests}`,
       };
+      const place = firstRecordedPlace(ok ? fresh : []);
+      const claim = ok ? recordedHarnessClaim(fresh) : null;
       const common = {
+        ...(claim ?? {}),
+        // Ambient telemetry often opens the row before the first hook carries
+        // repository context. Fill missing facts without rewriting the start.
+        ...(place.cwd !== undefined
+          ? { cwd: sql`COALESCE(${schema.tachoSessions.cwd}, ${place.cwd})` }
+          : {}),
+        ...(place.projectDir !== undefined
+          ? {
+              projectDir: sql`COALESCE(${schema.tachoSessions.projectDir}, ${place.projectDir})`,
+            }
+          : {}),
+        ...(place.gitBranch !== undefined
+          ? {
+              gitBranch: sql`COALESCE(${schema.tachoSessions.gitBranch}, ${place.gitBranch})`,
+            }
+          : {}),
+        ...(place.gitHeadShaStart !== undefined
+          ? {
+              gitHeadShaStart: sql`COALESCE(${schema.tachoSessions.gitHeadShaStart}, ${place.gitHeadShaStart})`,
+            }
+          : {}),
+        ...(place.gitDirtyStart !== undefined
+          ? {
+              gitDirtyStart: sql`COALESCE(${schema.tachoSessions.gitDirtyStart}, ${place.gitDirtyStart})`,
+            }
+          : {}),
         lastEventAt: now,
         seqCount: sql`GREATEST(${schema.tachoSessions.seqCount}, ${last.seq + 1})`,
         chainVerified: ok,
@@ -1358,6 +1391,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           derivedTier,
           derivedTier === TACHO_GATEWAY_TIER ? gatewayEvidenceAt : null,
           sessionGenesisHash,
+          ok,
         );
         const written = await tx
           .insert(schema.tachoSessions)
@@ -2055,6 +2089,47 @@ async function rollupFiles(
  * events rather than a re-read of the session row: the facts are already in
  * hand, and a transaction does not need another round trip to learn them.
  */
+/** Only explicit, consistent harness hooks can repair an ambient label.
+ * Model provider and agent naming are never harness evidence. The caller
+ * applies this only after chain verification and only to accepted fresh frames.
+ */
+export function recordedHarnessClaim(events: readonly TachoEvent[]) {
+  const hooks = events.filter((event) => event.source === "hook");
+  const first = hooks[0]?.agent;
+  if (
+    !first ||
+    !(WRAPPED_HARNESSES as readonly string[]).includes(first.harness) ||
+    first.runtime !== first.harness
+  )
+    return null;
+  if (
+    !hooks.every(
+      ({ agent }) =>
+        agent.harness === first.harness &&
+        agent.runtime === first.runtime &&
+        agent.agent_key === first.agent_key,
+    )
+  )
+    return null;
+  return {
+    harness: first.harness,
+    runtime: first.runtime,
+    agentKey: first.agent_key,
+  };
+}
+
+export function firstRecordedPlace(events: readonly TachoEvent[]) {
+  const first = <K extends keyof NonNullable<TachoEvent["context"]>>(key: K) =>
+    events.find((event) => event.context?.[key] !== undefined)?.context?.[key];
+  return {
+    cwd: first("cwd"),
+    projectDir: first("project_dir"),
+    gitBranch: first("git_branch"),
+    gitHeadShaStart: first("git_head_sha"),
+    gitDirtyStart: first("git_dirty"),
+  };
+}
+
 async function refreshSessionTitle(
   tx: Tx,
   ctx: Scope,

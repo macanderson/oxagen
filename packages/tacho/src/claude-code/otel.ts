@@ -232,6 +232,7 @@ export function redactedForDigest(attrs: Attrs): Attrs {
 
 /** Standard attributes every Claude Code record carries (data-model 2.2, 2.5). */
 export interface OtelStandard {
+  harness?: "claude-code" | "codex" | "cursor" | "stella";
   session_id?: string;
   prompt_id?: string;
   harness_event_sequence?: number;
@@ -259,7 +260,11 @@ export interface OtelStandard {
   agent_id?: string;
 }
 
-function standard(attrs: Attrs, resource: Attrs): OtelStandard {
+function standard(
+  attrs: Attrs,
+  resource: Attrs,
+  eventName?: string,
+): OtelStandard {
   const std: OtelStandard = {
     anthropic: {},
     context: {},
@@ -272,7 +277,25 @@ function standard(attrs: Attrs, resource: Attrs): OtelStandard {
   ) => {
     if (value !== undefined) target[key] = value;
   };
-  std.session_id = s(attrs, "session.id");
+  const service =
+    s(resource, "service.name")?.toLowerCase() ??
+    (eventName?.startsWith("claude_code.")
+      ? "claude-code"
+      : eventName?.startsWith("codex.")
+        ? "codex"
+        : undefined);
+  const harnesses = {
+    claude_code: "claude-code",
+    "claude-code": "claude-code",
+    codex: "codex",
+    "codex-cli": "codex",
+    codex_cli_rs: "codex",
+    cursor: "cursor",
+    stella: "stella",
+  } as const;
+  if (service !== undefined && Object.hasOwn(harnesses, service))
+    std.harness = harnesses[service as keyof typeof harnesses];
+  std.session_id = s(attrs, "session.id") ?? s(attrs, "conversation.id");
   std.prompt_id = s(attrs, "prompt.id");
   std.harness_event_sequence = n(attrs, "event.sequence");
   setIf(std.anthropic, "user_id_hash", s(attrs, "user.id"));
@@ -455,7 +478,11 @@ function logDraft(
     record.timeUnixNano !== undefined
       ? fromUnixNano(record.timeUnixNano)
       : (s(attrs, "event.timestamp") ?? new Date(0).toISOString());
-  const std = standard(attrs, resource);
+  const std = standard(
+    attrs,
+    resource,
+    record.body?.stringValue ?? s(attrs, "event.name"),
+  );
   const raw = digestJcs({
     body: record.body ?? null,
     attributes: redactedForDigest(attrs) as JsonValue,
@@ -796,7 +823,7 @@ function spanDraft(span: OtlpSpan, resource: Attrs): OtelDraft | undefined {
       : span.startTimeUnixNano !== undefined
         ? fromUnixNano(span.startTimeUnixNano)
         : new Date(0).toISOString();
-  const std = standard(attrs, resource);
+  const std = standard(attrs, resource, span.name);
   const spanRef = {
     ...(span.traceId !== undefined ? { trace_id: span.traceId } : {}),
     ...(span.spanId !== undefined ? { span_id: span.spanId } : {}),
@@ -1011,7 +1038,7 @@ export function normalizeOtlp(payload: OtlpPayload): OtlpNormalized {
               ? { ts: fromUnixNano(point.timeUnixNano) }
               : {}),
             attrs,
-            standard: standard(attrs, resource),
+            standard: standard(attrs, resource, metric.name),
           });
         }
       }

@@ -68,6 +68,8 @@ import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest"
 import { clearSteeringCacheForTests } from "./lib/tacho-steering";
 import {
   enforcementTierOf,
+  firstRecordedPlace,
+  recordedHarnessClaim,
   foldDelta,
   isObservedModelCall,
   tachoEventsIngestHandler,
@@ -530,7 +532,10 @@ function sessionNamed(db: FakeDb, where: unknown) {
  * probe (three strings in that order) is answered "present", which keeps every
  * case that predates `pendingColumns` on the migrated path.
  */
-function probeAnswer(db: FakeDb, query: unknown): Array<Record<string, number>> {
+function probeAnswer(
+  db: FakeDb,
+  query: unknown,
+): Array<Record<string, number>> {
   const chunks = (query as { queryChunks?: unknown[] }).queryChunks ?? [];
   const named = chunks.filter((c): c is string => typeof c === "string");
   if (named.length !== 3) return [{ "?column?": 1 }];
@@ -3941,5 +3946,125 @@ describe("observed metering from the model proxy", () => {
     expect(
       dialect.sqlToQuery(update?.values["numModelCalls"] as SQL).params,
     ).toEqual([0]);
+  });
+});
+
+describe("late run context and harness claims", () => {
+  function ambientThenHook() {
+    const opened = sealEvent(
+      unsealed("agent_start", {}, "otel_log", CLAUDE_CODE, { context: {} }),
+      GENESIS_CURSOR,
+    );
+    const hook = sealEvent(
+      unsealed(
+        "tool_call",
+        {},
+        "hook",
+        { runtime: "codex", harness: "codex" },
+        { context: { cwd: "/repo/src", project_dir: "/repo" } },
+      ),
+      opened.next,
+    );
+    return [opened.event, hook.event];
+  }
+
+  it.each([true, false])(
+    "only a verified initial batch repairs telemetry identity (%s)",
+    async (verified) => {
+      const db = fakeDb();
+      wire(db);
+      const events = ambientThenHook();
+      if (!verified)
+        (events[1] as TachoEvent).hash = `sha256:${"0".repeat(64)}`;
+      await tachoEventsIngestHandler(
+        { schema: "tacho.batch.v1", host_enrollment_id: HOST_PUBLIC, events },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        harness: verified ? "codex" : "claude-code",
+        runtime: verified ? "codex" : "claude-code",
+        cwd: verified ? "/repo/src" : null,
+        projectDir: verified ? "/repo" : null,
+        chainVerified: verified,
+      });
+    },
+  );
+
+  it("does not fill late context or change harness from an invalid continuation", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = ambientThenHook();
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: events.slice(0, 1),
+      },
+      CONTEXT,
+    );
+    (events[1] as TachoEvent).hash = `sha256:${"0".repeat(64)}`;
+    await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: events.slice(1),
+      },
+      CONTEXT,
+    );
+    const update = db.updates
+      .filter((entry) => entry.table === "sessions")
+      .at(-1)?.values;
+    expect(update).toBeDefined();
+    expect(update).not.toHaveProperty("harness");
+    expect(update).not.toHaveProperty("cwd");
+    expect(update).not.toHaveProperty("projectDir");
+  });
+
+  const seal = (draft: UnsealedTachoEvent) =>
+    sealEvent(draft, GENESIS_CURSOR).event;
+  it("takes the first recorded place even when telemetry opened without it", () => {
+    const frames = [
+      seal(
+        unsealed("agent_start", {}, "otel_log", CLAUDE_CODE, { context: {} }),
+      ),
+      seal(
+        unsealed("tool_call", {}, "hook", CLAUDE_CODE, {
+          context: {
+            cwd: "/repo/src",
+            project_dir: "/repo",
+            git_branch: "main",
+            git_head_sha: "abc",
+            git_dirty: false,
+          },
+        }),
+      ),
+      seal(
+        unsealed("tool_call", {}, "hook", CLAUDE_CODE, {
+          context: { cwd: "/elsewhere", git_head_sha: "def" },
+        }),
+      ),
+    ];
+    expect(firstRecordedPlace(frames)).toEqual({
+      cwd: "/repo/src",
+      projectDir: "/repo",
+      gitBranch: "main",
+      gitHeadShaStart: "abc",
+      gitDirtyStart: false,
+    });
+  });
+  it("repairs identity only from consistent explicit hooks, never a model", () => {
+    const codex = { runtime: "codex" as const, harness: "codex" };
+    const claimed = seal(unsealed("tool_call", {}, "hook", codex));
+    expect(recordedHarnessClaim([claimed])).toEqual({
+      runtime: "codex",
+      harness: "codex",
+      agentKey: "acme.core.cc-laptop",
+    });
+    expect(
+      recordedHarnessClaim([seal(unsealed("llm_call", {}, "otel_log", codex))]),
+    ).toBeNull();
+    expect(
+      recordedHarnessClaim([claimed, seal(unsealed("tool_call", {}))]),
+    ).toBeNull();
   });
 });

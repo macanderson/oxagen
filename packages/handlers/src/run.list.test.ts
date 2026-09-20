@@ -15,6 +15,8 @@ import {
   tachoPageQuery,
   tachoSessionQuery,
   ledgerIdentityQuery,
+  runRepository,
+  toTachoRunItem,
 } from "./run.list";
 import {
   ctx,
@@ -1011,3 +1013,102 @@ describe("a run row names who ran it, on what, with which model", () => {
 function out(page: { runs: readonly unknown[] }): unknown {
   return page.runs[0];
 }
+
+describe("run findability", () => {
+  it("returns recorded harness and repository facts without guessing from model", () => {
+    const row = tachoSession({
+      publicId: "tse_codex",
+      session: {
+        harness: "codex",
+        cwd: "/work/oxagen/apps/app",
+        projectDir: "/work/oxagen",
+        gitBranch: "fix/search",
+        gitHeadShaStart: "abc123",
+        modelInitial: "claude-sonnet-4",
+      },
+    });
+    const item = toTachoRunItem(row, undefined);
+    expect(item.harness).toBe("codex");
+    expect(item.workingDirectory).toBe("/work/oxagen/apps/app");
+    expect(item.repository).toEqual({
+      name: "oxagen",
+      root: "/work/oxagen",
+      branch: "fix/search",
+      commit: "abc123",
+    });
+    expect(runRepository({})).toBeNull();
+    expect(runRepository({ projectDir: "C:\\work\\repo\\" })?.name).toBe(
+      "repo",
+    );
+  });
+
+  it("applies literal search and filters inside both tenant queries before the page limit", () => {
+    const db = drizzle.mock({ schema });
+    const q = {
+      cursor: null,
+      limit: 5,
+      withoutWitnessRuns: true,
+      filters: {
+        search: "repo_100%",
+        repository: "oxagen",
+        status: "sealed" as const,
+        harness: "codex",
+        excludeRunId: "tse_self",
+      },
+    };
+    for (const query of [
+      ledgerPageQuery(db, SCOPE, q).toSQL(),
+      tachoPageQuery(db, SCOPE, q).toSQL(),
+    ]) {
+      expect(query.params).toContain(SCOPE.orgId);
+      expect(query.params).toContain(SCOPE.workspaceId);
+      expect(query.params).toContain("%repo\\_100\\%%");
+      expect(query.params).toContain("tse_self");
+      expect(query.params).toContain("sealed");
+      expect(query.sql).not.toContain("repo_100%");
+      expect(query.sql.indexOf(" ilike ")).toBeLessThan(
+        query.sql.indexOf(" limit "),
+      );
+    }
+    const tacho = tachoPageQuery(db, SCOPE, q).toSQL();
+    expect(tacho.params).toContain("codex");
+    expect(tacho.params).toContain("%oxagen%");
+    expect(ledgerPageQuery(db, SCOPE, q).toSQL().sql).toContain("false");
+  });
+
+  it("validates bounded filters and forwards them to both stores", async () => {
+    expect(runList.input.safeParse({ search: "x".repeat(201) }).success).toBe(
+      false,
+    );
+    expect(runList.input.safeParse({ excludeRunId: "bad" }).success).toBe(
+      false,
+    );
+    const stores = memoryStores([], []);
+    const calls: unknown[] = [];
+    const list = createRunListHandler({
+      ...stores,
+      queries: {
+        ...stores.queries,
+        ledgerPage: async (_scope, q) => {
+          calls.push(q.filters);
+          return [];
+        },
+        tachoPage: async (_scope, q) => {
+          calls.push(q.filters);
+          return [];
+        },
+      },
+    });
+    await list(
+      { limit: 10, search: "fix", harness: "codex", excludeRunId: "tse_self" },
+      ctx(),
+    );
+    expect(calls).toEqual(
+      Array(2).fill({
+        search: "fix",
+        harness: "codex",
+        excludeRunId: "tse_self",
+      }),
+    );
+  });
+});

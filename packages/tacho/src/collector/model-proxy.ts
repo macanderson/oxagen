@@ -394,21 +394,27 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     return value;
   }
 
-  function harnessFor(provider: ModelProvider): TachoHarness {
-    return provider === "anthropic" ? "claude-code" : "codex";
-  }
-
   function correlate(
     req: IncomingMessage,
     route: ModelRoute,
     body: () => Record<string, unknown> | undefined,
   ): { record?: SessionRecord; how: string } {
-    const harness = harnessFor(route.provider);
+    // Provider choice is not harness identity: every harness can use multiple vendors.
+    const claudeSession = header(req, "x-claude-code-session-id");
+    const codexSession = header(req, "session-id");
+    const harness: TachoHarness | undefined =
+      claudeSession !== undefined && codexSession === undefined
+        ? "claude-code"
+        : codexSession !== undefined && claudeSession === undefined
+          ? "codex"
+          : undefined;
     const explicit = header(req, TACHO_MODEL_SESSION_HEADER);
     const native =
-      route.provider === "anthropic"
-        ? header(req, "x-claude-code-session-id")
-        : header(req, "session-id");
+      harness === "claude-code"
+        ? claudeSession
+        : harness === "codex"
+          ? codexSession
+          : undefined;
     let id = explicit ?? native;
     let how = explicit !== undefined ? "header" : "harness_header";
     if (id === undefined && route.api === "anthropic.messages") {
@@ -417,12 +423,21 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     }
     if (id !== undefined && !isInternalSession(id) && id.length <= 256) {
       const known = deps.registry.get(id);
-      if (known !== undefined && !known.sealed) return { record: known, how };
+      if (
+        known !== undefined &&
+        !known.sealed &&
+        (harness === undefined || known.harness === harness)
+      )
+        return { record: known, how };
       // Seen here before any hook named it: open it as ambient, the way a
       // session first seen through OTel is opened, and let the hook adopt it.
-      const { record } = deps.registry.ensure(id, { harness, ambient: true });
+      const { record } = deps.registry.ensure(id, {
+        ...(harness !== undefined ? { harness } : {}),
+        ambient: true,
+      });
       return { record, how };
     }
+    if (harness === undefined) return { how: "unattributed" };
     const live = deps.registry
       .live()
       .filter(

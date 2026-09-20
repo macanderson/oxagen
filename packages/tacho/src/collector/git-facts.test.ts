@@ -7,6 +7,8 @@ import {
   parseNumstat,
   parsePorcelainZ,
   readGitFacts,
+  readWorkingTreePatch,
+  MAX_PATCH_BYTES,
   readWorkingTreeChanges,
   resolveNumstatPath,
   worktreeReconciledBody,
@@ -690,5 +692,53 @@ describe("canonicalRemote", () => {
     for (const secret of ["ghp_secret", "ghs_other", "user", "x-access-token"])
       for (const form of forms)
         expect(canonicalRemote(form)).not.toContain(secret);
+  });
+});
+
+describe("run discovery context and retained patch", () => {
+  it("captures the repository root even before its first commit", async () => {
+    const facts = await readGitFacts(
+      fakeGit({ "rev-parse --show-toplevel": "/work/project\n" }),
+      "/work/project/src",
+    );
+    expect(facts).toEqual({ project_dir: "/work/project" });
+  });
+  it("captures a bounded tracked snapshot against the observed baseline", async () => {
+    const calls: string[][] = [];
+    const patch = await readWorkingTreePatch(
+      fakeGit({ diff: "x".repeat(MAX_PATCH_BYTES + 1) }, calls),
+      "/repo",
+      "a".repeat(40),
+    );
+    expect(patch).toMatchObject({
+      truncated: true,
+      baseSha: "a".repeat(40),
+      scope: "tracked_worktree",
+    });
+    expect(Buffer.byteLength(patch!.patch)).toBe(MAX_PATCH_BYTES);
+    expect(calls[0]).toEqual(
+      expect.arrayContaining([
+        "--no-ext-diff",
+        "--no-textconv",
+        "a".repeat(40),
+      ]),
+    );
+  });
+  it("distinguishes a clean patch from a failed or unavailable baseline", async () => {
+    expect(
+      await readWorkingTreePatch(
+        fakeGit({ diff: "" }),
+        "/repo",
+        "a".repeat(40),
+      ),
+    ).toMatchObject({ patch: "", truncated: false });
+    expect(
+      await readWorkingTreePatch(fakeGit({}), "/repo", "a".repeat(40)),
+    ).toBeUndefined();
+    const calls: string[][] = [];
+    expect(
+      await readWorkingTreePatch(fakeGit({}, calls), "/repo"),
+    ).toBeUndefined();
+    expect(calls).toEqual([]);
   });
 });

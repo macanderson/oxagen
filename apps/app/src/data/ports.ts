@@ -143,11 +143,22 @@ export interface DataSource {
    * walks the recording to find its gaps.
    */
   runs: {
-    list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<RunPage>>;
+    list(
+      ctx: WsCtx,
+      q: {
+        cursor: string | null;
+        search?: string;
+        harness?: string;
+        status?: "live" | "sealed" | "halted";
+        repository?: string;
+        excludeRunId?: string;
+        limit?: number;
+      },
+    ): Promise<Read<RunPage>>;
     get(
       ctx: WsCtx,
       runId: string,
-      q: { framesAfter: string | null },
+      q: { framesAfter: string | null; includeDiff?: boolean },
     ): Promise<Read<RunDetail>>;
     frameBody(
       ctx: WsCtx,

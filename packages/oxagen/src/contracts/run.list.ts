@@ -210,6 +210,19 @@ export const runItemSchema = z
     model: runModelSchema.nullable(),
     /** The machine the run ran on; null for a ledger run. */
     machine: runMachineSchema.nullable(),
+    /** Recorded harness identity; never inferred from the model or agent label. */
+    harness: z.string().nullable().optional(),
+    workingDirectory: z.string().nullable().optional(),
+    repository: z
+      .object({
+        name: z.string().nullable(),
+        root: z.string().nullable(),
+        branch: z.string().nullable(),
+        commit: z.string().nullable(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     /** The generated name; null until `summarize_run` wrote one. */
     name: z.string().nullable(),
     summary: runSummarySchema.nullable(),
@@ -255,6 +268,13 @@ export const runList = registerCapability({
       limit: z.number().int().min(1).max(100).default(50),
       /** Opaque; only a cursor this capability returned is accepted. */
       cursor: z.string().max(256).optional(),
+      /** Literal case-insensitive substring, applied before pagination. */
+      search: z.string().trim().max(200).optional(),
+      harness: z.string().trim().min(1).max(100).optional(),
+      status: runStatusSchema.optional(),
+      /** Literal substring of the recorded repository root. */
+      repository: z.string().trim().max(500).optional(),
+      excludeRunId: runPublicIdSchema.optional(),
     })
     .strict(),
   output: z

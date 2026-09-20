@@ -33,6 +33,20 @@ export const FRAME_LIMIT_MAX = 500;
 export const FRAME_LIMIT_DEFAULT = 200;
 /** The longest a read may wait for an event past its cursor. */
 export const WAIT_MS_MAX = 20_000;
+export const RUN_DIFF_TEXT_MAX = 65_536;
+
+/** Captured tracked-worktree patch, not an attribution of every change to the agent. */
+export const runDiffSchema = z
+  .object({
+    patch: z.string().max(RUN_DIFF_TEXT_MAX).nullable(),
+    /** The base recorded with this patch, which may differ after a directory change. */
+    baseSha: z.string().max(128).nullable().optional(),
+    truncated: z.boolean(),
+    /** False when the bounded scan could not reach the latest reconciliation. */
+    complete: z.boolean(),
+    seq: z.string().regex(/^\d+$/).nullable(),
+  })
+  .strict();
 
 export const frameFidelitySchema = z.enum(["full", "digest_only"]);
 
@@ -127,6 +141,8 @@ export const runGet = registerCapability({
       runId: runPublicIdSchema,
       /** A frame or page cursor from an earlier read; omitted reads from the start. */
       framesAfter: z.string().max(256).optional(),
+      /** Read retained patch content only for an explicit detail request. */
+      includeDiff: z.boolean().optional(),
       frameLimit: z
         .number()
         .int()
@@ -141,6 +157,7 @@ export const runGet = registerCapability({
     .object({
       run: runItemSchema,
       frames: runFramePageSchema,
+      diff: runDiffSchema.optional(),
       /**
        * The worker run this run witnessed (spec §8.5 "Stamping"; ADR-064): a
        * witness run renders its own tab set. Null for every other run.

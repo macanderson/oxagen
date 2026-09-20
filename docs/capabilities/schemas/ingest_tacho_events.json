@@ -21830,6 +21830,16 @@
                 "body": {
                   "type": "object",
                   "properties": {
+                    "diff_truncated": {
+                      "type": "boolean"
+                    },
+                    "diff_base_sha": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "diff_scope": {
+                      "const": "tracked_worktree"
+                    },
                     "observed_changes": {
                       "type": "array",
                       "items": {

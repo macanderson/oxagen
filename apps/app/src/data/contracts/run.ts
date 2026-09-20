@@ -100,7 +100,17 @@ export const RunFrameBody = z.object({
 export type RunFrameBody = z.infer<typeof RunFrameBody>;
 
 /** `get_run`: the header row and one page of the run's frames. */
+export const RunDiff = z.object({
+  baseSha: z.string().nullable().optional(),
+  patch: z.string().nullable(),
+  truncated: z.boolean(),
+  complete: z.boolean(),
+  seq: z.string().nullable(),
+});
+export type RunDiff = z.infer<typeof RunDiff>;
+
 export const RunDetail = z.object({
+  diff: RunDiff.optional(),
   run: RunRow,
   frames: RunFramePage,
   /**
