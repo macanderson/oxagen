@@ -3,7 +3,7 @@ import { schema as db, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
-import { generateObjectFor, resolveModelFundingSource } from "@oxagen/ai";
+import { generateObjectFor, selectModelForOrg } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
 import { z } from "zod";
 import { logger } from "../logger";
@@ -985,11 +985,12 @@ export const [schemaReconcile] = createFunction(
                   derivedProps: z.record(z.unknown()),
                 });
                 const { object } = await generateObjectFor({
-                  // Platform-vs-org funding, resolved rather than assumed. The parameter is
-                  // required for that reason: it used to default to `platform`, and every
-                  // caller took the default, so an organisation that had brought its own key
-                  // was billed for this call anyway (ADR-053 §3).
-                  fundedBy: (await resolveModelFundingSource(orgId)).fundedBy,
+                  // Model and funding resolved together (ADR-053 §3, ADR-131): the key the
+                  // call is built on and the party billed for it must be one answer. Asking
+                  // only for `fundedBy` and letting `selectModel` fall back to the shared key
+                  // is how an organisation on its own key came to be reported as having paid
+                  // for a call Oxagen's key actually paid for.
+                  ...(await selectModelForOrg(orgId)),
                   chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
                   schema: missingSchema,
                   prompt: `You are completing missing required schema properties for a knowledge graph node with label "${label}".
@@ -1206,11 +1207,12 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                     derivedProps: z.record(z.unknown()),
                   });
                   const { object } = await generateObjectFor({
-                    // Platform-vs-org funding, resolved rather than assumed. The parameter is
-                    // required for that reason: it used to default to `platform`, and every
-                    // caller took the default, so an organisation that had brought its own key
-                    // was billed for this call anyway (ADR-053 §3).
-                    fundedBy: (await resolveModelFundingSource(orgId)).fundedBy,
+                    // Model and funding resolved together (ADR-053 §3, ADR-131): the key the
+                    // call is built on and the party billed for it must be one answer. Asking
+                    // only for `fundedBy` and letting `selectModel` fall back to the shared key
+                    // is how an organisation on its own key came to be reported as having paid
+                    // for a call Oxagen's key actually paid for.
+                    ...(await selectModelForOrg(orgId)),
                     chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
                     schema: missingSchema,
                     prompt: `You are completing missing required schema properties for a knowledge graph relationship of type "${relType}".

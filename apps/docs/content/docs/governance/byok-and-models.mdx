@@ -44,6 +44,20 @@ An organisation can pay its model vendor directly instead of buying tokens throu
 
 Governed actions are billed the same way either way. The key only changes who pays for tokens.
 
+### The key Oxagen uses when you do not bring one
+
+Oxagen does not run every customer on one shared key. When your organisation is created, Oxagen mints an OpenRouter key on its own account for your organisation alone, and every assistant turn that Oxagen pays for runs on that key.
+
+This changes nothing about your bill. Oxagen still pays the vendor, still reports your tokens in full, and still charges them at the vendor rate as assistant usage, with no margin. What it adds is a second record: OpenRouter reports usage per key, so the figure on your invoice can be checked against the vendor's own figure for the key that serves you.
+
+Three things are worth knowing about it:
+
+- **The key is named for your organisation and the person who created it**, in the form `oxagen/<your-slug>/<creator-email>`. The name is fixed when the key is minted. Renaming your organisation later does not rewrite it, because the name is a label an operator reads, and the key's identity is the record behind it.
+- **The key carries a daily spend ceiling**, $25 by default. It bounds one organisation's bad day. It is not what bounds an ordinary account: the monthly assistant spend cap below is reached first.
+- **You never see the key and never hold it.** It is Oxagen's key on Oxagen's vendor account. Bringing your own key, above, is the arrangement where you hold the key and pay the vendor.
+
+If Oxagen cannot mint the key, your organisation runs on Oxagen's shared key instead. The assistant works, the bill is the same, and what is missing is the per-key vendor figure until Oxagen fills it in.
+
 Oxagen decides who pays once per turn, before any model call. The same answer picks the key the call is made on and whether the tokens are billed:
 
 <Mermaid

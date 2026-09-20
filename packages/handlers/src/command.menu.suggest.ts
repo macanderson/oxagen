@@ -12,11 +12,7 @@
  *     auditable via the kernel's capability.invoked security event.
  */
 import { z } from "zod";
-import {
-  generateObjectFor,
-  selectModel,
-  resolveModelFundingSource,
-} from "@oxagen/ai";
+import { generateObjectFor, selectModelForOrg } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { commandMenuSuggest } from "@oxagen/oxagen/contracts/command.menu.suggest";
@@ -132,19 +128,19 @@ export const commandMenuSuggestHandler: CapabilityHandler<
   let suggestions: z.output<typeof suggestionSchema>["suggestions"] = [];
   try {
     const { object } = await generateObjectFor({
-      // Platform-vs-org funding, resolved rather than assumed. The parameter is
-      // required for that reason: it used to default to `platform`, and every
-      // caller took the default, so an organisation that had brought its own key
-      // was billed for this call anyway (ADR-053 §3).
-      fundedBy: (await resolveModelFundingSource(ctx.orgId)).fundedBy,
+      // Model and funding resolved together (ADR-053 §3, ADR-131): the key the
+      // call is built on and the party billed for it must be one answer. Asking
+      // only for `fundedBy` and letting `selectModel` fall back to the shared key
+      // is how an organisation on its own key came to be reported as having paid
+      // for a call Oxagen's key actually paid for.
+      // Use the fast tier — cheapest model, minimal latency, per spec §7 and
+      // CLAUDE.md operating model (Haiku for single-file reads/lookups).
+      ...(await selectModelForOrg(ctx.orgId, { tier: "fast" })),
       chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: suggestionSchema,
       system: SUGGESTION_SYSTEM_PROMPT,
       prompt,
       temperature: 0.4,
-      // Use the fast tier — cheapest model, minimal latency, per spec §7 and
-      // CLAUDE.md operating model (Haiku for single-file reads/lookups).
-      model: selectModel({ tier: "fast" }),
       telemetry: {
         orgId,
         workspaceId,

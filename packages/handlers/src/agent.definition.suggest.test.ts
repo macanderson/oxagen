@@ -11,7 +11,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@oxagen/ai", () => ({
   // Funding is resolved before the model call (ADR-053 §3); an org with no
   // stored key is platform-funded, which is what these fixtures exercise.
-  resolveModelFundingSource: async () => ({ fundedBy: "platform" }),
+  // ADR-131: the model and who pays for it are one answer, so the mock
+  // returns both. A fixture organisation has no minted key, so the
+  // model is the shared one and the turn is platform-funded.
+  selectModelForOrg: async () => ({
+    model: { modelId: "test/model" },
+    fundedBy: "platform",
+  }),
   generateObjectFor: mocks.generateObjectFor,
 }));
 

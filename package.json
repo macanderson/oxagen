@@ -41,6 +41,7 @@
     "check:db-migrate-script": "bash infra/tools/tests/run-all.sh",
     "db:reset": "tsx --env-file-if-exists=.env.local tools/scripts/db-reset.ts",
     "db:seed-iam": "tsx --env-file-if-exists=.env.local tools/scripts/seed-iam-defaults.ts",
+    "db:assistant-keys": "tsx --env-file-if-exists=.env.local tools/scripts/assistant-model-keys.ts",
     "check:brand": "node tools/scripts/sync-brand-assets.mjs --check",
     "check:manifest": "node tools/scripts/check_manifest.mjs",
     "inngest:verify": "tsx --env-file-if-exists=.env.local tools/scripts/inngest-verify.ts",

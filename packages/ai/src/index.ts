@@ -17,6 +17,11 @@ export {
 } from "./funding-source";
 export type { ModelFundingSource, TurnFunding } from "./funding-source";
 
+// The pair applied together. Prefer this to calling resolveModelFundingSource
+// and selectModel separately — see the module comment for what that costs.
+export { selectModelForOrg } from "./select-model-for-org";
+export type { OrgModelSelection } from "./select-model-for-org";
+
 // The ledger reasons a caller needs to satisfy `chargeReason`, re-exported
 // from `@oxagen/billing` rather than left to be imported past this package.
 //

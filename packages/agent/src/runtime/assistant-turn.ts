@@ -256,7 +256,10 @@ export async function prepareAssistantTurn(
       : resolvedTier
         ? { tier: resolvedTier }
         : {}),
-    ...(funding.fundedBy === "org" ? { credential: funding.credential } : {}),
+    // Unconditional on purpose (ADR-131): a platform-funded turn can also
+    // carry a key — the one Oxagen minted for this organisation — and a
+    // narrowing on `fundedBy` would drop it and spend the shared key instead.
+    ...(funding.modelKey ? { credential: funding.modelKey } : {}),
   });
   const modelId = modelIdOf(turnModel);
   const effort =
@@ -267,7 +270,7 @@ export async function prepareAssistantTurn(
       requestId: ctx.requestId,
       modelId,
       fundedBy: funding.fundedBy,
-      ...(funding.fundedBy === "org" ? { keyHint: funding.keyHint } : {}),
+      ...(funding.keyHint ? { keyHint: funding.keyHint } : {}),
     },
     "assistant turn model",
   );
@@ -478,7 +481,9 @@ async function runPreparedTurn(
       },
       model: p.turnModel,
       ...(p.tier ? { tier: p.tier } : {}),
-      ...(funding.fundedBy === "org" ? { credential: funding.credential } : {}),
+      // See the note on the selectModel call above: `modelKey`, not `fundedBy`,
+      // decides which key the turn spends.
+      ...(funding.modelKey ? { credential: funding.modelKey } : {}),
       governance: { ...materialised.governance, ...belt.governance },
       principal: userId,
       system: resolvePrompt({

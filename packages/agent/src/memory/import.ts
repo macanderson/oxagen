@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { generateObjectFor, resolveModelFundingSource } from "@oxagen/ai";
+import { generateObjectFor, selectModelForOrg } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
 import {
   memoryClassEnum,
@@ -74,11 +74,12 @@ export async function extractMemoriesFromDocument(args: {
   ctx: CapabilityContext;
 }): Promise<ExtractedMemory[]> {
   const { object } = await generateObjectFor({
-    // Platform-vs-org funding, resolved rather than assumed. The parameter is
-    // required for that reason: it used to default to `platform`, and every
-    // caller took the default, so an organisation that had brought its own
-    // key was billed for this call anyway (ADR-053 §3).
-    fundedBy: (await resolveModelFundingSource(args.ctx.orgId)).fundedBy,
+    // Model and funding resolved together (ADR-053 §3, ADR-131): the key the
+    // call is built on and the party billed for it must be one answer. Asking
+    // only for `fundedBy` and letting `selectModel` fall back to the shared key
+    // is how an organisation on its own key came to be reported as having paid
+    // for a call Oxagen's key actually paid for.
+    ...(await selectModelForOrg(args.ctx.orgId)),
     chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
     schema: extractionSchema,
     system: EXTRACTION_SYSTEM,

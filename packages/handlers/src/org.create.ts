@@ -15,6 +15,7 @@ import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
 import { openOnboardingGate } from "./lib/onboarding";
 import { bootstrapWorkspace } from "./workspace-bootstrap";
+import { provisionAssistantModelKey } from "./assistant-key-bootstrap";
 
 /**
  * The org bootstrap: the organization row, the creator's owner membership,
@@ -211,6 +212,23 @@ export const organizationCreateHandler: CapabilityHandler<
       logger.error(
         { err, orgId: created.org.id },
         "organization.create: failed to record security event",
+      );
+    });
+
+    // The organisation's own OpenRouter key (ADR-131). Detached for the same
+    // reason the security event is: it calls a third party, and neither the
+    // person signing up nor the transaction that just committed should wait
+    // on OpenRouter. An organisation whose key is not minted serves on the
+    // shared key, so this failing costs reconciliation granularity and
+    // nothing a customer can see.
+    provisionAssistantModelKey({
+      orgId: created.org.id,
+      orgSlug: created.org.slug,
+      userId,
+    }).catch((err: unknown) => {
+      logger.error(
+        { err, orgId: created.org.id },
+        "organization.create: assistant model key provisioning threw",
       );
     });
 

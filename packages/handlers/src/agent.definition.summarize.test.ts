@@ -3,7 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Mock the LLM layer ────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
-  selectModel: vi.fn(() => "mock-model"),
+  selectModelForOrg: vi.fn(async () => ({
+    model: "mock-model",
+    fundedBy: "platform",
+  })),
   resolveAgent: vi.fn(),
   withTenantDb: vi.fn(),
 }));
@@ -11,9 +14,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@oxagen/ai", () => ({
   // Funding is resolved before the model call (ADR-053 §3); an org with no
   // stored key is platform-funded, which is what these fixtures exercise.
-  resolveModelFundingSource: async () => ({ fundedBy: "platform" }),
+  // The model and the party billed for it are one answer (ADR-053 §3,
+  // ADR-131), so the mock returns both. A fixture organisation has neither a
+  // key it brought nor one Oxagen minted for it, so it is served by the
+  // shared model and the tokens are platform-funded.
   generateObjectFor: mocks.generateObjectFor,
-  selectModel: mocks.selectModel,
+  selectModelForOrg: mocks.selectModelForOrg,
 }));
 
 vi.mock("@oxagen/agent/handlers/_agent-definition", () => ({
@@ -142,7 +148,10 @@ const INPUT = { agentId: "agt_1" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.selectModel.mockReturnValue("mock-model");
+  mocks.selectModelForOrg.mockResolvedValue({
+    model: "mock-model",
+    fundedBy: "platform",
+  });
 });
 
 describe("agentDefinitionSummarizeHandler", () => {
@@ -164,7 +173,9 @@ describe("agentDefinitionSummarizeHandler", () => {
     expect(out.checksum).toBe(CHECKSUM);
     // The model call happened, on the fast tier, with tenant telemetry.
     expect(mocks.generateObjectFor).toHaveBeenCalledTimes(1);
-    expect(mocks.selectModel).toHaveBeenCalledWith({ tier: "fast" });
+    expect(mocks.selectModelForOrg).toHaveBeenCalledWith(TEST_CTX.orgId, {
+      tier: "fast",
+    });
     const call = mocks.generateObjectFor.mock.calls[0]![0] as {
       model: unknown;
       temperature: number;

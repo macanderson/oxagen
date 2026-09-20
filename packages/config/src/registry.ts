@@ -1177,6 +1177,36 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OPENROUTER_MANAGEMENT_KEY: {
+    group: "AI providers",
+    description:
+      "OpenRouter provisioning key, not an inference key (ADR-131). Mints one " +
+      "capped token per organisation so the vendor reports usage per customer. " +
+      "It can create, read, disable and delete every key in the account, so it " +
+      "is read in one module and never reaches a provider client or a log. " +
+      "Unset means no key is minted and every organisation serves on the " +
+      "shared key.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OPENROUTER_ORG_KEY_DAILY_LIMIT_USD: {
+    group: "AI providers",
+    description:
+      "Daily USD ceiling on each organisation's minted OpenRouter key. A blast " +
+      "radius, not a budget: the credit gate bounds what a customer may spend, " +
+      "and this stops one runaway loop draining the account every other " +
+      "customer's assistant depends on. A key that hits it stops answering " +
+      "until midnight UTC, so set it well above a heavy legitimate day.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "25" },
+  },
   STELLA_SERVE_URL: {
     group: "Agent engine",
     description:

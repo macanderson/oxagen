@@ -2,14 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelMessage } from "ai";
 
 // Mock the metered AI port so no real model is called. `generateObjectFor` is
-// the only LLM entry point; `selectModel` just returns an opaque handle.
+// the only LLM entry point; `selectModelForOrg` returns an opaque handle and
+// the organisation's funding answer together.
 const generateObjectFor = vi.fn();
 vi.mock("@oxagen/ai", () => ({
   // Funding is resolved before the model call (ADR-053 §3); an org with no
   // stored key is platform-funded, which is what these fixtures exercise.
-  resolveModelFundingSource: async () => ({ fundedBy: "platform" }),
+  // The model and the party billed for it are one answer (ADR-053 §3,
+  // ADR-131), so the mock returns both. A fixture organisation has neither a
+  // key it brought nor one Oxagen minted for it, so it is served by the
+  // shared model and the tokens are platform-funded.
+  selectModelForOrg: async () => ({
+    model: { modelId: "test/model" },
+    fundedBy: "platform",
+  }),
   generateObjectFor: (...args: unknown[]) => generateObjectFor(...args),
-  selectModel: () => "fast-model" as unknown,
 }));
 
 // Silence the best-effort warn logger.

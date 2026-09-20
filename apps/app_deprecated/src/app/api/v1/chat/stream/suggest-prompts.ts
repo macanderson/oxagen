@@ -1,10 +1,6 @@
 import { z } from "zod";
 import type { ModelMessage } from "ai";
-import {
-  generateObjectFor,
-  selectModel,
-  resolveModelFundingSource,
-} from "@oxagen/ai";
+import { generateObjectFor, selectModelForOrg } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
 import { logger } from "@oxagen/handlers/logger";
 
@@ -329,16 +325,16 @@ export async function generateTurnSuggestions(
   sections.push(`Conversation so far:\n\n${renderTranscript(turns)}`);
 
   try {
-    // Platform-vs-org funding, resolved rather than assumed. The parameter is
-    // required for that reason: it used to default to `platform`, and every
-    // caller took the default, so an organisation that had brought its own key
-    // was billed for this call anyway (ADR-053 §3).
-    const funding = await resolveModelFundingSource(input.orgId);
+    // Model and funding resolved together (ADR-053 §3, ADR-131): the key the
+    // call is built on and the party billed for it must be one answer. Asking
+    // only for `fundedBy` and letting `selectModel` fall back to the shared key
+    // is how an organisation on its own key came to be reported as having paid
+    // for a call Oxagen's key actually paid for.
+    const selection = await selectModelForOrg(input.orgId, { tier: "fast" });
     const generation = generateObjectFor({
-      fundedBy: funding.fundedBy,
+      ...selection,
       chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: suggestionsSchema,
-      model: selectModel({ tier: "fast" }),
       system: suggestionSystemPrompt(),
       prompt: sections.join("\n\n"),
       // A little warmth so the trio varies turn-to-turn and surfaces ideas the

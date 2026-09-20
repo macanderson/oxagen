@@ -6,8 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
   modelIdOf: vi.fn(),
-  resolveModelFundingSource: vi.fn(),
-  selectModel: vi.fn(),
+  selectModelForOrg: vi.fn(),
   withTenantDb: vi.fn(),
   runInTenantScope: vi.fn(),
   ledgerStore: vi.fn(),
@@ -36,8 +35,7 @@ vi.mock("../create-function", () => ({
 vi.mock("@oxagen/ai", () => ({
   generateObjectFor: mocks.generateObjectFor,
   modelIdOf: mocks.modelIdOf,
-  resolveModelFundingSource: mocks.resolveModelFundingSource,
-  selectModel: mocks.selectModel,
+  selectModelForOrg: mocks.selectModelForOrg,
 }));
 vi.mock("@oxagen/database", () => {
   // The org-wide seam is mocked as the SAME function as the tenant
@@ -235,11 +233,13 @@ describe("run.summarize job", () => {
       row(1, "llm_call", "What is in README?"),
     ]);
     mocks.evidenceStore.mockReturnValue({ getBody });
-    mocks.resolveModelFundingSource.mockResolvedValue({
+    // ADR-131: the model and the party billed for it arrive together, so a
+    // caller cannot build the client on one organisation's key and bill
+    // another. A fixture organisation has no key of its own.
+    mocks.selectModelForOrg.mockResolvedValue({
+      model: { id: "fast" },
       fundedBy: "platform",
-      credential: null,
     });
-    mocks.selectModel.mockReturnValue({ id: "fast" });
     mocks.modelIdOf.mockReturnValue("fast-model");
     mocks.generateObjectFor.mockResolvedValue({
       object: { name: "Review PR 42", summary: "Left two comments." },

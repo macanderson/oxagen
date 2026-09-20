@@ -7,21 +7,23 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createRecord } from "../record";
 import type { Namespace, Provenance } from "../types";
 
-// Mock the AI chokepoint. `selectModel` returns a sentinel; `generateObjectFor`
+// Mock the AI chokepoint. `selectModelForOrg` returns a sentinel model and the
+// organisation's funding answer together (ADR-131); `generateObjectFor`
 // is controlled per-test. `vi.hoisted` lets the mock factory reference these.
-const { generateObjectFor, selectModel, resolveModelFundingSource } =
-  vi.hoisted(() => ({
-    generateObjectFor: vi.fn(),
-    selectModel: vi.fn(() => ({ modelId: "test/fast" })),
-    // Defaults to `customer` deliberately. `resolveModelFundingSource` calls
-    // guessing `platform` the one direction the funding seam must never err in,
-    // so a test whose stub guessed it would be unable to catch that mistake.
-    resolveModelFundingSource: vi.fn(async () => ({ fundedBy: "customer" })),
-  }));
+const { generateObjectFor, selectModelForOrg } = vi.hoisted(() => ({
+  generateObjectFor: vi.fn(),
+  // Defaults to `customer` deliberately. Guessing `platform` is the one
+  // direction the funding seam must never err in, so a test whose stub guessed
+  // it would be unable to catch that mistake. The model travels with the
+  // funding answer (ADR-131) because a key and its payer are one decision.
+  selectModelForOrg: vi.fn(async () => ({
+    model: { modelId: "test/fast" },
+    fundedBy: "customer",
+  })),
+}));
 vi.mock("@oxagen/ai", () => ({
   generateObjectFor,
-  selectModel,
-  resolveModelFundingSource,
+  selectModelForOrg,
   CREDIT_REASONS: { CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens" },
 }));
 
@@ -90,7 +92,9 @@ describe("extractFactFromCluster — LLM path", () => {
 
     expect(generateObjectFor).toHaveBeenCalledTimes(1);
     // Fast/cheap tier + temperature 0 for a deterministic background job.
-    expect(selectModel).toHaveBeenCalledWith({ tier: "fast" });
+    expect(selectModelForOrg).toHaveBeenCalledWith(TELEMETRY.telemetry.orgId, {
+      tier: "fast",
+    });
     expect(generateObjectFor.mock.calls[0]![0]).toMatchObject({
       temperature: 0,
     });
@@ -113,7 +117,10 @@ describe("extractFactFromCluster — LLM path", () => {
     // ADR-053: an organisation that brought its own key must not be billed for
     // the call its key answered. The resolver is asked per organisation, and
     // whatever it answers is what reaches the chokepoint unchanged.
-    resolveModelFundingSource.mockResolvedValueOnce({ fundedBy: "customer" });
+    selectModelForOrg.mockResolvedValueOnce({
+      model: { modelId: "test/fast" },
+      fundedBy: "customer",
+    });
     generateObjectFor.mockResolvedValueOnce({
       object: { domain: "general" },
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
@@ -121,9 +128,9 @@ describe("extractFactFromCluster — LLM path", () => {
 
     await extractFactFromCluster(cluster, TELEMETRY);
 
-    expect(resolveModelFundingSource).toHaveBeenCalledWith(
-      TELEMETRY.telemetry.orgId,
-    );
+    expect(selectModelForOrg).toHaveBeenCalledWith(TELEMETRY.telemetry.orgId, {
+      tier: "fast",
+    });
     expect(generateObjectFor.mock.calls[0]![0]).toMatchObject({
       fundedBy: "customer",
       // The reason the assistant spend cap sums. A reason outside that sum is
@@ -133,7 +140,10 @@ describe("extractFactFromCluster — LLM path", () => {
   });
 
   it("passes a platform funding source through unchanged", async () => {
-    resolveModelFundingSource.mockResolvedValueOnce({ fundedBy: "platform" });
+    selectModelForOrg.mockResolvedValueOnce({
+      model: { modelId: "test/fast" },
+      fundedBy: "platform",
+    });
     generateObjectFor.mockResolvedValueOnce({
       object: { domain: "general" },
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
@@ -232,7 +242,7 @@ describe("extractFactFromCluster — reporting a failure it swallows", () => {
 
   it("reports a funding failure as phase 'funding', and still falls back", async () => {
     const onError = vi.fn();
-    resolveModelFundingSource.mockRejectedValueOnce(
+    selectModelForOrg.mockRejectedValueOnce(
       new Error("No active tenant scope"),
     );
 

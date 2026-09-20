@@ -295,10 +295,15 @@ export async function POST(request: NextRequest): Promise<Response> {
     { orgId: tenant.id, workspaceId: workspace.id },
     () => resolveModelFundingSource(tenant.id),
   );
-  // Spread into every `selectModel` call below, so under org funding no model
-  // this turn touches is built on the platform key (ADR-053 §2).
-  const modelCredential =
-    funding.fundedBy === "org" ? { credential: funding.credential } : {};
+  // Spread into every `selectModel` call below, so no model this turn touches
+  // is built on a key other than the one this organisation resolved to
+  // (ADR-053 §2). Keyed on `modelKey` rather than on `fundedBy`, because a
+  // platform-funded turn can also have its own key — the one Oxagen minted
+  // for this organisation — and narrowing on `fundedBy` would drop it and
+  // spend the shared key instead (ADR-131).
+  const modelCredential = funding.modelKey
+    ? { credential: funding.modelKey }
+    : {};
 
   // ── Pre-turn credit admission gate ───────────────────────────────────────────
   // Run the SAME admission gate (assertCanStartTurn) that already fires on every
@@ -372,7 +377,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       workspaceId: workspace.id,
       modelId: modelIdOf(turnModel),
       fundedBy: funding.fundedBy,
-      ...(funding.fundedBy === "org" ? { keyHint: funding.keyHint } : {}),
+      ...(funding.keyHint ? { keyHint: funding.keyHint } : {}),
     },
     "[chat/stream] turn model",
   );
@@ -1148,9 +1153,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           },
           model: turnModel,
           ...(resolvedTier ? { tier: resolvedTier } : {}),
-          ...(funding.fundedBy === "org"
-            ? { credential: funding.credential }
-            : {}),
+          ...modelCredential,
           governance: toolGovernance,
           principal: session.user.id,
           system: systemPrompt,

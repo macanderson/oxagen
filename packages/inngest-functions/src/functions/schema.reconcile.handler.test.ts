@@ -9,9 +9,13 @@ const mocks = vi.hoisted(() => ({
   sessionClose: vi.fn(),
   scopedSession: vi.fn(),
   generateObjectFor: vi.fn(),
-  resolveModelFundingSource: vi
-    .fn()
-    .mockResolvedValue({ fundedBy: "platform" }),
+  // ADR-131: the model and who pays for it are one answer, so the mock
+  // returns both. A fixture organisation has no minted key, so the
+  // model is the shared one and the turn is platform-funded.
+  selectModelForOrg: async () => ({
+    model: { modelId: "test/model" },
+    fundedBy: "platform",
+  }),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
@@ -88,9 +92,10 @@ vi.mock("@oxagen/ontology/tenant", () => ({
 
 vi.mock("@oxagen/ai", () => ({
   generateObjectFor: mocks.generateObjectFor,
-  // The handler resolves funding before each derivation call (ADR-053 §3);
-  // an org with no stored key is platform-funded, which is this fixture.
-  resolveModelFundingSource: mocks.resolveModelFundingSource,
+  // The handler resolves the model and the funding together before each
+  // derivation call (ADR-053 §3, ADR-131); an org with no key of either kind
+  // is served by the shared model and platform-funded, which is this fixture.
+  selectModelForOrg: mocks.selectModelForOrg,
 }));
 
 vi.mock("../logger", () => ({
