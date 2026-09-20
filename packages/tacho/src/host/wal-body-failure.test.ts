@@ -6,11 +6,25 @@ import { minimalSession } from "../test-helpers";
 import { scratchPaths } from "./test-support";
 import { Wal } from "./wal";
 
-const fault = vi.hoisted(() => ({ partialBodyWrite: false }));
+const fault = vi.hoisted(() => ({
+  partialBodyWrite: false,
+  refuseWholeBodyRead: false,
+}));
 vi.mock("node:fs", async (original) => {
   const fs = await original<typeof import("node:fs")>();
   return {
     ...fs,
+    readFileSync: (...args: Parameters<typeof fs.readFileSync>) => {
+      if (
+        fault.refuseWholeBodyRead &&
+        String(args[0]).endsWith(".bodies.jsonl")
+      ) {
+        throw new Error(
+          "Whole body-file reads are forbidden in this regression",
+        );
+      }
+      return fs.readFileSync(...args);
+    },
     appendFileSync: (...args: Parameters<typeof fs.appendFileSync>) => {
       if (fault.partialBodyWrite && String(args[0]).endsWith(".bodies.jsonl")) {
         fault.partialBodyWrite = false;
@@ -25,6 +39,7 @@ vi.mock("node:fs", async (original) => {
 });
 afterEach(() => {
   fault.partialBodyWrite = false;
+  fault.refuseWholeBodyRead = false;
 });
 
 function setup() {
@@ -99,6 +114,30 @@ describe("WAL body failure isolation", () => {
       2,
     );
     expect(restarted.bodiesFor(session)).toHaveLength(1);
+  });
+
+  it("streams body records across chunk boundaries while skipping a torn record", () => {
+    const { session, wal, bodyPath, body, report } = setup();
+    const large = {
+      ...body(0),
+      bytes: new TextEncoder().encode("λ".repeat(90_000)),
+    };
+    wal.append(session.slice(0, 1), [large]);
+    appendFileSync(bodyPath, "{torn-body\n");
+    wal.append(session.slice(1), [body(1)]);
+    fault.refuseWholeBodyRead = true;
+    const restored = wal.bodiesFor(session);
+    expect(restored.map((entry) => entry.event_id_idem)).toEqual([
+      large.event_id_idem,
+      body(1).event_id_idem,
+    ]);
+    expect(Buffer.from(restored[0]?.bytes_base64 ?? "", "base64")).toEqual(
+      Buffer.from(large.bytes),
+    );
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "invalid_body_record" }),
+    );
   });
 
   it("reports malformed records once per session read", () => {
