@@ -10,7 +10,12 @@
 export type TomlValue = string | number | boolean | TomlValue[] | TomlTable;
 export type TomlTable = { [key: string]: TomlValue };
 
-/** Why a line does not parse; the editor prints the catalog sentence for the code at its line. */
+/**
+ * Why a line does not parse; the editor prints the catalog sentence for the
+ * code at its line. `unreadable_value` also covers an escape TOML does not
+ * define, such as `\q` or a `\u` with the wrong digit count, because a
+ * value that cannot be decoded is a value that cannot be read.
+ */
 type TomlErrorCode =
   | "unterminated_string"
   | "unterminated_array"
@@ -36,12 +41,24 @@ class TomlSyntaxError extends Error {
   }
 }
 
+/**
+ * TOML's basic-string escapes, the set `tomlBasicString` in
+ * `packages/tacho/src/host/stella-writer.ts` emits. `\u` and `\U` take a
+ * hex code and are handled in `unescape`; anything else after a backslash
+ * is a refusal, since dropping the backslash would silently change the value.
+ */
 const ESCAPES: ReadonlyMap<string, string> = new Map([
-  ["n", "\n"],
+  ["b", "\b"],
   ["t", "\t"],
+  ["n", "\n"],
+  ["f", "\f"],
   ["r", "\r"],
   ['"', '"'],
   ["\\", "\\"],
+]);
+const UNICODE_ESCAPE_DIGITS: ReadonlyMap<string, number> = new Map([
+  ["u", 4],
+  ["U", 8],
 ]);
 const KEY = /^([A-Za-z0-9_.-]+|"[^"]*")\s*=/;
 const TABLE_HEADER = /^\[\[?([^\]]+)\]\]?\s*(#.*)?$/;
@@ -85,6 +102,67 @@ function setPath(table: TomlTable, path: string, value: TomlValue): void {
 
 const unquote = (key: string): string => key.replace(/^"|"$/g, "");
 
+/**
+ * The index of the first `"""` at or after `from` that is not escaped, or
+ * -1. A fence is escaped when an odd number of backslashes precedes it: in
+ * `\\"""` the pair is one escaped backslash and the fence closes the string,
+ * while in `\"""` the backslash escapes the first quote. The patcher uses the
+ * same scan to find where a multi-line value ends, so writer and reader agree.
+ */
+export function closingFence(s: string, from: number): number {
+  let at = s.indexOf('"""', from);
+  while (at >= 0) {
+    let backslashes = 0;
+    while (at - backslashes > 0 && s.charAt(at - backslashes - 1) === "\\")
+      backslashes++;
+    if (backslashes % 2 === 0) return at;
+    at = s.indexOf('"""', at + 1);
+  }
+  return at;
+}
+
+/**
+ * The character an escape at `raw[i]` (the backslash) stands for, and the
+ * index of the last character it consumed; `null` when the escape is not one
+ * TOML defines. `\u` and `\U` need exactly 4 or 8 hex digits and must name a
+ * scalar value: a lone surrogate is not a character a string can carry.
+ */
+function unescape(raw: string, i: number): [string, number] | null {
+  const next = raw.charAt(i + 1);
+  const known = ESCAPES.get(next);
+  if (known !== undefined) return [known, i + 1];
+  const digits = UNICODE_ESCAPE_DIGITS.get(next);
+  if (digits === undefined) return null;
+  const hex = raw.slice(i + 2, i + 2 + digits);
+  if (hex.length !== digits || !/^[0-9A-Fa-f]+$/.test(hex)) return null;
+  const code = Number.parseInt(hex, 16);
+  if (code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) return null;
+  return [String.fromCodePoint(code), i + 1 + digits];
+}
+
+/** The escapes of a basic string, plus the line-ending backslash, applied to a multi-line body. */
+function unescapeMultiline(raw: string, line: number): string {
+  let out = "";
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw.charAt(i);
+    if (c !== "\\") {
+      out += c;
+      continue;
+    }
+    const next = raw.charAt(i + 1);
+    if (next === "\n" || next === "\r") {
+      i++;
+      while (i + 1 < raw.length && /[ \t\r\n]/.test(raw.charAt(i + 1))) i++;
+      continue;
+    }
+    const decoded = unescape(raw, i);
+    if (decoded === null) throw new TomlSyntaxError("unreadable_value", line);
+    out += decoded[0];
+    i = decoded[1];
+  }
+  return out;
+}
+
 function skipBlanks(s: string, p: number): number {
   let q = p;
   while (s.charAt(q) === " " || s.charAt(q) === "\t") q++;
@@ -97,19 +175,31 @@ export function parseTomlSubset(text: string): TomlParse {
   let current = doc;
   let index = 0;
 
-  /** A `"""` string: closed on its own line, or read on until the line that closes it (end -1). */
+  /**
+   * A `"""` string: closed on its own line, or read on until the line that
+   * closes it (end -1). Escapes are processed as in a basic string, and a
+   * backslash before a line end swallows the newline and the whitespace
+   * after it (TOML's line-ending backslash), so a writer can close the fence
+   * without adding a newline to the value.
+   */
   function multiline(s: string, p: number, line: number): [string, number] {
     const rest = s.slice(p + 3);
-    const close = rest.indexOf('"""');
+    const close = closingFence(rest, 0);
     if (close >= 0)
-      return [rest.slice(0, close).replace(/^\n/, ""), p + 3 + close + 3];
-    const parts = rest.length > 0 ? [rest] : [];
+      return [
+        unescapeMultiline(rest.slice(0, close).replace(/^\r?\n/, ""), line),
+        p + 3 + close + 3,
+      ];
+    // A CRLF file leaves "\r" on the fence line; TOML trims the newline that
+    // follows an opening fence, so that carriage return is not body text.
+    const first = rest.replace(/^\r$/, "");
+    const parts = first.length > 0 ? [first] : [];
     for (index++; index < lines.length; index++) {
       const next = lines[index] ?? "";
-      const end = next.indexOf('"""');
+      const end = closingFence(next, 0);
       if (end >= 0) {
         parts.push(next.slice(0, end));
-        return [parts.join("\n"), -1];
+        return [unescapeMultiline(parts.join("\n"), line), -1];
       }
       parts.push(next);
     }
@@ -121,9 +211,11 @@ export function parseTomlSubset(text: string): TomlParse {
     for (let q = p + 1; q < s.length; q++) {
       const ch = s.charAt(q);
       if (ch === "\\") {
-        const escaped = s.charAt(q + 1);
-        out += ESCAPES.get(escaped) ?? escaped;
-        q++;
+        const decoded = unescape(s, q);
+        if (decoded === null)
+          throw new TomlSyntaxError("unreadable_value", line);
+        out += decoded[0];
+        q = decoded[1];
       } else if (ch === '"') {
         return [out, q + 1];
       } else {
