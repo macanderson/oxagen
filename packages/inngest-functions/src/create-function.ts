@@ -105,6 +105,32 @@ function wrapHandler(handler: DurableFunctionHandler) {
 export const MAX_BATCH_SIZE = 5;
 
 /**
+ * The longest `batchEvents.timeout` Inngest accepts, in seconds. Inngest
+ * checks it at sync alongside `maxSize`, and one function over it fails the
+ * sync for the whole app the same way. `cost.findings` asked for `5m`, the
+ * sync answered 400 with "The batch timeout for function 'cost.findings'
+ * cannot be longer than 30 seconds", and `deploy api.oxagen.sh` stayed red on
+ * every push to main while the functions went unregistered.
+ */
+export const MAX_BATCH_TIMEOUT_SECONDS = 30;
+
+/**
+ * Seconds in an Inngest duration string (`"30s"`, `"5m"`, `"1h"`).
+ *
+ * Returns `null` for a spelling this does not recognise, so an unparseable
+ * value is passed through to Inngest rather than rejected here — the sync is
+ * the authority on the format, and a guard that refuses what Inngest would
+ * have accepted is worse than one that lets Inngest answer.
+ */
+function batchTimeoutSeconds(timeout: string): number | null {
+  const match = /^(\d+)(s|m|h)$/.exec(timeout.trim());
+  if (!match) return null;
+  const value = Number(match[1]);
+  const unit = match[2] as "s" | "m" | "h";
+  return unit === "s" ? value : unit === "m" ? value * 60 : value * 3600;
+}
+
+/**
  * Translates abstract DurableFunctionConfig into Inngest-native config.
  */
 function buildInngestConfig(
@@ -130,6 +156,12 @@ function buildInngestConfig(
     if (config.batchEvents.maxSize > MAX_BATCH_SIZE) {
       throw new Error(
         `${config.id}: batchEvents.maxSize ${config.batchEvents.maxSize} is over Inngest's limit of ${MAX_BATCH_SIZE}, and the sync would refuse every function in the app`,
+      );
+    }
+    const seconds = batchTimeoutSeconds(config.batchEvents.timeout);
+    if (seconds !== null && seconds > MAX_BATCH_TIMEOUT_SECONDS) {
+      throw new Error(
+        `${config.id}: batchEvents.timeout ${config.batchEvents.timeout} is over Inngest's limit of ${MAX_BATCH_TIMEOUT_SECONDS}s, and the sync would refuse every function in the app`,
       );
     }
     // Inngest-native shape: { maxSize, timeout, key? }.
