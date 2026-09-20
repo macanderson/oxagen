@@ -1004,7 +1004,7 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
       });
     });
     const ctx = {
-      ...ctxFor(null),
+      ...ctxFor(ownerId),
       orgId: preOrgId,
       workspaceId: preWorkspaceId,
     };
