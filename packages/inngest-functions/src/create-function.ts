@@ -114,20 +114,52 @@ export const MAX_BATCH_SIZE = 5;
  */
 export const MAX_BATCH_TIMEOUT_SECONDS = 30;
 
+/** Seconds in each unit Inngest's `TimeStr` admits. */
+const BATCH_TIMEOUT_UNIT_SECONDS: Readonly<Record<string, number>> = {
+  w: 604_800,
+  d: 86_400,
+  h: 3_600,
+  m: 60,
+  s: 1,
+};
+
 /**
- * Seconds in an Inngest duration string (`"30s"`, `"5m"`, `"1h"`).
+ * Seconds in an Inngest duration string, composites included (`"30s"`,
+ * `"5m"`, `"15m15s"`, `"1d"`).
  *
- * Returns `null` for a spelling this does not recognise, so an unparseable
- * value is passed through to Inngest rather than rejected here — the sync is
- * the authority on the format, and a guard that refuses what Inngest would
- * have accepted is worse than one that lets Inngest answer.
+ * Every unit `TimeStr` admits is parsed, not just the single-component
+ * `<number><unit>` shape, because a value this cannot read is forwarded
+ * unchecked — so a spelling it does not know is a hole in the guard rather
+ * than a gap in its coverage. `15m15s` is the one the SDK's own doc comment
+ * advertises, and it is 915 seconds.
+ *
+ * The SDK is of two minds about which spellings reach this field.
+ * `InngestFunction.d.ts` types `batchEvents.timeout` as `TimeStrBatch`
+ * (`` `${number}s` ``, seconds only) while the doc comment directly above it
+ * says "Expects a time string such as 1s, 60s or 15m15s". This repository's
+ * own `DurableFunctionConfig.batchEvents.timeout` is a plain `string`, so
+ * neither constrains what a caller can write. Reading the wider vocabulary
+ * costs nothing and covers both readings.
+ *
+ * Returns `null` when the string is not entirely components, so a genuinely
+ * unrecognised spelling is still passed through to Inngest rather than
+ * rejected here — the sync is the authority on the format, and a guard that
+ * refuses what Inngest would have accepted is worse than one that lets
+ * Inngest answer. Nothing this returns can be a false rejection: a sum over
+ * the limit is a duration Inngest refuses whatever the spelling.
  */
 function batchTimeoutSeconds(timeout: string): number | null {
-  const match = /^(\d+)(s|m|h)$/.exec(timeout.trim());
-  if (!match) return null;
-  const value = Number(match[1]);
-  const unit = match[2] as "s" | "m" | "h";
-  return unit === "s" ? value : unit === "m" ? value * 60 : value * 3600;
+  const text = timeout.trim();
+  if (text === "") return null;
+  let total = 0;
+  let consumed = 0;
+  for (const [component, value, unit] of text.matchAll(/(\d+)([wdhms])/g)) {
+    total += Number(value) * (BATCH_TIMEOUT_UNIT_SECONDS[unit] as number);
+    consumed += component.length;
+  }
+  // Every character has to belong to a component; otherwise this is a
+  // spelling the parser cannot prove anything about.
+  return consumed === text.length ? total : null;
 }
 
 /**
