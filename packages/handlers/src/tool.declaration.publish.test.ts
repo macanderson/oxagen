@@ -4,17 +4,9 @@ import { HandlerError, isHandlerError } from "@oxagen/oxagen";
 import { canonicalJson, sha256Hex } from "./registry-digest";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
-// The handler issues withTenantDb calls in a fixed order:
-//   Fresh publish:
-//     1. existing-check  → select(...).where(...).limit(1)                → []
-//     2. transaction     → insert tool .returning(); insert version
-//                          .returning(); update tools .set().where()
-//   Existing tool:
-//     1. existing-check  → select(...).where(...).limit(1)                → [toolRow]
-//     2. latest-version  → select(...).where(...).limit(1)                → [latest?]
-//     3. (changed only) transaction → update version .returning() (the
-//                          classification it carries); insert version
-//                          .returning(); update tools
+// Publishing locks the workspace and reads/writes tool versions in one transaction.
+// The select queue holds the existing tool and latest version, when present;
+// the workspace lock has its own result so it cannot consume either fixture.
 // A publish that changes the safety classification reads the workspace's
 // consequence roles (query.workspaces.findFirst) before it writes.
 //
@@ -32,11 +24,12 @@ import { canonicalJson, sha256Hex } from "./registry-digest";
 //   - a classification on a name no capability is registered under is
 //     refused conflict / consequence_not_gated before anything is read; the
 //     same name with no classification publishes
-// Every select shares one queue; the transaction call gets a builder whose
+// Tool selects share one queue; the transaction call gets a builder whose
 // inserts/updates resolve via dedicated spies so ordering and shapes can be
 // asserted (same seam as skill.workspace.install.test.ts).
 const mocks = vi.hoisted(() => ({
   selectResults: [] as Array<() => Promise<unknown>>,
+  workspaceLocks: [] as string[],
   insertReturning: [] as Array<() => Promise<unknown>>,
   insertedValues: [] as Array<Record<string, unknown>>,
   updateSets: [] as Array<Record<string, unknown>>,
@@ -77,12 +70,20 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const makeTx = () => ({
     query: {
       workspaces: {
-        findFirst: async () => ({ consequenceRoles: mocks.consequenceRoles }),
+        findFirst: async () => ({
+          consequenceRoles: mocks.consequenceRoles,
+          settings: {},
+        }),
       },
     },
     select: () => ({
-      from: () => ({
+      from: (table: unknown) => ({
         where: () => ({
+          for: (mode: string) => {
+            expect(table).toBe(real.schema.workspaces);
+            mocks.workspaceLocks.push(mode);
+            return Promise.resolve([{ id: "ws_1" }]);
+          },
           limit: () => {
             const next = mocks.selectResults.shift();
             return next ? next() : Promise.resolve([]);
@@ -184,6 +185,7 @@ beforeEach(() => {
   mocks.roles = { org: "Owner", workspace: null };
   mocks.consequenceRoles = {};
   mocks.selectResults.length = 0;
+  mocks.workspaceLocks.length = 0;
   mocks.insertReturning.length = 0;
   mocks.insertedValues.length = 0;
   mocks.updateSets.length = 0;
@@ -210,6 +212,8 @@ describe("tool.declaration.publish handler", () => {
       checksum: EXPECTED_CHECKSUM,
       published: true,
     });
+    expect(mocks.workspaceLocks).toEqual(["update"]);
+    expect(mocks.selectResults).toHaveLength(0);
     // The name is lowercased into the slug; the version row carries the facts.
     expect(mocks.insertedValues[0]).toMatchObject({ slug: "read_file" });
     expect(mocks.insertedValues[1]).toMatchObject({
