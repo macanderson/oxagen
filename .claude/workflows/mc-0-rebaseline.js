@@ -194,16 +194,18 @@ async function runSession(session, specHint) {
   )))).filter(Boolean)
   const built = []
   for (const result of reported) {
+    const assigned = active.find(l => l.id === result.lane)
     if (!validLane(result) || !active.some(l => l.id === result.lane)
-      || reported.filter(other => other.lane === result.lane).length !== 1) {
+      || (assigned.integrate !== false && result.branch !== `mc/${session.id}-${result.lane}`)
+      || reported.filter(other => other.lane === result.lane || other.branch === result.branch || other.head_sha === result.head_sha).length !== 1) {
       log('invalid or duplicate lane result; stopping before integration')
       return { session: session.id, scout, error: 'invalid lane result', reported }
     }
     const remote = await agent(
-      `Read-only verification. Run git ls-remote --heads origin refs/heads/${result.branch} in the repository. Return exists=false if absent or the command fails; otherwise return the exact remote branch and 40-character head SHA. Do not edit files or push.`,
+      `Read-only verification. Run git ls-remote --heads origin refs/heads/${result.branch} in the repository. Return exists=false if absent or the command fails; otherwise return the fully qualified remote ref (refs/heads/<branch>) in branch and the 40-character head SHA. Do not edit files or push.`,
       { label: `verify:${result.lane}`, phase: 'Build', schema: REMOTE_HEAD, agentType: 'general-purpose' },
     )
-    if (!remote || !remote.exists || remote.branch !== result.branch || remote.head_sha !== result.head_sha) {
+    if (!remote || !remote.exists || remote.branch !== `refs/heads/${result.branch}` || remote.head_sha !== result.head_sha) {
       log(`lane ${result.lane} has no matching remote head; stopping before integration`)
       return { session: session.id, scout, error: 'remote head mismatch', reported }
     }

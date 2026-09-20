@@ -5011,7 +5011,6 @@ type Messages = {
           degraded: string;
           unreachable: string;
         };
-        stdioNote: string;
       };
     };
   };

@@ -84,13 +84,36 @@ for (const name of workflows) {
     );
     it.each([
       null,
-      { exists: false, branch: lane.branch, head_sha: sha },
-      { exists: true, branch: lane.branch, head_sha: "b".repeat(40) },
+      { exists: false, branch: `refs/heads/${lane.branch}`, head_sha: sha },
+      {
+        exists: true,
+        branch: `refs/heads/${lane.branch}`,
+        head_sha: "b".repeat(40),
+      },
     ])("refuses absent or changed remote heads", async (remote) => {
       const { calls } = await run(name, [lane], remote);
       expect(calls.some((call) => call.label.startsWith("integrate:"))).toBe(
         false,
       );
+    });
+    it.each(["main", "mc/test-two"])(
+      "rejects an unassigned branch %s",
+      async (branch) => {
+        const { calls } = await run(name, [{ ...lane, branch }], null);
+        expect(
+          calls.some((call) => /^(verify|integrate):/.test(call.label)),
+        ).toBe(false);
+      },
+    );
+    it("rejects duplicate commit claims before remote verification", async () => {
+      const { calls } = await run(
+        name,
+        [lane, { ...lane, lane: "two", branch: "mc/test-two" }],
+        null,
+      );
+      expect(
+        calls.some((call) => /^(verify|integrate):/.test(call.label)),
+      ).toBe(false);
     });
     it("stops on duplicate lane identities", async () => {
       const { calls } = await run(name, [lane, lane], null);
@@ -107,7 +130,7 @@ for (const name of workflows) {
     it("merges the verified commit rather than an unpinned branch", async () => {
       const { calls } = await run(name, [lane], {
         exists: true,
-        branch: lane.branch,
+        branch: `refs/heads/${lane.branch}`,
         head_sha: sha,
       });
       const integration = calls.find((call) =>
