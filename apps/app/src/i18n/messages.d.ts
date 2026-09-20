@@ -112,7 +112,6 @@ type Messages = {
     };
     detail: {
       header: string;
-      seeBelt: string;
       tabs: {
         label: string;
         identity: string;
@@ -282,35 +281,93 @@ type Messages = {
       };
       definition: {
         openEditor: string;
-        none: {
-          title: string;
-          body: string;
-        };
+        unset: string;
         unparsed: string;
-        fields: {
+        bar: {
+          dirty: string;
+          against: string;
+          againstSeed: string;
+          discard: string;
+          save: string;
+        };
+        identity: {
           title: string;
+          aside: string;
           schema: string;
           slug: string;
+          slugHint: string;
           name: string;
           description: string;
-          modelTier: string;
+          descriptionHint: string;
+        };
+        model: {
+          title: string;
+          tier: string;
+          tierHint: string;
           budget: string;
+          budgetHint: string;
+        };
+        tools: {
+          title: string;
+          aside: string;
           tools: string;
+          toolsHint: string;
           denyTools: string;
+          denyHint: string;
+          add: string;
+          addPlaceholder: string;
+          remove: string;
           sideEffects: string;
+          read: string;
+          write: string;
+          irreversible: string;
+          irreversibleUnknown: string;
+        };
+        instructions: {
+          title: string;
+          aside: string;
+          label: string;
+          hint: string;
+        };
+        harness: {
+          title: string;
           harness: string;
-          instructions: string;
-          unset: string;
+          harnessHint: string;
+          color: string;
+          colorHint: string;
         };
         source: {
           title: string;
+          truth: string;
+          open: string;
           lead: string;
-          path: string;
+          uncommitted: string;
           branch: string;
           commit: string;
+          draft: string;
           digest: string;
           pullRequest: string;
           committed: string;
+        };
+        changing: {
+          title: string;
+          edit: {
+            title: string;
+            body: string;
+          };
+          checks: {
+            title: string;
+            body: string;
+          };
+          review: {
+            title: string;
+            body: string;
+          };
+          merge: {
+            title: string;
+            body: string;
+          };
+          note: string;
         };
       };
     };
