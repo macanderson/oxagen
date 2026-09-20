@@ -217,6 +217,9 @@ export async function agentApprovalListResolvedHandler(
         ruleIds: true,
         autoRuleId: true,
         resolvedReasons: true,
+        resumeStatus: true,
+        resumeRunPublicId: true,
+        resumeError: true,
       },
       with: {
         // The requester: the message the call parked on, then its
