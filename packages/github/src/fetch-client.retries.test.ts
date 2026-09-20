@@ -284,6 +284,67 @@ describe("fork polling cancellation and limits", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  // Only a 404 says the fork is not reachable yet. Every other refusal says
+  // nothing about whether the fork exists, so polling past it and then
+  // answering with the creation response reports a fork nobody confirmed.
+  it.each([
+    ["an unauthorised availability request", 401, "Bad credentials"],
+    ["a forbidden availability request", 403, "Resource not accessible"],
+    ["a failing availability request", 500, "Internal Server Error"],
+  ])(
+    "propagates %s instead of the creation response",
+    async (_name, status, message) => {
+      const sleep = vi.fn(async () => undefined);
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(fork())
+        .mockResolvedValue(
+          new Response(JSON.stringify({ message }), { status }),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(
+        createGitHubClient({ token: "token", sleep }).forkRepo(forkArgs),
+      ).rejects.toMatchObject({ name: "GitHubApiError", status });
+      // One POST to create, one GET that refused, and no further poll.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(sleep).not.toHaveBeenCalled();
+    },
+  );
+
+  it("propagates a transport fault from an availability request", async () => {
+    const sleep = vi.fn(async () => undefined);
+    const reason = new Error("socket hang up");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(fork())
+      .mockRejectedValue(reason);
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      createGitHubClient({ token: "token", sleep }).forkRepo(forkArgs),
+    ).rejects.toBe(reason);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("returns the creation response once every poll has 404ed", async () => {
+    const sleep = vi.fn(async () => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(fork())
+      .mockResolvedValue(unavailable());
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      createGitHubClient({ token: "token", sleep }).forkRepo(forkArgs),
+    ).resolves.toEqual({
+      fullName: "octocat/project",
+      htmlUrl: "https://github.com/octocat/project",
+      defaultBranch: "main",
+    });
+    // One POST to create plus the ten availability polls.
+    expect(fetchMock).toHaveBeenCalledTimes(11);
+    expect(sleep).toHaveBeenCalledTimes(9);
+  });
+
   it("removes wait listeners on success and preserves 404 polling", async () => {
     const controller = new AbortController();
     const add = vi.spyOn(controller.signal, "addEventListener");

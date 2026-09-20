@@ -542,14 +542,16 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       } catch (error) {
         // Availability polling must not restart the request's retry budget or
         // turn a cancelled/timed-out operation into a successful fork result.
+        // Cancellation is asked first so an abort that raced a stale 404 is
+        // reported as the cancellation it is.
         opts.signal?.throwIfAborted();
-        if (
-          error instanceof GitHubRateLimitedError ||
-          (error instanceof Error &&
-            (error.name === "AbortError" || error.name === "TimeoutError"))
-        ) {
-          throw error;
-        }
+        // Only a 404 means "the fork is not reachable yet". A 401, a
+        // non-rate-limit 403, a 5xx or a transport fault says nothing about
+        // whether the fork exists, and swallowing it here would retry until
+        // the budget ran out and then return the creation response as a
+        // success — the same silent wrong answer this poll exists to avoid.
+        // `putFile` above draws the line in the same place.
+        if (!isNotFound(error)) throw error;
         // Fork not reachable yet — wait and retry
         if (attempt < maxAttempts - 1) {
           await sleep(sleepMs);
