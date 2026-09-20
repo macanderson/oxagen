@@ -61,6 +61,8 @@
     </main>
     <div id="log"></div>
 
+    <div id="connection-status" class="note" role="alert" hidden></div>
+    <script src="/request.js"></script>
     <script>
       let DATA = null, STATE = {};
       const srcLabel = (s) => !s ? "—" : s.type === "static" ? "static" : s.type;
@@ -78,7 +80,7 @@
         `${x.detail ? "  — " + esc(x.detail) : ""}</div>`;
 
       async function load() {
-        DATA = await (await fetch("/api/catalog")).json();
+        DATA = await (await window.envManagerFetch("/api/catalog")).json();
         document.getElementById("tokstatus").textContent =
           (DATA.hasToken ? "VERCEL_TOKEN set · " : "⚠ VERCEL_TOKEN missing · ") +
           Object.keys(DATA.projects).length + " projects";
@@ -94,7 +96,7 @@
 
       async function refresh() {
         try {
-          const r = await fetch("/api/state");
+          const r = await window.envManagerFetch("/api/state");
           const j = await r.json();
           STATE = j.state || {};
         } catch (e) { STATE = {}; }
@@ -149,7 +151,7 @@
         log.style.display = "block";
         log.innerHTML = `<div>pushing ${esc(key)} → ${esc(env)}…</div>`;
         try {
-          const r = await fetch("/api/set", {
+          const r = await window.envManagerFetch("/api/set", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ key, env, value })
@@ -170,7 +172,7 @@
         log.style.display = "block";
         log.innerHTML = `<div>checking gaps for ${esc(env)}…</div>`;
         try {
-          const r = await fetch(`/api/gaps?env=${encodeURIComponent(env)}`);
+          const r = await window.envManagerFetch(`/api/gaps?env=${encodeURIComponent(env)}`);
           const j = await r.json();
           if (j.error) { log.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
           const missing = j.missing || [];
@@ -201,7 +203,7 @@
         log.style.display = "block";
         log.innerHTML = `<div>deploying ${esc(env)}…</div>`;
         try {
-          const r = await fetch("/api/deploy", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ env }) });
+          const r = await window.envManagerFetch("/api/deploy", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ env }) });
           const j = await r.json();
           if (j.error) { log.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
           const lines = j.results.map(resultLine);
@@ -210,7 +212,11 @@
           await refresh();
         } catch (e) { log.innerHTML = `<div class="error">${esc(e)}</div>`; }
       }
-      load();
+      load().catch((error) => {
+        const notice = document.getElementById("connection-status");
+        notice.hidden = false;
+        notice.textContent = error.message;
+      });
     </script>
   </body>
 </html>
