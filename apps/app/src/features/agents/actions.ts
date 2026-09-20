@@ -88,7 +88,7 @@ export async function retireAgent(
 // repository and toolbelt reads are (ARCHITECTURE.md §2, ADR-089).
 
 /** One role the picker may offer: its name is what both writes take. */
-export type AssignableRole = {
+type AssignableRole = {
   name: string;
   scope: "org" | "workspace";
   /** A seeded agent role rather than one this organization wrote. */

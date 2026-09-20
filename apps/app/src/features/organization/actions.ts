@@ -1,4 +1,5 @@
 "use server";
+import { INVITABLE_ROLES, type InvitableRole } from "./invitation-roles";
 // The two writes on the People page (ARCHITECTURE.md §1.2): change a member's
 // organization role and remove a member. Both run through the kernel seam for
 // the organization the URL names, both are `noBillingGate` (INV-28, WL-22), and
@@ -252,10 +253,6 @@ export async function removeOrgMember(
  * so this is an organization role under a workspace-shaped name, and the
  * picker offers exactly what the contract admits.
  */
-export const INVITABLE_ROLES = ["member", "admin", "owner"] as const;
-
-export type InvitableRole = (typeof INVITABLE_ROLES)[number];
-
 const isInvitable = (role: string): role is InvitableRole =>
   INVITABLE_ROLES.some((known) => known === role);
 

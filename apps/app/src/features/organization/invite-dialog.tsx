@@ -34,7 +34,8 @@ import {
   UNANSWERED,
   useActionFailure,
 } from "./action-failure";
-import { INVITABLE_ROLES, type InvitableRole, sendInvitation } from "./actions";
+import { sendInvitation } from "./actions";
+import { INVITABLE_ROLES, type InvitableRole } from "./invitation-roles";
 
 /**
  * The sentence a refused invitation shows. The two refusals this write has of

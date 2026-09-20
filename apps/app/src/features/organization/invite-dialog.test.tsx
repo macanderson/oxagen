@@ -30,7 +30,6 @@ const { router, sendInvitation } = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
   sendInvitation,
-  INVITABLE_ROLES: ["member", "admin", "owner"] as const,
 }));
 
 const { InviteDialog } = await import("./invite-dialog");

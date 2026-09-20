@@ -27,7 +27,6 @@ vi.mock("./actions", () => ({
   changeMemberRole: vi.fn(),
   removeOrgMember: vi.fn(),
   sendInvitation: vi.fn(),
-  INVITABLE_ROLES: ["member", "admin", "owner"] as const,
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
