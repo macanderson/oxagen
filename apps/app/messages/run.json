@@ -346,11 +346,6 @@
         "countersigned": "Countersigned",
         "anchor": "Anchor"
       },
-      "tier": {
-        "gateway": "observed at the gateway",
-        "harness": "observed at the harness",
-        "observe": "observed from the side"
-      },
       "grade": {
         "inspect": "Inspect",
         "view": "View",

@@ -14,6 +14,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { ChainCheckpoint, RunChain } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
+import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
 import { formatCount } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
@@ -302,7 +303,12 @@ export function ChainSection({ read }: { read: Read<RunChain> }) {
               {read.value.merkleRoot ?? <NoValue />}
             </Fact>
             <Fact label={t("tierLabel")}>
-              {t(`tier.${read.value.enforcementTier}`)}
+              {/*
+                The same badge Fleet's Tier column and the Run header draw. The
+                seal's tier is the run's tier, so three copies of the closed
+                vocabulary (ADR-095) were three places it could drift.
+              */}
+              <EnforcementTierBadge tier={read.value.enforcementTier} />
             </Fact>
             <Fact label={t("gradeLabel")}>
               {read.value.recordedGrade === null ? (

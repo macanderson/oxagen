@@ -3313,11 +3313,6 @@ type Messages = {
         countersigned: string;
         anchor: string;
       };
-      tier: {
-        gateway: string;
-        harness: string;
-        observe: string;
-      };
       grade: {
         inspect: string;
         view: string;
