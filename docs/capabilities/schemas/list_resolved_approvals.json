@@ -93,6 +93,40 @@
             "resolvedAt": {
               "type": "string"
             },
+            "execution": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string"
+                },
+                "runId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "status",
+                "runId",
+                "reason"
+              ],
+              "additionalProperties": false
+            },
             "resolution": {
               "type": "string",
               "enum": [
