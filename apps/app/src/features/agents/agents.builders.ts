@@ -154,6 +154,12 @@ export function toolbelt(overrides: Partial<Toolbelt> = {}): Toolbelt {
         decision: "require_approval",
         rule: "agent:7:role_grant",
         readOnly: false,
+        // An MCP tool whose server was never imported into the registry: the
+        // belt records no schema for it.
+        inputSchema: null,
+        schemaOrigin: null,
+        schemaDigest: null,
+        schemaTruncated: false,
       },
       {
         name: "search_tools",
@@ -164,6 +170,16 @@ export function toolbelt(overrides: Partial<Toolbelt> = {}): Toolbelt {
         decision: "allow",
         rule: "human:8:default",
         readOnly: true,
+        // A capability: its schema is derived from the contract.
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string" } },
+          required: ["query"],
+        },
+        schemaOrigin: "declared",
+        schemaDigest:
+          "3f1a2b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708",
+        schemaTruncated: false,
       },
     ],
     cannotSee: [

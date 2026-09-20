@@ -163,7 +163,21 @@
             "require_approval": "requires approval"
           },
           "readOnly": "reads only",
-          "writes": "writes"
+          "writes": "writes",
+          "schema": {
+            "title": "Input schema",
+            "none": "No input schema is recorded for this tool.",
+            "origin": {
+              "declared": "Declared by the capability contract.",
+              "imported": "Imported from the server's tool list."
+            },
+            "digest": "Schema digest",
+            "copySchema": "Copy schema",
+            "copyDigest": "Copy digest",
+            "copied": "Copied",
+            "copyFailed": "Copy it by hand: this browser refused the clipboard.",
+            "truncated": "This schema is larger than the belt carries inline. The digest identifies it; read the full schema from the tool registry."
+          }
         },
         "cannotSee": {
           "title": "What this agent cannot see",

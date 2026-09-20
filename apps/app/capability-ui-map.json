@@ -226,9 +226,9 @@
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
       "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes get_agent_toolbelt (data/live/agents.ts, data/live/mappers/agents.ts)",
-      "proof": "apps/app/src/features/agents/agent.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "proof": "apps/app/src/features/agents/agent.test.tsx, apps/app/src/features/agents/toolbelt.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc-3-schemas"
     },
     "get_context_pr": {
       "route": "/[org]/[ws]/steering",
