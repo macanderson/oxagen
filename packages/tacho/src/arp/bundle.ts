@@ -200,6 +200,23 @@ export function writeCheckpoint(
   writeNew(root, "checkpoint.json", bytes);
 }
 
+/**
+ * The id an approval frame is correlated by. `approval_id` is the field the
+ * data model reserves for control-plane elevation; until a producer mints one,
+ * every recorded approval is correlated by the tool call it gates.
+ */
+function approvalCorrelationId(body: {
+  approval_id?: string | undefined;
+  tool_use_id?: string | undefined;
+}): string | undefined {
+  return body.approval_id ?? body.tool_use_id;
+}
+
+/** Whether a policy decision answers an approval rather than deferring it. */
+function isTerminalDecision(decision: string | undefined): boolean {
+  return decision === "allow" || decision === "deny";
+}
+
 /** A capture attestation cannot waive unresolved work recorded by the source. */
 export function verifySettledEvidence(events: readonly TachoEvent[]): void {
   const head = events.at(-1);
@@ -237,6 +254,8 @@ export function verifySettledEvidence(events: readonly TachoEvent[]): void {
           "ARP tool result has no correlation ID or settled status",
         );
       tools.delete(id);
+      // A gated call that produced a result had its approval answered.
+      approvals.delete(id);
     } else if (
       event.kind === "subagent_start" ||
       event.kind === "subagent_stop"
@@ -257,14 +276,26 @@ export function verifySettledEvidence(events: readonly TachoEvent[]): void {
         children.delete(id);
       }
     } else if (event.kind === "approval_request") {
-      const id = event.body.approval_id;
+      // The recorder correlates an approval by the tool call it gates:
+      // normalizeHook builds a PermissionRequest body from toolFacts, which
+      // carries tool_use_id and never approval_id. Reading approval_id alone
+      // refused every recorded approval, because nothing writes that field.
+      const id = approvalCorrelationId(event.body);
       if (!id || approvals.has(id))
         throw new Error("ARP approval has no unique correlation ID");
-      approvals.add(id);
+      // A request the harness already answered is settled where it stands:
+      // routeHook writes policy_decision "deny" for an operator-blocked host
+      // and returns that denial, so no later frame answers it. "ask" and
+      // "defer" are open and must be drained by a decision or a tool result.
+      if (!isTerminalDecision(event.body.policy_decision)) approvals.add(id);
     } else if (event.kind === "approval_decision") {
-      const id = event.body.approval_id;
+      const id = approvalCorrelationId(event.body);
       if (!id) throw new Error("ARP approval decision has no correlation ID");
       approvals.delete(id);
+    } else if (event.kind === "policy_decision") {
+      // PermissionDenied lands here carrying the gated call's tool_use_id.
+      const id = approvalCorrelationId(event.body);
+      if (id) approvals.delete(id);
     }
   }
   if (tools.size || children.size || approvals.size)

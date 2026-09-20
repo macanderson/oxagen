@@ -654,6 +654,120 @@ describe("ARP capture and preparation", () => {
     expect(existsSync(f.options.out)).toBe(false);
   });
 
+  // A gated tool call, as the recorder actually writes one: normalizeHook
+  // builds the PermissionRequest body from toolFacts (tool_use_id, no
+  // approval_id) and routeHook stamps the policy decision over it.
+  const gatedTurn = (
+    approval: Record<string, unknown>,
+    settle: readonly { kind: string; [key: string]: unknown }[],
+  ) =>
+    sealAll([
+      unsealed("agent_start", {
+        model: "test",
+        session_start_source: "startup",
+      }),
+      unsealed("turn_start", { prompt_length: 10 }),
+      unsealed("approval_request", {
+        tool_name: "Bash",
+        tool_use_id: "toolu_gated",
+        policy_source: "harness",
+        ...approval,
+      } as never),
+      ...settle.map(({ kind, ...body }) =>
+        unsealed(
+          kind as never,
+          {
+            tool_name: "Bash",
+            tool_use_id: "toolu_gated",
+            ...body,
+          } as never,
+        ),
+      ),
+      unsealed("turn_end", {
+        last_assistant_message_digest: `sha256:${"a".repeat(64)}`,
+      }),
+    ]);
+
+  const withEvidence = (f: ReturnType<typeof fixture>, events: unknown[]) => {
+    writeFileSync(
+      f.options.evidenceFile,
+      events.map((event) => JSON.stringify(event)).join("\n"),
+    );
+    f.brief.boundary_digest = (
+      events[events.length - 1] as { hash?: string } | undefined
+    )?.hash;
+    f.saveBrief();
+  };
+
+  it("captures a turn whose approval the tool result answered", async () => {
+    const f = fixture();
+    // The approval is correlated by tool_use_id because nothing in the
+    // recorder ever writes approval_id. Reading that field alone refused
+    // this stream outright, so no run that hit a prompt could checkpoint.
+    withEvidence(
+      f,
+      gatedTurn({ policy_decision: "defer" }, [
+        { kind: "tool_requested", policy_decision: "allow" },
+        { kind: "tool_call", tool_status: "ok", tool_duration_ms: 2 },
+      ]),
+    );
+    expect(() => captureCheckpoint(f.options)).not.toThrow();
+    expect(existsSync(f.options.out)).toBe(true);
+  });
+
+  it("captures a turn whose approval the operator blocked in place", async () => {
+    const f = fixture();
+    // routeHook writes policy_decision "deny" for an operator-blocked host
+    // and returns that denial, so no later frame answers the request.
+    withEvidence(f, gatedTurn({ policy_decision: "deny" }, []));
+    expect(() => captureCheckpoint(f.options)).not.toThrow();
+    expect(existsSync(f.options.out)).toBe(true);
+  });
+
+  it("captures a turn whose approval a denial answered", async () => {
+    const f = fixture();
+    withEvidence(
+      f,
+      gatedTurn({ policy_decision: "defer" }, [
+        { kind: "policy_decision", policy_decision: "deny" },
+      ]),
+    );
+    expect(() => captureCheckpoint(f.options)).not.toThrow();
+    expect(existsSync(f.options.out)).toBe(true);
+  });
+
+  it("refuses a turn with an approval nothing answered", async () => {
+    const f = fixture();
+    withEvidence(f, gatedTurn({ policy_decision: "defer" }, []));
+    expect(() => captureCheckpoint(f.options)).toThrow(
+      /approval|unsettled|settled/i,
+    );
+    expect(existsSync(f.options.out)).toBe(false);
+  });
+
+  it("refuses an approval carrying neither correlation ID", async () => {
+    const f = fixture();
+    withEvidence(
+      f,
+      sealAll([
+        unsealed("agent_start", {
+          model: "test",
+          session_start_source: "startup",
+        }),
+        unsealed("turn_start", { prompt_length: 10 }),
+        unsealed("approval_request", {
+          tool_name: "Bash",
+          policy_decision: "defer",
+        } as never),
+        unsealed("turn_end", {
+          last_assistant_message_digest: `sha256:${"a".repeat(64)}`,
+        }),
+      ]),
+    );
+    expect(() => captureCheckpoint(f.options)).toThrow(/correlation|approval/i);
+    expect(existsSync(f.options.out)).toBe(false);
+  });
+
   it("refuses a turn with an active subagent", async () => {
     const f = fixture();
     const events = sealAll([
