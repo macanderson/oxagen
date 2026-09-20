@@ -103,7 +103,9 @@ export async function createCreditLot(
     // 4. Compute the new effective balance (lazy expiry — expired lots excluded).
     const now = new Date();
     const balanceRows = await tx
-      .select({ remaining: schema.creditLots.remainingCents })
+      .select({
+        remaining: sql<string>`COALESCE(SUM(${schema.creditLots.remainingCents}), 0)`,
+      })
       .from(schema.creditLots)
       .where(
         and(
@@ -115,12 +117,7 @@ export async function createCreditLot(
         ),
       );
 
-    const effectiveBalanceCents = balanceRows.reduce(
-      (acc, r) =>
-        acc +
-        (typeof r.remaining === "bigint" ? r.remaining : BigInt(r.remaining)),
-      0n,
-    );
+    const effectiveBalanceCents = BigInt(balanceRows[0]?.remaining ?? "0");
 
     return { lotId, effectiveBalanceCents };
   });
@@ -205,7 +202,9 @@ export async function effectiveBalance(
   const runner = opts?.system ? withSystemDb : withTenantDb;
   const rows = await runner((tx) =>
     tx
-      .select({ remaining: schema.creditLots.remainingCents })
+      .select({
+        remaining: sql<string>`COALESCE(SUM(${schema.creditLots.remainingCents}), 0)`,
+      })
       .from(schema.creditLots)
       .where(
         and(
@@ -218,12 +217,7 @@ export async function effectiveBalance(
       ),
   );
 
-  return rows.reduce(
-    (acc, r) =>
-      acc +
-      (typeof r.remaining === "bigint" ? r.remaining : BigInt(r.remaining)),
-    0n,
-  );
+  return BigInt(rows[0]?.remaining ?? "0");
 }
 
 // ---------------------------------------------------------------------------

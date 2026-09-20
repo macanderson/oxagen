@@ -12,6 +12,8 @@
  * No live Postgres — mocks at the DB adapter seam.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 // ── Drizzle mock (no-op wrappers so calls don't throw) ───────────────────────
 
@@ -19,7 +21,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 interface MockState {
   // Lots returned by SELECT for effectiveBalance / createCreditLot balance step
-  lots: Array<{ remaining: bigint }>;
+  lots: Array<{ remaining: bigint | string }>;
+  balanceQueries: Array<{ fields: { remaining: SQL }; where: SQL }>;
   lotInsertRows: Array<Record<string, unknown>>;
   ledgerInserts: Array<Record<string, unknown>>;
   balanceUpserts: number;
@@ -28,6 +31,7 @@ interface MockState {
 
 const state: MockState = {
   lots: [],
+  balanceQueries: [],
   lotInsertRows: [],
   ledgerInserts: [],
   balanceUpserts: 0,
@@ -71,17 +75,20 @@ function makeTx() {
     // Supports both:
     //   createCreditLot: .select().from().where() → state.lots
     //   consumeCredits:  .select().from().where().orderBy().for() → state.lots
-    select: vi.fn(() => ({
+    select: vi.fn((fields: { remaining: SQL }) => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          // For effectiveBalance / createCreditLot inner SELECT (resolved directly)
-          then: (resolve: (v: typeof state.lots) => unknown) =>
-            resolve(state.lots),
-          // For consumeCredits SELECT (chained with .orderBy().for())
-          orderBy: vi.fn(() => ({
-            for: vi.fn(async () => state.lots),
-          })),
-        })),
+        where: vi.fn((where: SQL) => {
+          state.balanceQueries.push({ fields, where });
+          return {
+            // For effectiveBalance / createCreditLot inner SELECT (resolved directly)
+            then: (resolve: (v: typeof state.lots) => unknown) =>
+              resolve(state.lots),
+            // For consumeCredits SELECT (chained with .orderBy().for())
+            orderBy: vi.fn(() => ({
+              for: vi.fn(async () => state.lots),
+            })),
+          };
+        }),
       })),
     })),
     update: vi.fn(() => ({
@@ -155,6 +162,7 @@ const { __dbState } = (await import("@oxagen/database")) as unknown as {
 
 function resetState() {
   state.lots = [];
+  state.balanceQueries = [];
   state.lotInsertRows = [];
   state.ledgerInserts = [];
   state.balanceUpserts = 0;
@@ -172,7 +180,7 @@ describe("createCreditLot", () => {
   });
 
   it("happy path — returns lotId and effectiveBalanceCents", async () => {
-    state.lots = [{ remaining: 500n }]; // simulates post-insert SELECT
+    state.lots = [{ remaining: "9007199254740993" }]; // PostgreSQL SUM is numeric text.
 
     const result = await createCreditLot({
       orgId: "org-abc",
@@ -183,7 +191,18 @@ describe("createCreditLot", () => {
     });
 
     expect(result.lotId).toBe("lot-id-1");
-    expect(result.effectiveBalanceCents).toBe(500n);
+    expect(result.effectiveBalanceCents).toBe(9007199254740993n);
+    const query = state.balanceQueries[0];
+    expect(query).toBeDefined();
+    if (!query) throw new Error("Expected the post-grant balance query");
+    const dialect = new PgDialect();
+    expect(dialect.sqlToQuery(query.fields.remaining).sql).toMatch(
+      /COALESCE\(SUM\(.*remaining_cents.*\), 0\)/,
+    );
+    const predicate = dialect.sqlToQuery(query.where);
+    expect(predicate.params).toContain("org-abc");
+    expect(predicate.sql).toContain('"expires_at" is null');
+    expect(predicate.sql).toContain('"expires_at" >');
     expect(state.transactionCalled).toBe(true);
     expect(state.ledgerInserts).toHaveLength(1);
     expect(state.ledgerInserts[0]!.deltaCents).toBe(500n);
@@ -265,8 +284,25 @@ describe("effectiveBalance", () => {
   });
 
   it("sums remaining_cents across all non-expired lots", async () => {
-    state.lots = [{ remaining: 100n }, { remaining: 200n }, { remaining: 50n }];
+    state.lots = [{ remaining: "350" }];
     expect(await effectiveBalance("org-1")).toBe(350n);
+    const query = state.balanceQueries[0];
+    expect(query).toBeDefined();
+    if (!query) throw new Error("Expected a balance query");
+    const dialect = new PgDialect();
+    expect(dialect.sqlToQuery(query.fields.remaining).sql).toMatch(
+      /COALESCE\(SUM\(.*remaining_cents.*\), 0\)/,
+    );
+    const predicate = dialect.sqlToQuery(query.where);
+    expect(predicate.sql).toContain('"org_id" =');
+    expect(predicate.params).toContain("org-1");
+    expect(predicate.sql).toContain('"expires_at" is null');
+    expect(predicate.sql).toContain('"expires_at" >');
+  });
+
+  it("keeps database aggregates exact above the JavaScript integer range", async () => {
+    state.lots = [{ remaining: "9007199254740993" }];
+    expect(await effectiveBalance("org-1")).toBe(9007199254740993n);
   });
 
   it("returns 0 when there are no lots", async () => {
@@ -275,7 +311,7 @@ describe("effectiveBalance", () => {
   });
 
   it("returns 0 when all lots have zero remaining", async () => {
-    state.lots = [{ remaining: 0n }, { remaining: 0n }];
+    state.lots = [{ remaining: "0" }];
     expect(await effectiveBalance("org-1")).toBe(0n);
   });
 });
