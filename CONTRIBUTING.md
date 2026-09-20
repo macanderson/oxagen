@@ -166,15 +166,20 @@ Keep production URLs isolated to env vars — never hard-code domains.
 
 ## Release Process
 
-Only for maintainers:
+Only for maintainers. Three commands, one flow each:
 
 ```bash
-pnpm release:patch    # bug fixes
-pnpm release:minor    # new features
-pnpm release:major    # breaking changes
+pnpm dist:local                 # build tacho, oxagen, and the desktop app from this tree; the installer lands on ~/Desktop
+pnpm release:patch:publish      # 2.1.1 -> 2.1.2, then build every platform in CI and upload
+pnpm release:minor:publish      # 2.1.1 -> 2.2.0
+pnpm release:major:publish      # 2.1.1 -> 3.0.0
 ```
 
-This bumps package versions, generates release notes, creates a git tag, optionally publishes to npm, and synchronizes the legacy Vercel version value unless `--no-vercel` is set. Production deploys through the AWS workflows. See `tools/scripts/release.ts` for flags and README.md Deployment for the deployment paths.
+`dist:local` builds what is on your machine for your OS and architecture, signed with the updater key when `~/.tauri/oxagen-desktop.key` is present, and bumps nothing. It is the way to try an installer before a release.
+
+`release:<bump>:publish` (`tools/scripts/release-publish.ts`) writes the next version into every manifest in the tree, whatever its language (`package.json`, `Cargo.toml`, `Cargo.lock`; `pnpm check:versions` holds them in lockstep in CI), writes the notes from the diff since the last published GitHub release with a link to every installer and executable, commits on `release/vX.Y.Z`, tags `vX.Y.Z` and `desktop-vX.Y.Z`, opens the pull request, waits for `desktop.yml` to build the four targets, uploads the installers to downloads.oxagen.sh and `@oxagen/cli` to npm, and publishes the GitHub release. `--dry-run` previews the version and the notes. `--publish-only` resumes after the tags exist. Every upload step skips a version that is already there.
+
+`pnpm release:<bump>` alone (`tools/scripts/release.ts`) is the bump, the notes, and the local commit and tag, with no CI wait and no uploads. See the header of each script for flags.
 
 ## Security
 

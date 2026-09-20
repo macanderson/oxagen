@@ -143,7 +143,10 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm check:brand` | Verifies every frontend is on the Oxagen house brand kit (needs the house kit `oxagenai/oxagen-brand` checked out at `$OXAGEN_HOUSE_BRAND` or `../oxagen-house-brand`) |
 | `pnpm check:naming` | ADR-025 naming compliance |
 | `pnpm check:audit-coverage` | SOC 2 audit-event coverage (runs on every PR in CI) |
-| `pnpm release:patch/minor/major` | Lockstep version bump (all packages) + AI-generated release notes (via Vercel AI Gateway) + git tag + Vercel `PLATFORM_VERSION` sync (`--no-vercel` to skip; production itself runs on AWS, see README → Deployment) + optional NPM publish |
+| `pnpm release:patch/minor/major` | Lockstep version bump (every manifest: `package.json`, `Cargo.toml`, `Cargo.lock`) + AI-generated release notes (via Vercel AI Gateway) + git tag + Vercel `PLATFORM_VERSION` sync (`--no-vercel` to skip; production itself runs on AWS, see README → Deployment) + optional NPM publish |
+| `pnpm release:patch/minor/major:publish` | The bump and the notes (with a link to every installer and executable), then the commit, both tags, the PR, the CI build of all four desktop targets, and the uploads to downloads.oxagen.sh, npm, and the GitHub release (`tools/scripts/release-publish.ts`; `--dry-run`, `--publish-only`) |
+| `pnpm dist:local` | Build `tacho`, `oxagen`, and the desktop app from this tree for this OS and copy the installer to `~/Desktop` (`--out <dir>`); bumps and publishes nothing |
+| `pnpm check:versions` | Every tracked manifest carries the root version (`--fix` writes it); part of `check:contracts` |
 | `pnpm test:e2e` | Run the three Playwright specs (`apps/app/e2e`: `login`, `pay`, `page-load`). The suite holds exactly these three and gains no fourth — every other flow is a component test (`.claude/skills/oxagen-testing`, `apps/app/ARCHITECTURE.md` §6.3). |
 
 **Narrow test runs** (never run all tests): `pnpm --filter @oxagen/<pkg> test:unit <file>.test.ts`
