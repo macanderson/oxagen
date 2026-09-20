@@ -4961,6 +4961,11 @@ type Messages = {
         confirm: string;
         pending: string;
       };
+      disabledReason: {
+        classification_changed: string;
+        measure_changed: string;
+        tool_scope_changed: string;
+      };
     };
     servers: {
       title: string;

@@ -234,6 +234,18 @@ export const ApprovalRule = z.object({
   /** Globs over a declared tool's `slug@version` or its bare slug. */
   tools: z.array(z.string().min(1)).min(1),
   enabled: z.boolean(),
+  disabledReason: z
+    .object({
+      code: z.enum([
+        "classification_changed",
+        "measure_changed",
+        "tool_scope_changed",
+      ]),
+      tool: z.string(),
+      at: z.iso.datetime({ offset: true }),
+      detail: z.string(),
+    })
+    .optional(),
   /** measure → the inclusive ceiling, an integer string (INV-09). */
   maxMeasures: z.record(z.string(), z.string()),
   /** measure → the globs its target must match. */

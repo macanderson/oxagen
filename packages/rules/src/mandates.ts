@@ -61,7 +61,7 @@ import {
 } from "./call-facts";
 import { logger } from "./logger";
 import { notifyApprovalRequested } from "./approval-notify";
-import { loadRuleSetIn } from "./rule-store";
+import { loadRuleSetIn, lockDecisionRulesIn } from "./rule-store";
 import {
   exceeds,
   isCallsMeasure,
@@ -798,6 +798,7 @@ export async function decideMandate(
 ): Promise<CheckOutcome> {
   const at = (args.now ?? (() => new Date()))();
   return withTenantDb(async (tx): Promise<CheckOutcome> => {
+    await lockDecisionRulesIn(tx, args.workspaceId);
     const tool = await loadDeclaredTool(tx, args.workspaceId, args.capability);
     if (tool === null || tool.consequenceTags.length === 0)
       return { kind: "no_opinion" };

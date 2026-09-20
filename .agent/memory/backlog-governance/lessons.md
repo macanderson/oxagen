@@ -1,0 +1,1 @@
+- [2026-09-19] Before holding a workspace lock across a callback, pass its transaction through role and configuration reads so waiting writers cannot exhaust the pool around a nested checkout. (source: reflections/2026-09-19-rule-invalidation.md, agent: backlog-governance)

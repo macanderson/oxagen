@@ -160,6 +160,16 @@ function Row({
       <td className={cell}>
         <span className="flex flex-col gap-0.5">
           <span className="font-medium text-foreground">{rule.name}</span>
+          {rule.disabledReason && (
+            <span
+              className="text-xs text-muted-foreground"
+              data-testid="rule-disabled-reason"
+            >
+              {t(`disabledReason.${rule.disabledReason.code}`, {
+                tool: rule.disabledReason.tool,
+              })}
+            </span>
+          )}
           <span className={`${mono} text-xs text-muted-foreground`}>
             {t("slug", { slug: rule.slug })}
           </span>

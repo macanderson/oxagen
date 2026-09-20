@@ -24,7 +24,9 @@
  * row still waits for a person — `decideMandate` does that, and this module
  * never sees it.
  */
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, type Tx } from "@oxagen/database";
+import { HandlerError } from "@oxagen/oxagen";
+import { loadRuleSetIn, lockDecisionRulesIn } from "./rule-store";
 import { policyApprover } from "@oxagen/oxagen/approval-rules/schemas";
 import { and, eq } from "drizzle-orm";
 import {
@@ -106,25 +108,27 @@ export type AutoApprovalDecision = AutoApprovalOutcome & {
 export async function autoApproveParkedCall(
   args: AutoApproveArgs,
 ): Promise<AutoApprovalDecision | null> {
-  const rules = args.ruleSet.autoApproval ?? [];
-  if (rules.length === 0) return null;
   const at = (args.now ?? (() => new Date()))();
   const digest = inputDigest(args.input);
 
-  const evaluated = await withTenantDb(async (tx) => {
+  const evaluateIn = async (tx: Tx) => {
+    await lockDecisionRulesIn(tx, args.ctx.workspaceId);
+    const rules =
+      (await loadRuleSetIn(tx, args.ctx.workspaceId))?.autoApproval ?? [];
     const subject = await buildAutoApprovalSubject(tx, {
       capability: args.capability,
       input: args.input,
       workspaceId: args.ctx.workspaceId,
       digest,
       rules,
-      now: at,
+      now: (args.now ?? (() => new Date()))(),
     });
     return {
       outcome: evaluateAutoApproval(rules, subject),
       riskLevel: subject.tool?.riskGrade ?? "low",
     };
-  });
+  };
+  const evaluated = await withTenantDb(evaluateIn);
   const outcome = evaluated.outcome;
   if (outcome === null) return null;
   if (!outcome.ok) return outcome;
@@ -138,6 +142,15 @@ export async function autoApproveParkedCall(
       // It is logged here so the id this insert used to discard is visible
       // on the write path too, the instant the receipt is written.
       const [row] = await withTenantDb(async (tx) => {
+        const current = await evaluateIn(tx);
+        if (!current.outcome?.ok || current.outcome.ruleId !== outcome.ruleId) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "approval_policy_changed",
+            message:
+              "The approval rule changed before the call was released. Retry the call.",
+          });
+        }
         const runPublicId = await resolveRunPublicId(tx, {
           orgId: args.ctx.orgId,
           workspaceId: args.ctx.workspaceId,
@@ -152,7 +165,7 @@ export async function autoApproveParkedCall(
             inputPreview: (args.input ?? {}) as object,
             // The declared tool's grade: `ok` is unreachable without one,
             // because a capability with no declared tool is a floor.
-            riskLevel: evaluated.riskLevel,
+            riskLevel: current.riskLevel,
             ruleIds: [args.verdict.ruleId],
             inputDigest: digest,
             autoRuleId: outcome.ruleId,

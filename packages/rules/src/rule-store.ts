@@ -1,48 +1,23 @@
-/**
- * Where a workspace's rule set lives, and the cache in front of it.
- *
- * `workspaces.settings.decisionRules` — the workspace settings JSONB. Both
- * clauses of the document live here (ADR-070 decision 2): the gate rules that
- * were already stored here, and the auto-approval rules `set_approval_rules`
- * writes. One store, one loader, one read on the decision path. The loader
- * shape stays the seam: moving the document to a versioned registry record is
- * a change to these two functions and to nothing that calls them.
- *
- * ## The cache
- *
- * The gate fires on every scoped `invoke()`, and a per-invoke row read would
- * put the settings table on the hot path of every tool call. Rules change at
- * human speed; a 30-second TTL bounds staleness to less than any human
- * authoring loop while cutting the read amplification to one per workspace
- * per window. Negative results are cached too — most workspaces have no
- * rules, and those must not pay the read either. A write through one of the
- * approval-rule capabilities drops its workspace's entry, so the process that
- * made the change sees it at once.
- *
- * This module holds no dependency on the mandate check or the gate, so the
- * mandate check can read the rule set inside its own transaction without an
- * import cycle.
- */
+/** Load committed workspace rules without process-local authorization caches. */
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { ruleSetSchema } from "./schema";
 import type { RuleSet } from "./types";
 
-/** MEASURED-free tuning constant: staleness ceiling for a published rule change. */
-const RULES_CACHE_TTL_MS = 30_000;
+/** Retained for callers that invalidate after writes; reads are now uncached. */
+export function clearDecisionRulesCache(_workspaceId?: string): void {}
 
-interface CacheEntry {
-  at: number;
-  ruleSet: RuleSet | null;
-}
-
-const cache = new Map<string, CacheEntry>();
-
-/** Drop the cache: a test seam, and what a rule write calls for its own workspace. */
-export function clearDecisionRulesCache(workspaceId?: string): void {
-  if (workspaceId === undefined) cache.clear();
-  else cache.delete(workspaceId);
+/** Serialize decision facts with tool and rule writers until the transaction ends. */
+export async function lockDecisionRulesIn(
+  tx: Tx,
+  workspaceId: string,
+): Promise<void> {
+  await tx
+    .select({ id: schema.workspaces.id })
+    .from(schema.workspaces)
+    .where(eq(schema.workspaces.id, workspaceId))
+    .for("share");
 }
 
 /**
@@ -65,21 +40,16 @@ function parseStored(workspaceId: string, settings: unknown): RuleSet | null {
   return null;
 }
 
-/** The rule set of one workspace inside the caller's transaction, through the cache. */
+/** The rule set of one workspace inside the caller's transaction, without a process cache. */
 export async function loadRuleSetIn(
   tx: Tx,
   workspaceId: string,
 ): Promise<RuleSet | null> {
-  const cached = cache.get(workspaceId);
-  if (cached && Date.now() - cached.at < RULES_CACHE_TTL_MS) {
-    return cached.ruleSet;
-  }
   const row = await tx.query.workspaces.findFirst({
     where: eq(schema.workspaces.id, workspaceId),
     columns: { settings: true },
   });
   const ruleSet = parseStored(workspaceId, row?.settings);
-  cache.set(workspaceId, { at: Date.now(), ruleSet });
   return ruleSet;
 }
 
@@ -90,9 +60,5 @@ export async function loadWorkspaceRuleSet(args: {
 }): Promise<RuleSet | null> {
   const { workspaceId } = args;
   if (!workspaceId) return null;
-  const cached = cache.get(workspaceId);
-  if (cached && Date.now() - cached.at < RULES_CACHE_TTL_MS) {
-    return cached.ruleSet;
-  }
   return withTenantDb((tx) => loadRuleSetIn(tx, workspaceId));
 }

@@ -126,9 +126,13 @@ describe("assertConsequenceRole", () => {
     await expect(assertConsequenceRole(CTX, ["moves_money"], {})).resolves.toBe(
       "Billing",
     );
-    expect(mocks.assertOrgRole).toHaveBeenCalledWith(CTX, {
-      org: ["Owner", "Billing"],
-    });
+    expect(mocks.assertOrgRole).toHaveBeenCalledWith(
+      CTX,
+      {
+        org: ["Owner", "Billing"],
+      },
+      undefined,
+    );
   });
 
   it("refuses tags with no common role before any lookup", async () => {

@@ -106,12 +106,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where(eq(schema.approvalRequests.workspaceId, workspaceId)),
       );
 
-    const autoApprove = (
+    const autoApprove = async (
       input: unknown,
       rules: unknown[],
       runId?: string | null,
-    ) =>
-      inScope(() =>
+    ) => {
+      await storeRuleSet(v2(rules));
+      return inScope(() =>
         autoApproveParkedCall({
           capability: "stripe__create_payment",
           input,
@@ -121,6 +122,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           now: () => NOW,
         }),
       );
+    };
 
     beforeAll(async () => {
       await withSystemDb(async (tx) => {
@@ -225,7 +227,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     // ── the store ────────────────────────────────────────────────────────────
 
-    it("loads the clause out of the settings bag, caches it, and re-reads it once cleared", async () => {
+    it("loads the clause and observes a committed change without cache invalidation", async () => {
       await storeRuleSet(v2([RULE]));
       const first = await inScope(() =>
         loadWorkspaceRuleSet({ orgId, workspaceId }),
@@ -233,8 +235,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(first?.autoApproval).toHaveLength(1);
       expect(first?.schema).toBe("oxagen.decision-rules.v2");
 
-      // Cached: the row changes underneath and the loader still answers the
-      // version it read.
+      // A committed change must be visible to the next decision read.
       await withSystemDb((tx) =>
         tx
           .update(schema.workspaces)
@@ -244,7 +245,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(
         (await inScope(() => loadWorkspaceRuleSet({ orgId, workspaceId })))
           ?.autoApproval,
-      ).toHaveLength(1);
+      ).toHaveLength(0);
       clearDecisionRulesCache(workspaceId);
       expect(
         (await inScope(() => loadWorkspaceRuleSet({ orgId, workspaceId })))
@@ -573,6 +574,32 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // Restored: the same call qualifies again, so the case above is about
       // the classification and not about some leftover state.
       expect((await autoApprove(CALL, [RULE]))?.ok).toBe(true);
+    });
+
+    it("ignores a stale passed rule set after a committed disable", async () => {
+      await storeRuleSet(v2([{ ...RULE, enabled: false }]));
+      const outcome = await inScope(() =>
+        autoApproveParkedCall({
+          capability: "stripe__create_payment",
+          input: CALL,
+          ruleSet: v2([RULE]) as never,
+          verdict: VERDICT,
+          ctx: { orgId, workspaceId, userId },
+          now: () => NOW,
+        }),
+      );
+      expect(outcome).toBeNull();
+    });
+
+    it("refuses release if the rule is disabled after evaluation but before commit", async () => {
+      const decision = await autoApprove(CALL, [RULE]);
+      expect(decision?.ok).toBe(true);
+      if (!decision?.commit) throw new Error("Missing approval commit");
+      await storeRuleSet(v2([{ ...RULE, enabled: false }]));
+      await expect(inScope(decision.commit)).rejects.toMatchObject({
+        reason: "approval_policy_changed",
+      });
+      expect(await approvalsOf()).toHaveLength(0);
     });
 
     it("never reads a person's approval of a DIFFERENT capability with the same input", async () => {
