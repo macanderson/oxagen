@@ -97,7 +97,10 @@ describe("Tools › mandates ledger › the row's link", () => {
     );
     expect(
       within(ledger()).getByRole("link", { name: "mnd_4f2a9c" }),
-    ).toHaveAttribute("href", routes.mandate("globex", "payments", "mnd_4f2a9c"));
+    ).toHaveAttribute(
+      "href",
+      routes.mandate("globex", "payments", "mnd_4f2a9c"),
+    );
   });
 });
 
