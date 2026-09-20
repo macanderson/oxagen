@@ -137,7 +137,10 @@ const PAGE_ROUTES: ReadonlySet<string> = new Set(
 
 /** A table template as a page route: `/{org}/{ws}/steering` → `/[org]/[ws]/steering`. */
 const pageRouteOf = (template: string): string =>
-  template.replace("{org}", "[org]").replace("{ws}", "[ws]");
+  template
+    .replace(/[?#].*$/, "")
+    .replace("{org}", "[org]")
+    .replace("{ws}", "[ws]");
 
 /** A concrete URL for a table template or a page route. */
 const visit = (template: string): string =>
@@ -150,9 +153,9 @@ const visit = (template: string): string =>
 
 function locationOf(path: string): string | null {
   const res = proxy(request(path));
-  return res.status === 308
-    ? new URL(res.headers.get("location") ?? "").pathname
-    : null;
+  if (res.status !== 308) return null;
+  const target = new URL(res.headers.get("location") ?? "");
+  return `${target.pathname}${target.search}${target.hash}`;
 }
 
 describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
