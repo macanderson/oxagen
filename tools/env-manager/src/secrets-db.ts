@@ -3,7 +3,7 @@
 // Identity is the GCP secret name (`key`). Each row carries two kinds of column:
 //
 //  - MACHINE-owned (refreshed on every pull): active_version, updated_at, and the
-//    reconciled value (GCP value, overridden by a fresher creds.txt match).
+//    reconciled value (GCP first, local fallback for missing dev secrets).
 //  - HUMAN-owned (seeded once, then preserved): description, vendor_url, usage
 //    (which apps/packages consume it) and — because the operator asked for an
 //    editable spreadsheet — value itself.
@@ -33,7 +33,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 /** secrets.db lives at the env-manager package root (gitignored). */
 export const DB_PATH = join(here, "..", "secrets.db");
 
-/** Where the freshest value for a secret came from. */
+/** Where the selected value for a secret came from. */
 export type ValueSource =
   | "gcp"
   | "creds.txt"

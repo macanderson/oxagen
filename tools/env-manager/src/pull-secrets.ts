@@ -2,7 +2,7 @@
 //
 // For every secret in the project it records: the active (enabled) version, that
 // version's createTime (the "last updated" date), and the value — reconciled
-// against creds.txt (authoritative/freshest) and .env.local. It then seeds a
+// against creds.txt and .env.local, preserving any GCP value. It then seeds a
 // description, a vendor_url, and the apps/packages that consume it. Re-runnable:
 // human-edited columns are lock-protected (see secrets-db.ts).
 //
