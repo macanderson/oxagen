@@ -1893,6 +1893,9 @@ importers:
 
   packages/tacho:
     dependencies:
+      '@contextgraphprotocol/typescript-sdk':
+        specifier: 0.1.0
+        version: 0.1.0
       canonicalize:
         specifier: 1.0.8
         version: 1.0.8
