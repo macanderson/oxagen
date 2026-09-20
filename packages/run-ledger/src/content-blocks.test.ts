@@ -40,6 +40,173 @@ function textDeltas(
 }
 
 describe("assembleModelStream", () => {
+  it("reads terminal reasoning and refusal parts while ignoring unsupported output", () => {
+    const response = {
+      status: "completed",
+      usage: { input_tokens: 7 },
+      output: [
+        { type: "reasoning", summary: [{ text: "Check assumptions." }] },
+        {
+          type: "message",
+          content: [{ refusal: "Cannot comply." }, { type: "audio" }, null],
+        },
+        { type: "web_search_call" },
+        null,
+      ],
+    };
+    const assembly = assembleModelStream(
+      sse(["response.completed", { type: "response.completed", response }]),
+    );
+    expect(assembly?.blocks).toMatchObject([
+      { kind: "thinking", text: "Check assumptions.", partial: false },
+      { kind: "text", text: "Cannot comply.", partial: false },
+    ]);
+    expect(assembly?.usage.inputTokens).toBe(7);
+    expect(assembly?.usage.cacheReadTokens).toBeNull();
+  });
+
+  it("retains tool identity when a done item omits fields", () => {
+    const assembly = assembleModelStream(
+      sse(
+        [
+          "response.output_item.added",
+          {
+            type: "response.output_item.added",
+            output_index: 0,
+            item: {
+              type: "function_call",
+              name: "Read",
+              call_id: "call1",
+              arguments: "{}",
+            },
+          },
+        ],
+        [
+          "response.output_item.done",
+          {
+            type: "response.output_item.done",
+            output_index: 0,
+            item: { type: "function_call" },
+          },
+        ],
+        [
+          "response.incomplete",
+          {
+            type: "response.incomplete",
+            response: {
+              status: "incomplete",
+              output: [{ type: "function_call", status: "completed" }],
+            },
+          },
+        ],
+      ),
+    );
+    expect(assembly?.blocks[0]).toMatchObject({
+      kind: "tool_use",
+      name: "Read",
+      callKey: "call1",
+      input: {},
+      partial: false,
+    });
+    expect(assembly?.partial).toBe(true);
+  });
+
+  it("ignores unindexed and malformed events without losing adjacent text", () => {
+    const wire = sse(
+      ["response.in_progress", { type: "response.in_progress" }],
+      ["response.output_item.done", { type: "response.output_item.done" }],
+      [
+        "response.output_item.done",
+        { type: "response.output_item.done", output_index: 4, item: null },
+      ],
+      [
+        "response.output_text.delta",
+        { type: "response.output_text.delta", delta: "unindexed" },
+      ],
+      [
+        "response.output_text.delta",
+        { type: "response.output_text.delta", output_index: 0, delta: "kept" },
+      ],
+      [
+        "response.output_text.delta",
+        { type: "response.output_text.delta", output_index: 0 },
+      ],
+      [
+        "response.output_text.done",
+        { type: "response.output_text.done", output_index: 0 },
+      ],
+      ["response.completed", { type: "response.completed" }],
+    );
+    expect(assembleModelStream(wire)?.blocks).toMatchObject([
+      { text: "kept", partial: false },
+    ]);
+    expect(assembleModelStream('{"request":')).toBeNull();
+    expect(
+      assembleModelStream(JSON.stringify({ request: {}, response: wire })),
+    ).toBeNull();
+  });
+
+  it("records tool result summaries and final Anthropic usage updates", () => {
+    const wire = sse(
+      ["message_start", { type: "message_start", message: {} }],
+      [
+        "content_block_start",
+        {
+          type: "content_block_start",
+          index: 0,
+          content_block: {
+            type: "tool_result",
+            tool_use_id: "c1",
+            text: "x".repeat(200) + "\nsecond line",
+          },
+        },
+      ],
+      ["content_block_stop", { type: "content_block_stop", index: 0 }],
+      [
+        "content_block_start",
+        {
+          type: "content_block_start",
+          index: 1,
+          content_block: { type: "tool_result", text: "short" },
+        },
+      ],
+      ["content_block_stop", { type: "content_block_stop", index: 1 }],
+      [
+        "message_delta",
+        {
+          type: "message_delta",
+          delta: { stop_reason: "end_turn" },
+          usage: {
+            input_tokens: 4,
+            cache_read_input_tokens: 5,
+            cache_creation_input_tokens: 6,
+            output_tokens: 3,
+          },
+        },
+      ],
+      ["message_stop", { type: "message_stop" }],
+    );
+    const assembly = assembleModelStream(wire);
+    expect(assembly?.blocks).toMatchObject([
+      {
+        kind: "tool_result",
+        forId: "c1",
+        summary: "x".repeat(179) + "…",
+        partial: false,
+      },
+      { kind: "tool_result", forId: "b1", summary: "short", partial: false },
+    ]);
+    expect(assembly?.usage).toEqual({
+      inputTokens: 4,
+      cacheReadTokens: 5,
+      cacheWriteTokens: 6,
+      outputTokens: 3,
+    });
+    expect(assembly?.blocks.reduce((sum, block) => sum + block.tokens, 0)).toBe(
+      3,
+    );
+  });
+
   it("unwraps a retained exchange after a long request", () => {
     const response = sse(START, ...textDeltas(0, ["answer"]), [
       "message_stop",
