@@ -210,6 +210,34 @@ describe("ingestion.pipeline Inngest function", () => {
       );
     });
 
+    it("tracks the legacy URL through chained property mappings", async () => {
+      mocks.getConnector.mockReturnValue({
+        normalizeRecord: () => ({
+          ...NORMALIZED,
+          legacyExternalId: "42",
+          properties: { url: "https://github.com/acme/repo/issues/42" },
+        }),
+      });
+      mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+        fn({
+          execute: vi.fn().mockResolvedValue([
+            {
+              oxagen_entity_type: "task",
+              property_mappings: { url: "link", link: "source_link" },
+            },
+          ]),
+        }),
+      );
+      await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+      expect(mocks.resolveEntity).toHaveBeenCalledWith(
+        expect.objectContaining({
+          legacyUrlProperty: "source_link",
+          properties: { source_link: "https://github.com/acme/repo/issues/42" },
+        }),
+        expect.anything(),
+      );
+    });
+
     it("returns naturalKey and action on success", async () => {
       const step = makeStep();
       const result = await capturedHandler!({

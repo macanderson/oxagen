@@ -106,7 +106,8 @@ export async function resolveNaturalKey(
       const legacy = await session.run(
         `MATCH (n:EntityNode {naturalKey: $legacyNaturalKey, orgId: $orgId, workspaceId: $workspaceId})
          WHERE n.sourceRecordType = $sourceRecordType
-         RETURN n.publicId AS nodeId, n.properties AS properties`,
+         RETURN n.publicId AS nodeId, n.properties AS properties,
+                n.sourceExternalUrl AS sourceExternalUrl`,
         {
           legacyNaturalKey: mutation.legacyNaturalKey,
           orgId,
@@ -117,13 +118,17 @@ export async function resolveNaturalKey(
       // A repository-local number may already represent another repository.
       // Preserve an old public ID only when its recorded URL proves identity.
       const matches = legacy.records.filter((row) => {
+        const sourceExternalUrl: unknown = row.get("sourceExternalUrl");
+        if (typeof sourceExternalUrl === "string")
+          return sourceExternalUrl === mutation.sourceRef.externalUrl;
         try {
           const properties: unknown = JSON.parse(String(row.get("properties")));
           return (
             properties !== null &&
             typeof properties === "object" &&
-            (properties as Record<string, unknown>).url ===
-              mutation.sourceRef.externalUrl
+            (properties as Record<string, unknown>)[
+              mutation.legacyUrlProperty ?? "url"
+            ] === mutation.sourceRef.externalUrl
           );
         } catch {
           return false;
