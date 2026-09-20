@@ -2,7 +2,8 @@
 // from a contract field or is null, never a literal. AST over
 // src/data/live/mappers/**: a property or an assignment named in TRUST_NAMES
 // whose value is a literal, branches to one or falls back to one fails.
-// `grade` and `verdict` join the list with the lane that first renders them.
+// `grade` and `verdict` joined the list with the lanes that first rendered
+// them: the ladder rung on the Run page, and the Verdict column on Fleet.
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
@@ -17,7 +18,12 @@ import {
 const RULE = "trust-values";
 const MAPPERS_DIR = "src/data/live/mappers/";
 const PROBES = "src/test/arch/probes/trust-values";
-const TRUST_NAMES: ReadonlySet<string> = new Set(["basis", "tier"]);
+const TRUST_NAMES: ReadonlySet<string> = new Set([
+  "basis",
+  "tier",
+  "verdict",
+  "grade",
+]);
 
 function isLiteral(expression: ts.Expression): boolean {
   return (

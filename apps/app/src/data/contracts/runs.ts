@@ -31,6 +31,24 @@ export const RunSummary = z.object({
 export type RunSummary = z.infer<typeof RunSummary>;
 
 /**
+ * The witness verdict the rollup recorded (spec §8.5, §12.8; ADR-064), from
+ * the closed vocabulary the runner writes. Only `flipped` marks a run proven.
+ * Null when no witness reported on the run or the rollup has not rebuilt it;
+ * a null reads "not recorded", never `unverified`, which is itself a recorded
+ * answer a runner reached.
+ */
+export const ProofVerdict = z.enum([
+  "flipped",
+  "failing",
+  "unmoved",
+  "unsatisfied",
+  "tampered",
+  "unverified",
+  "waived",
+]);
+export type ProofVerdict = z.infer<typeof ProofVerdict>;
+
+/**
  * Where the run's actions were observed from (spec §8.4). `observe` records
  * what an agent did and gives Oxagen no connection point, so every direct
  * command is refused: a page draws the controls disabled rather than offering
@@ -38,6 +56,19 @@ export type RunSummary = z.infer<typeof RunSummary>;
  */
 export const EnforcementTier = z.enum(["gateway", "harness", "observe"]);
 export type EnforcementTier = z.infer<typeof EnforcementTier>;
+
+/**
+ * Spec §7.3: which model request a steer rides, and whether the step in
+ * flight is cut short to reach one sooner. It is a ceiling, not a promise:
+ * each connection point carries the strongest mode it can at or below the one
+ * asked for, and `dispatch_command` records both the request and what was
+ * carried.
+ *
+ * Mirrors `tachoDeliveryModeSchema` (packages/tacho/src/wire.ts), the way
+ * every view model here mirrors its contract enum.
+ */
+export const DeliveryMode = z.enum(["next_step", "interrupt", "turn_boundary"]);
+export type DeliveryMode = z.infer<typeof DeliveryMode>;
 
 /** The gaps a seal recorded, from the closed vocabulary (spec §13.1). */
 const CompletenessGap = z.enum([
@@ -88,6 +119,19 @@ export const RunMachine = z.object({
 });
 export type RunMachine = z.infer<typeof RunMachine>;
 
+/**
+ * Can a direct command reach this run? An `observe`-tier session only records
+ * what an agent did and gives Oxagen no connection point, so a queued pause,
+ * resume, steer or cancel would have nothing to travel down (#3285).
+ *
+ * Every surface that offers a run control answers from here: the Run page's
+ * controls and the Fleet row controls. One rule, so a row cannot offer what
+ * its run page refuses.
+ */
+export function acceptsCommands(tier: EnforcementTier): boolean {
+  return tier !== "observe";
+}
+
 export const RunRow = z.object({
   id: PublicId,
   /** Which store recorded the run: the evidence ledger or a wrapped agent's session. */
@@ -112,6 +156,7 @@ export const RunRow = z.object({
   name: z.string().min(1).nullable(),
   summary: RunSummary.nullable(),
   replayGrade: ReplayGrade.nullable(),
+  verdict: ProofVerdict.nullable(),
   enforcementTier: EnforcementTier,
   /** Empty while the run is live, or where the seal recorded none. */
   completenessGaps: z.array(CompletenessGap),

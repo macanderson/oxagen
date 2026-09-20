@@ -9,6 +9,7 @@
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
+import { canCommandRun } from "@/shared/run-command-roles";
 import { ApprovalsPanel } from "./approvals-panel";
 import { RunsTable } from "./runs-table";
 import { StatStrip } from "./stat-strip";
@@ -23,7 +24,8 @@ async function readFleet(
     source.approvals.pending(ctx, { runId: null }),
   ]);
   const named =
-    approvals.ok && approvals.value.some((item) => item.mandateId !== null);
+    approvals.ok &&
+    approvals.value.items.some((item) => item.mandateId !== null);
   const mandates = new Map<string, MandateRow>();
   if (named) {
     const read = await source.mandates.list(ctx, { agentId: null });
@@ -66,6 +68,7 @@ export async function Fleet({
         workspace={ctx.wsName}
         org={ctx.orgSlug}
         ws={ctx.wsSlug}
+        canCommand={canCommandRun(ctx.orgRole, ctx.wsRole)}
       />
     </div>
   );

@@ -2,10 +2,34 @@
 // and put the handler's reason in `code` (§3.2); each reason `dispatch_command`
 // throws has its own sentence, and any other code is printed as recorded with
 // no cause attached to it.
+//
+// It sits in the UI kit because two pages send run commands: the run's own
+// header and a run's row on Fleet. A lane may not import another lane's
+// internals (ARCHITECTURE.md §2), so a sentence kept in one of them would be
+// copied into the other, and two copies of a refusal vocabulary drift.
+//
+// The failure is taken structurally rather than as the seam's `ActionResult`,
+// because this layer has no edge to the kernel seam. Nothing is lost: every
+// caller passes the seam's own value, so a new `reason` on `ActionResult`
+// fails to compile at each call site rather than falling through to a
+// sentence that does not fit it.
+import { COMMAND_REASON_MAX } from "@oxagen/oxagen/tacho/command-limits";
 import { useTranslations } from "next-intl";
-import type { ActionResult } from "@/server/kernel";
 
-export type CommandFailure = Exclude<ActionResult<unknown>, { ok: true }>;
+export type CommandFailure =
+  | {
+      ok: false;
+      reason:
+        | "denied"
+        | "invalid"
+        | "not_found"
+        | "conflict"
+        | "unavailable"
+        | "exhausted";
+      code: string;
+      field?: string;
+    }
+  | { ok: false; reason: "pending_approval"; accessRequestId: string };
 
 export function useActionFailure(): (failure: CommandFailure) => string {
   const t = useTranslations("run.commands.failure");
@@ -46,6 +70,12 @@ export function useActionFailure(): (failure: CommandFailure) => string {
         switch (failure.code) {
           case "steer_text":
             return t("steerText");
+          case "delivery_mode":
+            return t("deliveryMode");
+          case "command_reason":
+            return t("commandReason", { max: COMMAND_REASON_MAX });
+          case "row_command":
+            return t("rowCommand");
           case "from_seq":
             return t("fromSeq");
           case "run_b":

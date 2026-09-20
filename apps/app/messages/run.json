@@ -215,7 +215,7 @@
       "steer": {
         "open": "Steer",
         "title": "Steer {run}",
-        "body": "Your text reaches the model as a control frame, at the strongest delivery the run's connection point can carry.",
+        "body": "Your text reaches the model as a control frame. Pick when the agent sees it.",
         "confirm": "Send it",
         "pending": "Sending",
         "queued": "The steer is queued. It reaches the model at the next delivery point."
@@ -247,9 +247,28 @@
         "seqPastSeal": "That frame is past the last one this run recorded.",
         "gapBeforeSeq": "A frame before that point kept no body, so the replay would have a hole before the branch. Nothing was minted.",
         "fromSeq": "The branch point is a frame sequence number of at least 1.",
-        "runB": "Name a second run to compare against, and not this one."
+        "runB": "Name a second run to compare against, and not this one.",
+        "deliveryMode": "Pick one of the three delivery modes. Nothing was queued.",
+        "commandReason": "Keep the reason to {max} characters or fewer. Nothing was queued.",
+        "rowCommand": "A run's row sends a pause, a resume or a cancel. Nothing was queued."
       },
-      "observeReason": "This run was observed from the side. Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel."
+      "observeReason": "This run was observed from the side. Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel.",
+      "delivery": {
+        "legend": "When the agent sees it",
+        "nextStep": {
+          "label": "Before the next model call",
+          "help": "The agent finishes the step it is on, then reads your text on its next model request."
+        },
+        "interrupt": {
+          "label": "Interrupt the step in flight",
+          "help": "The step running now is cut short so your text lands sooner. A connection point that cannot interrupt carries it at the next model call and records that it did."
+        },
+        "turnBoundary": {
+          "label": "At the end of the turn",
+          "help": "The agent finishes the whole turn, then reads your text before it starts the next one."
+        },
+        "ceiling": "This is a ceiling. The run's connection point carries the strongest mode it can at or below it, and the command records both what you asked for and what it carried."
+      }
     },
     "record": {
       "reread": "Re-read the run",
@@ -286,11 +305,6 @@
       "unobserved_tail": "the process ended without a terminal event",
       "chain_break": "the hash chain does not hold end to end",
       "telemetry_gap": "telemetry stopped for part of the run"
-    },
-    "tier": {
-      "gateway": "observed at the gateway",
-      "harness": "observed at the harness",
-      "observe": "observed from the side"
     },
     "chain": {
       "title": "Chain and seal",
@@ -331,11 +345,6 @@
         "signed": "Signed",
         "countersigned": "Countersigned",
         "anchor": "Anchor"
-      },
-      "tier": {
-        "gateway": "observed at the gateway",
-        "harness": "observed at the harness",
-        "observe": "observed from the side"
       },
       "grade": {
         "inspect": "Inspect",

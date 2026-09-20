@@ -243,7 +243,12 @@ export function writeManifestVersion(
   const text = readFileSync(path, "utf8");
   writeFileSync(
     path,
-    rewriteManifest(manifest, text, readManifestVersion(root, manifest), version),
+    rewriteManifest(
+      manifest,
+      text,
+      readManifestVersion(root, manifest),
+      version,
+    ),
   );
 }
 

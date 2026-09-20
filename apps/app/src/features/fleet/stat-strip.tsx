@@ -2,7 +2,7 @@
 // counted from a read the page already renders. A tile whose read failed is not
 // drawn; its section below shows the failure.
 import { useLocale, useTranslations } from "next-intl";
-import type { ApprovalItem } from "@/data/contracts/approvals";
+import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
 import type { RunPage } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { formatClock, formatCount } from "@/ui/money-format";
@@ -33,9 +33,19 @@ function LiveRuns({ page }: { page: RunPage }) {
   );
 }
 
-function Waiting({ items, now }: { items: ApprovalItem[]; now: number }) {
+/**
+ * How many calls are parked, and how long the oldest has waited.
+ *
+ * The figure is the whole queue, not one page of it. `approvals.pending` walks
+ * the cursor to the end under a bound and sets `more` when the bound stopped
+ * it, so a count this tile cannot stand behind reads `1,000+` rather than an
+ * exact number that is wrong. The line under it then says a bound stopped the
+ * read, because "1,000+" with no explanation is a figure nobody can act on.
+ */
+function Waiting({ queue, now }: { queue: ApprovalQueue; now: number }) {
   const t = useTranslations("fleet.stats.waiting");
   const locale = useLocale();
+  const { items } = queue;
   const oldest = items.reduce<ApprovalItem | null>(
     (first, item) =>
       first === null || Date.parse(item.createdAt) < Date.parse(first.createdAt)
@@ -43,14 +53,23 @@ function Waiting({ items, now }: { items: ApprovalItem[]; now: number }) {
         : first,
     null,
   );
+  const count = formatCount(items.length, locale);
   return (
     <dl data-testid="tile" className={TILE}>
       <dt className="text-xs font-medium text-muted-foreground">
         {t("title")}
       </dt>
       <dd className="text-2xl font-semibold tabular-nums">
-        {formatCount(items.length, locale)}
+        {queue.more ? t("more", { count }) : count}
       </dd>
+      {queue.more ? (
+        <dd
+          data-testid="waiting-more"
+          className="text-xs text-muted-foreground"
+        >
+          {t("moreBasis")}
+        </dd>
+      ) : null}
       <dd className="text-xs text-muted-foreground">
         {oldest === null
           ? t("none")
@@ -79,7 +98,7 @@ export function StatStrip({
   now,
 }: {
   runs: Read<RunPage>;
-  approvals: Read<ApprovalItem[]>;
+  approvals: Read<ApprovalQueue>;
   now: number;
 }) {
   const t = useTranslations("fleet.stats");
@@ -87,7 +106,7 @@ export function StatStrip({
   return (
     <section aria-label={t("label")} className="grid gap-3 sm:grid-cols-2">
       {runs.ok ? <LiveRuns page={runs.value} /> : null}
-      {approvals.ok ? <Waiting items={approvals.value} now={now} /> : null}
+      {approvals.ok ? <Waiting queue={approvals.value} now={now} /> : null}
     </section>
   );
 }

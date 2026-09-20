@@ -59,6 +59,7 @@ export function toRunRow(
             model: run.summary.model,
           },
     replayGrade: run.replayGrade,
+    verdict: run.verdict,
     enforcementTier: run.enforcementTier,
     completenessGaps: run.completenessGaps,
     canSummarize: run.canSummarize,

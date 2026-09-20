@@ -1,9 +1,18 @@
 // list_approvals output to the Fleet approvals panel (ARCHITECTURE.md §3.4).
 // Typed from the contract's `_output`; the agent key is the chain's first hop
 // the store has, and it is null until the gateway records it.
+//
+// Both hops the contract records travel: `chain.agentKey` and `chain.rule`.
+// The card draws four hops (who asked, which agent, which action, which rule),
+// and dropping the rule left the fourth hop blank on every card, including the
+// rows a mandate parked, which are exactly the rows that record one. The
+// recorded auto-approval evaluation travels for the same reason: it is what
+// the card's eligibility line reads, and recomputing it would show what the
+// rules say now rather than what judged this call (ADR-070).
 import type { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.list";
 import type { agentApprovalListResolved } from "@oxagen/oxagen/contracts/agent.approval.list_resolved";
 import type { z } from "zod";
+import { toAutoEligibility } from "@/data/contracts/approvals";
 import type {
   ApprovalItem,
   ResolvedApprovalItem,
@@ -20,6 +29,8 @@ export function toApprovalItems(
     agentKey: item.chain.agentKey,
     requester: item.requester,
     mandateId: item.mandateId,
+    rule: item.chain.rule,
+    autoEligibility: toAutoEligibility(item.autoEligibility),
     createdAt: item.createdAt,
     expiresAt: item.expiresAt,
   }));

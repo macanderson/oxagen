@@ -1657,21 +1657,80 @@ type Messages = {
         title: string;
         oldest: string;
         none: string;
+        more: string;
+        moreBasis: string;
       };
     };
     approvals: {
       title: string;
       parked: string;
+      more: string;
       empty: string;
       emptyDetail: string;
-      agent: string;
-      requester: string;
       timesOut: string;
       notRecorded: string;
       openRun: string;
       mandateUnread: string;
       mandatePeriodBasis: string;
       mandatePerCallOnly: string;
+      chain: {
+        title: string;
+        who: string;
+        agent: string;
+        action: string;
+        rule: string;
+        underMandate: string;
+      };
+      eligibility: {
+        none: string;
+        ok: string;
+        blocked: string;
+        floor: string;
+        recorded: string;
+        reasons: {
+          tool_not_declared: string;
+          tainted_input: string;
+          critical_hazard: string;
+          irreversible_consequence: string;
+          measure_above_ceiling: string;
+          measure_unreadable: string;
+          target_not_allowed: string;
+          target_unreadable: string;
+          no_standing_approval: string;
+          outside_business_hours: string;
+          consequences_changed: string;
+        };
+        unknownReason: string;
+      };
+      decide: {
+        open: string;
+        title: string;
+        body: string;
+        note: string;
+        noteHint: string;
+        approve: string;
+        deny: string;
+        approving: string;
+        denying: string;
+        checking: string;
+        settled: string;
+        eligibilityUnread: string;
+        failure: {
+          noteRequired: string;
+          noPrincipal: string;
+          orgRoleRequired: string;
+          noRoleCoversAllTags: string;
+          notAnApprover: string;
+          agentCannotResolveOwnMandate: string;
+          approvalExpired: string;
+          invalid: string;
+          pendingApproval: string;
+          exhausted: string;
+          billingLink: string;
+          refused: string;
+          unavailable: string;
+        };
+      };
     };
     runs: {
       title: string;
@@ -1680,14 +1739,29 @@ type Messages = {
         agent: string;
         operator: string;
         status: string;
+        tier: string;
         replay: string;
+        verdict: string;
         cost: string;
         frames: string;
         started: string;
+        controls: string;
       };
       noSummary: string;
       notRecorded: string;
       basisNotRecorded: string;
+      verdict: {
+        flipped: string;
+        failing: string;
+        unmoved: string;
+        unsatisfied: string;
+        tampered: string;
+        unverified: string;
+        waived: string;
+      };
+      legend: string;
+      unpriced: string;
+      unpricedLink: string;
       source: {
         ledger: string;
         tacho: string;
@@ -1700,6 +1774,18 @@ type Messages = {
         body: string;
         enroll: string;
         command: string;
+      };
+      controls: {
+        group: string;
+        action: string;
+        verbs: {
+          pause: string;
+          resume: string;
+          cancel: string;
+        };
+        sending: string;
+        queued: string;
+        reread: string;
       };
     };
   };
@@ -3129,8 +3215,27 @@ type Messages = {
         gapBeforeSeq: string;
         fromSeq: string;
         runB: string;
+        deliveryMode: string;
+        commandReason: string;
+        rowCommand: string;
       };
       observeReason: string;
+      delivery: {
+        legend: string;
+        nextStep: {
+          label: string;
+          help: string;
+        };
+        interrupt: {
+          label: string;
+          help: string;
+        };
+        turnBoundary: {
+          label: string;
+          help: string;
+        };
+        ceiling: string;
+      };
     };
     record: {
       reread: string;
@@ -3167,11 +3272,6 @@ type Messages = {
       unobserved_tail: string;
       chain_break: string;
       telemetry_gap: string;
-    };
-    tier: {
-      gateway: string;
-      harness: string;
-      observe: string;
     };
     chain: {
       title: string;
@@ -3212,11 +3312,6 @@ type Messages = {
         signed: string;
         countersigned: string;
         anchor: string;
-      };
-      tier: {
-        gateway: string;
-        harness: string;
-        observe: string;
       };
       grade: {
         inspect: string;
@@ -4711,6 +4806,11 @@ type Messages = {
         label: string;
         help: string;
       };
+    };
+    enforcementTier: {
+      gateway: string;
+      harness: string;
+      observe: string;
     };
     readFailure: {
       denied: string;

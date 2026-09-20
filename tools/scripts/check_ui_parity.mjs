@@ -19,6 +19,15 @@
  *     script verifies the static half; CI e2e + the committed proof verify the
  *     runtime half.)
  *
+ *     One capability can be operable from more than one page: a run is paused
+ *     from the run's own page and from its row on Fleet, and both are surfaces
+ *     a person uses. The registry holds one object per capability, so the
+ *     second page and every page after it go in that object's `also` array,
+ *     and each entry is held to the same bar as the primary binding: a `page`
+ *     that exists on disk and a `proof`. Without that, a second surface is
+ *     either invisible to the gate or forces a duplicate key the registry
+ *     cannot hold.
+ *
  *   REVERSE (advisory — always warn-only):
  *     A registered capability that apps/app actually invokes (a literal
  *     invoke("<name>") call) but that does NOT declare the "app" layer is
@@ -193,6 +202,54 @@ export function resolveInvoked(src, validNames, identToName) {
 }
 
 /**
+ * The gaps in a binding's `also` array: every further page the same capability
+ * is operated from. Each entry is checked the way the primary binding is, so a
+ * second surface cannot be listed without a page on disk and a proof.
+ *
+ * A missing `also` is not a gap. Most capabilities have one surface, and the
+ * registry's shape stays what it was for them.
+ *
+ * @param {string} capability - the capability name, for the gap's label
+ * @param {unknown} also - the binding's `also` value, usually undefined
+ * @param {(p:string)=>boolean} pageExists
+ */
+export function alsoGaps(capability, also, pageExists) {
+  if (also === undefined) return [];
+  if (!Array.isArray(also)) {
+    return [
+      {
+        capability,
+        reason: "binding.also is not an array of {route, page, proof} entries",
+      },
+    ];
+  }
+  const gaps = [];
+  also.forEach((entry, i) => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      gaps.push({
+        capability,
+        reason: `binding.also[${i}] is not a {route, page, proof} object`,
+      });
+      return;
+    }
+    if (!entry.page || !pageExists(entry.page)) {
+      gaps.push({
+        capability,
+        reason: `binding.also[${i}].page missing on disk: ${entry.page ?? "(unset)"}`,
+      });
+      return;
+    }
+    if (!entry.proof) {
+      gaps.push({
+        capability,
+        reason: `binding.also[${i}] has no runtime \`proof\` (screenshot under verifications/ or a component/action test)`,
+      });
+    }
+  });
+  return gaps;
+}
+
+/**
  * Pure parity computation. Given parsed contracts, the registry bindings, the
  * set of app-invoked names, and a `pageExists` predicate (injected so tests
  * need no disk), return { forward, reverse, blocking } gap lists.
@@ -240,6 +297,7 @@ export function computeParity({
           "binding has no runtime `proof` (screenshot under verifications/ or an e2e spec)",
       });
     }
+    forward.push(...alsoGaps(cap.name, b.also, pageExists));
   }
   const blocking = forward.filter((g) => !baseline.has(g.capability));
   const reverse = [];
