@@ -86,6 +86,7 @@ vi.mock("@oxagen/database", () => {
       h.seams.push("tenant");
       return fn(tx);
     },
+    withOrgDb: async (fn: (arg: typeof tx) => unknown) => fn(tx),
     withSystemDb: async (fn: (arg: typeof tx) => unknown) => {
       h.seams.push("system");
       return fn(tx);
