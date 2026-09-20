@@ -121,12 +121,14 @@ export async function readApprovalEligibility(
   org: string,
   ws: string,
   approvalId: string,
+  /** Which page is asking, so a refused read names that page's permission. */
+  page: "fleet" | "run",
 ): Promise<ActionResult<ApprovalEligibility>> {
   const ctx = await requireViewer(org, ws);
   const read = await kernelRead(ctx, {
     contract: approvalAutoEligibilityGet,
     input: { approvalId },
-    page: "fleet",
+    page,
   });
   if (!read.ok) return readToActionResult(read);
   const view = AutoEligibility.nullable().safeParse(read.value.eligibility);

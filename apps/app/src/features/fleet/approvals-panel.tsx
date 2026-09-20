@@ -63,11 +63,13 @@ function ApprovalCard({
   now,
   org,
   ws,
+  on,
 }: {
   item: ApprovalItem;
   /** The mandate the call drew on, when the viewer could read it. */
   mandate: MandateRow | null;
   now: number;
+  on: "fleet" | "run";
 } & Place) {
   const t = useTranslations("fleet.approvals");
   /**
@@ -177,6 +179,7 @@ function ApprovalCard({
         eligibility={item.autoEligibility}
         org={org}
         ws={ws}
+        on={on}
       />
     </li>
   );
@@ -196,8 +199,9 @@ export function ApprovalsPanel({
   now: number;
   /**
    * Which page is drawing the panel. It names the heading's element, so the
-   * Run page's copy cannot collide with Fleet's id; nothing else changes with
-   * it, because an approval must read the same on both pages.
+   * Run page's copy cannot collide with Fleet's id, and it is the page key a
+   * refused eligibility re-read reports its permission under. Nothing a reader
+   * acts on changes with it: an approval must read the same on both pages.
    */
   on?: "fleet" | "run";
 } & Place) {
@@ -237,6 +241,7 @@ export function ApprovalsPanel({
               now={now}
               org={org}
               ws={ws}
+              on={on}
             />
           ))}
         </ul>

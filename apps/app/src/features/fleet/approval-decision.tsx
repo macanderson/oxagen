@@ -178,6 +178,7 @@ export function ApprovalDecision({
   eligibility,
   org,
   ws,
+  on,
 }: {
   approvalId: string;
   /** The capability the parked call asked for, which titles the dialog. */
@@ -186,6 +187,8 @@ export function ApprovalDecision({
   eligibility: AutoEligibility | null;
   org: string;
   ws: string;
+  /** Which page is drawing the card, so a refused re-read names that page's permission. */
+  on: "fleet" | "run";
 }) {
   const t = useTranslations("fleet.approvals.decide");
   const failureText = useFailureText();
@@ -211,7 +214,7 @@ export function ApprovalDecision({
   }
 
   async function load() {
-    const result = await readApprovalEligibility(org, ws, approvalId);
+    const result = await readApprovalEligibility(org, ws, approvalId, on);
     if (result.ok) setFresh(result.value);
     else
       setUnread(

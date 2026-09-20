@@ -216,6 +216,7 @@ describe("readApprovalEligibility", () => {
       "acme",
       "core-platform",
       APPROVAL,
+      "fleet",
     );
     expect(result).toEqual({
       ok: true,
@@ -235,6 +236,7 @@ describe("readApprovalEligibility", () => {
       "acme",
       "core-platform",
       APPROVAL,
+      "fleet",
     );
     expect(result).toEqual({
       ok: true,
@@ -242,7 +244,7 @@ describe("readApprovalEligibility", () => {
     });
   });
 
-  it("carries a refused read across as a denial, so the dialog keeps its recorded line (negative)", async () => {
+  it("carries a refused read across as a denial, naming the asking page's permission (negative)", async () => {
     invoke.mockRejectedValue(
       new kernel.CapabilityError(
         "get_auto_eligibility",
@@ -254,8 +256,9 @@ describe("readApprovalEligibility", () => {
       "acme",
       "core-platform",
       APPROVAL,
+      "run",
     );
-    expect(result.ok).toBe(false);
-    expect(result.ok ? null : result.reason).toBe("denied");
+    // A card on the Run page reports the Run page's permission, not Fleet's.
+    expect(result).toEqual({ ok: false, reason: "denied", code: "run.read" });
   });
 });

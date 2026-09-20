@@ -56,6 +56,7 @@ function draw(recorded: AutoEligibility | null = eligibility) {
         eligibility={recorded}
         org="acme"
         ws="core-platform"
+        on="fleet"
       />
     </IntlProvider>,
   );
@@ -271,6 +272,12 @@ describe("the evaluation the dialog reads again", () => {
     });
     draw();
     await open();
+    expect(readApprovalEligibility).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      APPROVAL,
+      "fleet",
+    );
     expect(screen.getByTestId("eligibility-unread")).toHaveTextContent(
       "could not be read again (workspace.read)",
     );
