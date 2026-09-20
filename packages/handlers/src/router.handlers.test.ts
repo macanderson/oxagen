@@ -36,6 +36,7 @@ import { routerPolicySetHandler } from "./router.policy.set";
 import { routerStatsListHandler } from "./router.stats.list";
 import { routerDecisionPreviewHandler } from "./router.decision.preview";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
+import { roleTenantDb } from "./test-utils/role-tx";
 
 /** A tx whose routingPolicy.findMany resolves the given rows (for loadEffective). */
 function findManyTx(rows: unknown[]) {
@@ -105,6 +106,10 @@ describe("get_routing_policy", () => {
 });
 
 describe("set_routing_policy", () => {
+  beforeEach(() => {
+    mocks.withTenantDb.mockImplementationOnce(roleTenantDb({ org: "Owner" }));
+  });
+
   function upsertTx(existing: unknown) {
     const values = vi.fn().mockResolvedValue(undefined);
     const insert = vi.fn().mockReturnValue({ values });
