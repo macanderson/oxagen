@@ -153,6 +153,7 @@ export async function runPipeline(
   if (mapping === null) return null;
 
   // Apply property mappings: rename source field paths to canonical property names
+  let legacyUrlProperty = "url";
   const mappedProperties: Record<string, unknown> = {
     ...normalized.properties,
   };
@@ -161,6 +162,7 @@ export async function runPipeline(
   )) {
     if (sourceField in mappedProperties) {
       mappedProperties[canonicalName] = mappedProperties[sourceField];
+      if (sourceField === legacyUrlProperty) legacyUrlProperty = canonicalName;
       if (canonicalName !== sourceField) delete mappedProperties[sourceField];
     }
   }
@@ -183,6 +185,7 @@ export async function runPipeline(
       ? {}
       : {
           legacyNaturalKey: `${event.connectorType}:${event.connectionId}:${normalized.legacyExternalId}`,
+          legacyUrlProperty,
         }),
     operation: "insert",
     displayName: normalized.displayName,
