@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import type { RuleSet } from "@oxagen/rules";
 
 const h = vi.hoisted(() => ({
   row: {} as Record<string, unknown>,
@@ -12,7 +13,7 @@ const h = vi.hoisted(() => ({
   budgets: vi.fn(),
   gate: vi.fn(),
   autoApprove: vi.fn(),
-  realRules: null as unknown,
+  realRules: null as RuleSet | null,
   kill: vi.fn(),
   open: vi.fn(),
   seal: vi.fn(),
@@ -193,6 +194,17 @@ beforeEach(async () => {
     expiresAt: new Date(Date.now() + 60_000),
     resumeStartedAt: null,
   };
+  h.invoke.mockImplementation(async (_name, input, ctx) => {
+    const { createDecisionRulesGate } = await import("@oxagen/rules");
+    await createDecisionRulesGate({
+      loadRuleSet: async () => h.realRules,
+      autoApprove: h.autoApprove,
+    })({
+      capability: "write_test",
+      input: (h.schema as z.ZodType).parse(input),
+      ctx,
+    });
+  });
   h.roles.mockResolvedValue(["Member"]);
   h.budgets.mockResolvedValue([]);
   h.tools.mockResolvedValue({ nameMap: { write_test: "write_test" } });
@@ -276,11 +288,11 @@ describe("approved call resumption", () => {
       const commit = vi.fn().mockResolvedValue(undefined);
       h.autoApprove.mockResolvedValue({ ok: true, commit });
       expect(await resumeApprovedCall(ref)).toBe(
-        effect === "deny" ? "failed" : "succeeded",
+        effect === "deny" ? "indeterminate" : "succeeded",
       );
       if (effect === "deny") {
         expect(h.row.resumeError).toBe("decision_rule_denied");
-        expect(h.invoke).not.toHaveBeenCalled();
+        expect(h.invoke).toHaveBeenCalledTimes(1);
         expect(commit).not.toHaveBeenCalled();
       } else {
         expect(h.autoApprove).toHaveBeenCalledWith(
@@ -294,13 +306,39 @@ describe("approved call resumption", () => {
       }
     },
   );
+  it.each(["run", "kill"])(
+    "writes no standing-rule receipt when %s admission refuses",
+    async (stage) => {
+      h.realRules = {
+        schema: "oxagen.decision-rules.v1",
+        rules: [
+          {
+            id: "standing",
+            description: "govern resumed writes",
+            capability: "write_test",
+            when: { all: [] },
+            effect: "require_approval",
+          },
+        ],
+      };
+      const commit = vi.fn();
+      h.autoApprove.mockResolvedValue({ ok: true, commit });
+      if (stage === "run")
+        h.open.mockRejectedValue(new Error("run unavailable"));
+      else h.kill.mockResolvedValue({ reason: "workspace" });
+      expect(await resumeApprovedCall(ref)).toBe("failed");
+      expect(h.invoke).not.toHaveBeenCalled();
+      expect(h.autoApprove).not.toHaveBeenCalled();
+      expect(commit).not.toHaveBeenCalled();
+    },
+  );
   it("refuses revoked membership", async () => {
     h.roles.mockResolvedValue([]);
     expect(await resumeApprovedCall(ref)).toBe("failed");
     expect(h.row.resumeError).toBe("requester_access_revoked");
     expect(h.invoke).not.toHaveBeenCalled();
   });
-  it.each(["tool", "budget", "rules", "kill"])(
+  it.each(["tool", "budget", "kill"])(
     "rechecks fresh %s admission",
     async (kind) => {
       if (kind === "tool") h.tools.mockResolvedValue({ nameMap: {} });
@@ -308,7 +346,6 @@ describe("approved call resumption", () => {
         h.budgets.mockResolvedValue([
           { budget: { enabled: true }, overLimit: true },
         ]);
-      if (kind === "rules") h.gate.mockRejectedValue(new Error("new refusal"));
       if (kind === "kill") h.kill.mockResolvedValue({ reason: "workspace" });
       expect(await resumeApprovedCall(ref)).toBe("failed");
       expect(h.invoke).not.toHaveBeenCalled();
