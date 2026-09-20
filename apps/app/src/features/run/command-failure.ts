@@ -46,6 +46,8 @@ export function useActionFailure(): (failure: CommandFailure) => string {
         switch (failure.code) {
           case "steer_text":
             return t("steerText");
+          case "delivery_mode":
+            return t("deliveryMode");
           case "from_seq":
             return t("fromSeq");
           case "run_b":

@@ -25,6 +25,7 @@ import {
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import { moneyFromMicros } from "@/data/contracts/money";
+import { DeliveryMode } from "@/data/contracts/runs";
 import {
   RunTranscript,
   type TranscriptKind,
@@ -59,22 +60,45 @@ export async function haltRun(
     : result;
 }
 
-/** Steer the run: the text reaches the model as a control frame at the delivery mode the connection point can carry. */
+/**
+ * Steer the run: the text reaches the model as a control frame, at the
+ * delivery mode the operator asked for (spec §7.3).
+ *
+ * `requestedMode` is a ceiling, not a promise. The connection point resolves
+ * the strongest mode it can carry at or below it, and the command row records
+ * both the request and what was carried, so the caller says when the text can
+ * arrive rather than when it will.
+ *
+ * A server action is an endpoint, so the mode is parsed here rather than
+ * trusted from the form: a value outside the three the contract accepts comes
+ * back as `delivery_mode` on the field that carried it, not as a schema
+ * refusal with no field to point at.
+ */
 export async function steerRun(
   org: string,
   ws: string,
   runId: string,
   text: string,
+  requestedMode: string,
 ): Promise<ActionResult<QueuedCommand>> {
   const ctx = await requireViewer(org, ws);
   const trimmed = text.trim();
   if (trimmed === "" || trimmed.length > STEER_TEXT_MAX) {
     return { ok: false, reason: "invalid", code: "steer_text", field: "text" };
   }
+  const mode = DeliveryMode.safeParse(requestedMode);
+  if (!mode.success) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "delivery_mode",
+      field: "requestedMode",
+    };
+  }
   const result = await kernelWrite(ctx, tachoCommandDispatch, {
     target: { kind: "run", id: runId },
     command: "steer",
-    payload: { text: trimmed },
+    payload: { text: trimmed, requestedMode: mode.data },
   });
   return result.ok
     ? { ok: true, value: { commandIds: result.value.commandIds } }

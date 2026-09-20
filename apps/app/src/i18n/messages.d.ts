@@ -2664,8 +2664,25 @@ type Messages = {
         gapBeforeSeq: string;
         fromSeq: string;
         runB: string;
+        deliveryMode: string;
       };
       observeReason: string;
+      delivery: {
+        legend: string;
+        nextStep: {
+          label: string;
+          help: string;
+        };
+        interrupt: {
+          label: string;
+          help: string;
+        };
+        turnBoundary: {
+          label: string;
+          help: string;
+        };
+        ceiling: string;
+      };
     };
     record: {
       reread: string;
