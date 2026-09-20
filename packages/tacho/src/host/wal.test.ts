@@ -107,7 +107,7 @@ describe("Wal", () => {
     vi.mocked(readSync).mockImplementationOnce(() => {
       throw Object.assign(new Error("read failed"), { code: "EIO" });
     });
-    expect(wal.bodiesFor(session)).toEqual([]);
+    expect(() => wal.bodiesFor(session)).toThrow("read failed");
     expect(report).toHaveBeenCalledTimes(1);
     expect(report).toHaveBeenCalledWith({
       session_uuid: event.session_uuid,
