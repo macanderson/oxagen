@@ -25,3 +25,8 @@ Neither draft marks a finding fixed. Preserve existing unsent assistant text and
 The shared page frame, table recipes, phone cards, and identity component carry the presentation across routes. Fleet and Run omit the excluded columns and sections. Spend separates recorded spend from potential savings and exposes the correction paths. Billing omits completion-only meters.
 
 This decision changes product presentation and the recommendation handoff. It does not establish that production usage capture works, add new behavior detectors, calculate realized savings, or supply repository write tools to Stella. Each of those requires its own verification. Page-by-page browser comparison remains the check for visual fidelity; passing component tests alone cannot establish it.
+
+
+### Retained UI code
+
+The chain and replay components are registered in `DEREGISTERED.md` rather than deleted. INV-16 has a bounded exception for these three files and three tagged exports. Knip retains its empty baseline and reports unregistered unreachable code normally. This preserves the excluded implementation without offering it on a page.

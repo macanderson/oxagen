@@ -289,6 +289,7 @@ export async function readTranscriptPage(
  * attempt; the harness that admitted the run is what resumes it (ADR-043), so
  * this answers the attempt, not a running agent.
  */
+/** @deregistered Retained with the replay UI under ADR-130. */
 export async function forkRun(
   org: string,
   ws: string,
@@ -316,6 +317,7 @@ export async function forkRun(
  * recordings are aligned frame by frame on each frame's kind and call
  * identity; bodies are not read, so this works at grade `inspect` and above.
  */
+/** @deregistered Retained with the replay UI under ADR-130. */
 export async function bisectRuns(
   org: string,
   ws: string,
