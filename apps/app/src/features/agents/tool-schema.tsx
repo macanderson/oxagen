@@ -39,9 +39,9 @@ function CopyButton({ label, value }: { label: string; value: string }) {
         data-state={state}
         className={`${buttonSecondary} text-xs`}
         onClick={() => {
-          void writeClipboard(value).then((ok) =>
-            setState(ok ? "copied" : "failed"),
-          );
+          void writeClipboard(value).then((ok) => {
+            setState(ok ? "copied" : "failed");
+          });
         }}
       >
         {state === "copied" ? t("copied") : label}

@@ -12,6 +12,8 @@ const { invoke, requireViewer, kernelRead } = vi.hoisted(() => ({
   requireViewer: vi.fn(),
   kernelRead: vi.fn(),
 }));
+import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+
 vi.mock("@oxagen/oxagen", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/oxagen")>()),
   invoke,
@@ -941,8 +943,11 @@ describe("readAssignableRoles", () => {
       },
     });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    // The contract is compared by identity, not by name: this is the same
+    // module object the action imports, so a read that reached a different
+    // contract fails here rather than passing on a matching name.
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: expect.objectContaining({ name: "list_iam_roles" }),
+      contract: iamRoleList,
       input: { includeGrants: false, limit: 200, offset: 0 },
       page: "agents",
     });

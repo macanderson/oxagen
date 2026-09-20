@@ -257,7 +257,7 @@ export const INVITABLE_ROLES = ["member", "admin", "owner"] as const;
 export type InvitableRole = (typeof INVITABLE_ROLES)[number];
 
 const isInvitable = (role: string): role is InvitableRole =>
-  INVITABLE_ROLES.includes(role as InvitableRole);
+  INVITABLE_ROLES.some((known) => known === role);
 
 export type InvitationDraft = {
   email: string;

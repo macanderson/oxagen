@@ -23,7 +23,6 @@
 // that both changed nothing.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
-import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { Field } from "@/ui/field";

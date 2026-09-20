@@ -285,7 +285,7 @@ describe("a refusal", () => {
 });
 
 describe("a viewer who may not invite", () => {
-  it("reads the refusal in place of the control, and opens nothing (negative)", async () => {
+  it("reads the refusal in place of the control, and opens nothing (negative)", () => {
     renderDialog([PENDING], false);
     expect(screen.getByTestId("invite-denied")).toHaveTextContent(
       "Inviting someone is an Owner and Admin action.",

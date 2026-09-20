@@ -11,6 +11,7 @@ import { type Read, readError, readOk } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { nth } from "@/test/nth";
 import { spendBudgets } from "./agents.builders";
 
 vi.mock("next/link", () => ({
@@ -81,10 +82,10 @@ describe("BudgetSection", () => {
     const panel = renderPanel(
       readOk(spendBudgets({ limit: null, ratio: 0, state: "ok" })),
     );
-    const [row] = within(panel).getAllByRole("row").slice(1);
-    expect(within(row!).getAllByRole("cell")[1]).toHaveTextContent(
-      "No ceiling",
-    );
+    const row = nth(within(panel).getAllByRole("row"), 1, "the ceiling row");
+    expect(
+      nth(within(row).getAllByRole("cell"), 1, "the limit cell"),
+    ).toHaveTextContent("No ceiling");
   });
 
   it("names the per-agent gap and links to where a ceiling is set", () => {

@@ -13,6 +13,7 @@ import { readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
+import { nth } from "@/test/nth";
 import { toolbelt } from "./agents.builders";
 import { ToolbeltSection } from "./toolbelt";
 
@@ -92,7 +93,7 @@ describe("Toolbelt input schemas", () => {
       ...belt,
       tools: [
         {
-          ...belt.tools[1]!,
+          ...nth(belt.tools, 1, "the second belt entry"),
           inputSchema: null,
           schemaTruncated: true,
         },
@@ -115,11 +116,13 @@ describe("Toolbelt input schemas", () => {
     const restore = stubClipboard(writeText);
     draw();
     const row = within(schemaRow(1));
-    const [digest, schema] = row.getAllByTestId("belt-schema-copy");
-    await user.click(digest!);
+    const copies = row.getAllByTestId("belt-schema-copy");
+    const digest = nth(copies, 0, "the digest's copy button");
+    const schema = nth(copies, 1, "the schema's copy button");
+    await user.click(digest);
     expect(writeText).toHaveBeenCalledWith(DIGEST);
-    expect(digest!).toHaveTextContent("Copied");
-    await user.click(schema!);
+    expect(digest).toHaveTextContent("Copied");
+    await user.click(schema);
     expect(writeText).toHaveBeenLastCalledWith(
       expect.stringContaining('"type": "object"'),
     );
@@ -131,13 +134,21 @@ describe("Toolbelt input schemas", () => {
     const user = userEvent.setup();
     const restore = stubClipboard(writeText);
     draw();
-    const [digest] = within(schemaRow(1)).getAllByTestId("belt-schema-copy");
-    await user.click(digest!);
-    expect(digest!).not.toHaveTextContent("Copied");
-    // Each copy button carries its own live region; the digest's is first.
-    expect(within(schemaRow(1)).getAllByRole("status")[0]!).toHaveTextContent(
-      "Copy it by hand: this browser refused the clipboard.",
+    const digest = nth(
+      within(schemaRow(1)).getAllByTestId("belt-schema-copy"),
+      0,
+      "the digest's copy button",
     );
+    await user.click(digest);
+    expect(digest).not.toHaveTextContent("Copied");
+    // Each copy button carries its own live region; the digest's is first.
+    expect(
+      nth(
+        within(schemaRow(1)).getAllByRole("status"),
+        0,
+        "the digest's live region",
+      ),
+    ).toHaveTextContent("Copy it by hand: this browser refused the clipboard.");
     restore();
   });
 

@@ -43,7 +43,10 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Agent } = await import("./agent");
 
-const ctx = unsafeMint(WsCtx, {
+// The fields, kept apart from the minted viewer: a test that wants the same
+// viewer in another org role mints a second one from these rather than
+// spreading the first, which is a class instance and not a plain object.
+const CTX_FIELDS = {
   userId: "usr_marcusbell",
   orgId: "7a000000-0000-4000-8000-0000000000a1",
   orgSlug: "acme",
@@ -53,7 +56,9 @@ const ctx = unsafeMint(WsCtx, {
   wsSlug: "core-platform",
   wsName: "Core platform",
   wsRole: "member",
-});
+} as const;
+
+const ctx = unsafeMint(WsCtx, CTX_FIELDS);
 
 async function renderAgent(
   reads: Parameters<typeof agentsSource>[0],
@@ -249,7 +254,7 @@ describe("Identity", () => {
       { get: readOk(at.detail) },
       null,
       null,
-      unsafeMint(WsCtx, { ...ctx, orgRole: at.role }),
+      unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: at.role }),
     );
     const roles = region("Roles");
     expect(within(roles).queryAllByRole("button")).toEqual([]);

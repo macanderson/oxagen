@@ -13,7 +13,7 @@
 // Revoke names the role in its confirming sentence, because the button sits on
 // a row and a row is easy to mistake for its neighbour.
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useEffect, useState } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
@@ -40,9 +40,12 @@ export type RoleTarget = {
 
 type Failure = Exclude<ActionResult<unknown>, { ok: true }>;
 
-/** The catalogue read, in the four states the dialog draws. */
+/**
+ * The catalogue read, in the three states the dialog draws. `loading` is the
+ * state it opens in: the read starts when the dialog opens and nothing is
+ * offered until it answers.
+ */
 type Catalogue =
-  | { state: "idle" }
   | { state: "loading" }
   | { state: "loaded"; offer: RoleOffer }
   | { state: "failed"; failure: Failure };
@@ -56,13 +59,16 @@ export function AssignRole({ org, ws, agentId, agentSlug }: RoleTarget) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const [catalogue, setCatalogue] = useState<Catalogue>({ state: "idle" });
+  const [catalogue, setCatalogue] = useState<Catalogue>({ state: "loading" });
 
   // The catalogue is read once the dialog opens, and kept for as long as the
-  // page lives: a person who assigns two roles reads it once.
+  // page lives: a person who assigns two roles reads it once. The ref, not the
+  // state, is what stops a second read, so the effect sets no state
+  // synchronously and cannot cascade a render.
+  const startedRef = useRef(false);
   useEffect(() => {
-    if (!open || catalogue.state !== "idle") return;
-    setCatalogue({ state: "loading" });
+    if (!open || startedRef.current) return;
+    startedRef.current = true;
     void (async () => {
       try {
         const result = await readAssignableRoles(org, ws);
@@ -75,7 +81,7 @@ export function AssignRole({ org, ws, agentId, agentSlug }: RoleTarget) {
         setCatalogue({ state: "failed", failure: UNANSWERED });
       }
     })();
-  }, [open, catalogue.state, org, ws]);
+  }, [open, org, ws]);
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -124,7 +130,7 @@ export function AssignRole({ org, ws, agentId, agentSlug }: RoleTarget) {
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{t("body")}</p>
-          {catalogue.state === "loading" || catalogue.state === "idle" ? (
+          {catalogue.state === "loading" ? (
             <p data-state="loading" className="text-sm text-muted-foreground">
               {t("loading")}
             </p>

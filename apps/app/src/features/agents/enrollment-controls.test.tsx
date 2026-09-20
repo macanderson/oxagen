@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { nth } from "@/test/nth";
 
 const { router, issueAgentEnrollmentToken, revokeHostEnrollment } = vi.hoisted(
   () => ({
@@ -38,11 +39,14 @@ const DENIED = { ok: false, reason: "denied", code: "org_role_required" };
 
 /** A clipboard that records what it was asked to copy, or refuses. */
 function stubClipboard(writeText: () => Promise<void>) {
+  // The spy is returned directly rather than read back off `navigator`, which
+  // would be an unbound method reference.
+  const spy = vi.fn(writeText);
   Object.defineProperty(navigator, "clipboard", {
-    value: { writeText: vi.fn(writeText) },
+    value: { writeText: spy },
     configurable: true,
   });
-  return navigator.clipboard.writeText;
+  return spy;
 }
 
 function renderRevoke() {
@@ -199,12 +203,10 @@ describe("EnrollHost", () => {
       within(dialog).getByRole("button", { name: "Mint a token" }),
     );
     await screen.findByTestId("enrollment-token-value");
-    const [copyToken, copyCommand] = within(dialog).getAllByRole("button", {
-      name: "Copy",
-    });
-    await userEvent.click(copyToken!);
+    const copies = within(dialog).getAllByRole("button", { name: "Copy" });
+    await userEvent.click(nth(copies, 0, "the token's copy button"));
     expect(writeText).toHaveBeenCalledWith(TOKEN.token);
-    await userEvent.click(copyCommand!);
+    await userEvent.click(nth(copies, 1, "the command's copy button"));
     expect(writeText).toHaveBeenCalledWith(TOKEN.enrollCommand);
   });
 
@@ -218,7 +220,11 @@ describe("EnrollHost", () => {
     );
     await screen.findByTestId("enrollment-token-value");
     await userEvent.click(
-      within(dialog).getAllByRole("button", { name: "Copy" })[0]!,
+      nth(
+        within(dialog).getAllByRole("button", { name: "Copy" }),
+        0,
+        "the token's copy button",
+      ),
     );
     expect(dialog).toHaveTextContent("Copying is blocked in this browser");
     expect(screen.getByTestId("enrollment-token-value")).toHaveTextContent(
