@@ -1,8 +1,15 @@
-// Tools › the mandates ledger (#2957; mockup `pTools` mandates tab): every
-// mandate the workspace has granted, with what each has settled, what calls
-// in flight hold and what is left — the page the accountable office reads.
-// Each figure is the ledger's (INV-10); nothing here is a rollup of the rows
-// beneath it.
+// Tools › the mandates ledger (#2957; mockup `pTools` mandates tab): the
+// mandates this workspace has recorded — granted, requested, expired and
+// revoked — with what each has settled, what calls in flight hold and what is
+// left, the page the accountable office reads. Each figure is the ledger's
+// (INV-10); nothing here is a rollup of the rows beneath it.
+//
+// This header used to open on "every mandate the workspace has granted". Both
+// halves of that were wrong and the paragraph below already said so: the read
+// is narrowed for an unaccountable reader and bounded for everyone, and the
+// ledger carries drafts, expiries and revocations, none of which is a grant.
+// The lead on screen dropped the claim on 2026-09-16 and the comment kept it,
+// so the file described a section it no longer renders.
 //
 // A reader without an accountable org role is not denied this read: the
 // handler narrows it to the agents that reader created and answers an ordinary
@@ -20,6 +27,11 @@
 // no Grant: retirement suspends the principal, so authority granted to it
 // could never be drawn, and the handler would still record it (#3124).
 //
+// A row's mandate id is the link to that mandate's own page (#2957): its
+// authority, its ledger and its two governed writes. It was plain text here
+// while the Agents tab one lane over already linked the same id, which left
+// the office reading this ledger a table it could not open a row of.
+//
 // The registry, connections, kill switches and auto-approval rules are the
 // other tabs of this page, drawn by their own files; the tab bar is
 // `tabs.tsx`.
@@ -31,9 +43,11 @@ import {
   type MandateRow,
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
-import { mono, panel } from "@/ui/control-styles";
+import { routes } from "@/shared/safe-path";
+import { linkText, mono, panel } from "@/ui/control-styles";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { MandateScope } from "@/ui/mandate-scope";
+import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { useFormatter } from "@/ui/formatter";
 import { type AgentChoices, GrantMandate } from "./grant-mandate";
@@ -64,7 +78,12 @@ function Row({
       className="border-t border-border align-top"
     >
       <td className="px-3 py-2">
-        <span className={`${mono} break-all`}>{mandate.id}</span>
+        <SafeLink
+          to={routes.mandate(at.org, at.ws, mandate.id)}
+          className={`${mono} ${linkText} break-all`}
+        >
+          {mandate.id}
+        </SafeLink>
         <div className="text-xs text-muted-foreground">
           {mandate.consequenceTags.join(", ")}
         </div>
