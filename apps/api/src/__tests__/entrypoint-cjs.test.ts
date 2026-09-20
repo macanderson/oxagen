@@ -25,6 +25,9 @@ import { transform } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 const ENTRYPOINT = fileURLToPath(new URL("../index.ts", import.meta.url));
+const BACKFILL = fileURLToPath(
+  new URL("../scripts/cms-crm-backfill.ts", import.meta.url),
+);
 
 describe("apps/api self-hosted entrypoint", () => {
   it("transforms to CJS, the format build-node.mjs emits", async () => {
@@ -33,6 +36,22 @@ describe("apps/api self-hosted entrypoint", () => {
     // Same format/platform/target triple as build-node.mjs. A top-level await
     // here throws with "Top-level await is currently not supported with the
     // cjs output format".
+    await expect(
+      transform(source, {
+        loader: "ts",
+        format: "cjs",
+        platform: "node",
+        target: "node22",
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("the CRM backfill script transforms to CJS too (it ships beside the server)", async () => {
+    // build-node.mjs bundles src/scripts/cms-crm-backfill.ts to
+    // dist/cms-crm-backfill.cjs so the node can run it with `docker exec`.
+    // The script ends in `main().catch(...)`, not a top-level await, and
+    // this keeps it that way.
+    const source = await readFile(BACKFILL, "utf8");
     await expect(
       transform(source, {
         loader: "ts",
