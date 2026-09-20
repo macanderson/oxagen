@@ -7,7 +7,7 @@ This pass fixes the remaining request, transaction, and connector defects below.
 | Issue | Current result |
 | --- | --- |
 | #2396 | Main now validates every row-selecting pattern and seam-owned tenant parameter. The older raw-word regex description is stale. Semantic graph isolation remains governed by ADR-087 and #3199. |
-| #2406 | This change sends scoped queries through managed transactions. Reads use `executeRead`. Mutating clauses and procedure calls use `executeWrite`. The transaction callback contains only the query. Tenant parameters and transaction timeout survive retries. |
+| #2406 | Scoped reads use managed `executeRead` transactions. Mutating clauses and procedure calls use non-retrying `session.run` to avoid replaying committed mutations after a lost acknowledgement. Both paths preserve tenant parameters and transaction timeouts. |
 | #1825 | Engram rename or replay decision deferred under #3296, per the parent task. |
 | #2824 | Main already retains records without vectors when embedding fails. `dedup/__tests__/resolve.test.ts` includes an embedding 429 regression. Paid capacity, model/index compatibility, and a live resync remain unverified. No credential or production mutation was attempted. |
 | #2353 | This change adds a 30-second request deadline, caller cancellation, three total rate-limit attempts, server-directed waits, and a typed error when the required wait exceeds 120 seconds. Ambiguous network errors and non-rate-limit 403s are not retried. |

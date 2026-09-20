@@ -1,18 +1,17 @@
 # env-manager
 
-A **local-only**, no-auth web UI with two pages:
+A local web UI with two pages:
 
 - `/` — see every env var per environment and **push the right value to the right
   Vercel project** in one click.
 - `/secrets` — an editable spreadsheet over a local mirror of Google Cloud Secret
   Manager.
 
-The server binds to `127.0.0.1` only. There is no login, so anything that can reach
-the port can read every secret in the mirror. Do not port-forward it, do not expose
-it through a tunnel, and stop it when you are done.
+The server binds to `127.0.0.1` and requires the access token printed at startup.
+Open that link to read and edit secrets. Stop the server when you are done.
 
 ```bash
-pnpm env:manager          # from repo root  →  http://127.0.0.1:7799
+pnpm env:manager          # open the access link printed at startup
 pnpm env:secrets:pull     # refresh the /secrets mirror from GCP
 ```
 
@@ -103,3 +102,9 @@ Put these in the repo-root `.env.local`; `pnpm env:manager` loads it.
 - A push replaces a var by deleting the old entry and then creating a new one. Vercel
   has no transaction for this, so if the create half fails the variable is left unset
   rather than rolled back — check the log lines and re-push anything that errored.
+
+## Local access
+
+Start the manager and open the access link printed in the terminal. Each process generates a new token. The browser removes it from the URL and keeps it in tab-scoped session storage for navigation between the two pages. After restarting the server, open its new link. Do not share the link.
+
+The listener accepts its exact `127.0.0.1` host and port. It refuses cross-origin browser requests and requires a bearer token for every API read or mutation. Responses are not cached, and other pages cannot embed the manager in a frame.

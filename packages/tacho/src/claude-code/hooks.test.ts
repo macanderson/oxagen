@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { digestBytes, jcs } from "../digest";
 import { redactionMarker } from "../evidence/redaction";
-import { TACHO_MAX_REDACTIONS } from "../evidence/frame-body";
+import { MAX_CONTENT_REDACTIONS } from "../envelope";
 import { normalizeHook } from "./hooks";
 import { SessionRecorder } from "./recorder";
 
@@ -391,13 +391,12 @@ describe("hook normalization", () => {
   });
 
   it("hands the recorder the bytes each digest names", () => {
-    // The prompt, as UTF-8: its digest is the `content_digest` the draft
-    // already carried, so the chain does not move for a prompt with no secret.
+    // Hooks carry raw UTF-8. The recorder owns the content digest.
     const [prompt] = hook("UserPromptSubmit", { prompt: "Read README.md" });
     expect(prompt?.content?.content_type).toBe("text/plain; charset=utf-8");
     expect(dec.decode(prompt?.content?.bytes)).toBe("Read README.md");
     expect(digestBytes(prompt?.content?.bytes as Uint8Array)).toBe(
-      prompt?.content_digest,
+      digestBytes("Read README.md"),
     );
     const [expansion] = hook("UserPromptExpansion", { user_input: "go" });
     expect(expansion?.kind).toBe("oxagen:message");
@@ -450,7 +449,7 @@ describe("hook normalization", () => {
     const [stop] = hook("Stop", { last_assistant_message: "Done." });
     expect(dec.decode(stop?.content?.bytes)).toBe("Done.");
     expect(digestBytes(stop?.content?.bytes as Uint8Array)).toBe(
-      stop?.content_digest,
+      digestBytes("Done."),
     );
     const [sub] = hook("SubagentStop", {
       agent_id: "agent-1",
@@ -479,15 +478,13 @@ describe("content on a prompt frame", () => {
   const secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD";
 
   it("hands the recorder the prompt as it arrived, redacted by nobody yet", () => {
-    // The seam: the hook normalizer reports, the recorder redacts. Its
-    // `content_digest` is therefore the digest of the raw text, and only the
-    // digest the recorder chains names the bytes that ship.
+    // The hook normalizer carries bytes without assigning a competing digest.
     const draft = hook("UserPromptSubmit", {
       prompt: `ship it with ${secret}`,
     })[0];
 
     expect(dec.decode(draft?.content?.bytes)).toBe(`ship it with ${secret}`);
-    expect(draft?.content_digest).toBe(digestBytes(`ship it with ${secret}`));
+    expect(draft).not.toHaveProperty("content_digest");
     // The body member keeps digesting the prompt as the harness reported it:
     // it correlates frames and is never verified against bytes.
     expect(draft?.body["prompt_digest"]).not.toBe(
@@ -533,14 +530,10 @@ describe("content on a prompt frame", () => {
 });
 
 describe("a prompt with more credentials than one event can record", () => {
-  // Redaction removes every match. The record of the matches is what is
-  // bounded: `contentSchema` caps `content.redactions`, and a draft that
-  // handed over all of them would fail to seal, so the daemon answered 500,
-  // the hook fell back to a local decision, and the turn lost the frame it
-  // was supposed to leave behind. `prepareContent` ships no body and no
-  // digest instead, and says why on the event.
+  // The envelope bounds the detail list. Every match is still redacted,
+  // and the event records the full count alongside the retained digest.
   const many = Array.from(
-    { length: TACHO_MAX_REDACTIONS + 44 },
+    { length: MAX_CONTENT_REDACTIONS + 44 },
     (_, i) => `ghp_${String(i).padStart(36, "a")}`,
   );
 
@@ -560,12 +553,18 @@ describe("a prompt with more credentials than one event can record", () => {
     return { event, recorder };
   };
 
-  it("ships no body, chains no digest, and says why", () => {
+  it("keeps redacted bytes, their digest, and the full count", () => {
     const { event, recorder } = sealPrompt();
 
-    expect(event?.attrs["body_omitted"]).toBe("too_many_redactions");
-    expect(event?.content).toBeUndefined();
-    expect(recorder.takeBodies()).toEqual([]);
+    expect(event?.attrs["body_omitted"]).toBeUndefined();
+    expect(event?.attrs["oxagen.content_redactions_total"]).toBe(
+      String(many.length),
+    );
+    expect(event?.content?.redactions).toHaveLength(MAX_CONTENT_REDACTIONS);
+    const expected = many.map(() => redactionMarker("github_token")).join(" ");
+    const [body] = recorder.takeBodies();
+    expect(dec.decode(body?.bytes)).toBe(expected);
+    expect(event?.content?.digest).toBe(digestBytes(expected));
     // Not one token reaches the chain.
     expect(JSON.stringify(event)).not.toContain("ghp_");
   });
@@ -575,10 +574,12 @@ describe("a prompt with more credentials than one event can record", () => {
     expect(event?.kind).toBe("turn_start");
   });
 
-  it("keeps the unpromoted hook fields next to the reason", () => {
+  it("keeps the unpromoted hook fields next to the total", () => {
     const { event } = sealPrompt({ some_new_upstream_field: "kept" });
     expect(event?.attrs["hook.some_new_upstream_field"]).toBe("kept");
-    expect(event?.attrs["body_omitted"]).toBe("too_many_redactions");
+    expect(event?.attrs["oxagen.content_redactions_total"]).toBe(
+      String(many.length),
+    );
   });
 });
 

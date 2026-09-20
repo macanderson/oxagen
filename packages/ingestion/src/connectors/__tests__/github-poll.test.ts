@@ -239,7 +239,7 @@ describe("GitHub organization polling", () => {
           yielded.push(row);
       })(),
     ).rejects.toThrow("404");
-    expect(yielded).toEqual([]);
+    expect(yielded).toHaveLength(100);
   });
 
   it("treats a first-page 404 as an unavailable repository", async () => {
@@ -247,5 +247,71 @@ describe("GitHub organization polling", () => {
     expect(await collect(github.poll!(bearer, config, "issue", null))).toEqual(
       [],
     );
+  });
+});
+
+describe("incremental GitHub pagination", () => {
+  const cursor = "2026-02-01T00:00:00Z";
+  const changedAt = "2026-03-01T00:00:00Z";
+
+  it.each(["issue", "pull_request"])(
+    "stops %s with no changes after one full page",
+    async (kind) => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(
+          Array.from({ length: 100 }, (_, i) => ({
+            id: i + 1,
+            updated_at: cursor,
+          })),
+        ),
+      );
+      expect(await collect(github.poll!(bearer, config, kind, cursor))).toEqual(
+        [],
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["issue", "pull_request"])(
+    "reads all same-timestamp new %s records across pages",
+    async (kind) => {
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse(
+            Array.from({ length: 100 }, (_, i) => ({
+              id: i + 1,
+              updated_at: changedAt,
+            })),
+          ),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse(
+            Array.from({ length: 100 }, (_, i) => ({
+              id: i + 101,
+              updated_at: i === 0 ? changedAt : cursor,
+            })),
+          ),
+        );
+      const rows = await collect(github.poll!(bearer, config, kind, cursor));
+      expect(rows).toHaveLength(101);
+      expect(rows[100]?.externalId).toBe(`${kind}:id:101`);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("stops issue pagination at an excluded PR on the cursor boundary", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        Array.from({ length: 100 }, (_, i) => ({
+          id: i + 1,
+          updated_at: cursor,
+          pull_request: {},
+        })),
+      ),
+    );
+    expect(
+      await collect(github.poll!(bearer, config, "issue", cursor)),
+    ).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

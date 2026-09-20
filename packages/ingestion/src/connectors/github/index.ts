@@ -67,24 +67,37 @@ function ghHeaders(token: string): Record<string, string> {
   };
 }
 
-/** Read every page before yielding records, so an incomplete read cannot advance the cursor. */
-async function ghListPage(url: string, token: string): Promise<unknown[]> {
-  const rows: unknown[] = [];
+/** Yield pages on demand, stopping sorted issue/PR lists at their saved cursor. */
+async function* ghListRecords(
+  url: string,
+  token: string,
+  updatedCursor?: string | null,
+): AsyncIterable<unknown> {
   for (let page = 1; ; page++) {
     const pageUrl = page === 1 ? url : `${url}&page=${page}`;
     const resp = await fetch(pageUrl, {
       headers: ghHeaders(token),
       signal: AbortSignal.timeout(30_000),
     });
-    if (resp.status === 404 && page === 1) return [];
+    if (resp.status === 404 && page === 1) return;
     if (!resp.ok)
       throw new Error(`github.poll: GitHub API ${resp.status} for ${pageUrl}`);
     const data: unknown = await resp.json();
     if (!Array.isArray(data))
       throw new Error("github.poll: expected a GitHub list response");
-    rows.push(...(data as unknown[]));
-    if (data.length < 100) return rows;
+    for (const row of data as unknown[]) {
+      const updatedAt = asString(asRecord(row).updated_at);
+      if (updatedCursor && updatedAt && updatedAt <= updatedCursor) return;
+      yield row;
+    }
+    if (data.length < 100) return;
   }
+}
+
+async function ghListPage(url: string, token: string): Promise<unknown[]> {
+  const rows: unknown[] = [];
+  for await (const row of ghListRecords(url, token)) rows.push(row);
+  return rows;
 }
 
 // Utility functions to safely extract values
@@ -495,11 +508,12 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
 
       if (recordType === "pull_request" || recordType === "issue") {
         const path = recordType === "pull_request" ? "pulls" : "issues";
-        const rows = await ghListPage(
+        const rows = ghListRecords(
           `${base}/${path}?state=all&sort=updated&direction=desc&per_page=100`,
           token,
+          cursor,
         );
-        for (const raw of rows) {
+        for await (const raw of rows) {
           const r = raw as {
             updated_at?: string;
             pull_request?: unknown;
@@ -507,7 +521,6 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           };
           // The issues endpoint also returns PRs — drop them here.
           if (recordType === "issue" && r.pull_request !== undefined) continue;
-          if (cursor && r.updated_at && r.updated_at <= cursor) break; // sorted desc
           yield {
             sourceRecordType: recordType,
             externalId: githubRecordIdentity(recordType, asRecord(raw))

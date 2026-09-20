@@ -472,9 +472,9 @@ describe("workspace calls cannot write shared org rows", () => {
   it("cannot update or claim an existing shared org row", async () => {
     const result = await inScopeRolledBack(workspace, async (tx) => {
       const unchanged =
-        await tx`UPDATE iam.principal_role_assignments SET role_id = role_id WHERE public_id = 'pra_sr_org'`;
+        await tx`UPDATE iam.principal_role_assignments SET deleted_at = now() WHERE public_id = 'pra_sr_org'`;
       const claimed =
-        await tx`UPDATE iam.principal_role_assignments SET workspace_id = ${WS_A} WHERE public_id = 'pra_sr_org'`;
+        await tx`UPDATE iam.principal_role_assignments SET workspace_id = ${WS_A}, role_id = ${ROLE_FOR_WRITE} WHERE public_id = 'pra_sr_org'`;
       return { updated: unchanged.count, claimed: claimed.count };
     });
     expect(result).toEqual({ updated: 0, claimed: 0 });
