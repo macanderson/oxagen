@@ -18,7 +18,7 @@
 // the one that judged it, so the line names the rule id and says the evaluation
 // is the recorded one.
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { AutoEligibility } from "@/data/contracts/approvals";
 import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
@@ -216,9 +216,13 @@ export function ApprovalDecision({
   } | null>(null);
   /** The code a refused re-read answered; the recorded line stays either way. */
   const [unread, setUnread] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const readGeneration = useRef(0);
   const noteId = `approval-note-${approvalId}`;
 
   function reset() {
+    readGeneration.current += 1;
+    setReading(false);
     setNote("");
     setFailure(null);
     setFresh(null);
@@ -226,16 +230,27 @@ export function ApprovalDecision({
   }
 
   async function load() {
-    const result = await readApprovalEligibility(org, ws, approvalId, on);
-    if (result.ok) setFresh(result.value);
-    else
-      setUnread(
-        result.reason === "pending_approval" ? "pending_approval" : result.code,
-      );
+    const generation = ++readGeneration.current;
+    setReading(true);
+    try {
+      const result = await readApprovalEligibility(org, ws, approvalId, on);
+      if (generation !== readGeneration.current) return;
+      if (result.ok) setFresh(result.value);
+      else
+        setUnread(
+          result.reason === "pending_approval"
+            ? "pending_approval"
+            : result.code,
+        );
+    } catch {
+      if (generation === readGeneration.current) setUnread("action_failed");
+    } finally {
+      if (generation === readGeneration.current) setReading(false);
+    }
   }
 
   async function submit(decision: "approved" | "denied") {
-    if (pending !== null) return;
+    if (pending !== null || reading) return;
     setPending(decision);
     setFailure(null);
     try {
@@ -260,7 +275,7 @@ export function ApprovalDecision({
 
   const settledBy = fresh?.resolvedBy ?? null;
   const shown = fresh === null ? eligibility : fresh.eligibility;
-  const busy = pending !== null;
+  const busy = pending !== null || reading;
 
   return (
     <>

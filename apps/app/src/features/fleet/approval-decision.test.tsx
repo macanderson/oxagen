@@ -16,7 +16,7 @@
 // The rule lives on the server, because a `required` attribute is a courtesy
 // and not a gate; this case proves the dialog shows what the refusal said
 // rather than swallowing it.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -279,6 +279,64 @@ describe("the decision", () => {
 });
 
 describe("the evaluation the dialog reads again", () => {
+  it("holds both decisions until the freshness read settles", async () => {
+    const read = Promise.withResolvers<unknown>();
+    readApprovalEligibility.mockReturnValue(read.promise);
+    draw();
+    const user = await open();
+    for (const decision of ["approve", "deny"]) {
+      expect(within(dialog()).getByTestId(decision)).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+      await user.click(within(dialog()).getByTestId(decision));
+    }
+    expect(resolveApprovalAction).not.toHaveBeenCalled();
+    await act(async () =>
+      read.resolve({ ok: true, value: { resolvedBy: null, eligibility } }),
+    );
+    expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
+      "aria-disabled",
+    );
+  });
+
+  it("reports a rejected transport and releases the decisions", async () => {
+    readApprovalEligibility.mockRejectedValue(
+      new Error("transport unavailable"),
+    );
+    draw();
+    await open();
+    expect(screen.getByTestId("eligibility-unread")).toHaveTextContent(
+      "action_failed",
+    );
+    expect(screen.queryByTestId("eligibility-checking")).toBeNull();
+    expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
+      "aria-disabled",
+    );
+  });
+
+  it("discards a read that settles after its dialog closes", async () => {
+    const first = Promise.withResolvers<unknown>();
+    readApprovalEligibility.mockReturnValueOnce(first.promise);
+    draw();
+    const user = await open();
+    await user.keyboard("{Escape}");
+    await act(async () =>
+      first.resolve({
+        ok: true,
+        value: { resolvedBy: "user:stale", eligibility },
+      }),
+    );
+    const second = Promise.withResolvers<unknown>();
+    readApprovalEligibility.mockReturnValueOnce(second.promise);
+    await user.click(screen.getByTestId("decide"));
+    expect(screen.queryByTestId("approval-settled")).toBeNull();
+    expect(screen.getByTestId("eligibility-checking")).toBeInTheDocument();
+    await act(async () =>
+      second.resolve({ ok: true, value: { resolvedBy: null, eligibility } }),
+    );
+  });
+
   it("refuses to decide a call somebody else already answered", async () => {
     readApprovalEligibility.mockResolvedValue({
       ok: true,
