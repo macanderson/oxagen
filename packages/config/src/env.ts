@@ -231,6 +231,21 @@ export const baseEnvSchema = z.object({
   // Required only when OXAGEN_MODEL_PROVIDER=openrouter; optional here so every
   // other deployment stays valid without it.
   OPENROUTER_API_KEY: z.string().min(1).optional(),
+  // The OpenRouter PROVISIONING key (ADR-131) — not an inference key. It can
+  // create, read, disable and delete every key in Oxagen's account, so it is
+  // read in exactly one module (packages/ai/src/openrouter-provisioning.ts)
+  // and never reaches a provider client, a tenant scope or a log line.
+  // Optional: where it is unset no key is minted and every organisation
+  // serves on the shared key, which is what ran before ADR-131.
+  OPENROUTER_MANAGEMENT_KEY: z.string().min(1).optional(),
+  // The daily ceiling, in USD, on each organisation's minted key. It is a
+  // blast radius, not a budget: the product's own credit gate is what bounds
+  // what a customer may spend, and this only stops a runaway loop from
+  // draining the account every other customer's assistant depends on. Set
+  // well above a heavy legitimate day for one organisation — a key that hits
+  // it stops answering until midnight UTC, and a ceiling tuned too fine is an
+  // outage waiting for the first real customer.
+  OPENROUTER_ORG_KEY_DAILY_LIMIT_USD: z.coerce.number().positive().default(25),
   // The Stella engine the in-app agent runs on (ADR-053 §1): a stella-serve
   // container reached over loopback. The token is required for the assistant
   // to work at all; when it is unset the agent runtime reports "the assistant

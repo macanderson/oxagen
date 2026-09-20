@@ -7,11 +7,15 @@ const mockGenerateObjectFor = vi.fn();
 vi.mock("@oxagen/ai", () => ({
   // Funding is resolved before the model call (ADR-053 §3); an org with no
   // stored key is platform-funded, which is what these fixtures exercise.
-  resolveModelFundingSource: async () => ({ fundedBy: "platform" }),
+  // The model and the party billed for it are one answer (ADR-053 §3,
+  // ADR-131), so the mock returns both. A fixture organisation has neither a
+  // key it brought nor one Oxagen minted for it, so it is served by the
+  // shared model and the tokens are platform-funded.
+  selectModelForOrg: async () => ({
+    model: "mock-model",
+    fundedBy: "platform",
+  }),
   generateObjectFor: (...args: unknown[]) => mockGenerateObjectFor(...args),
-  // selectModel just needs to return something non-null; the handler passes it
-  // straight through to generateObjectFor which is mocked.
-  selectModel: () => "mock-model",
 }));
 
 // ── Mock withTenantDb / org settings ─────────────────────────────────────────
@@ -226,7 +230,7 @@ describe("commandMenuSuggestHandler", () => {
     const callArgs = mockGenerateObjectFor.mock.calls[0]?.[0] as {
       model: unknown;
     };
-    // Our mock selectModel returns "mock-model" for the fast tier
+    // The mock resolves the fast tier to "mock-model" for this organisation
     expect(callArgs.model).toBe("mock-model");
   });
 

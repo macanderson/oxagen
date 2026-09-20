@@ -2104,6 +2104,9 @@ importers:
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@oxagen/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../../packages/billing
@@ -2153,15 +2156,15 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
     devDependencies:
-      esbuild:
-        specifier: 0.28.0
-        version: 0.28.0
       '@types/node':
         specifier: 25.9.1
         version: 25.9.1
       '@vitest/coverage-v8':
         specifier: 2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0))
+      esbuild:
+        specifier: 0.28.0
+        version: 0.28.0
       vitest:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0)

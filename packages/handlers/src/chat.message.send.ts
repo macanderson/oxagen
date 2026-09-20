@@ -3,7 +3,7 @@ import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { generateObjectFor, resolveModelFundingSource } from "@oxagen/ai";
+import { generateObjectFor, selectModelForOrg } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
 import { logger } from "./logger";
 
@@ -171,11 +171,12 @@ async function generateConversationTitleAsync(
     });
 
     const { object } = await generateObjectFor({
-      // Platform-vs-org funding, resolved rather than assumed. The parameter is
-      // required for that reason: it used to default to `platform`, and every
-      // caller took the default, so an organisation that had brought its own key
-      // was billed for this call anyway (ADR-053 §3).
-      fundedBy: (await resolveModelFundingSource(orgId)).fundedBy,
+      // Model and funding resolved together (ADR-053 §3, ADR-131): the key the
+      // call is built on and the party billed for it must be one answer. Asking
+      // only for `fundedBy` and letting `selectModel` fall back to the shared key
+      // is how an organisation on its own key came to be reported as having paid
+      // for a call Oxagen's key actually paid for.
+      ...(await selectModelForOrg(orgId)),
       chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: titleSchema,
       prompt: `Generate a concise 3-8 word title for a conversation that starts with: "${userMessage.substring(0, 200)}"`,

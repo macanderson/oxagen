@@ -4,6 +4,7 @@ import {
   check,
   index,
   jsonb,
+  numeric,
   text,
   timestamp,
   uniqueIndex,
@@ -373,6 +374,107 @@ export const modelCredentials = orgSchema.table(
     keyHintCheck: check(
       "model_credentials_key_hint_check",
       sql`length(${t.keyHint}) <= 4`,
+    ),
+  }),
+);
+
+// ── assistant_model_keys ─────────────────────────────────────────────────────
+// The OpenRouter key Oxagen mints for one organisation (ADR-131).
+//
+// The neighbouring `model_credentials` is the key a CUSTOMER brought: their
+// vendor invoice, and Oxagen bills nothing for those tokens. A row here is a
+// key OXAGEN minted on its own account and handed to one organisation:
+// Oxagen's invoice, metered and billed as assistant usage exactly as on the
+// single shared key it replaces. This table changes which key spends, never
+// who pays — `resolveModelFundingSource` still answers `platform` for an
+// organisation whose only key is this one.
+//
+// Why per-organisation: a runaway turn hits `dailyLimitUsd` instead of the
+// account ceiling every other customer's assistant depends on; OpenRouter
+// reports usage per key, so an invoice line has a per-customer figure that
+// does not come from Oxagen's own meter; and one customer can be cut off
+// without touching anyone else.
+//
+// One row per organisation forever — `orgId` is UNIQUE with no soft-delete
+// predicate, because a rotation updates the row. That uniqueness IS the
+// provisioner's idempotence: a racing second caller loses the insert and
+// deletes the key it had just minted at the vendor.
+export const assistantModelKeys = orgSchema.table(
+  "assistant_model_keys",
+  {
+    ...idMixin("amk"),
+    ...auditMixin(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    // Only OpenRouter mints keys on demand today. The CHECK is narrow on
+    // purpose: widening it is a decision about a second vendor account, not a
+    // column edit.
+    provider: text("provider").notNull().default("openrouter"),
+    // The vendor's durable handle — what every later call is addressed by and
+    // what an OpenRouter usage export joins to this organisation. Not secret.
+    keyHash: text("key_hash").notNull(),
+    // `oxagen/<slug-at-creation>/<creator email>`. A label for people, never
+    // rewritten; the identity is keyHash. See `assistantKeyName`.
+    keyName: text("key_name").notNull(),
+    // KMS envelope over the plaintext key, same shape as modelCredentials.
+    keyCiphertext: bytea("key_ciphertext").notNull(),
+    keyKeyId: text("key_key_id").notNull(),
+    // SHA-256 of the plaintext — the provider-client cache key, so a rotated
+    // key misses the cache and the client built on the old one is dropped.
+    keyDigest: text("key_digest").notNull(),
+    // Last four characters. Not a secret; the CHECK holds it to four.
+    keyHint: text("key_hint").notNull(),
+    // The ceiling OpenRouter refills at midnight UTC, in USD. Stored as well
+    // as sent, so a drift check can ask the vendor what it believes the
+    // ceiling is rather than assume the call that set it landed.
+    dailyLimitUsd: numeric("daily_limit_usd", {
+      precision: 10,
+      scale: 2,
+    }).notNull(),
+    status: text("status").notNull().default("active"),
+    provisionedAt: timestamp("provisioned_at", {
+      withTimezone: true,
+      mode: "date",
+    })
+      .notNull()
+      .defaultNow(),
+    disabledAt: timestamp("disabled_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    // Why the last attempt failed, for an operator reading a row that exists
+    // and cannot serve. Scrubbed of key material by the writer.
+    lastError: text("last_error"),
+  },
+  (t) => ({
+    orgIdx: uniqueIndex("assistant_model_keys_org_unique").on(t.orgId),
+    // Two organisations on one vendor key would make every usage figure
+    // ambiguous, which is the whole reason the table exists.
+    hashIdx: uniqueIndex("assistant_model_keys_hash_unique").on(t.keyHash),
+    providerCheck: check(
+      "assistant_model_keys_provider_check",
+      sql`${t.provider} IN ('openrouter')`,
+    ),
+    statusCheck: check(
+      "assistant_model_keys_status_check",
+      sql`${t.status} IN ('active','disabled')`,
+    ),
+    keyHintCheck: check(
+      "assistant_model_keys_key_hint_check",
+      sql`length(${t.keyHint}) <= 4`,
+    ),
+    // A zero ceiling is not a smaller ceiling, it is a key that can never
+    // answer. An operator who wants that sets status='disabled'.
+    dailyLimitCheck: check(
+      "assistant_model_keys_daily_limit_check",
+      sql`${t.dailyLimitUsd} > 0`,
+    ),
+    // status and disabledAt agree in both directions, so "is this key off?"
+    // has one answer however it is asked.
+    disabledPairingCheck: check(
+      "assistant_model_keys_disabled_pairing_check",
+      sql`(${t.status} = 'disabled') = (${t.disabledAt} IS NOT NULL)`,
     ),
   }),
 );

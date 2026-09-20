@@ -16,8 +16,7 @@ import { z } from "zod";
 import {
   CREDIT_REASONS,
   generateObjectFor,
-  resolveModelFundingSource,
-  selectModel,
+  selectModelForOrg,
   type GenerateObjectArgs,
 } from "@oxagen/ai";
 import type { MemoryRecord, SemanticBody } from "../types";
@@ -75,7 +74,7 @@ export interface DistillationLlmOptions {
    * The catch below cannot distinguish a model outage, which is expected and
    * self-healing, from a funding lookup that throws because there is no active
    * tenant scope, which is neither: consolidation is a background job, and a
-   * scopeless `resolveModelFundingSource` would make every distillation fall
+   * scopeless `selectModelForOrg` would make every distillation fall
    * back to the heuristic forever. Both looked identical from outside, because
    * the catch was bare. This is how the second one becomes visible.
    */
@@ -229,28 +228,27 @@ export async function extractFactFromCluster(
 
   let phase: "funding" | "generate" = "funding";
   try {
-    // Who pays the vendor for this call (ADR-053). Asked per organisation
-    // rather than assumed: an organisation that brought its own key must not be
-    // charged, and `resolveModelFundingSource` calls guessing `platform` "the
-    // one direction this seam must never err in". Distillation is a background
-    // job with no user waiting, so paying for the lookup costs nothing anybody
+    // Who pays the vendor for this call, and on whose key (ADR-053, ADR-131).
+    // Asked per organisation rather than assumed: an organisation that brought
+    // its own key must not be charged, and guessing `platform` is "the one
+    // direction this seam must never err in". Distillation is a background job
+    // with no user waiting, so paying for the lookup costs nothing anybody
     // notices, and it runs only on the path that is about to call a model.
-    const { fundedBy } = await resolveModelFundingSource(
-      options.telemetry.orgId,
-    );
+    // Small, cheap "fast" tier — distillation is high-volume.
+    const selection = await selectModelForOrg(options.telemetry.orgId, {
+      tier: "fast",
+    });
 
     phase = "generate";
 
     const { object } = await generateObjectFor({
       schema: DistilledFactSchema,
-      // Small/cheap "fast" tier — distillation is a high-volume background job.
-      model: selectModel({ tier: "fast" }),
+      ...selection,
       // Temperature 0 so the decoration (domain label) is itself deterministic.
       temperature: 0,
       system: DISTILL_SYSTEM_PROMPT,
       prompt: buildClusterPrompt(heuristic.fact, cluster),
       telemetry: options.telemetry,
-      fundedBy,
       // Assistant tokens, which is what the assistant spend cap sums. The
       // retired `consume_token_overage` must not be repurposed (ADR-052/053),
       // and a reason outside that sum is invisible to the cap meant to bound it.

@@ -18,11 +18,7 @@
  * (a missing summary is never fatal to a list render).
  */
 import { z } from "zod";
-import {
-  generateObjectFor,
-  selectModel,
-  resolveModelFundingSource,
-} from "@oxagen/ai";
+import { generateObjectFor, selectModelForOrg } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { agentDefinitionSummarize } from "@oxagen/oxagen/contracts/agent.definition.summarize";
@@ -153,18 +149,18 @@ export const agentDefinitionSummarizeHandler: CapabilityHandler<
   let raw: string;
   try {
     const { object } = await generateObjectFor({
-      // Platform-vs-org funding, resolved rather than assumed. The parameter is
-      // required for that reason: it used to default to `platform`, and every
-      // caller took the default, so an organisation that had brought its own key
-      // was billed for this call anyway (ADR-053 §3).
-      fundedBy: (await resolveModelFundingSource(ctx.orgId)).fundedBy,
+      // Model and funding resolved together (ADR-053 §3, ADR-131): the key the
+      // call is built on and the party billed for it must be one answer. Asking
+      // only for `fundedBy` and letting `selectModel` fall back to the shared key
+      // is how an organisation on its own key came to be reported as having paid
+      // for a call Oxagen's key actually paid for.
+      // Fast/cheap tier — a one-line summary needs no reasoning model.
+      ...(await selectModelForOrg(ctx.orgId, { tier: "fast" })),
       chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
       schema: summarySchema,
       system: SUMMARY_SYSTEM_PROMPT,
       prompt,
       temperature: 0.3,
-      // Fast/cheap tier — a one-line summary needs no reasoning model.
-      model: selectModel({ tier: "fast" }),
       telemetry: {
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,

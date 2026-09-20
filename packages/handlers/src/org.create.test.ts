@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   openOnboardingGate: vi.fn(),
   provisionOrgGraph: vi.fn(),
   recordOrgGraphDatabase: vi.fn(),
+  provisionAssistantModelKey: vi.fn(),
 }));
 
 const ORG_ROW = {
@@ -111,6 +112,14 @@ vi.mock("@oxagen/database/data-plane", () => ({
   recordOrgGraphDatabase: mocks.recordOrgGraphDatabase,
 }));
 
+// Minting the organisation's own OpenRouter key (ADR-131) is covered by
+// assistant-key-provision.test.ts in @oxagen/ai; what belongs here is that
+// org.create fires it with the right arguments, only after the transaction
+// commits, and never lets it break signup.
+vi.mock("./assistant-key-bootstrap", () => ({
+  provisionAssistantModelKey: mocks.provisionAssistantModelKey,
+}));
+
 import { organizationCreateHandler } from "./org.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
@@ -143,6 +152,8 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     mocks.provisionOrgGraph.mockResolvedValue({ mode: "pooled" });
     mocks.recordOrgGraphDatabase.mockReset();
     mocks.recordOrgGraphDatabase.mockResolvedValue(undefined);
+    mocks.provisionAssistantModelKey.mockReset();
+    mocks.provisionAssistantModelKey.mockResolvedValue(undefined);
     mocks.withSystemDbFn.mockReset();
     passthrough();
   });
@@ -369,5 +380,78 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     await expect(organizationCreateHandler(INPUT, CTX)).rejects.toThrow(
       "workspace insert returned no row",
     );
+  });
+
+  // ── the organisation's own model key (ADR-131) ────────────────────────────
+
+  it("asks for the organisation's own model key with the slug it was created under", async () => {
+    // The slug is passed by value and baked into the key's name, which is why
+    // renaming the organisation later cannot rewrite it.
+    await organizationCreateHandler(INPUT, CTX);
+
+    expect(mocks.provisionAssistantModelKey).toHaveBeenCalledTimes(1);
+    expect(mocks.provisionAssistantModelKey).toHaveBeenCalledWith({
+      orgId: ORG_ROW.id,
+      orgSlug: ORG_ROW.slug,
+      userId: CTX.userId,
+    });
+  });
+
+  it("asks only after the transaction has committed", async () => {
+    // Minting inside the transaction would let a rollback strand a live,
+    // spendable key at the vendor with no row in Postgres to find it by.
+    let committed = false;
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        const out = await fn(makeTx());
+        committed = true;
+        return out;
+      },
+    );
+    mocks.provisionAssistantModelKey.mockImplementation(async () => {
+      expect(committed).toBe(true);
+    });
+
+    await organizationCreateHandler(INPUT, CTX);
+    expect(mocks.provisionAssistantModelKey).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not ask when the organisation was never created", async () => {
+    mocks.orgFindFirst.mockResolvedValueOnce({ id: "existing_id" });
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toMatchObject({
+      code: "conflict",
+    });
+    expect(mocks.provisionAssistantModelKey).not.toHaveBeenCalled();
+  });
+
+  it("returns the created organisation even when the key cannot be minted", async () => {
+    // The whole point of detaching it: an OpenRouter outage must not turn
+    // into a failed signup. The organisation serves on the shared key, which
+    // is what every organisation did before ADR-131.
+    mocks.provisionAssistantModelKey.mockRejectedValue(
+      new Error("openrouter unreachable"),
+    );
+
+    const result = await organizationCreateHandler(INPUT, CTX);
+
+    expect(result.slug).toBe("acme");
+    expect(result.workspace.slug).toBe("core");
+  });
+
+  it("does not wait for the key before answering the person signing up", async () => {
+    // A vendor's latency is not the signup's latency. If this ever becomes an
+    // await, the promise below never settles and this test times out rather
+    // than passing slowly.
+    let release: (() => void) | undefined;
+    mocks.provisionAssistantModelKey.mockReturnValue(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    await expect(organizationCreateHandler(INPUT, CTX)).resolves.toMatchObject({
+      slug: "acme",
+    });
+    release?.();
   });
 });

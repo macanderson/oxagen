@@ -23,8 +23,11 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 
 // ── Mock the LLM layer; capture the prompt the handler builds from graph stats ─
 let capturedPrompt = "";
-const mockResolveFunding = vi.fn(
-  async (_orgId: string): Promise<{ fundedBy: "platform" | "org" }> => ({
+const mockSelectModelForOrg = vi.fn(
+  async (
+    _orgId: string,
+  ): Promise<{ model: unknown; fundedBy: "platform" | "org" }> => ({
+    model: "shared-key-model",
     fundedBy: "platform",
   }),
 );
@@ -44,13 +47,14 @@ const mockGenerateObjectFor = vi.fn(async (args: { prompt: string }) => {
   };
 });
 vi.mock("@oxagen/ai", () => ({
-  // Funding is resolved before the model call (ADR-053 §3); an org with no
-  // stored key is platform-funded, which is what these fixtures exercise.
-  resolveModelFundingSource: (...a: unknown[]) =>
-    mockResolveFunding(a[0] as string),
+  // The model and the party billed for it are one answer (ADR-053 §3,
+  // ADR-131), so the mock returns both and the handler cannot build the
+  // client on one organisation's key while billing another. A fixture
+  // organisation has no key of its own, so the model is the shared one and
+  // the tokens are platform-funded.
+  selectModelForOrg: (...a: unknown[]) => mockSelectModelForOrg(a[0] as string),
   generateObjectFor: (...args: unknown[]) =>
     mockGenerateObjectFor(args[0] as { prompt: string }),
-  selectModel: () => "mock-model",
 }));
 
 vi.mock("./logger", () => ({
@@ -175,35 +179,45 @@ describe("schema.recommend — graph.stats signal mapping", () => {
   });
 });
 
-// ── ADR-053 §3: who paid for the recommendation ──────────────────────────────
+// ── ADR-053 §3, ADR-131: which key paid for the recommendation ──────────────
 //
 // `fundedBy` used to be optional on generateObjectFor and default to
 // `platform`, and this caller took the default — so an organisation that had
-// brought its own key was billed for this call anyway. It is a required
-// parameter now, resolved per org.
-describe("schema.recommend — funding source", () => {
+// brought its own key was billed for this call anyway. Making it required
+// fixed the billing half and left the other half open: the handler asked the
+// resolver for `fundedBy` and then built the model with a separate,
+// credential-less `selectModel`, so an organisation reported as having paid
+// was served by Oxagen's shared key. One call now answers both.
+describe("schema.recommend — the model and its funding source", () => {
   beforeEach(() => {
-    mockResolveFunding.mockClear();
-    mockResolveFunding.mockResolvedValue({ fundedBy: "platform" as const });
+    mockSelectModelForOrg.mockClear();
+    mockSelectModelForOrg.mockResolvedValue({
+      model: "shared-key-model",
+      fundedBy: "platform" as const,
+    });
   });
 
-  it("resolves funding for the calling org and passes the answer down", async () => {
+  it("resolves the model and the funding for the calling org and passes both down", async () => {
     graphStatsImpl = async () => ({
       nodeCount: 0,
       edgeCount: 0,
       nodesByLabel: {},
     });
     await schemaRecommendHandler({ sampleLimit: 200 }, ctx("app"));
-    expect(mockResolveFunding).toHaveBeenCalledTimes(1);
+    expect(mockSelectModelForOrg).toHaveBeenCalledTimes(1);
     const args = mockGenerateObjectFor.mock.calls[0]?.[0] as Record<
       string,
       unknown
     >;
     expect(args.fundedBy).toBe("platform");
+    expect(args.model).toBe("shared-key-model");
   });
 
-  it("passes org funding through, so a customer's own key is not billed", async () => {
-    mockResolveFunding.mockResolvedValue({ fundedBy: "org" as const });
+  it("uses the organisation's own key AND bills the organisation, never one without the other", async () => {
+    mockSelectModelForOrg.mockResolvedValue({
+      model: "customer-key-model",
+      fundedBy: "org" as const,
+    });
     graphStatsImpl = async () => ({
       nodeCount: 0,
       edgeCount: 0,
@@ -215,5 +229,8 @@ describe("schema.recommend — funding source", () => {
       unknown
     >;
     expect(args.fundedBy).toBe("org");
+    // The half that used to be dropped. Without this assertion the handler
+    // could report the customer as having paid while spending Oxagen's key.
+    expect(args.model).toBe("customer-key-model");
   });
 });

@@ -147,3 +147,5 @@ first. Move a row into its epic when one fits.
 - [ADR-128](./ADR-128-source-identifiers-determine-draft-filenames.md): Source identifiers determine draft filenames.
 
 - [ADR-130: Spend and operator feedback lead the app](ADR-130-spend-and-operator-feedback-ui.md)
+
+- [ADR-131](./ADR-131-one-openrouter-key-per-organisation.md): Oxagen mints one OpenRouter key per organisation, named `oxagen/<slug>/<creator-email>` at creation and never rewritten, with a daily spend ceiling (default $25). A minted key changes which key spends, never who is billed, so `ModelFundingSource` splits into `fundedBy` and `modelKey` and `selectModelForOrg` resolves both in one call. Extends ADR-053.

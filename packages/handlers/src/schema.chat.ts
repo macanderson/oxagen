@@ -1,10 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaChat } from "@oxagen/oxagen/contracts/schema.chat";
-import {
-  generateObjectFor,
-  selectModel,
-  resolveModelFundingSource,
-} from "@oxagen/ai";
+import { generateObjectFor, selectModelForOrg } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
 import { z } from "zod";
 import { schema as db, withTenantDb } from "@oxagen/database";
@@ -245,18 +241,18 @@ Conversation ID: ${conversationId}
 Draft version: ${input.draftVersionId ?? "current draft"}`;
 
   const { object } = await generateObjectFor({
-    // Platform-vs-org funding, resolved rather than assumed. The parameter is
-    // required for that reason: it used to default to `platform`, and every
-    // caller took the default, so an organisation that had brought its own key
-    // was billed for this call anyway (ADR-053 §3).
-    fundedBy: (await resolveModelFundingSource(ctx.orgId)).fundedBy,
+    // Model and funding resolved together (ADR-053 §3, ADR-131): the key the
+    // call is built on and the party billed for it must be one answer. Asking
+    // only for `fundedBy` and letting `selectModel` fall back to the shared key
+    // is how an organisation on its own key came to be reported as having paid
+    // for a call Oxagen's key actually paid for.
+    // Precise tier (claude-opus-4.8): reliable structured tool/mutation emission
+    // for schema authoring — the balanced default routinely under-emitted edits.
+    ...(await selectModelForOrg(ctx.orgId, { tier: "precise" })),
     chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
     schema: chatResponseSchema,
     prompt: input.message,
     system,
-    // Precise tier (claude-opus-4.8): reliable structured tool/mutation emission
-    // for schema authoring — the balanced default routinely under-emitted edits.
-    model: selectModel({ tier: "precise" }),
     abortSignal: AbortSignal.timeout(SCHEMA_CHAT_MODEL_TIMEOUT_MS),
     telemetry: {
       orgId: ctx.orgId,

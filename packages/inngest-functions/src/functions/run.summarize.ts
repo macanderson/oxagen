@@ -12,12 +12,7 @@
 // organisation's funding source, metered like every other model call. The
 // three summary columns are written together with the model id
 // (`modelIdOf`) that produced them.
-import {
-  generateObjectFor,
-  modelIdOf,
-  resolveModelFundingSource,
-  selectModel,
-} from "@oxagen/ai";
+import { generateObjectFor, modelIdOf, selectModelForOrg } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import { NonRetriableError } from "@oxagen/functions";
@@ -177,15 +172,15 @@ export const [runSummarize] = createFunction(
     }
 
     const generated = await step.run("generate", async () => {
-      const funding = await resolveModelFundingSource(data.orgId);
-      const model = selectModel({
+      // Model and funding resolved together (ADR-053 §3, ADR-131): the key the
+      // call is built on and the party billed for it must be one answer.
+      const { model, fundedBy } = await selectModelForOrg(data.orgId, {
         tier: "fast",
-        ...(funding.credential ? { credential: funding.credential } : {}),
       });
       const { object } = await generateObjectFor({
         schema: summarySchema,
         model,
-        fundedBy: funding.fundedBy,
+        fundedBy,
         chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
         prompt: summaryPrompt(data.runPublicId, collected),
         temperature: 0.2,

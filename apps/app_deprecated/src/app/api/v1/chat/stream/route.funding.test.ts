@@ -168,8 +168,24 @@ const ORG_CREDENTIAL = {
 };
 const ORG_FUNDING = {
   fundedBy: "org" as const,
-  credential: ORG_CREDENTIAL,
+  modelKey: ORG_CREDENTIAL,
   keyHint: "sk-or-…-KEY",
+};
+
+/**
+ * A key Oxagen minted FOR the organisation (ADR-131). Platform-funded — the
+ * tokens are still billed — but the client is built on the organisation's own
+ * token so the vendor reports its usage separately.
+ */
+const MINTED_KEY = {
+  provider: "openrouter" as const,
+  apiKey: "sk-or-v1-MINTED-FOR-THIS-ORG",
+  digest: "m1nt3d",
+};
+const MINTED_FUNDING = {
+  fundedBy: "platform" as const,
+  modelKey: MINTED_KEY,
+  keyHint: "-ORG",
 };
 
 function governedTurn() {
@@ -300,6 +316,26 @@ describe("POST /api/v1/chat/stream — who pays for the tokens (ADR-053)", () =>
     expect(mocks.selectModel.mock.calls[0]![0]).not.toHaveProperty(
       "credential",
     );
+    expect(turnInput()["fundedBy"]).toBe("platform");
+  });
+
+  it("with a key Oxagen minted for it: the model is built on that key and the turn is still billed", async () => {
+    // The pair ADR-131 separates. Before it, "has a key" and "the customer
+    // pays" were one fact, and a caller narrowing on `fundedBy` to decide
+    // whether to pass a credential would silently spend the shared key here.
+    mocks.resolveModelFundingSource.mockResolvedValue(MINTED_FUNDING);
+
+    const res = await postAndDrain();
+
+    expect(res.status).toBe(200);
+    expect(mocks.selectModel).toHaveBeenCalledWith(
+      expect.objectContaining({ credential: MINTED_KEY }),
+    );
+    // Billed exactly as a shared-key turn is: the meter reads `fundedBy` and
+    // never the key.
+    expect(mocks.evaluateTurnCreditGate).toHaveBeenCalledWith(ORG.id, {
+      fundedBy: "platform",
+    });
     expect(turnInput()["fundedBy"]).toBe("platform");
   });
 
