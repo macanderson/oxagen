@@ -256,7 +256,11 @@ describe("kernel security event emitter", () => {
         throw new Error("Tenant entry unexpectedly accepted");
       });
       await expect(
-        invoke("test.scope_errors", { value: "x" }, ctx),
+        invoke(
+          "test.scope_errors",
+          { value: "x" },
+          { ...ctx, workspaceId: "" },
+        ),
       ).rejects.toMatchObject({ code });
       expect(emitter).toHaveBeenCalledWith(
         expect.objectContaining({
