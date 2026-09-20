@@ -274,13 +274,17 @@ data "aws_iam_policy_document" "oxagen_platform" {
   # send statement above spells out: a tag condition would be evaluated
   # against the document, which carries no tag, and deny the session.
   #
-  # `AWS-StartPortForwardingSession` alone, not the whole document namespace —
+  # Only the two port-forwarding documents, not the whole document namespace.
+  # Remote-host forwarding reaches Aurora for the ClickHouse migration lock;
   # `AWS-StartInteractiveCommand` and `SSM-SessionManagerRunShell` are shells,
   # and a role that may forward a port has no business getting one.
   statement {
-    sid       = "PortForwardDocument"
-    actions   = ["ssm:StartSession"]
-    resources = ["arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSession"]
+    sid     = "PortForwardDocument"
+    actions = ["ssm:StartSession"]
+    resources = [
+      "arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSession",
+      "arn:aws:ssm:${var.region}::document/AWS-StartPortForwardingSessionToRemoteHost",
+    ]
   }
 
   # Closing the tunnel. Scoped to sessions this role's own identity opened,

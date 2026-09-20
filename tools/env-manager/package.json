@@ -3,7 +3,7 @@
   "version": "2.1.1",
   "private": true,
   "type": "module",
-  "description": "Local-only web UI to view env/secrets per environment and deploy the right values to the right Vercel project + environment. No auth — binds to 127.0.0.1.",
+  "description": "Local-only web UI to view env/secrets per environment and deploy the right values to the right Vercel project + environment. Requires a per-process access token and binds to 127.0.0.1.",
   "scripts": {
     "dev": "NODE_NO_WARNINGS=1 tsx --env-file-if-exists=../../.env.local src/server.ts",
     "start": "NODE_NO_WARNINGS=1 tsx --env-file-if-exists=../../.env.local src/server.ts",

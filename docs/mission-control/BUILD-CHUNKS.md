@@ -140,7 +140,7 @@ Lanes:
 
 - **roles.** Assign and revoke on the identity tab.
 - **enrollment.** Revoke a host. Mint an enrollment token and show the command once. A read-only budget panel with its basis, and the NotBacked line for agent-scope budgets.
-- **schemas.** `get_agent_toolbelt` carries each tool's input schema and digest. The toolbelt renders them. Contract change, whole parity chain.
+- **schemas.** `get_agent_toolbelt` carries each tool's input schema and digest. The toolbelt renders them. Read capability schemas from registered contract inputs, MCP schemas from the descriptors used in materialization with server identity, and versioned schemas from the resolved version. Contract change, whole parity chain.
 - **invite.** Send an organization invitation. The handler records an org role and no workspace, so there is no workspace picker and the copy claims nothing about workspaces. A repeat for a pending email returns the existing invitation, shown as already invited.
 
 Done when:
@@ -182,7 +182,7 @@ Lanes:
 
 - **segments.** Tabs as path segments through one optional catch-all that replaces `steering/page.tsx` (Next.js refuses both at the same level), with `records` as the default, the seven tabs in spec order, NotBacked lines for Ontology and Preview, the old `?tab=` values redirected inside the page (the proxy's legacy table sees only the pathname), and a page for one published record (#3395).
 - **memory.** What agents remembered, with provenance as the record carries it. The memory record holds a free-text `source` and no frame id today, so the lane adds optional provenance fields to the contract where the store can fill them and renders NotRecorded where it cannot. Retire, demote, propose as a record.
-- **policy.** Active mandates, enabled rules, and switches that are on, each linking to its editor, with the gate notice named as Phase 1.
+- **policy.** Add cursor pagination through the mandate and kill-switch contracts, handlers and parity chain; consume all pages and report page failures. Test beyond the current 100-mandate and 200-switch caps. Active mandates, enabled rules, and switches that are on, each linking to its editor, with the gate notice named as Phase 1.
 
 Done when:
 
@@ -198,8 +198,8 @@ Every `mc-*` workflow has the same four phases and the same preamble, copied int
 
 1. **Scout.** One read-only agent checks each lane against `origin/main` and returns `still_open`, the file and line facts the builder needs, and the open PRs that overlap. A lane that already shipped is skipped and logged. `dryRun: true` stops here.
 2. **Build.** One agent per lane, in parallel, each in its own worktree on `mc/<session>-<lane>` from `origin/main`, owning only its paths, pushing after every step, opening no PR.
-3. **Integrate.** One agent merges the lane branches into `mc/<session>`, merges `origin/main`, reads the whole diff against this document, runs the generators, updates this document's boxes and `ARCHITECTURE.md` §1.2, opens the PR ready for review with the template filled, and drives CI green for up to four rounds. It does not merge.
-4. **Review.** One agent cold-reviews the PR, fixes every P0 and P1 on the branch, carries P2 and below into one residue issue, and replies on and resolves each carried thread per AGENTS.md.
+3. **Integrate.** Validate each lane's branch and SHA, then use a read-only agent to verify the published remote head. Invalid, absent or changed heads stop integration. One agent merges the verified lane commits into `mc/<session>`, merges `origin/main`, reads the whole diff against this document, runs the generators, updates this document's boxes and `ARCHITECTURE.md` §1.2, opens the PR ready for review with the template filled, and drives CI green for up to four rounds. It does not merge.
+4. **Review.** One agent cold-reviews the PR, fixes every P0 and P1 on the branch, carries P2 and below into one residue issue by default, splitting genuinely unrelated changes under SCR-003, and replies on and resolves each carried thread per AGENTS.md.
 
 A lane marked `integrate: false` is a sidecar: it works on branches that are not the session's and its result is reported, never merged.
 

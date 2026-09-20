@@ -224,4 +224,21 @@ say "Applying all $(find "$MIGRATIONS_DIR" -name '*.sql' | wc -l | tr -d ' ') mi
 cd packages/database
 DATABASE_URL="$SIM_URL" atlas migrate apply --env ci
 
-say "The directory applies without a superuser."
+say "Seeding platform defaults with the production artifact as ${SIM_ROLE}"
+# The same executable and assets are packaged by run-db-migrations.sh.
+# A second run proves that retries do not duplicate platform defaults.
+DATABASE_URL="$SIM_URL" NODE_ENV=production node dist/platform-seed/src/platform-seed.mjs
+DATABASE_URL="$SIM_URL" NODE_ENV=production node dist/platform-seed/src/platform-seed.mjs
+psql "$SIM_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM billing.plans WHERE slug = 'free') <> 1 THEN
+    RAISE EXCEPTION 'Platform seed did not produce exactly one Free plan';
+  END IF;
+  IF (SELECT count(*) FROM cms.book_editions WHERE slug IN ('field-manual', 'page-flip-reader')) <> 2 THEN
+    RAISE EXCEPTION 'Platform seed did not produce both book editions';
+  END IF;
+END
+$$;
+SQL
+say "Migrations and platform defaults apply without a superuser."

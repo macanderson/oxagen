@@ -27,19 +27,13 @@
  *    nothing but one refused body.
  */
 import { digestBytes, type Sha256Digest } from "../digest";
+import { MAX_CONTENT_REDACTIONS } from "../envelope";
 import { type PolicyBundle, TACHO_MAX_BODY_BYTES } from "../wire";
 import { type Redaction, redactBytes } from "./redaction";
 import {
   RETENTION_CLASS_BY_KIND,
   type RetentionContentClass,
 } from "./retention";
-
-/**
- * The most redactions one event may record (`contentSchema` caps the list at
- * 256). A body that needs more is not shipped at all: truncating the list
- * would chain a record that says less was removed than was.
- */
-export const TACHO_MAX_REDACTIONS = 256;
 
 /** What a hook draft hands the recorder: the bytes before redaction. */
 export interface DraftContent {
@@ -106,47 +100,35 @@ export function retentionAllows(
   );
 }
 
-/**
- * What the recorder chains for a frame, and the body it holds for it. The
- * digest, when there is one, is always the digest of the redacted bytes,
- * whether or not they ship, so the chain never names bytes that carry a
- * secret. A body that needs more redactions than one event can record gets
- * no digest at all: chaining one over a shorter list would say less was
- * removed than was.
- */
-export type PreparedContent =
+/** The digest names redacted bytes, including when size prevents shipment. */
+export type PreparedContent = {
+  digest: Sha256Digest;
+  redactions: Redaction[];
+  redactionsTotal: number;
+} & (
   | {
-      digest: Sha256Digest;
-      redactions: Redaction[];
       body: { content_type: string; bytes: Uint8Array };
       omitted?: undefined;
     }
   | {
-      digest: Sha256Digest;
-      redactions: Redaction[];
       body?: undefined;
       omitted: "too_large";
     }
-  | {
-      digest?: undefined;
-      redactions?: undefined;
-      body?: undefined;
-      omitted: "too_many_redactions";
-    };
+);
 
-/** Redact, size-check and digest a draft's content. */
+/** Redact every match, bound the detail list, and digest the resulting bytes. */
 export function prepareContent(content: DraftContent): PreparedContent {
   const { bytes, redactions } = redactBytes(content.bytes);
-  if (redactions.length > TACHO_MAX_REDACTIONS) {
-    return { omitted: "too_many_redactions" };
-  }
-  const digest = digestBytes(bytes);
+  const evidence = {
+    digest: digestBytes(bytes),
+    redactions: redactions.slice(0, MAX_CONTENT_REDACTIONS),
+    redactionsTotal: redactions.length,
+  };
   if (bytes.byteLength > TACHO_MAX_BODY_BYTES) {
-    return { digest, redactions, omitted: "too_large" };
+    return { ...evidence, omitted: "too_large" };
   }
   return {
-    digest,
-    redactions,
+    ...evidence,
     body: { content_type: content.content_type, bytes },
   };
 }

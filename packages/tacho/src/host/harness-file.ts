@@ -290,7 +290,8 @@ export class HarnessFiles {
     let current: string | undefined;
     try {
       current = readFileSync(target, "utf8");
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       current = undefined;
     }
     if (current === undefined) {

@@ -16,7 +16,7 @@ Six checks run before anything reaches GitHub, and a failed check writes nothing
 
 1. **Frontmatter**: `name`, `version` and `scope` are present, and `name` matches the directory.
 2. **Version**: plain semver, and strictly greater than the version merged today when the call replaces a skill.
-3. **Digest**: the canonical bytes (LF line ends) hash to `sha256:<hex>`. The checks take it again at merge, and every run that loads this version records it.
+3. **Digest**: the canonical bytes (LF line ends) hash to `sha256:<hex>`. The checks cover the submitted bytes. They do not run again at merge. Review subsequent pushes before merging.
 4. **Grants**: the frontmatter names no `allowed-tools`, `tools`, `permissions`, `grants`, `tier` or `role`. A skill cannot add a tool or raise a tier.
 5. **Secret and PII scan**: the body and every bundle file are scanned for credential shapes and US social security numbers.
 6. **Load cost**: the estimated tokens (four characters each) fit the `[search] budget` in `.oxagen/skills.toml`, or 6,000 when the file names none.
@@ -67,3 +67,5 @@ Org Owner or Admin, checked by the handler (INV-29) for the signed-in user. An A
 | `forbidden` | No signed-in user (`no_principal`), or the user is not an org Owner or Admin (`org_role_required`). |
 | `not_found` | The workspace binds no main repository (`workspace_repository_missing`). |
 | `conflict` | A check failed (`skill_check_<name>`: `skill_check_frontmatter`, `skill_check_version`, `skill_check_digest`, `skill_check_grants`, `skill_check_secrets` or `skill_check_load_cost`), or the merged skill has no version to compare against (`skill_merged_unversioned`), or GitHub refused a write (`github_refused`). |
+
+An existing proposal branch is reused only when it has an open pull request into the configured production branch. Otherwise the handler refuses with `proposal_branch_exists`; preserve or remove that branch explicitly before retrying. It never deletes the branch automatically.

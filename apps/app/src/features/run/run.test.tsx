@@ -1309,6 +1309,36 @@ describe("approvals on the run", () => {
     );
   });
 
+  it("labels an expired approval without guessing its cause", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok({ items: [], more: false }),
+        resolvedApprovals: ok([
+          {
+            id: "apr_expired",
+            runId: "tse_7k2m9q",
+            tool: "delete_workspace",
+            requester: null,
+            createdAt: new Date(NOW - 600_000).toISOString(),
+            expiresAt: new Date(NOW - 300_000).toISOString(),
+            resolvedAt: new Date(NOW - 300_000).toISOString(),
+            resolution: "expired",
+            resolvedBy: null,
+            autoRuleRef: null,
+          },
+        ]),
+      },
+      { tab: "approvals" },
+    );
+    expect(screen.getByTestId("resolved-approver")).toHaveTextContent(
+      /^system$/,
+    );
+    expect(screen.getByTestId("resolved-approver")).not.toHaveTextContent(
+      "unknown",
+    );
+  });
+
   it("names its own failure when the resolved read is refused (negative)", async () => {
     await renderRun(
       {

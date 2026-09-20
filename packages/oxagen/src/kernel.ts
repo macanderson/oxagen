@@ -1505,9 +1505,9 @@ async function _invokeCoreInner(
             // is read fresh at call time by a caller whose own run id can
             // change after `ctx` was built (the in-app assistant opens its
             // run only after materializing tools) and takes priority;
-            // ctx.agentRun?.runId is the fallback for an Agent RBAC call,
-            // which carries no separate opts.runId of its own.
-            runId: opts?.runId ?? ctx.agentRun?.runId ?? null,
+            // Nested calls inherit ctx.runId from the outer handler context.
+            // Agent RBAC calls fall back to ctx.agentRun?.runId.
+            runId: opts?.runId ?? ctx.runId ?? ctx.agentRun?.runId ?? null,
           },
           principal: resolvedPrincipal,
         });
@@ -1524,6 +1524,7 @@ async function _invokeCoreInner(
       // capabilities). isUuid guards the fail-closed scope validation.
       const checkedCtx: CheckedContext = {
         ...ctx,
+        runId: opts?.runId ?? ctx.runId ?? ctx.agentRun?.runId ?? null,
         principal: resolvedPrincipal,
         // Attached ONLY here, only from the IAM runtime's own insert, and only
         // on the allow path — the handler is the one consumer downstream of a

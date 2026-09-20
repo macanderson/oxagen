@@ -563,16 +563,21 @@ export class SessionRecorder {
       fields.content !== undefined ? prepareContent(fields.content) : undefined;
     const content =
       prepared !== undefined
-        ? prepared.digest !== undefined
-          ? { digest: prepared.digest, redactions: prepared.redactions }
-          : undefined
+        ? { digest: prepared.digest, redactions: prepared.redactions }
         : fields.content_digest !== undefined
           ? { digest: fields.content_digest, redactions: [] }
           : undefined;
-    const attrs =
-      prepared?.omitted !== undefined
-        ? { ...fields.attrs, body_omitted: prepared.omitted }
-        : (fields.attrs ?? {});
+    const attrs = {
+      ...fields.attrs,
+      ...(prepared?.omitted !== undefined
+        ? { body_omitted: prepared.omitted }
+        : {}),
+      ...(prepared !== undefined && prepared.redactionsTotal > 0
+        ? {
+            "oxagen.content_redactions_total": String(prepared.redactionsTotal),
+          }
+        : {}),
+    };
     const unsealed = compact({
       v: "tacho/1.0",
       event_id: newEventId(Date.parse(fields.ts)),
@@ -800,9 +805,6 @@ export class SessionRecorder {
         ? { hook_source_kind: draft.hook_source_kind }
         : {}),
       attrs: draft.attrs,
-      ...(draft.content_digest !== undefined
-        ? { content_digest: draft.content_digest }
-        : {}),
       ...(draft.content !== undefined ? { content: draft.content } : {}),
       raw_source_digest: draft.raw_source_digest,
       turn: draft.turn ?? {},

@@ -6,8 +6,7 @@
 // an agent that already runs somewhere. This call writes no row: it cuts the
 // branch `agents/<slug>` from the production branch, commits the definition
 // `.oxagen/agents/<slug>.toml` and the subagent file generated from it, and
-// opens the pull request. The agent exists when a person merges it, which is
-// also the only place a reviewer can stop it.
+// opens the pull request. Register the agent after merge to create its identity.
 //
 // Six checks run before anything reaches GitHub, and a failed check writes
 // nothing: the schema, the key, the belt, authority, the budget, and the
@@ -19,8 +18,7 @@
 // subagents there, and Stella adopts them from `.claude/` (ADR-101). Codex
 // documents no subagent file, so it gets none.
 //
-// Roles: org Owner or Admin, asserted in the handler (INV-29). Merging the
-// file creates a principal, so the call needs what `register_agent` needs. An
+// Roles: org Owner or Admin, asserted in the handler (INV-29). The call needs the same organization role as `register_agent`. An
 // API key carries no user to hold that role, so the capability ships on the
 // API alone, as `propose_skill` does. It spends no governed action units:
 // `noBillingGate: true`.
@@ -50,6 +48,12 @@ export const agentSlugSchema = z
 export function agentDefinitionPath(slug: string): string {
   return `${AGENT_DEFINITION_DIR}/${slug}.toml`;
 }
+
+export const SUBAGENT_FILE_HARNESSES: readonly string[] = [
+  "claude-code",
+  "cursor",
+  "stella",
+];
 
 export function generatedAgentPath(slug: string): string {
   return `${GENERATED_AGENT_DIR}/${slug}.md`;
@@ -273,7 +277,7 @@ export const agentPropose = registerCapability({
   name: "propose_agent",
   domain: "agent",
   description:
-    "Write a new agent as a pull request: cut agents/<slug> from the main repository's production branch, commit .oxagen/agents/<slug>.toml and the subagent file generated from it, and open the pull request. Six checks (schema, key, belt, authority, budget, secret and PII scan) run first, and a failed check writes nothing. No row is written; the agent exists on merge.",
+    "Write a new agent as a pull request: cut agents/<slug> from the main repository's production branch, commit .oxagen/agents/<slug>.toml and, for Claude Code, Cursor, and Stella, the subagent file generated from it, and open the pull request. Six checks (schema, key, belt, authority, budget, secret and PII scan) run first, and a failed check writes nothing. No row is written; register the agent after merge to create its identity.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs", "app"],
@@ -302,11 +306,11 @@ export const agentPropose = registerCapability({
   output: z
     .object({
       slug: z.string(),
-      /** `org_ns.ws_ns.slug` as it will be on merge; null while a namespace is unset. */
+      /** `org_ns.ws_ns.slug` to use when registering after merge; null while a namespace is unset. */
       agentKey: z.string().nullable(),
       path: z.string(),
       /** The generated subagent file committed beside the definition. */
-      generatedPath: z.string(),
+      generatedPath: z.string().nullable(),
       branch: z.string(),
       /** `owner/name` of the main repository the pull request targets. */
       repository: z.string(),

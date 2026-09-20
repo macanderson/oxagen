@@ -12,7 +12,7 @@
 import { agentPropose } from "@oxagen/oxagen/contracts/agent.propose";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
-import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
+import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
@@ -29,19 +29,19 @@ export async function readMainRepository(
 ): Promise<ActionResult<MainRepository>> {
   const ctx = await requireViewer(org, ws);
   const read = await kernelRead(ctx, {
-    contract: repositoryMainGet,
+    contract: contextSteeringFreshness,
     input: {},
     page: "repositories",
   });
   const result = readToActionResult(read);
   if (!result.ok) return result;
-  const repo = result.value.repository;
+  const { repository, defaultBranch } = result.value;
   return {
     ok: true,
     value:
-      repo === null
+      repository === null || defaultBranch === null
         ? null
-        : { fullName: repo.fullName, defaultRef: repo.defaultRef },
+        : { fullName: repository, defaultRef: defaultBranch },
   };
 }
 
