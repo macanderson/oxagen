@@ -197,7 +197,7 @@ export function RuleEditor({
   const [hoursOn, setHoursOn] = useState(
     existing !== null && existing.businessHours !== null,
   );
-  const rendered = useRef<ApprovalRuleDraft | null>(null);
+  const renderedRef = useRef<ApprovalRuleDraft | null>(null);
   const creating = existing === null;
   const hours = existing?.businessHours ?? null;
   /** A rule the fields cannot write back as stored: shown, never saved here. */
@@ -223,7 +223,7 @@ export function RuleEditor({
         at.ws,
         creating ? "create" : "edit",
         parsed.draft,
-        rendered.current,
+        renderedRef.current,
       );
       if (result.ok) {
         setOpen(false);
@@ -247,7 +247,8 @@ export function RuleEditor({
         }
         className={creating ? buttonPrimary : buttonSecondary}
         onClick={() => {
-          rendered.current = existing === null ? null : renderedDraft(existing);
+          renderedRef.current =
+            existing === null ? null : renderedDraft(existing);
           setOpen(true);
         }}
       >
