@@ -116,7 +116,7 @@ export const ResolvedApprovalItem = z.object({
   execution: z
     .object({
       status: z.string(),
-      runId: z.string().nullable(),
+      runId: PublicId.nullable(),
       reason: z.string().nullable(),
     })
     .optional(),
