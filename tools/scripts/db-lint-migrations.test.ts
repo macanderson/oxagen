@@ -442,3 +442,76 @@ describe("headRef, and CI's synthetic pull_request merge commit", () => {
     });
   });
 });
+
+describe("exact historical migration restoration", () => {
+  const restored = "20260920170000_workspace_nullable_writes.sql";
+  const newer = "20260920200000_approval_resume.sql";
+  const path = `packages/database/atlas/migrations/${restored}`;
+  const original = "a".repeat(40);
+  const deleted = "d".repeat(40);
+  const blob = "b".repeat(40);
+
+  function historicalGit(
+    mode: "exact" | "modified" | "new" | "branch-only" | "unavailable",
+  ): GitRunner {
+    const baseline = fakeGit({
+      mergeBase: MERGE_BASE_SHA,
+      atRef: {
+        [MERGE_BASE_SHA]: [newer],
+        "origin/main": [newer],
+      },
+    });
+    return (args) => {
+      if (args[0] === "hash-object") {
+        expect(args).toEqual(["hash-object", "--no-filters", "--", path]);
+        return mode === "modified" ? "c".repeat(40) : blob;
+      }
+      if (args[0] === "log") {
+        expect(args).toEqual([
+          "log",
+          "--format=%H",
+          "--full-history",
+          MERGE_BASE_SHA,
+          "--",
+          path,
+        ]);
+        if (mode === "unavailable") throw new Error("Missing history");
+        // A matching branch-only blob cannot appear in merge-base ancestry.
+        return mode === "new" || mode === "branch-only"
+          ? ""
+          : `${deleted}\n${original}\n`;
+      }
+      if (args[0] === "rev-parse") {
+        if (args[3] === `${deleted}:${path}`) throw new Error("Deleted path");
+        expect(args).toEqual([
+          "rev-parse",
+          "--verify",
+          "--quiet",
+          `${original}:${path}`,
+        ]);
+        return blob;
+      }
+      return baseline(args);
+    };
+  }
+
+  it("accepts identical bytes at the same path in merge-base ancestry", () => {
+    const result = checkAtlasBaseline([restored, newer], {
+      run: historicalGit("exact"),
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("does not prove");
+  });
+
+  it.each(["modified", "new", "branch-only", "unavailable"] as const)(
+    "still refuses %s backdated SQL",
+    (mode) => {
+      const result = checkAtlasBaseline([restored, newer], {
+        run: historicalGit(mode),
+      });
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain(restored);
+    },
+  );
+});
