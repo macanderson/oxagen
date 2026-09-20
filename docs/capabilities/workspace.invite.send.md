@@ -36,6 +36,17 @@ Send a workspace invitation to an email address. Creates a pending invitation ro
 | `forbidden` | Caller lacks Owner or Admin role in the org.             |
 | `no_auth`   | Request has no authenticated user context.               |
 
+## Surfaces
+
+The web app operates this at Organization › People › Invite
+(`apps/app/src/features/organization/invite-dialog.tsx`), bound in
+`apps/app/capability-ui-map.json`. The dialog asks for no workspace: the
+capability is scoped, but the row it writes carries `orgId` and an
+organization role and records no workspace, so the workspace the kernel
+enters is invocation scope alone. A second invitation for an email that is
+already pending returns the existing row, which the page reads as "already
+invited" rather than as a failure.
+
 ## SPEC references
 
 - docs/architecture/workspace/spec.md — §invitations

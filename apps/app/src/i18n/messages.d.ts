@@ -2302,6 +2302,33 @@ type Messages = {
       never: string;
       empty: string;
     };
+    invite: {
+      open: string;
+      title: string;
+      confirm: string;
+      pending: string;
+      body: string;
+      email: string;
+      emailHint: string;
+      role: string;
+      roleHint: string;
+      message: string;
+      messageHint: string;
+      denied: string;
+      close: string;
+      sent: {
+        title: string;
+        body: string;
+      };
+      already: {
+        title: string;
+        body: string;
+      };
+      failure: {
+        emailInvalid: string;
+        roleNotInvitable: string;
+      };
+    };
     apiKeys: {
       lead: string;
       tableLabel: string;

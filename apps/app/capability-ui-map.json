@@ -806,6 +806,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "send_workspace_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — Organization › Pending invitations › “Invite”: an email, the role the invitation offers, and an optional note. The contract is scoped, so the kernel enters the org-only workspace sentinel an OrgCtx carries, and the handler records an organization invitation with no workspace, which is why the dialog asks for none (features/organization/invite-dialog.tsx, features/organization/actions.ts)",
+      "testid": "send-invitation",
+      "proof": "apps/app/src/features/organization/invite-dialog.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc3-invite"
+    },
     "set_approval_rule_enabled": {
       "route": "/[org]/[ws]/tools?tab=autoapprovals",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",

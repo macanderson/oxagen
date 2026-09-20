@@ -127,6 +127,33 @@
       "never": "Never",
       "empty": "No invitations are waiting for an answer."
     },
+    "invite": {
+      "open": "Invite",
+      "title": "Invite someone to this organization",
+      "confirm": "Send invitation",
+      "pending": "Sending",
+      "body": "The invitation admits this person to the organization with the role you pick. It grants no workspace of its own.",
+      "email": "Email",
+      "emailHint": "The invitation is sent here, and the link expires in seven days.",
+      "role": "Role offered",
+      "roleHint": "The organization role they hold once they accept.",
+      "message": "Note (optional)",
+      "messageHint": "Sent with the invitation email.",
+      "denied": "Inviting someone is an Owner and Admin action.",
+      "close": "Done",
+      "sent": {
+        "title": "Invitation sent",
+        "body": "{email} was invited as {role}. The invitation is listed under Pending invitations until they answer."
+      },
+      "already": {
+        "title": "Already invited",
+        "body": "{email} already has a pending invitation, so nothing changed. It is listed under Pending invitations, and the role it offers is the one it was sent with."
+      },
+      "failure": {
+        "emailInvalid": "That is not an email address. Check the spelling and try again.",
+        "roleNotInvitable": "That role is not one an invitation offers. Pick Member, Admin, or Owner."
+      }
+    },
     "apiKeys": {
       "lead": "A key acts as the person who created it, in this workspace: on the API, MCP and the CLI it can do what that person can do here, and no more.",
       "tableLabel": "API keys",
