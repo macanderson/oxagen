@@ -86,6 +86,8 @@ const source: DataSource = {
     grants: refuse,
     killSwitches: refuse,
     approvalRules: refuse,
+    connections: refuse,
+    mcpServers: refuse,
   },
 };
 const deps: AuditExportDeps = { resolveViewer, dataSource: () => source };

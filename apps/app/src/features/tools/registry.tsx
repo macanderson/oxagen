@@ -8,8 +8,18 @@
 // from a hard-coded name table) and "On belts". The Category column is the
 // registry attribute `list_tool_versions` does carry and filter on — the
 // version's consequence tags.
+//
+// Under the registry sits the servers section (`./servers.tsx`): a tool
+// version came from a server, the import control picks one from that roster,
+// and registering one is where a row there starts. A registry read that is
+// refused replaces the whole tab, servers included, because a reader denied
+// the registry is denied the roster on the same clause.
 import { useLocale, useTranslations } from "next-intl";
-import type { ToolVersion, ToolVersionPage } from "@/data/contracts/tools";
+import type {
+  McpServerList,
+  ToolVersion,
+  ToolVersionPage,
+} from "@/data/contracts/tools";
 import { MONEY_TAG } from "@/data/contracts/tools";
 import type { Read } from "@/data/read";
 import type { OrgRole } from "@/server/viewer";
@@ -28,6 +38,7 @@ import {
   type Tone,
 } from "./parts";
 import { ReadFailure } from "./read-failure";
+import { Servers } from "./servers";
 import { ToolDialog } from "./tool-dialog";
 import {
   type ToolNameStyle,
@@ -306,7 +317,9 @@ export function Registry({
   cursor,
   canImport,
   canClassify,
+  canRegister,
   read,
+  servers,
 }: {
   at: ToolsAt;
   orgRole: OrgRole;
@@ -315,7 +328,11 @@ export function Registry({
   cursor: string | null;
   canImport: boolean;
   canClassify: boolean;
+  /** An org Owner or Admin: what `register_mcp_server` declares. */
+  canRegister: boolean;
   read: Read<ToolVersionPage>;
+  /** list_mcp_servers: the servers the import control picks from. */
+  servers: Read<McpServerList>;
 }) {
   const t = useTranslations("tools.registry");
   if (!read.ok) {
@@ -329,97 +346,118 @@ export function Registry({
     );
   }
   const { items, nextCursor } = read.value;
-  const importAction = canImport ? <ImportControls at={at} /> : null;
+  // The import control picks a server from the roster rather than taking a
+  // typed `mcs_…`; when the roster could not be read it falls back to the id.
+  const importAction = canImport ? (
+    <ImportControls
+      at={at}
+      servers={servers.ok ? servers.value.servers : null}
+    />
+  ) : null;
+  const serversSection = (
+    <Servers
+      at={at}
+      orgRole={orgRole}
+      canRegister={canRegister}
+      read={servers}
+    />
+  );
 
   if (items.length === 0 && category === null && cursor === null) {
     return (
-      <Section
-        id="tools-registry"
-        title={t("empty.title")}
-        lead={t("empty.body")}
-        actions={importAction}
-        data-state="empty"
-      />
+      <div className="flex flex-col gap-6">
+        <Section
+          id="tools-registry"
+          title={t("empty.title")}
+          lead={t("empty.body")}
+          actions={importAction}
+          data-state="empty"
+        />
+        {serversSection}
+      </div>
     );
   }
   return (
-    <Section
-      id="tools-registry"
-      title={t("title")}
-      lead={t("lead")}
-      actions={importAction}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <CategoryChips
-          at={at}
-          names={names}
-          category={category}
-          items={items}
-          complete={nextCursor === null}
-        />
-        <NamesToggle at={at} names={names} category={category} />
-      </div>
-      {items.length === 0 ? (
-        <p data-state="empty" className="text-sm text-muted-foreground">
-          {t("emptyCategory")}
-        </p>
-      ) : (
-        <Table
-          label={t("title")}
-          columns={[
-            { label: t("columns.version") },
-            { label: t("columns.category") },
-            { label: t("columns.hazard") },
-            { label: t("columns.gate") },
-            { label: t("columns.egress") },
-            { label: t("columns.financial") },
-            { label: t("columns.origin") },
-            { label: t("columns.digest") },
-            { label: t("columns.calls"), numeric: true },
-          ]}
-        >
-          {items.map((version) => (
-            <Row
-              key={version.id}
-              at={at}
-              version={version}
-              names={names}
-              canClassify={canClassify}
-            />
-          ))}
-        </Table>
-      )}
-      <p
-        data-state="facets-declared"
-        className="max-w-prose text-xs text-muted-foreground"
+    <div className="flex flex-col gap-6">
+      <Section
+        id="tools-registry"
+        title={t("title")}
+        lead={t("lead")}
+        actions={importAction}
       >
-        {t("categoriesDeclaredNote")}
-      </p>
-      {category === null ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CategoryChips
+            at={at}
+            names={names}
+            category={category}
+            items={items}
+            complete={nextCursor === null}
+          />
+          <NamesToggle at={at} names={names} category={category} />
+        </div>
+        {items.length === 0 ? (
+          <p data-state="empty" className="text-sm text-muted-foreground">
+            {t("emptyCategory")}
+          </p>
+        ) : (
+          <Table
+            label={t("title")}
+            columns={[
+              { label: t("columns.version") },
+              { label: t("columns.category") },
+              { label: t("columns.hazard") },
+              { label: t("columns.gate") },
+              { label: t("columns.egress") },
+              { label: t("columns.financial") },
+              { label: t("columns.origin") },
+              { label: t("columns.digest") },
+              { label: t("columns.calls"), numeric: true },
+            ]}
+          >
+            {items.map((version) => (
+              <Row
+                key={version.id}
+                at={at}
+                version={version}
+                names={names}
+                canClassify={canClassify}
+              />
+            ))}
+          </Table>
+        )}
         <p
-          data-state="facets-filtered"
+          data-state="facets-declared"
           className="max-w-prose text-xs text-muted-foreground"
         >
-          {t("categoriesFilteredNote")}
+          {t("categoriesDeclaredNote")}
         </p>
-      )}
-      {nextCursor === null ? null : (
-        <p
-          data-state="facets-partial"
-          className="max-w-prose text-xs text-muted-foreground"
-        >
-          {t("categoriesNote")}
+        {category === null ? null : (
+          <p
+            data-state="facets-filtered"
+            className="max-w-prose text-xs text-muted-foreground"
+          >
+            {t("categoriesFilteredNote")}
+          </p>
+        )}
+        {nextCursor === null ? null : (
+          <p
+            data-state="facets-partial"
+            className="max-w-prose text-xs text-muted-foreground"
+          >
+            {t("categoriesNote")}
+          </p>
+        )}
+        <CursorPager
+          nextCursor={nextCursor}
+          link={(next) =>
+            toolsLink(at, { tab: "registry", names, category, cursor: next })
+          }
+        />
+        <p className="max-w-prose text-xs text-muted-foreground">
+          {t("gateNote")}
         </p>
-      )}
-      <CursorPager
-        nextCursor={nextCursor}
-        link={(next) =>
-          toolsLink(at, { tab: "registry", names, category, cursor: next })
-        }
-      />
-      <p className="max-w-prose text-xs text-muted-foreground">
-        {t("gateNote")}
-      </p>
-    </Section>
+      </Section>
+      {serversSection}
+    </div>
   );
 }

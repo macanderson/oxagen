@@ -110,6 +110,8 @@ const source: DataSource = {
     grants: vi.fn(),
     killSwitches: vi.fn(),
     approvalRules: vi.fn(),
+    connections: vi.fn(),
+    mcpServers: vi.fn(),
   },
 };
 

@@ -1,7 +1,13 @@
 // The sentence a refused Tools write shows. The kernel classified the refusal
 // and put the handler's HandlerError reason in `code` (§3.2). Each reason
-// import_tools, set_tool_classification, set_kill_switch and the auto-approval
-// writes throw has its own sentence; any other code is printed as recorded.
+// import_tools, set_tool_classification, set_kill_switch, the auto-approval
+// writes, create_connection, get_connection and register_mcp_server throw has
+// its own sentence; any other code is printed as recorded.
+//
+// `register_mcp_server` refuses an endpoint only this deployment can reach,
+// and `create_connection` refuses an unregistered connector, with errors the
+// seam has no code for: both arrive as `unavailable` under `kernel_failure`.
+// Naming either one here would need a code the kernel does not carry.
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 
