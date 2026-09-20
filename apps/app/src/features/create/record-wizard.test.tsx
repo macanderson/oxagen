@@ -365,7 +365,9 @@ describe("the context-record wizard: pull request", () => {
     expect(screen.getByText(t("opened.passed"))).toBeTruthy();
     // The page behind moves to Context PRs with this pull request selected.
     const target = "/acme/core-platform/steering?tab=prs&proposal=prp_01K5ABC";
-    expect(push).toHaveBeenCalledWith(target);
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith(target);
+    });
     expect(
       screen
         .getByRole("link", { name: t("opened.onContextPrs") })
