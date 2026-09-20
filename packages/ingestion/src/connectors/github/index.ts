@@ -82,7 +82,7 @@ async function ghListPage(url: string, token: string): Promise<unknown[]> {
     const data: unknown = await resp.json();
     if (!Array.isArray(data))
       throw new Error("github.poll: expected a GitHub list response");
-    rows.push(...data);
+    rows.push(...(data as unknown[]));
     if (data.length < 100) return rows;
   }
 }
