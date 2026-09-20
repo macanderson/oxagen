@@ -31,7 +31,7 @@ BEGIN
   END LOOP;
   -- New tables can inherit default grants. Remove those before copying the source ACL.
   FOR grant_row IN SELECT DISTINCT acl.grantee FROM pg_catalog.pg_class c,
-    LATERAL aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl WHERE c.oid = target_table LOOP
+    LATERAL aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl WHERE c.oid = target_table AND acl.grantee <> c.relowner LOOP
     role_sql := CASE WHEN grant_row.grantee = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(grant_row.grantee)) END;
     EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE %s FROM %s', target_table, role_sql);
   END LOOP;

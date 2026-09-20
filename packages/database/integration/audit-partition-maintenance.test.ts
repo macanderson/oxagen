@@ -78,6 +78,34 @@ describe("audit partition maintenance", () => {
         );
         await tx`INSERT INTO security.security_events(org_id, occurred_at, event_type, outcome)
         VALUES (${org}, ${old!.lower}::timestamptz, 'capability.invoke_allowed', 'allow')`;
+        // Exercise the definer body without superuser privilege. All ownership,
+        // grants, and the fixture role disappear with this transaction rollback.
+        const owner = `audit_owner_${randomUUID().replaceAll("-", "")}`;
+        await tx.unsafe(
+          `CREATE ROLE ${owner} NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`,
+        );
+        await tx.unsafe(`GRANT USAGE, CREATE ON SCHEMA security TO ${owner}`);
+        await tx.unsafe(
+          `ALTER TABLE security.security_events OWNER TO ${owner}`,
+        );
+        await tx.unsafe(
+          `ALTER TABLE security.security_events_default OWNER TO ${owner}`,
+        );
+        await tx.unsafe(
+          `ALTER TABLE security.${expiredPartition} OWNER TO ${owner}`,
+        );
+        await tx.unsafe(
+          `GRANT EXECUTE ON FUNCTION security.copy_audit_table_security(regclass,regclass,boolean) TO ${owner}`,
+        );
+        await tx.unsafe(
+          `ALTER FUNCTION security.maintain_audit_partitions() OWNER TO ${owner}`,
+        );
+        const [ownerFlags] =
+          await tx`SELECT rolsuper, rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = ${owner}`;
+        expect(ownerFlags).toMatchObject({
+          rolsuper: false,
+          rolbypassrls: false,
+        });
         await tx`SET LOCAL ROLE oxagen_app`;
         await tx`CREATE TEMP TABLE pg_class (oid oid, relkind "char") ON COMMIT DROP`;
         const [first] =

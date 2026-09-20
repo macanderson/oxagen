@@ -21,7 +21,7 @@ Only local test file: `pnpm --filter @oxagen/telemetry exec vitest run src/click
 
 CI-only changes cover tenant scope validation, real kernel security-event classification, daily job refusal/result validation, partition metadata and role grants, DEFAULT movement, seven-year calendar cutoff, expired named partitions, repeated maintenance, and the advisory lock from another connection. The PostgreSQL fixture rolls back its rows and DDL.
 
-Independent peer review approved the tenant/kernel/breaker changes and bounded partition design. Configured commit/push hooks remain required before handoff. Production application is not authorized by this source review.
+Independent peer review approved the tenant/kernel/breaker changes and bounded partition design. Configured format, typecheck, lint, and Atlas hooks check each commit. The PostgreSQL fixture runs maintenance under a non-superuser owner to cover row privileges as well as DDL. Production application is not authorized by this source review.
 
 ## Remaining umbrella requirements
 

@@ -89,7 +89,9 @@ export function guardClickhouseClient(
     get(target, key) {
       const value: unknown = Reflect.get(target, key, target);
       if (typeof value !== "function") return value;
-      if (!remote.has(key)) return value.bind(target);
+      if (!remote.has(key))
+        return (...args: unknown[]): unknown =>
+          Reflect.apply(value, target, args);
       return async (...args: unknown[]) => {
         const lease = breaker.begin();
         try {

@@ -28,6 +28,6 @@ Validate tenant and principal identifiers before entering async local storage. M
 
 Partition creation and retention take an exclusive parent lock. The migration preserves existing data but needs a deployment window sized for catalog changes and DEFAULT validation. A large retention backlog can take multiple daily batches. Production apply is not part of this source change.
 
-CI integration tests check the partitioned parent, restricted function and child permissions, DEFAULT row movement, exact calendar cutoff, expired partition removal, repeated delivery, and the advisory lock from another connection. Unit tests cover job refusal and result validation, tenant error classification, and ClickHouse response leases.
+CI integration tests invoke maintenance through the application role under a non-superuser function owner. They check the partitioned parent, restricted function and child permissions, DEFAULT row movement, exact calendar cutoff, expired partition removal, repeated delivery, and the advisory lock from another connection. Unit tests cover job refusal and result validation, tenant error classification, and ClickHouse response leases.
 
 This decision does not provide separate system database credentials (#2150), a `withSystemDb` shrinking baseline (#1394), or production schema drift evidence. Those remain separate requirements in #2972. It does not rewrite shipped ClickHouse migrations or change billing delivery.
