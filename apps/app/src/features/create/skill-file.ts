@@ -1,3 +1,5 @@
+import { skillSourceName } from "@/shared/source-identity";
+
 // The skill wizard's file logic (roadmap creation-spec §4; mockup
 // `wzSkillSlug`, `wzSkillBody`, `wzWords`): the directory name a description
 // or a bundle implies, the SKILL.md drafted from a description, and what the
@@ -41,7 +43,6 @@ const STOP = new Set([
 ]);
 
 /** A skill's directory name: lowercase kebab-case, at most 48 characters (skillNameSchema). */
-const SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const NAME_MAX = 48;
 
 /** The words of `text` a name may be built from, lowercased, in order. */
@@ -110,10 +111,7 @@ export function isSemver(v: string): boolean {
  * renames the skill in the editor.
  */
 export function skillNameOf(text: string, fallback: string): string {
-  const name = frontmatterOf(text)?.name;
-  return name !== undefined && name.length <= NAME_MAX && SKILL_NAME.test(name)
-    ? name
-    : fallback;
+  return skillSourceName(text) ?? fallback;
 }
 
 /**

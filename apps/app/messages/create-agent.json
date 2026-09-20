@@ -55,7 +55,8 @@
       "denied": "{count} denied",
       "unparsed": "line {line} does not parse ({code})",
       "revert": "Revert",
-      "request": "<code>tools</code> is a request, not a grant. What the agent can reach is this list intersected with the roles it holds and with your own grants, never wider than either."
+      "request": "<code>tools</code> is a request, not a grant. What the agent can reach is this list intersected with the roles it holds and with your own grants, never wider than either.",
+      "invalidSlug": "Set slug to a lowercase name with hyphens, up to 18 characters."
     },
     "toolbelt": {
       "title": "The toolbelt",

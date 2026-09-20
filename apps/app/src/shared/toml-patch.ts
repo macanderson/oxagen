@@ -87,7 +87,7 @@ function valueEnd(s: string, p: number): number {
     else if (ch === "]" || ch === "}") depth--;
     q++;
   }
-  while (q > p && (s.charAt(q - 1) === " " || s.charAt(q - 1) === "\t")) q--;
+  while (q > p && /[ \t\r]/.test(s.charAt(q - 1))) q--;
   return q;
 }
 
@@ -238,7 +238,8 @@ export function tomlSet(
   const insertBefore = (at: number, from: number, entry: string): string => {
     let cut = at;
     while (cut > from && lines[cut - 1] === "") cut--;
-    lines.splice(cut, 0, entry);
+    const newline = text.includes("\r\n") ? "\r" : "";
+    lines.splice(cut, 0, `${entry}${newline}`);
     return lines.join("\n");
   };
 

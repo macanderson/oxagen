@@ -13,6 +13,7 @@ import { SUBAGENT_FILE_HARNESSES } from "@oxagen/oxagen/contracts/agent.propose"
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import type { ActionResult } from "@/server/kernel";
+import { agentSourceSlug, renameAgentSource } from "@/shared/source-identity";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
@@ -160,13 +161,20 @@ function useFile(api: StepProps<AgentDraft>["api"]) {
     },
   });
   const edited = d.edits[slug];
+  const text = edited ?? seed;
+  const sourceSlug = agentSourceSlug(text);
   return {
-    slug,
+    slug: sourceSlug ?? slug,
+    valid: sourceSlug !== null,
     seed,
-    text: edited ?? seed,
+    text,
     edited: edited !== undefined && edited !== seed,
     set: (value: string) => {
-      api.update({ edits: { ...d.edits, [slug]: value } });
+      const nextSlug = agentSourceSlug(value) ?? slug;
+      const edits = { ...d.edits };
+      delete edits[slug];
+      edits[nextSlug] = value;
+      api.update({ slug: nextSlug, edits });
     },
     revert: () => {
       api.update({
@@ -205,6 +213,7 @@ function IdentityStep({ api }: StepProps<AgentDraft>) {
   const d = api.draft;
   const slug = slugOf(d);
   const valid = isAgentSlug(slug);
+  const file = useFile(api);
   return (
     <div className="flex flex-col gap-4 text-sm">
       <div className="flex flex-col gap-1.5">
@@ -222,7 +231,13 @@ function IdentityStep({ api }: StepProps<AgentDraft>) {
           aria-invalid={!valid}
           aria-describedby="wizard-slug-hint"
           onChange={(event) => {
-            api.update({ slug: normalizeSlug(event.target.value) });
+            const next = normalizeSlug(event.target.value);
+            const source = renameAgentSource(file.text, next);
+            const edits = { ...d.edits };
+            delete edits[slug];
+            delete edits[next];
+            if (file.edited) edits[next] = source ?? file.text;
+            api.update({ slug: next, edits });
           }}
           className={`${inputBase} ${mono}`}
         />
@@ -334,10 +349,22 @@ function DefinitionStep({ api }: StepProps<AgentDraft>) {
           </span>
         )}
       </p>
+      {reading.ok && !file.valid ? (
+        <FormAlert>{t("invalidSlug")}</FormAlert>
+      ) : null}
       <FileEditor
         path={`.oxagen/agents/${file.slug}.toml`}
         value={file.text}
         onChange={file.set}
+        rename={{
+          name: file.slug,
+          onRename: (name) => {
+            const source = renameAgentSource(file.text, name);
+            if (source === null) return false;
+            file.set(source);
+            return true;
+          },
+        }}
         bar={
           <button
             type="button"
@@ -627,7 +654,7 @@ function useAgentStep(props: StepProps<AgentDraft>): StepView {
       body: <IdentityStep {...props} />,
       primary: {
         label: t("writeDefinition"),
-        enabled: isAgentSlug(file.slug) && d.harness !== null,
+        enabled: isAgentSlug(slugOf(d)) && d.harness !== null,
       },
     };
   if (step === 3)
@@ -637,7 +664,7 @@ function useAgentStep(props: StepProps<AgentDraft>): StepView {
       body: <DefinitionStep {...props} />,
       primary: {
         label: t("pickBelt"),
-        enabled: readDefinition(file.text).ok,
+        enabled: file.valid,
       },
     };
   if (step === 4)
@@ -654,7 +681,7 @@ function useAgentStep(props: StepProps<AgentDraft>): StepView {
       body: <Opened agent={d.submit.agent} />,
     };
   const submit = async () => {
-    if (d.harness === null) return;
+    if (d.harness === null || !file.valid) return;
     api.update({ submit: { state: "pending" } });
     try {
       const result = await proposeAgent(ctx.org, ctx.ws, {
@@ -688,6 +715,7 @@ function useAgentStep(props: StepProps<AgentDraft>): StepView {
       enabled:
         ctx.repo.state === "bound" &&
         d.harness !== null &&
+        file.valid &&
         d.submit.state !== "pending",
       run: submit,
     },

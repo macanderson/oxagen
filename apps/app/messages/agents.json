@@ -480,6 +480,8 @@
       "save": "Save",
       "modified": "modified",
       "unchanged": "unchanged",
+      "identityLocked": "This registered agent’s slug and filename are fixed.",
+      "identityMismatch": "The source slug must match this registered agent. Restore slug = \"{slug}\" before saving.",
       "stat": "+{added} −{removed}",
       "parse": {
         "error": "The file does not parse at line {line}: {reason}.",

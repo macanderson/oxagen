@@ -77,6 +77,7 @@ function renderEditor(base = DEFINITION_SOURCE) {
         org="acme"
         ws="core-platform"
         agentId="agt_releasebot"
+        slug="release-bot"
         path={PATH}
         base={base}
         branch="agents/release-bot"
@@ -186,6 +187,31 @@ describe("AgentSource", () => {
 });
 
 describe("SourceEditor", () => {
+  it.each([
+    DEFINITION_SOURCE.replace('slug = "release-bot"', 'slug = "renamed"'),
+    DEFINITION_SOURCE.replace('slug = "release-bot"', "# slug removed"),
+  ])(
+    "blocks a changed or missing registered slug before commit",
+    async (draft) => {
+      renderEditor();
+      expect(
+        screen.getByText(
+          "This registered agent’s slug and filename are fixed.",
+        ),
+      ).toBeVisible();
+      edit(draft);
+      expect(screen.getByTestId("source-slug-error")).toHaveTextContent(
+        'Restore slug = "release-bot" before saving.',
+      );
+      expect(button("Save")).toBeDisabled();
+      expect(editor()).toHaveValue(draft);
+      expect(commitAgentDefinition).not.toHaveBeenCalled();
+      await userEvent.click(button("Discard"));
+      expect(screen.queryByTestId("source-slug-error")).toBeNull();
+      expect(button("Save")).toBeEnabled();
+    },
+  );
+
   it("marks an edit modified with its diff stat, and Discard returns to the base", async () => {
     renderEditor();
     expect(button("Discard")).toBeDisabled();
@@ -205,7 +231,9 @@ describe("SourceEditor", () => {
       "The file does not parse at line 2: a string is not closed.",
     );
     expect(button("Save")).toBeDisabled();
-    edit('schema = "agent-definition/v0.1"\nname = "closed"\n');
+    edit(
+      'schema = "agent-definition/v0.1"\nslug = "release-bot"\nname = "closed"\n',
+    );
     expect(screen.queryByTestId("parse-error")).toBeNull();
     expect(button("Save")).toBeEnabled();
   });

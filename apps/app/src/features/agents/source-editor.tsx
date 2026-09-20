@@ -180,6 +180,7 @@ export function SourceEditor({
   org,
   ws,
   agentId,
+  slug,
   path,
   base,
   branch,
@@ -189,6 +190,8 @@ export function SourceEditor({
   org: string;
   ws: string;
   agentId: string;
+  /** The registered identity slug, which definition commits cannot change. */
+  slug: string;
   /** `.oxagen/agents/<slug>.toml`. */
   path: string;
   /** The committed file, or the seed an agent with no committed file starts from. */
@@ -206,6 +209,7 @@ export function SourceEditor({
   const parsed = useMemo(() => parseTomlSubset(draft), [draft]);
   const stat = useMemo(() => diffStat(base, draft), [base, draft]);
   const dirty = draft !== base;
+  const matchesIdentity = parsed.ok && parsed.doc.slug === slug;
 
   return (
     <section aria-label={path} className={`${panel} flex flex-col`}>
@@ -236,7 +240,7 @@ export function SourceEditor({
           <button
             type="button"
             className={buttonPrimary}
-            disabled={!parsed.ok}
+            disabled={!parsed.ok || !matchesIdentity}
             onClick={() => {
               setCommitting(true);
             }}
@@ -245,6 +249,16 @@ export function SourceEditor({
           </button>
         </span>
       </div>
+      <p className="px-4 pt-3 text-xs text-muted-foreground">
+        {t("identityLocked")}
+      </p>
+      {parsed.ok && !matchesIdentity ? (
+        <div className="px-4 pt-3">
+          <FormAlert testId="source-slug-error">
+            {t("identityMismatch", { slug })}
+          </FormAlert>
+        </div>
+      ) : null}
       {parsed.ok ? null : (
         <div className="px-4 pt-3">
           <FormAlert testId="parse-error">
