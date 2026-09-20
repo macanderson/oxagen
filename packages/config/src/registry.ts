@@ -1917,6 +1917,42 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
   },
 
+  TAURI_SIGNING_PRIVATE_KEY: {
+    group: "Operator scripts",
+    description:
+      "The desktop app's updater signing key (minisign; contents or a path). " +
+      "`pnpm dist:local` reads ~/.tauri/oxagen-desktop.key when this is unset; " +
+      "desktop.yml holds it as a secret. Unset builds carry no updater artifacts.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: {
+    group: "Operator scripts",
+    description:
+      "Password of TAURI_SIGNING_PRIVATE_KEY. The key has none, so this is set " +
+      "to the empty string: an absent variable makes tauri prompt for one.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  APPLE_SIGNING_IDENTITY: {
+    group: "Operator scripts",
+    description:
+      "The Developer ID tauri signs the macOS bundle with. `-` signs ad hoc, " +
+      "which `pnpm dist:local` and desktop.yml use when no Developer ID is configured.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "-",
+  },
+
   OXAGEN_INSTALL_BASE: {
     group: "Operator scripts",
     description:
