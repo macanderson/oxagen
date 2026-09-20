@@ -292,8 +292,9 @@ describe("the evaluation the dialog reads again", () => {
       await user.click(within(dialog()).getByTestId(decision));
     }
     expect(resolveApprovalAction).not.toHaveBeenCalled();
-    await act(() => {
+    await act(async () => {
       read.resolve({ ok: true, value: { resolvedBy: null, eligibility } });
+      await read.promise;
     });
     expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
       "aria-disabled",
@@ -321,19 +322,21 @@ describe("the evaluation the dialog reads again", () => {
     draw();
     const user = await open();
     await user.keyboard("{Escape}");
-    await act(() => {
+    await act(async () => {
       first.resolve({
         ok: true,
         value: { resolvedBy: "user:stale", eligibility },
       });
+      await first.promise;
     });
     const second = Promise.withResolvers<unknown>();
     readApprovalEligibility.mockReturnValueOnce(second.promise);
     await user.click(screen.getByTestId("decide"));
     expect(screen.queryByTestId("approval-settled")).toBeNull();
     expect(screen.getByTestId("eligibility-checking")).toBeInTheDocument();
-    await act(() => {
+    await act(async () => {
       second.resolve({ ok: true, value: { resolvedBy: null, eligibility } });
+      await second.promise;
     });
   });
 
