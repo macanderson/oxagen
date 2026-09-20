@@ -110,6 +110,7 @@ describe("toRunPage", () => {
             model: "z-ai/glm-flash-latest",
           },
           replayGrade: "fork",
+          verdict: null,
           enforcementTier: "gateway",
           completenessGaps: [],
           canSummarize: true,
