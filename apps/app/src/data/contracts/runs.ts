@@ -10,6 +10,28 @@ export const RunStatus = z.enum(["live", "sealed", "halted"]);
 export type RunStatus = z.infer<typeof RunStatus>;
 
 /**
+ * How the run ended, in the word its store recorded. `status` is the
+ * lifecycle and folds every sealed run into one word, so a run that finished
+ * and a run that failed read the same there. This separates them.
+ *
+ * `running` while the run is open. `completed`, `failed`, and `cancelled`
+ * come from the ledger; a wrapped session adds `crashed` (the harness died)
+ * and `unknown` (the harness stopped reporting before it recorded an end).
+ * `unknown` is a recorded answer and not a missing one: it says the record
+ * does not show how the run ended, which is weaker than any of the others
+ * and is rendered as such.
+ */
+export const RunOutcome = z.enum([
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+  "crashed",
+  "unknown",
+]);
+export type RunOutcome = z.infer<typeof RunOutcome>;
+
+/**
  * The replay grade the seal recorded (spec §8.4), weakest first. The page
  * renders the recorded word and never a stronger one; null while the run is
  * live or its seal predates the recorder.
@@ -142,6 +164,7 @@ export const RunRow = z.object({
   /** The person's name; null for a principal that is not a person, and for a person with no name recorded. */
   operatorName: z.string().min(1).nullable(),
   status: RunStatus,
+  outcome: RunOutcome,
   /** Distinct turns; null for a ledger run whose model-call payloads are encrypted. */
   turns: z.number().int().nonnegative().nullable(),
   /** Model calls plus tool calls. */

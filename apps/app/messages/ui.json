@@ -30,8 +30,14 @@
     },
     "runStatus": {
       "live": "live",
+      "running": "running",
       "sealed": "sealed",
-      "halted": "halted"
+      "halted": "halted",
+      "completed": "completed",
+      "failed": "failed",
+      "cancelled": "cancelled",
+      "crashed": "crashed",
+      "unknown": "outcome not recorded"
     },
     "generated": {
       "label": "generated",
