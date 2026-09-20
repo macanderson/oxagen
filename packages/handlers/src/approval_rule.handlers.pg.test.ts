@@ -528,7 +528,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           const values = { ...version, id: undefined, publicId: undefined };
           const [retained] = await tx
             .insert(schema.toolVersions)
-            .values({ ...values, versionNumber: 2 })
+            .values({ ...values, versionNumber: 2, isLatest: false })
             .returning();
           if (!retained) throw new Error("Missing retained version");
           return retained;
