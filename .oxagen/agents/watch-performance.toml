@@ -1,0 +1,22 @@
+# .oxagen/agents/watch-performance.toml
+# The definition is the record. Nothing here is written to a database by the wizard:
+# the definition is published when a person merges this pull request. Register the agent afterward to create its identity.
+schema = "agent-definition/v0.1"
+slug = "watch-performance"
+name = "Watch performance"
+description = "Watch the performance budget on every pull request"
+model_tier = "complex"
+tools = ["search_graph", "recall_memory"]
+deny_tools = ["github__merge_pull_request@*", "github__delete_*@*"]
+side_effects = ["read", "write"]
+budget = { per_run_micros = 4000000 }
+
+[instructions]
+body = """
+Watch the performance budget on every pull request
+
+Work inside the toolbelt you were given. When a step needs authority you do
+not hold, stop and say which one. Do not route around it.
+"""
+
+[harness.claude-code]
