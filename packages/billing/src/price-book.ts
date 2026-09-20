@@ -399,6 +399,10 @@ function entryCouldPrice(entry: PriceEntry, modelId: string): boolean {
  *   observe some of the eleven and never the rest: a token read never reports
  *   `image` or `video_second` usage, so those rows' boundaries can only ever
  *   split a bucket nobody probes.
+ * - `since` and `until` retain only endpoints inside the inclusive observation
+ *   window. Older and future changes cannot split any calls in that report.
+ *   Filter endpoints, not rows: a rate that starts before the window can still
+ *   end inside it, and that ending must separate the observed calls.
  *
  * Omitting a key leaves that dimension unnarrowed, and omitting `filter`
  * entirely returns every boundary in the book.
@@ -408,11 +412,15 @@ export function priceBookBoundaries(
   filter?: {
     models?: readonly string[];
     tokenClasses?: readonly PriceTokenClass[];
+    since?: Date;
+    until?: Date;
   },
 ): number[] {
   const classes =
     filter?.tokenClasses === undefined ? null : new Set(filter.tokenClasses);
   const models = filter?.models;
+  const since = filter?.since?.getTime() ?? -Infinity;
+  const until = filter?.until?.getTime() ?? Infinity;
   const relevant = book.filter((e) => {
     if (classes !== null && !classes.has(e.tokenClass)) return false;
     if (models === undefined) return true;
@@ -425,7 +433,9 @@ export function priceBookBoundaries(
         ...(e.effectiveTo === null ? [] : [e.effectiveTo.getTime()]),
       ]),
     ),
-  ].sort((a, b) => a - b);
+  ]
+    .filter((at) => at >= since && at <= until)
+    .sort((a, b) => a - b);
 }
 
 /**

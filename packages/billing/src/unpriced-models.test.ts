@@ -629,6 +629,42 @@ describe("readUnpricedModels", () => {
     loadSpy.mockRestore();
   });
 
+  it("bounds the observed-model callback to the report window", async () => {
+    const before = new Date(SINCE.getTime() - 1);
+    const inside = new Date("2026-09-07T00:00:00.000Z");
+    const after = new Date(AT.getTime() + 1);
+    const loadSpy = vi.spyOn(priceBook, "loadPriceBook").mockResolvedValue([
+      entry({ model: "watched", effectiveFrom: before, effectiveTo: SINCE }),
+      entry({ model: "watched", effectiveFrom: SINCE, effectiveTo: inside }),
+      entry({ model: "watched", effectiveFrom: inside, effectiveTo: AT }),
+      entry({ model: "watched", effectiveFrom: AT, effectiveTo: after }),
+      entry({ model: "watched", effectiveFrom: after }),
+      entry({
+        model: "unrelated",
+        effectiveFrom: new Date(inside.getTime() + 1),
+      }),
+      entry({
+        model: "watched",
+        tokenClass: "image",
+        effectiveFrom: new Date(inside.getTime() + 2),
+      }),
+    ]);
+    let handed: readonly Date[] = [];
+    readObservedModelsMock.mockImplementation(async (args) => {
+      const typed = args as {
+        boundariesFor: (models: readonly string[]) => readonly Date[];
+      };
+      handed = typed.boundariesFor(["watched"]);
+      return [];
+    });
+    try {
+      await readUnpricedModels({ orgId: ORG, since: SINCE, at: AT });
+      expect(handed).toEqual([SINCE, inside, AT]);
+    } finally {
+      loadSpy.mockRestore();
+    }
+  });
+
   it("reports what the frame read observed, judged against the book", async () => {
     const loadSpy = vi
       .spyOn(priceBook, "loadPriceBook")
