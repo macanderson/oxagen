@@ -1,6 +1,6 @@
 export const meta = {
   name: 'mc-5-steering-hub',
-  description: 'Mission Control session 5: the Steering hub as path segments with the Memory and Policy tabs and a single-record route, the UI-only half of Phase 2 over handlers that ship today; Preview, skill sync, and ontology notes wait on Phases 1 and 2; one PR',
+  description: 'Rev1 app session 5: the Steering hub as path segments with the Memory and Policy tabs and a single-record route, the UI-only half of Phase 2 over handlers that ship today; Preview, skill sync, and ontology notes wait on Phases 1 and 2; one PR',
   whenToUse: 'Run only after PR #3479 (creation wizards, Skills as a tab of Steering) and session 2 (the Tools auto-approvals editor the Policy tab links to) have merged. Advances #3297 and #3395. Do not add governance ceremony: ADR-091 §6 freeze.',
   phases: [
     { title: 'Scout', detail: 'confirm #3479 merged and each lane is still open' },
@@ -193,7 +193,7 @@ async function runSession(session, specHint) {
 const session = {
   id: '5',
   title: 'Steering hub: segments, Memory, Policy, one record',
-  prTitle: 'Mission Control: Steering tabs as path segments, the Memory and Policy tabs, and a route for one published record',
+  prTitle: 'Oxagen app: Steering tabs as path segments, the Memory and Policy tabs, and a route for one published record',
   issueHint: 'Refs #3297 and #3395; Closes #3395 only if its DoD is fully done. The freeze in ADR-091 §6 forbids new proposal states, checks, or review steps; add none.',
   lanes: [
     {

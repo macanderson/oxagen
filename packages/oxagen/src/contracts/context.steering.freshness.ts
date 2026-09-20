@@ -17,7 +17,7 @@
  *      `headCommit` is the commit the newest promotion published at, and a
  *      checkout that cannot reach it is behind whatever its own refs say.
  *   2. **What the organisation decided.** `autoSync` and `blockStaleRuns`
- *      are a workspace policy, set once in Mission Control, and this is how
+ *      are a workspace policy, set once in the operator console, and this is how
  *      they reach every machine. A local file may switch a gate ON and can
  *      never switch one OFF, so this read is the floor rather than a
  *      suggestion.

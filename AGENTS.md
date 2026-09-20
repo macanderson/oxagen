@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Oxagen is Mission Control for agent operators and the agent control plane they work in (ADR-067): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the security, FinOps and engineering teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams, not to resellers. [`docs/VISION.md`](docs/VISION.md) is the reference for feature direction; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
+Oxagen is workforce management for autonomous agents, on the shared agent control plane their operators work in (ADR-113, superseding the product name in ADR-067): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the security, FinOps and engineering teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams, not to resellers. [`docs/VISION.md`](docs/VISION.md) is the reference for feature direction; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
 
 Oxagen governs agents; it does not run them (ADR-043). Stella is the coding agent; Oxagen is the governor, grounder, explainer, meter and rater. Monorepo built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
 
@@ -143,7 +143,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm check:brand` | Verifies every frontend is on the Oxagen house brand kit (needs the house kit `oxagenai/oxagen-brand` checked out at `$OXAGEN_HOUSE_BRAND` or `../oxagen-house-brand`) |
 | `pnpm check:naming` | ADR-025 naming compliance |
 | `pnpm check:audit-coverage` | SOC 2 audit-event coverage (runs on every PR in CI) |
-| `pnpm release:patch/minor/major` | Lockstep version bump (all packages) + AI-generated release notes (via Vercel AI Gateway) + git tag + Vercel `PLATFORM_VERSION` sync (`--no-vercel` to skip; production itself runs on AWS, see README → Deployment) + optional NPM publish |
+| `pnpm release:patch/minor/major` | Lockstep version bump (all packages) + model-written release notes under the clear-prose and oxagen-branding skills (via Vercel AI Gateway; `tools/scripts/lib/release-notes.ts`) + the docs page `apps/docs/content/docs/releases/v<version>.mdx` + git tag. Releases ship from the Release workflow (`.github/workflows/release.yml`, `workflow_dispatch`), which runs this and opens the release PR; see CONTRIBUTING.md → Release Process |
 | `pnpm test:e2e` | Run the three Playwright specs (`apps/app/e2e`: `login`, `pay`, `page-load`). The suite holds exactly these three and gains no fourth — every other flow is a component test (`.claude/skills/oxagen-testing`, `apps/app/ARCHITECTURE.md` §6.3). |
 
 **Narrow test runs** (never run all tests): `pnpm --filter @oxagen/<pkg> test:unit <file>.test.ts`

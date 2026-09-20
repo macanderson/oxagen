@@ -377,7 +377,7 @@ export function buildProgram(): Command {
   contextCmd
     .command("propose")
     .description(
-      "Record a proposal (the record it should become, why); its Context PR is opened and merged from Mission Control",
+      "Record a proposal (the record it should become, why); its Context PR is opened and merged in Oxagen",
     )
     .requiredOption(
       "--lineage <id>",
@@ -448,6 +448,61 @@ export function buildProgram(): Command {
       const { repoUnlink } = await import("./commands/repo.js");
       await repoUnlink(bindingId, opts);
     });
+  repoCmd
+    .command("tree")
+    .description(
+      "What a repository holds under .oxagen/ on its production branch, read from GitHub now",
+    )
+    .argument("<bindingId>", "The rpb_… binding id `oxagen repo list` shows")
+    .option("--json", "Output JSON")
+    .action(async (bindingId: string, opts: { json?: boolean }) => {
+      const { repoTree } = await import("./commands/repo.js");
+      await repoTree(bindingId, opts);
+    });
+  repoCmd
+    .command("branch")
+    .description(
+      "Confirm or change a repository's production branch; the branch must exist on GitHub",
+    )
+    .argument("<bindingId>", "The rpb_… binding id `oxagen repo list` shows")
+    .argument("<branch>", "The branch to make the production branch")
+    .option("--json", "Output JSON")
+    .action(
+      async (bindingId: string, branch: string, opts: { json?: boolean }) => {
+        const { repoBranch } = await import("./commands/repo.js");
+        await repoBranch(bindingId, branch, opts);
+      },
+    );
+  repoCmd
+    .command("init")
+    .description(
+      "Open the pull request that adds .oxagen/ to a repository; it never writes to the production branch",
+    )
+    .argument("<bindingId>", "The rpb_… binding id `oxagen repo list` shows")
+    .requiredOption(
+      "--workspace-toml <file>",
+      "The .oxagen/workspace.toml to propose",
+    )
+    .option("--mode <mode>", "solo | team | regulated", "team")
+    .option(
+      "--governance-toml <file>",
+      "The .oxagen/rules/governance.toml to propose; drafted from --mode when omitted",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        bindingId: string,
+        opts: {
+          json?: boolean;
+          mode?: string;
+          workspaceToml?: string;
+          governanceToml?: string;
+        },
+      ) => {
+        const { repoInit } = await import("./commands/repo.js");
+        await repoInit(bindingId, opts);
+      },
+    );
   // ── steering: is this checkout running on the records in force? ─────────────
 
   const steeringCmd = program

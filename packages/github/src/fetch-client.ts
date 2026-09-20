@@ -569,6 +569,28 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     }
   }
 
+  /**
+   * One branch's head commit, or null when GitHub answers 404: the branch
+   * does not exist. Unlike `listBranches`, which stops at 300, this answers
+   * for any branch by name.
+   */
+  async function getBranch(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<{ name: string; sha: string } | null> {
+    try {
+      const data = await request<GHBranch>(
+        "GET",
+        `/repos/${seg(args.owner)}/${seg(args.repo)}/branches/${encodeURIComponent(args.branch)}`,
+      );
+      return { name: args.branch, sha: data.commit.sha };
+    } catch (err) {
+      if (isNotFound(err)) return null;
+      throw err;
+    }
+  }
+
   async function getTree(args: {
     owner: string;
     repo: string;
@@ -576,12 +598,16 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
   }): Promise<string[]> {
     const ref = args.ref ?? "main";
     const repoPath = `/repos/${seg(args.owner)}/${seg(args.repo)}`;
-    // Step 1 — resolve branch → tree SHA via the branches endpoint.
-    const branch = await request<GHBranch>(
+    // Step 1 — resolve the ref to its commit's tree SHA. `/commits/{ref}`
+    // takes a branch name, a tag or a commit SHA. `/branches/{ref}` takes a
+    // branch name and nothing else, so every caller that named a commit —
+    // which is what a caller does when it wants two reads to agree on one
+    // commit — was answered 404.
+    const commit = await request<GHBranchCommit>(
       "GET",
-      `${repoPath}/branches/${encodeURIComponent(ref)}`,
+      `${repoPath}/commits/${encodeURIComponent(ref)}`,
     );
-    const treeSha = branch.commit.commit.tree.sha;
+    const treeSha = commit.commit.tree.sha;
     // Step 2 — fetch the recursive tree.
     const treeData = await request<GHTreeResponse>(
       "GET",
@@ -935,6 +961,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     listPullRequests,
     getFileContent,
     getTree,
+    getBranch,
     getPullRequest,
     listPullRequestComments,
     listCiChecks,

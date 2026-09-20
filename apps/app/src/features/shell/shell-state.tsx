@@ -41,8 +41,6 @@ type ShellState = {
    */
   avatarOpen: boolean;
   setAvatarOpen: (open: boolean) => void;
-  workspaceSettingsOpen: boolean;
-  setWorkspaceSettingsOpen: (open: boolean) => void;
   assistantOpen: boolean;
   setAssistantOpen: (open: boolean) => void;
   theme: Theme;
@@ -76,7 +74,6 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountTab, setAccountTab] = useState<AccountTab>("profile");
   const [avatarOpenRaw, setAvatarOpenRaw] = useState(false);
-  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
 
   const openAccount = useCallback((tab: AccountTab) => {
     setAccountTab(tab);
@@ -118,8 +115,6 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       openAccount,
       avatarOpen: avatarOpenRaw,
       setAvatarOpen,
-      workspaceSettingsOpen,
-      setWorkspaceSettingsOpen,
       assistantOpen,
       setAssistantOpen,
       theme,
@@ -133,7 +128,6 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       openAccount,
       avatarOpenRaw,
       setAvatarOpen,
-      workspaceSettingsOpen,
       assistantOpen,
       theme,
       setTheme,

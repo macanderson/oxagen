@@ -11,9 +11,9 @@ import {
 const page = `<!doctype html>
 <html><head>
 <meta charset="utf-8">
-<title>Mission Control &amp; friends | Oxagen</title>
+<title>Fleet &amp; friends | Oxagen</title>
 <meta name="description" content="Agents you can &quot;check&quot;.">
-<meta property="og:title" content="Mission Control">
+<meta property="og:title" content="Fleet">
 <meta property="og:image" content="https://oxagen.sh/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://oxagen.sh/og.png">
@@ -22,7 +22,7 @@ const page = `<!doctype html>
 describe("pageMeta", () => {
   it("reads the title and description, decoding entities", () => {
     expect(pageMeta(page)).toEqual({
-      title: "Mission Control & friends | Oxagen",
+      title: "Fleet & friends | Oxagen",
       description: 'Agents you can "check".',
     });
     expect(pageMeta("<html></html>")).toEqual({ title: "", description: "" });
@@ -32,9 +32,9 @@ describe("pageMeta", () => {
 
 describe("cardTitle", () => {
   it("drops the site name off the end, in any of its separators", () => {
-    expect(cardTitle("Mission Control | Oxagen")).toBe("Mission Control");
-    expect(cardTitle("Mission Control — Oxagen")).toBe("Mission Control");
-    expect(cardTitle("Mission Control · Oxagen ")).toBe("Mission Control");
+    expect(cardTitle("Fleet | Oxagen")).toBe("Fleet");
+    expect(cardTitle("Fleet — Oxagen")).toBe("Fleet");
+    expect(cardTitle("Fleet · Oxagen ")).toBe("Fleet");
     expect(cardTitle("Oxagen — The control plane")).toBe(
       "Oxagen — The control plane",
     );
@@ -62,7 +62,7 @@ describe("withOgImage", () => {
     url: "https://oxagen.sh/og/products-oxagen-dark.png",
     width: 1200,
     height: 630,
-    alt: 'Mission Control & "friends"',
+    alt: 'Fleet & "friends"',
   };
 
   it("replaces the declared image tags with the card and its size and alt", () => {
@@ -71,11 +71,9 @@ describe("withOgImage", () => {
     expect(out.match(/property="og:image"/g)).toHaveLength(1);
     expect(out.match(/name="twitter:image"/g)).toHaveLength(1);
     expect(out).toContain(
-      '</title>\n<meta property="og:image" content="https://oxagen.sh/og/products-oxagen-dark.png">\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n<meta property="og:image:alt" content="Mission Control &amp; &quot;friends&quot;">\n<meta name="twitter:image" content="https://oxagen.sh/og/products-oxagen-dark.png">',
+      '</title>\n<meta property="og:image" content="https://oxagen.sh/og/products-oxagen-dark.png">\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n<meta property="og:image:alt" content="Fleet &amp; &quot;friends&quot;">\n<meta name="twitter:image" content="https://oxagen.sh/og/products-oxagen-dark.png">',
     );
-    expect(out).toContain(
-      '<meta property="og:title" content="Mission Control">',
-    );
+    expect(out).toContain('<meta property="og:title" content="Fleet">');
   });
 
   it("adds the tags to a page that declared none, and is idempotent", () => {

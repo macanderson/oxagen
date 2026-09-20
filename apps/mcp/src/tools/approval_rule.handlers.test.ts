@@ -86,7 +86,11 @@ describe("the auto-approval rule tools", () => {
 
   it("carry the contract's own argument schema", () => {
     expect(Object.keys(listSchema)).toEqual([]);
-    expect(Object.keys(setSchema).sort()).toEqual(["replaces", "rules", "saving"]);
+    expect(Object.keys(setSchema).sort()).toEqual([
+      "replaces",
+      "rules",
+      "saving",
+    ]);
     expect(Object.keys(deleteSchema)).toEqual(["ruleId"]);
     expect(Object.keys(enabledSchema).sort()).toEqual(["enabled", "ruleId"]);
     expect(Object.keys(eligibilitySchema)).toEqual(["approvalId"]);

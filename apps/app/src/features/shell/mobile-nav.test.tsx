@@ -28,7 +28,6 @@ import { phoneWidth } from "@/test/phone";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
-import workspaceSettingsMessages from "../../../messages/workspace-settings.json";
 import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
@@ -42,32 +41,6 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () =>
     new URLSearchParams(nav.query || (nav.pathname.split("?")[1] ?? "")),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
-}));
-
-// The Workspace settings dialog reads through server actions on open. What is
-// under test here is the drawer, so the reads are stubbed at their seam and the
-// panel's own states are proven in workspace-settings.test.tsx.
-vi.mock("./workspace-settings-actions", () => ({
-  readWorkspaceRepository: vi.fn().mockResolvedValue({
-    ok: true,
-    value: {
-      repository: null,
-      github: {
-        connected: false,
-        connectUrl: null,
-        installUrl: null,
-        manageUrl: null,
-      },
-    },
-  }),
-  listInstallationRepositories: vi.fn(),
-  bindWorkspaceRepository: vi.fn(),
-  listGithubInstallations: vi.fn().mockResolvedValue({
-    ok: false,
-    reason: "conflict",
-    code: "github_not_authorized",
-  }),
-  attachGithubInstallation: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -139,7 +112,6 @@ function renderPhone(data: ShellData, page: ReactNode = null) {
         ...en,
         ...shellMessages,
         ...uiMessages,
-        ...workspaceSettingsMessages,
       }}
     >
       <ShellClient data={data} />
@@ -234,6 +206,7 @@ describe("thumb bar", () => {
     ["/acme/core-platform/tools", "tools"],
     ["/acme/core-platform/spend", "spend"],
     ["/acme/core-platform/steering", "more"],
+    ["/acme/core-platform/repositories", "more"],
     ["/acme/billing", "more"],
     ["/acme/api-keys", "more"],
     ["/acme/model-funding", "more"],
@@ -262,7 +235,7 @@ describe("thumb bar", () => {
 });
 
 describe("More sheet", () => {
-  it("rises as a bottom sheet carrying Steering, Organization, Billing and Audit", async () => {
+  it("rises as a bottom sheet carrying Steering, Repositories, Organization, Billing and Audit", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     const more = screen.getByRole("button", { name: "More" });
@@ -273,6 +246,7 @@ describe("More sheet", () => {
     const links = within(sheet).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
       ["Steering", "/acme/core-platform/steering"],
+      ["Repositories", "/acme/core-platform/repositories"],
       ["Organization", "/acme"],
       ["Billing", "/acme/billing"],
       ["Audit", "/acme/audit"],
@@ -332,7 +306,7 @@ describe("the other dialogs on a phone", () => {
       within(drawer)
         .getByRole("navigation", { name: "Main" })
         .querySelectorAll("a"),
-    ).toHaveLength(8);
+    ).toHaveLength(9);
   });
 
   // The rail that carries the launcher is `hidden md:flex`, so without this a
@@ -364,26 +338,6 @@ describe("the other dialogs on a phone", () => {
     const flyout = screen.getByTestId("assistant-flyout");
     expect(flyout).not.toHaveAttribute("inert");
     expect(within(flyout).getByTestId("assistant-composer")).toBeTruthy();
-  });
-
-  // The drawer is a modal of its own. Opening Workspace settings from inside it
-  // without closing it first stacks two modal roots and two scrims, and the
-  // drawer is still there when the settings dialog closes — so the person lands
-  // back in the navigation they left rather than on the page. The nav links and
-  // the assistant launcher already take the drawer's `close`; so does this.
-  it("the workspace settings control closes the drawer before opening the dialog", async () => {
-    const user = userEvent.setup();
-    renderPhone(shellData());
-    await user.click(screen.getByRole("button", { name: "Open navigation" }));
-    const drawer = await screen.findByTestId("nav-drawer");
-    await user.click(within(drawer).getByTestId("open-workspace-settings"));
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("nav-drawer")).toBeNull();
-    });
-    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
-    // One modal surface, one scrim — not the drawer's stacked under the sheet's.
-    expect(document.querySelectorAll("[data-scrim]")).toHaveLength(1);
   });
 
   // On a phone the control that opened the assistant is gone by the time the
@@ -462,7 +416,6 @@ describe("card tables", () => {
           ...en,
           ...shellMessages,
           ...uiMessages,
-          ...workspaceSettingsMessages,
         }}
       >
         <ShellClient data={shellData()} />

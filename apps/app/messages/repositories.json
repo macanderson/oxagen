@@ -1,0 +1,409 @@
+{
+  "repositories": {
+    "mainRepository": {
+      "heading": "GitHub connection and main repository",
+      "about": "The main repository is where this workspace keeps .oxagen/: its published steering records, the promotion ledger, and every agent definition. A workspace has one. Until it is bound the workspace is provisional: runs are still recorded and spend still counts, but steering and agent definitions stay off.",
+      "loading": "Reading this workspace's main repository…",
+      "connected": "Returned from GitHub. The installation is attached to this workspace.",
+      "installRefused": "Returned from GitHub, but that installation could not be verified, so nothing was attached. Install the App again from this workspace and approve it on the account that owns the repository.",
+      "installUnverified": "Returned from GitHub with the App installed, but GitHub sent no authorization to check the installation against, so nothing has been attached yet. Use “Connect an existing installation” below to finish. The App is already installed, so it takes one click and no further approval.",
+      "install": {
+        "heading": "Oxagen reaches a repository through its GitHub App",
+        "body": "No installation is attached to this workspace yet, so there is nothing to pick from. Install the App on the account that owns the repository, or connect an installation that account already has; GitHub sends you back here either way.",
+        "unreachable": "An installation is attached to this workspace, but GitHub would not let Oxagen use it. That is what an uninstalled, suspended, or withdrawn installation looks like from here. Install the App again, or attach an installation this account still reaches. Either one replaces the installation on file.",
+        "action": "Install the GitHub App",
+        "connect": "Connect an existing installation"
+      },
+      "unconfigured": "This deployment has no GitHub App configured, so the App cannot be installed from here. An operator sets the App up before a repository can be bound.",
+      "picker": {
+        "heading": "Pick this workspace's main repository",
+        "loading": "Listing the repositories the installation reaches…",
+        "filterLabel": "Filter repositories",
+        "filterPlaceholder": "owner/name",
+        "listLabel": "Repositories the installation reaches",
+        "empty": "The installation reaches no repositories. Grant it access to one on GitHub, then reload this page.",
+        "noMatch": "No repository matches “{query}”.",
+        "private": "Private",
+        "defaultBranch": "default branch {ref}",
+        "truncated": "The installation reaches more repositories than this list holds, so the one you want may not be here. Narrow the App's repository access on GitHub and reload this page.",
+        "bind": "Bind as main repo",
+        "binding": "Binding…",
+        "none": "Choose a repository first."
+      },
+      "bound": {
+        "heading": "Bound",
+        "defaultRef": "Default branch",
+        "boundAt": "Bound {date}",
+        "open": "Open on GitHub",
+        "retired": "The GitHub connection this repository was bound through has been removed, so Oxagen can no longer read .oxagen/ from it. Steering and Context PRs are off until it is bound again. The repository itself has not changed, and neither has anything else about this workspace. Bind it again through a live GitHub connection.",
+        "reconnect": "Reconnect this repository",
+        "reconnecting": "Reconnecting…",
+        "fixed": "Which repository is main cannot be changed here. Moving a workspace to another repository is an organization owner's decision, needs approval, and is recorded as a security event.",
+        "refDrift": "Context PRs are opened against, checked against, and merged into the branch approved here, never whatever GitHub currently calls the default. If this repository's default branch was renamed, they are refused until the new branch is approved.",
+        "reapprove": "Re-approve the default branch",
+        "reapproving": "Re-approving…"
+      },
+      "manage": "Change which repositories the App reaches",
+      "installChoose": "Returned from GitHub. This account reaches more than one installation of the Oxagen App, so pick the one this workspace should act through.",
+      "installNone": "Returned from GitHub. The Oxagen App is not installed on any account you administer, so there is nothing to attach yet. Install it on the account that owns the repository.",
+      "installations": {
+        "heading": "Installations this account reaches",
+        "about": "The App is already installed on these accounts. Pick the one this workspace should reach repositories through.",
+        "loading": "Listing the installations this account reaches…",
+        "listLabel": "GitHub accounts the App is installed on",
+        "allRepositories": "all repositories",
+        "selectedRepositories": "selected repositories",
+        "attach": "Use this installation",
+        "attaching": "Attaching…",
+        "none": "Choose an installation first."
+      }
+    },
+    "failure": {
+      "denied": "Only an organization Owner or Admin, or this workspace’s Owner, can read or change this workspace’s repositories.",
+      "githubNotConnected": "No GitHub App installation is attached to this workspace, so there is nothing to bind. Install the App first.",
+      "repositoryNotInstalled": "The installation cannot read that repository. Grant it access on GitHub, then try again.",
+      "mainRepoBound": "This workspace already binds a different main repository. Changing it is an org owner's decision, recorded as a security event.",
+      "invalid": "That repository name is not one GitHub accepts.",
+      "pendingApproval": "This needs a person to approve it. Request {accessRequestId} is waiting.",
+      "refused": "This was refused: {code}.",
+      "unavailable": "This could not be read from GitHub ({code}). Try again in a moment.",
+      "githubNotAuthorized": "GitHub is not authorized for this organization yet, so there is nothing to list. Connect GitHub first.",
+      "installationUnreachable": "The connected GitHub account cannot reach that installation. Pick one it can, or install the App on that account.",
+      "mainRepo": "That is this workspace’s main repository. It is bound above, and a main repository is never also linked.",
+      "repositoryAlreadyLinked": "That repository is already linked to this workspace.",
+      "mainRepoClaimed": "Another workspace steers by that repository. A workspace’s main repository cannot be linked by another workspace, because Context PRs would open on its .oxagen/ tree.",
+      "mainRepoUnbound": "Bind this workspace’s main repository first. A linked repository is its second.",
+      "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be this workspace’s main. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
+      "mainRepoUnlinkRefused": "The main repository cannot be unlinked. A workspace without one cannot exist.",
+      "repositoryNotLinked": "That repository is no longer linked to this workspace. Reload the page to read the current list.",
+      "branchNotFound": "GitHub has no branch by that name in this repository. Check the spelling, or push the branch first.",
+      "productionBranchMissing": "The production branch this repository records no longer exists on GitHub. Set the production branch first.",
+      "productionBranchIsInitBranch": "This repository records oxagen/init as its production branch, which is where the init pull request is pushed. Set another production branch first.",
+      "oxagenTreeExists": "This repository already has .oxagen/ on its production branch. Change it with an ordinary pull request.",
+      "governanceTomlInvalid": "governance.toml does not declare the mode you chose. Fix the file or pick the mode it names.",
+      "workspaceTomlInvalid": "workspace.toml is not valid TOML. Fix the file and open the pull request again.",
+      "secretFound": "A file carries a credential or personal data. Nothing was pushed. Take it out and open the pull request again.",
+      "authorityDeclared": "A file declares a grant of authority, which the init tree never carries. Nothing was pushed. Take it out and open the pull request again.",
+      "githubRefused": "GitHub refused the write. Nothing reached the production branch. Check that the App can write to this repository, then try again."
+    },
+    "page": {
+      "title": "Repositories",
+      "eyebrow": "Workspace · {workspace}",
+      "addOxagen": "Add Oxagen to a repository",
+      "loading": "Reading this workspace’s repositories…",
+      "tabs": {
+        "label": "Repository views",
+        "repositories": "Repositories ({count} linked)",
+        "workingCopies": "Working copies",
+        "changes": "Changes",
+        "changesOpen": "Changes ({count} open)",
+        "configuration": "Configuration"
+      },
+      "ungoverned": "No .oxagen/ in {repositories}. A run on it is steered by the main repository and by nothing of its own, and a repository-scoped record has nowhere to be published until the tree exists. Add Oxagen to it to fix that.",
+      "linking": {
+        "title": "What linking does, in order",
+        "branch": "Confirms the production branch. GitHub’s default is the suggestion. You decide, and it never moves on its own.",
+        "events": "Subscribes to the repository’s events through the GitHub App, so pushes, pull requests, and issues reach Oxagen as they happen.",
+        "issues": "Imports the repository’s issues once, then keeps them current from issue events.",
+        "graph": "Keeps a code graph of the production branch current on every push to it."
+      },
+      "setup": "GitHub connection and main repository",
+      "connectDirectory": "Connect a directory",
+      "error": {
+        "title": "Repositories could not be loaded",
+        "body": "Nothing was changed. Runs kept recording while this page was down.",
+        "retry": "Try again"
+      },
+      "denied": {
+        "title": "You cannot see this workspace’s repositories",
+        "body": "The roles you hold do not include {permission} on {workspace}.",
+        "signedIn": "Signed in as",
+        "roles": "{org} in the organization, {workspace} in this workspace",
+        "needed": "Needed",
+        "ask": "Ask an organization Owner or Admin, or this workspace’s Owner, to grant it.",
+        "back": "Back to Fleet"
+      },
+      "empty": {
+        "title": "This workspace has no repository yet",
+        "body": "A workspace without a main repository cannot exist, so this is the moment between creating one and binding it. Until it is bound there is nowhere to publish a record to. Install or connect the GitHub App below, then bind the main repository."
+      }
+    },
+    "permissions": {
+      "title": "The permissions this needs",
+      "label": "GitHub App permissions",
+      "columns": {
+        "permission": "Permission",
+        "access": "Access"
+      },
+      "names": {
+        "contents": "Contents",
+        "pullRequests": "Pull requests",
+        "checks": "Checks",
+        "metadata": "Metadata",
+        "issues": "Issues"
+      },
+      "access": {
+        "readWrite": "Read and write",
+        "write": "Write",
+        "read": "Read"
+      },
+      "cannotHeading": "What the write access still does not buy",
+      "cannot": {
+        "productionBranch": "Oxagen writes to a branch and never to the production branch.",
+        "merge": "It merges only what a person merges.",
+        "secrets": "It cannot read a repository secret.",
+        "authority": "Nothing it writes under .oxagen/ grants an agent authority."
+      }
+    },
+    "table": {
+      "label": "Repositories this workspace binds",
+      "columns": {
+        "repository": "Repository",
+        "role": "Role",
+        "productionBranch": "Production branch",
+        "oxagen": ".oxagen/",
+        "events": "Events",
+        "symbols": "Symbols",
+        "action": "Action"
+      },
+      "onlyMain": "Only the main repository. Link a second one below.",
+      "openOnGitHub": "Open on GitHub",
+      "retired": "Connection retired: the GitHub connection this repository was bound through has been removed, so Oxagen cannot read it. Link it again through a live connection.",
+      "roleMain": "main",
+      "roleLinked": "linked",
+      "events": {
+        "installed": "App installed",
+        "suspended": "App suspended",
+        "uninstalled": "App uninstalled",
+        "paused": "Connection paused",
+        "retired": "Connection retired",
+        "unknown": "Not recorded"
+      },
+      "symbolsNotRecorded": "Not recorded yet",
+      "details": "Details",
+      "unlink": "Unlink",
+      "unlinkConfirm": "Unlink {repository} from this workspace? Its binding history stays in the record, and runs that cited it keep citing it.",
+      "unlinkYes": "Unlink it",
+      "unlinkNo": "Keep it",
+      "unlinking": "Unlinking…",
+      "tree": {
+        "reading": "Reading…",
+        "unread": "Not read",
+        "branchMissing": "Branch missing",
+        "governed": "governed · {files} files",
+        "absent": "no .oxagen/"
+      },
+      "reachable": {
+        "heading": "Not linked",
+        "about": "Repositories the installation reaches that this workspace does not bind. Linking one does what the steps below describe.",
+        "label": "Repositories the installation reaches that are not linked",
+        "columns": {
+          "repository": "Repository",
+          "role": "Role",
+          "defaultBranch": "GitHub default branch",
+          "action": "Action"
+        },
+        "notLinked": "not linked",
+        "link": "Link",
+        "linking": "Linking…",
+        "truncated": "The installation reaches more repositories than this list holds. Link one by name below."
+      },
+      "link": {
+        "heading": "Link a repository by name",
+        "label": "Repository",
+        "hint": "owner/name on GitHub. The workspace’s GitHub App installation has to reach it.",
+        "placeholder": "owner/name",
+        "unparsable": "Write it as owner/name.",
+        "submit": "Link",
+        "pending": "Linking…"
+      }
+    },
+    "dialog": {
+      "title": "Repository",
+      "roleMain": "Main repository",
+      "roleLinked": "Linked repository",
+      "seeChanges": "See its changes",
+      "addOxagen": "Add Oxagen",
+      "loading": "Reading .oxagen/ from GitHub…",
+      "facts": {
+        "productionBranch": "Production branch",
+        "branchMissing": "missing on GitHub",
+        "head": "head {sha}",
+        "githubDefault": "GitHub default",
+        "suggestion": "a suggestion, not the decision",
+        "oxagen": ".oxagen/",
+        "atCommit": "at {sha}",
+        "events": "Events",
+        "codeGraph": "Code graph",
+        "drift": "Data-layer drift",
+        "workingCopies": "Working copies",
+        "issues": "Issues"
+      },
+      "events": {
+        "installed": "The App is installed and the connection is live, so GitHub can deliver events.",
+        "suspended": "The App installation is suspended. GitHub delivers nothing until it is unsuspended.",
+        "uninstalled": "The App was uninstalled. GitHub delivers nothing until it is installed again.",
+        "paused": "The connection is paused. Events are not processed until it resumes.",
+        "retired": "The connection was removed. Bind the repository again through a live one.",
+        "unknown": "No installation record exists for this repository’s connection."
+      },
+      "notRecorded": "Not recorded yet.",
+      "issuesNotRecorded": "Not imported yet. Issue import runs with the GitHub ingestion, which has not shipped.",
+      "initOpen": "Pull request #{number} adds .oxagen/ and is waiting for a person to merge it.",
+      "initOpenLink": "Open it on GitHub",
+      "ungovernedLinked": "This repository has no .oxagen/. A run on it is steered by the main repository alone, and a repository-scoped record has nowhere to be published.",
+      "ungovernedMain": "The main repository has no .oxagen/ yet, so there is nowhere for steering records or agent definitions to be published. Add Oxagen to it first.",
+      "branch": {
+        "heading": "Production branch",
+        "about": "The only branch whose commits update the code graph, the only one .oxagen/ is read from, and the only one a pull request from Oxagen merges into. It never moves on its own.",
+        "moved": "GitHub’s default branch is {github}. The production branch is still {current}.",
+        "useSuggestion": "Make {branch} the production branch",
+        "label": "Another branch",
+        "empty": "Name a branch first.",
+        "changed": "The production branch moved from {from} to {to}. Runs admitted before the change keep citing {from}.",
+        "unchanged": "{branch} is already the production branch. Nothing was written.",
+        "submit": "Set production branch",
+        "pending": "Setting…"
+      }
+    },
+    "wizard": {
+      "title": "Add Oxagen to a repository",
+      "cancel": "Cancel",
+      "back": "Back",
+      "next": "Next",
+      "open": "Open pull request",
+      "opening": "Opening…",
+      "stepsLabel": "Steps",
+      "steps": {
+        "repository": "Repository",
+        "branch": "Branch and governance",
+        "permissions": "Permissions",
+        "review": "Review",
+        "pullRequest": "Pull request"
+      },
+      "repository": {
+        "heading": "Which repository",
+        "about": "Only repositories with no .oxagen/ yet are listed. A repository that has one is changed with an ordinary pull request.",
+        "empty": "Every repository this workspace binds already has .oxagen/, or its production branch could not be read. Link another repository first.",
+        "none": "Choose a repository first.",
+        "main": "main",
+        "linked": "linked"
+      },
+      "branch": {
+        "heading": "Production branch",
+        "production": "The pull request merges into {branch}, the production branch this repository records. Change it from the repository’s Details before you continue if it is wrong.",
+        "suggestion": "GitHub’s default branch is {branch}. That is a suggestion, not the decision.",
+        "same": "It matches GitHub’s default branch."
+      },
+      "mode": {
+        "heading": "Governance mode",
+        "about": "Written to .oxagen/rules/governance.toml, the one file nothing else in Oxagen writes. It is read on the production branch when a pull request opens and again when it merges.",
+        "solo": "Any workspace member merges, the author included.",
+        "team": "An org Owner or Admin, or a workspace Owner, other than the author merges.",
+        "regulated": "An org Owner or Admin other than the author merges, recorded as the accountable approver."
+      },
+      "review": {
+        "about": "Both files in full. Every line is yours to change before the pull request opens."
+      },
+      "pullRequest": {
+        "heading": "A pull request to {repository}",
+        "about": "Opened from {branch} into {base}. Nothing reaches {base} until a person merges it on GitHub.",
+        "gitignore": "The .gitignore change adds .oxagen/workspace.json, one machine’s link to this workspace, so it is never committed."
+      },
+      "opened": {
+        "opened": "Pull request #{number} is open on {repository}, into {base}.",
+        "reused": "Pull request #{number} on {repository} already adds .oxagen/. Nothing new was pushed.",
+        "merge": "Merging it is yours. Once it merges, this repository reads as governed here.",
+        "link": "Open #{number} on GitHub"
+      }
+    },
+    "workingCopies": {
+      "behindNote": "A working copy that is behind is not a run that is behind. Steering reaches a run through the gateway from the merged commit, whatever a directory on your disk holds. What a stale copy costs is the person, who reads rules that are no longer in force.",
+      "notRecorded": "No working copy is recorded yet. oxagen init links a directory on your machine and reports nothing back to Oxagen, so this list stays empty until it does.",
+      "twoFiles": {
+        "title": "Two files, and only one of them is yours to review",
+        "toml": "is committed, reviewed, and the source of truth.",
+        "json": "is gitignored and says which workspace this checkout talks to. That is a fact about a laptop, not about the product.",
+        "gitignore": "The init pull request adds workspace.json to .gitignore."
+      },
+      "sync": {
+        "title": "Syncing, in both directions",
+        "init": "Links the directory to this workspace. Running it again changes nothing.",
+        "status": "Compares .oxagen/ against the production branch and shows whether it is behind.",
+        "propose": "Records a proposal from this checkout.",
+        "pull": "Not in the CLI yet. git pull on the production branch updates .oxagen/ today.",
+        "merge": "Opening and merging a pull request are not CLI commands, because both need a role only a signed-in person holds."
+      },
+      "connect": {
+        "title": "Connect a directory",
+        "about": "Run one command in the directory. There is no browse button: a browser cannot see your filesystem, and a path typed into a form proves nothing about what is at it.",
+        "reads": "The command reads the git remote, the branch, and the head from the directory and writes .oxagen/workspace.json there.",
+        "pairing": "Oxagen does not issue pairing codes yet, so the directory is linked on your machine only and does not appear in this list.",
+        "grantsNothing": "Linking a directory grants nothing. Your roles decide what you may do here, and an agent’s mandate decides what it may do there. A laptop is not a principal."
+      }
+    },
+    "changes": {
+      "loading": "Reading the pull requests Oxagen has open…",
+      "empty": "Oxagen has no pull request open or merged on this workspace’s repositories.",
+      "label": "Pull requests Oxagen opened",
+      "columns": {
+        "change": "Change",
+        "kind": "Kind",
+        "pullRequest": "Pull request",
+        "openedBy": "Opened by",
+        "state": "State",
+        "checks": "Checks",
+        "opened": "Opened"
+      },
+      "kinds": {
+        "context_record": "context record"
+      },
+      "states": {
+        "pr_open": "Open",
+        "checks_running": "Checks running",
+        "checks_passed": "Checks passed",
+        "checks_failed": "Checks failed",
+        "merged": "Merged",
+        "rejected": "Closed"
+      },
+      "checksPending": "not run",
+      "otherKinds": "Context records are the only kind listed here today. Init, skill, agent, tool, and configuration pull requests have no list yet. Select a row to see its checks, what merge will do, and the merge control.",
+      "whoOpens": {
+        "title": "What opens one, without anybody asking",
+        "promoter": "The promoter, which argues from runs.",
+        "reconciler": "The reconciler, which argues from two records it read. It is not built yet.",
+        "person": "A person, who argues from their own judgment.",
+        "drift": "Drift is reported, never repaired in place. The pull request is the only place a person can say which side was right."
+      }
+    },
+    "configuration": {
+      "noMain": "This workspace binds no main repository, so there is no .oxagen/ to show.",
+      "loading": "Reading .oxagen/ from {repository}…",
+      "branchMissing": "The production branch {branch} no longer exists on GitHub, so nothing could be read. Set the production branch from the repository’s Details.",
+      "readAt": "As it is on {repository}, branch {branch}, at commit {sha}.",
+      "workspaceTomlMissing": "Not on the production branch yet. Add Oxagen to this repository to put it there.",
+      "drift": {
+        "title": "Drift",
+        "notRecorded": "Not recorded yet. Drift is the reconciler’s record of the file against what the control plane holds, and the reconciler is not built. When it is, drift arrives as a pull request, never as an edit in place."
+      },
+      "mode": {
+        "solo": "mode: solo",
+        "team": "mode: team",
+        "regulated": "mode: regulated",
+        "absent": "No governance.toml. Pull requests are reviewed as team.",
+        "invalid": "governance.toml names no mode Oxagen knows, so opening and merging are both refused."
+      },
+      "modeRead": "Read on the production branch when a pull request opens and again when it merges, so raising the mode takes effect on everything already in flight. A file that exists but names no mode refuses both rather than falling back to team.",
+      "modes": {
+        "solo": "Any workspace member merges, the author included.",
+        "team": "An org Owner or Admin, or a workspace Owner, other than the author merges.",
+        "regulated": "An org Owner or Admin other than the author merges, recorded as the accountable approver."
+      },
+      "tree": {
+        "title": "The whole tree",
+        "empty": "No .oxagen/ on the production branch.",
+        "stella": "Oxagen reads .oxagen/ and nothing else. Whatever sits under .stella/ is invisible to it."
+      }
+    }
+  }
+}

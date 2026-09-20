@@ -18,7 +18,7 @@ import { readGatePolicy } from "./context.steering.freshness";
 // over the defaults (ADR-059 decision 1). A stored value that no longer
 // parses reads as no overrides.
 // `steering` is the two freshness gates, read out of the settings JSONB bag
-// by the same parser `get_steering_freshness` uses, so Mission Control's
+// by the same parser `get_steering_freshness` uses, so the operator console's
 // checkboxes and a developer's machine can never read one value two ways.
 export function mapWorkspaceSettingsRow(row: {
   name: string;

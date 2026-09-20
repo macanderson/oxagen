@@ -125,8 +125,8 @@ export async function exportRun(
  * module is a client component, and INV-19 has every exported function of a
  * `"use server"` module answer with an `ActionResult`, so a `Read` is carried
  * across rather than returned: `denied` keeps the permission the page failure
- * names, and an error keeps its code. The Workspace settings dialog does the
- * same for its two on-demand reads; the layer matrix (INV-07) keeps
+ * names, and an error keeps its code. The Repositories page does the same
+ * for its on-demand reads; the layer matrix (INV-07) keeps
  * `features/*` out of `data/live`, so each of the two owns its own copy.
  *
  * `invalid_input` becomes `invalid` rather than `unavailable`, because the
