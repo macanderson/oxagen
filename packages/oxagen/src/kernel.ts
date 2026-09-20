@@ -869,6 +869,8 @@ async function resolveHandler(name: string): Promise<CapabilityHandlerFn> {
 }
 
 export interface InvokeOptions {
+  /** Internal replay invariant, checked on the exact parsed value before admission or dispatch. */
+  assertValidatedInput?: (input: unknown) => void | Promise<void>;
   /**
    * Surface the call arrives on. When set, the kernel enforces the
    * contract's `surfaces` allowlist — e.g. an `agent`-only capability
@@ -1161,6 +1163,8 @@ async function _invokeCoreInner(
       `Input validation failed for "${name}": ${inputResult.error.message}`,
     );
   }
+
+  await opts.assertValidatedInput?.(inputResult.data);
 
   // ── Scope wrapper helper ──────────────────────────────────────────────────
   // For SCOPED capabilities, the IAM check, billing admission gate, and handler

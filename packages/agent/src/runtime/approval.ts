@@ -5,6 +5,10 @@ import { eq, and, gt, isNull, sql } from "drizzle-orm";
 import { requireEnv } from "@oxagen/config/env";
 import postgres from "postgres";
 import pino from "pino";
+import {
+  ApprovalResumeError,
+  encryptApprovalResume,
+} from "./approval-resume-payload";
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
@@ -55,11 +59,11 @@ export interface CreateApprovalArgs {
    */
   runId?: string | null;
   ttlMs?: number;
+  resumeRequesterUserId?: string;
 }
 
 /** `agent_runs.id` is a uuid; anything else is a caller's sentinel, not a run. */
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The public id of the run a parked call belongs to, or null.
@@ -160,9 +164,12 @@ async function ensureListener(): Promise<void> {
   await listenerPromise;
 }
 
-export async function createApprovalRequest(
-  args: CreateApprovalArgs,
-): Promise<{ approvalId: string }> {
+export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
+  approvalId: string;
+  resolution?: string | null;
+  resumeStatus?: string | null;
+}> {
+  if (args.resumeRequesterUserId) return createResumableApproval(args);
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? DEFAULT_TTL_MS));
   // An ordinary approval row used to store no digest at all, so a person's
   // decision here could never satisfy a rule's standing window and the next
@@ -233,6 +240,96 @@ export async function createApprovalRequest(
     return row.id;
   });
   return { approvalId };
+}
+
+async function createResumableApproval(args: CreateApprovalArgs) {
+  const requesterUserId = args.resumeRequesterUserId!;
+  const digest = inputDigest(args.digestInput);
+  const payload = await encryptApprovalResume({
+    version: 1,
+    orgId: args.orgId,
+    workspaceId: args.workspaceId,
+    requesterUserId,
+    messageId: args.messageId,
+    capabilityName: args.capabilityName,
+    rawInput: args.inputPreview,
+    validatedDigest: digest,
+    riskLevel: args.riskLevel,
+  });
+  return withTenantDb(async (tx) => {
+    const message = await tx.query.messages.findFirst({
+      where: and(
+        eq(schema.messages.id, args.messageId),
+        eq(schema.messages.orgId, args.orgId),
+        eq(schema.messages.workspaceId, args.workspaceId),
+      ),
+    });
+    const conversation =
+      message &&
+      (await tx.query.conversations.findFirst({
+        where: and(
+          eq(schema.conversations.id, message.conversationId),
+          eq(schema.conversations.orgId, args.orgId),
+          eq(schema.conversations.workspaceId, args.workspaceId),
+          eq(schema.conversations.userId, requesterUserId),
+        ),
+      }));
+    if (!conversation)
+      throw new ApprovalResumeError("requester_conversation_missing");
+    const resumeKey = inputDigest({
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      conversationId: conversation.id,
+      requesterUserId,
+      capability: args.capabilityName,
+      digest,
+    });
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${resumeKey}, 0))`,
+    );
+    const a = schema.approvalRequests;
+    const existing = await tx.query.approvalRequests.findFirst({
+      where: and(
+        eq(a.orgId, args.orgId),
+        eq(a.workspaceId, args.workspaceId),
+        eq(a.resumeKey, resumeKey),
+        gt(a.expiresAt, new Date()),
+      ),
+    });
+    if (existing)
+      return {
+        approvalId: existing.id,
+        resolution: existing.resolution,
+        resumeStatus: existing.resumeStatus,
+      };
+    const expiresAt = new Date(Date.now() + (args.ttlMs ?? DEFAULT_TTL_MS));
+    const [row] = await tx
+      .insert(a)
+      .values({
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+        messageId: args.messageId,
+        capabilityName: args.capabilityName,
+        inputPreview: { inputDigest: digest },
+        inputDigest: digest,
+        riskLevel: args.riskLevel,
+        expiresAt,
+        runPublicId: await resolveRunPublicId(tx, args),
+        resumeKey,
+        resumePayload: payload,
+        resumeStatus: "waiting",
+      })
+      .returning({ approvalId: a.id });
+    if (!row) throw new ApprovalResumeError("approval_not_recorded");
+    await notifyApprovalRequested(tx, {
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      capabilityName: args.capabilityName,
+      riskLevel: args.riskLevel,
+      expiresAt,
+    });
+    return { ...row, resolution: null, resumeStatus: "waiting" };
+  });
 }
 
 type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];

@@ -1,3 +1,4 @@
+import { ApprovalResumeError } from "./approval-resume-payload";
 import { tool, jsonSchema, type Tool, type ToolSet } from "@oxagen/ai";
 import { type ZodTypeAny } from "zod";
 import pino from "pino";
@@ -549,7 +550,19 @@ export async function materializeTools(
               // etc.) fails fast with "No active tenant scope" before the approval
               // card can render. The handler call below (invoke) re-establishes
               // scope independently inside the kernel.
-              const { approvalId } = await runInTenantScope(
+              if (
+                opts.approvalMode === "park" &&
+                (!ctx.userId || ctx.apiKeyId || ctx.agentRun)
+              ) {
+                throw new ApprovalResumeError("unsupported_requester_context");
+              }
+              if (
+                opts.approvalMode === "park" &&
+                !(cap.input as ZodTypeAny).safeParse(input).success
+              ) {
+                throw new ApprovalResumeError("input_invalid");
+              }
+              const approval = await runInTenantScope(
                 { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
                 () =>
                   createApprovalRequest({
@@ -585,8 +598,19 @@ export async function materializeTools(
                     // read for this digest.
                     digestInput: digestInputFor(cap, input),
                     riskLevel,
+                    ...(opts.approvalMode === "park"
+                      ? { resumeRequesterUserId: ctx.userId! }
+                      : {}),
                   }),
               );
+              const { approvalId } = approval;
+              if (opts.approvalMode === "park" && approval.resolution) {
+                return {
+                  approvalId,
+                  resolution: approval.resolution,
+                  execution: approval.resumeStatus,
+                };
+              }
               // Emit approval-required event BEFORE blocking so the stream route
               // can forward it to the client immediately. Without this, the SSE
               // channel goes silent during the waitForApproval block and the

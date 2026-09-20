@@ -458,6 +458,9 @@ describe("resolve_approval — the UPDATE", () => {
     expect(q.sql).toMatch(/"expires_at" > now\(\)/);
     expect(q.sql).toMatch(/"resolution" is null/i);
     expect(q.params).toEqual([PUBLIC_ID, CTX.orgId, CTX.workspaceId]);
+    const queued = render(captured.set?.resumeStatus as SQL);
+    expect(queued.sql).toMatch(/"resume_payload" IS NOT NULL/i);
+    expect(queued.params).toContain("queued");
     expect(captured.set).toMatchObject({
       resolution: "approved",
       resolvedByUserId: "u_1",
