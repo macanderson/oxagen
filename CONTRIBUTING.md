@@ -1,6 +1,6 @@
 # Contributing
 
-Oxagen is Mission Control for agent operators and the agent control plane they work in: every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
+Oxagen is workforce management for autonomous agents, on the shared agent control plane their operators work in (ADR-113): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
 
 ## Prerequisites
 
@@ -166,15 +166,36 @@ Keep production URLs isolated to env vars — never hard-code domains.
 
 ## Release Process
 
-Only for maintainers:
+Only for maintainers. Releases run from GitHub: Actions, Release, Run
+workflow, then pick `patch`, `minor` or `major`. That run:
+
+1. bumps every package to the next version and has a model write the release
+   notes from the diff since the last tag, under the `clear-prose` and
+   `oxagen-branding` skills, checked by `check:prose`;
+2. writes `releases/v<version>.md`, the top of `CHANGELOG.md`, and the docs
+   page `apps/docs/content/docs/releases/v<version>.mdx`;
+3. opens a pull request titled `chore(release): v<version>` with auto-merge
+   on. Read the notes there; edit the docs page on that branch if a line is
+   wrong. CI gates the PR like any other.
+
+When the PR merges, the `tag` job tags `v<version>` and `desktop-v<version>`,
+opens the GitHub release with the notes, publishes `@oxagen/cli` to npm, and
+the `desktop-v` tag starts `.github/workflows/desktop.yml`, which builds the
+app on four runners and publishes the installers, their checksums and the
+listing page to https://downloads.oxagen.sh/. The docs page is live at
+https://docs.oxagen.sh/docs/releases/v<version> once main deploys.
+
+The workflow needs the `RELEASE_TOKEN` secret: a fine-grained personal
+access token for this repository with contents, pull requests and workflows
+set to write. The workflow's own token cannot open a PR that CI runs on.
+`dry_run: true` previews the version and the notes without it.
+
+The same script runs locally for a preview or a manual release:
 
 ```bash
-pnpm release:patch    # bug fixes
-pnpm release:minor    # new features
-pnpm release:major    # breaking changes
+tsx tools/scripts/release.ts patch --dry-run   # the bump and the notes, nothing written
+pnpm release:patch                              # bump, notes, commit and tag on your branch
 ```
-
-This bumps package versions, generates release notes, creates a git tag, optionally publishes to npm, and synchronizes the legacy Vercel version value unless `--no-vercel` is set. Production deploys through the AWS workflows. See `tools/scripts/release.ts` for flags and README.md Deployment for the deployment paths.
 
 ## Security
 

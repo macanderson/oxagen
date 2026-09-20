@@ -27,7 +27,6 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
-import workspaceSettingsMessages from "../../../messages/workspace-settings.json";
 
 import { recoveryCodeVault } from "./recovery-code-vault";
 import { shellData } from "./shell.builders";
@@ -150,7 +149,6 @@ function renderShell(data: ShellData) {
         ...en,
         ...shellMessages,
         ...uiMessages,
-        ...workspaceSettingsMessages,
       }}
     >
       <ShellClient data={data} />
@@ -244,7 +242,7 @@ describe("the user-menu trigger", () => {
 });
 
 describe("sidebar", () => {
-  it("renders exactly the mockup's eight links with Agent IAM naming and the current page", () => {
+  it("renders exactly the mockup's ten links with Agent IAM naming and the current page", () => {
     renderShell(shellData());
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
     const main = within(sidebar).getByRole("navigation", { name: "Main" });
@@ -254,6 +252,7 @@ describe("sidebar", () => {
       ["Agent IAM", "/acme/core-platform/agents"],
       ["Tools", "/acme/core-platform/tools"],
       ["Steering", "/acme/core-platform/steering"],
+      ["Repositories", "/acme/core-platform/repositories"],
       ["Spend", "/acme/core-platform/spend"],
       ["Organization", "/acme"],
       ["Billing", "/acme/billing"],
@@ -276,7 +275,7 @@ describe("sidebar", () => {
     nav.pathname = "/acme/billing";
     renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
-    expect(within(main).getAllByRole("link")).toHaveLength(8);
+    expect(within(main).getAllByRole("link")).toHaveLength(9);
     expect(within(main).getByRole("link", { name: "Billing" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -345,6 +344,7 @@ describe("command menu", () => {
       "Agent IAM",
       "Tools",
       "Steering",
+      "Repositories",
       "Spend",
       "Organization",
       "Roles",

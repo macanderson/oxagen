@@ -1,5 +1,7 @@
 # Oxagen Mission Control
 
+> The product name Mission Control was retired on 2026-09-19 by [ADR-113](../../adr/ADR-113-workforce-management-leads-mission-control-is-retired.md); this folder keeps its name as a path, and the documents in it keep their text.
+
 The specification and implementation plan for the `apps/app` rebuild (the
 Mission Control app), carried in the repo so they survive the mockups
 repository. The mockups they render live in a separate repository.

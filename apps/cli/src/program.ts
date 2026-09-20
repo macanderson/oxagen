@@ -32,7 +32,7 @@ const { version } = pkg;
  * mints it. `oxagen agent enroll` dispatches on it: `--token` is overloaded
  * across the two scopes the command now serves, so the prefix — not the mere
  * presence of a token — is what says which credential the operator holds
- * (ADR-103 decision 3).
+ * (ADR-112 decision 3).
  */
 const ENROLLMENT_TOKEN_PREFIX = "oxe_1time_";
 
@@ -62,7 +62,7 @@ function refusesMisplacedFlags(
  * The four wrapping subcommands whose names collide with nothing, attached to
  * whichever group asks for them.
  *
- * ADR-103 phase 1b moves the wrapping commands onto `oxagen agent` and leaves
+ * ADR-112 phase 1b moves the wrapping commands onto `oxagen agent` and leaves
  * the deprecated `oxagen tacho` working through the deprecation window, so both
  * groups carry these four. They must not drift apart: a runbook that says
  * `oxagen tacho hosts` and one that says `oxagen agent hosts` have to do the
@@ -70,7 +70,7 @@ function refusesMisplacedFlags(
  *
  * The other three — `enroll`, `status`, `unenroll` — are not here because their
  * shape differs by parent. On `agent` each also has to serve the server-scoped
- * operation that already owns the name (ADR-103 decision 3); on `tacho` each
+ * operation that already owns the name (ADR-112 decision 3); on `tacho` each
  * keeps the host-only shape every enrolled machine was enrolled with.
  */
 function addHostWrapCommands(parent: Command): void {
@@ -377,7 +377,7 @@ export function buildProgram(): Command {
   contextCmd
     .command("propose")
     .description(
-      "Record a proposal (the record it should become, why); its Context PR is opened and merged from Mission Control",
+      "Record a proposal (the record it should become, why); its Context PR is opened and merged in Oxagen",
     )
     .requiredOption(
       "--lineage <id>",
@@ -448,6 +448,61 @@ export function buildProgram(): Command {
       const { repoUnlink } = await import("./commands/repo.js");
       await repoUnlink(bindingId, opts);
     });
+  repoCmd
+    .command("tree")
+    .description(
+      "What a repository holds under .oxagen/ on its production branch, read from GitHub now",
+    )
+    .argument("<bindingId>", "The rpb_… binding id `oxagen repo list` shows")
+    .option("--json", "Output JSON")
+    .action(async (bindingId: string, opts: { json?: boolean }) => {
+      const { repoTree } = await import("./commands/repo.js");
+      await repoTree(bindingId, opts);
+    });
+  repoCmd
+    .command("branch")
+    .description(
+      "Confirm or change a repository's production branch; the branch must exist on GitHub",
+    )
+    .argument("<bindingId>", "The rpb_… binding id `oxagen repo list` shows")
+    .argument("<branch>", "The branch to make the production branch")
+    .option("--json", "Output JSON")
+    .action(
+      async (bindingId: string, branch: string, opts: { json?: boolean }) => {
+        const { repoBranch } = await import("./commands/repo.js");
+        await repoBranch(bindingId, branch, opts);
+      },
+    );
+  repoCmd
+    .command("init")
+    .description(
+      "Open the pull request that adds .oxagen/ to a repository; it never writes to the production branch",
+    )
+    .argument("<bindingId>", "The rpb_… binding id `oxagen repo list` shows")
+    .requiredOption(
+      "--workspace-toml <file>",
+      "The .oxagen/workspace.toml to propose",
+    )
+    .option("--mode <mode>", "solo | team | regulated", "team")
+    .option(
+      "--governance-toml <file>",
+      "The .oxagen/rules/governance.toml to propose; drafted from --mode when omitted",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        bindingId: string,
+        opts: {
+          json?: boolean;
+          mode?: string;
+          workspaceToml?: string;
+          governanceToml?: string;
+        },
+      ) => {
+        const { repoInit } = await import("./commands/repo.js");
+        await repoInit(bindingId, opts);
+      },
+    );
   // ── steering: is this checkout running on the records in force? ─────────────
 
   const steeringCmd = program
@@ -1020,14 +1075,14 @@ export function buildProgram(): Command {
 
   // ── tacho: wrap this machine's agent sessions under Oxagen control ───────────
   //
-  // Hidden, and deprecated in favour of `oxagen agent` (ADR-103 phase 1, spec
+  // Hidden, and deprecated in favour of `oxagen agent` (ADR-112 phase 1, spec
   // §2.1: the old word does not appear in the product). It still runs, and the
   // subcommands below are unchanged, because every machine enrolled so far was
   // enrolled with `oxagen tacho enroll` and that string is in scripts, runbooks,
   // and the managed settings documents MDM has already pushed. Refusing it would
   // turn a rename into an outage.
   //
-  // All seven now also live on `oxagen agent` (ADR-103 phase 1b). Three of the
+  // All seven now also live on `oxagen agent` (ADR-112 phase 1b). Three of the
   // names were taken there by server-scoped operations, and they resolve by
   // argument rather than by renaming either side: `agent status` bare reports
   // this machine and `agent status <agent>` reports that agent, the same split
@@ -1356,7 +1411,7 @@ export function buildProgram(): Command {
       await handleAgentEnvList(agentHandle, opts);
     });
 
-  // ── agent enroll: wrap this machine (#2967, ADR-103 phase 1b) ──────────────
+  // ── agent enroll: wrap this machine (#2967, ADR-112 phase 1b) ──────────────
   //
   // One command over two scopes, because §2.1 names one. With a single-use
   // enrollment token (the scripted path of the register flow, MC spec §14.1)

@@ -243,7 +243,7 @@ export async function requestMandate(
   // viewer, and not down in `data/live` — a port implementation has no viewer
   // and no business asking who is looking (ARCHITECTURE.md §2). An on-demand
   // read from an action goes through the kernel seam exactly as its write does
-  // (ADR-089), like the Workspace settings dialog's.
+  // (ADR-089), like the Repositories page's.
   //
   // A zone that cannot be established refuses; it does not fall back. The pages
   // do fall back to Pacific, because a date drawn in the wrong zone is a

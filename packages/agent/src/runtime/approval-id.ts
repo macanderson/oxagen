@@ -5,7 +5,7 @@ import { isApprovalPublicId } from "@oxagen/oxagen/contracts/agent.approval.reso
 /**
  * The WHERE term that finds an approval request by either of its ids (#2906).
  *
- * The Mission Control app and the list reads show the public id (`apr_…`); the
+ * The app and the list reads show the public id (`apr_…`); the
  * runtime and the deprecated app carry the row uuid. A value shaped like a
  * public id matches `public_id`; anything else matches `id`. The contract has
  * already refused values that are neither, so a uuid literal never reaches

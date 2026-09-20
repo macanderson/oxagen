@@ -186,10 +186,7 @@ describe("propose_agent", () => {
       handler()(input({ source: "schema = " }), ctx()),
     ).rejects.toMatchObject({ reason: "agent_check_schema" });
     await expect(
-      handler()(
-        input({ source: definition({ slug: '"other"' }) }),
-        ctx(),
-      ),
+      handler()(input({ source: definition({ slug: '"other"' }) }), ctx()),
     ).rejects.toMatchObject({ reason: "agent_check_schema" });
     expect(github.commits).toEqual([]);
   });

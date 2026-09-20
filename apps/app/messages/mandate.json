@@ -49,7 +49,7 @@
       },
       "notRecorded": "not recorded",
       "callBasis": "The Call column names the measure the movement drew. The ledger records the call by its own identifier and no read carries the tool version it named, so the tool is not shown here.",
-      "receiptBasis": "A receipt frame is written by the collector on each host, not by Mission Control. No read carries one yet, so no receipt opens from this table.",
+      "receiptBasis": "A receipt frame is written by the collector on each host, not by the operator console. No read carries one yet, so no receipt opens from this table.",
       "readBound": "The newest {shown} movements, which is the most this page reads at once. This mandate has recorded at least that many, and this page cannot tell you whether it has recorded more.",
       "empty": "This mandate has never been drawn on",
       "emptyBody": "Its ledger is empty, so none of the period limit has been drawn.",
@@ -183,7 +183,7 @@
       },
       "error": {
         "title": "This mandate could not be loaded",
-        "body": "Nothing was changed. Runs kept recording while this page was down: frames are written by the collector on each host, not by Mission Control.",
+        "body": "Nothing was changed. Runs kept recording while this page was down: frames are written by the collector on each host, not by the operator console.",
         "code": "{code} · {status}",
         "readAt": "Read at {at}",
         "retry": "Try again"

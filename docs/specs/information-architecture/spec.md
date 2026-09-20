@@ -1,6 +1,6 @@
 # Oxagen v2 — Information Architecture
 
-> **Historical design:** This document predates the Mission Control rebuild. It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
+> **Historical design:** This document predates the rev1 app rebuild (ADR-081). It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
 
 Canonical specification for the v2 app's information architecture. This is the source of truth that drives the app shell, sidebar, route layout, ACL surface, and every user-facing nav decision in `apps/app`.
 

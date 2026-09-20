@@ -2,7 +2,7 @@
 window.OX_SCRIPT = [
   {
     title: "Historical: Title · Oxagen",
-    say: "Historical presentation. Product, pricing, and security claims may be obsolete. Use the current docs for setup and supported features. Thanks for the time. In ten minutes I want to show you a category that is opening right now, and why Oxagen is the company to own it. The title states the mission: Mission Control for agent operators, so you can see which agent spent what, and on whose behalf. Short version: agents are writing production code inside regulated companies, and no rule decides what those agents may read, spend, or do. Oxagen is the agent control plane that does. Let's go.",
+    say: "Historical presentation. Product, pricing, and security claims may be obsolete. Use the current docs for setup and supported features. Thanks for the time. In ten minutes I want to show you a category that is opening right now, and why Oxagen is the company to own it. The title states the mission: workforce management for autonomous agents, so you can see which agent spent what, and on whose behalf. Short version: agents are writing production code inside regulated companies, and no rule decides what those agents may read, spend, or do. Oxagen is the agent control plane that does. Let's go.",
   },
   {
     title: "Historical: The shift already happened",

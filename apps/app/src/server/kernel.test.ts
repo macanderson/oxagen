@@ -321,16 +321,18 @@ describe("kernelRead", () => {
       1,
     ],
     ["HandlerError forbidden", handlerError("forbidden"), DENIED, 0],
+    // The handler's reason rides in `code`, the kind in the status, so a page's
+    // failure sentence written for `github_not_connected` gets the reason.
     [
       "HandlerError not_found",
       handlerError("not_found"),
-      readError("not_found", 404),
+      readError("not_found_reason", 404),
       0,
     ],
     [
       "HandlerError conflict",
       handlerError("conflict"),
-      readError("conflict", 409),
+      readError("conflict_reason", 409),
       0,
     ],
     ["a structurally cloned error", clonedError, DENIED, 0],
@@ -602,10 +604,11 @@ describe("handler registries (INV-23)", () => {
 });
 
 // The other end of `toRead`'s encoding. `Read` has no not_found, conflict or
-// invalid variant, so those three kinds arrive as a `ReadError` whose `code`
-// is the kind's own name. A converter reading `reason` alone calls a missing
-// row unavailable, which tells a person to come back for something that was
-// never there and hides a 404 behind a 503.
+// invalid variant, so those three kinds arrive as a `ReadError` whose status
+// names the kind and whose `code` keeps the handler's reason. A converter
+// reading `reason` alone calls a missing row unavailable, which tells a person
+// to come back for something that was never there and hides a 404 behind a
+// 503; one keyed on `code` would drop the reason the failure sentences need.
 describe("readToActionResult", () => {
   it("keeps not_found, conflict and invalid apart from a real outage", async () => {
     const { readToActionResult } = await import("./kernel");
@@ -618,6 +621,11 @@ describe("readToActionResult", () => {
       ok: false,
       reason: "conflict",
       code: "conflict",
+    });
+    expect(readToActionResult(readError("github_not_connected", 409))).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "github_not_connected",
     });
     expect(readToActionResult(readError("invalid_input", 400))).toEqual({
       ok: false,

@@ -138,9 +138,9 @@ describe("checkAgentDefinition", () => {
     expect(
       failed(run({ doc: { ...DOC, side_effects: ["read", "irreversible"] } })),
     ).toEqual(["irreversible_without_mandate"]);
-    expect(failed(run({ doc: { ...DOC, side_effects: ["delete"] } }))).toEqual(
-      ["side_effect_unknown"],
-    );
+    expect(failed(run({ doc: { ...DOC, side_effects: ["delete"] } }))).toEqual([
+      "side_effect_unknown",
+    ]);
     expect(failed(run({ doc: { ...DOC, side_effects: "read" } }))).toEqual([
       "side_effect_unknown",
     ]);
@@ -150,7 +150,12 @@ describe("checkAgentDefinition", () => {
   });
 
   it("needs a positive whole per-run budget (negative)", () => {
-    for (const budget of [undefined, {}, { per_run_micros: 0 }, { per_run_micros: 1.5 }]) {
+    for (const budget of [
+      undefined,
+      {},
+      { per_run_micros: 0 },
+      { per_run_micros: 1.5 },
+    ]) {
       expect(failed(run({ doc: { ...DOC, budget } }))).toEqual([
         "budget_missing",
       ]);
@@ -158,9 +163,9 @@ describe("checkAgentDefinition", () => {
   });
 
   it("scans the whole file for secrets (negative)", () => {
-    expect(
-      failed(run({ source: `token = "ghp_${"a".repeat(36)}"` })),
-    ).toEqual(["secret_github_token"]);
+    expect(failed(run({ source: `token = "ghp_${"a".repeat(36)}"` }))).toEqual([
+      "secret_github_token",
+    ]);
   });
 });
 

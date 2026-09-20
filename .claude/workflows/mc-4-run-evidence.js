@@ -1,6 +1,6 @@
 export const meta = {
   name: 'mc-4-run-evidence',
-  description: 'Mission Control session 4: a Proof tab over the proof handler that already ships, run export status and download, gateway outcomes (budget refusal, interrupt, routed tier) visible in the transcript, and the unmetered-runs caveat and cache tile on Spend; one PR',
+  description: 'Rev1 app session 4: a Proof tab over the proof handler that already ships, run export status and download, gateway outcomes (budget refusal, interrupt, routed tier) visible in the transcript, and the unmetered-runs caveat and cache tile on Spend; one PR',
   whenToUse: 'Run after mc-1-decide-and-act (it extends the Run tabs and the Fleet caveat). Advances #2952, #2955 (the buildable slice only), #3304.',
   phases: [
     { title: 'Scout', detail: 'confirm each lane is still open on main' },
@@ -193,7 +193,7 @@ async function runSession(session, specHint) {
 const session = {
   id: '4',
   title: 'Run evidence: proof, export download, gateway outcomes, spend honesty',
-  prTitle: 'Mission Control: the Proof tab, run export download, gateway outcomes on the transcript, and unmetered runs named beside every total',
+  prTitle: 'Oxagen app: the Proof tab, run export download, gateway outcomes on the transcript, and unmetered runs named beside every total',
   issueHint: 'Refs #2952, #2955, #3304, #3299. Closes #3304 only if its whole DoD is done. Never claim proof beyond what get_run_proof records.',
   lanes: [
     {

@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { mandateList, mandateRow } from "@/test/mandate-views";
 import {
   agentDetail,
   agentsSource,
@@ -102,14 +103,8 @@ describe("Agent header and tabs", () => {
         .getAllByRole("button")
         .map((b) => b.textContent),
     ).toEqual(["Rotate credential", "Suspend", "Deregister"]);
-    expect(
-      within(header).getByRole("link", {
-        name: "See the belt as the model sees it",
-      }),
-    ).toHaveAttribute(
-      "href",
-      "/acme/core-platform/agents/release-bot?tab=toolbelt",
-    );
+    // The Toolbelt tab is the one way to the belt; the header carries no second link to it.
+    expect(within(header).queryByRole("link")).toBeNull();
   });
 
   it("links the six sections a store backs, and no Budgets or Runs tab (negative)", async () => {
@@ -126,7 +121,7 @@ describe("Agent header and tabs", () => {
         "/acme/core-platform/agents/release-bot?tab=incidents",
       ],
       [
-        "Definition in git",
+        "Configuration",
         "/acme/core-platform/agents/release-bot?tab=definition",
       ],
       ["Mandates", "/acme/core-platform/agents/release-bot?tab=mandates"],
@@ -728,34 +723,60 @@ describe("Tamper incidents", () => {
   });
 });
 
-describe("Definition in git", () => {
-  it("draws the committed file's fields and the commit it came from, with the editor one link away", async () => {
+describe("Configuration", () => {
+  it("draws the committed file as a form, its commit beside it, and the editor one link away", async () => {
     await renderAgent(
-      { get: readOk(agentDetail({ definition: committedDefinition() })) },
+      {
+        get: readOk(agentDetail({ definition: committedDefinition() })),
+        mandates: mandateList([mandateRow()]),
+      },
       "definition",
     );
-    expect(current()).toEqual(["Definition in git"]);
-    const file = region("The file");
-    expect(file).toHaveTextContent("Schemaagent-definition/v0.1");
-    expect(file).toHaveTextContent("Model tiercomplex");
-    expect(file).toHaveTextContent("Per-run budget$2.50");
-    expect(file).toHaveTextContent("Toolsgithub__*linear__get_issue");
-    expect(file).toHaveTextContent("Descriptionnot set");
-    expect(file).toHaveTextContent("Denied toolsnot set");
-    expect(file).toHaveTextContent("Harnessclaude-code");
-    expect(file).toHaveTextContent("InstructionsYou prepare releases.");
+    expect(current()).toEqual(["Configuration"]);
+    const identity = region("Identity");
+    expect(screen.getByRole("textbox", { name: "Schema" })).toHaveValue(
+      "agent-definition/v0.1",
+    );
+    expect(within(identity).getByRole("textbox", { name: "Name" })).toHaveValue(
+      "Release bot",
+    );
+    expect(screen.getByRole("combobox", { name: "Model tier" })).toHaveValue(
+      "complex",
+    );
+    expect(
+      screen.getByRole("spinbutton", { name: "Per-run budget (USD)" }),
+    ).toHaveValue(2.5);
+    const tools = region("Tools");
+    expect(
+      within(tools)
+        .getAllByRole("button", { name: /^Remove / })
+        .map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Remove github__*", "Remove linear__get_issue"]);
+    expect(
+      within(tools).getByRole("checkbox", { name: /^irreversible/ }),
+    ).toBeEnabled();
+    expect(screen.getByRole("textbox", { name: "Instructions" })).toHaveValue(
+      "You prepare releases.\n",
+    );
+    expect(screen.getByRole("textbox", { name: "Harness" })).toHaveValue(
+      "claude-code",
+    );
+    expect(screen.getByRole("combobox", { name: "Color" })).toHaveValue("blue");
     const source = region("Source");
     expect(source).toHaveTextContent("Branchagents/release-bot");
-    expect(source).toHaveTextContent("Commit9c1e2f0");
+    expect(source).toHaveTextContent("At commit9c1e2f0");
     expect(source).toHaveTextContent(
       "Pull requesthttps://github.com/acme/core/pull/12",
     );
     expect(
-      within(source).getByRole("link", { name: "Open in the source editor" }),
+      within(source).getByRole("link", {
+        name: /\.oxagen\/agents\/release-bot\.toml/,
+      }),
     ).toHaveAttribute("href", "/acme/core-platform/agents/release-bot/source");
+    expect(screen.queryByTestId("definition-dirty")).toBeNull();
   });
 
-  it("names the line a committed file does not parse at", async () => {
+  it("names the line a committed file does not parse at and locks the form", async () => {
     await renderAgent(
       {
         get: readOk(
@@ -765,20 +786,42 @@ describe("Definition in git", () => {
             ),
           }),
         ),
+        mandates: mandateList([]),
       },
       "definition",
     );
     expect(screen.getByTestId("definition-unparsed")).toHaveTextContent(
-      "The committed file does not parse at line 2.",
+      "The file does not parse at line 2",
     );
+    expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();
   });
 
-  it("points an agent with no committed file at the editor", async () => {
-    await renderAgent({ get: readOk(agentDetail()) }, "definition");
-    const none = region("No definition committed");
-    expect(none).toHaveTextContent(".oxagen/agents/release-bot.toml");
+  it("locks irreversible when the agent's only mandate is not in effect (negative)", async () => {
+    await renderAgent(
+      {
+        get: readOk(agentDetail({ definition: committedDefinition() })),
+        mandates: mandateList([mandateRow({ status: "revoked" })]),
+      },
+      "definition",
+    );
+    const locked = screen.getByRole("checkbox", { name: /^irreversible/ });
+    expect(locked).toBeDisabled();
+    expect(locked.closest("label")).toHaveTextContent("This agent holds none.");
+  });
+
+  it("seeds a form for an agent with no committed file and locks irreversible without a mandate", async () => {
+    await renderAgent(
+      { get: readOk(agentDetail()), mandates: mandateList([]) },
+      "definition",
+    );
+    expect(screen.getByRole("textbox", { name: "Slug" })).toHaveValue(
+      "release-bot",
+    );
+    expect(region("Source")).toHaveTextContent(
+      "No definition is committed yet",
+    );
     expect(
-      within(none).getByRole("link", { name: "Open in the source editor" }),
-    ).toHaveAttribute("href", "/acme/core-platform/agents/release-bot/source");
+      screen.getByRole("checkbox", { name: /^irreversible/ }),
+    ).toBeDisabled();
   });
 });
