@@ -1,0 +1,20 @@
+schema = "context-record/v0.1"
+set_id = "macanderson.oxagen"
+
+[[record]]
+lineage_id = "ctx.product.do-not-run-tests"
+record_id = "rec_product_do_not_run_tests_cd20cc27771a"
+record_hash = "sha256:db85e3a33ed681eca06bc8f7026c65a71443bab4930e515cfb6f7969e0071b60"
+kind = "constraint"
+statement = "Do not run tests locally except for tests you edited or authored."
+origin = "user"
+sharing_scope = "workspace"
+status = "active"
+
+[record.provenance]
+source_kind = "proposal"
+source_uri = "oxagen:proposal/prp_7d1et4nfxsa0vb0hyz1kxs"
+
+[record.steering]
+force = "must"
+
