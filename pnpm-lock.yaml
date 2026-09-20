@@ -2144,6 +2144,9 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
     devDependencies:
+      esbuild:
+        specifier: 0.28.0
+        version: 0.28.0
       '@types/node':
         specifier: 25.9.1
         version: 25.9.1
