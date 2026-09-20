@@ -13,7 +13,7 @@
 //
 // PARTITION MANAGEMENT:
 //   ADR-125 restores RANGE partitions on occurred_at in
-//   20260920230000_security_events_partitioning.sql. The daily Inngest cron
+//   20260921060000_security_events_partitioning.sql. The daily Inngest cron
 //   calls a no-argument database function to prepare the current and next two
 //   UTC months and expire data after seven calendar years. The preserved
 //   DEFAULT heap drains expired rows in batches of 10,000. Application access
