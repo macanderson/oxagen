@@ -125,8 +125,8 @@ export type RunMachine = z.infer<typeof RunMachine>;
  * resume, steer or cancel would have nothing to travel down (#3285).
  *
  * Every surface that offers a run control answers from here: the Run page's
- * controls today, and the Fleet row controls when that lane lands. One rule,
- * so a row cannot offer what its run page refuses.
+ * controls and the Fleet row controls. One rule, so a row cannot offer what
+ * its run page refuses.
  */
 export function acceptsCommands(tier: EnforcementTier): boolean {
   return tier !== "observe";

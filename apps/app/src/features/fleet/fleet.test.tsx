@@ -35,7 +35,10 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
-vi.mock("./actions", () => ({
+// The three server actions are stubbed and the module's own constants kept:
+// the row controls read ROW_COMMANDS from here to draw their buttons.
+vi.mock("./actions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./actions")>()),
   resolveApprovalAction: vi.fn(),
   readApprovalEligibility: vi.fn(),
   dispatchRunCommand: vi.fn(),

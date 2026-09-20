@@ -13,6 +13,7 @@
 // caller passes the seam's own value, so a new `reason` on `ActionResult`
 // fails to compile at each call site rather than falling through to a
 // sentence that does not fit it.
+import { COMMAND_REASON_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { useTranslations } from "next-intl";
 
 export type CommandFailure =
@@ -72,7 +73,7 @@ export function useActionFailure(): (failure: CommandFailure) => string {
           case "delivery_mode":
             return t("deliveryMode");
           case "command_reason":
-            return t("commandReason");
+            return t("commandReason", { max: COMMAND_REASON_MAX });
           case "row_command":
             return t("rowCommand");
           case "from_seq":

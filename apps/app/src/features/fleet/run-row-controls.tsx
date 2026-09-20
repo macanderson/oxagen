@@ -25,6 +25,7 @@
 // command for nobody. It never says the run paused, only that the pause was
 // taken, because `dispatch_command` queues and the run's own status is what
 // says the agent obeyed.
+import { COMMAND_REASON_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { useTranslations } from "next-intl";
 import {
   type SyntheticEvent,
@@ -33,7 +34,7 @@ import {
   useState,
   useTransition,
 } from "react";
-import type { RunRow } from "@/data/contracts/runs";
+import { acceptsCommands, type RunRow } from "@/data/contracts/runs";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, inputBase, linkText } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -201,7 +202,7 @@ function RowCommands({
               id={fieldId}
               name="reason"
               rows={2}
-              maxLength={512}
+              maxLength={COMMAND_REASON_MAX}
               value={reason}
               onChange={(event) => {
                 setReason(event.target.value);
@@ -246,7 +247,7 @@ export function RunRowControls({
   canCommand: boolean;
 }) {
   if (status !== "live") return null;
-  if (enforcementTier === "observe") {
+  if (!acceptsCommands(enforcementTier)) {
     return (
       <NoRowControls reason="observeReason" testId="row-observe-no-control" />
     );

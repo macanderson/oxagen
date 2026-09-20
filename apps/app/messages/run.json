@@ -249,7 +249,7 @@
         "fromSeq": "The branch point is a frame sequence number of at least 1.",
         "runB": "Name a second run to compare against, and not this one.",
         "deliveryMode": "Pick one of the three delivery modes. Nothing was queued.",
-        "commandReason": "Keep the reason to 512 characters or fewer. Nothing was queued.",
+        "commandReason": "Keep the reason to {max} characters or fewer. Nothing was queued.",
         "rowCommand": "A run's row sends a pause, a resume or a cancel. Nothing was queued."
       },
       "observeReason": "This run was observed from the side. Oxagen was never in the path of its calls, so there is no connection point to pause, steer or cancel.",
