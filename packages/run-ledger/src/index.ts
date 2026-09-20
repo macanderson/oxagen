@@ -11,6 +11,45 @@
  */
 export { type PlatformSurface } from "./surface";
 
+// Reassembly (spec §14): a recorded model stream folded ONCE, where the frame
+// is written, into the message it was — and the pure step summary over the
+// result. Nothing downstream reassembles.
+export {
+  assembleModelStream,
+  decodeAssembly,
+  encodeAssembly,
+  looksLikeModelStream,
+  MESSAGE_ASSEMBLY_CONTENT_TYPE,
+  MESSAGE_ASSEMBLY_VERSION,
+  type AssemblyTiming,
+  type AssemblyUsage,
+  type BlockJson,
+  type ContentBlock,
+  type MessageAssembly,
+  type TextBlock,
+  type ThinkingBlock,
+  type ToolResultBlock,
+  type ToolUseBlock,
+  type ToolVerdict,
+  type WireShape,
+} from "./content-blocks";
+export {
+  writeAssembly,
+  type AssemblyWrite,
+  type AssemblyWriteInput,
+} from "./assembly-write";
+export {
+  clauseOf,
+  nameList,
+  pastTense,
+  precisOf,
+  summarizeStep,
+  PRECIS_MAX,
+  type BlockFigure,
+  type StepSummary,
+  type StepTiming,
+} from "./step-summary";
+
 // Frame bodies and the seal's replay evidence (ADR-058): the body and archive
 // store seams the recorder writes through, and the pure grading helpers.
 export {

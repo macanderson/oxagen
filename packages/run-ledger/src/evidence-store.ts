@@ -37,6 +37,7 @@ import {
   SHA256_DIGEST_PATTERN,
 } from "@oxagen/tacho";
 import { storage, type StorageAdapter } from "@oxagen/storage";
+import { MESSAGE_ASSEMBLY_CONTENT_TYPE } from "./content-blocks";
 import type { RunArchiveStore, RunBodyStore } from "./frame-body";
 
 /** `evb:v1:<key id>:<sha256 hex>`: the body reference a frame row carries. */
@@ -82,6 +83,24 @@ export function evidenceBodyKey(
   digestHex: string,
 ): string {
   return `evidence/${scope.orgId}/${scope.workspaceId}/bodies/${keyIdSegment(keyId)}/${digestHex}`;
+}
+
+/**
+ * Where a frame's REASSEMBLY lands: the message a recorded model stream folded
+ * into, derived at ingest and stored beside the wire (`content-blocks.ts`).
+ *
+ * Keyed by the body's own digest under the same key id, so a reader that holds
+ * the frame's body reference finds the assembly without a second column and
+ * without a second round trip to Postgres. It is derived, never evidence: the
+ * chain covers the body bytes and nothing here, and an assembly that is
+ * missing, stale or unreadable costs a reader nothing but a fold on the spot.
+ */
+export function evidenceAssemblyKey(
+  scope: EvidenceScope,
+  keyId: string,
+  digestHex: string,
+): string {
+  return `evidence/${scope.orgId}/${scope.workspaceId}/assemblies/${keyIdSegment(keyId)}/${digestHex}`;
 }
 
 function evidenceSegmentKey(
@@ -165,6 +184,20 @@ interface StoredFrameBody {
 
 export interface EvidenceStore extends RunBodyStore, RunArchiveStore {
   getBody(scope: EvidenceScope, ref: string): Promise<StoredFrameBody>;
+  /** Required here: this store always has somewhere to put a fold. */
+  putAssembly(input: {
+    orgId: string;
+    workspaceId: string;
+    runId: string;
+    bodyRef: string;
+    bytes: Uint8Array;
+  }): Promise<void>;
+  /**
+   * The reassembly stored beside the body `ref` names, or null when none was
+   * written, it was written by an older fold, or it cannot be read. A null is
+   * never an error: the caller folds the wire itself and carries on.
+   */
+  getAssembly(scope: EvidenceScope, ref: string): Promise<Uint8Array | null>;
   /** The archive segment bytes a seal's reference names. */
   getSegment(ref: string): Promise<Uint8Array>;
   /** Write an export bundle once; returns where it landed. */
@@ -215,6 +248,47 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
       });
       const { contentType, bytes } = parseFrameBodyPlaintext(plaintext);
       return { bytes, contentType, digestHex: parsed.digestHex };
+    },
+
+    async putAssembly(input) {
+      const parsed = parseEvidenceBodyRef(input.bodyRef);
+      if (!parsed) {
+        throw new TypeError(
+          `not an evidence body reference: ${input.bodyRef}`,
+        );
+      }
+      const { adapter } = deps.readCrypto(parsed.keyId);
+      const ciphertext = await encrypt(
+        frameBodyPlaintext(MESSAGE_ASSEMBLY_CONTENT_TYPE, input.bytes),
+        parsed.keyId,
+        { adapter },
+      );
+      await deps.storage.put({
+        key: evidenceAssemblyKey(input, parsed.keyId, parsed.digestHex),
+        body: ciphertext,
+        contentType: BODY_OBJECT_CONTENT_TYPE,
+        access: "private",
+      });
+    },
+
+    async getAssembly(scope, ref) {
+      const parsed = parseEvidenceBodyRef(ref);
+      if (!parsed) return null;
+      try {
+        const { adapter } = deps.readCrypto(parsed.keyId);
+        const object = await deps.storage.get(
+          evidenceAssemblyKey(scope, parsed.keyId, parsed.digestHex),
+        );
+        const plaintext = await decrypt(
+          Buffer.from(await readAll(object.body)),
+          parsed.keyId,
+          { adapter },
+        );
+        return parseFrameBodyPlaintext(plaintext).bytes;
+      } catch {
+        // Derived, not evidence: a miss is a fold the caller does itself.
+        return null;
+      }
     },
 
     async putSegment(input) {
@@ -289,4 +363,5 @@ export const deferredEvidenceArchive: RunArchiveStore = {
  */
 export const deferredEvidenceBodies: RunBodyStore = {
   put: (input) => evidenceStore().put(input),
+  putAssembly: (input) => evidenceStore().putAssembly(input),
 };

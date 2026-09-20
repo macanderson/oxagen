@@ -74,7 +74,20 @@ export interface RunFrame {
   /** Which half of its exchange the frame records. */
   phase: FramePhase;
   identity: FrameIdentity;
+  /**
+   * What the producer timed about the call, when it timed anything. The
+   * recorded stream carries no clock, so a reassembly's time to first token
+   * and wall time come from here (tacho `ttft_ms`, `api_duration_ms`).
+   */
+  timing: FrameTiming;
 }
+
+/** What a frame's receipt timed. Null where it timed nothing. */
+export interface FrameTiming {
+  ttftMs: number | null;
+  durationMs: number | null;
+}
+
 
 const NO_IDENTITY: FrameIdentity = {
   tool: null,
@@ -258,6 +271,12 @@ export function ledgerFrame(event: AttemptEventReadRecord): RunFrame {
         : null,
     phase: ledgerPhase(event.eventType),
     identity: ledgerIdentity(event),
+    // The ledger's receipts carry no call timing of their own; a reassembly
+    // on a ledger frame times itself from the two frames of its step.
+    timing: {
+      ttftMs: numberField(event.payload, "ttft_ms"),
+      durationMs: numberField(event.payload, "duration_ms"),
+    },
   };
 }
 
@@ -282,6 +301,10 @@ export interface TachoFrameRowLike {
   policyDecision: string;
   costUsdMicros: number | null;
   turnSeq: number | null;
+  /** Milliseconds to the first token the provider sent; null when untimed. */
+  ttftMs?: number | null;
+  /** The provider call's wall time; null when untimed. */
+  apiDurationMs?: number | null;
 }
 
 /** Which half of its exchange a wrapped kind records. */
@@ -420,6 +443,10 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
       // correctly. Empty for kinds that carry no call id; those still fall
       // back to adjacency within their step kind.
       callId: blank(row.toolUseId),
+    },
+    timing: {
+      ttftMs: row.ttftMs ?? null,
+      durationMs: row.apiDurationMs ?? null,
     },
   };
 }

@@ -68,6 +68,7 @@ import {
   type Redaction,
 } from "@oxagen/tacho";
 import type { PlatformSurface } from "./surface";
+import { writeAssembly } from "./assembly-write";
 import {
   type AttemptEventBodyInput,
   archiveFrameOf,
@@ -1766,6 +1767,16 @@ async function resolveBodyColumns(
     runId: attempt.run_id,
     digest: event.body.digest,
     contentType: event.body.contentType,
+    bytes: event.body.bytes,
+  });
+  // The fold happens here, once, and never in a viewer. It is derived, so it
+  // cannot refuse the frame: `writeAssembly` reports every way it can miss
+  // and the append carries on either way.
+  await writeAssembly(bodies, {
+    orgId: attempt.org_id,
+    workspaceId: attempt.workspace_id,
+    runId: attempt.run_id,
+    bodyRef: ref,
     bytes: event.body.bytes,
   });
   return retainedColumns(event.body, ref);
