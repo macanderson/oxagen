@@ -110,6 +110,8 @@ Done when:
 
 ## Session 2: tools governance
 
+Landed in PR https://github.com/macanderson/oxagen/pull/3519 (connections, servers, and the ledger links).
+
 **Why.** Five approval-rule contracts, `grant_mandate`, three connection contracts, and two server contracts are registered and reachable only through the API. The accountable office has no UI for the one write the mandates ledger exists for.
 
 Lanes:
