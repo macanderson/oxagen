@@ -114,7 +114,8 @@ describe("assembled model responses", () => {
       cost: null,
     };
     const page = runTranscript({ entries: [transcriptEntry()] });
-    const entry = page.entries[0]!;
+    const entry = page.entries[0];
+    if (!entry) throw new Error("Missing transcript fixture entry");
     const mapped = RunTranscript.parse(
       toRunTranscript({
         ...page,
