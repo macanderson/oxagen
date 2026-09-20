@@ -316,7 +316,7 @@
           "tier": "Model tier",
           "tierHint": "complex routes to the workspace's complex model and light to its light one. The harness makes the call with its own key; Oxagen records what it reports.",
           "budget": "Per-run budget (USD)",
-          "budgetHint": "Stored as budget = { per_run_micros = {micros} }. Checked against reported spend at each hook boundary; a breach pauses the run at the next one."
+          "budgetHint": "Stored as budget = '{' per_run_micros = {micros} '}'. Checked against reported spend at each hook boundary; a breach pauses the run at the next one."
         },
         "tools": {
           "title": "Tools",
