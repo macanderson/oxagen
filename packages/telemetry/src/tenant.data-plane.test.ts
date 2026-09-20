@@ -68,7 +68,7 @@ describe("shared plane (default)", () => {
 
   it("queries through the process singleton", async () => {
     await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
-      chSelect({ query: "SELECT 1 WHERE org_id = {orgId:UUID}" }),
+      chSelect({ query: "SELECT 1 FROM events WHERE org_id = {orgId:UUID}" }),
     );
     expect(mocks.sharedQuery).toHaveBeenCalledTimes(1);
   });
@@ -105,7 +105,7 @@ describe("dedicated plane", () => {
 
   it("routes the read to the organisation's own client with the tenant params", async () => {
     await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
-      chSelect({ query: "SELECT 1 WHERE org_id = {orgId:UUID}" }),
+      chSelect({ query: "SELECT 1 FROM events WHERE org_id = {orgId:UUID}" }),
     );
     expect(mocks.dedicatedQuery).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -146,7 +146,7 @@ describe("fail closed", () => {
     }));
     await expect(
       runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
-        chSelect({ query: "SELECT 1 WHERE org_id = {orgId:UUID}" }),
+        chSelect({ query: "SELECT 1 FROM events WHERE org_id = {orgId:UUID}" }),
       ),
     ).rejects.toThrow(DataPlaneUnavailableError);
     expect(mocks.sharedQuery).not.toHaveBeenCalled();
