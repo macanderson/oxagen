@@ -88,6 +88,7 @@ vi.mock("drizzle-orm", () => {
     isNull: op("isNull"),
     isNotNull: op("isNotNull"),
     lt: op("lt"),
+    sql: (_parts: TemplateStringsArray, ...values: unknown[]) => values,
   };
 });
 vi.mock("../logger", () => ({ logger: mocks.logger }));
@@ -130,7 +131,7 @@ function scans(due: Due[], lapsed: Lapsed[] = []) {
 }
 
 /** A tenant tx whose updates record their SET values and WHERE predicates. */
-function makeTenantTx() {
+function makeTenantTx(updated: { id: string }[] = [{ id: "apr-1" }]) {
   const sets: Record<string, unknown>[] = [];
   const wheres: unknown[] = [];
   const tx = {
@@ -140,7 +141,9 @@ function makeTenantTx() {
         return {
           where: (w: unknown) => {
             wheres.push(w);
-            return Promise.resolve();
+            return Object.assign(Promise.resolve(), {
+              returning: async () => updated,
+            });
           },
         };
       },
@@ -197,10 +200,13 @@ describe("mandate/expiry", () => {
     ]);
     expect(lapsedWhere).toHaveBeenCalledWith([
       "and",
-      ["isNotNull", "mandate_id"],
       ["isNull", "token_used_at"],
       ["lt", "expires_at", expect.any(Date)],
-      ["or", ["isNull", "resolution"], ["eq", "resolution", "approved"]],
+      [
+        "or",
+        ["isNull", "resolution"],
+        ["and", ["isNotNull", "mandate_id"], ["eq", "resolution", "approved"]],
+      ],
     ]);
   });
 
@@ -292,6 +298,53 @@ describe("mandate/expiry", () => {
     expect(mocks.emitSecurityEventAsync).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: "org-2" }),
     );
+  });
+
+  it("persists an ordinary timeout with its expiry instant and protects concurrent decisions", async () => {
+    scans([], [{ ...L1, mandateId: null }]);
+    const { tx, sets, wheres } = makeTenantTx();
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (t: unknown) => unknown) => fn(tx),
+    );
+    await expect(capturedHandler!({ step })).resolves.toEqual({
+      expired: 0,
+      voided: 1,
+    });
+    expect(mocks.runInTenantScope).toHaveBeenCalledWith(
+      { orgId: L1.orgId, workspaceId: L1.workspaceId },
+      expect.any(Function),
+    );
+    expect(sets).toEqual([
+      { resolution: "expired", resolvedAt: ["expires_at"] },
+    ]);
+    expect(wheres).toEqual([
+      [
+        "and",
+        ["eq", "id", L1.id],
+        ["eq", "org_id", L1.orgId],
+        ["eq", "workspace_id", L1.workspaceId],
+        ["isNull", "mandate_id"],
+        ["isNull", "resolution"],
+        ["isNull", "token_used_at"],
+        ["lt", "expires_at", expect.any(Date)],
+      ],
+    ]);
+    expect(mocks.lockMandate).not.toHaveBeenCalled();
+    expect(mocks.expireApproval).not.toHaveBeenCalled();
+  });
+
+  it("does not count an ordinary approval resolved between the scan and update", async () => {
+    scans([], [{ ...L1, mandateId: null }]);
+    const { tx } = makeTenantTx([]);
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (t: unknown) => unknown) => fn(tx),
+    );
+    await expect(capturedHandler!({ step })).resolves.toEqual({
+      expired: 0,
+      voided: 0,
+    });
+    expect(mocks.lockMandate).not.toHaveBeenCalled();
+    expect(mocks.expireApproval).not.toHaveBeenCalled();
   });
 
   it("voids a lapsed approval under its mandate's lock in the mandate's tenant scope", async () => {

@@ -13,9 +13,11 @@
 // before the agent retried — unresolved, or approved and never used —
 // under the same lock: the reservation is released and the row resolves
 // `expired`, so a period's remaining authority is what open calls hold.
+// Ordinary unresolved approvals also expire at their recorded deadline.
+// Their conditional update preserves any concurrent human decision.
 // A mandate or row that fails is logged and skipped; the next run retries it.
 
-import { and, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import {
@@ -159,12 +161,14 @@ export const [mandateExpiry] = createFunction(
           .from(schema.approvalRequests)
           .where(
             and(
-              isNotNull(schema.approvalRequests.mandateId),
               isNull(schema.approvalRequests.tokenUsedAt),
               lt(schema.approvalRequests.expiresAt, now),
               or(
                 isNull(schema.approvalRequests.resolution),
-                eq(schema.approvalRequests.resolution, "approved"),
+                and(
+                  isNotNull(schema.approvalRequests.mandateId),
+                  eq(schema.approvalRequests.resolution, "approved"),
+                ),
               ),
             ),
           )
@@ -178,8 +182,38 @@ export const [mandateExpiry] = createFunction(
         : await step.run("expire-lapsed-approvals", async () => {
             let count = 0;
             for (const row of lapsed) {
-              if (row.mandateId === null) continue;
               try {
+                if (row.mandateId === null) {
+                  const updated = await runInTenantScope(
+                    { orgId: row.orgId, workspaceId: row.workspaceId },
+                    () =>
+                      withTenantDb((tx) =>
+                        tx
+                          .update(schema.approvalRequests)
+                          .set({
+                            resolution: "expired",
+                            resolvedAt: sql`${schema.approvalRequests.expiresAt}`,
+                          })
+                          .where(
+                            and(
+                              eq(schema.approvalRequests.id, row.id),
+                              eq(schema.approvalRequests.orgId, row.orgId),
+                              eq(
+                                schema.approvalRequests.workspaceId,
+                                row.workspaceId,
+                              ),
+                              isNull(schema.approvalRequests.mandateId),
+                              isNull(schema.approvalRequests.resolution),
+                              isNull(schema.approvalRequests.tokenUsedAt),
+                              lt(schema.approvalRequests.expiresAt, new Date()),
+                            ),
+                          )
+                          .returning({ id: schema.approvalRequests.id }),
+                      ),
+                  );
+                  count += updated.length;
+                  continue;
+                }
                 const released = await underMandateLock(
                   {
                     id: row.mandateId,
