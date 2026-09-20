@@ -33,6 +33,7 @@ import {
   TEST_ENROLLMENT,
   unsignedBundle,
 } from "../host/test-support";
+import { TACHO_VERSION } from "../version";
 import type { EnrollmentResponse } from "../wire";
 import { type CliDeps, defaultCliDeps } from "./deps";
 
@@ -481,7 +482,7 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
     findFreePort: async () => 47123,
     randomToken: () => "local-token-0123456789abcdef",
     sleep: async () => undefined,
-    wrapperVersion: "2.1.1",
+    wrapperVersion: TACHO_VERSION,
     ...options.overrides,
   });
   const guarded =

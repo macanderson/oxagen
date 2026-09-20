@@ -10,6 +10,8 @@
  *   pnpm release:patch            # 0.1.0 -> 0.1.1
  *   pnpm release:minor            # 0.1.0 -> 0.2.0
  *   pnpm release:major            # 0.1.0 -> 1.0.0
+ *   pnpm release:<bump>:publish   # the same, then build every platform in CI
+ *                                 # and upload (tools/scripts/release-publish.ts)
  *   tsx tools/scripts/release.ts minor --dry-run     # show everything, write nothing
  *   tsx tools/scripts/release.ts --set 0.2.0         # set an exact version
  *
@@ -21,6 +23,11 @@
  *   --no-notes    skip the Anthropic release-notes generation (plain changelog)
  *   --no-git      skip the commit + tag
  *   --no-npm      skip the CLI build + npm publish (even if NPM_TOKEN is available)
+ *   --install-links
+ *                 end the notes with an "## Install" section that links every
+ *                 installer and executable of this version by its published
+ *                 name (tools/scripts/lib/release-artifacts.ts); the publish
+ *                 flow passes this, since it is what makes those files exist
  *   --yes         (reserved) non-interactive; this script is already non-interactive
  *
  * Release notes are written by a model from the commit log, diffstat and diff
@@ -54,17 +61,13 @@
  * Run via `pnpm release:<patch|minor|major>` (wraps this with --env-file-if-exists).
  */
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { argv, env, exit } from "node:process";
 import { join, resolve } from "node:path";
 import kleur from "kleur";
 import { formatError } from "./lib/format-error";
+import { npmCfg, publishCliToNpm } from "./lib/npm-cli";
+import { installSection } from "./lib/release-artifacts";
 import {
   changelogEntry,
   fallbackNotes,
@@ -78,6 +81,11 @@ import {
   systemPrompt,
   userPrompt,
 } from "./lib/release-notes";
+import {
+  discoverManifests,
+  readManifestVersion,
+  setAllVersions,
+} from "./lib/versions";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const NOTES_MAX_TOKENS = 8192; // headroom so large releases don't truncate mid-section
@@ -92,6 +100,7 @@ interface Options {
   notes: boolean;
   git: boolean;
   npm: boolean;
+  installLinks: boolean;
 }
 
 // ── small utilities ──────────────────────────────────────────────────────────
@@ -380,11 +389,26 @@ async function generateNotes(h: NotesInput): Promise<ReleaseNotes> {
 
 const DOCS_RELEASES_DIR = join(ROOT, "apps/docs/content/docs/releases");
 
+/**
+ * The changelog entry, plus the install links when the publish flow asked for
+ * them (`--install-links`). Every artifact of the release is named from the
+ * version alone, so the links are written before CI has built the files.
+ */
+function releaseBody(
+  version: string,
+  notes: ReleaseNotes,
+  install: string | null,
+): string {
+  const entry = changelogEntry(version, notes);
+  return install === null ? entry : `${entry.trimEnd()}\n\n${install}\n`;
+}
+
 function writeNotes(
   version: string,
   notes: ReleaseNotes,
+  install: string | null,
 ): { changelog: string; release: string; page: string } {
-  const entry = changelogEntry(version, notes);
+  const entry = releaseBody(version, notes, install);
   const releasesDir = join(ROOT, "releases");
   mkdirSync(releasesDir, { recursive: true });
   const releaseFile = join(releasesDir, `v${version}.md`);
@@ -538,6 +562,7 @@ function parseArgs(): Options {
     notes: true,
     git: true,
     npm: true,
+    installLinks: false,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -547,6 +572,7 @@ function parseArgs(): Options {
     else if (a === "--no-notes") opts.notes = false;
     else if (a === "--no-git") opts.git = false;
     else if (a === "--no-npm") opts.npm = false;
+    else if (a === "--install-links") opts.installLinks = true;
     else if (a === "--yes") {
       /* non-interactive already */
     } else if (a === "--set") opts.setVersion = args[++i] ?? null;
@@ -590,43 +616,54 @@ async function main(): Promise<void> {
     ),
   );
 
-  const files = workspacePackageFiles();
-  console.log(kleur.bold(`  Packages (${files.length}):`));
-  for (const file of files) {
-    if (opts.dryRun) {
-      const pkg = JSON.parse(readFileSync(file, "utf8")) as {
-        name?: string;
-        version?: string;
-      };
+  // Every manifest, whatever its language: package.json, Cargo.toml, the
+  // crate's Cargo.lock entry (tools/scripts/lib/versions.ts). CI's
+  // check:versions fails when any of them drifts from the root.
+  if (opts.dryRun) {
+    const manifests = discoverManifests(ROOT);
+    console.log(kleur.bold(`  Manifests (${manifests.length}):`));
+    for (const m of manifests) {
+      const from = readManifestVersion(ROOT, m);
       console.log(
-        `    ${kleur.dim(pkg.version ?? "?")} → ${kleur.green(next)}  ${pkg.name ?? file}`,
+        `    ${kleur.dim(from ?? "?")} → ${kleur.green(next)}  ${m.name} (${m.file})`,
       );
-    } else {
-      const { name, from } = setPackageVersion(file, next);
-      console.log(`    ${kleur.dim(from)} → ${kleur.green(next)}  ${name}`);
     }
+  } else {
+    const written = setAllVersions(ROOT, next);
+    console.log(kleur.bold(`  Manifests (${written.length}):`));
+    for (const m of written)
+      console.log(
+        `    ${kleur.dim(m.from ?? "(none)")} → ${kleur.green(next)}  ${m.name} (${m.file})`,
+      );
   }
   if (!opts.dryRun) syncLocalEnv(next);
 
   // ── Release notes ──
   let notes: ReleaseNotes | null = null;
+  // The docs page renders its downloads through <ReleaseDownloads>, so the
+  // install links belong only to the copies that carry no component: the
+  // release file, the changelog entry, and the tag body that
+  // release-publish.ts reuses for the GitHub release.
+  const install = opts.installLinks ? installSection(next) : null;
   if (opts.notes) {
     console.log(kleur.bold("\n  Release notes:"));
     const history = collectHistory(next, opts.fromRef);
     console.log(kleur.dim(`    history range: ${history.fromRef}..HEAD`));
     notes = await generateNotes(history);
     if (!opts.dryRun) {
-      const written = writeNotes(next, notes);
+      const written = writeNotes(next, notes, install);
       console.log(
         kleur.green(
           `    ✓ ${written.release.replace(ROOT + "/", "")}  +  CHANGELOG.md  +  ${written.page.replace(ROOT + "/", "")}`,
         ),
       );
     } else {
+      // Print what would be written, install links and all, so --dry-run is a
+      // preview of the file and not of the model's answer alone.
       console.log(
         kleur.dim(
           "\n" +
-            `SUMMARY: ${notes.summary}\n\n${notes.body}`
+            releaseBody(next, notes, install)
               .split("\n")
               .map((l) => "    │ " + l)
               .join("\n"),
@@ -641,7 +678,9 @@ async function main(): Promise<void> {
     git(["add", "-A"]);
     git(["commit", "-m", `chore(release): v${next}`]);
     const tagBody =
-      notes === null ? `Release v${next}` : changelogEntry(next, notes).trim();
+      notes === null
+        ? `Release v${next}`
+        : releaseBody(next, notes, install).trim();
     git(["tag", "-a", `v${next}`, "-m", tagBody]);
     console.log(kleur.green(`    ✓ committed + tagged v${next}`));
     console.log(kleur.dim("    (push with: git push && git push --tags)"));

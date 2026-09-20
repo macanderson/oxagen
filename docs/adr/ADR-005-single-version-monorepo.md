@@ -1,7 +1,7 @@
 # ADR-005 — Single-version monorepo via Changesets
 
 **Date:** 2026-05-27
-**Status:** Accepted
+**Status:** Accepted (amended by ADR-114: Changesets is retired; `tools/scripts/release.ts` and `check:versions` hold the single version across every manifest)
 **Epic:** Foundations
 
 ## Context
