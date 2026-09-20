@@ -2,7 +2,7 @@
 // a `.skill`, a `.zip` or a bare `SKILL.md`, read in the browser and hashed
 // there). Nothing here uploads anything: the bytes stay in the tab until the
 // pull request carries them, and the digest shown is the one the checks take
-// again at merge.
+// before opening the pull request. Later pushes need a new review.
 //
 // A `.skill` is a zip archive. The reader below handles the two methods a
 // skill bundle uses, stored (0) and deflate (8), with the platform's own

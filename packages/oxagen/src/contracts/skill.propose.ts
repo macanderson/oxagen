@@ -20,6 +20,7 @@
 // and commit_agent_definition do. A skill write spends no governed action
 // units: `noBillingGate: true` (ARCHITECTURE.md §1.5).
 import { z } from "zod";
+import { parseDocument } from "yaml";
 import { registerCapability } from "../registry";
 
 /** Where governed skills live in the main repository (MC spec §10.2). */
@@ -73,23 +74,33 @@ export type SkillFrontmatter = {
   bodyStart: number;
 };
 
-/**
- * The frontmatter of a SKILL.md: the block between a `---` first line and the
- * next `---` line, read as `key: value` lines. Null when the file does not open
- * with a fence or never closes one. Only the flat keys the checks read are
- * parsed; a nested value is kept as the text after the colon.
- */
+/** Parse a YAML mapping without aliases or duplicate keys. Invalid YAML fails closed. */
 export function readSkillFrontmatter(text: string): SkillFrontmatter | null {
   const lines = text.replace(/\r\n/g, "\n").split("\n");
   if (lines[0] !== "---") return null;
   const close = lines.indexOf("---", 1);
   if (close < 0) return null;
-  const fields: Record<string, string> = {};
-  for (const line of lines.slice(1, close)) {
-    const m = /^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$/.exec(line);
-    if (m?.[1] !== undefined) fields[m[1]] = (m[2] ?? "").trim();
+  try {
+    const doc = parseDocument(lines.slice(1, close).join("\n"), {
+      uniqueKeys: true,
+    });
+    if (doc.errors.length > 0) return null;
+    const value: unknown = doc.toJS({ maxAliasCount: 0 });
+    if (value === null || typeof value !== "object" || Array.isArray(value))
+      return null;
+    const fields: Record<string, string> = Object.create(null) as Record<
+      string,
+      string
+    >;
+    for (const [key, item] of Object.entries(value)) {
+      if (key === "<<") return null;
+      // Retain every key for the grant check, including keys with structured values.
+      fields[key] = typeof item === "string" ? item : JSON.stringify(item);
+    }
+    return { fields, bodyStart: close + 1 };
+  } catch {
+    return null;
   }
-  return { fields, bodyStart: close + 1 };
 }
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;

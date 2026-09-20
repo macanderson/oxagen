@@ -1,4 +1,4 @@
-// audit-exempt: opening the pull request creates nothing (the agent exists only when a person merges it, MC spec §6.2); the kernel's capability.invoke_* audit records the call.
+// audit-exempt: opening the pull request creates nothing (register_agent creates the identity after merge, MC spec §6.2); the kernel's capability.invoke_* audit records the call.
 //
 // propose_agent (MC spec §6.2, §10.2; roadmap creation-spec §1, the agent
 // wizard). The last step of New agent: a pull request against the workspace's
@@ -7,8 +7,7 @@
 //
 // Flow:
 //   1. Role gate: org Owner or Admin (assertOrgRole, INV-29), for the signed-in
-//      user. Merging the file creates a principal, which is register_agent's
-//      role. An API key carries no user, so the call is refused there.
+//      user. Registration after merge creates the principal.
 //   2. The file is parsed. A file that does not parse fails the schema check.
 //   3. What the checks read, in one tenant transaction: whether the slug is
 //      held by an agent in this workspace (the slug index covers retired and
@@ -44,6 +43,7 @@ import {
   generatedAgentPath,
   generateSubagentFile,
   instructionsOf,
+  SUBAGENT_FILE_HARNESSES,
 } from "@oxagen/oxagen/contracts/agent.propose";
 import type { PlanTier } from "@oxagen/oxagen/types";
 import { and, eq, isNull } from "drizzle-orm";
@@ -73,6 +73,8 @@ export type ProposeAgentDeps = {
     | "resolveRepository"
     | "readFile"
     | "ensureBranch"
+    | "deleteBranch"
+    | "reconcileFiles"
     | "putFile"
     | "findOpenPullRequest"
     | "openPullRequest"
@@ -114,8 +116,8 @@ function prBody(args: {
     "Drafted in the Oxagen agent wizard from a description, and edited by the person who opened this pull request.",
     "",
     args.agentKey === null
-      ? "- Merging this creates the agent's principal. Until then the agent does not exist and nothing can be attributed to it."
-      : `- Merging this creates the principal \`${args.agentKey}\`. Until then the agent does not exist and nothing can be attributed to it.`,
+      ? "- After merge, register this agent under the same slug to create its identity and credential."
+      : `- After merge, register \`${args.agentKey}\` under the same slug to create its identity and credential.`,
     `- Definition digest at open: \`${args.digest}\`.`,
     "- `tools` is a request, not a grant. What the agent can reach is that list intersected with the roles it holds and with the grants of the person it acts for.",
     "- The subagent file is generated from the definition. Change the definition, not the generated file.",
@@ -256,7 +258,9 @@ export function createProposeAgentHandler(
     }
 
     const digest = `sha256:${sha256Hex(source)}`;
-    const generatedPath = generatedAgentPath(input.slug);
+    const generatedPath = SUBAGENT_FILE_HARNESSES.includes(input.harness)
+      ? generatedAgentPath(input.slug)
+      : null;
     const description = doc.description;
     const generated = generateSubagentFile({
       slug: input.slug,
@@ -271,24 +275,40 @@ export function createProposeAgentHandler(
     });
     const branch = agentBranch(input.slug);
 
-    await deps.github.ensureBranch(repo, branch, base);
+    if (branch === base) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "production_branch_is_proposal_branch",
+        message:
+          "The proposal branch is the production branch. Change the repository binding before proposing files.",
+      });
+    }
+
     const open = await deps.github.findOpenPullRequest(repo, {
       head: branch,
       base,
     });
+    if (open === null) await deps.github.deleteBranch(repo, branch);
+    await deps.github.ensureBranch(repo, branch, base);
+    await deps.github.reconcileFiles(repo, {
+      branch,
+      roots: [path, generatedAgentPath(input.slug)],
+      files: [path, ...(generatedPath === null ? [] : [generatedPath])],
+    });
     const message = `agents: add ${input.slug}`;
-    await deps.github.putFile(repo, {
+    let { commitSha } = await deps.github.putFile(repo, {
       path,
       content: source,
       message,
       branch,
     });
-    const { commitSha } = await deps.github.putFile(repo, {
-      path: generatedPath,
-      content: generated,
-      message: `agents: generate ${generatedPath} from ${path}`,
-      branch,
-    });
+    if (generatedPath !== null)
+      ({ commitSha } = await deps.github.putFile(repo, {
+        path: generatedPath,
+        content: generated,
+        message: `agents: generate ${generatedPath} from ${path}`,
+        branch,
+      }));
 
     const pullRequest =
       open ??
@@ -301,7 +321,7 @@ export function createProposeAgentHandler(
           agentKey: facts.agentKey,
           harness: input.harness,
           digest,
-          files: [path, generatedPath],
+          files: [path, ...(generatedPath === null ? [] : [generatedPath])],
           rationale: input.rationale,
         }),
       }));

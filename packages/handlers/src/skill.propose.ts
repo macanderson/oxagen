@@ -45,6 +45,8 @@ export type ProposeSkillDeps = {
     | "resolveRepository"
     | "readFile"
     | "ensureBranch"
+    | "deleteBranch"
+    | "reconcileFiles"
     | "putFile"
     | "findOpenPullRequest"
     | "openPullRequest"
@@ -76,7 +78,7 @@ function prBody(args: {
       ? "Drafted in the Oxagen skill wizard from a description, and edited by the person who opened this pull request."
       : "Read out of an uploaded bundle in the Oxagen skill wizard.",
     "",
-    `- Digest at open: \`${args.digest}\`. The checks take it again at merge, and every run that loads this version records it.`,
+    `- Digest at open: \`${args.digest}\`. The checks cover these submitted bytes. Later pushes require a new review.`,
     `- Load cost: about ${args.tokens.toLocaleString("en-US")} tokens, inside the ${args.budget.toLocaleString("en-US")}-token search budget.`,
     "- This file grants nothing. Every action it names still goes through the toolbelt and the policy that governs it.",
     "",
@@ -158,10 +160,25 @@ export function createProposeSkillHandler(
       ...files.map((f) => `${SKILL_DIR}/${input.name}/${f.path}`),
     ];
 
-    await deps.github.ensureBranch(repo, branch, base);
+    if (branch === base) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "production_branch_is_proposal_branch",
+        message:
+          "The proposal branch is the production branch. Change the repository binding before proposing files.",
+      });
+    }
+
     const open = await deps.github.findOpenPullRequest(repo, {
       head: branch,
       base,
+    });
+    if (open === null) await deps.github.deleteBranch(repo, branch);
+    await deps.github.ensureBranch(repo, branch, base);
+    await deps.github.reconcileFiles(repo, {
+      branch,
+      roots: [`${SKILL_DIR}/${input.name}`],
+      files: written,
     });
 
     const message =

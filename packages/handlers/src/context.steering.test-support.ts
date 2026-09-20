@@ -580,6 +580,22 @@ export class FakeGitHub implements SteeringGitHub {
     this.branches.push({ branch, from });
     this.heads.set(branch, this.shaOf(from));
   }
+  async reconcileFiles(
+    _repo: SteeringRepository,
+    args: { branch: string; roots: string[]; files: string[] },
+  ) {
+    for (const path of this.tree(this.shaOf(args.branch)).keys()) {
+      if (
+        args.roots.some(
+          (root) => path === root || path.startsWith(`${root}/`),
+        ) &&
+        !args.files.includes(path)
+      ) {
+        const sha = this.commit(args.branch, path, "");
+        this.files.delete(`${sha}:${path}`);
+      }
+    }
+  }
   async putFile(
     _repo: SteeringRepository,
     args: { path: string; content: string; message: string; branch: string },

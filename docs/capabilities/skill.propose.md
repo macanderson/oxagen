@@ -16,7 +16,7 @@ Six checks run before anything reaches GitHub, and a failed check writes nothing
 
 1. **Frontmatter**: `name`, `version` and `scope` are present, and `name` matches the directory.
 2. **Version**: plain semver, and strictly greater than the version merged today when the call replaces a skill.
-3. **Digest**: the canonical bytes (LF line ends) hash to `sha256:<hex>`. The checks take it again at merge, and every run that loads this version records it.
+3. **Digest**: the canonical bytes (LF line ends) hash to `sha256:<hex>`. The checks cover the submitted bytes. They do not run again at merge. Review subsequent pushes before merging.
 4. **Grants**: the frontmatter names no `allowed-tools`, `tools`, `permissions`, `grants`, `tier` or `role`. A skill cannot add a tool or raise a tier.
 5. **Secret and PII scan**: the body and every bundle file are scanned for credential shapes and US social security numbers.
 6. **Load cost**: the estimated tokens (four characters each) fit the `[search] budget` in `.oxagen/skills.toml`, or 6,000 when the file names none.
