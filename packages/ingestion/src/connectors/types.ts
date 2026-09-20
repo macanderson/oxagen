@@ -83,6 +83,8 @@ export interface RecordTypeSample {
 // Output of normalizeRecord() — flat properties, no entity type knowledge.
 export interface NormalizedRecord {
   externalId: string;
+  /** Previous identity spelling, usable only after stored source identity matches. */
+  legacyExternalId?: string;
   externalUrl?: string;
   displayName?: string;
   properties: Record<string, unknown>;
