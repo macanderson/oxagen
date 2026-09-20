@@ -6,6 +6,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
+    withOrgDb: vi.fn(() => {
+      throw new Error("Seat reads must use the invitation transaction");
+    }),
     withTenantDb: vi.fn(() => {
       throw new Error("Seat reads must use the invitation transaction");
     }),
