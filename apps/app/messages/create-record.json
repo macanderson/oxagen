@@ -1,0 +1,213 @@
+{
+  "createRecord": {
+    "describe": {
+      "title": "Write a context record",
+      "subtitle": "One concern per record, and one record per pull request.",
+      "placeholder": "Do not re-read CHANGELOG.md more than once in a run; cache the first read.",
+      "hint": "Say the thing itself, not the reason for it. The reason belongs in the rationale on the pull request, where a reviewer reads it once. In the bundle, every agent pays for it on every turn.",
+      "suggestions": {
+        "changelog": "Do not re-read CHANGELOG.md more than once in a run",
+        "release": "The release manager opens the release pull request; a person merges it",
+        "order": "Cut a release in this order: freeze, dry-run migrations, tag, publish",
+        "flake": "The checkout e2e suite flaked on Safari through August"
+      },
+      "noGrant": "A record steers. It never grants. No sentence you write here makes a denied call allowed.",
+      "next": "Pick a kind"
+    },
+    "kind": {
+      "title": "What kind is it?",
+      "subtitle": "The kind decides how the record reaches a run and what the checks assert. It is not a label.",
+      "cards": "Record kinds",
+      "never": "Can never: {text}",
+      "reaches": "How a {kind} reaches a run",
+      "next": "Write the statement",
+      "kinds": {
+        "rule": {
+          "label": "rule",
+          "about": "A directive that steers behaviour.",
+          "use": "An instruction you want followed, that a reasonable agent could still weigh against the task.",
+          "never": "It cannot grant authority, and it cannot make a denied call allowed.",
+          "deliver": "Compiled into the steering block of the policy bundle. <code>must</code> and <code>should</code> sit in the stable prefix of every turn. <code>may</code> and <code>info</code> are selected by relevance."
+        },
+        "constraint": {
+          "label": "constraint",
+          "about": "A hard boundary: require or forbid.",
+          "use": "A boundary with two values and no middle: require this, or forbid that.",
+          "never": "It can narrow what is allowed. It can never widen it. A require does not create the permission it requires.",
+          "deliver": "Compiled into the stable prefix at whatever force it carries, and checked against every other published record on the same subject."
+        },
+        "procedure": {
+          "label": "procedure",
+          "about": "Steps, in order.",
+          "use": "Steps, in order, where the order is the point.",
+          "never": "A step is not an authority. Naming a governed action in step 4 does not put it on a toolbelt.",
+          "deliver": "Compiled like a rule, and rendered as an ordered list so a model cannot silently reorder it."
+        },
+        "fact": {
+          "label": "fact",
+          "about": "A checkable claim about the world.",
+          "use": "A claim about the world that somebody could check and find false.",
+          "never": "It steers nothing by itself. A fact that needs to change behaviour is a rule that cites it.",
+          "deliver": "Delivered as a <code>fact</code> context frame with provenance to this record and its commit, <code>valid_from</code> set to the merge time."
+        },
+        "memory": {
+          "label": "memory",
+          "about": "A durable recollection.",
+          "use": "Something that happened, that explains what an agent is about to see.",
+          "never": "It never forbids anything, and it is never evidence on its own. It is why a retry is not a regression, not proof that it was not.",
+          "deliver": "Delivered as a <code>memory</code> context frame, selected by relevance, never pinned into the prefix."
+        },
+        "preference": {
+          "label": "preference",
+          "about": "Soft, and often unfalsifiable.",
+          "use": "A soft leaning, usually unfalsifiable, that you would rather have than not.",
+          "never": "It never blocks a call, and a run that ignored it is not a failing run.",
+          "deliver": "Delivered at <code>may</code> or <code>info</code>, selected by relevance, and dropped first when the window is tight."
+        }
+      }
+    },
+    "statement": {
+      "title": "The statement",
+      "subtitle": "This is the record. Everything else about it is metadata.",
+      "drafted": {
+        "title": "A statement, drafted from what you wrote",
+        "body": "Oxagen filled this in from your description, in this tab. No model wrote it and no run was recorded. Every line below is yours to change before anybody reviews it."
+      },
+      "path": "{path} · statement",
+      "tokens": "about {tokens, number} tokens",
+      "revert": "Revert",
+      "empty": "Write the statement before you run the checks.",
+      "tooLong": "The statement is {count, number} characters. The schema takes {max, number} at most.",
+      "force": {
+        "label": "Force",
+        "stable": "In the stable prefix of every turn in scope. It is paid for whether or not it is relevant.",
+        "selected": "Selected by relevance, and dropped first when the window is tight.",
+        "preference": "A preference is soft, so it is never must or should.",
+        "informs": "A fact or a memory informs, so its force is info."
+      },
+      "scope": {
+        "label": "Scope",
+        "workspace": "workspace",
+        "repository": "repository (opens on a linked repository)",
+        "workspaceHint": "Opens on {repository} and reaches every agent in {workspace}.",
+        "repositoryClosed": "A repository record opens on the linked repository itself, and it may narrow what a workspace record allows, never widen it. This wizard opens pull requests on the main repository only, so the records it writes are workspace records."
+      },
+      "effect": {
+        "label": "Constraint effect",
+        "hint": "The only two values there are. A record can never grant authority, so there is no third."
+      },
+      "preview": {
+        "label": "How it will read",
+        "badge": "Not published. This is the preview."
+      },
+      "bundle": "Merging it recompiles the workspace’s steering bundle and adds about {tokens, number} tokens to each turn it reaches. A request already recorded keeps the bundle version it was sent with, so merging this never changes what an old run carried.",
+      "next": "Run the checks"
+    },
+    "checks": {
+      "title": "What the checks will assert",
+      "subtitle": "Six of them, on the pull request, before anybody can merge it.",
+      "items": {
+        "schema": {
+          "name": "Schema",
+          "detail": "<code>context-record/v0.1</code> is valid: one file, one record, one lineage."
+        },
+        "lineage": {
+          "name": "Lineage uniqueness",
+          "detail": "No published record may hold <code>{lineage}</code>. If one does, this check fails and nothing merges. Amend the published record instead of opening a second under its id."
+        },
+        "hash": {
+          "name": "record_hash recomputation",
+          "detail": "Recomputed over the canonical bytes and compared to the file."
+        },
+        "secrets": {
+          "name": "Secret and PII scan",
+          "detail": "The statement, the rationale, and the evidence are scanned. A name or a key in any of them fails."
+        },
+        "conflicts": {
+          "name": "Conflict against active records",
+          "detail": "Checked against every published record in the workspace. A <code>forbid</code> that contradicts an active <code>require</code> on the same subject fails."
+        },
+        "effect": {
+          "name": "constraint_effect is require or forbid",
+          "constraint": "<code>{effect}</code>. It grants nothing.",
+          "none": "Not a constraining kind. The field is absent, which also passes."
+        }
+      },
+      "fifth": "The conflict check earns the others. Two people can each write a sensible record, six weeks apart, that together say a call must happen and must not. The pull request is the only place that is caught, before either reaches a run.",
+      "next": "Open the pull request"
+    },
+    "pr": {
+      "title": "Open the pull request",
+      "subtitle": "People trust pull requests. That is the whole design.",
+      "lead": "Merge is the publication. Nothing steers until then, and the record is in force from the merge commit, not from when you wrote it.",
+      "fileRecord": "the record",
+      "rationale": "Rationale on the pull request",
+      "checks": {
+        "schema": "<code>context-record/v0.1</code>",
+        "lineage": "<code>{lineage}</code> is free",
+        "hash": "recomputed at merge",
+        "secrets": "statement, rationale, and evidence",
+        "conflicts": "against every published record",
+        "effect": "<code>{effect}</code>",
+        "noEffect": "none: this kind constrains nothing"
+      },
+      "names": {
+        "schema": "Schema",
+        "lineage": "Lineage",
+        "hash": "Hash",
+        "secrets": "Secrets",
+        "conflicts": "Conflicts",
+        "effect": "Effect"
+      },
+      "open": "Open the pull request",
+      "opening": "Opening the pull request",
+      "proposalKept": "Proposal {proposal} is on Steering, under Proposals. Trying again opens its pull request. It does not propose a second record.",
+      "repo": {
+        "loading": "Reading the workspace’s main repository.",
+        "unbound": "This workspace has no main repository yet. Bind one in Workspace settings, then open the pull request.",
+        "denied": "Opening a Context PR needs Owner or Admin on the organization, or Owner or Member on the workspace.",
+        "unavailable": "The main repository could not be read ({code}). Nothing was written. Close the wizard and open it again to retry."
+      }
+    },
+    "opened": {
+      "title": "The pull request is open",
+      "subtitle": "It steers nothing until it merges.",
+      "link": "{repository}#{number}",
+      "noPr": "The proposal is recorded, and its pull request is not open yet.",
+      "path": "{path} on {branch}",
+      "checks": "The six checks",
+      "status": {
+        "passed": "passed",
+        "failed": "failed",
+        "running": "running",
+        "pending": "pending"
+      },
+      "names": {
+        "schema": "Schema",
+        "lineage_uniqueness": "Lineage uniqueness",
+        "record_hash": "record_hash recomputation",
+        "secret_pii_scan": "Secret and PII scan",
+        "conflict_against_active": "Conflict against active records",
+        "constraint_effect": "constraint_effect"
+      },
+      "passed": "Every check passed. A reviewer can merge it under the workspace’s governance mode.",
+      "failed": "A check failed, so the pull request cannot merge. Fix the file on the branch, or close the pull request from Context PRs. Nothing is in force.",
+      "running": "The checks are still running. Context PRs shows them as they finish.",
+      "onContextPrs": "Open it on Context PRs"
+    },
+    "failure": {
+      "orgRoleRequired": "Opening a Context PR needs Owner or Admin on the organization, or Owner or Member on the workspace. Nothing was written.",
+      "noPrincipal": "Oxagen could not tell who is signed in. Sign in again and retry. Nothing was written.",
+      "lineagePrOpen": "A Context PR for this lineage is already open. One concern, one pull request. Change the description to name a different concern, or finish the open one first.",
+      "governanceUnreadable": "The main repository’s .oxagen/rules/governance.toml could not be read, so Oxagen cannot tell who may merge. Fix it on the production branch, then try again.",
+      "repositoryMissing": "This workspace has no main repository yet. Bind one in Workspace settings.",
+      "githubRefused": "GitHub refused the write. Check the GitHub App’s access to the repository and try again.",
+      "baseMoved": "The production branch moved while the pull request was opening. Try again.",
+      "proposalMoved": "Another change moved this proposal first. Open it on Context PRs to see where it stands.",
+      "unanswered": "Oxagen did not answer. Try again.",
+      "refused": "The pull request was refused ({code}).",
+      "invalid": "The {field} value is not one propose_record accepts. Nothing was written.",
+      "pendingApproval": "Opening this pull request waits for approval: access request {request}."
+    }
+  }
+}

@@ -140,6 +140,129 @@
         },
         "x-server-validated": true,
         "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "replaces": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "maxMeasures": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "x-server-validated": true,
+              "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload.",
+              "default": {}
+            },
+            "allowTargets": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              },
+              "x-server-validated": true,
+              "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload.",
+              "default": {}
+            },
+            "standingWindowMs": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 60000,
+                  "maximum": 2592000000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "businessHours": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "timezone": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+                    },
+                    "days": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 7
+                      }
+                    },
+                    "start": {
+                      "type": "string"
+                    },
+                    "end": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "timezone",
+                    "days",
+                    "start",
+                    "end"
+                  ],
+                  "additionalProperties": false,
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "tools"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "saving": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
       }
     },
     "required": [

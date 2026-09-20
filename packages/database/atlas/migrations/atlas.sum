@@ -172,4 +172,6 @@ h1:suLSvQc/Hq64ZMaAfB2s9Y4bMyWo3l5tpU6XYGdycAo=
 20260919200000_mandate_ledger_measure_kind.sql h1:O+NSZv2kaiORIZttfzhHY9Qkshl2WpJaGQJse3eJfx8=
 20260920120000_backfill_mandate_read_grants.sql h1:GLkEisWu7LzadDVSuMC8UFJ3r01dt8Os/mCUFFjoHnw=
 20260920130000_book_second_edition.sql h1:O+iHXyb8JZA3PzHGy6ETcnZcDA1L47ktwTm/KuKOARU=
+20260920140000_cms_leads_crm_sync.sql h1:g85MAn34U0xENw2BexF9B9biiXo/lATdLVgwklszU/4=
 20260920150000_book_second_edition.sql h1:Tt2KVgDXud6PzmZ+8xrv0kv2lfQmcQ+fHDMdt0FrV6o=
+

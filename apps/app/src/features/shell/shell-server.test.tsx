@@ -106,7 +106,12 @@ describe("ShellChrome", () => {
         contextPr: vi.fn(),
         freshness: vi.fn(),
       },
-      tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
+      tools: {
+        versions: vi.fn(),
+        grants: vi.fn(),
+        killSwitches: vi.fn(),
+        approvalRules: vi.fn(),
+      },
     };
     // The chrome is wrapped in the viewer's zone, so its own dates agree with
     // the page's; the client shell is the provider's one child.
@@ -139,6 +144,18 @@ describe("ShellFrame", () => {
     expect(screen.getByText("chrome")).toBeInTheDocument();
     expect(screen.getByRole("main")).toHaveTextContent("page");
     expect(container.querySelector("script")?.innerHTML).toBe(THEME_SCRIPT);
+  });
+
+  it("paints the workspace on the content-panel token, not the page canvas", async () => {
+    // AGENTS.md "Design Token Usage in Shell Components": the shell frame is
+    // the reskin knob for the content panel. A dark-mode pass once moved it
+    // to `bg-app-canvas`, which put the workspace on the black page canvas
+    // and took the frame out of reach of a `--app-panel-bg` change.
+    const { ShellFrame } = await import("./shell-frame");
+    render(await ShellFrame({ chrome: <p>chrome</p>, children: null }));
+    const shell = screen.getByTestId("shell");
+    expect(shell.className).toContain("bg-app-panel-bg");
+    expect(shell.className).not.toContain("bg-app-canvas");
   });
 
   it("streams a labelled skeleton while the chrome loads", async () => {

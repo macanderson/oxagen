@@ -1,7 +1,8 @@
-// Contract-parsed outputs of the three #2958 reads, for the tests of the Tools
-// port and the Tools page. Each record goes through its contract's own output
-// schema, so a fixture that drifts from the contract fails here rather than in
-// the view.
+// Contract-parsed outputs of the three #2958 reads and `list_approval_rules`,
+// for the tests of the Tools port and the Tools page. Each record goes through
+// its contract's own output schema, so a fixture that drifts from the contract
+// fails here rather than in the view.
+import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
@@ -11,6 +12,7 @@ type CredentialGrantListOutput = ReturnType<
   typeof credentialGrantList.output.parse
 >;
 type KillSwitchListOutput = ReturnType<typeof killSwitchList.output.parse>;
+type ApprovalRuleListOutput = ReturnType<typeof approvalRuleList.output.parse>;
 
 export function toolVersionListOutput(
   over: Partial<ToolVersionListOutput> = {},
@@ -174,6 +176,53 @@ export function killSwitchListOutput(
         clearedBy: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
       },
     ],
+    ...over,
+  });
+}
+
+export function approvalRuleListOutput(
+  over: Partial<ApprovalRuleListOutput> = {},
+): ApprovalRuleListOutput {
+  return approvalRuleList.output.parse({
+    items: [
+      {
+        id: "small-refunds",
+        name: "Small refunds to known customers",
+        tools: ["stripe__create_refund@*"],
+        enabled: true,
+        maxMeasures: { amount: "50000000" },
+        allowTargets: { counterparty: ["cus_*", "vendor:aws"] },
+        standingWindowMs: null,
+        businessHours: {
+          timezone: "Europe/London",
+          days: [1, 2, 3, 4, 5],
+          start: "09:00",
+          end: "17:00",
+        },
+        createdBy: "usr_01k5a1",
+        createdAt: "2026-09-12T10:00:00.000Z",
+        authoredConsequences: ["moves_money"],
+        hits30d: 212,
+        skipped30d: 9,
+      },
+      {
+        // Off, with a standing window and nothing else, written by no person,
+        // and carrying no stamp: the row that says it releases nothing.
+        id: "repeat-deploys",
+        name: "Repeat deploys to staging",
+        tools: ["deploy__release"],
+        enabled: false,
+        maxMeasures: {},
+        allowTargets: {},
+        standingWindowMs: 3_600_000,
+        businessHours: null,
+        createdBy: null,
+        createdAt: "2026-09-01T08:00:00.000Z",
+        hits30d: 0,
+        skipped30d: 4,
+      },
+    ],
+    windowDays: 30,
     ...over,
   });
 }

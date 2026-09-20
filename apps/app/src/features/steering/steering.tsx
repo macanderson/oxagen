@@ -1,11 +1,14 @@
 // Steering (#2961; ARCHITECTURE.md §1.2): the records in force in this
-// workspace, the proposals waiting for a person with the support they cite,
-// and the Context PR that publishes one: its state machine, its checks, what
-// merge will do and the merge. Effect metrics, retirement candidates and
+// workspace, the skills its harness sessions reported (the Skills tab, which
+// is the Skills lane's inventory; MC spec §10.7), the proposals waiting for a
+// person with the support they cite, and the Context PR that publishes one:
+// its state machine, its checks, what merge will do and the merge. Effect metrics, retirement candidates and
 // promotion thresholds are not in this release. Each tab makes only the reads
 // it shows.
+import { Suspense } from "react";
 import type { DataSource } from "@/data/ports";
 import { PageRecord } from "@/features/shell";
+import { Skills, SkillsLoading } from "@/features/skills";
 import type { WsCtx } from "@/server/viewer";
 import { ContextPrs } from "./context-prs";
 import { Freshness } from "./freshness";
@@ -36,6 +39,12 @@ async function TabBody({
         <Records at={at} kind={view.kind} offset={view.offset} read={read} />
       );
     }
+    case "skills":
+      return (
+        <Suspense fallback={<SkillsLoading />}>
+          <Skills ctx={ctx} source={source} cursor={view.cursor} />
+        </Suspense>
+      );
     case "proposals": {
       const read = await source.steering.proposals(ctx, {
         offset: view.offset,
@@ -68,7 +77,7 @@ export async function Steering({
 }: {
   ctx: WsCtx;
   source: DataSource;
-  /** The query the URL carried: `tab`, `kind`, `offset`, `proposal`. */
+  /** The query the URL carried: `tab`, `kind`, `offset`, `proposal`, `cursor`. */
   searchParams: Readonly<Record<string, string | string[] | undefined>>;
 }) {
   const view = parseSteeringView(searchParams);

@@ -1,12 +1,17 @@
 "use server";
-// The three writes the Tools page makes (#2958), each through the kernel seam
-// for the workspace viewer the URL names.
+// The writes the Tools page makes (#2958; auto-approvals, ADR-070), each
+// through the kernel seam for the workspace viewer the URL names.
 //
 // Every one is `noBillingGate` and role-checked in its handler (INV-29), so
 // there is no second gate here: `import_tools` and `set_tool_classification`
 // want an org Owner or Admin (import also accepts a workspace Owner),
-// `set_kill_switch` an org Owner or Admin. A refusal comes back as `denied`
-// with nothing changed, and the page names it where the person acted.
+// `set_kill_switch` an org Owner or Admin, and the three auto-approval writes
+// an org Owner or Admin. A refusal comes back as `denied` with nothing
+// changed, and the page names it where the person acted.
+import { approvalRuleDelete } from "@oxagen/oxagen/contracts/approval_rule.delete";
+import { approvalRuleEnabledSet } from "@oxagen/oxagen/contracts/approval_rule.enabled.set";
+import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
+import { approvalRuleSet } from "@oxagen/oxagen/contracts/approval_rule.set";
 import {
   killSwitchSet,
   type KillSwitchSetInput,
@@ -14,14 +19,19 @@ import {
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
 import type {
+  ApprovalRuleHours,
   KillSwitchKind,
   ToolClassification,
   ToolEgress,
   ToolRiskGrade,
   ToolSideEffect,
 } from "@/data/contracts/tools";
-import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import type { ActionResult, ContractOutput } from "@/server/kernel";
+import {
+  kernelRead,
+  kernelWrite,
+  readToActionResult,
+} from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 /**
@@ -212,4 +222,184 @@ export async function flipKillSwitch(
         },
       }
     : result;
+}
+
+/** One auto-approval rule as the dialog writes it: the fields an author owns. */
+export type ApprovalRuleDraft = {
+  id: string;
+  name: string;
+  /** One glob per entry, already split. */
+  tools: readonly string[];
+  enabled: boolean;
+  /** measure → the inclusive ceiling, an integer string. */
+  maxMeasures: Readonly<Record<string, string>>;
+  /** measure → the globs its target must match. */
+  allowTargets: Readonly<Record<string, readonly string[]>>;
+  standingWindowMs: number | null;
+  businessHours: ApprovalRuleHours | null;
+};
+
+type StoredRule = ContractOutput<typeof approvalRuleList>["items"][number];
+
+/**
+ * A stored rule as the body `set_approval_rules` takes back. The provenance
+ * (`createdBy`, `createdAt`, `authoredConsequences`) and the two counters are
+ * the handler's, so they are left off and the handler re-derives them.
+ */
+function bodyOf(rule: StoredRule | ApprovalRuleDraft) {
+  return {
+    id: rule.id,
+    name: rule.name,
+    tools: [...rule.tools],
+    enabled: rule.enabled,
+    maxMeasures: { ...rule.maxMeasures },
+    allowTargets: Object.fromEntries(
+      Object.entries(rule.allowTargets).map(([measure, globs]) => [
+        measure,
+        [...globs],
+      ]),
+    ),
+    standingWindowMs: rule.standingWindowMs,
+    businessHours:
+      rule.businessHours === null
+        ? null
+        : {
+            timezone: rule.businessHours.timezone,
+            days: [...rule.businessHours.days],
+            start: rule.businessHours.start,
+            end: rule.businessHours.end,
+          },
+  };
+}
+
+/**
+ * One rule body as a string two equal bodies share: the record fields are
+ * written in key order, because two reads of the same rule may order them
+ * differently and that is not a change anyone made.
+ */
+function bodyKey(body: ReturnType<typeof bodyOf>): string {
+  const ordered = <T,>(record: Readonly<Record<string, T>>) =>
+    Object.fromEntries(
+      Object.entries(record).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0,
+      ),
+    );
+  return JSON.stringify({
+    ...body,
+    maxMeasures: ordered(body.maxMeasures),
+    allowTargets: ordered(body.allowTargets),
+  });
+}
+
+/**
+ * Creates or edits one auto-approval rule.
+ *
+ * `set_approval_rules` replaces the whole set, so this reads the set as it is
+ * now and splices the one rule into it, rather than trusting the copy the page
+ * rendered. A page loaded before another person's edit would otherwise write
+ * that edit away. Two windows are open between the page and the write, and
+ * each is closed separately:
+ *
+ * - **render to read.** The dialog opens on a rule it rendered and submits
+ *   whenever the author is done, so `rendered` carries the rule as they saw
+ *   it and an edit is refused as `rule_changed` when the read no longer
+ *   matches it. Without it, another person switching the rule off is undone
+ *   by a stale editor still carrying `enabled: true`.
+ * - **read to write.** The read goes back as `replaces`, and the handler
+ *   compares it with the stored set under its rule-set lock, refusing as
+ *   `rule_set_changed` when they differ.
+ *
+ * Rules this save does not change keep their stamp on the server.
+ *
+ * A rule's id is its audit citation (`policy:<id>`), so an edit keeps it and
+ * a create refuses an id already in use rather than overwriting that rule.
+ */
+export async function saveApprovalRule(
+  org: string,
+  ws: string,
+  mode: "create" | "edit",
+  draft: ApprovalRuleDraft,
+  /**
+   * The rule as the editor rendered it, and null when creating: a create
+   * writes over nothing, and the id check below refuses one already in use.
+   */
+  rendered: ApprovalRuleDraft | null,
+): Promise<ActionResult<{ ruleId: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const current = await kernelRead(ctx, {
+    contract: approvalRuleList,
+    input: {},
+    page: "tools",
+  });
+  if (!current.ok) return readToActionResult<never>(current);
+  const stored = current.value.items;
+  const body = bodyOf({
+    ...draft,
+    id: draft.id.trim(),
+    name: draft.name.trim(),
+    tools: draft.tools.map((glob) => glob.trim()).filter((g) => g !== ""),
+  });
+  const before = stored.find((rule) => rule.id === body.id);
+  if (mode === "create" && before !== undefined) {
+    return { ok: false, reason: "conflict", code: "rule_id_taken" };
+  }
+  if (mode === "edit") {
+    if (before === undefined) {
+      return {
+        ok: false,
+        reason: "not_found",
+        code: "approval_rule_not_found",
+      };
+    }
+    if (
+      rendered === null ||
+      bodyKey(bodyOf(rendered)) !== bodyKey(bodyOf(before))
+    ) {
+      return { ok: false, reason: "conflict", code: "rule_changed" };
+    }
+  }
+  const rules =
+    mode === "create"
+      ? [...stored.map(bodyOf), body]
+      : stored.map((rule) => (rule.id === body.id ? body : bodyOf(rule)));
+  // `replaces` makes the write conditional on the set read above: if another
+  // person deleted, switched off or edited a rule in between, the handler
+  // refuses it as `rule_set_changed` instead of writing their change away.
+  const result = await kernelWrite(ctx, approvalRuleSet, {
+    rules,
+    replaces: stored.map(bodyOf),
+    // The rule being saved is re-checked and re-stamped even if unchanged, so
+    // saving a rule held back as `consequences_changed` re-authorises it.
+    saving: [body.id],
+  });
+  return result.ok ? { ok: true, value: { ruleId: body.id } } : result;
+}
+
+/**
+ * Switches one rule on or off without sending the rest of the set back.
+ * Switching on re-runs the checks the rule was saved under.
+ */
+export async function setApprovalRuleEnabled(
+  org: string,
+  ws: string,
+  ruleId: string,
+  enabled: boolean,
+): Promise<ActionResult<{ ruleId: string; enabled: boolean }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, approvalRuleEnabledSet, {
+    ruleId,
+    enabled,
+  });
+  return result.ok ? { ok: true, value: { ruleId, enabled } } : result;
+}
+
+/** Removes one rule from the set. Switching it off keeps its id and counters instead. */
+export async function deleteApprovalRule(
+  org: string,
+  ws: string,
+  ruleId: string,
+): Promise<ActionResult<{ ruleId: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, approvalRuleDelete, { ruleId });
+  return result.ok ? { ok: true, value: { ruleId } } : result;
 }

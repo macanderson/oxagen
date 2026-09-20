@@ -488,6 +488,51 @@ export async function withCounters(
   };
 }
 
+/**
+ * The fields an author writes, in one canonical string, so two copies of a
+ * rule compare equal whatever order their records' keys arrived in.
+ * Provenance (`createdBy`, `createdAt`, `authoredConsequences`) is left out:
+ * it is what a write stamps, not what an author changes.
+ */
+export function ruleBodyKey(rule: AutoApprovalRuleBody): string {
+  const sorted = <T>(record: Readonly<Record<string, T>>) =>
+    Object.keys(record)
+      .sort()
+      .map((key) => [key, record[key]] as const);
+  return JSON.stringify([
+    rule.id,
+    rule.name,
+    rule.tools,
+    rule.enabled,
+    sorted(rule.maxMeasures),
+    sorted(rule.allowTargets),
+    rule.standingWindowMs,
+    rule.businessHours === null
+      ? null
+      : [
+          rule.businessHours.timezone,
+          rule.businessHours.days,
+          rule.businessHours.start,
+          rule.businessHours.end,
+        ],
+  ]);
+}
+
+/**
+ * True when the stored rules are, rule for rule and in order, the bodies a
+ * caller says it read. The optimistic check `set_approval_rules` makes when a
+ * caller sends `replaces`.
+ */
+export function sameRuleBodies(
+  stored: readonly AutoApprovalRuleBody[],
+  read: readonly AutoApprovalRuleBody[],
+): boolean {
+  return (
+    stored.length === read.length &&
+    stored.every((rule, i) => ruleBodyKey(rule) === ruleBodyKey(read[i]!))
+  );
+}
+
 /** The rule `ruleId` names, or a `not_found` refusal. */
 export function requireRule(
   rules: readonly AutoApprovalRule[],

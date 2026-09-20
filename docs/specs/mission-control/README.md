@@ -37,5 +37,10 @@ Sources and copies:
   build-time decision log and traceability over this spec; they do not restate it.
 - `docs/mission-control/GAP-INVENTORY.md` is the 2026-09-19 page-by-page gap
   inventory of `apps/app` against the canonical roadmap §14. Prefer it over
-  `PLAN.md` / `TRACEABILITY.md` for what is built today.
+  `PLAN.md` / `TRACEABILITY.md` for what is built today, and read
+  `docs/audits/2026-09-19-mission-control-gap-inventory-review.md` beside it:
+  the review corrects the rows five same-day PRs made stale.
+- `docs/mission-control/BUILD-CHUNKS.md` is the build plan that follows from
+  the review: six sessions, each a `/mc-<n>-<name>` command over a workflow in
+  `.claude/workflows/`.
 - Build tracking: integration branch `app-rebuild`, PR #2894.

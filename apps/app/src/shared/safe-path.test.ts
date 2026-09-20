@@ -202,10 +202,10 @@ describe("routes", () => {
       "/acme/core-platform/spend?tab=waste",
     );
     expect(routes.skills("acme", "core-platform")).toBe(
-      "/acme/core-platform/skills",
+      "/acme/core-platform/steering?tab=skills",
     );
     expect(routes.skills("acme", "core-platform", { cursor: "c 2&x" })).toBe(
-      "/acme/core-platform/skills?cursor=c+2%26x",
+      "/acme/core-platform/steering?tab=skills&cursor=c+2%26x",
     );
     expect(
       routes.spend("acme", "core-platform", {

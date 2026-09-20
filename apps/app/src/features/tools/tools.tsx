@@ -1,32 +1,37 @@
 // Tools (#2958, #2957; ARCHITECTURE.md §1.2, mockup `mockups/pages/tools.md`):
 // the registry of tool versions with their safety classification, the
 // credential grants the broker minted, the kill switches reaching this
-// workspace, and the ledger of every mandate the workspace has granted.
+// workspace, the ledger of every mandate the workspace has granted, and the
+// auto-approval rules that let a call skip a person (ADR-070).
 //
-// Four tabs, because four of the mockup's six are backed today. #2958 shipped
+// Five tabs, because five of the mockup's six are backed today. #2958 shipped
 // the shell and the first three and left the slot this comment described;
-// #2957's ledger fills it, adding its name to TOOLS_TABS and its case below
-// and moving nothing else. Policy and Auto-approvals are still their own lanes
-// and arrive the same way.
+// #2957's ledger filled it, and Auto-approvals arrived the same way: its name
+// in TOOLS_TABS, its case below, and nothing else moved. Policy is still its
+// own lane.
 //
 // Each tab makes only the reads it shows, except the switch count on the tab
 // strip: a count in navigation appears where something waits on a person, and
 // a switch that is denying is exactly that. The kernel seam serves one read
 // per request, so the switches tab does not pay for that count twice.
+import type { AgentPage } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
+import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { panel } from "@/ui/control-styles";
 import { useTranslations } from "next-intl";
+import { AutoApprovals } from "./auto-approvals";
 import { Connections } from "./connections";
-import { MandatesLedger } from "./mandates-ledger";
+import { type LedgerGrant, MandatesLedger } from "./mandates-ledger";
 import { Registry } from "./registry";
 import { Switches, switchesOn } from "./switches";
 import { ToolsTabs } from "./tabs";
 import { parseToolsView, type ToolsAt, type ToolsView } from "./view";
 
 /**
- * An org Owner or Admin: exactly what `set_tool_classification` and
- * `set_kill_switch` declare (both grant no workspace role at all), so hiding
+ * An org Owner or Admin: exactly what `set_tool_classification`,
+ * `set_kill_switch`, `set_approval_rules`, `set_approval_rule_enabled` and
+ * `delete_approval_rule` declare (none grants a workspace role), so hiding
  * their controls from anyone else hides nothing the kernel would have allowed.
  * Each of those handlers asserts the same pair itself, on every org tier, and
  * INV-29 pins the assertion — see the note on `canImportTools`.
@@ -68,6 +73,58 @@ function canAdministerOrg(ctx: WsCtx): boolean {
  */
 function canImportTools(ctx: WsCtx): boolean {
   return canAdministerOrg(ctx);
+}
+
+/**
+ * An org Owner, Admin, Billing or Compliance member: every role a consequence
+ * can name. `grant_mandate` asserts, in its handler and on every org tier, an
+ * org role the workspace names for every tag on the mandate
+ * (`assertConsequenceRole`, INV-29), and both the defaults and the workspace's
+ * `consequence_roles` overrides draw only from those four
+ * (`consequenceRolesSchema`). So hiding the control from anyone else hides
+ * nothing the kernel would have allowed.
+ *
+ * It is wider than any one grant. A Billing member may grant `moves_money` and
+ * is refused `destroys_data`, and which tags a person will pick is not known
+ * until they pick them. The handler makes that call and the dialog names its
+ * refusal. The org role is the enforceable one here for the reason
+ * `canImportTools` gives.
+ */
+function canGrantMandates(ctx: WsCtx): boolean {
+  return (
+    ctx.orgRole === "owner" ||
+    ctx.orgRole === "admin" ||
+    ctx.orgRole === "billing" ||
+    ctx.orgRole === "compliance"
+  );
+}
+
+/**
+ * What the grant dialog's picker offers, from one page of `list_agents`. A
+ * retired identity is left out and remembered, so its requested drafts are
+ * offered no Grant: retirement suspends the principal, and a mandate granted
+ * after it can never be drawn. A read with a next page is marked partial, and
+ * the picker says so, rather than presenting the page as every agent.
+ */
+function grantableAgents(read: Read<AgentPage>): LedgerGrant {
+  if (!read.ok) return { agents: { ok: false }, retired: new Set() };
+  const live = read.value.agents.filter((agent) => agent.status !== "retired");
+  return {
+    agents: {
+      ok: true,
+      agents: live.map((agent) => ({
+        id: agent.id,
+        slug: agent.slug,
+        name: agent.name,
+      })),
+      partial: read.value.nextCursor !== null,
+    },
+    retired: new Set(
+      read.value.agents
+        .filter((agent) => agent.status === "retired")
+        .map((agent) => agent.id),
+    ),
+  };
 }
 
 async function TabBody({
@@ -135,8 +192,38 @@ async function TabBody({
       // ledger is what the accountable office reads across agents. `orgRole`
       // goes in because an unaccountable reader is answered a narrowed list
       // and the section must say so rather than present it as the whole.
-      const read = await source.mandates.list(ctx, { agentId: null });
-      return <MandatesLedger read={read} orgRole={ctx.orgRole} />;
+      //
+      // A reader who may grant also gets the agents read, which the picker
+      // needs; anyone else is not charged for it.
+      const [read, agents] = await Promise.all([
+        source.mandates.list(ctx, { agentId: null }),
+        canGrantMandates(ctx)
+          ? source.agents.list(ctx, { cursor: null })
+          : Promise.resolve(null),
+      ]);
+      return (
+        <MandatesLedger
+          read={read}
+          orgRole={ctx.orgRole}
+          at={at}
+          grant={agents === null ? null : grantableAgents(agents)}
+        />
+      );
+    }
+    case "autoapprovals": {
+      // `list_approval_rules` admits an org Owner, Admin or Compliance, so a
+      // Compliance reader sees the rules and the counters with no control on
+      // them. The three writes admit an org Owner or Admin only, which is
+      // `canAdministerOrg` exactly; each handler asserts the same pair.
+      const read = await source.tools.approvalRules(ctx);
+      return (
+        <AutoApprovals
+          at={at}
+          orgRole={ctx.orgRole}
+          canWrite={canAdministerOrg(ctx)}
+          read={read}
+        />
+      );
     }
   }
 }

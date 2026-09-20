@@ -52,6 +52,22 @@ describe("set_approval_rules contract", () => {
     expect(approvalRuleSet.input.parse({ rules: [] })).toEqual({ rules: [] });
   });
 
+  it("takes the set the caller read as an optional `replaces`, in the body shape", () => {
+    const parsed = approvalRuleSet.input.parse({
+      rules: [body],
+      replaces: [],
+    });
+    expect(parsed.replaces).toEqual([]);
+    expect(approvalRuleSet.input.parse({ rules: [] }).replaces).toBeUndefined();
+    // Provenance is the handler's, so a stored rule's stamp is refused here too.
+    expect(
+      approvalRuleSet.input.safeParse({
+        rules: [],
+        replaces: [{ ...body, createdAt: "2026-09-19T00:00:00.000Z" }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("refuses two rules under one id, which would take the stored set dark", () => {
     const duplicate = approvalRuleSet.input.safeParse({
       rules: [body, { ...body, name: "A second rule, same id" }],
