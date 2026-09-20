@@ -6,4 +6,4 @@ model_tier = "complex"
 side_effects = ["read", "write"]
 
 [harness.claude-code]
-color = "green"
+color = "gold"
