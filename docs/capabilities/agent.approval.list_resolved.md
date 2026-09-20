@@ -78,3 +78,7 @@ None.
 | code            | meaning                                    |
 | --------------- | ------------------------------------------ |
 | `invalid_input` | `limit` outside 1–100, `since`/`until` not RFC 3339, or an unknown field. |
+
+## Resumed calls
+
+A stored built-in call includes `execution`: its `status`, the new `runId` when recorded, and a named refusal `reason` when present. `dispatched` means an async capability accepted dispatch. `indeterminate` means the external outcome is unknown and the worker will not retry. Legacy rows omit this object.

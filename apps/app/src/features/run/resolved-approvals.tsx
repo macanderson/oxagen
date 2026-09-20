@@ -47,6 +47,24 @@ function ResolvedApprovalRow({ item }: { item: ResolvedApprovalItem }) {
             })}
           </time>
         </dd>
+        {item.execution && (
+          <>
+            <dt className="text-muted-foreground">{t("execution")}</dt>
+            <dd data-testid="approval-execution">{item.execution.status}</dd>
+            {item.execution.reason && (
+              <>
+                <dt>{t("reason")}</dt>
+                <dd>{item.execution.reason}</dd>
+              </>
+            )}
+            {item.execution.runId && (
+              <>
+                <dt>{t("resumedRun")}</dt>
+                <dd className={`${mono} break-all`}>{item.execution.runId}</dd>
+              </>
+            )}
+          </>
+        )}
       </dl>
     </li>
   );
