@@ -76,7 +76,7 @@ describe("readMainRepository", () => {
       ok: true,
       value: { fullName: "acme/platform", defaultRef: "main" },
     });
-    expect(contextSteeringFreshness.defaultRoles?.workspace?.Member).toBe(
+    expect(contextSteeringFreshness.defaultRoles.workspace.Member).toBe(
       "allow",
     );
     expect(contextSteeringFreshness.defaultEffect).toBe("allow");
