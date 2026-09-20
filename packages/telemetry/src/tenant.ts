@@ -57,42 +57,54 @@ export async function chInsert(
 }
 
 /**
- * Execute a ClickHouse SELECT query, binding `orgId` and `workspaceId` from
- * the active tenant scope as named query params alongside any caller-supplied
- * params. Throws `TenantScopeError` when:
- *  - No scope is active (fail-closed).
- *  - The query string does not mention `org_id` anywhere.
- *
- * The second check is a word-boundary regex over the query text, so it catches
- * only the blunt mistake (`SELECT * FROM events` with no WHERE at all). It is
- * NOT proof of tenant isolation: `org_id` appearing in a SELECT list, a
- * comment, a GROUP BY, or an OR'd predicate all satisfy it. Binding orgId /
- * workspaceId as params does not filter either — the query author still has to
- * write the `WHERE org_id = {orgId:UUID}` clause. Review every new chSelect
- * query for a real equality filter; the regex will not catch it for you.
- *
- * A query that genuinely must run unscoped must use the raw `clickhouse()`
- * client directly inside `packages/telemetry` — not this helper.
- *
- * @returns A `ResponseJSON<T>` envelope with a `data: T[]` field. The "JSON"
- * ClickHouse wire format always wraps rows in this shape; callers destructure
- * `result.data` to access the row array.
+ * Read a single table through a derived source scoped to the active tenant.
+ * Only one SELECT and one unqualified table source are admitted. Joins,
+ * subqueries, comments, and set operations require a dedicated reviewed
+ * reader instead. Tenant parameters override caller-supplied values.
  */
 export async function chSelect<T>(q: {
   query: string;
   params?: Record<string, unknown>;
 }): Promise<ResponseJSON<T>> {
   const { orgId, workspaceId } = requireScope();
-  if (!/\borg_id\b/.test(q.query)) {
-    throw new TenantScopeError(
-      `ClickHouse read must filter by org_id: ${q.query.slice(0, 80)}`,
-    );
-  }
+  const scopedQuery = scopeSelectSource(q.query);
   const ch = await planeClient(orgId);
   const result = await ch.query({
-    query: q.query,
+    query: scopedQuery,
     query_params: { ...q.params, orgId, workspaceId },
     format: "JSON",
   });
   return result.json<T>();
+}
+
+/** Scope the source before any caller predicate, grouping, or aggregation. */
+function scopeSelectSource(query: string): string {
+  const source = /\bFROM\s+([a-z_][a-z0-9_]*)(\s+FINAL)?(?=\s|$)/i.exec(query);
+  const supported =
+    /^\s*SELECT\b/i.test(query) &&
+    (query.match(/\bSELECT\b/gi)?.length ?? 0) === 1 &&
+    (query.match(/\bFROM\b/gi)?.length ?? 0) === 1 &&
+    !/;|--|\/\*|\*\/|#|\b(?:JOIN|UNION|INTERSECT|EXCEPT|WITH|INTO|SETTINGS|FORMAT)\b/i.test(
+      query,
+    );
+  if (!supported || !source) {
+    throw new TenantScopeError(
+      "ClickHouse org_id isolation requires a single-table SELECT",
+    );
+  }
+  const tail = query.slice(source.index + source[0].length);
+  if (
+    !/^\s*(?:$|WHERE\b|GROUP\s+BY\b|HAVING\b|ORDER\s+BY\b|LIMIT\b)/i.test(tail)
+  ) {
+    throw new TenantScopeError(
+      "ClickHouse org_id isolation does not support this table source",
+    );
+  }
+  const table = source[1];
+  const final = source[2] ? " FINAL" : "";
+  return (
+    query.slice(0, source.index) +
+    `FROM (SELECT * FROM ${table}${final} WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}) AS ${table}` +
+    tail
+  );
 }

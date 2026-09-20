@@ -163,6 +163,8 @@ Storage boundaries are enforced (see [`AGENTS.md`](AGENTS.md) and `docs/adr/`):
 
 Tenant isolation is enforced at every layer: Postgres RLS (raw `db()` is banned — `withTenantDb` / `withSystemDb` / `scopedSession` only), ClickHouse predicates, per-workspace Neo4j scoping.
 
+ClickHouse migrations require `DATABASE_URL` for a shared Postgres advisory lock. Use the same coordination database for every migration process targeting one ClickHouse deployment. The runner fails before ClickHouse DDL if it cannot acquire the lock. See [ADR-116](docs/adr/ADR-116-clickhouse-reads-scope-the-source-and-migrations-share-a-lock.md).
+
 ---
 
 ## Getting Started

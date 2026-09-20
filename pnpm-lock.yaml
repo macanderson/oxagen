@@ -1954,6 +1954,9 @@ importers:
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
       zod:
         specifier: 3.25.76
         version: 3.25.76

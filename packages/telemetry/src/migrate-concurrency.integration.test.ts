@@ -40,10 +40,8 @@
 // temporarily calling migrateOnce() directly from migrate() (i.e. removing
 // the queue) — see the PR description for the exact command and output.
 //
-// What this does NOT cover: two SEPARATE processes (module state cannot span
-// processes). See the "Same-process concurrency guard" comment above
-// `migrationQueue` in migrate.ts and issue #2687 for that residual gap and
-// why it is accepted rather than fixed here.
+// The second case starts two OS processes against the CI ClickHouse and
+// Postgres services to exercise the shared advisory lock.
 //
 // Like this package's other DDL-lifecycle integration tests, this runs
 // against the real local ClickHouse (docker :8123) and skips cleanly when it
@@ -51,6 +49,8 @@
 // cannot distinguish "the DROP ran once" from "the DROP ran twice", which is
 // the entire content of this defect.
 
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 process.env.CLICKHOUSE_URL ??= "http://localhost:8123";
@@ -146,4 +146,73 @@ describe.skipIf(!chUp)(
       }
     }, 60_000);
   },
+);
+
+it.skipIf(!chUp || !process.env.DATABASE_URL)(
+  "two processes record a destructive migration only once",
+  async () => {
+    const { migrate } = await import("./migrate");
+    const { clickhouse } = await import("./clickhouse");
+    await migrate();
+    await clickhouse().command({
+      query: "ALTER TABLE _migrations DELETE WHERE filename = {f:String}",
+      query_params: { f: RACED_FILE },
+      clickhouse_settings: { mutations_sync: "1" },
+    });
+    const code = `
+    import { migrate } from './src/migrate.ts';
+    import { closeClickhouse } from './src/clickhouse.ts';
+    process.send('ready');
+    process.once('message', async () => {
+      try { await migrate(); await closeClickhouse(); process.exit(0); }
+      catch (error) { console.error(error); process.exit(1); }
+    });
+  `;
+    const children = [0, 1].map(() =>
+      spawn(
+        process.execPath,
+        ["--import", "tsx", "--input-type=module", "-e", code],
+        {
+          cwd: fileURLToPath(new URL("..", import.meta.url)),
+          env: process.env,
+          stdio: ["ignore", "pipe", "pipe", "ipc"],
+        },
+      ),
+    );
+    try {
+      const done = children.map(
+        (child) =>
+          new Promise<void>((resolve, reject) => {
+            let errors = "";
+            child.stderr?.on("data", (chunk: Buffer) => {
+              errors += chunk.toString();
+            });
+            child.stdout?.resume();
+            child.once("error", reject);
+            child.once("exit", (code) =>
+              code === 0 ? resolve() : reject(new Error(errors)),
+            );
+          }),
+      );
+      const start = Promise.all(
+        children.map(
+          (child) =>
+            new Promise<void>((resolve, reject) => {
+              child.once("message", () => resolve());
+              child.once("error", reject);
+              child.once("exit", () =>
+                reject(new Error("Migration worker exited before ready")),
+              );
+            }),
+        ),
+      ).then(() => {
+        for (const child of children) child.send("start");
+      });
+      await Promise.all([...done, start]);
+      expect(await ledgerCountFor(RACED_FILE)).toBe(1);
+    } finally {
+      for (const child of children) if (child.exitCode === null) child.kill();
+    }
+  },
+  60_000,
 );
