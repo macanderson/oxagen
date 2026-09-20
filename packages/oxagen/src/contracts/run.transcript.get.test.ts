@@ -20,6 +20,7 @@ const half = {
   fidelity: "full",
   text: '{"path":"README.md"}',
   truncated: false,
+  assembly: null,
 };
 
 const entry = {

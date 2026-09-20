@@ -657,8 +657,7 @@
           "healthy": "reachable",
           "degraded": "not health checked",
           "unreachable": "unreachable"
-        },
-        "stdioNote": "A stdio server is not probed from here, so it is recorded as not health checked and pins no tool until one is discovered."
+        }
       }
     }
   }
