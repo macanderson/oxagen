@@ -26,7 +26,6 @@ import {
 } from "@/ui/control-styles";
 import { tabLink } from "@/ui/route-tabs";
 import { headCell } from "@/ui/table";
-import { badgeBase } from "@/ui/badge";
 import { APP_DIR, listFiles, WHOLE_TREE_TIMEOUT_MS } from "./parse";
 
 const RULE = "design-record";
@@ -87,10 +86,9 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(statValue).toContain("tabular-nums");
   });
 
-  it("`.btn` at rest is the panel fill; `.b` is a bordered pill", () => {
-    expect(buttonSecondary).toContain("bg-card");
-    expect(badgeBase).toContain("border");
-    expect(badgeBase).toContain("rounded-md");
+  it("`.btn` at rest is the panel fill", () => {
+    expect(lightRoot()).toMatch(/--button-default-bg:\s*var\(--panel\)/);
+    expect(buttonSecondary).toContain("bg-button-default-bg");
   });
 });
 
@@ -123,8 +121,9 @@ function hits(files: readonly string[], pattern: RegExp, name: string): string[]
   return out;
 }
 
-describe("design record: no page draws around the recipes", () => {
-  const files = listFiles("src").filter(
+/** Every production module and stylesheet under src/, but the recipes and this test. */
+function scanned(): string[] {
+  return listFiles("src").filter(
     (file) =>
       file !== SELF &&
       !RECIPES.has(file) &&
@@ -132,11 +131,14 @@ describe("design record: no page draws around the recipes", () => {
       !/\.test\.tsx?$/.test(file) &&
       /\.(tsx?|css)$/.test(file),
   );
+}
+
+describe("design record: no page draws around the recipes", () => {
 
   it(
     "no file under src/ paints with the kit's ink primary",
     () => {
-      expect(hits(files, INK_PRIMARY, "ink-primary")).toEqual([]);
+      expect(hits(scanned(), INK_PRIMARY, "ink-primary")).toEqual([]);
     },
     WHOLE_TREE_TIMEOUT_MS,
   );
@@ -144,7 +146,7 @@ describe("design record: no page draws around the recipes", () => {
   it(
     "no file under src/ draws a stat tile by hand",
     () => {
-      expect(hits(files, HAND_TILE, "hand-tile")).toEqual([]);
+      expect(hits(scanned(), HAND_TILE, "hand-tile")).toEqual([]);
     },
     WHOLE_TREE_TIMEOUT_MS,
   );

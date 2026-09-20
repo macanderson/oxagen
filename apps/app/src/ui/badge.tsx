@@ -29,7 +29,7 @@ const TONE: Record<BadgeTone, string> = {
   quiet: "border-border bg-hl text-muted-foreground",
 };
 
-export const badgeBase =
+const badgeBase =
   "inline-flex items-center gap-[5px] whitespace-nowrap rounded-md border px-[7px] py-0.5 text-[11px] font-semibold leading-normal tracking-[0.02em]";
 
 export function Badge({

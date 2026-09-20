@@ -97,6 +97,12 @@
     --button-primary-border: var(--gold);
     --button-primary-hover-bg: var(--gold-bright);
     --button-primary-active-bg: var(--gold-deep);
+    /* `.btn { background:var(--panel); border-color:var(--border) }` and the
+       wash on hover; the kit's default button is transparent. */
+    --button-default-bg: var(--panel);
+    --button-default-border: var(--border);
+    --button-default-hover-bg: var(--hl);
+    --button-default-active-bg: var(--hl);
     /* `.tab[aria-selected] { border-bottom-color: var(--gold) }` */
     --tab-border-active: var(--gold);
     /* `.navitem { color: var(--muted) }`; current and hover take the ink. */

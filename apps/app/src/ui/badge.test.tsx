@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // The one state badge: a tone is a state hue on the ink, the border and the
 // wash; the dot is on by default and off for a fact; a data attribute the
 // caller passes reaches the element, because every page reads the state off it.
