@@ -6,11 +6,20 @@ import { minimalSession } from "../test-helpers";
 import { scratchPaths } from "./test-support";
 import { Wal } from "./wal";
 
-const fault = vi.hoisted(() => ({ partialBodyWrite: false }));
+const fault = vi.hoisted(() => ({
+  partialBodyWrite: false,
+  wholeBodyReadForbidden: false,
+}));
 vi.mock("node:fs", async (original) => {
   const fs = await original<typeof import("node:fs")>();
   return {
     ...fs,
+    readFileSync: (...args: Parameters<typeof fs.readFileSync>) => {
+      if (fault.wholeBodyReadForbidden && String(args[0]).endsWith(".bodies.jsonl")) {
+        throw new Error("whole-file body read exceeds the string limit");
+      }
+      return fs.readFileSync(...args);
+    },
     appendFileSync: (...args: Parameters<typeof fs.appendFileSync>) => {
       if (fault.partialBodyWrite && String(args[0]).endsWith(".bodies.jsonl")) {
         fault.partialBodyWrite = false;
@@ -25,6 +34,7 @@ vi.mock("node:fs", async (original) => {
 });
 afterEach(() => {
   fault.partialBodyWrite = false;
+  fault.wholeBodyReadForbidden = false;
 });
 
 function setup() {
@@ -46,6 +56,31 @@ function setup() {
 }
 
 describe("WAL body failure isolation", () => {
+  it("streams bodies across read chunks while skipping malformed records", () => {
+    const { session, report, wal, bodyPath, body } = setup();
+    const largeBody = {
+      ...body(0),
+      bytes: new TextEncoder().encode("retained content é".repeat(10_000)),
+    };
+    wal.append(session.slice(0, 1), [largeBody]);
+    appendFileSync(bodyPath, "{broken\n");
+    wal.append(session.slice(1), [body(1)]);
+    fault.wholeBodyReadForbidden = true;
+    expect(wal.bodiesFor(session)).toEqual(
+      [largeBody, body(1)].map((entry) => ({
+        event_id_idem: entry.event_id_idem,
+        content_type: entry.content_type,
+        bytes_base64: Buffer.from(entry.bytes).toString("base64"),
+      })),
+    );
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith({
+      session_uuid: session[0]?.session_uuid,
+      operation: "read",
+      code: "invalid_body_record",
+    });
+  });
+
   it("persists sealed events when the actual body path is unwritable and later resumes body storage", () => {
     const { paths, session, uuid, report, wal, bodyPath, body } = setup();
     mkdirSync(bodyPath);
