@@ -293,7 +293,9 @@ describe("propose_agent", () => {
     facts.agentKey = null;
     const out = await handler()(input(), ctx());
     expect(out.agentKey).toBeNull();
-    expect(github.pulls[0]!.body).toContain("creates the agent's principal");
+    expect(github.pulls[0]!.body).toContain(
+      "After merge, register this agent under the same slug to create its identity and credential.",
+    );
   });
 
   it("refuses a caller who is not an org Owner or Admin before reading anything (negative)", async () => {
