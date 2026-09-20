@@ -100,114 +100,74 @@ describe("computeParity — forward gate", () => {
   });
 });
 
-describe("computeParity — a second page in `also`", () => {
+describe("computeParity — also, the second page a capability is bound on", () => {
   const pageExists = (p: string) =>
-    p === "apps/app/.../real-page.tsx" || p === "apps/app/.../fleet.tsx";
+    p === "apps/app/.../real-page.tsx" || p === "apps/app/.../second-page.tsx";
   const primary = {
     page: "apps/app/.../real-page.tsx",
-    proof: "verifications/s/x.png",
+    proof: "apps/app/src/features/x/x.test.tsx",
   };
-
-  it("passes a second surface whose page exists and carries a proof", () => {
-    const bindings = {
-      create_api_key: {
-        ...primary,
-        also: [
-          {
-            route: "/[org]/[ws]",
-            page: "apps/app/.../fleet.tsx",
-            proof: "apps/app/src/features/fleet/row.test.tsx",
-          },
-        ],
-      },
-    };
-    const { forward } = computeParity({
+  const gaps = (also: unknown) =>
+    computeParity({
       caps: CAPS,
-      bindings,
+      bindings: { create_api_key: { ...primary, also } },
       invoked: new Set(),
       pageExists,
-    });
-    expect(forward).toHaveLength(0);
+    }).forward;
+
+  it("passes a binding whose also entry has a page on disk and a proof", () => {
+    expect(
+      gaps([
+        { page: "apps/app/.../second-page.tsx", proof: "apps/app/b.test.tsx" },
+      ]),
+    ).toHaveLength(0);
   });
 
-  it("flags an `also` page that is not on disk", () => {
-    const bindings = {
-      create_api_key: {
-        ...primary,
-        also: [{ page: "apps/app/.../ghost.tsx", proof: "x.test.tsx" }],
-      },
-    };
+  it("flags an also entry whose page is missing on disk", () => {
+    const [gap] = gaps([
+      { page: "apps/app/.../ghost.tsx", proof: "apps/app/b.test.tsx" },
+    ]);
+    expect(gap).toMatchObject({ capability: "create_api_key" });
+    expect(gap!.reason).toContain("binding.also[0].page missing on disk");
+  });
+
+  it("flags an also entry that carries no runtime proof", () => {
+    const [gap] = gaps([{ page: "apps/app/.../second-page.tsx" }]);
+    expect(gap!.reason).toContain("binding.also[0] has no runtime `proof`");
+  });
+
+  it("reports the index of the failing entry, not the first one", () => {
+    const [gap] = gaps([
+      { page: "apps/app/.../second-page.tsx", proof: "apps/app/b.test.tsx" },
+      { page: "apps/app/.../ghost.tsx", proof: "apps/app/c.test.tsx" },
+    ]);
+    expect(gap!.reason).toContain("binding.also[1]");
+  });
+
+  it("flags a mistyped also rather than skipping it (negative)", () => {
+    expect(gaps("apps/app/.../second-page.tsx")[0]!.reason).toContain(
+      "binding.also is not an array",
+    );
+    expect(gaps(["apps/app/.../second-page.tsx"])[0]!.reason).toContain(
+      "binding.also[0] is not an object",
+    );
+  });
+
+  it("judges the primary binding first: a broken primary hides nothing", () => {
     const { forward } = computeParity({
       caps: CAPS,
-      bindings,
+      bindings: {
+        create_api_key: {
+          page: "apps/app/.../ghost.tsx",
+          proof: "p",
+          also: [{ page: "apps/app/.../second-page.tsx", proof: "q" }],
+        },
+      },
       invoked: new Set(),
       pageExists,
     });
     expect(forward).toHaveLength(1);
-    expect(forward[0]!.reason).toContain("also[0].page missing on disk");
-  });
-
-  it("flags an `also` entry with no proof, the way the primary binding is", () => {
-    const bindings = {
-      create_api_key: {
-        ...primary,
-        also: [{ page: "apps/app/.../fleet.tsx" }],
-      },
-    };
-    const { forward } = computeParity({
-      caps: CAPS,
-      bindings,
-      invoked: new Set(),
-      pageExists,
-    });
-    expect(forward[0]!.reason).toContain("also[0] has no runtime `proof`");
-  });
-
-  it("blocks under the ratchet like any other forward gap", () => {
-    const bindings = {
-      create_api_key: {
-        ...primary,
-        also: [{ page: "apps/app/.../ghost.tsx", proof: "x.test.tsx" }],
-      },
-    };
-    const { blocking } = computeParity({
-      caps: CAPS,
-      bindings,
-      invoked: new Set(),
-      pageExists,
-      baseline: new Set(),
-    });
-    expect(blocking.map((g) => g.capability)).toEqual(["create_api_key"]);
-  });
-});
-
-describe("alsoGaps", () => {
-  const pageExists = (p: string) => p === "real.tsx";
-
-  it("treats a binding with no `also` as no gap, so one-surface bindings are unchanged", () => {
-    expect(alsoGaps("create_api_key", undefined, pageExists)).toEqual([]);
-  });
-
-  it("rejects an `also` that is not an array (negative)", () => {
-    const gaps = alsoGaps("create_api_key", { page: "real.tsx" }, pageExists);
-    expect(gaps[0]!.reason).toContain("not an array");
-  });
-
-  it("rejects an entry that is not an object (negative)", () => {
-    const gaps = alsoGaps("create_api_key", ["real.tsx"], pageExists);
-    expect(gaps[0]!.reason).toContain("not a {route, page, proof} object");
-  });
-
-  it("reports every bad entry with its index, not only the first", () => {
-    const gaps = alsoGaps(
-      "create_api_key",
-      [{ page: "gone.tsx", proof: "p" }, { page: "real.tsx" }],
-      pageExists,
-    );
-    expect(gaps.map((g) => g.reason)).toEqual([
-      expect.stringContaining("also[0].page missing on disk"),
-      expect.stringContaining("also[1] has no runtime `proof`"),
-    ]);
+    expect(forward[0]!.reason).toContain("binding.page missing on disk");
   });
 });
 

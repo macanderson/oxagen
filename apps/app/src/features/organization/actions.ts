@@ -1,4 +1,5 @@
 "use server";
+import { INVITABLE_ROLES, type InvitableRole } from "./invitation-roles";
 // The two writes on the People page (ARCHITECTURE.md §1.2): change a member's
 // organization role and remove a member. Both run through the kernel seam for
 // the organization the URL names, both are `noBillingGate` (INV-28, WL-22), and
@@ -6,6 +7,10 @@
 // anyone else is answered `denied` with nothing changed. The handlers refuse the
 // demotion or removal of the last owner with `HandlerError { code: "conflict",
 // reason: "last_owner" }`, which the seam classifies as `conflict`.
+//
+// Organization › People also sends an invitation (#2964). It is the one write
+// here whose contract is named for a workspace and records an organization
+// row; `sendInvitation` below says why the picked scope grants nothing.
 //
 // The Organization writes a person starts from the Roles page and the
 // Workspaces section (#2964), each through the kernel seam for the
@@ -26,6 +31,7 @@ import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.change";
 import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
+import { workspaceInviteSend } from "@oxagen/oxagen/contracts/workspace.invite.send";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import { GrantableOrgRole } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
@@ -237,5 +243,75 @@ export async function removeOrgMember(
   });
   return result.ok
     ? { ok: true, value: { memberId: result.value.targetUserId } }
+    : result;
+}
+
+/**
+ * The three roles `send_workspace_invite` offers, in the spelling its contract
+ * takes. The handler title-cases the one picked into the organization role the
+ * invitation row records (`mapRole`, packages/handlers/src/workspace.invite.send.ts),
+ * so this is an organization role under a workspace-shaped name, and the
+ * picker offers exactly what the contract admits.
+ */
+const isInvitable = (role: string): role is InvitableRole =>
+  INVITABLE_ROLES.some((known) => known === role);
+
+export type InvitationDraft = {
+  email: string;
+  /** One of INVITABLE_ROLES; anything else is refused on `role` before the kernel runs. */
+  role: string;
+  /** Left blank, the invitation is sent with no note. */
+  message: string;
+};
+
+/** The invitation row the handler answered with: the one it made, or the one already pending. */
+export type InvitationSent = { id: string; status: string; expiresAt: string };
+
+/**
+ * Invites someone to this organization.
+ *
+ * The capability is named for a workspace and declared `scoped`, but the row it
+ * writes is the organization's: the handler inserts into `invitations` with
+ * `orgId` and a title-cased organization role, and records no workspace column
+ * (packages/handlers/src/workspace.invite.send.ts:35-50). The workspace the
+ * kernel enters is invocation scope alone, and on this page that is the
+ * org-only sentinel an `OrgCtx` carries, the same scope the other Organization
+ * writes run under. So the dialog asks for no workspace and its copy grants
+ * none: the invitation admits the person to the organization with the role
+ * picked, and nothing more.
+ *
+ * A second invitation for an email that is already pending is not a failure.
+ * The handler's insert conflicts, it re-reads the pending row and answers with
+ * it (:58-76), so this returns `ok` with the existing invitation's id and the
+ * page says the person was already invited.
+ */
+export async function sendInvitation(
+  org: string,
+  draft: InvitationDraft,
+): Promise<ActionResult<InvitationSent>> {
+  const ctx = await requireViewer(org);
+  if (!isInvitable(draft.role)) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "role_not_invitable",
+      field: "role",
+    };
+  }
+  const message = draft.message.trim();
+  const result = await kernelWrite(ctx, workspaceInviteSend, {
+    email: draft.email.trim(),
+    role: draft.role,
+    ...(message === "" ? {} : { message }),
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          id: result.value.id,
+          status: result.value.status,
+          expiresAt: result.value.expires_at,
+        },
+      }
     : result;
 }

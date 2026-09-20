@@ -8,7 +8,7 @@
     "proof": "path to the runtime proof: an apps/app component or action test, or verifications/<session>/<name>.png",
     "verifiedAt": "YYYY-MM-DD the proof was captured against a working page",
     "verifiedBy": "session id that captured it",
-    "also": "optional array of the further pages the same capability is operated from, each {route, page, entry, proof, verifiedAt, verifiedBy}; check_ui_parity holds every entry to the primary binding's bar, a page on disk and a proof"
+    "also": "optional array of the second and later pages the same capability is operated on, each entry shaped like the binding itself (route, page, entry, optional testid, proof) and held to the same bar by check_ui_parity.mjs"
   },
   "bindings": {
     "accept_member_invite": {
@@ -98,7 +98,18 @@
       "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes create_enrollment_token (features/onboarding/actions.ts)",
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]/agents/[agent]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+          "entry": "/[org]/[ws]/agents/[agent]?tab=enrollment — Enroll a host mints the token and shows the oxagen agent enroll command once (features/agents/enrollment-controls.tsx, features/agents/actions.ts)",
+          "testid": "enroll-host",
+          "proof": "apps/app/src/features/agents/enrollment-controls.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "mc-3-enrollment"
+        }
+      ]
     },
     "create_org": {
       "route": "/new-organization",
@@ -223,6 +234,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "assign_agent_role": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=identity — Assign a role on the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
+      "proof": "apps/app/src/features/agents/role-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc-3-roles"
+    },
     "get_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
@@ -235,9 +254,9 @@
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
       "entry": "/[org]/[ws]/agents/[agent] — the rev1 surface that invokes get_agent_toolbelt (data/live/agents.ts, data/live/mappers/agents.ts)",
-      "proof": "apps/app/src/features/agents/agent.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "proof": "apps/app/src/features/agents/toolbelt.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc-3-schemas"
     },
     "get_context_pr": {
       "route": "/[org]/[ws]/steering",
@@ -390,7 +409,17 @@
       "entry": "/[org]/[ws]/spend — the rev1 surface that invokes get_spend_budget (data/live/mappers/spend.ts, data/live/spend.ts)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]/agents/[agent]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+          "entry": "/[org]/[ws]/agents/[agent]?tab=budgets — the ceiling this agent runs under, read-only, beside the agent-scope line the contract cannot answer (features/agents/budget-panel.tsx, data/live/agents.ts)",
+          "proof": "apps/app/src/features/agents/budget-panel.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "mc-3-enrollment"
+        }
+      ]
     },
     "get_spend_drill": {
       "route": "/[org]/[ws]/spend",
@@ -730,6 +759,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "revoke_agent_role": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=identity — Revoke on each row of the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
+      "proof": "apps/app/src/features/agents/role-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc-3-roles"
+    },
     "revoke_api_key": {
       "route": "/[org]/api-keys",
       "page": "apps/app/src/app/[org]/api-keys/page.tsx",
@@ -754,6 +791,15 @@
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
     },
+    "revoke_tacho_enrollment": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=enrollment — Revoke on a host row, confirmed by hostname, with an optional reason (features/agents/enrollment-controls.tsx, features/agents/actions.ts)",
+      "testid": "revoke-host",
+      "proof": "apps/app/src/features/agents/enrollment-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "mc-3-enrollment"
+    },
     "rotate_agent_credential": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
@@ -769,6 +815,15 @@
       "proof": "apps/app/src/features/organization/key-row.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "send_workspace_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — Organization › Pending invitations › “Invite”: an email, the role the invitation offers, and an optional note. The contract is scoped, so the kernel enters the org-only workspace sentinel an OrgCtx carries, and the handler records an organization invitation with no workspace, which is why the dialog asks for none (features/organization/invite-dialog.tsx, features/organization/actions.ts)",
+      "testid": "send-invitation",
+      "proof": "apps/app/src/features/organization/invite-dialog.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc3-invite"
     },
     "set_approval_rule_enabled": {
       "route": "/[org]/[ws]/tools?tab=autoapprovals",

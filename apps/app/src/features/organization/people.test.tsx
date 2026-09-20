@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // Organization › People over org.members: the tabs, the members with the two
-// writes their row carries and pending invitations in the ok state, each
+// writes their row carries, pending invitations with the Invite control that
+// adds one, each
 // section's empty line, and the denied, pending-approval and error states that
 // replace both sections. Every state is checked with axe. Roles is a tab of its
 // own and Workspaces is a sibling section of the same page, so neither renders
@@ -25,6 +26,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("./actions", () => ({
   changeMemberRole: vi.fn(),
   removeOrgMember: vi.fn(),
+  sendInvitation: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -187,6 +189,38 @@ describe("the writes on a member's row", () => {
     );
     expect(screen.queryByRole("button", { name: "Change role" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+  });
+});
+
+describe("the Invite control", () => {
+  it("an Owner opens it from the Pending invitations section", async () => {
+    await renderPeople(readOk(roster));
+    const invitations = screen.getByRole("region", {
+      name: "Pending invitations",
+    });
+    expect(
+      within(invitations).getByRole("button", { name: "Invite" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("invite-denied")).toBeNull();
+  });
+
+  it("a Member reads the refusal in its place, and opens nothing (negative)", async () => {
+    await renderPeople(readOk(roster), "member");
+    expect(screen.getByTestId("invite-denied")).toHaveTextContent(
+      "Inviting someone is an Owner and Admin action.",
+    );
+    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
+  });
+
+  it("stays offered when no invitation is waiting", async () => {
+    await renderPeople(readOk({ members: [], invitations: [] }));
+    expect(screen.getByRole("button", { name: "Invite" })).toBeInTheDocument();
+  });
+
+  it("is not offered when the read did not list (negative)", async () => {
+    await renderPeople(readError("control_plane_unavailable", 503));
+    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
+    expect(screen.queryByTestId("invite-denied")).toBeNull();
   });
 });
 

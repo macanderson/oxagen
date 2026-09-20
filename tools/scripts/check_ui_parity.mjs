@@ -202,51 +202,48 @@ export function resolveInvoked(src, validNames, identToName) {
 }
 
 /**
- * The gaps in a binding's `also` array: every further page the same capability
- * is operated from. Each entry is checked the way the primary binding is, so a
- * second surface cannot be listed without a page on disk and a proof.
+ * One bound surface judged by the same two rules as any other: its `page`
+ * exists on disk and it carries a runtime `proof`. Returns the reason it
+ * fails, or null.
  *
- * A missing `also` is not a gap. Most capabilities have one surface, and the
- * registry's shape stays what it was for them.
+ * @param {{page?:string, proof?:string}} surface
+ * @param {(p:string)=>boolean} pageExists
+ * @param {string} label - what to call the surface in the reason ("binding", "binding.also[0]")
+ */
+function surfaceGap(surface, pageExists, label) {
+  if (!surface.page || !pageExists(surface.page))
+    return `${label}.page missing on disk: ${surface.page ?? "(unset)"}`;
+  if (!surface.proof)
+    return `${label} has no runtime \`proof\` (screenshot under verifications/ or an e2e spec)`;
+  return null;
+}
+
+/**
+ * The `also` array: the second and later pages one capability is operated on.
  *
- * @param {string} capability - the capability name, for the gap's label
- * @param {unknown} also - the binding's `also` value, usually undefined
+ * The registry holds one object per capability name, so a capability a person
+ * reaches from two places (create_enrollment_token from the register flow and
+ * from an agent's Enrollment tab) could only be recorded once. A duplicate key
+ * is not an option: JSON keeps the last one and the first page silently
+ * stops being checked. So the extra pages go in `also`, and each entry is held to
+ * the same bar as the primary binding: a page that exists and a proof that
+ * names it. An `also` that is not an array is itself the gap, because a
+ * mistyped binding that is quietly skipped is how a dead surface looks done.
+ *
+ * @param {{also?:unknown}} binding
  * @param {(p:string)=>boolean} pageExists
  */
-export function alsoGaps(capability, also, pageExists) {
-  if (also === undefined) return [];
-  if (!Array.isArray(also)) {
-    return [
-      {
-        capability,
-        reason: "binding.also is not an array of {route, page, proof} entries",
-      },
-    ];
+function alsoGap(binding, pageExists) {
+  const { also } = binding;
+  if (also === undefined) return null;
+  if (!Array.isArray(also)) return "binding.also is not an array";
+  for (const [i, surface] of also.entries()) {
+    if (typeof surface !== "object" || surface === null)
+      return `binding.also[${i}] is not an object`;
+    const gap = surfaceGap(surface, pageExists, `binding.also[${i}]`);
+    if (gap) return gap;
   }
-  const gaps = [];
-  also.forEach((entry, i) => {
-    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
-      gaps.push({
-        capability,
-        reason: `binding.also[${i}] is not a {route, page, proof} object`,
-      });
-      return;
-    }
-    if (!entry.page || !pageExists(entry.page)) {
-      gaps.push({
-        capability,
-        reason: `binding.also[${i}].page missing on disk: ${entry.page ?? "(unset)"}`,
-      });
-      return;
-    }
-    if (!entry.proof) {
-      gaps.push({
-        capability,
-        reason: `binding.also[${i}] has no runtime \`proof\` (screenshot under verifications/ or a component/action test)`,
-      });
-    }
-  });
-  return gaps;
+  return null;
 }
 
 /**
@@ -283,21 +280,13 @@ export function computeParity({
       });
       continue;
     }
-    if (!b.page || !pageExists(b.page)) {
-      forward.push({
-        capability: cap.name,
-        reason: `binding.page missing on disk: ${b.page ?? "(unset)"}`,
-      });
+    const gap = surfaceGap(b, pageExists, "binding");
+    if (gap) {
+      forward.push({ capability: cap.name, reason: gap });
       continue;
     }
-    if (!b.proof) {
-      forward.push({
-        capability: cap.name,
-        reason:
-          "binding has no runtime `proof` (screenshot under verifications/ or an e2e spec)",
-      });
-    }
-    forward.push(...alsoGaps(cap.name, b.also, pageExists));
+    const extra = alsoGap(b, pageExists);
+    if (extra) forward.push({ capability: cap.name, reason: extra });
   }
   const blocking = forward.filter((g) => !baseline.has(g.capability));
   const reverse = [];

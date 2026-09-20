@@ -12,14 +12,104 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { isHandlerError } from "@oxagen/oxagen";
 import { schema } from "@oxagen/database";
+import { createHash } from "node:crypto";
 import {
+  BELT_SCHEMA_BYTE_LIMIT,
   FULL_BELT_LIMIT,
   agentToolbeltGet,
+  beltToolSchema,
 } from "@oxagen/oxagen/contracts/agent.toolbelt.get";
+import { beltSchemaFacts } from "./agent.toolbelt.get";
 
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+
+describe("beltSchemaFacts", () => {
+  const sha = (text: string) =>
+    createHash("sha256").update(text, "utf8").digest("hex");
+
+  it("digests the canonical schema, so key order is not identity", () => {
+    const one = beltSchemaFacts(
+      { type: "object", properties: { b: {}, a: {} } },
+      "declared",
+      { tool: "t" },
+    );
+    const two = beltSchemaFacts(
+      { properties: { a: {}, b: {} }, type: "object" },
+      "declared",
+      { tool: "t" },
+    );
+    expect(one.schemaDigest).toBe(two.schemaDigest);
+    expect(one.schemaDigest).toBe(
+      sha('{"properties":{"a":{},"b":{}},"type":"object"}'),
+    );
+    expect(one).toMatchObject({
+      schemaOrigin: "declared",
+      schemaTruncated: false,
+    });
+    expect(one.inputSchema).toEqual({
+      type: "object",
+      properties: { b: {}, a: {} },
+    });
+  });
+
+  it("carries a schema over the cap as its digest alone", () => {
+    const big = {
+      type: "object",
+      description: "x".repeat(BELT_SCHEMA_BYTE_LIMIT),
+    };
+    const facts = beltSchemaFacts(big, "imported", { tool: "srv__big" });
+    expect(facts.inputSchema).toBeNull();
+    expect(facts.schemaTruncated).toBe(true);
+    expect(facts.schemaOrigin).toBe("imported");
+    expect(facts.schemaDigest).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("reports no schema for a value that is not a JSON Schema object", () => {
+    for (const value of [null, undefined, "{}", 7, [{ type: "object" }]]) {
+      expect(beltSchemaFacts(value, "declared", { tool: "t" })).toEqual({
+        inputSchema: null,
+        schemaOrigin: null,
+        schemaDigest: null,
+        schemaTruncated: false,
+      });
+    }
+  });
+
+  it("reports no schema, rather than failing the read, for a row with no canonical form", () => {
+    const facts = beltSchemaFacts({ type: new Map() }, "imported", {
+      tool: "srv__broken",
+    });
+    expect(facts.schemaDigest).toBeNull();
+    expect(facts.inputSchema).toBeNull();
+  });
+
+  it("parses through the contract on a belt entry", () => {
+    const entry = {
+      name: "list_agent_defs",
+      kind: "capability" as const,
+      server: null,
+      category: null,
+      riskLevel: "low" as const,
+      decision: "allow" as const,
+      rule: "agent:7:role_grant",
+      readOnly: true,
+      ...beltSchemaFacts({ type: "object" }, "declared", { tool: "x" }),
+    };
+    expect(() => beltToolSchema.parse(entry)).not.toThrow();
+    // The fields are optional: an entry written before them still parses.
+    const { inputSchema, schemaOrigin, schemaDigest, schemaTruncated, ...old } =
+      entry;
+    expect(() => beltToolSchema.parse(old)).not.toThrow();
+    expect([inputSchema, schemaOrigin, schemaDigest, schemaTruncated]).toEqual([
+      { type: "object" },
+      "declared",
+      sha('{"type":"object"}'),
+      false,
+    ]);
+  });
+});
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "get_agent_toolbelt against Postgres",
@@ -185,6 +275,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(byName.get("list_agent_environments")).toMatchObject({
         decision: "require_approval",
       });
+      // A capability carries the schema the model is handed, derived from the
+      // contract, with the digest that identifies it.
+      const withSchema = byName.get("list_agent_defs")!;
+      expect(withSchema.schemaOrigin).toBe("declared");
+      expect(withSchema.schemaDigest).toMatch(/^[0-9a-f]{64}$/);
+      expect(withSchema.schemaTruncated).toBe(false);
+      expect(withSchema.inputSchema).toMatchObject({ type: "object" });
       // A tool with no grant on the agent side is out of sight, with the
       // deciding step named; every excluded name is off the belt.
       const cut = out.cannotSee.find((c) => c.name === "delete_agent_def");
@@ -202,9 +299,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("lists MCP tools only from the servers the runtime loads: an install that is off and a server with no listing contribute nothing", async () => {
       const out = agentToolbeltGet.output.parse(await belt("granted"));
+      // The server's cached tools/list snapshot holds names only, and these
+      // tools were never imported into the registry, so the entry reports no
+      // schema rather than a placeholder.
       expect(out.tools.find((t) => t.name === "live__ping")).toMatchObject({
         kind: "mcp",
         category: "external",
+        inputSchema: null,
+        schemaOrigin: null,
+        schemaDigest: null,
+        schemaTruncated: false,
       });
       const listed = [
         ...out.tools.map((t) => t.name),

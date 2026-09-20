@@ -16,6 +16,7 @@ import {
   committedDefinition,
   incident,
   incidentPage,
+  spendBudgets,
   toolbelt,
 } from "./agents.builders";
 
@@ -42,7 +43,10 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Agent } = await import("./agent");
 
-const ctx = unsafeMint(WsCtx, {
+// The fields, kept apart from the minted viewer: a test that wants the same
+// viewer in another org role mints a second one from these rather than
+// spreading the first, which is a class instance and not a plain object.
+const CTX_FIELDS = {
   userId: "usr_marcusbell",
   orgId: "7a000000-0000-4000-8000-0000000000a1",
   orgSlug: "acme",
@@ -52,16 +56,20 @@ const ctx = unsafeMint(WsCtx, {
   wsSlug: "core-platform",
   wsName: "Core platform",
   wsRole: "member",
-});
+} as const;
+
+const ctx = unsafeMint(WsCtx, CTX_FIELDS);
 
 async function renderAgent(
   reads: Parameters<typeof agentsSource>[0],
   tab: string | null = null,
   cursor: string | null = null,
+  /** The viewer, for the cases that turn on the organization role it holds. */
+  viewer = ctx,
 ) {
   const { source, calls } = agentsSource(reads);
   const element = await Agent({
-    ctx,
+    ctx: viewer,
     source,
     agent: "release-bot",
     tab,
@@ -107,7 +115,7 @@ describe("Agent header and tabs", () => {
     expect(within(header).queryByRole("link")).toBeNull();
   });
 
-  it("links the six sections a store backs, and no Budgets or Runs tab (negative)", async () => {
+  it("links the seven sections a store backs, and no Runs tab (negative)", async () => {
     await renderAgent({ get: readOk(agentDetail()) });
     const links = within(
       screen.getByRole("navigation", { name: "Agent sections" }),
@@ -116,6 +124,7 @@ describe("Agent header and tabs", () => {
       ["Identity", "/acme/core-platform/agents/release-bot?tab=identity"],
       ["Toolbelt", "/acme/core-platform/agents/release-bot?tab=toolbelt"],
       ["Enrollment", "/acme/core-platform/agents/release-bot?tab=enrollment"],
+      ["Budgets", "/acme/core-platform/agents/release-bot?tab=budgets"],
       [
         "Tamper incidents",
         "/acme/core-platform/agents/release-bot?tab=incidents",
@@ -126,7 +135,53 @@ describe("Agent header and tabs", () => {
       ],
       ["Mandates", "/acme/core-platform/agents/release-bot?tab=mandates"],
     ]);
-    expect(document.body).not.toHaveTextContent(/budget|trust|score/i);
+    // Runs per agent still has no contract, and no trust score is recorded
+    // anywhere (ARCHITECTURE.md §3.6).
+    expect(document.body).not.toHaveTextContent(/trust|score/i);
+  });
+
+  it("reads the ceilings the agent runs under on the Budgets tab, and nothing else", async () => {
+    const calls = await renderAgent(
+      { get: readOk(agentDetail()), budgets: readOk(spendBudgets()) },
+      "budgets",
+    );
+    expect(current()).toEqual(["Budgets"]);
+    const panel = region("Budgets");
+    expect(
+      within(panel).getByRole("row", { name: /This workspace/ }),
+    ).toHaveTextContent("$500.00");
+    expect(
+      within(panel).getByTestId("agent-budget-not-backed"),
+    ).toHaveTextContent("Oxagen records no ceiling for one agent");
+    expect(
+      within(panel).getByRole("link", { name: "Set ceilings on Spend" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend?tab=budgets");
+    expect(calls.budgets).toHaveLength(1);
+    expect(calls.toolbelt).toEqual([]);
+    expect(calls.incidents).toEqual([]);
+  });
+
+  it("keeps the agent-scope line when no ceiling is set at all (negative)", async () => {
+    await renderAgent(
+      { get: readOk(agentDetail()), budgets: readOk([]) },
+      "budgets",
+    );
+    expect(screen.getByTestId("budgets-empty")).toHaveTextContent(
+      "No spend ceiling is set",
+    );
+    expect(screen.getByTestId("agent-budget-not-backed")).toBeInTheDocument();
+  });
+
+  it("renders a refused budgets read in place of the table (negative)", async () => {
+    await renderAgent(
+      {
+        get: readOk(agentDetail()),
+        budgets: readError("rollup_rebuild_in_progress", 504),
+      },
+      "budgets",
+    );
+    expect(region("Budgets")).toHaveTextContent("rollup_rebuild_in_progress");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
   it("offers Resume for a suspended agent and no write at all for a retired one", async () => {
@@ -149,7 +204,7 @@ describe("Agent header and tabs", () => {
   });
 
   it("opens Identity for an unknown tab (negative)", async () => {
-    const calls = await renderAgent({ get: readOk(agentDetail()) }, "budgets");
+    const calls = await renderAgent({ get: readOk(agentDetail()) }, "runs");
     expect(current()).toEqual(["Identity"]);
     expect(calls.toolbelt).toEqual([]);
     expect(calls.incidents).toEqual([]);
@@ -182,6 +237,34 @@ describe("Agent header and tabs", () => {
 });
 
 describe("Identity", () => {
+  // assign_agent_role and revoke_agent_role are org Owner or Admin writes
+  // their handlers check, and a retired principal holds no authority to
+  // change, so the panel offers a control neither reader could use.
+  it.each([
+    ["a member", { detail: agentDetail(), role: "member" as const }],
+    [
+      "a retired identity",
+      {
+        detail: agentDetail({ identity: { status: "retired" } }),
+        role: "owner" as const,
+      },
+    ],
+  ])("offers no role control to %s (negative)", async (_name, at) => {
+    await renderAgent(
+      { get: readOk(at.detail) },
+      null,
+      null,
+      unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: at.role }),
+    );
+    const roles = region("Roles");
+    expect(within(roles).queryAllByRole("button")).toEqual([]);
+    expect(
+      within(roles)
+        .getAllByRole("columnheader")
+        .map((h) => h.textContent),
+    ).toEqual(["Role", "Scope", "Assigned", "Expires"]);
+  });
+
   it("draws the principal, its roles and its credentials, and reads nothing else", async () => {
     const calls = await renderAgent({ get: readOk(agentDetail()) });
     expect(current()).toEqual(["Identity"]);
@@ -192,7 +275,17 @@ describe("Identity", () => {
       within(region("Roles"))
         .getAllByRole("cell")
         .map((c) => c.textContent),
-    ).toEqual(["CI writer", "workspace", "Sep 2, 2026, 10:00 AM", "standing"]);
+    ).toEqual([
+      "CI writer",
+      "workspace",
+      "Sep 2, 2026, 10:00 AM",
+      "standing",
+      // The owner reading this page may change the agent's roles (#2956).
+      "Revoke CI writer",
+    ]);
+    expect(
+      within(region("Roles")).getByRole("button", { name: "Assign a role" }),
+    ).toBeInTheDocument();
     expect(
       within(region("Run credentials"))
         .getAllByRole("cell")
@@ -517,6 +610,7 @@ describe("Enrollment", () => {
       "not recorded",
       "sha256:ab12cd34",
       "never",
+      "Revoke",
     ]);
     expect(
       within(second ?? document.body)
@@ -531,8 +625,24 @@ describe("Enrollment", () => {
       "version 12",
       "sha256:ab12cd34",
       "Sep 14, 2026, 10:00 AM",
+      // A revoked host has nothing left to revoke.
+      "",
     ]);
     expect(calls.toolbelt).toEqual([]);
+  });
+
+  it("offers Enroll a host on the tab, and none for a retired identity (negative)", async () => {
+    await renderAgent({ get: readOk(agentDetail()) }, "enrollment");
+    expect(screen.getByTestId("enroll-host")).toBeInTheDocument();
+    cleanup();
+
+    // A retired identity is archived, so create_enrollment_token selects it
+    // out and the control would only ever answer agent_not_found.
+    await renderAgent(
+      { get: readOk(agentDetail({ identity: { status: "retired" } })) },
+      "enrollment",
+    );
+    expect(screen.queryByTestId("enroll-host")).not.toBeInTheDocument();
   });
 
   it("says an enrollment past its expiry has expired, over the status column alone (negative)", async () => {
