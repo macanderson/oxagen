@@ -407,6 +407,12 @@ export interface GitHubClient {
 
 /** Options accepted by createGitHubClient. */
 export interface GitHubClientOptions {
+  /** Per-attempt timeout, including the response body. Defaults to 30 seconds. */
+  timeoutMs?: number;
+  /** Cancels requests and prevents further retries. */
+  signal?: AbortSignal;
+  /** Refuse longer server waits instead of retrying early. Defaults to two minutes. */
+  maxRateLimitWaitMs?: number;
   /** Personal access token or GitHub App installation token. */
   token: string;
   /** Override the GitHub API base URL (e.g. for GitHub Enterprise). */

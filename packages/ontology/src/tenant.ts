@@ -17,6 +17,7 @@ import {
   keepPredicatePositions,
   projectedNames,
   rowSelectingScope,
+  stripLiteralsAndComments,
 } from "./graph-scope";
 import type { GraphScope, RowSelectingPart, ScopeEvent } from "./graph-scope";
 
@@ -427,9 +428,8 @@ export function assertAnchorsTenant(cypher: string): void {
  *     `maxHops`, and a per-query transaction timeout for `maxTraversalMs`.
  *  5. Rejects write clauses when `mode` is `read` (defense in depth).
  *
- * Omitting the scope (the default) leaves behavior byte-identical to before:
- * humans and scope-less sessions are pass-through. Existing callers that call
- * `scopedSession()` with no argument are unaffected.
+ * Omitting the optional scope leaves the query unchanged after tenant checks.
+ * Read queries use managed retries. Writes execute once without replay.
  */
 export function scopedSession(scope?: GraphScope): {
   run: (
@@ -468,6 +468,26 @@ export function scopedSession(scope?: GraphScope): {
     return s;
   }
 
+  function runQuery(
+    sess: Session,
+    cypher: string,
+    params: Record<string, unknown>,
+    config?: Parameters<Session["executeRead"]>[1],
+  ) {
+    // Writes and unknown procedures must not retry: an acknowledgement can
+    // be lost after a committed mutation with no caller-stable idempotency key.
+    const text = stripLiteralsAndComments(cypher);
+    const writes = /\b(?:CREATE|MERGE|SET|DELETE|REMOVE|FOREACH|CALL)\b/i.test(
+      text,
+    );
+    if (writes) {
+      return config
+        ? sess.run(cypher, params, config)
+        : sess.run(cypher, params);
+    }
+    return sess.executeRead(async (tx) => await tx.run(cypher, params), config);
+  }
+
   return {
     async run(cypher: string, params: Record<string, unknown> = {}) {
       // Reduce to filtering positions before testing, so a mention of `orgId`
@@ -477,15 +497,15 @@ export function scopedSession(scope?: GraphScope): {
       assertAnchorsTenant(cypher);
       const sess = await ensureSession();
 
-      // No agent scope → behaviorally unchanged pass-through (humans and
-      // scope-less sessions). Guard the shared Neo4j driver with the circuit
+      // Without an agent scope, execute the authored query with read-only
+      // retries. Guard the shared Neo4j driver with the circuit
       // breaker: a degraded AuraDB fails fast (CircuitOpenError) instead of
       // every scoped query piling handshake attempts onto a down cluster. The
       // TenantScopeError guard above is deliberately OUTSIDE the breaker — a
       // programming error must never count toward tripping it.
       if (scope === undefined) {
         return neo4jBreaker().exec(() =>
-          sess.run(cypher, { ...params, orgId, workspaceId }),
+          runQuery(sess, cypher, { ...params, orgId, workspaceId }),
         );
       }
 
@@ -523,9 +543,7 @@ export function scopedSession(scope?: GraphScope): {
       assertAnchorsTenant(applied.cypher);
       const finalParams = { ...applied.params, orgId, workspaceId };
       return neo4jBreaker().exec(() =>
-        applied.txConfig
-          ? sess.run(applied.cypher, finalParams, applied.txConfig)
-          : sess.run(applied.cypher, finalParams),
+        runQuery(sess, applied.cypher, finalParams, applied.txConfig),
       );
     },
     // A session that never ran opened no connection, so there is nothing to
