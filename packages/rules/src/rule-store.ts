@@ -97,13 +97,13 @@ export async function loadWorkspaceRuleSet(args: {
   return withTenantDb((tx) => loadRuleSetIn(tx, workspaceId));
 }
 
-/** External transports have no fallback governance path, so invalid rules refuse the call. */
-export async function loadExternalRuleSet(args: {
+/** Read current authority without either cache; missing or malformed workspaces refuse admission. */
+export async function loadCurrentRuleSet(args: {
   orgId: string;
   workspaceId: string | null;
 }): Promise<RuleSet | null> {
   const workspaceId = args.workspaceId;
-  if (!workspaceId) throw new Error("External rules require a workspace");
+  if (!workspaceId) throw new Error("Current rules require a workspace");
   return withTenantDb(async (tx) => {
     const row = await tx.query.workspaces.findFirst({
       where: and(
@@ -112,8 +112,10 @@ export async function loadExternalRuleSet(args: {
       ),
       columns: { settings: true },
     });
-    if (!row) throw new Error("External rule workspace is unavailable");
+    if (!row) throw new Error("Current rule workspace is unavailable");
     const raw = (row.settings as Record<string, unknown> | null)?.decisionRules;
     return raw == null ? null : ruleSetSchema.parse(raw);
   });
 }
+
+export const loadExternalRuleSet = loadCurrentRuleSet;

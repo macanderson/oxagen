@@ -43,6 +43,31 @@ const RULES: RuleSet = {
 const CTX = { orgId: "org1", workspaceId: "ws1", userId: null };
 
 describe("createDecisionRulesGate", () => {
+  test.each(["missing", "offline", "incomplete"])(
+    "refuses fresh admission when rule facts are %s",
+    async (failure) => {
+      const resolveFacts =
+        failure === "missing"
+          ? undefined
+          : async () => {
+              if (failure === "offline") throw new Error("facts offline");
+              return {};
+            };
+      const gate = createDecisionRulesGate({
+        loadRuleSet: async () => RULES,
+        resolveFacts,
+      });
+      await expect(
+        gate({
+          capability: "issue_refund",
+          input: { amount_usd: 10 },
+          ctx: CTX,
+          requireFreshRules: true,
+        }),
+      ).rejects.toMatchObject({ code: "decision_rules_unavailable" });
+    },
+  );
+
   test("enforces a deny as a typed error citing the rule", async () => {
     const gate = createDecisionRulesGate({ loadRuleSet: async () => RULES });
     await expect(

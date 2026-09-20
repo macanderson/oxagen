@@ -51,6 +51,35 @@ afterEach(() => {
 });
 
 describe("kernel decision-rules gate", () => {
+  it("requests fresh admission exactly once on the canonical gate", async () => {
+    registerRefund();
+    const handler = vi.fn(async () => ({ ok: true }));
+    registerHandler("test.refund", async () => handler);
+    const gate = vi.fn(async () => undefined);
+    setDecisionRulesGate(gate);
+    await invoke("test.refund", { amount_usd: 10 }, ctx, {
+      requireFreshRules: true,
+    });
+    expect(gate).toHaveBeenCalledOnce();
+    expect(gate).toHaveBeenCalledWith(
+      expect.objectContaining({ requireFreshRules: true }),
+    );
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("refuses requested fresh admission when the runtime gate is missing", async () => {
+    registerRefund();
+    const handler = vi.fn(async () => ({ ok: true }));
+    registerHandler("test.refund", async () => handler);
+    clearDecisionRulesGate();
+    await expect(
+      invoke("test.refund", { amount_usd: 10 }, ctx, {
+        requireFreshRules: true,
+      }),
+    ).rejects.toMatchObject({ code: "decision_rules_unavailable" });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it("refuses BEFORE the handler runs, with the gate's own error", async () => {
     registerRefund();
     const handler = vi.fn(async () => ({ ok: true }));
