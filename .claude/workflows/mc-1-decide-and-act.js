@@ -1,6 +1,6 @@
 export const meta = {
   name: 'mc-1-decide-and-act',
-  description: 'Mission Control session 1: approve and deny with reason on Fleet and Run, the four-hop chain and eligibility on every card, the enforcement tier and verdict columns on Fleet, run controls from Fleet, and steer with a delivery mode; one PR',
+  description: 'Rev1 app session 1: approve and deny with reason on Fleet and Run, the four-hop chain and eligibility on every card, the enforcement tier and verdict columns on Fleet, run controls from Fleet, and steer with a delivery mode; one PR',
   whenToUse: 'The P0 session. Run after mc-0-rebaseline. Owns issues #2950, #2953, #3285 and the app half of #2970 and #3286.',
   phases: [
     { title: 'Scout', detail: 'confirm each lane is still open on main' },
@@ -193,7 +193,7 @@ async function runSession(session, specHint) {
 const session = {
   id: '1',
   title: 'Decide and act: approvals, trust columns, run controls',
-  prTitle: 'Mission Control: approve and deny from Fleet and Run, honest trust columns on Fleet, and run controls with a delivery mode',
+  prTitle: 'Oxagen app: approve and deny from Fleet and Run, honest trust columns on Fleet, and run controls with a delivery mode',
   issueHint: 'Read #2950 and #2953 first. Use Closes #2950 only if every DoD box there is done (decision 1 recorded in the ADR, the dialog, the columns, the tests); otherwise Refs. Refs #2953, #3285, #2970, #3286.',
   lanes: [
     {

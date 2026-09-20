@@ -1,6 +1,6 @@
 # Mutation verifier deck
 
-Historical presentation source. Its product claims and demo flow predate the current Mission Control app. Do not use it as a current feature, security, pricing, or setup reference.
+Historical presentation source. Its product claims and demo flow predate the current Oxagen app. Do not use it as a current feature, security, pricing, or setup reference.
 
 `index.html` holds the slides. `script-data.js` holds presenter notes. Keep their slide order aligned when editing. Review the rendered deck and its claims against the current code and house brand before presenting it again.
 

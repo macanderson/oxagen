@@ -1,6 +1,6 @@
 # 02 — Information Architecture
 
-> **Historical design:** This document predates the Mission Control rebuild. It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
+> **Historical design:** This document predates the rev1 app rebuild (ADR-081). It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
 
 The IA does three jobs at once: it lays out the navigation, it fixes the vocabulary we use
 everywhere (product, docs, sales), and it maps every operable capability to a home so parity

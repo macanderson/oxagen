@@ -112,7 +112,7 @@ export async function repoList(
   }
   if (result.repositories.length === 0) {
     writer.write(
-      "No repositories are bound to this workspace. Bind a main repository from Mission Control, then link more with `oxagen repo link <owner/name>`.",
+      "No repositories are bound to this workspace. Bind a main repository in Oxagen, then link more with `oxagen repo link <owner/name>`.",
     );
     return;
   }

@@ -319,7 +319,7 @@ footer a{color:var(--muted)}
 <div class="wrap">
 <header><a href="https://oxagen.sh/" aria-label="oxagen">${LOCKUP_SVG}</a><span class="tag">downloads.oxagen.sh</span></header>
 <section class="hero">
-<p class="eyebrow">Mission Control for agent operators</p>
+<p class="eyebrow">Workforce management for autonomous agents</p>
 <h1>Download the Oxagen app</h1>
 <p class="lede">The Oxagen app signs this machine in to your organization and registers the Claude Code, Codex, Cursor, and Stella installs it finds. Every run they make is recorded, and every action routed through Oxagen is answered by your rules.</p>
 <p class="meta"><span>Version <code>${version}</code></span><span>Published <code>${escapeHtml(input.publishedAt)}</code></span><span><a href="${links.notes}">Release notes</a></span></p>

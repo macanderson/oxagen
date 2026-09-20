@@ -45,7 +45,7 @@ const REPO_ROOT = join(HERE, "..", "..");
 const DB_DIR = join(REPO_ROOT, "packages", "database");
 export const BOOKS_DIR = join(DB_DIR, "seed-assets", "books");
 export const MANUSCRIPT_DIR = join(BOOKS_DIR, "manuscript");
-export const MIGRATION_NAME = "20260920130000_book_second_edition.sql";
+export const MIGRATION_NAME = "20260920150000_book_second_edition.sql";
 export const MIGRATION_FILE = join(
   DB_DIR,
   "atlas",

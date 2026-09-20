@@ -1,6 +1,6 @@
 # Command Menu — Specification
 
-> **Historical design:** This document predates the Mission Control rebuild. It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
+> **Historical design:** This document predates the rev1 app rebuild (ADR-081). It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
 
 Requirements spec for the `⌘K` (Cmd+K / Ctrl+K) command menu in `apps/app`. Builds on [`../information-architecture/spec.md`](../information-architecture/spec.md) and [`../application-shell/spec.md`](../application-shell/spec.md).
 

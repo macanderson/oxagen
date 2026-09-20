@@ -268,7 +268,7 @@
       },
       "error": {
         "title": "Tools could not be loaded",
-        "body": "Nothing was changed. Runs kept recording while this page was down — frames are written by the gateway, not by Mission Control.",
+        "body": "Nothing was changed. Runs kept recording while this page was down: frames are written by the gateway, not by the operator console.",
         "code": "{code} · {status}",
         "retry": "Try again"
       }

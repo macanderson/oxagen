@@ -58,7 +58,7 @@ export function loadSkills(root: string): string {
 /** The instructions the model works under: the skills, then the job. */
 export function systemPrompt(skills: string): string {
   return [
-    "You write the release notes for Oxagen, Mission Control for agent operators.",
+    "You write the release notes for Oxagen, workforce management for autonomous agents.",
     "Two skills govern every sentence you write. Read them first; they are your instructions.",
     "",
     skills,

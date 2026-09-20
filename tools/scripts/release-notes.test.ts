@@ -36,7 +36,7 @@ describe("the model's instructions", () => {
       expect(skills).toContain(`<skill path="${rel}">`);
     expect(skills).toContain("No em dashes");
     const system = systemPrompt(skills);
-    expect(system).toContain("Mission Control for agent operators");
+    expect(system).toContain("workforce management for autonomous agents");
     expect(system).toContain("SUMMARY:");
     expect(system).toContain("## What changed");
     expect(system).toContain("Do not list every commit");
