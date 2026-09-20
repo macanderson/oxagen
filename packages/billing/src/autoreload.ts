@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import {
   notifyOrgManagers,
   lowBalanceAlertTemplate,
@@ -107,7 +107,19 @@ async function claimReloadEpisode(
         autoReloadEpisodeStartedAt: sql`COALESCE(${schema.orgBillingSettings.autoReloadEpisodeStartedAt}, ${now})`,
         updatedAt: now,
       })
-      .where(eq(schema.orgBillingSettings.orgId, orgId))
+      .where(
+        and(
+          eq(schema.orgBillingSettings.orgId, orgId),
+          eq(schema.orgBillingSettings.autoReloadEnabled, true),
+          or(
+            isNull(schema.orgBillingSettings.lastAutoReloadAt),
+            lt(
+              schema.orgBillingSettings.lastAutoReloadAt,
+              new Date(now.getTime() - 60 * 60 * 1000),
+            ),
+          ),
+        ),
+      )
       .returning({
         idempotencyKey: schema.orgBillingSettings.autoReloadEpisodeKey,
         startedAt: schema.orgBillingSettings.autoReloadEpisodeStartedAt,
@@ -123,7 +135,11 @@ async function claimReloadEpisode(
 }
 
 /** Close the episode: the credits are granted, so the next low balance is new. */
-async function closeReloadEpisode(orgId: string, now: Date): Promise<void> {
+async function closeReloadEpisode(
+  orgId: string,
+  now: Date,
+  idempotencyKey: string,
+): Promise<void> {
   await withTenantDb((tx) =>
     tx
       .update(schema.orgBillingSettings)
@@ -133,7 +149,12 @@ async function closeReloadEpisode(orgId: string, now: Date): Promise<void> {
         autoReloadEpisodeStartedAt: null,
         updatedAt: now,
       })
-      .where(eq(schema.orgBillingSettings.orgId, orgId)),
+      .where(
+        and(
+          eq(schema.orgBillingSettings.orgId, orgId),
+          eq(schema.orgBillingSettings.autoReloadEpisodeKey, idempotencyKey),
+        ),
+      ),
   );
 }
 
@@ -325,7 +346,7 @@ export async function maybeAutoReload(
     // The credits exist, so the episode is over: stamp the reload and release
     // the key together. One write, so the rolling guard and the idempotency key
     // can never disagree about whether a reload is still outstanding.
-    await closeReloadEpisode(orgId, now);
+    await closeReloadEpisode(orgId, now, episode.idempotencyKey);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error(

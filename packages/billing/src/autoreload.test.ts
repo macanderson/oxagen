@@ -12,6 +12,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -64,6 +66,8 @@ interface DbState {
   episodeKey: string | null;
   episodeStartedAt: Date | null;
   claimCount: number;
+  claimPredicates: SQL[];
+  closePredicates: SQL[];
   /** What a fresh claim records as the episode's start. Tests move this. */
   now: Date;
 }
@@ -76,6 +80,8 @@ function makeState(): DbState {
     episodeKey: null,
     episodeStartedAt: null,
     claimCount: 0,
+    claimPredicates: [],
+    closePredicates: [],
     now: new Date(),
   };
 }
@@ -94,21 +100,28 @@ function makeDb(state: DbState) {
     },
     update: vi.fn(() => ({
       set: vi.fn((vals: Record<string, unknown>) => {
-        // closeReloadEpisode writes literal nulls and a date; claimReloadEpisode
-        // writes COALESCE expressions, handled in returning() below.
-        if (vals["autoReloadEpisodeKey"] === null) {
-          state.episodeKey = null;
-          state.episodeStartedAt = null;
-        }
-        if (vals["lastAutoReloadAt"] instanceof Date) {
-          state.lastAutoReloadAt = vals["lastAutoReloadAt"] as Date;
-        }
         return {
-          where: vi.fn(() => {
+          where: vi.fn((predicate: SQL) => {
+            if (vals["autoReloadEpisodeKey"] === null) {
+              state.closePredicates.push(predicate);
+              const query = new PgDialect().sqlToQuery(predicate);
+              if (query.params.includes(state.episodeKey)) {
+                state.episodeKey = null;
+                state.episodeStartedAt = null;
+                state.lastAutoReloadAt = vals["lastAutoReloadAt"] as Date;
+              }
+            }
             const builder = Promise.resolve(undefined) as Promise<unknown> & {
               returning: () => Promise<unknown[]>;
             };
             builder.returning = async () => {
+              state.claimPredicates.push(predicate);
+              if (
+                state.lastAutoReloadAt &&
+                state.lastAutoReloadAt.getTime() >=
+                  state.now.getTime() - 60 * 60 * 1000
+              )
+                return [];
               if (!state.episodeKey) {
                 state.claimCount += 1;
                 state.episodeKey = `episode-${state.claimCount}`;
@@ -487,6 +500,62 @@ describe("maybeAutoReload — one charge per low-balance episode (#1420)", () =>
     vi.useRealTimers();
   });
 
+  it("does not clear a replacement episode when an older reload finishes", async () => {
+    const state = makeState();
+    state.subRow = { stripeCustomerId: "cus_test_001" };
+    dbHolder.instance = makeDb(state);
+    getOrgBillingSettingsMock.mockResolvedValue(makeSettings());
+    effectiveBalanceMock.mockResolvedValue(100n);
+    chargeOffSessionMock.mockResolvedValue({
+      paymentIntentId: "pi_test_001",
+      status: "succeeded",
+      succeeded: true,
+    });
+    const replacementStarted = new Date(Date.now() + 61 * 60 * 1000);
+    createCreditLotMock.mockImplementationOnce(async () => {
+      state.episodeKey = "replacement-episode";
+      state.episodeStartedAt = replacementStarted;
+      return { lotId: "lot-1", effectiveBalanceCents: 1000n };
+    });
+
+    await maybeAutoReload("org-abc");
+    expect(state.episodeKey).toBe("replacement-episode");
+    expect(state.episodeStartedAt).toEqual(replacementStarted);
+    expect(state.lastAutoReloadAt).toBeNull();
+    const predicate = state.closePredicates[0];
+    expect(predicate).toBeDefined();
+    if (!predicate) throw new Error("Expected an episode close");
+    const query = new PgDialect().sqlToQuery(predicate);
+    expect(query.sql).toContain('"org_id" =');
+    expect(query.sql).toContain('"auto_reload_episode_key" =');
+    expect(query.params).toEqual(["org-abc", "episode-1"]);
+  });
+
+  it("refuses a stale settings read after another reload completed", async () => {
+    const state = makeState();
+    state.subRow = { stripeCustomerId: "cus_test_001" };
+    state.lastAutoReloadAt = new Date();
+    dbHolder.instance = makeDb(state);
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({ lastAutoReloadAt: null }),
+    );
+    effectiveBalanceMock.mockResolvedValue(100n);
+
+    const result = await maybeAutoReload("org-abc");
+    expect(result.reloaded).toBe(false);
+    expect(chargeOffSessionMock).not.toHaveBeenCalled();
+    expect(createCreditLotMock).not.toHaveBeenCalled();
+    const predicate = state.claimPredicates[0];
+    expect(predicate).toBeDefined();
+    if (!predicate) throw new Error("Expected an atomic reload claim");
+    const query = new PgDialect().sqlToQuery(predicate);
+    expect(query.sql).toContain('"last_auto_reload_at" is null');
+    expect(query.sql).toContain('"last_auto_reload_at" <');
+    expect(query.sql).toContain('"auto_reload_enabled" =');
+    expect(query.params).toContain("org-abc");
+    expect(query.params).toContain(true);
+  });
+
   it("retries under the ORIGINAL idempotency key across an hour boundary", async () => {
     // The witness for #1420. The key used to be bucketed by calendar hour while
     // the retry it protects is bounded by elapsed time, so a retry forty
@@ -572,6 +641,10 @@ describe("maybeAutoReload — one charge per low-balance episode (#1420)", () =>
     });
 
     await maybeAutoReload("org-abc");
+    vi.useFakeTimers();
+    const nextHour = new Date(Date.now() + 61 * 60 * 1000);
+    vi.setSystemTime(nextHour);
+    state.now = nextHour;
     await maybeAutoReload("org-abc");
 
     const keys = chargeOffSessionMock.mock.calls.map(
