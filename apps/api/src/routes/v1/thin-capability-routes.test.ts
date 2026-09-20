@@ -1047,7 +1047,15 @@ const ROUTES: ThinRoute[] = [
     route: contextRecordPublishRoute as unknown as Hono<never>,
     method: "POST",
     capability: contextRecordPublish.name,
-    body: { record_id: "no-raw-db", title: "No raw db()", body: "[rule]\n" },
+    // #3302: kind/force/statement are required on every publish.
+    body: {
+      record_id: "no-raw-db",
+      title: "No raw db()",
+      body: "[rule]\n",
+      kind: "rule",
+      force: "should",
+      statement: "No raw db() calls in handlers.",
+    },
     invalidBody: { record_id: "no-raw-db", title: "", body: "x" },
     status: 200,
   },

@@ -31,7 +31,7 @@ List the workspace's published steering records: what is in force on the product
 | `records[].id` | `string` | `agent.context_records.public_id` (`ctr_…`) |
 | `records[].lineageId` | `string` | `context_records.slug` — the lineage id and the file stem |
 | `records[].title` | `string` | `context_records.title` |
-| `records[].kind` / `.force` / `.constraintEffect` / `.statement` | nullable | Written by `merge_context_pr`; null on a record `publish_context_record` published |
+| `records[].kind` / `.force` / `.constraintEffect` / `.statement` | nullable | Written by `merge_context_pr` and, since #3302, by `publish_context_record`. Null only on a record predating both, or a version predating migration `20260918160000` |
 | `records[].sharingScope` | `repository \| workspace` | `context_records.sharing_scope` |
 | `records[].status` | `active \| retired \| superseded` | `context_records.status` |
 | `records[].version` / `.checksum` | nullable | The active `context_record_versions` row |
