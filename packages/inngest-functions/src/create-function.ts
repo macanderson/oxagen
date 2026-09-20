@@ -105,6 +105,87 @@ function wrapHandler(handler: DurableFunctionHandler) {
 export const MAX_BATCH_SIZE = 5;
 
 /**
+ * The longest `batchEvents.timeout` Inngest accepts, in seconds. Inngest
+ * checks it at sync alongside `maxSize`, and one function over it fails the
+ * sync for the whole app the same way. `cost.findings` asked for `5m`, the
+ * sync answered 400 with "The batch timeout for function 'cost.findings'
+ * cannot be longer than 30 seconds", and `deploy api.oxagen.sh` stayed red on
+ * every push to main while the functions went unregistered.
+ */
+export const MAX_BATCH_TIMEOUT_SECONDS = 30;
+
+/**
+ * Seconds in one `<number><unit>` component of an Inngest duration, or `null`
+ * for a unit `TimeStr` does not admit.
+ *
+ * Total over every input, `undefined` included, because a capture group is
+ * optional to the type checker however certain the pattern is — which is what
+ * keeps this free of a cast that would outlive the reason for it.
+ */
+function componentSeconds(
+  digits: string | undefined,
+  unit: string | undefined,
+): number | null {
+  const value = Number(digits);
+  if (!Number.isFinite(value)) return null;
+  switch (unit) {
+    case "w":
+      return value * 604_800;
+    case "d":
+      return value * 86_400;
+    case "h":
+      return value * 3_600;
+    case "m":
+      return value * 60;
+    case "s":
+      return value;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Seconds in an Inngest duration string, composites included (`"30s"`,
+ * `"5m"`, `"15m15s"`, `"1d"`).
+ *
+ * Every unit `TimeStr` admits is parsed, not just the single-component
+ * `<number><unit>` shape, because a value this cannot read is forwarded
+ * unchecked — so a spelling it does not know is a hole in the guard rather
+ * than a gap in its coverage. `15m15s` is the one the SDK's own doc comment
+ * advertises, and it is 915 seconds.
+ *
+ * The SDK is of two minds about which spellings reach this field.
+ * `InngestFunction.d.ts` types `batchEvents.timeout` as `TimeStrBatch`
+ * (`` `${number}s` ``, seconds only) while the doc comment directly above it
+ * says "Expects a time string such as 1s, 60s or 15m15s". This repository's
+ * own `DurableFunctionConfig.batchEvents.timeout` is a plain `string`, so
+ * neither constrains what a caller can write. Reading the wider vocabulary
+ * costs nothing and covers both readings.
+ *
+ * Returns `null` when the string is not entirely components, so a genuinely
+ * unrecognised spelling is still passed through to Inngest rather than
+ * rejected here — the sync is the authority on the format, and a guard that
+ * refuses what Inngest would have accepted is worse than one that lets
+ * Inngest answer. Nothing this returns can be a false rejection: a sum over
+ * the limit is a duration Inngest refuses whatever the spelling.
+ */
+function batchTimeoutSeconds(timeout: string): number | null {
+  const text = timeout.trim();
+  if (text === "") return null;
+  let total = 0;
+  let consumed = 0;
+  for (const [component, digits, unit] of text.matchAll(/(\d+)([wdhms])/g)) {
+    const seconds = componentSeconds(digits, unit);
+    if (seconds === null) return null;
+    total += seconds;
+    consumed += component.length;
+  }
+  // Every character has to belong to a component; otherwise this is a
+  // spelling the parser cannot prove anything about.
+  return consumed === text.length ? total : null;
+}
+
+/**
  * Translates abstract DurableFunctionConfig into Inngest-native config.
  */
 function buildInngestConfig(
@@ -130,6 +211,12 @@ function buildInngestConfig(
     if (config.batchEvents.maxSize > MAX_BATCH_SIZE) {
       throw new Error(
         `${config.id}: batchEvents.maxSize ${config.batchEvents.maxSize} is over Inngest's limit of ${MAX_BATCH_SIZE}, and the sync would refuse every function in the app`,
+      );
+    }
+    const seconds = batchTimeoutSeconds(config.batchEvents.timeout);
+    if (seconds !== null && seconds > MAX_BATCH_TIMEOUT_SECONDS) {
+      throw new Error(
+        `${config.id}: batchEvents.timeout ${config.batchEvents.timeout} is over Inngest's limit of ${MAX_BATCH_TIMEOUT_SECONDS}s, and the sync would refuse every function in the app`,
       );
     }
     // Inngest-native shape: { maxSize, timeout, key? }.

@@ -572,6 +572,99 @@ describe("createFunction adapter", () => {
       expect(capturedConfigs).toHaveLength(0);
     });
 
+    it("refuses a batch timeout over Inngest's limit, which would fail the whole app's sync", () => {
+      const config: DurableFunctionConfig = {
+        id: "slow-batch",
+        batchEvents: { maxSize: 5, timeout: "5m" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/batch" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      expect(() => createFunction(config, trigger, handler)).toThrow(
+        /slow-batch: batchEvents.timeout 5m is over Inngest's limit of 30s/,
+      );
+      expect(capturedConfigs).toHaveLength(0);
+    });
+
+    it("refuses a composite batch timeout over the limit", () => {
+      // The spelling the Inngest SDK's own doc comment advertises for this
+      // field. 15m15s is 915 seconds, and a parser that reads only
+      // `<number><unit>` forwards it unchecked.
+      const config: DurableFunctionConfig = {
+        id: "composite-batch",
+        batchEvents: { maxSize: 5, timeout: "15m15s" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/batch" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      expect(() => createFunction(config, trigger, handler)).toThrow(
+        /composite-batch: batchEvents.timeout 15m15s is over Inngest's limit of 30s/,
+      );
+      expect(capturedConfigs).toHaveLength(0);
+    });
+
+    it.each(["1m1s", "1d", "1w", "2h30m"])(
+      "refuses the over-limit batch timeout %s",
+      (timeout) => {
+        const config: DurableFunctionConfig = {
+          id: "over-limit",
+          batchEvents: { maxSize: 5, timeout },
+        };
+        const trigger: DurableFunctionTrigger = { event: "test/batch" };
+        const handler: DurableFunctionHandler = async () => undefined;
+
+        expect(() => createFunction(config, trigger, handler)).toThrow(
+          /over-limit: batchEvents.timeout .* is over Inngest's limit of 30s/,
+        );
+        expect(capturedConfigs).toHaveLength(0);
+      },
+    );
+
+    it("accepts a composite batch timeout inside the limit", () => {
+      const config: DurableFunctionConfig = {
+        id: "composite-ok",
+        batchEvents: { maxSize: 5, timeout: "0m30s" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/batch" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      createFunction(config, trigger, handler);
+
+      expect(capturedConfigs[0]).toMatchObject({
+        batchEvents: { timeout: "0m30s" },
+      });
+    });
+
+    it("accepts a batch timeout at the limit", () => {
+      const config: DurableFunctionConfig = {
+        id: "at-the-limit",
+        batchEvents: { maxSize: 5, timeout: "30s" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/batch" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      createFunction(config, trigger, handler);
+
+      expect(capturedConfigs[0]).toMatchObject({
+        batchEvents: { timeout: "30s" },
+      });
+    });
+
+    it("leaves a timeout spelling it cannot parse to Inngest", () => {
+      const config: DurableFunctionConfig = {
+        id: "odd-spelling",
+        batchEvents: { maxSize: 5, timeout: "PT1M" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/batch" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      createFunction(config, trigger, handler);
+
+      expect(capturedConfigs[0]).toMatchObject({
+        batchEvents: { timeout: "PT1M" },
+      });
+    });
+
     it("omits batchEvents when not configured", () => {
       const config: DurableFunctionConfig = { id: "plain-fn" };
       const trigger: DurableFunctionTrigger = { event: "test/plain" };

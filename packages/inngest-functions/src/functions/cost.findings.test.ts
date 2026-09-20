@@ -48,6 +48,9 @@ describe("cost.findings", () => {
     expect(config.batchEvents).toMatchObject({
       key: "event.data.workspaceId",
       maxSize: 5,
+      // Inngest refuses a batch timeout over 30s, and the refusal fails the
+      // sync for every function in the app, not just this one.
+      timeout: "30s",
     });
   });
 
