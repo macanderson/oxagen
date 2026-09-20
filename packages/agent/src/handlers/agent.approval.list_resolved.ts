@@ -57,9 +57,9 @@ type QueriedRow = {
   ruleIds: string[];
   autoRuleId: string | null;
   resolvedReasons: string[];
-  resumeStatus?: string | null;
-  resumeRunPublicId?: string | null;
-  resumeError?: string | null;
+  resumeStatus: string | null;
+  resumeRunPublicId: string | null;
+  resumeError: string | null;
   message: {
     conversation: { user: { publicId: string } | null } | null;
   } | null;
@@ -186,7 +186,7 @@ export async function agentApprovalListResolvedHandler(
   ctx: CapabilityContext,
 ): Promise<AgentApprovalListResolvedOutput> {
   const after = decodeResolvedCursor(input.cursor);
-  const rows = (await withTenantDb((tx) =>
+  const rows: QueriedRow[] = await withTenantDb((tx) =>
     tx.query.approvalRequests.findMany({
       where: and(
         eq(ar.orgId, ctx.orgId),
@@ -243,7 +243,7 @@ export async function agentApprovalListResolvedHandler(
         mandate: { columns: { publicId: true } },
       },
     }),
-  )) as QueriedRow[];
+  );
   const page = rows.slice(0, input.limit);
   const last = page[page.length - 1];
   return {
