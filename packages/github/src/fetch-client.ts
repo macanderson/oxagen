@@ -30,6 +30,47 @@ export class GitHubApiError extends Error {
   }
 }
 
+/** A refused request whose next permitted attempt exceeds this call's retry budget. */
+export class GitHubRateLimitedError extends GitHubApiError {
+  readonly code = "github_rate_limited" as const;
+  constructor(
+    status: number,
+    message: string,
+    readonly retryAfterMs: number,
+  ) {
+    super(status, message);
+    this.name = "GitHubRateLimitedError";
+  }
+}
+
+function rateLimitDelay(
+  res: Response,
+  message: string,
+  attempt: number,
+): number | null {
+  if (res.status !== 403 && res.status !== 429) return null;
+  const retryAfter = res.headers?.get("retry-after");
+  const remaining = res.headers?.get("x-ratelimit-remaining");
+  if (
+    res.status !== 429 &&
+    !retryAfter &&
+    remaining !== "0" &&
+    !/rate limit|secondary limit/i.test(message)
+  )
+    return null;
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    const delay = Number.isFinite(seconds)
+      ? seconds * 1000
+      : Date.parse(retryAfter) - Date.now();
+    if (Number.isFinite(delay) && delay >= 0) return delay;
+  }
+  const reset = Number(res.headers?.get("x-ratelimit-reset"));
+  if (remaining === "0" && reset > 0)
+    return Math.max(0, reset * 1000 - Date.now());
+  return 60_000 * 2 ** attempt;
+}
+
 function isNotFound(err: unknown): boolean {
   return err instanceof GitHubApiError && err.status === 404;
 }
@@ -302,26 +343,37 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     body?: unknown,
   ): Promise<T> {
     const url = `${baseUrl}${path}`;
-    const res = await fetch(url, {
-      method,
-      headers: commonHeaders,
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-
-    if (!res.ok) {
+    for (let attempt = 0; ; attempt++) {
+      opts.signal?.throwIfAborted();
+      const timeout = AbortSignal.timeout(opts.timeoutMs ?? 30_000);
+      const signal = opts.signal
+        ? AbortSignal.any([opts.signal, timeout])
+        : timeout;
+      const res = await fetch(url, {
+        method,
+        headers: commonHeaders,
+        signal,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+      if (res.ok) {
+        if (res.status === 204) return undefined as T;
+        return res.json() as Promise<T>;
+      }
       let message = res.statusText;
       try {
         const err = (await res.json()) as GHErrorBody;
         if (err.message) message = err.message;
       } catch {
-        // fallback to statusText
+        // An aborted body read must not turn into another request.
+        signal.throwIfAborted();
       }
-      throw new GitHubApiError(res.status, message);
+      const delay = rateLimitDelay(res, message, attempt);
+      if (delay === null) throw new GitHubApiError(res.status, message);
+      if (attempt >= 2 || delay > (opts.maxRateLimitWaitMs ?? 120_000)) {
+        throw new GitHubRateLimitedError(res.status, message, delay);
+      }
+      await sleep(delay);
     }
-
-    // A DELETE answers 204 with no body.
-    if (res.status === 204) return undefined as T;
-    return res.json() as Promise<T>;
   }
 
   // -------------------------------------------------------------------------

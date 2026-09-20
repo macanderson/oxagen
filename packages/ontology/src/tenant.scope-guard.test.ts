@@ -28,7 +28,21 @@ const run = vi.fn(
   }),
 );
 const close = vi.fn(async () => undefined);
-vi.mock("./client", () => ({ session: () => ({ run, close }) }));
+const executeRead = vi.fn(
+  async (
+    work: (tx: { run: typeof run }) => Promise<unknown>,
+    _config?: { timeout: number },
+  ) => work({ run }),
+);
+const executeWrite = vi.fn(
+  async (
+    work: (tx: { run: typeof run }) => Promise<unknown>,
+    _config?: { timeout: number },
+  ) => work({ run }),
+);
+vi.mock("./client", () => ({
+  session: () => ({ run, close, executeRead, executeWrite }),
+}));
 
 import { runInTenantScope } from "@oxagen/tenancy";
 import { assertAnchorsTenant, scopedSession } from "./tenant";
