@@ -180,7 +180,17 @@
       "entry": "/[org]/[ws]/runs/[run] — Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command (features/run/actions.ts, features/run/run-controls.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedBy": "session-c2f283fb-3282-review",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/[ws]/page.tsx",
+          "entry": "/[org]/[ws] (Fleet) — Pause, Resume and Cancel on a live wrapped run's row queue dispatch_command (features/fleet/actions.ts, features/fleet/run-row-controls.tsx). Steer stays on the run page: the contract requires a payload on it",
+          "proof": "apps/app/src/features/fleet/run-row-controls.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "session-018UrgFq-mc1-controls"
+        }
+      ]
     },
     "export_audit_events": {
       "route": "/[org]/audit/export",

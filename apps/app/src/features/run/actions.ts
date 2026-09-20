@@ -11,6 +11,7 @@
 // Steering text is evidence. Oxagen records it, quotes it and hands it to the
 // model as content; it is never executed here.
 import {
+  COMMAND_REASON_MAX,
   STEER_TEXT_MAX,
   tachoCommandDispatch,
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
@@ -40,7 +41,15 @@ export type QueuedCommand = { commandIds: string[] };
 
 type RunTranscriptGetOutput = ContractOutput<typeof runTranscriptGet>;
 
-/** Pause at the next boundary, or resume a run paused earlier. The reason reaches the model. */
+/**
+ * Pause at the next boundary, or resume a run paused earlier. The reason
+ * reaches the model, and an empty one is omitted rather than sent as the
+ * blank string the contract's `min(1)` would refuse.
+ *
+ * The reason is held to the contract's own ceiling here, so a long one comes
+ * back naming the field a person can shorten instead of as a schema refusal
+ * with nothing to point at.
+ */
 export async function haltRun(
   org: string,
   ws: string,
@@ -50,6 +59,14 @@ export async function haltRun(
 ): Promise<ActionResult<QueuedCommand>> {
   const ctx = await requireViewer(org, ws);
   const trimmed = reason.trim();
+  if (trimmed.length > COMMAND_REASON_MAX) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "command_reason",
+      field: "reason",
+    };
+  }
   const result = await kernelWrite(ctx, tachoCommandDispatch, {
     target: { kind: "run", id: runId },
     command,

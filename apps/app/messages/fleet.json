@@ -36,7 +36,8 @@
         "replay": "Replay",
         "cost": "Cost",
         "frames": "Frames",
-        "started": "Started"
+        "started": "Started",
+        "controls": "Controls"
       },
       "noSummary": "No summary yet. Open the run to read its frames.",
       "notRecorded": "not recorded",
@@ -53,6 +54,18 @@
         "body": "Nothing has reached Oxagen from this workspace. A run appears when an enrolled agent makes its first model call; agents start runs, and this page is where you open one.",
         "enroll": "Enroll the host an agent runs on, from its repository:",
         "command": "oxagen agent enroll"
+      },
+      "controls": {
+        "group": "Commands for {run}",
+        "action": "{command} {run}",
+        "verbs": {
+          "pause": "pause",
+          "resume": "resume",
+          "cancel": "cancel"
+        },
+        "sending": "Sending the {command}.",
+        "queued": "The {command} is queued. The run's status says when the agent has taken it.",
+        "reread": "Re-read the runs"
       }
     }
   }

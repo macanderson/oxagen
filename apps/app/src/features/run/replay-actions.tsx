@@ -20,11 +20,11 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { RunRow } from "@/data/contracts/runs";
+import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { bisectRuns, forkRun } from "./actions";
-import { UNANSWERED, useActionFailure } from "./command-failure";
 
 type Divergence = {
   divergentSeq: string | null;

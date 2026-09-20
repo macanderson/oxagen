@@ -32,11 +32,12 @@ import { type SyntheticEvent, useId, useState } from "react";
 import type { DeliveryMode, RunRow } from "@/data/contracts/runs";
 import type { ActionResult } from "@/server/kernel";
 import type { OrgRole, WsRole } from "@/server/viewer";
+import { canCommandRun } from "@/shared/run-command-roles";
+import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { UNANSWERED, useActionFailure } from "./command-failure";
 import { haltRun, type QueuedCommand, steerRun } from "./actions";
 
 const COMMANDS = ["pause", "resume", "steer", "cancel"] as const;
@@ -247,16 +248,6 @@ function CommandDialog({
   );
 }
 
-/** Whether `dispatch_command` admits this viewer: org Owner or Admin, or workspace Owner or Member. */
-function canCommand(orgRole: OrgRole, wsRole: WsRole): boolean {
-  return (
-    orgRole === "owner" ||
-    orgRole === "admin" ||
-    wsRole === "owner" ||
-    wsRole === "member"
-  );
-}
-
 function DisabledControls({
   reason,
   testId,
@@ -325,7 +316,7 @@ export function RunControls({
       <DisabledControls reason={t("ledgerReason")} testId="ledger-no-control" />
     );
   }
-  if (!canCommand(orgRole, wsRole)) {
+  if (!canCommandRun(orgRole, wsRole)) {
     return (
       <DisabledControls reason={t("roleReason")} testId="role-no-control" />
     );

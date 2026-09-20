@@ -52,6 +52,9 @@ export type CommandTarget = z.output<typeof commandTargetSchema>;
 
 export const STEER_TEXT_MAX = 16_384;
 
+/** The reason a pause, resume or cancel carries, as the model reads it on resume. */
+export const COMMAND_REASON_MAX = 512;
+
 export const commandPayloadSchema = z
   .object({
     /** The steering or message text. Evidence, quoted and cited; never executed by Oxagen. */
@@ -73,7 +76,7 @@ export const dispatchCommandFieldsSchema = z
     /** Required for `steer` and `message`; refused on the others. */
     payload: commandPayloadSchema.optional(),
     /** Read by the model on resume, and shown on the pause banner. */
-    reason: z.string().min(1).max(512).optional(),
+    reason: z.string().min(1).max(COMMAND_REASON_MAX).optional(),
     /** 10 s to 24 h. A command with no expiry could never reach `expired`. */
     expiresInMs: z
       .number()

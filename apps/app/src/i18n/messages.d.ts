@@ -1626,6 +1626,7 @@ type Messages = {
         cost: string;
         frames: string;
         started: string;
+        controls: string;
       };
       noSummary: string;
       notRecorded: string;
@@ -1642,6 +1643,18 @@ type Messages = {
         body: string;
         enroll: string;
         command: string;
+      };
+      controls: {
+        group: string;
+        action: string;
+        verbs: {
+          pause: string;
+          resume: string;
+          cancel: string;
+        };
+        sending: string;
+        queued: string;
+        reread: string;
       };
     };
   };
@@ -2665,6 +2678,8 @@ type Messages = {
         fromSeq: string;
         runB: string;
         deliveryMode: string;
+        commandReason: string;
+        rowCommand: string;
       };
       observeReason: string;
       delivery: {

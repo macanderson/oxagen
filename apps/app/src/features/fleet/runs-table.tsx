@@ -16,6 +16,7 @@ import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, numericCell, Table } from "@/ui/table";
 import { ReadFailure } from "@/ui/read-failure";
+import { RunRowControls } from "./run-row-controls";
 
 type Place = { org: string; ws: string };
 
@@ -41,7 +42,12 @@ function RunsPageView({
   cursor,
   org,
   ws,
-}: { page: RunPage; cursor: string | null } & Place) {
+  canCommand,
+}: {
+  page: RunPage;
+  cursor: string | null;
+  canCommand: boolean;
+} & Place) {
   const t = useTranslations("fleet.runs");
   const format = useFormatter();
   const locale = useLocale();
@@ -57,6 +63,7 @@ function RunsPageView({
     { label: t("columns.cost"), numeric: true },
     { label: t("columns.frames"), numeric: true },
     { label: t("columns.started") },
+    { label: t("columns.controls") },
   ];
   return (
     <>
@@ -151,6 +158,17 @@ function RunsPageView({
                 })}
               </time>
             </td>
+            <td className={cell}>
+              <RunRowControls
+                org={org}
+                ws={ws}
+                runId={run.id}
+                status={run.status}
+                source={run.source}
+                enforcementTier={run.enforcementTier}
+                canCommand={canCommand}
+              />
+            </td>
           </tr>
         ))}
       </Table>
@@ -181,11 +199,14 @@ export function RunsTable({
   workspace,
   org,
   ws,
+  canCommand,
 }: {
   runs: Read<RunPage>;
   cursor: string | null;
   /** The workspace's display name, for the empty state. */
   workspace: string;
+  /** Whether `dispatch_command` admits this viewer, resolved once for the page. */
+  canCommand: boolean;
 } & Place) {
   const t = useTranslations("fleet.runs");
   return (
@@ -198,7 +219,13 @@ export function RunsTable({
       ) : runs.value.runs.length === 0 && cursor === null ? (
         <EmptyRuns workspace={workspace} />
       ) : (
-        <RunsPageView page={runs.value} cursor={cursor} org={org} ws={ws} />
+        <RunsPageView
+          page={runs.value}
+          cursor={cursor}
+          org={org}
+          ws={ws}
+          canCommand={canCommand}
+        />
       )}
     </section>
   );

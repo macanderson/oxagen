@@ -28,6 +28,11 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+// The runs table draws the row controls, and a live wrapped run's controls
+// read the router to re-read the table after a queued command.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -235,6 +240,9 @@ describe("runs table", () => {
       "$4.13gateway_observed",
       "1,204",
       "Sep 15, 2026, 8:00 AM",
+      // A live ledger run carries the recorded reason in place of controls:
+      // Oxagen holds no run token it could revoke (WL-61).
+      "This run's evidence comes from an external engine. Oxagen holds no run token it can revoke, so there is nothing here to pause, steer or cancel.",
     ]);
     // The run cell leads with what the run was, keeps the id under it, and
     // labels the model's sentence so it cannot read as the record.
