@@ -4,11 +4,13 @@ import { PgDialect } from "drizzle-orm/pg-core";
 const queries = vi.hoisted(() => ({
   predicates: [] as import("drizzle-orm").SQL[],
   shared: [{ id: "notification-1" }],
+  workspace: [{ id: "notification-2" }],
 }));
 beforeEach(() => {
   vi.clearAllMocks();
   queries.predicates.length = 0;
   queries.shared = [{ id: "notification-1" }];
+  queries.workspace = [{ id: "notification-2" }];
 });
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -21,7 +23,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           set: () => ({
             where: (predicate: import("drizzle-orm").SQL) => {
               queries.predicates.push(predicate);
-              return { returning: () => Promise.resolve(queries.shared) };
+              return {
+                returning: () =>
+                  Promise.resolve(
+                    queries.predicates.length === 1
+                      ? queries.shared
+                      : queries.workspace,
+                  ),
+              };
             },
           }),
         }),
@@ -85,14 +94,21 @@ describe("notifications.mark handler", () => {
 
 it("falls back to the workspace seam when no shared notification matches", async () => {
   queries.shared = [];
-  await handler({ id: "ntf_workspace", read: true }, ctx);
+  expect(await handler({ id: "ntf_workspace", read: true }, ctx)).toEqual({
+    ok: true,
+  });
   expect(withOrgDb).toHaveBeenCalledTimes(1);
   expect(withTenantDb).toHaveBeenCalledTimes(1);
   const predicate = queries.predicates[1];
   expect(predicate).toBeDefined();
   if (!predicate) throw new Error("Missing workspace update");
   const statement = new PgDialect().sqlToQuery(predicate);
-  expect(statement.params).toEqual(["ntf_workspace", "user-1", "org-1"]);
+  expect(statement.params).toEqual([
+    "ntf_workspace",
+    "user-1",
+    "org-1",
+    "ws-1",
+  ]);
 });
 
 it("does not enter the tenant seam for an organization-only call", async () => {
@@ -103,4 +119,23 @@ it("does not enter the tenant seam for an organization-only call", async () => {
   );
   expect(withOrgDb).toHaveBeenCalledTimes(1);
   expect(withTenantDb).not.toHaveBeenCalled();
+});
+
+it("reports no update for a missing or foreign notification", async () => {
+  queries.shared = [];
+  queries.workspace = [];
+  expect(await handler({ id: "ntf_foreign", read: true }, ctx)).toEqual({
+    ok: false,
+  });
+  const statements = queries.predicates.map((predicate) =>
+    new PgDialect().sqlToQuery(predicate),
+  );
+  expect(statements[0]?.params).toEqual(["ntf_foreign", "user-1", "org-1"]);
+  expect(statements[1]?.params).toEqual([
+    "ntf_foreign",
+    "user-1",
+    "org-1",
+    "ws-1",
+  ]);
+  expect(statements[1]?.sql).toContain('"workspace_id" =');
 });

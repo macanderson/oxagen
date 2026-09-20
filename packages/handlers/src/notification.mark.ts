@@ -33,6 +33,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     return { ok: true };
   }
 
+  let matched = false;
   try {
     const ownership = and(
       eq(schema.notifications.publicId, id),
@@ -46,14 +47,25 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         .where(and(ownership, isNull(schema.notifications.workspaceId)))
         .returning({ id: schema.notifications.id }),
     );
+    matched = shared.length > 0;
     if (
       shared.length === 0 &&
       ctx.workspaceId &&
       ctx.workspaceId !== ORG_ONLY_WORKSPACE_ID
     ) {
-      await withTenantDb((tx) =>
-        tx.update(schema.notifications).set(updates).where(ownership),
+      const workspaceRows = await withTenantDb((tx) =>
+        tx
+          .update(schema.notifications)
+          .set(updates)
+          .where(
+            and(
+              ownership,
+              eq(schema.notifications.workspaceId, ctx.workspaceId!),
+            ),
+          )
+          .returning({ id: schema.notifications.id }),
       );
+      matched = workspaceRows.length > 0;
     }
   } catch (err) {
     logger.error(
@@ -67,5 +79,5 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     { id, orgId: ctx.orgId, userId: ctx.userId },
     "notifications.mark: ok",
   );
-  return { ok: true };
+  return { ok: matched };
 };
