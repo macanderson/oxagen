@@ -39,7 +39,7 @@ function Detail({ detail }: { detail: ConnectionDetail }) {
           <span className={`${mono} break-all`}>{detail.id}</span>
         </Fact>
         <Fact name="connector" term={t("facts.connector")}>
-          <span className={mono}>{detail.connectorId}</span>
+          <span className={mono}>{detail.connector}</span>
         </Fact>
         <Fact name="auth" term={t("facts.auth")}>
           <span className={mono}>{detail.authScheme}</span>

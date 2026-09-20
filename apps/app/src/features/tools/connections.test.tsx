@@ -42,7 +42,6 @@ const { connectionList, credentialGrantPage } = await import(
   "./tools.builders"
 );
 const { connectionGetOutput } = await import("@/test/tools-outputs");
-const { toConnectionDetail } = await import("@/data/live/mappers/tools");
 const { ConnectionDetail } = await import("@/data/contracts/tools");
 
 const at = { org: "acme", ws: "core-platform" };
@@ -82,8 +81,19 @@ function fill(label: string | RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
-const detail = () =>
-  ConnectionDetail.parse(toConnectionDetail(connectionGetOutput()));
+/**
+ * One connection as the drawer is handed it: the contract's record with its
+ * database uuid dropped and its public id carried as `id` (INV-11), which is
+ * what `readConnection` does.
+ */
+function detail() {
+  const { id: _rowId, publicId, connectorId, ...rest } = connectionGetOutput();
+  return ConnectionDetail.parse({
+    id: publicId,
+    connector: connectorId,
+    ...rest,
+  });
+}
 
 beforeEach(() => {
   for (const fn of [router.replace, addConnection, readConnection]) {
@@ -284,12 +294,12 @@ describe("Add connection", () => {
     await screen.findByTestId("connection-add-done");
     // Not in an input, and not anywhere else in the document: the form is
     // replaced by the outcome and the outcome names the connection only.
-    for (const input of document.querySelectorAll("input, textarea")) {
-      expect((input as HTMLInputElement).value).not.toContain(
-        "tok-live-secret",
-      );
+    for (const field of document.querySelectorAll("input, textarea")) {
+      if (field instanceof HTMLInputElement) {
+        expect(field.value).not.toContain("tok-live-secret");
+      }
     }
-    expect(document.body.textContent ?? "").not.toContain("tok-live-secret");
+    expect(document.body.textContent).not.toContain("tok-live-secret");
   });
 
   it("offers the control to a member and lets the server refuse them", async () => {

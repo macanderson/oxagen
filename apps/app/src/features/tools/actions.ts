@@ -35,7 +35,6 @@ import {
   ConnectionDetail,
   type ConnectionDetail as ConnectionDetailView,
 } from "@/data/contracts/tools";
-import { toConnectionDetail } from "@/data/live/mappers/tools";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -509,7 +508,29 @@ export async function readConnection(
     page: "tools",
   });
   if (!read.ok) return readToActionResult<never>(read);
-  const parsed = ConnectionDetail.safeParse(toConnectionDetail(read.value));
+  // Mapped here rather than in `data/live/mappers`: an on-demand read belongs
+  // to the action that makes it, and a feature may not import a live mapper
+  // (INV-07). The record's database uuid is dropped on the way (INV-11).
+  const out = read.value;
+  const parsed = ConnectionDetail.safeParse({
+    id: out.publicId,
+    connector: out.connectorId,
+    displayName: out.displayName,
+    authScheme: out.authScheme,
+    deliveryMethod: out.deliveryMethod,
+    status: out.status,
+    entityCount: out.entityCount,
+    lastSyncAt: out.lastSyncAt,
+    healthStatus: out.healthStatus,
+    lastPollAt: out.lastPollAt,
+    nextPollAt: out.nextPollAt,
+    createdAt: out.createdAt,
+    deliveryConfig: out.deliveryConfig,
+    errorMessage: out.errorMessage,
+    consecutiveFailureCount: out.consecutiveFailureCount,
+    lastErrorAt: out.lastErrorAt,
+    updatedAt: out.updatedAt,
+  });
   if (!parsed.success) {
     return { ok: false, reason: "unavailable", code: "record_unmappable" };
   }

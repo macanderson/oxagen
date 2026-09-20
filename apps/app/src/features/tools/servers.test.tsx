@@ -206,9 +206,11 @@ describe("RegisterServer", () => {
     fireEvent.submit(formOf(screen.getByText("Register server")));
     await screen.findByTestId("server-register-done");
     for (const field of document.querySelectorAll("input, textarea")) {
-      expect((field as HTMLInputElement).value).not.toContain("secret-value");
+      if (field instanceof HTMLInputElement) {
+        expect(field.value).not.toContain("secret-value");
+      }
     }
-    expect(document.body.textContent ?? "").not.toContain("secret-value");
+    expect(document.body.textContent).not.toContain("secret-value");
   });
 
   it("says a stdio server is not probed from here", () => {

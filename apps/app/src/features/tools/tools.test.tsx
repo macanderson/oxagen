@@ -1160,7 +1160,9 @@ describe("Tools › mandates ledger › grant", () => {
       mandateList([mandateRow({ status: "active" }), draft()]),
     );
     expect(
-      within(ledger()).getByRole("button", { name: "Grant mandate mnd_7c1d2e" }),
+      within(ledger()).getByRole("button", {
+        name: "Grant mandate mnd_7c1d2e",
+      }),
     ).toBeInTheDocument();
     expect(
       within(ledger()).queryByRole("button", {
@@ -1284,13 +1286,17 @@ describe("Tools › auto-approvals", () => {
       refunds.getByText("counterparty matches cus_*, vendor:aws"),
     ).toBeVisible();
     expect(
-      refunds.getByText("Mon, Tue, Wed, Thu, Fri, 09:00 to 17:00 (Europe/London)"),
+      refunds.getByText(
+        "Mon, Tue, Wed, Thu, Fri, 09:00 to 17:00 (Europe/London)",
+      ),
     ).toBeVisible();
     expect(refunds.getByText("Checked against: moves_money")).toBeVisible();
     expect(refunds.getByText(/usr_01k5a1/)).toBeVisible();
     expect(refunds.getByText("212")).toBeVisible();
     expect(refunds.getByText("9")).toBeVisible();
-    expect(ruleRow("small-refunds").querySelector('[data-state="on"]')).not.toBeNull();
+    expect(
+      ruleRow("small-refunds").querySelector('[data-state="on"]'),
+    ).not.toBeNull();
 
     const deploys = within(ruleRow("repeat-deploys"));
     expect(
@@ -1299,7 +1305,9 @@ describe("Tools › auto-approvals", () => {
       ),
     ).toBeVisible();
     expect(deploys.getByText(/by no recorded person/)).toBeVisible();
-    expect(ruleRow("repeat-deploys").querySelector('[data-state="off"]')).not.toBeNull();
+    expect(
+      ruleRow("repeat-deploys").querySelector('[data-state="off"]'),
+    ).not.toBeNull();
   });
 
   // A rule with no stamp does not qualify until it is written again. The row
@@ -1362,7 +1370,11 @@ describe("Tools › auto-approvals", () => {
   });
 
   it("answers a denied read with the access-denied panel and the tab to try again", async () => {
-    await renderRules({ ok: false, reason: "denied", permission: "tools.read" });
+    await renderRules({
+      ok: false,
+      reason: "denied",
+      permission: "tools.read",
+    });
     expect(screen.getByTestId("tools-denied")).toBeVisible();
     cleanup();
     await renderRules(readError("tool_registry_unavailable", 503));
@@ -1440,8 +1452,9 @@ describe("Tools › auto-approvals", () => {
   // role the handler would refuse without the test saying which.
   it("reads for exactly the roles list_approval_rules grants", () => {
     expect(
-      (["owner", "admin", "compliance", "member", "billing", "viewer"] as const)
-        .filter((role) => orgGrants(approvalRuleList, role)),
+      (
+        ["owner", "admin", "compliance", "member", "billing", "viewer"] as const
+      ).filter((role) => orgGrants(approvalRuleList, role)),
     ).toEqual(["owner", "admin", "compliance"]);
   });
 });

@@ -303,8 +303,12 @@ export type ConnectionHealth = z.infer<typeof ConnectionHealth>;
 
 export const Connection = z.object({
   id: PublicId,
-  /** The connector type slug the row was created against (`github`, `stripe`). */
-  connectorId: z.string().min(1),
+  /**
+   * The connector type slug the row was created against (`github`, `stripe`).
+   * Not an id: it names a connector this deployment ships, and INV-11 reserves
+   * an `…Id` field for a public id.
+   */
+  connector: z.string().min(1),
   displayName: z.string().min(1),
   /** How the stored credential authenticates; free text on the contract. */
   authScheme: z.string().min(1),

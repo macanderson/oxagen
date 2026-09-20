@@ -4,7 +4,6 @@
 // handler counted it — no count, digest or duration is computed here.
 import type { agentMcpList } from "@oxagen/oxagen/contracts/agent.mcp.list";
 import type { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
-import type { connectionGet } from "@oxagen/oxagen/contracts/connection.get";
 import type { connectionList } from "@oxagen/oxagen/contracts/connection.list";
 import type { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import type { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
@@ -12,7 +11,6 @@ import type { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list
 import type { z } from "zod";
 import type {
   ApprovalRuleSet,
-  ConnectionDetail,
   ConnectionList,
   CredentialGrantPage,
   KillSwitchBoard,
@@ -164,7 +162,7 @@ export function toConnectionList(
   return {
     connections: out.connections.map((item) => ({
       id: item.publicId,
-      connectorId: item.connectorId,
+      connector: item.connectorId,
       displayName: item.displayName,
       authScheme: item.authScheme,
       deliveryMethod: item.deliveryMethod,
@@ -176,31 +174,6 @@ export function toConnectionList(
       nextPollAt: item.nextPollAt,
       createdAt: item.createdAt,
     })),
-  };
-}
-
-/** `get_connection` as the detail drawer reads it: the row, plus why it is failing. */
-export function toConnectionDetail(
-  out: ContractOutput<typeof connectionGet>,
-): z.input<typeof ConnectionDetail> {
-  return {
-    id: out.publicId,
-    connectorId: out.connectorId,
-    displayName: out.displayName,
-    authScheme: out.authScheme,
-    deliveryMethod: out.deliveryMethod,
-    status: out.status,
-    entityCount: out.entityCount,
-    lastSyncAt: out.lastSyncAt,
-    healthStatus: out.healthStatus,
-    lastPollAt: out.lastPollAt,
-    nextPollAt: out.nextPollAt,
-    createdAt: out.createdAt,
-    deliveryConfig: out.deliveryConfig,
-    errorMessage: out.errorMessage,
-    consecutiveFailureCount: out.consecutiveFailureCount,
-    lastErrorAt: out.lastErrorAt,
-    updatedAt: out.updatedAt,
   };
 }
 

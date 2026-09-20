@@ -215,7 +215,7 @@ function ConnectionRow({ at, item }: { at: ToolsAt; item: Connection }) {
         </ConnectionDrawer>
       </td>
       <td className={cell}>
-        <Chip>{item.connectorId}</Chip>
+        <Chip>{item.connector}</Chip>
       </td>
       <td className={cell}>
         <span className="flex flex-wrap gap-1">
@@ -293,7 +293,7 @@ function ConnectionsTable({
   // capability lists the connectors, and inventing that list here would offer
   // a slug the handler may refuse.
   const connectors = [
-    ...new Set(connections.map((item) => item.connectorId)),
+    ...new Set(connections.map((item) => item.connector)),
   ].sort();
   const add = <AddConnection at={at} connectors={connectors} />;
   if (connections.length === 0) {

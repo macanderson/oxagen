@@ -283,9 +283,17 @@ export const CONNECTION_SCHEMES = {
 
 export type ConnectionScheme = keyof typeof CONNECTION_SCHEMES;
 
-export const CONNECTION_SCHEME_NAMES = Object.keys(
-  CONNECTION_SCHEMES,
-) as readonly ConnectionScheme[];
+/**
+ * The schemes in the order the select offers them. Written out rather than
+ * taken from `Object.keys`, which types its answer as `string[]` and would
+ * need an assertion to get the union back.
+ */
+export const CONNECTION_SCHEME_NAMES = [
+  "api_key",
+  "bearer_token",
+  "basic_auth",
+  "connection_string",
+] as const satisfies readonly ConnectionScheme[];
 
 /** The scheme the dialog opens on, and what an unreadable form value falls back to. */
 export const DEFAULT_CONNECTION_SCHEME: ConnectionScheme = "api_key";
