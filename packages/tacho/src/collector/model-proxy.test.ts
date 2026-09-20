@@ -734,9 +734,9 @@ describe("the loopback model proxy", () => {
       expect(readFileSync(file, "latin1").includes(LEAKED_KEY)).toBe(false);
   });
 
-  it("propagates a client abort upstream and records the partial stream", async () => {
+  it("propagates a client abort without blaming the upstream and records the partial stream", async () => {
     const fake = await vendor(streamingAnthropic(150));
-    const { port, session, frames } = await boot(fake.url);
+    const { port, session, frames, log } = await boot(fake.url);
     const uuid = await session("sess-abort");
     const answer = await call(port, {
       path: "/anthropic/v1/messages",
@@ -753,6 +753,9 @@ describe("the loopback model proxy", () => {
       input_tokens: 1000,
       output_tokens: 1,
     });
+    expect(log.filter((line) => line.includes("failed mid-response"))).toEqual(
+      [],
+    );
   });
 
   it("routes Codex by its credential, correlates by session-id, and forwards a zstd body untouched", async () => {
@@ -1017,7 +1020,7 @@ describe("the loopback model proxy", () => {
       res.write(ANTHROPIC_EVENTS[0]);
       // Then silence: the vendor is still thinking when the operator pauses.
     });
-    const { handle, plane, port, session, frames } = await boot(fake.url);
+    const { handle, plane, port, session, frames, log } = await boot(fake.url);
     const uuid = await session("sess-pause");
     const ask = () =>
       call(port, {
@@ -1045,6 +1048,9 @@ describe("the loopback model proxy", () => {
       input_tokens: 1000,
     });
     expect(frames(uuid)[0]!.attrs["oxagen.interrupted"]).toBe("1");
+    expect(log.filter((line) => line.includes("failed mid-response"))).toEqual(
+      [],
+    );
 
     const refused = await ask();
     expect(refused.status).toBe(403);
@@ -1316,7 +1322,7 @@ describe("the loopback model proxy", () => {
       res.write(ANTHROPIC_EVENTS[0]);
       setTimeout(() => res.destroy(), 30);
     });
-    const { handle, port, session, frames } = await boot(fake.url);
+    const { handle, port, session, frames, log } = await boot(fake.url);
     const uuid = await session("sess-hard");
     const headers = ["X-Claude-Code-Session-Id", "sess-hard"];
 
@@ -1344,6 +1350,9 @@ describe("the loopback model proxy", () => {
       api_error_class: "upstream_reset",
       input_tokens: 1000,
     });
+    expect(
+      log.filter((line) => line.includes("failed mid-response")),
+    ).toHaveLength(1);
 
     const upgrade = await new Promise<string>((resolve) => {
       const socket = connect(port, "127.0.0.1", () =>

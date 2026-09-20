@@ -101,6 +101,7 @@ import {
 } from "./registry";
 import {
   type CollectorApi,
+  type CollectorServer,
   createCollectorServer,
   type HookEnvelope,
 } from "./server";
@@ -289,6 +290,54 @@ class Serial {
 
 export async function startDaemon(
   options: DaemonOptions,
+): Promise<DaemonHandle> {
+  const loaded = options.host ?? readHostFile(options.paths.hostFile);
+  if (loaded === undefined) {
+    throw new Error(
+      `no enrollment at ${options.paths.hostFile}; run \`tacho enroll\` first`,
+    );
+  }
+  ensureDir(options.paths.root);
+  let ready: CollectorApi | undefined;
+  const log =
+    options.log ??
+    ((line: string) => {
+      const now = options.now?.() ?? Date.now();
+      process.stderr.write(`${new Date(now).toISOString()} tachod ${line}\n`);
+    });
+  const server = createCollectorServer(() => ready, log);
+  let port: number | undefined;
+  try {
+    // Own the listeners before loading recorder state or appending any WAL
+    // frame. A rejected second process must leave the active chains untouched.
+    if (options.listen ?? true) {
+      const unixSocket = (options.platform ?? process.platform) !== "win32";
+      port = (
+        await server.listen({
+          ...(unixSocket ? { socketPath: options.paths.socket } : {}),
+          port: options.port ?? loaded.port,
+        })
+      ).port;
+    }
+    return await initializeDaemon(
+      { ...options, host: loaded, log },
+      server,
+      port,
+      (api) => {
+        ready = api;
+      },
+    );
+  } catch (error) {
+    await server.close();
+    throw error;
+  }
+}
+
+async function initializeDaemon(
+  options: DaemonOptions,
+  server: CollectorServer,
+  port: number | undefined,
+  ready: (api: CollectorApi) => void,
 ): Promise<DaemonHandle> {
   const paths = options.paths;
   const now = options.now ?? (() => Date.now());
@@ -1803,15 +1852,9 @@ export async function startDaemon(
     ]);
   }
 
-  const server = createCollectorServer(api, log);
-  let port: number | undefined;
+  ready(api);
   if (options.listen ?? true) {
     const unixSocket = (options.platform ?? process.platform) !== "win32";
-    const listening = await server.listen({
-      ...(unixSocket ? { socketPath: paths.socket } : {}),
-      port: options.port ?? host.port,
-    });
-    port = listening.port;
     log(
       unixSocket
         ? `listening on ${paths.socket} and 127.0.0.1:${port ?? "?"}`

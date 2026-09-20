@@ -51,6 +51,19 @@ describe("retainsBody", () => {
     expect(retainsBody("tool_call", exact(["tool_call"]))).toBe(true);
   });
 
+  it("retains compaction summaries only when model content is authorized", () => {
+    expect(contentClassOf("oxagen:compaction")).toBe("model_call");
+    expect(retainsBody("oxagen:compaction", exact(["model_call"]))).toBe(true);
+    expect(retainsBody("oxagen:compaction", exact(["tool_call"]))).toBe(false);
+    expect(
+      retainsBody("oxagen:compaction", {
+        mode: "digest_only",
+        classes: ["model_call"],
+      }),
+    ).toBe(false);
+    expect(retainsBody("oxagen:compaction", undefined)).toBe(false);
+  });
+
   it("keeps nothing when the mandate names no class", () => {
     // `content_exact` says exact bytes MAY be kept. The classes say which.
     // An empty list authorises none of them, and reading the mode alone
@@ -117,6 +130,7 @@ describe("one table, not two", () => {
       "turn_end",
       "llm_call",
       "oxagen:message",
+      "oxagen:compaction",
       "subagent_stop",
       "tool_requested",
       "tool_call",

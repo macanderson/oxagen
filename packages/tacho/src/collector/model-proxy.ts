@@ -935,16 +935,22 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         decoder.once("error", () => settle(undefined));
         decoder.end();
       });
-      upstream.on("error", (error) => {
-        deps.log(
-          `model proxy: upstream ${target.host} failed mid-response: ${error.message}`,
-        );
+      // Node emits both aborted and error when a response is destroyed, even
+      // when this proxy destroyed it because the caller left. Classify and
+      // report the first failure only, preserving an already recorded cause.
+      const failResponse = (error?: Error): void => {
+        if (settled) return;
+        if (abortReason === undefined) {
+          deps.log(
+            `model proxy: upstream ${target.host} failed mid-response: ${error?.message ?? "aborted"}`,
+          );
+        }
         settle(abortReason !== undefined ? "interrupted" : "upstream_reset");
         res.destroy();
-      });
+      };
+      upstream.on("error", failResponse);
       upstream.on("aborted", () => {
-        settle(abortReason !== undefined ? "interrupted" : "upstream_reset");
-        res.destroy();
+        failResponse();
       });
       // `pipe` carries the backpressure: a slow reader pauses the vendor's
       // stream instead of growing a buffer here.

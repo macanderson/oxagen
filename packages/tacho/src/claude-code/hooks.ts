@@ -120,6 +120,7 @@ const PROMOTED = new Set([
   "user_response",
   "config_source",
   "custom_instructions",
+  "compact_summary",
   "teammate_name",
   "subagent_result",
 ]);
@@ -569,6 +570,7 @@ export function normalizeHook(
     case "PostCompact": {
       const trigger = str(input["trigger"]);
       const custom = str(input["custom_instructions"]);
+      const summary = str(input["compact_summary"]);
       return [
         draft(
           "oxagen:compaction",
@@ -580,6 +582,8 @@ export function normalizeHook(
           },
           {
             hook_source_kind: `${input.hook_event_name}:${trigger ?? "unknown"}`,
+            // Summary text follows normal content redaction and retention.
+            ...(summary !== undefined ? { content: textContent(summary) } : {}),
           },
         ),
       ];
