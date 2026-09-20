@@ -260,8 +260,8 @@ export class Wal {
     for (const [session, idems] of wanted) {
       const path = this.bodyFileFor(session);
       if (!existsSync(path)) continue;
-      let reportedInvalid = false;
       try {
+        let reportedInvalid = false;
         for (const line of readLines(path)) {
           if (line.trim().length === 0) continue;
           let stored: StoredBody;
@@ -277,7 +277,9 @@ export class Wal {
               throw new Error("Invalid body record");
           } catch {
             if (!reportedInvalid) {
-              this.bodyFailure(session, "read", { code: "invalid_body_record" });
+              this.bodyFailure(session, "read", {
+                code: "invalid_body_record",
+              });
               reportedInvalid = true;
             }
             continue;
