@@ -422,7 +422,13 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Generate with `openssl rand -base64 32`.",
     secret: true,
     clientExposed: false,
-    services: ["api", "app"],
+    // `mcp` because ADR-131 envelopes a minted assistant model key with this
+    // KEK, and `create_organization` declares the `mcp` surface. Without it
+    // there, `recordAssistantModelKey` raises AssistantModelKeyKekUnsetError,
+    // the caller unwinds by deleting the key it just minted, and the
+    // organisation stays on the shared key — the same silent outcome as an
+    // absent management key, one step further along.
+    services: ["api", "app", "mcp"],
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
@@ -1216,6 +1222,14 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     // 25 that used to sit here is the code's own fallback in
     // `dailyLimitUsd()` and `env.ts`, so an unset variable still mints at 25.
     valueOrigin: "manual",
+    // The placeholder is not cosmetic. `renderEnvExample` writes `KEY=` for a
+    // manual var with none, and a developer who copies .env.example to
+    // .env.local then hands `loadEnv()` an empty string rather than nothing.
+    // `z.coerce.number()` turns "" into 0, `.positive()` rejects 0, and
+    // `.default(25)` never fires because the value is not undefined — so the
+    // API refuses to start. Every other optional numeric var here carries one
+    // for the same reason.
+    placeholder: "25",
   },
   STELLA_SERVE_URL: {
     group: "Agent engine",

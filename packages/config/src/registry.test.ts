@@ -249,4 +249,37 @@ describe("ADR-131 per-organisation key provisioning", () => {
       "manual",
     );
   });
+
+  // Unset and empty are different inputs and only one of them is safe.
+  // `renderEnvExample` writes `KEY=` for a manual var with no placeholder, and
+  // a developer following the documented `cp .env.example .env.local` then
+  // hands `loadEnv()` an empty string. `z.coerce.number()` turns "" into 0,
+  // `.positive()` rejects it, and `.default(25)` never fires because the value
+  // is not undefined — the API refuses to start on a file it was told to copy.
+  it("renders a usable daily ceiling in .env.example rather than an empty one", () => {
+    expect(renderEnvExample()).toContain(
+      "\nOPENROUTER_ORG_KEY_DAILY_LIMIT_USD=25",
+    );
+  });
+
+  it("rejects the empty string the generator would otherwise emit", () => {
+    expect(
+      baseEnvSchema.shape.OPENROUTER_ORG_KEY_DAILY_LIMIT_USD.safeParse("")
+        .success,
+    ).toBe(false);
+    expect(
+      baseEnvSchema.shape.OPENROUTER_ORG_KEY_DAILY_LIMIT_USD.parse(undefined),
+    ).toBe(25);
+  });
+
+  // Minting is only half of provisioning. `recordAssistantModelKey` envelopes
+  // the key with this KEK and raises AssistantModelKeyKekUnsetError without it,
+  // after which the caller deletes the key it just minted and the organisation
+  // stays on the shared key. A service that can create an organisation needs
+  // both variables or it silently achieves nothing.
+  it("routes the envelope KEK to every service that can store a minted key", () => {
+    expect(ENV_REGISTRY.AUTH_TOKEN_ENCRYPTION_KEY?.services).toEqual(
+      expect.arrayContaining(["api", "app", "mcp"]),
+    );
+  });
 });
