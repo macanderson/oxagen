@@ -24,7 +24,7 @@
  * import cycle.
  */
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { ruleSetSchema } from "./schema";
 import type { RuleSet } from "./types";
@@ -95,4 +95,24 @@ export async function loadWorkspaceRuleSet(args: {
     return cached.ruleSet;
   }
   return withTenantDb((tx) => loadRuleSetIn(tx, workspaceId));
+}
+
+/** External transports have no fallback governance path, so invalid rules refuse the call. */
+export async function loadExternalRuleSet(args: {
+  orgId: string;
+  workspaceId: string | null;
+}): Promise<RuleSet | null> {
+  if (!args.workspaceId) throw new Error("External rules require a workspace");
+  return withTenantDb(async (tx) => {
+    const row = await tx.query.workspaces.findFirst({
+      where: and(
+        eq(schema.workspaces.id, args.workspaceId!),
+        eq(schema.workspaces.orgId, args.orgId),
+      ),
+      columns: { settings: true },
+    });
+    if (!row) throw new Error("External rule workspace is unavailable");
+    const raw = (row.settings as Record<string, unknown> | null)?.decisionRules;
+    return raw == null ? null : ruleSetSchema.parse(raw);
+  });
 }

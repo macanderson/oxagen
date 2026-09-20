@@ -34,6 +34,16 @@ const FIXTURE = [
   },
 ];
 
+const externalRulesMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+);
+vi.mock("./external-tool-rules", () => ({
+  externalDecisionCheck: () => externalRulesMock,
+}));
+beforeEach(() => {
+  externalRulesMock.mockReset().mockResolvedValue(undefined);
+});
+
 vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: () => FIXTURE,
   getSurfaces: (c: { surfaces?: readonly string[] }) =>
@@ -857,6 +867,47 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     expect(fakeExecute).toHaveBeenCalledTimes(1);
   });
 
+  it.each([1, 2, 3])(
+    "blocks the transport when external rules refuse at check %i",
+    async (checkNumber) => {
+      for (let i = 1; i < checkNumber; i++)
+        externalRulesMock.mockResolvedValueOnce(undefined);
+      externalRulesMock.mockRejectedValueOnce(
+        new Error("external decision denied"),
+      );
+      const { tools } = await materializeTools(CTX);
+      const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as unknown as {
+        execute: (input: unknown) => Promise<unknown>;
+      };
+      await expect(t.execute({})).rejects.toThrow("external decision denied");
+      expect(fakeExecute).not.toHaveBeenCalled();
+      expect(externalRulesMock).toHaveBeenCalledTimes(checkNumber);
+    },
+  );
+
+  it("refuses IAM revoked during an external approval or consent wait", async () => {
+    vi.mocked(authorizeExternalCapability)
+      .mockResolvedValueOnce({
+        allowed: true,
+        outcome: "allow",
+        reason: null,
+        decision: null,
+      })
+      .mockResolvedValueOnce({
+        allowed: false,
+        outcome: "deny",
+        reason: "revoked_during_wait",
+        decision: null,
+      });
+    const { tools } = await materializeTools(CTX);
+    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as unknown as {
+      execute: (input: unknown) => Promise<unknown>;
+    };
+    expect(await t.execute({})).toContain("revoked_during_wait");
+    expect(fakeExecute).not.toHaveBeenCalled();
+    expect(authorizeExternalCapability).toHaveBeenCalledTimes(2);
+  });
+
   it("runs the IAM gate inside the turn's tenant scope (regression: fetchAuthz needs withTenantDb)", async () => {
     let scopeAtIam: unknown = "UNSET";
     vi.mocked(authorizeExternalCapability).mockImplementationOnce(async () => {
@@ -1162,7 +1213,7 @@ describe("materializeTools — kill switches (spec §6.11)", () => {
       connectionId: null,
       readOnly: false,
     });
-    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as {
+    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as unknown as {
       execute?: (i: unknown) => Promise<unknown>;
     };
     const result = await t.execute!({});
@@ -1245,7 +1296,7 @@ describe("materializeTools — kill switches (spec §6.11)", () => {
       messageId: "msg_42",
       userId: "u_1",
     });
-    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as {
+    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as unknown as {
       execute?: (i: unknown) => Promise<unknown>;
     };
     const result = await t.execute!({});
