@@ -1,10 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { HandlerError, isHandlerError } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
   insertReturning: vi.fn(),
   findFirst: vi.fn(),
+  /** The organization roles the caller holds; the gate admits Owner or Admin. */
+  callerOrgRoles: ["Owner"] as string[],
 }));
 
 // Default: insert succeeds and returns a row.
@@ -16,6 +19,27 @@ const DEFAULT_ROW = {
 
 mocks.insertReturning.mockResolvedValue([DEFAULT_ROW]);
 mocks.findFirst.mockResolvedValue(null);
+
+// The organization-role gate, stubbed so the suite decides who is calling
+// without a database. The handler writes an organization invitation carrying
+// an organization role, so only an org Owner or Admin may issue one.
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (c: { userId: string | null }) => c.userId,
+  assertOrgRole: async (
+    actor: { userId: string | null },
+    required: { org: string[] },
+  ) => {
+    if (!actor.userId)
+      throw new HandlerError({ code: "forbidden", reason: "no_principal" });
+    const match = mocks.callerOrgRoles.find((r) => required.org.includes(r));
+    if (!match)
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "role_not_permitted",
+      });
+    return match;
+  },
+}));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -52,6 +76,7 @@ describe("workspaceInviteSendHandler (@oxagen/handlers)", () => {
     vi.clearAllMocks();
     mocks.insertReturning.mockResolvedValue([DEFAULT_ROW]);
     mocks.findFirst.mockResolvedValue(null);
+    mocks.callerOrgRoles = ["Owner"];
   });
 
   // ── auth guard ────────────────────────────────────────────────────────────
@@ -64,6 +89,33 @@ describe("workspaceInviteSendHandler (@oxagen/handlers)", () => {
         anonCtx,
       ),
     ).rejects.toThrow("workspace.invite.send requires an authenticated user");
+  });
+
+  // A member who is neither Owner nor Admin reaching the capability on any
+  // surface could otherwise invite an account as Owner and take the
+  // organization over: the contract's defaultRoles do not gate the call on
+  // their own, because check-iam fast-paths a non-enterprise human principal.
+  it.each(["member", "admin", "owner"] as const)(
+    "refuses a Member inviting with role %s, and writes nothing",
+    async (role) => {
+      mocks.callerOrgRoles = ["Member"];
+      const err = await workspaceInviteSendHandler(
+        { email: "mallory@example.com", role },
+        CTX,
+      ).catch((e: unknown) => e);
+      expect(isHandlerError(err) && err.code).toBe("forbidden");
+      expect(mocks.insertReturning).not.toHaveBeenCalled();
+    },
+  );
+
+  it("admits an org Admin", async () => {
+    mocks.callerOrgRoles = ["Admin"];
+    await expect(
+      workspaceInviteSendHandler(
+        { email: "alice@example.com", role: "member" },
+        CTX,
+      ),
+    ).resolves.toMatchObject({ status: "pending" });
   });
 
   // ── happy path: new invite ────────────────────────────────────────────────

@@ -4,7 +4,25 @@ import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import { sendEmail, invitationEmailTemplate } from "@oxagen/notifications";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { logger, maskEmail } from "./logger";
+
+/**
+ * Who may issue an organization invitation.
+ *
+ * The row this handler writes is the organization's and it carries an
+ * organization role, so the gate is an organization role and nothing else.
+ * `check-iam.ts` fast-paths a non-enterprise human principal, so the
+ * contract's `defaultRoles` do not gate a call on their own: without this
+ * check any member of the organization reaching the capability on any
+ * surface could invite an account as Owner and take the organization over.
+ *
+ * This is narrower than the contract's `defaultRoles`, which also admit a
+ * workspace Owner or Admin. A workspace role grants authority inside one
+ * workspace; the invitation grants authority over the whole organization,
+ * so the workspace leg is deliberately not offered here.
+ */
+const ORG_INVITE_ROLES = ["Owner", "Admin"] as const;
 
 /** Map workspace-level invite role to title-cased org-level role. */
 function mapRole(role: "member" | "admin" | "owner"): string {
@@ -26,6 +44,13 @@ export const workspaceInviteSendHandler: CapabilityHandler<
     );
     throw new Error("workspace.invite.send requires an authenticated user");
   }
+
+  // Throws HandlerError `forbidden`, which every surface already maps: the
+  // API answers 403 and the app renders its denied state.
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: [...ORG_INVITE_ROLES] },
+  );
 
   const expiresAt = new Date(Date.now() + 7 * 864e5);
   const orgRole = mapRole(input.role);
