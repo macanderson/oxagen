@@ -16,7 +16,14 @@
 // The rule lives on the server, because a `required` attribute is a courtesy
 // and not a gate; this case proves the dialog shows what the refusal said
 // rather than swallowing it.
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -307,13 +314,15 @@ describe("the evaluation the dialog reads again", () => {
     );
     draw();
     await open();
-    expect(screen.getByTestId("eligibility-unread")).toHaveTextContent(
-      "action_failed",
-    );
-    expect(screen.queryByTestId("eligibility-checking")).toBeNull();
-    expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
-      "aria-disabled",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("eligibility-unread")).toHaveTextContent(
+        "action_failed",
+      );
+      expect(screen.queryByTestId("eligibility-checking")).toBeNull();
+      expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
+        "aria-disabled",
+      );
+    });
   });
 
   it("discards a read that settles after its dialog closes", async () => {
