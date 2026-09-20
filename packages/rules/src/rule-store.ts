@@ -102,11 +102,12 @@ export async function loadExternalRuleSet(args: {
   orgId: string;
   workspaceId: string | null;
 }): Promise<RuleSet | null> {
-  if (!args.workspaceId) throw new Error("External rules require a workspace");
+  const workspaceId = args.workspaceId;
+  if (!workspaceId) throw new Error("External rules require a workspace");
   return withTenantDb(async (tx) => {
     const row = await tx.query.workspaces.findFirst({
       where: and(
-        eq(schema.workspaces.id, args.workspaceId!),
+        eq(schema.workspaces.id, workspaceId),
         eq(schema.workspaces.orgId, args.orgId),
       ),
       columns: { settings: true },

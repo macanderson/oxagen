@@ -34,14 +34,19 @@ const FIXTURE = [
   },
 ];
 
+const externalRulesFactory = vi.hoisted(() => vi.fn());
 const externalRulesMock = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 );
 vi.mock("./external-tool-rules", () => ({
-  externalDecisionCheck: () => externalRulesMock,
+  externalDecisionCheck: (args: unknown) => {
+    externalRulesFactory(args);
+    return externalRulesMock;
+  },
 }));
 beforeEach(() => {
   externalRulesMock.mockReset().mockResolvedValue(undefined);
+  externalRulesFactory.mockReset();
 });
 
 vi.mock("@oxagen/oxagen", () => ({
@@ -882,8 +887,46 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       await expect(t.execute({})).rejects.toThrow("external decision denied");
       expect(fakeExecute).not.toHaveBeenCalled();
       expect(externalRulesMock).toHaveBeenCalledTimes(checkNumber);
+      expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "failed", error_class: "Error" }),
+      );
     },
   );
+
+  it("parks external decision approvals without dispatching transport", async () => {
+    const onApprovalRequired = vi.fn();
+    externalRulesMock.mockImplementationOnce(() => {
+      const args = externalRulesFactory.mock.calls[0]?.[0] as {
+        onApprovalRequired: (event: {
+          approvalId: string;
+          capability: string;
+          inputPreview: unknown;
+          riskLevel: "high";
+          expiresAt: string;
+        }) => void;
+      };
+      args.onApprovalRequired({
+        approvalId: "parked-external",
+        capability: "external",
+        inputPreview: {},
+        riskLevel: "high",
+        expiresAt: "2099-01-01T00:00:00Z",
+      });
+    });
+    const { tools } = await materializeTools(CTX, {
+      approvalMode: "park",
+      onApprovalRequired,
+    });
+    const t = tools[`mcp_${MCP_SERVER.id}_list_pull_requests`] as unknown as {
+      execute: (input: unknown) => Promise<unknown>;
+    };
+    await expect(t.execute({})).rejects.toMatchObject({
+      code: "pending_approval",
+      approvalId: "parked-external",
+    });
+    expect(onApprovalRequired).toHaveBeenCalledOnce();
+    expect(fakeExecute).not.toHaveBeenCalled();
+  });
 
   it("refuses IAM revoked during an external approval or consent wait", async () => {
     vi.mocked(authorizeExternalCapability)

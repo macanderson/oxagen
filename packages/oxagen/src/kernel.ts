@@ -2020,7 +2020,11 @@ export async function enforceExternalDecisionRules(
           : "external_decision_refused";
     emitSecurityEvent({
       capability: name,
-      outcome: "deny",
+      outcome:
+        code === "external_rules_unavailable" ||
+        code === "external_decision_refused"
+          ? "error"
+          : "deny",
       surface: ctx.surface,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,

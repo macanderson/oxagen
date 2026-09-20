@@ -927,14 +927,57 @@ export async function materializeTools(
               return `Tool blocked by workspace policy: ${reason}`;
             }
             // ── End IAM gate ────────────────────────────────────────────────
-            const checkDecisionRules = externalDecisionCheck({
+            const admitExternalDecision = externalDecisionCheck({
               name: capturedKey,
               input,
               ctx,
               principal: iamResult.principal,
               runId: opts.runIdRef?.current ?? ctx.agentRun?.runId ?? null,
-              onApprovalRequired: opts.onApprovalRequired,
+              onApprovalRequired: opts.onApprovalRequired
+                ? (event) => {
+                    opts.onApprovalRequired?.(event);
+                    if (opts.approvalMode === "park")
+                      throw new ApprovalPendingError(
+                        event.capability,
+                        event.approvalId,
+                        event.expiresAt,
+                      );
+                  }
+                : undefined,
             });
+            const checkDecisionRules: typeof admitExternalDecision = async (
+              options,
+            ) => {
+              try {
+                await admitExternalDecision(options);
+              } catch (error) {
+                try {
+                  await insertToolInvocation(
+                    buildInvocationPayload(
+                      {
+                        invocationId,
+                        ctx,
+                        capabilityName: capturedKey,
+                        externalServerId,
+                        inputBytes: byteSize(input),
+                      },
+                      {
+                        status: "failed",
+                        outputBytes: 0,
+                        latencyMs: Date.now() - startedAt,
+                        errorClass:
+                          error instanceof Error
+                            ? error.name
+                            : "ExternalDecisionRefused",
+                      },
+                    ),
+                  );
+                } catch {
+                  /* telemetry must never fail the call */
+                }
+                throw error;
+              }
+            };
             await checkDecisionRules();
 
             // ── Agent RBAC MCP rule gate (Phase 4a, spec §3.7) ─────────────

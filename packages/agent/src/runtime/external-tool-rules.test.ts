@@ -173,6 +173,47 @@ describe("external decision admission", () => {
       code: "external_rules_unavailable",
     });
   });
+  it("does not wait when the surface parks its approval card", async () => {
+    rule("require_approval");
+    const parked = new Error("parked");
+    await expect(
+      check(
+        vi.fn(() => {
+          throw parked;
+        }),
+      )(),
+    ).rejects.toBe(parked);
+    expect(mocks.create).toHaveBeenCalledOnce();
+    expect(mocks.wait).not.toHaveBeenCalled();
+  });
+  it("reports infrastructure failures as security errors", async () => {
+    const emit = vi.fn();
+    setSecurityEventEmitter(emit);
+    clearDecisionRulesGate();
+    await expect(check()()).rejects.toMatchObject({
+      code: "external_rules_unavailable",
+    });
+    expect(emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        outcome: "error",
+        errorCode: "external_rules_unavailable",
+      }),
+    );
+    setDecisionRulesGate(
+      createDecisionRulesGate({
+        loadRuleSet: async () => {
+          throw new Error("offline");
+        },
+      }),
+    );
+    await expect(check()()).rejects.toThrow("offline");
+    expect(emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        outcome: "error",
+        errorCode: "external_decision_refused",
+      }),
+    );
+  });
   it("fails closed on a rule loader failure", async () => {
     setDecisionRulesGate(
       createDecisionRulesGate({
