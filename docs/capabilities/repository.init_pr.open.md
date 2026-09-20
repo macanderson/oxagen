@@ -20,7 +20,7 @@ Idempotent: an init pull request already open for the repository is answered as 
 - MCP: `open_init_pr`
 - CLI: `oxagen repo init <bindingId> --workspace-toml <file> [--mode solo|team|regulated] [--governance-toml <file>] [--json]`
 - App: "Add Oxagen to a repository" on the Repositories page, the five-step init wizard
-- Authentication: session or API key; org Owner or Admin, or the workspace's Owner, checked by the handler (INV-29)
+- Authentication: session or API key; org Owner or Admin, checked by the handler
 - Capability name: `open_init_pr`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity
 
@@ -50,7 +50,7 @@ Idempotent: an init pull request already open for the repository is answered as 
 
 | Code | Reason | When |
 |---|---|---|
-| `forbidden` | `no_principal`, `org_role_required` | no acting user, or not an org Owner or Admin or the workspace's Owner |
+| `forbidden` | `no_principal`, `org_role_required` | no acting user, or not an org Owner or Admin |
 | `conflict` | `governance_toml_invalid` | the file does not parse, or declares a different mode |
 | `conflict` | `workspace_toml_invalid` | the file does not parse |
 | `conflict` | `secret_found` | a file carries a credential token, a private key block, a value after a sensitive key, an email address, a social security number or a card number; the message names the file and the finding (`secret_pii_scan`) |

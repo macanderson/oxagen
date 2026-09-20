@@ -2,7 +2,7 @@
 // Repositories page's init wizard).
 //
 // Flow:
-//   1. Role gate — org Owner or Admin, or the workspace's Owner (INV-29).
+//   1. Role gate: org Owner or Admin (repository-binding spec section 2.3).
 //   2. The two files the person reviewed are checked before anything reaches
 //      GitHub: governance.toml must parse and declare exactly the mode they
 //      chose (the Context PR gate reads it on every open and merge, and a file
@@ -114,8 +114,12 @@ export function findAuthorityGrants(
   tree: unknown,
   at: string[] = [],
 ): string[] {
-  if (typeof tree !== "object" || tree === null || Array.isArray(tree))
-    return [];
+  if (Array.isArray(tree)) {
+    return tree.flatMap((value, index) =>
+      findAuthorityGrants(value, [...at, String(index)]),
+    );
+  }
+  if (typeof tree !== "object" || tree === null) return [];
   const found: string[] = [];
   for (const [key, value] of Object.entries(tree)) {
     const path = [...at, key];
@@ -171,7 +175,7 @@ export function createInitPrOpenHandler(
     const actingUserId = await resolveActingUserId(ctx);
     await assertOrgRole(
       { ...ctx, userId: actingUserId },
-      { org: ["Owner", "Admin"], workspace: ["Owner"] },
+      { org: ["Owner", "Admin"] },
     );
 
     const declared = parseGovernanceMode(input.governanceToml);

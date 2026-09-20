@@ -1,3 +1,5 @@
+import { assertCallerRole } from "./lib/capability-role-guard";
+import { pluginCredentialRevoke } from "@oxagen/oxagen/contracts/plugin.credential.revoke";
 import { and, eq, isNull } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
 import { deleteWorkspaceSecret } from "@oxagen/plugins";
@@ -20,6 +22,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     );
   }
 
+  await assertCallerRole(pluginCredentialRevoke, ctx);
   // Load the installed plugin row — must belong to this org + workspace.
   const listing = await withTenantDb(async (tx) => {
     const [row] = await tx

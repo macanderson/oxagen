@@ -30,8 +30,8 @@
  * and `conflict: workspace_toml_invalid`, and `conflict: github_refused` with
  * GitHub's own message when a push is refused.
  *
- * Roles: org Owner or Admin, or the workspace's Owner (INV-29), as
- * `link_repository`. A settings write: `noBillingGate: true`.
+ * Roles: org Owner or Admin (repository-binding spec section 2.3).
+ * A settings write: `noBillingGate: true`.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -56,7 +56,7 @@ export const repositoryInitPrOpen = registerCapability({
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    workspace: { Owner: "allow" },
+    workspace: {},
   },
   input: z
     .object({

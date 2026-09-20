@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { canaryIsVisible, CANARY_EVENT_NAME } from "./inngest-verify";
+import { readFileSync } from "node:fs";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  canaryIsVisible,
+  CANARY_EVENT_NAME,
+  checkKeyPosture,
+} from "./inngest-verify";
 
 describe("canaryIsVisible", () => {
   it("finds the canary by its public id", () => {
@@ -48,5 +53,36 @@ describe("canaryIsVisible", () => {
 
   it("is false for an empty environment", () => {
     expect(canaryIsVisible([], "01CANARY")).toBe(false);
+  });
+});
+
+describe("production signing key posture", () => {
+  it("sets production mode on the deploy verification step", () => {
+    const workflow = readFileSync(
+      new URL("../../.github/workflows/pipeline.yml", import.meta.url),
+      "utf8",
+    );
+    const step = workflow
+      .split("- name: Sync Inngest functions and verify the key pair")[1]
+      ?.split(/\n      - /)[0];
+    expect(step).toMatch(/env:\s*\n\s*NODE_ENV: production/);
+    expect(step).toContain("pnpm inngest:verify");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("refuses a test signing key in the deploy environment", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("verification refused");
+    });
+    expect(() => checkKeyPosture("signkey-test-example")).toThrow(
+      "verification refused",
+    );
+    expect(exit).toHaveBeenCalledWith(1);
   });
 });

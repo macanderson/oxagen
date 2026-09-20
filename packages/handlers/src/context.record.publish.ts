@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordPublish } from "@oxagen/oxagen/contracts/context.record.publish";
 import {
@@ -32,6 +33,11 @@ import { sha256Hex } from "./registry-digest";
 export const contextRecordPublishHandler: CapabilityHandler<
   typeof contextRecordPublish
 > = async (input, ctx) => {
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] },
+  );
+
   if (!ctx.workspaceId) {
     throw new Error(
       "[context.record.publish] workspaceId is required (scoped capability)",

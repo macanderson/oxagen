@@ -8,7 +8,7 @@
 
 ## Intent
 
-Invite a user to join the org by email. Seat enforcement is applied before the invitation is persisted — if the org has no available license the call fails with a typed `SeatLimitError`. The invitation is created in `pending` state and must be accepted by the invitee via `org.member.invite.accept`.
+Invite someone to join the org by email. Seat enforcement locks the organization and its subscription, checks capacity, and inserts the invitation in one transaction. Two concurrent invitations cannot reserve the final seat. An organization with no subscription uses the same organization lock. If no license is available, the call fails with a typed `SeatLimitError`. The invitation is created in `pending` state and must be accepted by the invitee via `org.member.invite.accept`.
 
 ## Input
 

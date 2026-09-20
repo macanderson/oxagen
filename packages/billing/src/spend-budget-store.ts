@@ -9,7 +9,7 @@
  * getScopeBudgets lives in ./spend-budget-gate; the get_spend_budget /
  * set_spend_budget handlers call getSpendBudget / setSpendBudget here.
  */
-import { withTenantDb, schema } from "@oxagen/database";
+import { withTenantDb, withOrgDb, schema } from "@oxagen/database";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import type { SpendBudget, SpendBudgetPeriod } from "./spend-budget";
 
@@ -56,12 +56,23 @@ function rowToBudgetRow(row: Row): SpendBudgetRow {
  * org-first so the gate reports the broader ceiling first. Runs inside the
  * caller's active tenant scope (the kernel gate already holds one).
  */
-export async function getScopeBudgets(): Promise<SpendBudgetRow[]> {
-  const rows = await withTenantDb((tx) =>
+export async function getScopeBudgets(scope?: {
+  orgId: string;
+  workspaceId: string | null;
+}): Promise<SpendBudgetRow[]> {
+  const orgOnly = scope?.workspaceId === null;
+  const read = orgOnly ? withOrgDb : withTenantDb;
+  const rows = await read((tx) =>
     tx
       .select()
       .from(schema.spendBudgets)
-      .where(eq(schema.spendBudgets.enabled, true)),
+      .where(
+        and(
+          eq(schema.spendBudgets.enabled, true),
+          scope ? eq(schema.spendBudgets.orgId, scope.orgId) : undefined,
+          orgOnly ? isNull(schema.spendBudgets.workspaceId) : undefined,
+        ),
+      ),
   );
   return orgFirst(rows);
 }

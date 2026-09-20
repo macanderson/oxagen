@@ -10,6 +10,7 @@ import {
   authorizeExternalCapability,
   capabilitiesForSurface,
   clearBillingAdmissionGate,
+  clearBudgetAdmissionGate,
   clearHandlersForTests,
   clearKernelAccessRequestCreator,
   clearKernelIAMRuntime,
@@ -21,6 +22,7 @@ import {
   registerHandler,
   registerHandlersOnce,
   setBillingAdmissionGate,
+  setBudgetAdmissionGate,
   setKernelAccessRequestCreator,
   setKernelIAMRuntime,
   setSecurityEventEmitter,
@@ -60,6 +62,35 @@ describe("capability kernel", () => {
     clearRegistryForTests();
     clearHandlersForTests();
     clearSecurityEventEmitter();
+    clearBudgetAdmissionGate();
+  });
+
+  it("checks the organization ceiling for an org-only invocation", async () => {
+    echoCap();
+    const handler = vi.fn(async (input: unknown) => input);
+    registerHandler("test.echo", async () => handler);
+    const gate = vi.fn(async () => {
+      throw Object.assign(new Error("budget reached"), {
+        code: "budget_exceeded",
+      });
+    });
+    setBudgetAdmissionGate(gate);
+    await expect(
+      invoke(
+        "test.echo",
+        { value: "hi" },
+        {
+          ...ctx,
+          workspaceId: "00000000-0000-0000-0000-000000000000",
+        },
+      ),
+    ).rejects.toThrow();
+    expect(gate).toHaveBeenCalledWith({
+      orgId: ctx.orgId,
+      workspaceId: null,
+      capability: "test.echo",
+    });
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("validates input, runs the handler, and validates output", async () => {

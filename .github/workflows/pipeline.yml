@@ -668,6 +668,9 @@ jobs:
       - name: RLS isolation proof and manifest coverage
         run: pnpm --filter @oxagen/database test:integration
 
+      - name: Seat reservation concurrency proof
+        run: pnpm --filter @oxagen/billing exec vitest run --config vitest.integration.config.ts
+
       - name: Migrate Neo4j
         run: DB_MIGRATE_STORES=neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
@@ -1009,6 +1012,8 @@ jobs:
       # run. This step syncs the api after each deploy and fails the deploy
       # when Inngest refuses the sync or the key pair does not match.
       - name: Sync Inngest functions and verify the key pair
+        env:
+          NODE_ENV: production
         if: steps.tip.outputs.at_tip == 'true' && matrix.service == 'api'
         run: |
           set -euo pipefail

@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
@@ -13,6 +14,11 @@ export async function agentMcpDeleteHandler(
   input: AgentMcpDeleteInput,
   ctx: CapabilityContext,
 ): Promise<AgentMcpDeleteOutput> {
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"], workspace: ["Owner"] },
+  );
+
   // Soft-delete: set deleted_at + disable so tools stop registering
   // immediately, but the row (and its tool_snapshots) survive >= 365 days for
   // replay durability before the retention job purges the snapshots.
