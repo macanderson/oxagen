@@ -9,6 +9,58 @@
 -- constraint_effect when kind is constraint) on every call, so no future
 -- write from the deployed handler leaves kind or force NULL. This
 -- migration backfills the rows a prior, permissive call already wrote.
+
+-- Codex P1 on #3486 (round 7): first, rescue the classification a
+-- direct publish supplied during the deploy-before-migrate window.
+--
+-- `publish_context_record`'s handler guards the version-row classification
+-- columns with `hasColumnFresh`, because migration 20260918160000 (which
+-- adds them) is applied by the manual db-migrate.yml workflow on no
+-- ordering guarantee against deploy-node. While that probe answers false the
+-- handler still writes the caller's classification onto the RECORD row --
+-- those columns predate the migration -- but omits it from the version row
+-- it just inserted and pinned. 20260918160000's own backfill reads each
+-- version's classification from the proposal that merged it, and a direct
+-- publish has no proposal, so without this the window's versions stay NULL
+-- for good.
+--
+-- That is not a cosmetic gap. `classificationOf` falls back to the record
+-- row for a version carrying none, so the moment the record is reclassified,
+-- that old body is read under the new directive -- #3312's defect, in a new
+-- doorway.
+--
+-- Only the version the record currently PINS is recoverable, and only from
+-- the record row. That is exactly right for it and for nothing else: every
+-- writer (this handler's compatibility path and `publishMerge` alike) sets
+-- the record row's four columns and `active_version_id` in ONE transaction,
+-- so the row's classification describes the body it pins. Copying it onto
+-- that version therefore materialises the fallback already in force for it
+-- today -- no row changes how it steers -- and makes the pairing durable, so
+-- a later reclassification can no longer re-point the old body.
+--
+-- `r."kind" IS NOT NULL` is what keeps this honest, and it is why this runs
+-- BEFORE the memory/info backfill below: a genuinely legacy record (written
+-- before classification existed) still has a NULL row here and is skipped,
+-- keeping the NULL-version + record-row fallback 20260918160000 chose for
+-- it, rather than stamping an invented label onto an immutable version.
+--
+-- A window version that has since been SUPERSEDED is not recoverable: its
+-- classification was never persisted anywhere, so it keeps the record-row
+-- fallback. Nothing in this schema can do better for it.
+UPDATE "agent"."context_record_versions" v
+SET
+  "kind" = r."kind",
+  "force" = r."force",
+  "constraint_effect" = r."constraint_effect",
+  "statement" = r."statement"
+FROM "agent"."context_records" r
+WHERE r."active_version_id" = v."id"
+  AND v."kind" IS NULL
+  AND r."kind" IS NOT NULL
+  AND r."org_id" = v."org_id"
+  AND r."workspace_id" = v."workspace_id";
+
+-- Then label the genuinely pre-existing NULL rows.
 --
 -- A pre-existing NULL row was written before classification existed at all,
 -- so there is no real kind or force to recover for it: inventing one (a
