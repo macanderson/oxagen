@@ -3549,7 +3549,7 @@
       "writes": []
     }
   ],
-  "contentHash": "894ef685ce927edbb65a23d17e6d9f6a15ec23087ca2b8b73cb5b6328f1da0d4",
+  "contentHash": "d03ec821ad94e54ec5743b463a2967c625b056a04f938a4b9303ed788d5f560a",
   "domains": [
     {
       "name": "agent",
@@ -3826,6 +3826,7 @@
       ],
       "tables": [
         "neo4j:Tenant",
+        "postgres:org.assistant_model_keys",
         "postgres:org.data_planes",
         "postgres:org.invitations",
         "postgres:org.model_credentials",
@@ -3985,7 +3986,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 135
+      "tableCount": 136
     },
     {
       "domains": [
@@ -16361,6 +16362,131 @@
       "id": "postgres:notification.notifications",
       "name": "notifications",
       "rls": "workspace_nullable",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "key_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "key_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "key_ciphertext",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "key_key_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "key_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "key_hint",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "daily_limit_usd",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "numeric(10, 2)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provisioned_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "disabled_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "last_error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.assistant_model_keys",
+      "name": "assistant_model_keys",
+      "rls": "org_only",
       "store": "postgres",
       "tenantScoped": true
     },
