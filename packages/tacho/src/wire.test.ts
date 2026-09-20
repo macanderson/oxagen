@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bundleResponseSchema,
   controlEnvelopeSchema,
+  deliveredCommandSchema,
   ingestResponseSchema,
   commandsResponseSchema,
   tachoBatchSchema,
@@ -110,7 +111,64 @@ describe("the command-poll response wrapper", () => {
   });
 });
 
+const COMMAND = {
+  id: "cmd_1",
+  command: "steer",
+  session_uuid: null,
+  payload: { text: "Review the failed request" },
+  requested_mode: "next_step",
+  delivery_mode: "next_step",
+  degraded_reason: null,
+  reason: "Operator feedback",
+  issued_at: "2026-09-20T00:00:00Z",
+  expires_at: null,
+};
+
+const commandResponses = [
+  {
+    name: "command poll",
+    parse: (command: unknown) =>
+      commandsResponseSchema.parse({
+        acknowledged: 0,
+        control: { ...CONTROL, commands: [command] },
+      }),
+  },
+  {
+    name: "ingest",
+    parse: (command: unknown) =>
+      ingestResponseSchema.parse({
+        accepted: 1,
+        event_ids: ["evt_1"],
+        chain_breaks: [],
+        control: { ...CONTROL, commands: [command] },
+      }),
+  },
+];
+
+describe.each(commandResponses)("commands in $name responses", ({ parse }) => {
+  it("accepts additive metadata without changing known command fields", () => {
+    const parsed = parse({ ...COMMAND, priority: 1 });
+    expect(parsed.control.commands).toEqual([{ ...COMMAND, priority: 1 }]);
+  });
+
+  it.each([
+    ["missing id", { ...COMMAND, id: undefined }],
+    ["unknown command", { ...COMMAND, command: "future-command" }],
+    ["invalid payload", { ...COMMAND, payload: null }],
+    ["invalid delivery mode", { ...COMMAND, delivery_mode: "future-mode" }],
+  ] as const)("still rejects %s", (_name, command) => {
+    expect(() => parse({ ...command, priority: 1 })).toThrow();
+  });
+});
+
 describe("what this host sends", () => {
+  it("keeps produced commands strict while receiving additive metadata", () => {
+    expect(deliveredCommandSchema.parse(COMMAND)).toEqual(COMMAND);
+    expect(() =>
+      deliveredCommandSchema.parse({ ...COMMAND, priority: 1 }),
+    ).toThrow();
+  });
+
   it("is still strict, so drift in our own batch is caught here and not by the server", () => {
     // The batch is otherwise VALID — `events: []` alone violates `.min(1)`, so
     // a batch that was empty as well as unexpected would throw even after

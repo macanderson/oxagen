@@ -389,6 +389,10 @@ export const deliveredCommandSchema = z
 
 export type DeliveredCommand = z.output<typeof deliveredCommandSchema>;
 
+// The host reads commands from a control plane that may be newer than itself.
+// Keep the producing schema strict, but tolerate additive response metadata.
+const deliveredCommandResponseSchema = deliveredCommandSchema.passthrough();
+
 /** The signed policy bundle a host caches (spec section 7.1). */
 export const policyBundleSchema = z
   .object({
@@ -715,7 +719,7 @@ export const controlEnvelopeSchema = z
     host_status: tachoHostStatusSchema,
     deny_generation: denyGenerationSchema,
     bundle_etag: z.string().min(1),
-    commands: z.array(deliveredCommandSchema).max(100),
+    commands: z.array(deliveredCommandResponseSchema).max(100),
   })
   .passthrough();
 
