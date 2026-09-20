@@ -3549,7 +3549,7 @@
       "writes": []
     }
   ],
-  "contentHash": "82f194cb52b0fa2ecddea65fe179a2b966944edd2ca5e5b9b1ba7525428bdca9",
+  "contentHash": "7be52b6092363cbb462d234c2d81c8e685d8d32b4b93282851bb3a6ce528d524",
   "domains": [
     {
       "name": "agent",
@@ -7536,6 +7536,48 @@
         },
         {
           "name": "run_public_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "resume_payload",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "resume_key",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "resume_status",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "resume_started_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "resume_finished_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "resume_run_public_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "resume_error",
           "nullable": true,
           "primaryKey": false,
           "type": "text"

@@ -1295,6 +1295,11 @@ describe("approvals on the run", () => {
             expiresAt: new Date(NOW + 3_600_000).toISOString(),
             resolvedAt: new Date(NOW - 30_000).toISOString(),
             resolution: "approved",
+            execution: {
+              status: "succeeded",
+              runId: "arun_resumed",
+              reason: null,
+            },
             resolvedBy: "policy:small-vendor-payments",
             autoRuleRef: "small-vendor-payments",
           },
@@ -1302,6 +1307,10 @@ describe("approvals on the run", () => {
       },
       { tab: "approvals" },
     );
+    expect(screen.getByTestId("approval-execution")).toHaveTextContent(
+      "succeeded",
+    );
+    expect(screen.getByText("arun_resumed")).toBeInTheDocument();
     const [card] = screen.getAllByTestId("resolved-approval");
     expect(card).toHaveTextContent("stripe__create_payment");
     expect(screen.getByTestId("resolved-approver")).toHaveTextContent(

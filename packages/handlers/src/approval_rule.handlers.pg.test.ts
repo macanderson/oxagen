@@ -201,7 +201,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
      *
      * The capability registration is not decoration: a classified declaration
      * whose slug names none is refused by `publish_tool_declaration`, and a
-     * rule over it by `rule_not_gated`, so a fixture without it would be a
+     * rule over it by `tool_not_registered`, so a fixture without it would be a
      * tool no workspace can hold.
      */
     async function declareCapabilityTool(
@@ -298,7 +298,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // capability (`conflict` / `consequence_not_gated`), because the gate
       // that reads a classification lives inside `invoke()` and finds the tool
       // by slug. `assertRulesSavable` re-applies that same precondition to a
-      // rule naming the tool (`rule_not_gated`).
+      // rule naming the tool (`tool_not_registered`).
       //
       // The fixture below inserts the tool row directly rather than through
       // the publisher, so nothing here would otherwise hold it to a
@@ -661,19 +661,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(conflict("no_tool_matches"));
     });
 
-    it("refuses a rule over a declared tool invoke() does not dispatch", async () => {
-      // The gate asserted here is the one the fixture above satisfies, and it
-      // is asserted FIRING as well as passing: a declared, enabled, matchable
-      // tool whose slug names no registered capability is dispatched by
-      // materialize-tools through `authorizeExternalCapability` and the
-      // transport, never by `invoke()`, so the decision-rules gate never sees
-      // those calls and a rule over them would be stored and never enforced.
-      //
-      // Unclassified on purpose — no tags, no measures — because that is
-      // exactly the declaration `publish_tool_declaration` DOES admit for a
-      // slug naming no capability, so this is a tool an operator really can
-      // have. The rule names no measure, so the refusal cannot be the
-      // measure guard standing in for this one.
+    it("refuses auto-approval for an external tool with no trusted measures", async () => {
+      // Deny and human-approval rules now apply to this identity. Auto-approval
+      // still needs provider measures, even when the author names no ceiling.
       const externalToolId = randomUUID();
       const externalVersionId = randomUUID();
       await withSystemDb(async (tx) => {
@@ -719,7 +709,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               allowTargets: {},
             },
           ]),
-        ).rejects.toSatisfy(conflict("rule_not_gated"));
+        ).rejects.toSatisfy(conflict("external_auto_approval_unsupported"));
         // A refused rule writes nothing, the same as every other guard here.
         expect(await settingsOf()).toEqual(before);
         expect(doubles.events).toEqual([]);

@@ -3121,6 +3121,9 @@ type Messages = {
       resolvedBy: string;
       resolvedAt: string;
       empty: string;
+      execution: string;
+      reason: string;
+      resumedRun: string;
     };
     tabs: {
       label: string;

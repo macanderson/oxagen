@@ -50,6 +50,7 @@ export {
 } from "./call-facts";
 export { loadRuleSetIn, lockDecisionRulesIn } from "./rule-store";
 export {
+  ExternalToolAuthorityError,
   createDecisionRulesGate,
   DecisionRuleApprovalRequiredError,
   DecisionRuleDeniedError,

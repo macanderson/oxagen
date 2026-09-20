@@ -51,6 +51,7 @@ export function toResolvedApprovalItems(
     expiresAt: item.expiresAt,
     resolvedAt: item.resolvedAt,
     resolution: item.resolution,
+    ...(item.execution ? { execution: item.execution } : {}),
     resolvedBy: item.resolvedBy,
     autoRuleRef: item.autoRuleId,
   }));

@@ -82,3 +82,8 @@ The tool change itself is not refused because an existing rule fails that check.
 reads return it, and Tools shows the reason. Switching off preserves it. Saving
 or switching on reruns the authoring checks and clears it. The security event
 `approval_rule.invalidated` names the rule, tool, actor, and before/after facts.
+## External MCP tools
+
+Auto-approval is unavailable for external MCP tools because they have no trusted cost or consequence measures. Saving an auto-approval rule for one returns `external_auto_approval_unsupported`.
+
+Use the workspace decision-rules document for `deny` or `require_approval` rules instead. These match `mcp.<serverId>.<tool>` and `file-mcp.<serverName>.<tool>`, including server-prefix patterns such as `mcp.<serverId>.*`. Human approval applies to one exact call. A changed input or rule document requires a new decision. External calls by an agent principal remain refused until their mandate measures can be established. See ADR-122.
