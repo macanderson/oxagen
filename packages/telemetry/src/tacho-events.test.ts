@@ -199,6 +199,8 @@ describe("selectTachoEvents", () => {
         policyDecision: "allow",
         costUsdMicros: null,
         turnSeq: 2,
+        ttftMs: null,
+        apiDurationMs: null,
       },
     ]);
     const [call] = chSelect.mock.calls[0] ?? [];
@@ -210,5 +212,28 @@ describe("selectTachoEvents", () => {
       afterSeq: 2,
       limit: 10,
     });
+  });
+  it("maps recorded model timing without treating missing measurements as zero", async () => {
+    chSelect.mockResolvedValueOnce({
+      data: [
+        { seq: "1", ttft_ms: "125", api_duration_ms: "2300" },
+        { seq: "2", ttft_ms: 0, api_duration_ms: 0 },
+        { seq: "3", ttft_ms: null, api_duration_ms: null },
+      ],
+    });
+    const rows = await selectTachoEvents({
+      sessionUuid: SESSION,
+      afterSeq: 0,
+      limit: 10,
+    });
+    expect(
+      rows.map(({ ttftMs, apiDurationMs }) => ({ ttftMs, apiDurationMs })),
+    ).toEqual([
+      { ttftMs: 125, apiDurationMs: 2300 },
+      { ttftMs: 0, apiDurationMs: 0 },
+      { ttftMs: null, apiDurationMs: null },
+    ]);
+    expect(chSelect.mock.calls[0]?.[0]?.query).toContain("ttft_ms");
+    expect(chSelect.mock.calls[0]?.[0]?.query).toContain("api_duration_ms");
   });
 });

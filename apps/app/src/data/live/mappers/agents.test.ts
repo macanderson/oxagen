@@ -276,6 +276,10 @@ describe("toToolbelt", () => {
           decision: "require_approval",
           rule: "agent:7:role_grant",
           readOnly: false,
+          inputSchema: null,
+          schemaOrigin: null,
+          schemaDigest: null,
+          schemaTruncated: false,
         },
       ],
       cannotSee: [

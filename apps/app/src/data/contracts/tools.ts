@@ -278,7 +278,7 @@ export type ApprovalRuleSet = z.infer<typeof ApprovalRuleSet>;
  * so the view model admits the six and refuses anything else rather than
  * printing a word no filter can select.
  */
-export const CONNECTION_STATUSES = [
+const CONNECTION_STATUSES = [
   "pending_setup",
   "connected",
   "paused",
@@ -298,8 +298,7 @@ export type ConnectionStatus = z.infer<typeof ConnectionStatus>;
 const StoredConnectionStatus = z.string().pipe(ConnectionStatus);
 
 /** What the connector poll loop rolled up; the contract's own enum. */
-export const ConnectionHealth = z.enum(["healthy", "degraded", "errored"]);
-export type ConnectionHealth = z.infer<typeof ConnectionHealth>;
+const ConnectionHealth = z.enum(["healthy", "degraded", "errored"]);
 
 export const Connection = z.object({
   id: PublicId,
@@ -348,9 +347,8 @@ export type ConnectionDetail = z.infer<typeof ConnectionDetail>;
  * of them; `sse` reaches the table through the plugin install path, so the
  * list admits it and the register form does not offer it.
  */
-export const MCP_TRANSPORTS = ["streamable-http", "sse", "stdio"] as const;
-export const McpTransport = z.enum(MCP_TRANSPORTS);
-export type McpTransport = z.infer<typeof McpTransport>;
+const MCP_TRANSPORTS = ["streamable-http", "sse", "stdio"] as const;
+const McpTransport = z.enum(MCP_TRANSPORTS);
 
 /** Transports the endpoint registration form can configure and run. */
 export const REGISTERABLE_MCP_TRANSPORTS = ["streamable-http"] as const;
@@ -367,13 +365,7 @@ export type McpAuthStrategy = z.infer<typeof McpAuthStrategy>;
  * `register_mcp_server` carries, and the page prints that word rather than a
  * friendlier one it was not given.
  */
-export const McpHealth = z.enum([
-  "healthy",
-  "degraded",
-  "unreachable",
-  "unknown",
-]);
-export type McpHealth = z.infer<typeof McpHealth>;
+const McpHealth = z.enum(["healthy", "degraded", "unreachable", "unknown"]);
 
 export const McpServer = z.object({
   /** `mcs_…`: the id `import_tools` names a server by. */

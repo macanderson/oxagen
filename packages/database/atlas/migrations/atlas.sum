@@ -1,4 +1,4 @@
-h1:Y9pujnriZAGiPoMwzKsARZGOpkdQ6QN58vDeFbkv1ps=
+h1:XJoKK8/aVZwiYSYMSvUfaFXSLUcCcY8Bz9BiYfCypdc=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -175,3 +175,4 @@ h1:Y9pujnriZAGiPoMwzKsARZGOpkdQ6QN58vDeFbkv1ps=
 20260920140000_cms_leads_crm_sync.sql h1:g85MAn34U0xENw2BexF9B9biiXo/lATdLVgwklszU/4=
 20260920150000_book_second_edition.sql h1:HaO4KDRwqsb9Gx+qOdMhc96pXKkzojkhrEaUF9BaInI=
 20260920160000_context_records_kind_force_not_null.sql h1:9NPgITUFgZreZFXzypfhotzGeDIOVFp4C0UhKgS0eCs=
+20260920170000_workspace_nullable_writes.sql h1:qIdM3C/683DRjlF8bQDmSwqZqFAGSxqlWhNTARhOcTQ=
