@@ -503,6 +503,75 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
     });
 
+    it("keeps rules unchanged when a retained inactive version is classified", async () => {
+      const slug = `inactive_${tag}`;
+      const tool = await declareCapabilityTool(slug, {
+        declared: [],
+        classified: [],
+      });
+      try {
+        await set(ownerUserId, [
+          {
+            ...RULE,
+            id: "inactive-rule",
+            tools: [slug],
+            maxMeasures: {},
+            allowTargets: {},
+          },
+        ]);
+        const before = await settingsOf();
+        const old = await withSystemDb(async (tx) => {
+          const version = await tx.query.toolVersions.findFirst({
+            where: eq(schema.toolVersions.id, tool.versionId),
+          });
+          if (!version) throw new Error("Missing fixture version");
+          const values = { ...version, id: undefined, publicId: undefined };
+          const [retained] = await tx
+            .insert(schema.toolVersions)
+            .values({ ...values, versionNumber: 2 })
+            .returning();
+          if (!retained) throw new Error("Missing retained version");
+          return retained;
+        });
+        const { toolClassificationSetHandler } = await import(
+          "./tool.classification.set"
+        );
+        await inScope(() =>
+          toolClassificationSetHandler(
+            {
+              toolVersionId: old.publicId,
+              riskGrade: "high",
+              reason: "Historical classification",
+              classification: {
+                sideEffect: "write",
+                egress: "local",
+                consequenceTags: ["moves_money"],
+                measures: {},
+                dataClasses: [],
+              },
+            },
+            ctx(ownerUserId),
+          ),
+        );
+        expect(await settingsOf()).toEqual(before);
+        const retained = await withSystemDb((tx) =>
+          tx.query.toolVersions.findFirst({
+            where: eq(schema.toolVersions.id, old.id),
+          }),
+        );
+        expect(retained?.classification).toMatchObject({
+          consequenceTags: ["moves_money"],
+        });
+        await withSystemDb((tx) =>
+          tx
+            .delete(schema.toolVersions)
+            .where(eq(schema.toolVersions.id, old.id)),
+        );
+      } finally {
+        await removeTools([tool]);
+      }
+    });
+
     it("publishing a changed untagged measure disables the rule before evaluation", async () => {
       const slug = `measure_${tag}`;
       const tool = await declareCapabilityTool(slug, {

@@ -1,2 +1,4 @@
 - [2026-09-19] Before holding a workspace lock across a callback, pass its transaction through role and configuration reads so waiting writers cannot exhaust the pool around a nested checkout. (source: reflections/2026-09-19-rule-invalidation.md, agent: backlog-governance)
 - [2026-09-19] Inspect retained PR heads and integration parents before attributing a loss to squash mechanics. A branch can contain the fix commit while its integration result discards the fix. (source: reflections/2026-09-19-stale-squash-audit.md)
+
+- 2026-09-20: Database-scope regression tests need distinct organization and workspace spies. An injected callback argument alone does not prove that the exported handler chooses the right wrapper.

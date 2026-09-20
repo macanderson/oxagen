@@ -81,6 +81,7 @@ const postgresToolClassificationDeps: ToolClassificationDeps = {
       await lockWorkspaceRuleSet(tx, args.workspaceId);
       const [before] = await tx
         .select({
+          activeVersionId: schema.tools.activeVersionId,
           slug: schema.tools.slug,
           version: schema.toolVersions.versionNumber,
           consequenceTags: schema.toolVersions.consequenceTags,
@@ -119,6 +120,7 @@ const postgresToolClassificationDeps: ToolClassificationDeps = {
           updatedById: args.userId ?? undefined,
         })
         .where(eq(schema.toolVersions.id, args.versionId));
+      if (before.activeVersionId !== args.versionId) return;
       await invalidateApprovalRules(tx, {
         orgId: args.orgId,
         workspaceId: args.workspaceId,
