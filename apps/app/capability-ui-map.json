@@ -214,6 +214,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "assign_agent_role": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=identity — Assign a role on the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
+      "proof": "apps/app/src/features/agents/role-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc-3-roles"
+    },
     "get_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
@@ -725,6 +733,14 @@
       "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "revoke_agent_role": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=identity — Revoke on each row of the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
+      "proof": "apps/app/src/features/agents/role-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc-3-roles"
     },
     "revoke_api_key": {
       "route": "/[org]/api-keys",

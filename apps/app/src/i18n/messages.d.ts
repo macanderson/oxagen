@@ -143,12 +143,33 @@ type Messages = {
           scope: string;
           assigned: string;
           expires: string;
+          actions: string;
         };
         scope: {
           org: string;
           workspace: string;
         };
         standing: string;
+        assign: {
+          open: string;
+          title: string;
+          body: string;
+          field: string;
+          builtIn: string;
+          loading: string;
+          empty: string;
+          notEnforced: string;
+          partial: string;
+          confirm: string;
+          pending: string;
+        };
+        revoke: {
+          open: string;
+          title: string;
+          body: string;
+          confirm: string;
+          pending: string;
+        };
       };
       credentials: {
         title: string;

@@ -156,7 +156,27 @@ export async function Agent({
   let body: ReactNode;
   switch (selected) {
     case "identity":
-      body = <IdentitySection detail={detail} now={now} />;
+      body = (
+        <IdentitySection
+          detail={detail}
+          now={now}
+          // assign_agent_role and revoke_agent_role are org Owner or Admin
+          // writes (INV-29, checked in their handlers), and a retired
+          // principal holds no authority to change, so the panel offers the
+          // controls to nobody else.
+          manage={
+            (ctx.orgRole === "owner" || ctx.orgRole === "admin") &&
+            identity.status !== "retired"
+              ? {
+                  org: place.org,
+                  ws: place.ws,
+                  agentId: identity.id,
+                  agentSlug: identity.slug,
+                }
+              : null
+          }
+        />
+      );
       break;
     case "toolbelt":
       body = (

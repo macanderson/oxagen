@@ -5,11 +5,16 @@
 // role-checked in its handler (INV-29): rotate, suspend and retire by an org
 // Owner or Admin, commit by an Owner, Admin or Member; a refusal comes back as
 // `denied` with nothing changed. request_mandate (#2957) joins them: an agent
-// operator asks for authority and the accountable role decides.
+// operator asks for authority and the accountable role decides. The roles
+// block below is the third identity write (#2956): an org Owner or Admin
+// attaches an IAM role to the agent's delegated principal, or detaches one.
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
 import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition.commit";
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
+import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
+import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
+import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
 import {
   consequenceTagsOf,
@@ -17,9 +22,14 @@ import {
   mandateLimitsOf,
 } from "@/data/contracts/mandates";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer, viewerTimeZone } from "@/server/viewer";
 import { endOfZonedDay, startOfZonedDay } from "@/shared/calendar-day";
+
+/** A refusal the action makes itself, before the kernel, naming the field at fault. */
+function refuseField(field: string): ActionResult<never> {
+  return { ok: false, reason: "invalid", code: "invalid_input", field };
+}
 
 /** Retires the current key and mints a replacement; the secret is returned once and never again. */
 export async function rotateAgentCredential(
@@ -64,6 +74,147 @@ export async function retireAgent(
   const result = await kernelWrite(ctx, agentRetire, { agentId });
   return result.ok
     ? { ok: true, value: { retiredAt: result.value.retiredAt } }
+    : result;
+}
+
+// ── Roles ────────────────────────────────────────────────────────────────────
+// assign_agent_role and revoke_agent_role name a role by NAME, not by id, so
+// the dialog needs the catalogue to offer a choice. list_iam_roles answers it,
+// and the read runs here rather than in a port: the Roles panel is server
+// rendered from get_agent and the catalogue is wanted only once a person opens
+// the dialog, so it is read on demand from an action exactly as the wizards'
+// repository and toolbelt reads are (ARCHITECTURE.md §2, ADR-089).
+
+/** One role the picker may offer: its name is what both writes take. */
+export type AssignableRole = {
+  name: string;
+  scope: "org" | "workspace";
+  /** A seeded agent role rather than one this organization wrote. */
+  builtIn: boolean;
+};
+
+/** The catalogue a role picker offers, and whether the kernel resolves grants yet. */
+export type RoleOffer = {
+  roles: AssignableRole[];
+  /**
+   * Whether the kernel's IAM check runs the resolver for this organization
+   * (ARCHITECTURE.md §1.5). False means a role the agent holds governs nothing
+   * until the organization moves to a tier that enforces it, and the dialog
+   * says so rather than implying the assignment takes effect.
+   */
+  enforced: boolean;
+  tier: string;
+  /** More roles exist than the one page this read asks for. */
+  more: boolean;
+};
+
+/**
+ * The largest page `list_iam_roles` allows. One page is the whole catalogue
+ * for every organization that has fewer than 200 roles, and a role past it is
+ * a role the picker cannot offer, so the offer carries `more` and the dialog
+ * says the list is partial rather than implying it is everything.
+ */
+const ROLE_PAGE = 200;
+
+/**
+ * The roles an agent may hold. `kind` is the contract's own answer to that
+ * question: `agent` covers the seeded agent roles and every custom role, and
+ * `human` covers the seeded membership roles, which `assign_agent_role`
+ * refuses because the org Owner role is a resolver super-user and attaching it
+ * to an unattended automation would be an escalation by construction.
+ *
+ * Filtering here means the picker cannot offer a choice the handler will
+ * refuse. That matters more than it looks: the handler's refusal carries a
+ * plain Error with `agent_role_not_assignable` in `code`, which the kernel seam
+ * cannot classify, so the dialog would name it `kernel_failure` and the person
+ * would learn nothing.
+ */
+export async function readAssignableRoles(
+  org: string,
+  ws: string,
+): Promise<ActionResult<RoleOffer>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: iamRoleList,
+    input: { includeGrants: false, limit: ROLE_PAGE, offset: 0 },
+    page: "agents",
+  });
+  const result = readToActionResult(read);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: {
+      roles: result.value.roles
+        .filter((role) => role.kind === "agent")
+        .map((role) => ({
+          name: role.name,
+          scope: role.scopeKind,
+          builtIn: role.isSystemDefault,
+        })),
+      enforced: result.value.enforcement.enforced,
+      tier: result.value.enforcement.tier,
+      more: result.value.hasMore,
+    },
+  };
+}
+
+/**
+ * Attaches the named role to the agent's delegated principal. The handler
+ * refuses a role whose grants exceed the assigner's own (the delegation
+ * ceiling), so an assignment can never widen what the person doing it holds.
+ * `alreadyAssigned` comes back true when the agent held the role already, and
+ * nothing was written.
+ */
+export async function assignAgentRole(
+  org: string,
+  ws: string,
+  agentId: string,
+  roleName: string,
+): Promise<ActionResult<{ roleName: string; alreadyAssigned: boolean }>> {
+  const name = roleName.trim();
+  if (name === "") return refuseField("roleName");
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, agentRoleAssign, {
+    agentId,
+    roleName: name,
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          roleName: result.value.roleName,
+          alreadyAssigned: result.value.alreadyAssigned,
+        },
+      }
+    : result;
+}
+
+/**
+ * Detaches the named role. The row is soft-deleted, so the audit trail keeps
+ * the assignment that was held. Idempotent: `revoked` is false when the agent
+ * did not hold the role, which is what a second click on a stale page does.
+ */
+export async function revokeAgentRole(
+  org: string,
+  ws: string,
+  agentId: string,
+  roleName: string,
+): Promise<ActionResult<{ roleName: string; revoked: boolean }>> {
+  const name = roleName.trim();
+  if (name === "") return refuseField("roleName");
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, agentRoleRevoke, {
+    agentId,
+    roleName: name,
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          roleName: result.value.roleName,
+          revoked: result.value.revoked,
+        },
+      }
     : result;
 }
 
@@ -151,7 +302,7 @@ export type MandateDraft = {
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function refuse(field: keyof MandateDraft): ActionResult<never> {
-  return { ok: false, reason: "invalid", code: "invalid_input", field };
+  return refuseField(field);
 }
 
 /**
