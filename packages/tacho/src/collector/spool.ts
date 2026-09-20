@@ -239,7 +239,7 @@ export class Shipper {
   }
 
   /**
-   * Quarantine events belonging to a previous enrollment, and return the rest.
+   * Separate events belonging to a previous enrollment before reading bodies.
    *
    * Re-enrolling a host mints a new `host_enrollment_id` and leaves whatever is
    * still spooled stamped with the old one. The control plane rejects a batch
@@ -254,12 +254,12 @@ export class Shipper {
    * on disk where someone can inspect them, exactly like a batch the control
    * plane refuses as malformed.
    */
-  private setAsideForeignEvents(batch: TachoEvent[]): {
+  private partitionByEnrollment(batch: TachoEvent[]): {
     own: TachoEvent[];
-    quarantined: number;
+    foreign: TachoEvent[];
   } {
     const mine = this.options.hostEnrollmentId;
-    if (mine === undefined) return { own: batch, quarantined: 0 };
+    if (mine === undefined) return { own: batch, foreign: [] };
     const own: TachoEvent[] = [];
     const foreign: TachoEvent[] = [];
     for (const event of batch) {
@@ -267,7 +267,12 @@ export class Shipper {
       if (stamped === undefined || stamped === mine) own.push(event);
       else foreign.push(event);
     }
-    if (foreign.length === 0) return { own, quarantined: 0 };
+    return { own, foreign };
+  }
+
+  private setAsideForeignEvents(foreign: TachoEvent[]): number {
+    if (foreign.length === 0) return 0;
+    const mine = this.options.hostEnrollmentId;
     for (const event of foreign) {
       this.quarantine(
         event,
@@ -280,7 +285,7 @@ export class Shipper {
     this.options.log(
       `quarantined ${foreign.length} event(s) from a previous enrollment`,
     );
-    return { own, quarantined: foreign.length };
+    return foreign.length;
   }
 
   /**
@@ -313,7 +318,10 @@ export class Shipper {
     const batch = this.options.wal.unshipped(TACHO_MAX_BATCH);
     if (batch.length === 0)
       return { shipped: 0, quarantined: 0, reachable: this.reachable };
-    const { own, quarantined } = this.setAsideForeignEvents(batch);
+    const { own, foreign } = this.partitionByEnrollment(batch);
+    // Complete body reads before ingest or quarantine can advance any cursor.
+    const batchBodies = this.options.wal.bodiesFor(own);
+    const quarantined = this.setAsideForeignEvents(foreign);
     if (own.length === 0)
       return { shipped: 0, quarantined, reachable: this.reachable };
     // Filtered against the mandate as it stands now, not as it stood when the
@@ -336,7 +344,7 @@ export class Shipper {
     );
     const allowed: TachoBody[] = [];
     const withdrawn: TachoEvent[] = [];
-    for (const body of this.options.wal.bodiesFor(own)) {
+    for (const body of batchBodies) {
       const event = eventOf.get(body.event_id_idem);
       const contentClass =
         event === undefined ? undefined : contentClassOf(event.kind);
