@@ -1,7 +1,7 @@
 // Agent IAM (ARCHITECTURE.md §1.2 Agents row, #2956): the workspace's
 // identities from one list_agents page. The tiles count the whole workspace
 // (the contract's totals); the table is the page. A figure no store records
-// (tier, belt size, proven runs, mandates) has no column: it renders nothing
+// (tier, belt size, mandates) has no column: it renders nothing
 // until its lane lands (§3.6).
 import { useLocale, useTranslations } from "next-intl";
 import type { AgentPage } from "@/data/contracts/agents";
@@ -105,12 +105,19 @@ function IdentityRows({
                 />
               </SafeLink>
             </td>
-            <td className={cell}>{t(`harness.${agent.harness}`)}</td>
+            <td className={`${cell} whitespace-nowrap`}>
+              {t(`harness.${agent.harness}`)}
+            </td>
             <td className={cell}>
               {agent.operatorId === null ? (
                 <NotRecordedValue />
               ) : (
-                <span className={mono}>{agent.operatorId}</span>
+                <span
+                  className={`${mono} block max-w-48 truncate`}
+                  title={agent.operatorId}
+                >
+                  {agent.operatorId}
+                </span>
               )}
             </td>
             <td className={cell}>
@@ -135,7 +142,7 @@ function IdentityRows({
               {formatCount(agent.incidents, locale)}
             </td>
             <td className={cell}>
-              <span className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-2 whitespace-nowrap">
                 <SafeLink
                   to={routes.agent(org, ws, agent.slug, { tab: "definition" })}
                   className={linkText}
@@ -214,7 +221,7 @@ export async function Agents({
 }) {
   const read = await source.agents.list(ctx, { cursor });
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-3.5">
       {read.ok ? <Tiles totals={read.value.totals} /> : null}
       <Identities
         read={read}

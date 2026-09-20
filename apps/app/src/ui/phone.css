@@ -52,6 +52,8 @@
   /* A list table becomes a stack of cards, each cell labelled by its column. */
   table[data-cards] {
     display: block;
+    min-width: 0;
+    width: 100%;
   }
 
   table[data-cards] thead {
@@ -71,18 +73,23 @@
     padding: 6px 12px;
   }
 
-  table[data-cards] td {
+  table[data-cards] td,
+  table[data-cards] th[scope="row"] {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
     gap: 8px;
     min-height: 34px;
+    min-width: 0;
+    max-width: none;
+    overflow-wrap: anywhere;
     padding: 7px 0;
     white-space: normal;
   }
 
-  table[data-cards] td[data-label]::before {
+  table[data-cards] td[data-label]::before,
+  table[data-cards] th[scope="row"][data-label]::before {
     content: attr(data-label);
     margin-right: auto;
     max-width: 38%;

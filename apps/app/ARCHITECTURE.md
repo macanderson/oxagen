@@ -1,5 +1,7 @@
 # Oxagen `apps/app`: rev1 architecture
 
+> Current presentation scope: [ADR-130](../../docs/adr/ADR-130-spend-and-operator-feedback-ui.md) applies the canonical mockup layout while excluding DoD, witness, proof, and credit/trust scores. Its spend and correction flows take precedence over the historical page descriptions below.
+
 > **Status**
 >
 > - Law for `apps/app` rev1. Every rev1 PR into `app-rebuild` conforms to this document; the invariants in §4 are enforced mechanically and the worklist in `architecture.worklist.json` is the order of work.

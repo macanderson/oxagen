@@ -1,26 +1,3 @@
-// The Run page (ARCHITECTURE.md §1.2 Run row, WL-35; mockup `pRun`): what this
-// run is, then one section chosen by `?tab=`.
-//
-// `get_run` is always read, because the header is on every tab and the frames
-// page travels with it. Every other read belongs to one tab and is made only
-// when that tab is open, so opening the page costs one invoke and no tab
-// nobody looked at is paid for (§3.5's poll budget).
-//
-// Five sections have a store behind them: Transcript (`get_run_transcript` at
-// `everything`, through the chips the URL pressed, grouped into turns and
-// steps in the view, with `?zoom=` naming which disclosures start open and the
-// player paging the cursor as the playhead moves), Frames (`get_run`'s own
-// page, plus one frame's bytes from `get_run_frame_body` when `?body=` names
-// it), Cost (`get_run_cost`, with the waterfall read from the run's own
-// per-turn ledger), Chain and seal (`get_run_chain`) and Approvals
-// (`list_approvals` narrowed to this run).
-//
-// Two of the mockup's tabs are still not drawn here (§3.6: a slice with no
-// backing has no read at all):
-//   - Proof, and the four-tab set a witness run renders, need `get_run_proof`
-//     and the witness vocabulary; #2955 owns them. The header states that a run
-//     witnessed another, and links no further.
-//   - Context was cut (#2954 closed).
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -35,14 +12,13 @@ import { routes } from "@/shared/safe-path";
 import { panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
-import { ChainSection } from "./chain";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
 import { RunHeader } from "./header";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import { kindsParam, TranscriptSection } from "./transcript";
 
-const TABS = ["transcript", "frames", "cost", "chain", "approvals"] as const;
+const TABS = ["transcript", "cost", "frames", "approvals"] as const;
 type Tab = (typeof TABS)[number];
 
 /** A frame's position as the contract spells it (`frameSeqSchema`): decimal, at most 19 digits. */
@@ -234,11 +210,6 @@ export async function Run({
       section = <CostSection read={cost} turns={turns} steps={steps} />;
       break;
     }
-    case "chain":
-      section = (
-        <ChainSection read={await source.runs.chain(ctx, detail.run.id)} />
-      );
-      break;
     case "approvals": {
       const { approvals, mandates, at } = await readApprovals(
         source,
@@ -269,7 +240,6 @@ export async function Run({
     <div className="flex flex-col gap-6">
       <RunHeader
         run={detail.run}
-        witnessed={detail.witnessed}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         org={place.org}

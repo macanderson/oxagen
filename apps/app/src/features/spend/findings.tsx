@@ -13,7 +13,7 @@ import type {
 } from "@/data/contracts/spend";
 import { routes } from "@/shared/safe-path";
 import { eyebrow, linkText, mono, panel } from "@/ui/control-styles";
-import { formatCount, formatRatio } from "@/ui/money-format";
+import { formatCount, formatMoney, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import {
   CostFigure,
@@ -166,7 +166,7 @@ function FindingCard({
     <li
       data-finding={finding.id}
       data-confidence={finding.confidence}
-      className={`${panel} flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between`}
+      className={`${panel} grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_240px]`}
     >
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -186,7 +186,7 @@ function FindingCard({
             {t(`findings.confidence.${finding.confidence}`)}
           </span>
         </div>
-        <p className={`${mono} text-sm`}>{finding.subject}</p>
+        <p className={`${mono} break-words text-sm`}>{finding.subject}</p>
         <p className="max-w-prose text-sm text-muted-foreground">
           <span className="font-medium text-foreground">
             {t("findings.why")}
@@ -206,13 +206,16 @@ function FindingCard({
           })}
           {" · "}
           <Instant iso={finding.window.from} />
-          {" – "}
+          {" · "}
           <Instant iso={finding.window.to} />
         </p>
       </div>
       <div className="flex flex-none flex-col items-start gap-2 sm:items-end">
-        <span className="text-lg font-semibold">
-          <CostFigure cost={finding.saving} />
+        <span className="text-xs text-muted-foreground">
+          {t("findings.saving")}
+        </span>
+        <span className="font-mono text-2xl font-semibold tabular-nums">
+          <MoneyFigure money={finding.saving} />
         </span>
         <span className="text-xs text-muted-foreground">
           {share === null
@@ -231,7 +234,30 @@ function FindingCard({
           >
             {t("findings.evidence.open")}
           </SafeLink>
-          <FixDialog at={at} findingId={finding.id} fix={finding.fix} />
+          <FixDialog
+            at={at}
+            findingId={finding.id}
+            fix={finding.fix}
+            contextDescription={t("findings.fix.draft", {
+              id: finding.id,
+              subject: finding.subject,
+              from: finding.window.from,
+              to: finding.window.to,
+              amount: formatMoney(finding.saving, {
+                locale,
+                precision: "exact",
+              }),
+              currency: finding.saving.currency,
+              basis:
+                finding.saving.basis === null
+                  ? t("basisNotRecorded")
+                  : t(`basis.${finding.saving.basis}`),
+              runs: formatCount(finding.runs, locale),
+              calls: formatCount(finding.calls, locale),
+              fix: finding.fix,
+              why: finding.why,
+            })}
+          />
         </div>
       </div>
     </li>
@@ -260,23 +286,52 @@ export function FindingsSection({
             {t("findings.heroTitle")}
           </h2>
         </div>
-        <TileStrip>
-          <Tile term={t("findings.saving")} note={t("findings.savingNote")}>
-            <CostFigure cost={findings.saving} />
-          </Tile>
-          <Tile term={t("findings.share")} note={t("findings.shareNote")}>
-            <RatioFigure ratio={findings.share} />
-          </Tile>
-          <Tile
-            term={t("findings.annualised")}
-            note={t("findings.annualisedNote")}
-          >
-            <CostFigure cost={findings.annualised} />
-          </Tile>
-          <Tile term={t("findings.spend")} note={t("findings.spendNote")}>
-            <CostFigure cost={findings.spend} />
-          </Tile>
-        </TileStrip>
+        <dl className="grid gap-6 lg:grid-cols-[minmax(240px,1.3fr)_repeat(3,minmax(0,1fr))]">
+          <div className="flex flex-col gap-2">
+            <dt className="text-sm text-muted-foreground">
+              {t("findings.saving")}
+            </dt>
+            <dd className="font-mono text-4xl font-semibold tracking-tight tabular-nums">
+              <MoneyFigure money={findings.saving} />
+            </dd>
+            <dd className="text-xs text-muted-foreground">
+              {t("findings.savingNote")}
+            </dd>
+          </div>
+          <div className="flex flex-col gap-2">
+            <dt className="text-xs text-muted-foreground">
+              {t("findings.share")}
+            </dt>
+            <dd className="font-mono text-xl tabular-nums">
+              <RatioFigure ratio={findings.share} />
+            </dd>
+            <dd className="text-xs text-muted-foreground">
+              {t("findings.shareNote")}
+            </dd>
+          </div>
+          <div className="flex flex-col gap-2">
+            <dt className="text-xs text-muted-foreground">
+              {t("findings.annualised")}
+            </dt>
+            <dd className="font-mono text-xl tabular-nums">
+              <MoneyFigure money={findings.annualised} />
+            </dd>
+            <dd className="text-xs text-muted-foreground">
+              {t("findings.annualisedNote")}
+            </dd>
+          </div>
+          <div className="flex flex-col gap-2">
+            <dt className="text-xs text-muted-foreground">
+              {t("findings.spend")}
+            </dt>
+            <dd className="font-mono text-xl tabular-nums">
+              <CostFigure cost={findings.spend} />
+            </dd>
+            <dd className="text-xs text-muted-foreground">
+              {t("findings.spendNote")}
+            </dd>
+          </div>
+        </dl>
         {findings.findings.length === 0 ? null : (
           <>
             <CompositionStrip findings={findings.findings} shares={shares} />
@@ -350,7 +405,7 @@ export function FindingEvidenceSection({
           term={t("findings.evidence.atStake")}
           note={t("findings.evidence.atStakeNote")}
         >
-          <CostFigure cost={finding.saving} />
+          <MoneyFigure money={finding.saving} />
         </Tile>
         <Tile term={t("findings.evidence.confidence")}>
           {t(`findings.confidence.${finding.confidence}`)}

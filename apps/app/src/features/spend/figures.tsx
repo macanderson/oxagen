@@ -89,7 +89,9 @@ export function Tile({
   return (
     <div className={`${panel} flex flex-col gap-1 p-4`}>
       <dt className="text-xs text-muted-foreground">{term}</dt>
-      <dd className="text-lg font-semibold">{children}</dd>
+      <dd className="font-mono text-2xl font-semibold tabular-nums">
+        {children}
+      </dd>
       {note === undefined ? null : (
         <dd className="text-xs text-muted-foreground">{note}</dd>
       )}
@@ -103,7 +105,7 @@ export function TileStrip({ children }: { children: ReactNode }) {
   );
 }
 
-/** The period's total at the top of the page; proven and accepted stay two figures. */
+/** Recorded spend and workload, without outcome or operator scores. */
 export function SpendStrip({
   total,
   period,
@@ -117,17 +119,14 @@ export function SpendStrip({
       <Tile term={t("strip.spend")} note={t("period", period)}>
         <CostFigure cost={total.cost} />
       </Tile>
-      <Tile term={t("strip.proven")} note={t("strip.provenNote")}>
-        <MoneyFigure money={total.proven} />
+      <Tile term={t("strip.runs")} note={t("strip.runsNote")}>
+        <CountFigure count={total.runs} />
       </Tile>
-      <Tile term={t("strip.accepted")} note={t("strip.acceptedNote")}>
-        <MoneyFigure money={total.accepted} />
+      <Tile term={t("strip.calls")} note={t("strip.callsNote")}>
+        <CountFigure count={total.calls} />
       </Tile>
-      <Tile
-        term={t("strip.productiveRatio")}
-        note={t("strip.productiveRatioNote")}
-      >
-        <RatioFigure ratio={total.productiveRatio} />
+      <Tile term={t("strip.coverage")} note={t("strip.coverageNote")}>
+        {total.cost === null ? t("strip.missing") : t("strip.available")}
       </Tile>
     </TileStrip>
   );

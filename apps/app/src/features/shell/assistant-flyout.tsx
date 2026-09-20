@@ -101,6 +101,10 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import {
+  ASSISTANT_DRAFT_EVENT,
+  assistantDraftOf,
+} from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { AssistantStreamingText } from "./assistant-streaming-text";
@@ -338,6 +342,36 @@ export function AssistantFlyout() {
       return next;
     });
   }
+
+  useEffect(() => {
+    const receiveDraft = (event: Event) => {
+      const request = assistantDraftOf(event);
+      if (
+        request === null ||
+        request.org !== org ||
+        request.ws !== ws ||
+        scope === null
+      )
+        return;
+      setThreads((prior) => {
+        const next = new Map(prior);
+        const current = prior.get(scope) ?? EMPTY_THREAD;
+        // Keep unsent work and place the requested change after it.
+        next.set(scope, {
+          ...current,
+          draft: current.draft.trim()
+            ? `${current.draft}\n\n${request.content}`
+            : request.content,
+        });
+        return next;
+      });
+      setAssistantOpen(true);
+    };
+    window.addEventListener(ASSISTANT_DRAFT_EVENT, receiveDraft);
+    return () => {
+      window.removeEventListener(ASSISTANT_DRAFT_EVENT, receiveDraft);
+    };
+  }, [org, ws, scope, setAssistantOpen]);
 
   // Where focus came from, so closing can give it back. Captured at the open,
   // which is the launcher that was tapped — the rail's on a desktop, or, on a

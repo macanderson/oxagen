@@ -719,8 +719,8 @@ function useRecordStep(props: StepProps<RecordDraft>): StepView {
 export const recordWizard: WizardKind<RecordDraft> = {
   kind: "record",
   need: "steering.write",
-  init: () => ({
-    desc: "",
+  init: (prefill) => ({
+    desc: prefill?.description ?? "",
     kind: null,
     force: null,
     effect: "forbid",

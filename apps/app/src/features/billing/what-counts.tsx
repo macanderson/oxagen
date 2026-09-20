@@ -5,7 +5,7 @@
 import { useTranslations } from "next-intl";
 import { Section } from "./section";
 
-const ITEMS = ["gau", "credits", "free", "reported"] as const;
+const ITEMS = ["gau", "credits", "free"] as const;
 
 export function WhatCounts() {
   const t = useTranslations("billing.whatCounts");

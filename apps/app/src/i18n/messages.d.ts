@@ -991,8 +991,6 @@ type Messages = {
       overdrawn: string;
       other: string;
       otherNote: string;
-      held: string;
-      heldNote: string;
       credits: string;
       creditsValue: string;
       creditsNote: string;
@@ -1128,8 +1126,6 @@ type Messages = {
       creditsBody: string;
       free: string;
       freeBody: string;
-      reported: string;
-      reportedBody: string;
     };
     changePlan: {
       open: string;
@@ -1757,6 +1753,11 @@ type Messages = {
         more: string;
         moreBasis: string;
       };
+      spend: {
+        title: string;
+        unavailable: string;
+        coverage: string;
+      };
     };
     approvals: {
       title: string;
@@ -1836,9 +1837,6 @@ type Messages = {
         agent: string;
         operator: string;
         status: string;
-        tier: string;
-        replay: string;
-        verdict: string;
         cost: string;
         frames: string;
         started: string;
@@ -1847,16 +1845,6 @@ type Messages = {
       noSummary: string;
       notRecorded: string;
       basisNotRecorded: string;
-      verdict: {
-        flipped: string;
-        failing: string;
-        unmoved: string;
-        unsatisfied: string;
-        tampered: string;
-        unverified: string;
-        waived: string;
-      };
-      legend: string;
       unpriced: string;
       unpricedLink: string;
       source: {
@@ -1883,6 +1871,13 @@ type Messages = {
         sending: string;
         queued: string;
         reread: string;
+        unavailable: string;
+      };
+      unnamedRun: string;
+      operatorKind: {
+        human: string;
+        agent: string;
+        service: string;
       };
     };
   };
@@ -3499,6 +3494,7 @@ type Messages = {
       };
     };
     loading: string;
+    unnamedRun: string;
   };
   shell: {
     skipToContent: string;
@@ -3903,24 +3899,33 @@ type Messages = {
           refused: string;
           unavailable: string;
         };
+        contextTitle: string;
+        contextBody: string;
+        contextAction: string;
+        codeTitle: string;
+        codeBody: string;
+        effort: string;
+        draft: string;
+        codeAction: string;
+        codeDraft: string;
       };
     };
     strip: {
       spend: string;
-      proven: string;
-      provenNote: string;
-      accepted: string;
-      acceptedNote: string;
-      productiveRatio: string;
-      productiveRatioNote: string;
+      runs: string;
+      runsNote: string;
+      calls: string;
+      callsNote: string;
+      coverage: string;
+      coverageNote: string;
+      missing: string;
+      available: string;
     };
     columns: {
       provider: string;
       runs: string;
       calls: string;
       spend: string;
-      proven: string;
-      productiveRatio: string;
     };
     groups: {
       operator: {

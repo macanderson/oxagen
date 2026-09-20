@@ -76,7 +76,7 @@
         "subtitle": "A skill is a file with a version and a digest. There are three ways to get one, and all three end in a merge.",
         "registry": {
           "title": "Search the registry",
-          "body": "Pin a published version by its digest. It arrives with a publisher, a version, and a proof rate somebody measured.",
+          "body": "Pin a published version by its digest. Review its publisher, instructions, and required tools before adding it.",
           "closed": "No skill registry is connected to this workspace yet."
         },
         "describe": {

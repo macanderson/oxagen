@@ -174,3 +174,33 @@
     }
   }
 }
+
+/* The mockup's workspace frame and data density, shared by every app page. */
+[data-shell-page] main#main {
+  max-width: 1500px;
+  padding: 22px 24px 80px;
+}
+
+[data-shell-page] table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+[data-shell-page] table thead th {
+  padding: 9px 12px;
+  white-space: nowrap;
+  background: var(--muted-surface);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+[data-shell-page] table tbody :is(td, th) {
+  vertical-align: middle;
+}
+
+@media (width < 48rem) {
+  [data-shell-page] main#main {
+    padding: 16px 16px 88px;
+  }
+}

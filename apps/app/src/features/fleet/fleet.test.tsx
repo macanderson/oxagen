@@ -116,7 +116,7 @@ describe("Fleet reads", () => {
 });
 
 describe("stat strip", () => {
-  it("draws exactly the Live runs and Waiting on a human tiles, counted from the rows on the page", async () => {
+  it("counts activity and recorded spend from the rows on the page", async () => {
     await renderFleet({
       runs: runPage([
         runRow({ id: "arun_a1", status: "live" }),
@@ -131,14 +131,16 @@ describe("stat strip", () => {
         approvalItem({ id: "apr_old" }),
       ]),
     });
-    expect(screen.getAllByTestId("tile")).toHaveLength(2);
+    expect(screen.getAllByTestId("tile")).toHaveLength(3);
     expect(tile("Live runs")).toHaveTextContent(
       "Live runs2of 2 agents in this workspace",
     );
     expect(tile("Waiting on a human")).toHaveTextContent(
       "Waiting on a human2oldest approval has waited 2:30 of 10:00",
     );
-    expect(strip()).not.toHaveTextContent(/spend|cache/i);
+    expect(tile("Spend, runs shown")).toHaveTextContent(
+      "Cost recorded for 3 of 3 runs",
+    );
   });
 
   it("counts an empty workspace as zero and says nothing is parked", async () => {
@@ -148,6 +150,18 @@ describe("stat strip", () => {
     );
     expect(tile("Waiting on a human")).toHaveTextContent(
       "Waiting on a human0nothing is parked",
+    );
+  });
+
+  it("does not turn missing cost into zero spend", async () => {
+    await renderFleet({
+      runs: runPage([runRow({ cost: null })]),
+      approvals: NO_APPROVALS,
+    });
+    expect(tile("Spend, runs shown")).toHaveTextContent("Not recorded");
+    expect(tile("Spend, runs shown")).not.toHaveTextContent("$0.00");
+    expect(tile("Spend, runs shown")).toHaveTextContent(
+      "Cost recorded for 0 of 1 runs",
     );
   });
 
@@ -328,7 +342,7 @@ describe("approvals panel", () => {
 });
 
 describe("runs table", () => {
-  it("draws a row per run: the generated name over the id, the agent identity, operator, status, enforcement tier, replay grade, verdict, cost with its basis, frames and start", async () => {
+  it("draws a row per run: the task, agent identity, operator, status, cost with its basis, frames, and start", async () => {
     await renderFleet({
       runs: runPage([runRow()]),
       approvals: NO_APPROVALS,
@@ -337,17 +351,14 @@ describe("runs table", () => {
     const cells = within(row ?? runsSection()).getAllByRole("cell");
     expect(cells.map((c) => c.textContent).slice(1)).toEqual([
       "reacme.core.release-botevidence ledger",
-      "Marcus Bellprn_marcusbell",
+      "Marcus Bell",
       "live",
-      "observed at the harness",
-      "fork",
-      "flipped",
       "$4.13gateway_observed",
       "1,204",
       "Sep 15, 2026, 8:00 AM",
       // A live ledger run carries the recorded reason in place of controls:
       // Oxagen holds no run token it could revoke (WL-61).
-      "This run's evidence comes from an external engine. Oxagen holds no run token it can revoke, so there is nothing here to pause, steer or cancel.",
+      "View onlyThis run's evidence comes from an external engine. Oxagen holds no run token it can revoke, so there is nothing here to pause, steer or cancel.",
     ]);
     // The run cell leads with what the run was, keeps the id under it, and
     // labels the model's sentence so it cannot read as the record.
@@ -364,21 +375,21 @@ describe("runs table", () => {
     ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
   });
 
-  it("heads a run with no generated name by its id, and says no summary was written", async () => {
+  it("heads a run without a generated name by its task reference", async () => {
     await renderFleet({
       runs: runPage([runRow({ name: null, summary: null })]),
       approvals: NO_APPROVALS,
     });
     const [row] = within(runsSection()).getAllByTestId("run-row");
     const cells = within(row ?? runsSection()).getAllByRole("cell");
-    expect(cells[0]).toHaveTextContent(
-      "No summary yet. Open the run to read its frames.",
-    );
+    expect(cells[0]).toHaveTextContent("ENG-4121 cut the 3.2 release");
     expect(
       within(row ?? runsSection()).queryByTestId("generated-summary"),
     ).toBeNull();
     expect(
-      within(runsSection()).getByRole("link", { name: "arun_7k2m9q" }),
+      within(runsSection()).getByRole("link", {
+        name: "ENG-4121 cut the 3.2 release",
+      }),
     ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
   });
 
@@ -407,68 +418,45 @@ describe("runs table", () => {
     const cells = within(unrecorded ?? runsSection()).getAllByRole("cell");
     expect(cells[1]).toHaveTextContent(/^not recordedwrapped agent$/);
     expect(cells[2]).toHaveTextContent(/^not recorded$/);
-    expect(cells[7]).toHaveTextContent(/^not recorded$/);
+    expect(cells[4]).toHaveTextContent(/^not recorded$/);
     expect(noBasis).toHaveTextContent("$0.00basis not recorded");
     expect(runsSection()).not.toHaveTextContent(/trust/i);
   });
 
-  it.each([
-    ["gateway", "observed at the gateway"],
-    ["harness", "observed at the harness"],
-    ["observe", "observed from the side"],
-  ] as const)(
-    "draws the %s tier as the word the record holds, and nothing stronger",
-    async (tier, word) => {
-      await renderFleet({
-        runs: runPage([runRow({ enforcementTier: tier })]),
-        approvals: NO_APPROVALS,
-      });
-      const [row] = within(runsSection()).getAllByTestId("run-row");
-      const cells = within(row ?? runsSection()).getAllByRole("cell");
-      expect(cells[4]).toHaveTextContent(word);
-      expect(within(cells[4] ?? runsSection()).getByText(word)).toHaveAttribute(
-        "data-tier",
-        tier,
-      );
-    },
-  );
-
-  it.each([
-    "flipped",
-    "failing",
-    "unmoved",
-    "unsatisfied",
-    "tampered",
-    "unverified",
-    "waived",
-  ] as const)("draws the recorded %s verdict as its own word", async (word) => {
-    await renderFleet({
-      runs: runPage([runRow({ verdict: word })]),
-      approvals: NO_APPROVALS,
-    });
-    const [row] = within(runsSection()).getAllByTestId("run-row");
-    const cells = within(row ?? runsSection()).getAllByRole("cell");
-    expect(cells[6]).toHaveTextContent(new RegExp(`^${word}$`));
-  });
-
-  // `unverified` is a verdict a runner reached. A run no witness reported on
-  // has no verdict at all, and saying "unverified" there would claim a run was
-  // checked and found wanting.
-  it("reads a run with no recorded verdict as not recorded, never unverified (negative)", async () => {
-    await renderFleet({
-      runs: runPage([runRow({ verdict: null })]),
-      approvals: NO_APPROVALS,
-    });
-    const [row] = within(runsSection()).getAllByTestId("run-row");
-    const cells = within(row ?? runsSection()).getAllByRole("cell");
-    expect(cells[6]).toHaveTextContent(/^not recorded$/);
-    expect(runsSection()).not.toHaveTextContent("unverified");
-  });
-
-  it("says what tier and verdict mean under the table", async () => {
+  it("omits proof, replay, and verdict columns from the operator table", async () => {
     await renderFleet({ runs: runPage([runRow()]), approvals: NO_APPROVALS });
-    expect(within(runsSection()).getByTestId("runs-legend")).toHaveTextContent(
-      "Tier is where Oxagen observed a run's calls. Verdict is the word a witness reported on it. Only flipped marks a run proven.",
+    const headers = within(runsSection())
+      .getAllByRole("columnheader")
+      .map((header) => header.textContent);
+    expect(headers).toEqual([
+      "Run",
+      "Agent",
+      "Operator",
+      "Status",
+      "Cost",
+      "Frames",
+      "Started",
+      "Controls",
+    ]);
+    expect(runsSection()).not.toHaveTextContent(/witness|proven|flipped/);
+  });
+
+  it("excludes missing costs from the spend total and keeps currencies separate", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({ cost: { micros: "1500000", currency: "USD", basis: null } }),
+        runRow({
+          id: "arun_eur",
+          cost: { micros: "2500000", currency: "EUR", basis: null },
+        }),
+        runRow({ id: "arun_missing", cost: null }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    expect(tile("Spend, runs shown")).toHaveTextContent("$1.50");
+    expect(tile("Spend, runs shown")).toHaveTextContent("€2.50");
+    expect(tile("Spend, runs shown")).toHaveTextContent(
+      "Cost recorded for 2 of 3 runs",
     );
   });
 

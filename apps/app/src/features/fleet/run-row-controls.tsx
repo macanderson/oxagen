@@ -52,13 +52,17 @@ function NoRowControls({
   testId: string;
 }) {
   const t = useTranslations("run.commands");
+  const controls = useTranslations("fleet.runs.controls");
   return (
-    <p
+    <details
       data-testid={testId}
       className="max-w-[18rem] text-xs text-muted-foreground"
     >
-      {t(reason)}
-    </p>
+      <summary className="cursor-pointer whitespace-nowrap">
+        {controls("unavailable")}
+      </summary>
+      <p className="pt-2">{t(reason)}</p>
+    </details>
   );
 }
 

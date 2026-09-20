@@ -9,6 +9,8 @@ import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { assistantDraftOf } from "@/shared/assistant-draft";
+import { createRequestOf } from "@/shared/create";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import spend from "../../../messages/spend.json";
 import ui from "../../../messages/ui.json";
@@ -229,9 +231,61 @@ describe("Fix a finding", () => {
         fix="Request grouped totals; page line items only on drill-down."
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Fix" }));
-    return screen.getByRole("dialog", { name: "Fix this finding" });
+    await userEvent.click(screen.getByRole("button", { name: "Review fix" }));
+    return screen.getByRole("dialog", {
+      name: "Review the recommended change",
+    });
   }
+
+  it("opens a prefilled context draft without claiming a fix or writing a PR", async () => {
+    const listener = vi.fn((event: Event) => createRequestOf(event));
+    window.addEventListener("oxagen:create", listener);
+    try {
+      await openDialog();
+      expect(
+        screen.getByText(/Implementation cost is not estimated/),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Plan a code PR with Stella" }),
+      ).toBeInTheDocument();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Draft a context PR" }),
+      );
+      expect(listener).toHaveBeenCalledOnce();
+      expect(listener.mock.results[0]?.value).toEqual({
+        kind: "record",
+        prefill: {
+          description:
+            "Request grouped totals; page line items only on drill-down.",
+        },
+      });
+      expect(recordFindingFixAction).not.toHaveBeenCalled();
+      expect(dismissFindingAction).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("oxagen:create", listener);
+    }
+  });
+
+  it("offers a scoped code PR request for review without recording a fix", async () => {
+    const listener = vi.fn((event: Event) => assistantDraftOf(event));
+    window.addEventListener("oxagen:assistant-draft", listener);
+    try {
+      await openDialog();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Plan a code PR with Stella" }),
+      );
+      expect(listener).toHaveBeenCalledOnce();
+      const draft = listener.mock.results[0]?.value;
+      expect(draft?.org).toBe(at.org);
+      expect(draft?.ws).toBe(at.ws);
+      expect(draft?.content).toContain("Do not mark the finding fixed.");
+      expect(draft?.content).toContain("Request grouped totals");
+      expect(recordFindingFixAction).not.toHaveBeenCalled();
+      expect(dismissFindingAction).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("oxagen:assistant-draft", listener);
+    }
+  });
 
   it("shows the fix the finding names and records the change, returning to the findings tab", async () => {
     recordFindingFixAction.mockResolvedValue({ ok: true, value: null });

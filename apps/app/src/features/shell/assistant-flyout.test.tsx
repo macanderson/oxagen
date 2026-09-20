@@ -22,6 +22,7 @@ import {
 import type { ReactNode } from "react";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { openAssistantDraft } from "@/shared/assistant-draft";
 import { PageRecord } from "./page-record";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
@@ -1071,5 +1072,93 @@ describe("AssistantFlyout", () => {
   it("has no axe violations", async () => {
     const { flyout } = await openFlyout();
     await expectNoAxe(flyout);
+  });
+});
+
+describe("cost recommendation handoff", () => {
+  it("opens a closed composer without sending the draft", () => {
+    render(tree());
+    expect(screen.queryByTestId("assistant-composer")).toBeNull();
+    act(() =>
+      openAssistantDraft({
+        org: "acme",
+        ws: "core-platform",
+        content: "Review this code correction.",
+      }),
+    );
+    expect(screen.getByTestId("assistant-composer")).toHaveValue(
+      "Review this code correction.",
+    );
+    expect(askAssistant).not.toHaveBeenCalled();
+  });
+
+  it("ignores a matching workspace slug in another organization", async () => {
+    await openFlyout();
+    act(() =>
+      openAssistantDraft({
+        org: "other",
+        ws: "core-platform",
+        content: "Private recommendation.",
+      }),
+    );
+    expect(screen.getByTestId("assistant-composer")).toHaveValue("");
+    expect(askAssistant).not.toHaveBeenCalled();
+  });
+
+  it("keeps drafts in their own workspace after navigation", async () => {
+    const { renavigate } = await openFlyout();
+    act(() =>
+      openAssistantDraft({
+        org: "acme",
+        ws: "core-platform",
+        content: "Core recommendation.",
+      }),
+    );
+    renavigate("/acme/payments");
+    act(() =>
+      openAssistantDraft({
+        org: "acme",
+        ws: "core-platform",
+        content: "Late core recommendation.",
+      }),
+    );
+    expect(screen.getByTestId("assistant-composer")).toHaveValue("");
+    renavigate("/acme/core-platform");
+    expect(screen.getByTestId("assistant-composer")).toHaveValue(
+      "Core recommendation.",
+    );
+    expect(askAssistant).not.toHaveBeenCalled();
+  });
+
+  it("opens a reviewable draft, preserves unsent work, and sends nothing", async () => {
+    const { user } = await openFlyout();
+    await user.type(
+      screen.getByTestId("assistant-composer"),
+      "My existing question.",
+    );
+    act(() =>
+      openAssistantDraft({
+        org: "acme",
+        ws: "core-platform",
+        content: "Plan a code PR for repeated reads.",
+      }),
+    );
+    expect(screen.getByTestId("assistant-composer")).toHaveValue(
+      "My existing question.\n\nPlan a code PR for repeated reads.",
+    );
+    expect(askAssistant).not.toHaveBeenCalled();
+  });
+
+  it("ignores a request belonging to a different workspace", async () => {
+    await openFlyout();
+    act(() =>
+      openAssistantDraft({
+        org: "acme",
+        ws: "other",
+        content: "Plan a code PR.",
+      }),
+    );
+    expect(screen.getByTestId("assistant-composer")).toHaveValue("");
+    expect(askAssistant).not.toHaveBeenCalled();
   });
 });

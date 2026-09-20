@@ -6,7 +6,7 @@
 // wizard ends on. A new kind plugs in by adding a module to `WIZARDS`
 // (./kinds.ts) and its kind to `CREATE_KINDS`; the shell does not change.
 import type { ReactNode } from "react";
-import type { CreateKind } from "@/shared/create";
+import type { CreateKind, CreatePrefill } from "@/shared/create";
 
 /**
  * Every step label a wizard may show, one catalog key each under
@@ -117,7 +117,7 @@ export type WizardKind<D> = {
   /** The grant the footer names: "needs skills.admin on core-platform". */
   need: string;
   /** A fresh draft; the shell makes one each time the wizard opens. */
-  init(): D;
+  init(prefill?: CreatePrefill): D;
   /** The step list, a function of the draft (a path the operator chose can change it). */
   steps(draft: D): readonly StepId[];
   /**

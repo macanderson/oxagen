@@ -53,3 +53,29 @@ describe("createRequestOf", () => {
     ).toBeNull();
   });
 });
+
+describe("context description prefill", () => {
+  it("passes a finding draft without submitting anything", () => {
+    const seen = listen();
+    openCreate("record", {
+      description: "Finding fnd_1: paginate repeated tool results.",
+    });
+    expect(seen.mock.results[0]?.value).toEqual({
+      kind: "record",
+      prefill: {
+        description: "Finding fnd_1: paginate repeated tool results.",
+      },
+    });
+  });
+  it.each([
+    { kind: "skill", prefill: { description: "Wrong wizard" } },
+    { kind: "record", prefill: { description: 42 } },
+    { kind: "record", prefill: { description: " " } },
+    { kind: "record", prefill: { description: "x".repeat(2001) } },
+    { kind: "record", prefill: null },
+  ])("rejects invalid prefill %j", (detail) => {
+    expect(
+      createRequestOf(new CustomEvent(CREATE_EVENT, { detail })),
+    ).toBeNull();
+  });
+});

@@ -22,7 +22,6 @@ import { IntlProvider } from "@/test/intl";
 import { mandateList, mandateRow } from "@/test/mandate-views";
 import {
   NOW,
-  runChain,
   runCost,
   runDetail,
   runFrame,
@@ -164,17 +163,17 @@ describe("header", () => {
     await expectNoAxe(container);
   });
 
-  it("heads a run with no generated name by its id and says no summary was written", async () => {
+  it("heads a run with its task reference when no generated name exists", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ name: null, summary: null }) })),
       transcript: ok(runTranscript()),
     });
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "tse_7k2m9q",
+      "ENG-4121 cut the 3.2 release",
     );
     expect(screen.queryByTestId("generated-summary")).toBeNull();
     expect(
-      screen.getByText(/No summary yet\. A sealed run can be summarized/),
+      screen.getByText(/No summary yet\. Open the transcript/),
     ).toBeTruthy();
   });
 
@@ -278,14 +277,12 @@ describe("header", () => {
     expect(facts.getByText("not recorded")).toBeTruthy();
   });
 
-  it("states that a witness run witnessed another and links no further", async () => {
+  it("omits witness details from the operator view", async () => {
     await renderRun({
       detail: ok(runDetail({ witnessed: true })),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-witnessed")).toHaveTextContent(
-      "This run witnessed another run.",
-    );
+    expect(screen.queryByTestId("run-witnessed")).toBeNull();
   });
 });
 
@@ -497,7 +494,7 @@ describe("transcript", () => {
     expect(
       within(screen.getByTestId("transcript")).getByText("sealed"),
     ).toBeTruthy();
-    expect(screen.getByText(/Replay grade fork/)).toBeTruthy();
+    expect(screen.queryByText(/Replay grade fork/)).toBeNull();
   });
 
   it("scrubs back, dims the steps past the position and moves the cost with it", async () => {
@@ -676,7 +673,7 @@ describe("transcript", () => {
       },
       { tab: "transcript" },
     );
-    expect(screen.getByText(/has no frames yet/)).toBeTruthy();
+    expect(screen.getByText(/has no recorded frames yet/)).toBeTruthy();
   });
 
   it("says when the transcript stopped short of the end (negative)", async () => {
@@ -1088,24 +1085,15 @@ describe("chips", () => {
   });
 });
 
-describe("chain and seal", () => {
-  it("reads get_run_chain only when its tab is open, and states the recorded grade", async () => {
+describe("operator sections", () => {
+  it("opens the transcript for a retired chain tab without reading proof data", async () => {
     const { calls } = await renderRun(
-      {
-        detail: ok(runDetail()),
-        chain: ok(runChain({ recordedGrade: "view" })),
-      },
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
       { tab: "chain" },
     );
-    expect(calls.chain).toHaveLength(1);
-    expect(calls.transcript).toHaveLength(0);
-    expect(calls.cost).toHaveLength(0);
-    expect(screen.getByTestId("chain-ladder")).toBeTruthy();
-  });
-
-  it("names its own failure when the chain read is refused (negative)", async () => {
-    await renderRun({ detail: ok(runDetail()), chain: DOWN }, { tab: "chain" });
-    expect(screen.getByText(/frame_store_unreachable/)).toBeTruthy();
+    expect(calls.chain).toHaveLength(0);
+    expect(calls.transcript).toHaveLength(1);
+    expect(screen.queryByRole("link", { name: "Chain and seal" })).toBeNull();
   });
 });
 

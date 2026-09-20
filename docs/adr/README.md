@@ -145,3 +145,5 @@ first. Move a row into its epic when one fits.
 - [ADR-114](./ADR-114-one-version-across-every-manifest-and-a-laptop-publish-flow.md): One version across every tracked manifest, whatever its language (`package.json`, `Cargo.toml`, `Cargo.lock`), held by `pnpm check:versions` in CI and written by `pnpm release:*`; release notes diff from the last published GitHub release and link every installer and executable by name; `pnpm release:<bump>:publish` cuts, tags, waits for the four-target CI build, and uploads from a laptop, with every upload step idempotent; `pnpm dist:local` builds the installer from the tree. Amends ADR-005: the Changesets half is retired.
 
 - [ADR-128](./ADR-128-source-identifiers-determine-draft-filenames.md): Source identifiers determine draft filenames.
+
+- [ADR-130: Spend and operator feedback lead the app](ADR-130-spend-and-operator-feedback-ui.md)

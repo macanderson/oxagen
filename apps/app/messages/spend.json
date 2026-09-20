@@ -24,14 +24,14 @@
       "setBudget": "Set a budget"
     },
     "findings": {
-      "eyebrow": "Savings identified",
-      "heroTitle": "Savings identified in this workspace",
-      "saving": "Savings identified",
-      "savingNote": "measured minus counterfactual over the runs each finding cites",
+      "eyebrow": "Opportunities to reduce spend",
+      "heroTitle": "Potential savings in this workspace",
+      "saving": "Potential savings",
+      "savingNote": "estimated reduction on the cited workload",
       "share": "Share of priced spend",
       "shareNote": "the annualised saving against the spend this window priced",
       "annualised": "A year at this run rate",
-      "annualisedNote": "each saving scaled from its own window to 365 days",
+      "annualisedNote": "projection if the same workload repeats for 365 days",
       "spend": "Priced spend in this window",
       "spendNote": "the span the listed findings cover",
       "strip": {
@@ -39,10 +39,10 @@
         "tail": "{count} smaller findings"
       },
       "facts": "{findings} findings · {operators} operators involved · {high} high confidence · {medium} medium",
-      "note": "Each saving is measured minus counterfactual over the runs it cites, at the price each call paid. Evidence opens those runs and the arithmetic; Fix opens the change that removes it.",
+      "note": "Potential savings compare recorded costs with an alternative on the cited calls. They are estimates, not savings already achieved. Review the calculation and proposed change before acting.",
       "list": "Findings, largest saving first",
       "emptyTitle": "No finding is open",
-      "empty": "The detectors run after each run seals and again nightly. A finding is written only with the runs that prove it, so an empty list means nothing in the window was proven, not that nothing was looked for.",
+      "empty": "No open finding matches the supported patterns in the available data. Missing usage or prices can prevent a cost estimate.",
       "rank": "#{rank}",
       "kind": {
         "cache_writes_never_read": "Cache written and never read",
@@ -61,16 +61,16 @@
         "medium": "medium confidence"
       },
       "why": "Why it costs money:",
-      "fixLabel": "The fix:",
+      "fixLabel": "Recommended change:",
       "cites": "{runs} runs · {calls} calls",
       "shareOfIdentified": "{share} of the identified savings",
       "shareUnknown": "share not comparable",
       "evidence": {
-        "open": "Evidence",
+        "open": "Review calculation",
         "eyebrow": "Evidence",
         "back": "Back to the findings",
-        "atStake": "At stake",
-        "atStakeNote": "measured minus counterfactual",
+        "atStake": "Potential savings",
+        "atStakeNote": "estimated reduction on the cited workload",
         "confidence": "Confidence",
         "covered": "Calls the counterfactual prices",
         "coveredValue": "{covered} of {calls}",
@@ -86,14 +86,14 @@
           "run": "Run",
           "startedAt": "Started",
           "measured": "Measured",
-          "counterfactual": "Counterfactual"
+          "counterfactual": "Alternative estimate"
         },
         "note": "Every run above is a sealed record. Open one to read the frames the arithmetic came from."
       },
       "fix": {
-        "open": "Fix",
-        "title": "Fix this finding",
-        "body": "The fix is in the agent’s own code, harness or tool configuration, which Oxagen does not hold. Record the change once you have made it: the finding is marked applied with this call’s request id, and later passes cite only runs that start afterwards, so the saving shows on this page.",
+        "open": "Review fix",
+        "title": "Review the recommended change",
+        "body": "Review the recommendation before changing instructions, a harness, or a tool. Recording a fix only updates this finding. It does not edit code, open a pull request, or measure realised savings.",
         "record": "Record the fix as applied",
         "recording": "Recording the change",
         "dismiss": "Dismiss this finding",
@@ -108,25 +108,34 @@
           "invalid": "The decision was refused as invalid. Nothing was changed.",
           "refused": "The decision was refused: {code}. Nothing was changed.",
           "unavailable": "The decision could not be recorded: {code}. Nothing was changed."
-        }
+        },
+        "contextTitle": "Context PR",
+        "contextBody": "For an instruction or workflow change, review the finding and recommendation in the context-record wizard. Nothing is published until you review and merge its pull request.",
+        "contextAction": "Draft a context PR",
+        "codeTitle": "Code PR",
+        "codeBody": "Review a request for Stella to inspect the finding and plan a harness hook, custom tool, or code change. Opening a pull request depends on the repository tools and access available to Stella.",
+        "effort": "Implementation cost is not estimated. Potential savings exclude the cost of making the change.",
+        "draft": "Finding {id} for {subject}. Window: {from} to {to}. Cites {runs} runs and {calls} calls. Potential savings: {amount} {currency}, estimated on {basis} cost data. Implementation cost is not estimated.\n\nRecommended change: {fix}\n\nObserved behavior: {why}",
+        "codeAction": "Plan a code PR with Stella",
+        "codeDraft": "Inspect this spend finding and read the cited calls before proposing a change. Plan the smallest harness hook, custom tool, or code fix that addresses the behavior, with tests. Separate measured costs from potential savings. Estimate implementation cost only with stated assumptions. Open a reviewable code PR only if repository tools and access are available. Otherwise report the missing access. Do not mark the finding fixed.\n\n{finding}"
       }
     },
     "strip": {
       "spend": "Spend",
-      "proven": "Proven spend",
-      "provenNote": "runs whose verdict flipped",
-      "accepted": "Accepted, not proven",
-      "acceptedNote": "a human verified it; never folded into proven",
-      "productiveRatio": "Productive ratio",
-      "productiveRatioNote": "steps that advanced the task"
+      "runs": "Runs",
+      "runsNote": "runs included in this report",
+      "calls": "Calls",
+      "callsNote": "calls included in this report",
+      "coverage": "Cost data",
+      "coverageNote": "Recorded amounts can exclude unpriced calls. Check Pricing for gaps.",
+      "missing": "Missing",
+      "available": "Available"
     },
     "columns": {
       "provider": "Provider",
       "runs": "Runs",
       "calls": "Calls",
-      "spend": "Spend",
-      "proven": "Proven",
-      "productiveRatio": "Productive ratio"
+      "spend": "Spend"
     },
     "groups": {
       "operator": {
@@ -158,7 +167,7 @@
       "noCause": "No waste found",
       "byCause": "By cause",
       "none": "No run in this period shows waste in its frames.",
-      "proof": "Runs that prove it",
+      "proof": "Related runs",
       "cause": {
         "cache_write_never_read": "Cache written and never read"
       }
@@ -338,7 +347,7 @@
     },
     "empty": {
       "title": "No spend to report yet",
-      "body": "Rollups are rebuilt from frames after each run seals. No run in this period has been rolled up, so there is nothing to report and nothing billable.",
+      "body": "No cost rollup is available for this period. Missing usage or prices do not mean the work was free. Check Pricing and the run records.",
       "back": "Back to Fleet"
     },
     "budgetDialog": {

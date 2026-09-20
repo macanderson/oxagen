@@ -161,3 +161,20 @@ describe("CreateHost", () => {
     expect(readMainRepository).not.toHaveBeenCalled();
   });
 });
+
+it("prefills a finding in the context wizard and leaves it editable", async () => {
+  mount();
+  const description =
+    "Finding fnd_1. Use pagination to reduce repeated result tokens.";
+  act(() => {
+    openCreate("record", { description });
+  });
+  expect(await screen.findByTestId("wizard-desc")).toHaveValue(description);
+  fireEvent.change(screen.getByTestId("wizard-desc"), {
+    target: { value: "Review and narrow this instruction." },
+  });
+  expect(screen.getByTestId("wizard-desc")).toHaveValue(
+    "Review and narrow this instruction.",
+  );
+  expect(proposeSkill).not.toHaveBeenCalled();
+});

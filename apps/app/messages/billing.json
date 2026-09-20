@@ -83,8 +83,6 @@
       "overdrawn": "overdrawn by {count}",
       "other": "Other governed actions",
       "otherNote": "reported, never priced",
-      "held": "Held runs",
-      "heldNote": "reported, never priced (dod.held)",
       "credits": "Usage credits",
       "creditsValue": "{count} credits",
       "creditsNote": "balance for in-app AI usage; 1 credit = $0.01",
@@ -219,9 +217,7 @@
       "credits": "Billed in usage credits",
       "creditsBody": "each model call the in-app agent makes, at provider cost times the meter markup.",
       "free": "Free",
-      "freeBody": "membership writes and every other governed action, dod.held included.",
-      "reported": "Reported",
-      "reportedBody": "held runs and proven spend."
+      "freeBody": "membership writes and every governed action other than resolve_approval."
     },
     "changePlan": {
       "open": "Change plan",

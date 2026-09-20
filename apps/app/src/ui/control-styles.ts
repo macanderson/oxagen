@@ -26,7 +26,7 @@ export const inputBase =
   "disabled:bg-input-disabled-bg disabled:text-input-disabled-fg aria-invalid:border-input-invalid-border aria-invalid:outline-input-invalid-ring";
 
 export const panel =
-  "rounded-xl border border-border bg-card text-card-foreground shadow-sm";
+  "min-w-0 rounded-xl border border-border bg-card text-card-foreground";
 
 export const eyebrow =
   "text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground";

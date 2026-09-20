@@ -27,7 +27,7 @@ export function AgentCard({
   return (
     <span
       data-layout={layout}
-      className="flex min-w-0 items-center gap-2 text-left"
+      className="flex min-w-0 items-center gap-2.5 text-left"
     >
       {agentKey === null ? null : (
         <span
@@ -37,17 +37,20 @@ export function AgentCard({
           {slug.slice(0, 2)}
         </span>
       )}
-      <span className="flex min-w-0 flex-col">
+      <span
+        className={`flex min-w-0 flex-col leading-snug ${layout === "list" ? "w-48 max-w-60" : "max-w-full"}`}
+      >
         {agentKey === null ? (
           <span className="text-muted-foreground">{notRecorded}</span>
         ) : (
           <span
-            className={`${mono} break-all ${layout === "detail" ? "text-lg font-semibold" : ""}`}
+            title={agentKey}
+            className={`${mono} ${layout === "detail" ? "break-words text-lg font-semibold" : "truncate"}`}
           >
             {agentKey}
           </span>
         )}
-        <span className="text-xs text-muted-foreground">{sub}</span>
+        <span className="truncate text-xs text-muted-foreground">{sub}</span>
       </span>
     </span>
   );

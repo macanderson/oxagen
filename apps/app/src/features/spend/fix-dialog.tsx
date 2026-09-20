@@ -1,15 +1,16 @@
 "use client";
-// Fix (mockup `fix`, #2963): the two decisions a person takes on an open
-// finding. The four kinds the job detects have their fix in the agent's own
-// code, harness or tool configuration, which Oxagen does not hold, so the
-// dialog shows the fix the finding names and records the change
-// (record_finding_fix) or closes the finding (dismiss_finding). Both are org
-// Owner or Admin in the handler, so a refusal renders as its sentence and
-// changes nothing; a decision taken leaves the finding off the list, which the
-// server renders again.
+// Review a recommendation, draft a Context PR or a Stella request, then
+// record or dismiss the finding separately. Draft handoffs never submit a
+// write or claim realised savings. Only the explicit record/dismiss actions
+// change the finding, through the kernel's existing role checks.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
+import {
+  ASSISTANT_DRAFT_MAX,
+  openAssistantDraft,
+} from "@/shared/assistant-draft";
+import { CREATE_DESCRIPTION_MAX, openCreate } from "@/shared/create";
 import { routes } from "@/shared/safe-path";
 import { buttonSecondary } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -63,11 +64,13 @@ export function FixDialog({
   at,
   findingId,
   fix,
+  contextDescription,
 }: {
   at: SpendAt;
   findingId: string;
   /** The change the finding names, as the findings job wrote it. */
   fix: string;
+  contextDescription?: string;
 }) {
   const t = useTranslations("spend");
   const failureText = useFailureText();
@@ -129,6 +132,58 @@ export function FixDialog({
           <p className="text-sm text-muted-foreground">
             {t("findings.fix.body")}
           </p>
+          <p className="text-xs text-muted-foreground">
+            {t("findings.fix.effort")}
+          </p>
+          <section className="rounded-lg border border-border p-3">
+            <h3 className="text-sm font-semibold">
+              {t("findings.fix.contextTitle")}
+            </h3>
+            <p className="my-2 text-sm text-muted-foreground">
+              {t("findings.fix.contextBody")}
+            </p>
+            <button
+              type="button"
+              className={buttonSecondary}
+              disabled={pending !== null}
+              onClick={() => {
+                setOpen(false);
+                openCreate("record", {
+                  description: (contextDescription ?? fix).slice(
+                    0,
+                    CREATE_DESCRIPTION_MAX,
+                  ),
+                });
+              }}
+            >
+              {t("findings.fix.contextAction")}
+            </button>
+          </section>
+          <section className="rounded-lg border border-border p-3">
+            <h3 className="text-sm font-semibold">
+              {t("findings.fix.codeTitle")}
+            </h3>
+            <p className="my-2 text-sm text-muted-foreground">
+              {t("findings.fix.codeBody")}
+            </p>
+            <button
+              type="button"
+              className={buttonSecondary}
+              disabled={pending !== null}
+              onClick={() => {
+                setOpen(false);
+                openAssistantDraft({
+                  org: at.org,
+                  ws: at.ws,
+                  content: t("findings.fix.codeDraft", {
+                    finding: contextDescription ?? fix,
+                  }).slice(0, ASSISTANT_DRAFT_MAX),
+                });
+              }}
+            >
+              {t("findings.fix.codeAction")}
+            </button>
+          </section>
           {failure === null ? null : (
             <FormAlert testId="spend-fix-failure">{failure}</FormAlert>
           )}

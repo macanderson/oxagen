@@ -549,7 +549,6 @@ export function TranscriptView({
   kinds,
   zoom: initialZoom,
   status,
-  replayGrade,
   org,
   ws,
   runId,
@@ -964,9 +963,7 @@ export function TranscriptView({
           ))}
         </span>
         <p className="m-0 basis-full text-[11px] leading-snug text-muted-foreground">
-          {replayGrade === null
-            ? t("transportNote")
-            : t("transportNoteGraded", { grade: replayGrade })}
+          {t("transportNote")}
         </p>
       </div>
       <div

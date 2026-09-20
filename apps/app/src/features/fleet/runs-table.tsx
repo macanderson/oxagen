@@ -1,12 +1,3 @@
-// The runs table: one list_runs page, newest first, with links to the next
-// page and back to the newest. A value the store did not record reads "not
-// recorded". The empty state tells a new workspace how its first run arrives.
-//
-// Three columns describe how much a row can be trusted: the enforcement tier
-// (where Oxagen observed the run's calls), the replay grade the seal recorded,
-// and the witness verdict. Each renders the recorded word and nothing stronger
-// (spec §14), so a run with no witness reads "not recorded" rather than
-// `unverified`, which is itself a verdict a runner reached.
 import { useLocale, useTranslations } from "next-intl";
 import { useFormatter } from "@/ui/formatter";
 import type { RunPage } from "@/data/contracts/runs";
@@ -14,12 +5,10 @@ import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { linkText, mono, panel } from "@/ui/control-styles";
-import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { GeneratedSummary } from "@/ui/generated-summary";
-import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, numericCell, Table } from "@/ui/table";
 import { ReadFailure } from "@/ui/read-failure";
@@ -70,9 +59,6 @@ function RunsPageView({
     { label: t("columns.agent") },
     { label: t("columns.operator") },
     { label: t("columns.status") },
-    { label: t("columns.tier") },
-    { label: t("columns.replay") },
-    { label: t("columns.verdict") },
     { label: t("columns.cost"), numeric: true },
     { label: t("columns.frames"), numeric: true },
     { label: t("columns.started") },
@@ -83,86 +69,49 @@ function RunsPageView({
       <Table label={t("title")} columns={columns}>
         {page.runs.map((run) => (
           <tr key={run.id} data-testid="run-row">
-            <td className={`${cell} max-w-sm`}>
+            <td className={`${cell} min-w-64 max-w-80`}>
               <SafeLink
                 to={routes.run(org, ws, run.id)}
-                className={
-                  run.name === null
-                    ? `${linkText} ${mono}`
-                    : `${linkText} font-medium`
-                }
+                className={`${linkText} block truncate font-medium`}
+                title={run.name ?? run.taskRef ?? run.id}
               >
-                {run.name ?? run.id}
+                {run.name ?? run.taskRef ?? t("unnamedRun")}
               </SafeLink>
-              {run.name === null ? null : (
-                <span className={`block text-xs text-muted-foreground ${mono}`}>
-                  {run.id}
-                </span>
-              )}
+              <span
+                className={`block truncate text-[10px] text-muted-foreground ${mono}`}
+              >
+                {run.id}
+              </span>
               {run.taskRef === null ? null : (
                 <span className="block text-xs text-muted-foreground">
                   {run.taskRef}
                 </span>
               )}
-              {run.summary === null ? (
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  {t("noSummary")}
-                </span>
-              ) : (
+              {run.summary === null ? null : (
                 <div className="mt-1">
                   <GeneratedSummary summary={run.summary} />
                 </div>
               )}
             </td>
-            <td className={cell}>
+            <td className={`${cell} min-w-48 max-w-60`}>
               <AgentCard
                 agentKey={run.agentKey}
                 notRecorded={t("notRecorded")}
                 sub={t(`source.${run.source}`)}
               />
             </td>
-            <td className={cell}>
-              {run.operatorName === null ? (
-                run.operatorId === null ? (
-                  notRecorded
-                ) : (
-                  // No name to print: the principal id is the identifier the
-                  // rest of the record is keyed on, so it stands in its own
-                  // right rather than as a stand-in for a name.
-                  <span className={mono}>{run.operatorId}</span>
-                )
-              ) : (
-                <span className="flex flex-col">
-                  <span>{run.operatorName}</span>
-                  <span className={`${mono} text-xs text-muted-foreground`}>
-                    {run.operatorId}
-                  </span>
-                </span>
-              )}
+            <td className={`${cell} min-w-36 whitespace-nowrap`}>
+              <span title={run.operatorId ?? undefined}>
+                {run.operatorName ??
+                  (run.operatorKind === null
+                    ? notRecorded
+                    : t(`operatorKind.${run.operatorKind}`))}
+              </span>
             </td>
             <td className={cell}>
               <StatusBadge status={run.status} />
             </td>
-            <td className={cell}>
-              <EnforcementTierBadge tier={run.enforcementTier} />
-            </td>
-            <td className={cell}>
-              {run.replayGrade === null ? (
-                notRecorded
-              ) : (
-                <ReplayGradeBadge grade={run.replayGrade} />
-              )}
-            </td>
-            <td className={cell}>
-              {run.verdict === null ? (
-                notRecorded
-              ) : (
-                <span data-verdict={run.verdict} className="whitespace-nowrap">
-                  {t(`verdict.${run.verdict}`)}
-                </span>
-              )}
-            </td>
-            <td className={numericCell}>
+            <td className={`${numericCell} whitespace-nowrap`}>
               {run.cost === null ? (
                 notRecorded
               ) : (
@@ -174,8 +123,12 @@ function RunsPageView({
                 </>
               )}
             </td>
-            <td className={numericCell}>{formatCount(run.frames, locale)}</td>
-            <td className={cell}>
+            <td className={`${numericCell} whitespace-nowrap`}>
+              {formatCount(run.frames, locale)}
+            </td>
+            <td
+              className={`${cell} whitespace-nowrap text-xs text-muted-foreground`}
+            >
               <time dateTime={run.startedAt}>
                 {format.dateTime(new Date(run.startedAt), {
                   dateStyle: "medium",
@@ -183,7 +136,7 @@ function RunsPageView({
                 })}
               </time>
             </td>
-            <td className={cell}>
+            <td className={`${cell} min-w-36 max-w-56`}>
               <RunRowControls
                 org={org}
                 ws={ws}
@@ -197,12 +150,6 @@ function RunsPageView({
           </tr>
         ))}
       </Table>
-      <p
-        data-testid="runs-legend"
-        className="max-w-prose pt-3 text-xs text-muted-foreground"
-      >
-        {t("legend")}
-      </p>
       {unpriced === 0 ? null : (
         <p
           data-testid="runs-unpriced"
