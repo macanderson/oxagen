@@ -16,6 +16,7 @@ import { CREDIT_REASONS } from "./constants";
 import { logger } from "./logger";
 import { getOrgBillingSettings } from "./billing-settings";
 import { readRecordedCustomerId } from "./recorded-customer";
+import { deterministicUuid } from "./internal/deterministic-uuid";
 
 // ---------------------------------------------------------------------------
 // Low balance detection
@@ -326,6 +327,7 @@ export async function maybeAutoReload(
   // paymentIntentId to compensate if it doesn't. The retry is bounded by
   // EPISODE_MAX_AGE_MS, past which it refuses rather than charging again.
   //
+  const referenceId = deterministicUuid(chargeResult.paymentIntentId);
   const grantDate = now;
   const expiresAt = new Date(grantDate);
   expiresAt.setFullYear(expiresAt.getFullYear() + 1);
@@ -338,7 +340,7 @@ export async function maybeAutoReload(
       expiresAt,
       reason: CREDIT_REASONS.GRANT_AUTO_RELOAD,
       referenceType: "payment_intent",
-      referenceId: chargeResult.paymentIntentId,
+      referenceId,
     });
   } catch (err) {
     let alreadyGranted = false;
@@ -349,7 +351,7 @@ export async function maybeAutoReload(
             where: and(
               eq(schema.creditLedger.orgId, orgId),
               eq(schema.creditLedger.referenceType, "payment_intent"),
-              eq(schema.creditLedger.referenceId, chargeResult.paymentIntentId),
+              eq(schema.creditLedger.referenceId, referenceId),
               eq(schema.creditLedger.reason, CREDIT_REASONS.GRANT_AUTO_RELOAD),
               eq(schema.creditLedger.deltaCents, BigInt(amountCents)),
             ),

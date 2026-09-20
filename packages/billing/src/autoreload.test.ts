@@ -318,7 +318,12 @@ describe("maybeAutoReload", () => {
       expect(query.sql).toContain('"delta_cents"');
       expect(query.sql).toContain('"reason"');
       expect(query.params).toContain("org-abc");
-      expect(query.params).toContain("pi_test_001");
+      const referenceId = "d1823e31-77e3-3e46-d723-49b4c6f9f110";
+      expect(query.params).toContain(referenceId);
+      expect(query.params).not.toContain("pi_test_001");
+      expect(createCreditLotMock).toHaveBeenCalledWith(
+        expect.objectContaining({ referenceId }),
+      );
       expect(query.params).toContain("payment_intent");
       expect(query.params).toContain("grant_auto_reload");
       expect(query.params.map(String)).toContain("2000");
