@@ -54,6 +54,7 @@ export {
   createDecisionRulesGate,
   DecisionRuleApprovalRequiredError,
   DecisionRuleDeniedError,
+  DecisionRuleUnavailableError,
   type DecisionGateArgs,
   type DecisionRulesGateFn,
   type DecisionRulesGateOptions,

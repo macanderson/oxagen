@@ -11,12 +11,10 @@ import {
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import {
   bootstrapDecisionRulesRuntime,
-  autoApproveParkedCall,
-  createDecisionRulesGate,
   inputDigest,
-  ruleSetSchema,
   DecisionRuleDeniedError,
   DecisionRuleApprovalRequiredError,
+  DecisionRuleUnavailableError,
 } from "@oxagen/rules";
 import {
   getCapability,
@@ -260,33 +258,9 @@ export async function resumeApprovedCall(
         const budgets = await getSpendBudgetStatuses();
         if (budgets.some((status) => status.budget.enabled && status.overLimit))
           throw new ApprovalResumeError("budget_exhausted");
-        await withTenantDb(async (tx) => {
-          const [workspace] = await tx
-            .select({ settings: schema.workspaces.settings })
-            .from(schema.workspaces)
-            .where(
-              and(
-                eq(schema.workspaces.orgId, ref.orgId),
-                eq(schema.workspaces.id, ref.workspaceId),
-              ),
-            )
-            .for("share");
-          if (!workspace) throw new ApprovalResumeError("workspace_removed");
-          const raw = (workspace.settings as Record<string, unknown> | null)
-            ?.decisionRules;
-          const rules = raw == null ? null : ruleSetSchema.parse(raw);
-          await createDecisionRulesGate({
-            loadRuleSet: async () => rules,
-            autoApprove: autoApproveParkedCall,
-            onError: (error) => {
-              throw error;
-            },
-          })({
-            capability: cap.name,
-            input: parsed.data,
-            ctx,
-          });
-        });
+        // invoke owns the fresh decision-rule check and its approval receipt.
+        // A preflight gate would commit before run admission and commit again
+        // when the canonical invocation evaluates the same standing rule.
         run = await openAssistantRun({
           orgId: ref.orgId,
           workspaceId: ref.workspaceId,
@@ -320,6 +294,7 @@ export async function resumeApprovedCall(
         dispatched = true;
         await invoke(cap.name, payload.rawInput, ctx, {
           surface: "agent",
+          requireFreshRules: true,
           runId: run.runId,
           assertValidatedInput: (value) => {
             if (inputDigest(value) !== payload.validatedDigest)
@@ -349,10 +324,20 @@ export async function resumeApprovedCall(
                 ? "new_rule_requires_approval"
                 : error instanceof CapabilityError
                   ? error.code
-                  : dispatched
-                    ? "execution_outcome_unknown"
-                    : "authorization_or_admission_failed";
-        const status = dispatched ? "indeterminate" : "failed";
+                  : error instanceof DecisionRuleUnavailableError
+                    ? "decision_rules_unavailable"
+                    : dispatched
+                      ? "execution_outcome_unknown"
+                      : "authorization_or_admission_failed";
+        const refusedBeforeHandler =
+          error instanceof ApprovalResumeError ||
+          error instanceof DecisionRuleDeniedError ||
+          error instanceof DecisionRuleApprovalRequiredError ||
+          error instanceof DecisionRuleUnavailableError ||
+          (error instanceof CapabilityError &&
+            error.code === "decision_rules_unavailable");
+        const status =
+          dispatched && !refusedBeforeHandler ? "indeterminate" : "failed";
         if (run) await run.seal({ status: "failed", error: reason });
         await finish(status, reason);
         return status;

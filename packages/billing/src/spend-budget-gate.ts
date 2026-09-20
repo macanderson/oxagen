@@ -19,7 +19,7 @@
  * IAM-gated, audited override.
  */
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
-import { withTenantDb, schema } from "@oxagen/database";
+import { withTenantDb, withOrgDb, schema } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import { sumSpendCounter } from "./spend-counter";
 import {
@@ -55,6 +55,7 @@ export interface SpendGateDeps {
    *  true when THIS caller won the flip and should deliver the notification. */
   claimThreshold: (args: {
     budgetId: string;
+    workspaceId: string | null;
     threshold: number;
     periodStart: Date;
   }) => Promise<boolean>;
@@ -258,6 +259,7 @@ export async function assertWithinSpendBudget(
       void deps
         .claimThreshold({
           budgetId: budget.id,
+          workspaceId: budget.workspaceId,
           threshold,
           periodStart: anchor,
         })
@@ -306,7 +308,8 @@ async function deliverBudgetThresholdNotification(
   );
   if (admins.length === 0) return;
 
-  await withTenantDb((tx) =>
+  const write = budget.workspaceId === null ? withOrgDb : withTenantDb;
+  await write((tx) =>
     tx.insert(schema.notifications).values(
       budgetThresholdNotificationRows(
         notice,

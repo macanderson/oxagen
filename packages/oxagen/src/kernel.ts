@@ -311,6 +311,7 @@ export interface DecisionSettlement {
 }
 
 export type DecisionRulesKernelGateFn = (args: {
+  requireFreshRules?: boolean;
   capability: string;
   input: unknown;
   ctx: {
@@ -611,6 +612,7 @@ async function applyDecisionSettlement(
 }
 
 export type CapabilityErrorCode =
+  | "decision_rules_unavailable"
   | "external_rules_unavailable"
   | "external_settlement_unsupported"
   | "unknown_capability"
@@ -877,6 +879,8 @@ async function resolveHandler(name: string): Promise<CapabilityHandlerFn> {
 }
 
 export interface InvokeOptions {
+  /** Internal resumption admission: read current rules and refuse unavailable authority. */
+  requireFreshRules?: boolean;
   /** Internal replay invariant, checked on the exact parsed value before admission or dispatch. */
   assertValidatedInput?: (input: unknown) => void | Promise<void>;
   /**
@@ -1501,8 +1505,23 @@ async function _invokeCoreInner(
       // (org-less) invocations pass. Fires for agent-facing surfaces and API
       // alike — a rule about refunds binds the action, not the door it came
       // through.
-      if (_decisionRulesGate !== null && ctx.orgId && isScoped) {
+      if (
+        opts.requireFreshRules &&
+        (!_decisionRulesGate || !ctx.orgId || !ctx.workspaceId)
+      ) {
+        throw new CapabilityError(
+          canonical,
+          "decision_rules_unavailable",
+          "Current decision rules are unavailable",
+        );
+      }
+      if (
+        _decisionRulesGate !== null &&
+        ctx.orgId &&
+        (isScoped || opts.requireFreshRules)
+      ) {
         const settlement = await _decisionRulesGate({
+          ...(opts.requireFreshRules ? { requireFreshRules: true } : {}),
           capability: canonical,
           // The VALIDATED input — the same value the handler receives, so a
           // rule and the action it governs read one shape.

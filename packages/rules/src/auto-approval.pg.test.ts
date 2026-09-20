@@ -26,6 +26,19 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 describe.skipIf(!process.env.DATABASE_URL)(
   "auto-approval against Postgres",
   async () => {
+    // Load only the dispatch and registry seams before timed test bodies.
+    // The package root also registers every production capability.
+    const { z } = await import("zod");
+    const { registerCapability, clearRegistryForTests } = await import(
+      "@oxagen/oxagen/registry"
+    );
+    const {
+      invoke,
+      registerHandler,
+      setDecisionRulesGate,
+      clearDecisionRulesGate,
+      clearHandlersForTests,
+    } = await import("@oxagen/oxagen/kernel");
     const { schema, withSystemDb, withTenantDb } = await import(
       "@oxagen/database"
     );
@@ -714,17 +727,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row?.runPublicId).toBe(runPublicId);
     });
 
+    // This integration cold-loads the capability kernel under coverage, then
+    // commits two nested Postgres receipts. Keep its budget local to this case.
     it("records the same public run id for outer and nested auto-approvals", async () => {
-      const { z } = await import("zod");
-      const {
-        invoke,
-        registerCapability,
-        registerHandler,
-        setDecisionRulesGate,
-        clearDecisionRulesGate,
-        clearHandlersForTests,
-        clearRegistryForTests,
-      } = await import("@oxagen/oxagen");
       registerCapability({
         name: "stripe__create_payment",
         domain: "test",
@@ -780,7 +785,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         clearHandlersForTests();
         clearRegistryForTests();
       }
-    });
+    }, 30_000);
 
     it("leaves run_public_id null for a call with no run in scope, never a fabricated one", async () => {
       const decision = await autoApprove(CALL, [RULE], null);

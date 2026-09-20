@@ -1,7 +1,7 @@
 /**
  * spend-budget-store.ts — the Postgres CRUD for the hard period-to-date spend
  * ceiling (billing.spend_budgets). All reads/writes go through
- * withTenantDb so RLS (`workspace_nullable`) scopes them: a read inside a
+ * the scope-specific database seam. RLS scopes tenant reads: a read inside a
  * workspace scope returns BOTH the org-level ceiling (workspace_id IS NULL) and
  * that workspace's own ceiling.
  *
@@ -144,7 +144,8 @@ export interface SetSpendBudgetInput {
 export async function setSpendBudget(
   input: SetSpendBudgetInput,
 ): Promise<SpendBudgetRow> {
-  const row = await withTenantDb(async (tx) => {
+  const transaction = input.workspaceId === null ? withOrgDb : withTenantDb;
+  const row = await transaction(async (tx) => {
     const existing = (
       await tx
         .select()
@@ -205,10 +206,12 @@ export async function setSpendBudget(
  */
 export async function claimBudgetThreshold(args: {
   budgetId: string;
+  workspaceId: string | null;
   threshold: number;
   periodStart: Date;
 }): Promise<boolean> {
-  const affected = await withTenantDb((tx) =>
+  const transaction = args.workspaceId === null ? withOrgDb : withTenantDb;
+  const affected = await transaction((tx) =>
     tx
       .update(schema.spendBudgets)
       .set({

@@ -1,5 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const notificationDb = vi.hoisted(() => ({ writes: [] as string[] }));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  const tx = (scope: string) => ({
+    select: () => ({
+      from: () => ({ where: () => Promise.resolve([{ userId: "admin-1" }]) }),
+    }),
+    insert: () => ({
+      values: () => {
+        notificationDb.writes.push(scope);
+        return Promise.resolve();
+      },
+    }),
+  });
+  return {
+    ...real,
+    withOrgDb: async (fn: (db: ReturnType<typeof tx>) => unknown) =>
+      fn(tx("org")),
+    withTenantDb: async (fn: (db: ReturnType<typeof tx>) => unknown) =>
+      fn(tx("workspace")),
+  };
+});
+
 const counter = vi.hoisted(() => ({ sumSpendCounter: vi.fn() }));
 vi.mock("./spend-counter", () => ({
   sumSpendCounter: counter.sumSpendCounter,
@@ -161,7 +184,10 @@ describe("assertWithinSpendBudget — threshold notifications", () => {
     await assertWithinSpendBudget(args, d);
     await new Promise((r) => setTimeout(r, 0)); // let the fire-and-forget resolve
     expect(claimThreshold).toHaveBeenCalledWith(
-      expect.objectContaining({ threshold: 80 }),
+      expect.objectContaining({
+        threshold: 80,
+        workspaceId: budgetRow().workspaceId,
+      }),
     );
     expect(notify).toHaveBeenCalledTimes(1);
   });
@@ -385,4 +411,32 @@ describe("the spend read is the recorders' counter (ADR-060 §5)", () => {
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
     );
   });
+});
+
+describe("threshold notification write scope", () => {
+  it.each([null, "ws-1"])(
+    "writes notifications in scope %s",
+    async (workspaceId) => {
+      notificationDb.writes.length = 0;
+      const d = deps({
+        loadBudgets: vi.fn(async () => [
+          budgetRow({
+            workspaceId,
+            scope: workspaceId === null ? "org" : "workspace",
+          }),
+        ]),
+        readSpend: vi.fn(async () => 8_500_000n),
+      });
+      delete d.notify;
+      await assertWithinSpendBudget(
+        { orgId: "org-1", workspaceId: "ws-1", capability: "test" },
+        d,
+      );
+      await vi.waitFor(() =>
+        expect(notificationDb.writes).toEqual([
+          workspaceId === null ? "org" : "workspace",
+        ]),
+      );
+    },
+  );
 });

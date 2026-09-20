@@ -328,6 +328,33 @@ export async function setTransactionWorkspaceScope(
 }
 
 /**
+ * Write an org-owned row inside an existing mixed workspace/org transaction.
+ * The org fence and bypass state remain unchanged. An empty workspace narrows
+ * writes to workspace-less rows; it does not permit other workspace writes.
+ * A savepoint restores transaction-local settings on callback failure, even
+ * when SQL aborted the savepoint. Success restores the exact prior setting.
+ * Callers must authorize the org mutation before entering this callback.
+ */
+export async function withTransactionOrgScope<T>(
+  tx: Tx,
+  fn: (orgTx: Tx) => Promise<T>,
+): Promise<T> {
+  return tx.transaction(async (orgTx) => {
+    const [previous] = await orgTx.execute<{ workspace: string | null }>(
+      sql`select current_setting('app.current_workspace_id', true) as workspace`,
+    );
+    await orgTx.execute(
+      sql`select set_config('app.current_workspace_id', '', true)`,
+    );
+    const result = await fn(orgTx);
+    await orgTx.execute(
+      sql`select set_config('app.current_workspace_id', ${previous?.workspace ?? ""}, true)`,
+    );
+    return result;
+  });
+}
+
+/**
  * Like `withTenantDb`, but the transaction runs at REPEATABLE READ.
  *
  * Narrow by design: this exists for ADMISSION-TIME AUTHORIZATION SNAPSHOT

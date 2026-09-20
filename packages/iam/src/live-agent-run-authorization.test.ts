@@ -20,9 +20,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   tx: { select: vi.fn(), insert: vi.fn() },
+  orgWrites: vi.fn(),
 }));
 
 vi.mock("@oxagen/database/tenant", () => ({
+  withOrgDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+    mocks.orgWrites();
+    return fn(mocks.tx);
+  },
   withRepeatableReadTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
     fn(mocks.tx),
   withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mocks.tx),
@@ -777,11 +782,13 @@ describe("persistAuthorizationDecision()", () => {
 
   it("records NULL (not 0) as the workspace generation for an org-scoped decision", async () => {
     const { values } = primeInsert();
+    mocks.orgWrites.mockClear();
     await persistAuthorizationDecision({
       ...baseArgs,
       workspaceId: null,
       runBinding: null,
     });
+    expect(mocks.orgWrites).toHaveBeenCalledTimes(1);
     expect(values[0]?.["scopeKind"]).toBe("org");
     expect(values[0]?.["workspaceDenyGeneration"]).toBeNull();
   });
