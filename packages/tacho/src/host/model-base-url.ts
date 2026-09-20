@@ -684,9 +684,14 @@ function restoreOne(
       next = joinLines(lines);
     }
   }
-  dropSidecar();
-  if (next === undefined || next === text) return false;
+  if (next === undefined || next === text) {
+    dropSidecar();
+    return false;
+  }
   writeAtomicPreserving(file, next);
+  // Keep the recovery record until the replacement is durable, so a failed
+  // write can be retried with the original displaced value intact.
+  dropSidecar();
   return true;
 }
 

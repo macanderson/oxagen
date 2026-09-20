@@ -1,0 +1,15 @@
+{
+  "fetchedMain": "ec637f8e4bf21de30776fad2a54dde6ff6d6b78d",
+  "recoveryAndAuditTip": "2174aa7f74cfa214db2e04c5d0e8ca3335f09db3",
+  "metadataQuery": "gh pr list --repo macanderson/oxagen --state merged --base main --search merged:>=2026-09-17 --limit 1000 --json number,title,headRefOid,baseRefOid,mergeCommit,mergedAt",
+  "prs": 161,
+  "squashBaselines": 161,
+  "integrationBaselines": 281,
+  "candidateFilePairs": 588,
+  "candidateIntegrationCommits": 156,
+  "binaryCandidates": 7,
+  "rawCandidatesSha256": "54a7cbb731940d7a8329511e523db0a96fd8338e57f126f8d8483f496adb9fd3",
+  "independentlyReviewedCandidateRecords": 87,
+  "remainingRecordsWithoutIndependentDisposition": 501,
+  "claimsNoLiveRegressionsAcrossAllCandidates": false
+}

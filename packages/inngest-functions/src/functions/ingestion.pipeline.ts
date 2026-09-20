@@ -2,11 +2,10 @@ import { createFunction } from "../create-function";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { scopedSession } from "@oxagen/ontology/tenant";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { renderEntityText, embedEntity } from "@oxagen/ingestion/embed";
 import { upsertEntityNode } from "@oxagen/ingestion/mutations";
-import { resolveEntity } from "@oxagen/ingestion/dedup";
+import { resolveEntity, resolveNaturalKey } from "@oxagen/ingestion/dedup";
 import type { EntityMutation, SourceRef } from "@oxagen/ingestion/types";
 import type { EntityTypeMapping } from "@oxagen/ingestion/pipeline";
 import {
@@ -199,6 +198,11 @@ export const [ingestionPipeline] = createFunction(
           entityType: entityTypeMapping.oxagenEntityType,
           sourceRecordType,
           naturalKey: `${connectorType}:${connectionId}:${normalized.externalId}`,
+          ...(normalized.legacyExternalId
+            ? {
+                legacyNaturalKey: `${connectorType}:${connectionId}:${normalized.legacyExternalId}`,
+              }
+            : {}),
           operation: "insert",
           displayName: normalized.displayName,
           properties: mappedProperties,
@@ -236,38 +240,20 @@ export const [ingestionPipeline] = createFunction(
       return { skipped: true, reason: normalizeResult.reason };
     }
 
-    const mutation = normalizeResult.mutation;
+    let mutation = normalizeResult.mutation;
     const embeddingEnabled = shouldRunInference(
       sourceRecordType,
       normalizeResult.legacyEmbeddingPolicy,
     );
 
     // ── Step 2: Dedup Pass A — exact naturalKey lookup in Neo4j ─────────────
-    const dedupPassA = await step.run(
-      "dedup-pass-a",
-      async (): Promise<{
-        found: boolean;
-        nodeId?: string;
-      }> => {
-        return runInTenantScope({ orgId, workspaceId }, async () => {
-          const session = scopedSession();
-          try {
-            const result = await session.run(
-              `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
-             RETURN n.publicId AS nodeId`,
-              { naturalKey: mutation.naturalKey, orgId },
-            );
-            const record = result.records[0];
-            if (record) {
-              return { found: true, nodeId: record.get("nodeId") as string };
-            }
-            return { found: false };
-          } finally {
-            await session.close();
-          }
-        });
-      },
+    const dedupPassA = await step.run("dedup-pass-a", () =>
+      runInTenantScope({ orgId, workspaceId }, () =>
+        resolveNaturalKey(mutation, orgId),
+      ),
     );
+    // Carry the stored key through the memoized step into the later upsert.
+    mutation = dedupPassA.mutation ?? mutation;
 
     // ── Step 3: Dedup Pass B — embedding similarity match ───────────────────
     const dedup = await step.run(
@@ -282,7 +268,7 @@ export const [ingestionPipeline] = createFunction(
         confidence: number;
         similarityDeferred?: boolean;
       }> => {
-        if (dedupPassA.found && dedupPassA.nodeId) {
+        if (dedupPassA.nodeId) {
           return {
             action: "updated_principal",
             principalNodeId: dedupPassA.nodeId,

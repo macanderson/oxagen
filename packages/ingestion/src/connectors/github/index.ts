@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import { z } from "zod";
+import { githubRecordIdentity } from "./record-identity";
 import { constantTimeStringEqual } from "../safe-compare";
 import {
   registerConnector,
@@ -32,23 +33,30 @@ function githubToken(auth: AuthCredential): string | null {
   return null;
 }
 
-/**
- * Derive the { owner, repo } targets to poll from the stored config.
- *
- * Reads `owner`/`repo` first, then the `repositories` "owner/name" list.
- * `config.organizations` is accepted by the config schema but NOT expanded
- * here — polling an org requires a repo-listing API call this pure helper does
- * not make, so an org-only connection polls nothing.
- */
-function pollTargets(config: Config): Array<{ owner: string; repo: string }> {
-  if (config.owner && config.repo)
-    return [{ owner: config.owner, repo: config.repo }];
-  const out: Array<{ owner: string; repo: string }> = [];
-  for (const full of config.repositories ?? []) {
-    const [owner, repo] = full.split("/");
-    if (owner && repo) out.push({ owner, repo });
+/** Resolve configured repositories, including the repositories visible in each organization. */
+async function pollTargets(
+  config: Config,
+  token: string,
+): Promise<Array<{ owner: string; repo: string }>> {
+  const names = [...(config.repositories ?? [])];
+  if (config.owner && config.repo) names.push(`${config.owner}/${config.repo}`);
+  for (const organization of config.organizations ?? []) {
+    const repos = await ghListPage(
+      `https://api.github.com/orgs/${encodeURIComponent(organization)}/repos?per_page=100`,
+      token,
+    );
+    for (const raw of repos) {
+      const fullName = asString(asRecord(raw).full_name);
+      if (fullName) names.push(fullName);
+    }
   }
-  return out;
+  const targets = new Map<string, { owner: string; repo: string }>();
+  for (const name of names) {
+    const [owner, repo, extra] = name.split("/");
+    if (owner && repo && !extra)
+      targets.set(name.toLowerCase(), { owner, repo });
+  }
+  return [...targets.values()];
 }
 
 function ghHeaders(token: string): Record<string, string> {
@@ -59,19 +67,37 @@ function ghHeaders(token: string): Record<string, string> {
   };
 }
 
-/**
- * Fetch ONE page of a GitHub list endpoint. There is no `Link`-header
- * pagination: a poll that finds more than `per_page` changed records since the
- * cursor sees only the first page, and the cursor still advances past the rest.
- */
-async function ghListPage(url: string, token: string): Promise<unknown[]> {
-  const resp = await fetch(url, { headers: ghHeaders(token) });
-  if (resp.status === 404) return [];
-  if (!resp.ok) {
-    throw new Error(`github.poll: GitHub API ${resp.status} for ${url}`);
+/** Yield pages on demand, stopping sorted issue/PR lists at their saved cursor. */
+async function* ghListRecords(
+  url: string,
+  token: string,
+  updatedCursor?: string | null,
+): AsyncIterable<unknown> {
+  for (let page = 1; ; page++) {
+    const pageUrl = page === 1 ? url : `${url}&page=${page}`;
+    const resp = await fetch(pageUrl, {
+      headers: ghHeaders(token),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (resp.status === 404 && page === 1) return;
+    if (!resp.ok)
+      throw new Error(`github.poll: GitHub API ${resp.status} for ${pageUrl}`);
+    const data: unknown = await resp.json();
+    if (!Array.isArray(data))
+      throw new Error("github.poll: expected a GitHub list response");
+    for (const row of data as unknown[]) {
+      const updatedAt = asString(asRecord(row).updated_at);
+      if (updatedCursor && updatedAt && updatedAt <= updatedCursor) return;
+      yield row;
+    }
+    if (data.length < 100) return;
   }
-  const data = (await resp.json()) as unknown;
-  return Array.isArray(data) ? (data as unknown[]) : [];
+}
+
+async function ghListPage(url: string, token: string): Promise<unknown[]> {
+  const rows: unknown[] = [];
+  for await (const row of ghListRecords(url, token)) rows.push(row);
+  return rows;
 }
 
 // Utility functions to safely extract values
@@ -218,12 +244,7 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           .map((l) => asString(asRecord(l)["name"]))
           .filter((n): n is string => !!n);
         return {
-          externalId:
-            r["number"] !== undefined
-              ? String(r["number"])
-              : r["id"] !== undefined
-                ? String(r["id"])
-                : "",
+          ...githubRecordIdentity("pull_request", r),
           externalUrl: asString(r["html_url"]) ?? undefined,
           displayName: asString(r["title"]) ?? undefined,
           properties: {
@@ -247,12 +268,7 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           .map((l) => asString(asRecord(l)["name"]))
           .filter((n): n is string => !!n);
         return {
-          externalId:
-            r["number"] !== undefined
-              ? String(r["number"])
-              : r["id"] !== undefined
-                ? String(r["id"])
-                : "",
+          ...githubRecordIdentity("issue", r),
           externalUrl: asString(r["html_url"]) ?? undefined,
           displayName: asString(r["title"]) ?? undefined,
           properties: {
@@ -465,7 +481,7 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
   async *poll(auth, config, recordType, cursor): AsyncIterable<RawRecord> {
     const token = githubToken(auth);
     if (!token) return;
-    const targets = pollTargets(config);
+    const targets = await pollTargets(config, token);
     const now = new Date().toISOString();
 
     for (const { owner, repo } of targets) {
@@ -492,11 +508,12 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
 
       if (recordType === "pull_request" || recordType === "issue") {
         const path = recordType === "pull_request" ? "pulls" : "issues";
-        const rows = await ghListPage(
+        const rows = ghListRecords(
           `${base}/${path}?state=all&sort=updated&direction=desc&per_page=100`,
           token,
+          cursor,
         );
-        for (const raw of rows) {
+        for await (const raw of rows) {
           const r = raw as {
             updated_at?: string;
             pull_request?: unknown;
@@ -504,10 +521,10 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           };
           // The issues endpoint also returns PRs — drop them here.
           if (recordType === "issue" && r.pull_request !== undefined) continue;
-          if (cursor && r.updated_at && r.updated_at <= cursor) break; // sorted desc
           yield {
             sourceRecordType: recordType,
-            externalId: r.number !== undefined ? String(r.number) : "",
+            externalId: githubRecordIdentity(recordType, asRecord(raw))
+              .externalId,
             raw,
             receivedAt: now,
           };

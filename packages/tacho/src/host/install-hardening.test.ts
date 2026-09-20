@@ -444,7 +444,7 @@ describe("the service managers", () => {
   it("escapes % and $ in a systemd unit so a path is not read as a specifier", () => {
     const unit = renderSystemdUnit(spec);
     expect(unit).toContain('Environment="HOME=/home/100%%dev"');
-    expect(unit).toContain('Environment="PATH=/usr/bin:$$HOME/bin"');
+    expect(unit).toContain('Environment="PATH=/usr/bin:$HOME/bin"');
     expect(unit).toContain('ExecStart="/opt/o x/tacho" "daemon"');
   });
 });

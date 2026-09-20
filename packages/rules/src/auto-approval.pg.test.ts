@@ -714,6 +714,74 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row?.runPublicId).toBe(runPublicId);
     });
 
+    it("records the same public run id for outer and nested auto-approvals", async () => {
+      const { z } = await import("zod");
+      const {
+        invoke,
+        registerCapability,
+        registerHandler,
+        setDecisionRulesGate,
+        clearDecisionRulesGate,
+        clearHandlersForTests,
+        clearRegistryForTests,
+      } = await import("@oxagen/oxagen");
+      registerCapability({
+        name: "stripe__create_payment",
+        domain: "test",
+        description: "Nested payment fixture",
+        surfaces: ["api"],
+        layers: ["unit"],
+        defaultEffect: "allow",
+        mode: "sync",
+        sensitivity: "low",
+        defaultRoles: { org: {}, workspace: {} },
+        input: z.unknown(),
+        output: z.unknown(),
+      });
+      let outer = true;
+      registerHandler(
+        "stripe__create_payment",
+        async () => async (input, checkedCtx) => {
+          if (outer) {
+            outer = false;
+            return invoke("stripe__create_payment", input, checkedCtx);
+          }
+          return { ok: true };
+        },
+      );
+      setDecisionRulesGate(async ({ input, ctx }) => {
+        const decision = await autoApprove(input, [RULE], ctx.runId);
+        expect(decision?.ok).toBe(true);
+        await decision?.commit?.();
+      });
+      try {
+        await invoke(
+          "stripe__create_payment",
+          CALL,
+          {
+            orgId,
+            workspaceId,
+            userId,
+            apiKeyId: null,
+            requestId: "nested-approval",
+            surface: "api",
+            messageId: null,
+          },
+          { runId },
+        );
+        const rows = await approvalsOf();
+        expect(rows).toHaveLength(2);
+        expect(rows.map((row) => row.runPublicId)).toEqual([
+          runPublicId,
+          runPublicId,
+        ]);
+      } finally {
+        clearDecisionRulesGate();
+        clearHandlersForTests();
+        clearRegistryForTests();
+      }
+    });
+
     it("leaves run_public_id null for a call with no run in scope, never a fabricated one", async () => {
       const decision = await autoApprove(CALL, [RULE], null);
       await inScope(async () => {

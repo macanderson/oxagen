@@ -149,7 +149,7 @@ describe("google connectors subscribeWebhooks (watch channels)", () => {
 
   it("google-calendar watches the primary events feed", async () => {
     fetchMock.mockResolvedValueOnce(okJson({ resourceId: "res-c" }));
-    await googleCalendar.subscribeWebhooks!(
+    const result = await googleCalendar.subscribeWebhooks!(
       auth,
       { includeDeclinedEvents: false, syncMonthsBack: 3 },
       "https://api.oxagen.sh/webhooks/google-calendar/con_c",
@@ -158,6 +158,12 @@ describe("google connectors subscribeWebhooks (watch channels)", () => {
     expect(url).toBe(
       "https://www.googleapis.com/calendar/v3/calendars/primary/events/watch",
     );
+    expect(result.recordTypes).toEqual(["event"]);
+    const recordType = result.recordTypes?.[0];
+    if (!recordType) throw new Error("Expected a Calendar record type");
+    expect(
+      googleCalendar.normalizeRecord(recordType, { id: "event-1" }).externalId,
+    ).toBe("event-1");
   });
 
   it("throws on a non-2xx watch response", async () => {

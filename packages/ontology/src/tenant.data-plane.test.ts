@@ -21,13 +21,31 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./client", () => ({
   session: (database?: string | null) => {
     mocks.sharedSession(database);
-    return { run: mocks.run, close: mocks.close };
+    return {
+      run: mocks.run,
+      close: mocks.close,
+      executeRead: async (
+        work: (tx: { run: typeof mocks.run }) => Promise<unknown>,
+      ) => work({ run: mocks.run }),
+      executeWrite: async (
+        work: (tx: { run: typeof mocks.run }) => Promise<unknown>,
+      ) => work({ run: mocks.run }),
+    };
   },
 }));
 vi.mock("./data-plane-driver", () => ({
   dedicatedSession: (args: unknown) => {
     mocks.dedicatedSession(args);
-    return { run: mocks.run, close: mocks.close };
+    return {
+      run: mocks.run,
+      close: mocks.close,
+      executeRead: async (
+        work: (tx: { run: typeof mocks.run }) => Promise<unknown>,
+      ) => work({ run: mocks.run }),
+      executeWrite: async (
+        work: (tx: { run: typeof mocks.run }) => Promise<unknown>,
+      ) => work({ run: mocks.run }),
+    };
   },
 }));
 // The breaker would otherwise need real telemetry env; pass-through here.

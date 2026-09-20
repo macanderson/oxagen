@@ -15,9 +15,8 @@ import { insertEvents } from "@oxagen/telemetry";
 import { logger } from "../logger";
 import { resolveConnectionAuth } from "../lib/resolve-connection-auth";
 
-// Cap the records pulled per record type per poll so a large backlog fans out
-// across several polls (bounded via the advancing cursor) instead of one huge
-// dispatch. The remaining backlog is picked up on the next scheduled poll.
+// Refuse an oversized batch until the connector supports durable continuation.
+// Advancing a timestamp cursor over a truncated stream would discard records.
 const MAX_RECORDS_PER_TYPE = 200;
 // Inngest batch size for entity.received fan-out.
 const BATCH_SIZE = 50;
@@ -177,8 +176,12 @@ export const [ingestionConnectionPoll] = createFunction(
               recordType,
               priorCursor,
             )) {
+              if (collected.length >= MAX_RECORDS_PER_TYPE) {
+                throw new Error(
+                  `Poll exceeded ${MAX_RECORDS_PER_TYPE} records for ${recordType}; cursor retained because this batch needs paged continuation`,
+                );
+              }
               collected.push(rec);
-              if (collected.length >= MAX_RECORDS_PER_TYPE) break;
             }
             if (collected.length === 0) continue;
 

@@ -19,6 +19,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { capabilityMutates } from "@oxagen/oxagen/types";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
+import { externalDecisionCheck } from "./external-tool-rules";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { checkConsent, recordConsent, DEFAULT_CONSENT_TTL_MS } from "./consent";
 import {
@@ -951,6 +952,58 @@ export async function materializeTools(
               return `Tool blocked by workspace policy: ${reason}`;
             }
             // ── End IAM gate ────────────────────────────────────────────────
+            const admitExternalDecision = externalDecisionCheck({
+              name: capturedKey,
+              input,
+              ctx,
+              principal: iamResult.principal,
+              runId: opts.runIdRef?.current ?? ctx.agentRun?.runId ?? null,
+              onApprovalRequired: opts.onApprovalRequired
+                ? (event) => {
+                    opts.onApprovalRequired?.(event);
+                    if (opts.approvalMode === "park")
+                      throw new ApprovalPendingError(
+                        event.capability,
+                        event.approvalId,
+                        event.expiresAt,
+                      );
+                  }
+                : undefined,
+            });
+            const checkDecisionRules: typeof admitExternalDecision = async (
+              options,
+            ) => {
+              try {
+                await admitExternalDecision(options);
+              } catch (error) {
+                try {
+                  await insertToolInvocation(
+                    buildInvocationPayload(
+                      {
+                        invocationId,
+                        ctx,
+                        capabilityName: capturedKey,
+                        externalServerId,
+                        inputBytes: byteSize(input),
+                      },
+                      {
+                        status: "failed",
+                        outputBytes: 0,
+                        latencyMs: Date.now() - startedAt,
+                        errorClass:
+                          error instanceof Error
+                            ? error.name
+                            : "ExternalDecisionRefused",
+                      },
+                    ),
+                  );
+                } catch {
+                  /* telemetry must never fail the call */
+                }
+                throw error;
+              }
+            };
+            await checkDecisionRules();
 
             // ── Agent RBAC MCP rule gate (Phase 4a, spec §3.7) ─────────────
             // Defense-in-depth twin of the listing filter above: even if this
@@ -1273,6 +1326,22 @@ export async function materializeTools(
               const killedDuringWait = await refuseIfKilled();
               if (killedDuringWait !== null) return killedDuringWait;
             }
+
+            // Consent may have waited while rules or kill switches changed.
+            await checkDecisionRules();
+            const freshIam = await runInTenantScope(
+              { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+              () => authorizeExternalCapability(capturedKey, ctx, "allow"),
+            );
+            if (!freshIam.allowed)
+              return `Tool blocked by workspace policy: ${freshIam.reason ?? freshIam.outcome}`;
+            // No interactive wait follows the final IAM check.
+            await checkDecisionRules({
+              principal: freshIam.principal,
+              interactive: false,
+            });
+            const killedBeforeTransport = await refuseIfKilled();
+            if (killedBeforeTransport !== null) return killedBeforeTransport;
 
             // ── OTEL span: covers external MCP tool call duration ──────────
             // Started inside any active kernel/stream span so the parent

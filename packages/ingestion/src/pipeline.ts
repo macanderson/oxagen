@@ -179,6 +179,11 @@ export async function runPipeline(
     entityType: mapping.oxagenEntityType,
     sourceRecordType: event.sourceRecordType,
     naturalKey: `${event.connectorType}:${event.connectionId}:${normalized.externalId}`,
+    ...(normalized.legacyExternalId === undefined
+      ? {}
+      : {
+          legacyNaturalKey: `${event.connectorType}:${event.connectionId}:${normalized.legacyExternalId}`,
+        }),
     operation: "insert",
     displayName: normalized.displayName,
     properties: mappedProperties,
