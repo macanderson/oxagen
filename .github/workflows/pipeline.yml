@@ -610,8 +610,8 @@ jobs:
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
           pnpm turbo run test:e2e $TURBO_FILTER
 
-      - name: Upload Playwright traces (on failure)
-        if: failure()
+      - name: Upload Playwright screenshots and traces
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
