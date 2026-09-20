@@ -1,0 +1,1612 @@
+[
+  {
+    "baseRefOid": "0d03a96b93d32c7919cc157a38605ff1e3ac5b43",
+    "headRefOid": "b6754f232cabd5e45d8cda7eac0404bb1e8bb538",
+    "mergeCommit": {
+      "oid": "394ee6ae2ab2ad0b6f5bd3dbc04b955619a0924e"
+    },
+    "mergedAt": "2026-09-20T02:52:11Z",
+    "number": 3528,
+    "title": "Repair combined CI failures blocking production deployment"
+  },
+  {
+    "baseRefOid": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+    "headRefOid": "c516e19202326cd0b410ab7370dcedc22bcb9f70",
+    "mergeCommit": {
+      "oid": "c28415e00b00230f889fe17c0adebd887e9b1fe3"
+    },
+    "mergedAt": "2026-09-20T01:38:02Z",
+    "number": 3527,
+    "title": "Fix release checks after helper extraction"
+  },
+  {
+    "baseRefOid": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+    "headRefOid": "dd631e491bb894abc42835e89e539693a0784853",
+    "mergeCommit": {
+      "oid": "02417c928606a150e08cb2966a2c8a79dd942c79"
+    },
+    "mergedAt": "2026-09-20T01:40:26Z",
+    "number": 3522,
+    "title": "Fix 20 reported authorization, billing, and reliability bugs"
+  },
+  {
+    "baseRefOid": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+    "headRefOid": "8666f7bd08249d5b502aa9130b97e8bc206cd7d0",
+    "mergeCommit": {
+      "oid": "2d054f03044479b5693eac255b22df8671f9c920"
+    },
+    "mergedAt": "2026-09-20T01:40:12Z",
+    "number": 3520,
+    "title": "fix(run): render a model response as the message it was, not as its SSE stream"
+  },
+  {
+    "baseRefOid": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+    "headRefOid": "da5f9e19a003bd7b18f955a29ba321f37ee6a93b",
+    "mergeCommit": {
+      "oid": "516dcf18f591283421ecd8c5c2191dd361359ce7"
+    },
+    "mergedAt": "2026-09-20T01:40:03Z",
+    "number": 3519,
+    "title": "Tools: a connections table, servers in the registry, and a mandate ledger that links"
+  },
+  {
+    "baseRefOid": "0ff76f3deee34d9d4b581c8ad0e49c0aa4edafb5",
+    "headRefOid": "5b4fd0eaefc1d42ee2a5aec4e98dcdb65022148e",
+    "mergeCommit": {
+      "oid": "cd0c2514db0a57d8fa05e9c29134e5cc15cd01b2"
+    },
+    "mergedAt": "2026-09-20T01:19:35Z",
+    "number": 3518,
+    "title": "chore: drop Vercel deploy config, and repair what the AWS cutover broke"
+  },
+  {
+    "baseRefOid": "234b33225525469883902c683ecca349484cfec7",
+    "headRefOid": "f08d367fb294d1ea83ac6c521fb3d3588d2ea90a",
+    "mergeCommit": {
+      "oid": "a55139c66137d2fa3dd2d48178529a0337aa40e3"
+    },
+    "mergedAt": "2026-09-20T01:39:52Z",
+    "number": 3517,
+    "title": "Mission Control: roles and enrollment as writes on the agent page, toolbelt schemas, budgets on the agent, and send an invitation"
+  },
+  {
+    "baseRefOid": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+    "headRefOid": "db8be6c055a8296df7f9e66e6429bfa609103769",
+    "mergeCommit": {
+      "oid": "234b33225525469883902c683ecca349484cfec7"
+    },
+    "mergedAt": "2026-09-20T01:38:41Z",
+    "number": 3516,
+    "title": "Mission Control: approve and deny from Fleet and Run, honest trust columns on Fleet, and run controls with a delivery mode"
+  },
+  {
+    "baseRefOid": "5ea4ca94a425e31e2ae360e159c4fbe7ac700861",
+    "headRefOid": "a12d284a0483f72d475b0631331a658122fa6932",
+    "mergeCommit": {
+      "oid": "9e588b5c2378186d57b9c4414f1577d6a8c986bd"
+    },
+    "mergedAt": "2026-09-20T01:19:51Z",
+    "number": 3515,
+    "title": "Wait for record wizard navigation in coverage test"
+  },
+  {
+    "baseRefOid": "cb30ad453cc1a249f487e153f88bc18a87d5a147",
+    "headRefOid": "50f9e5688422415937b83e4e1d8d531bde00ea07",
+    "mergeCommit": {
+      "oid": "5ea4ca94a425e31e2ae360e159c4fbe7ac700861"
+    },
+    "mergedAt": "2026-09-20T00:48:37Z",
+    "number": 3514,
+    "title": "fix(db): re-record the storage manifest's stale contentHash"
+  },
+  {
+    "baseRefOid": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4",
+    "headRefOid": "79355b22f8da90f4ad254cb43c5f747636e19ce2",
+    "mergeCommit": {
+      "oid": "ebff744cb3ed1038d435c7d861cfc48b80551a0f"
+    },
+    "mergedAt": "2026-09-20T01:38:19Z",
+    "number": 3513,
+    "title": "Issues: a title standard that reads without opening the issue, and four issue fields"
+  },
+  {
+    "baseRefOid": "9e588b5c2378186d57b9c4414f1577d6a8c986bd",
+    "headRefOid": "ac514fb7298f85e87b2ed67bf72a380710ae7b4e",
+    "mergeCommit": {
+      "oid": "c661ff2a7cddb2e00fb6d82d9f7fb9da3a3109e4"
+    },
+    "mergedAt": "2026-09-20T01:21:02Z",
+    "number": 3512,
+    "title": "release: one version across every manifest, pnpm dist:local, and pnpm release:<bump>:publish from the laptop"
+  },
+  {
+    "baseRefOid": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c",
+    "headRefOid": "574b14af4c0ad104d7624e43529af576a6c7a808",
+    "mergeCommit": {
+      "oid": "798ff280f16eab621ea0a038f5f34d4f25628d2f"
+    },
+    "mergedAt": "2026-09-20T00:11:54Z",
+    "number": 3510,
+    "title": "build(api): ship the CRM backfill script in the node release"
+  },
+  {
+    "baseRefOid": "f86fbb191881d61444ad63cbecc07a7ece02cb96",
+    "headRefOid": "b062582f98de482067043eb17aeee98c98aca862",
+    "mergeCommit": {
+      "oid": "f1562e5583191e12f5d6abffd9c424f9ea888b61"
+    },
+    "mergedAt": "2026-09-20T00:03:19Z",
+    "number": 3507,
+    "title": "Assistant: tighten line-height in replies and list items"
+  },
+  {
+    "baseRefOid": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c",
+    "headRefOid": "4d6871c6e5d958a3ca310e84926eb38eb3d8d7a5",
+    "mergeCommit": {
+      "oid": "3b68d0a5d3d92fe5a22d9e756f2693da123c41e4"
+    },
+    "mergedAt": "2026-09-20T00:11:38Z",
+    "number": 3506,
+    "title": "Phase 3 on apps/docs: take the product name off the published docs, keep every live name"
+  },
+  {
+    "baseRefOid": "33e1401276470d4828a777c8ab04d3c8820ba454",
+    "headRefOid": "e6b323ac90095f9f8b30e644e4dd6583bb0df2dc",
+    "mergeCommit": {
+      "oid": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7"
+    },
+    "mergedAt": "2026-09-20T00:07:24Z",
+    "number": 3498,
+    "title": "Escape the docs homepage apostrophe to restore CI"
+  },
+  {
+    "baseRefOid": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7",
+    "headRefOid": "0ea8fb39f7cdd2d01ee85c8adab54607c31e4c2f",
+    "mergeCommit": {
+      "oid": "a1e8031b9548fb7eb154484a9f1ef3680948b12f"
+    },
+    "mergedAt": "2026-09-20T00:10:06Z",
+    "number": 3497,
+    "title": "Workforce management leads; Mission Control is retired as the product name (ADR-113)"
+  },
+  {
+    "baseRefOid": "f1562e5583191e12f5d6abffd9c424f9ea888b61",
+    "headRefOid": "ea7aaeed6a826b3d83c5f2cbbf06ae9221516b0c",
+    "mergeCommit": {
+      "oid": "57b194e9e246f5844f77caaf644eb882f4f85536"
+    },
+    "mergedAt": "2026-09-20T00:03:46Z",
+    "number": 3496,
+    "title": "release: one-button releases, model-written notes on docs.oxagen.sh, and a house-brand downloads page published by CI"
+  },
+  {
+    "baseRefOid": "33e1401276470d4828a777c8ab04d3c8820ba454",
+    "headRefOid": "e1239c8451d7f9026fd6093950cc0a94c475de3a",
+    "mergeCommit": {
+      "oid": "0ffe9e6f1a6ad242b64f1af1104eb4c22ad6cb8a"
+    },
+    "mergedAt": "2026-09-19T23:45:03Z",
+    "number": 3495,
+    "title": "Mission Control: adversarial review of the gap inventory and a six-session build plan"
+  },
+  {
+    "baseRefOid": "89de4525fd02992be4c0f2f89b80aff6d3372458",
+    "headRefOid": "cf074539d33ea6019cdfdc6a38674376ce6800c1",
+    "mergeCommit": {
+      "oid": "6e1de20875114505f564ea8c94ce97de63a7450f"
+    },
+    "mergedAt": "2026-09-19T22:33:30Z",
+    "number": 3491,
+    "title": "Match app light and dark modes to the mockup palettes"
+  },
+  {
+    "baseRefOid": "33e1401276470d4828a777c8ab04d3c8820ba454",
+    "headRefOid": "5e36f3cd0dd7849a3762ac00d78b21ee90f3945c",
+    "mergeCommit": {
+      "oid": "f86fbb191881d61444ad63cbecc07a7ece02cb96"
+    },
+    "mergedAt": "2026-09-19T23:51:01Z",
+    "number": 3489,
+    "title": "ADR-112 phase 3: measure the docs scope by occurrence, and rewrite the corpus README"
+  },
+  {
+    "baseRefOid": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+    "headRefOid": "d121291d1bcfada4c886299c84ccb37a7f30adb8",
+    "mergeCommit": {
+      "oid": "33e1401276470d4828a777c8ab04d3c8820ba454"
+    },
+    "mergedAt": "2026-09-19T22:59:00Z",
+    "number": 3488,
+    "title": "fix(billing): observed usage is per-class and per-price-window, not one aggregate"
+  },
+  {
+    "baseRefOid": "23f5c708f62e408da80bca8cc83c4c75839b33dc",
+    "headRefOid": "94cb43b855a43dad8fa8e0a63aef415a12f2e47e",
+    "mergeCommit": {
+      "oid": "cc8f0b8462a957b1c01f5757d8996d1e304c61d6"
+    },
+    "mergedAt": "2026-09-19T22:34:18Z",
+    "number": 3487,
+    "title": "fix(iam): enforce create_connection's declared Owner/Admin role in the handler"
+  },
+  {
+    "baseRefOid": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c",
+    "headRefOid": "99aef4b426da3858cd0fa07260730251788450e8",
+    "mergeCommit": {
+      "oid": "cb30ad453cc1a249f487e153f88bc18a87d5a147"
+    },
+    "mergedAt": "2026-09-20T00:12:22Z",
+    "number": 3486,
+    "title": "fix(context): require kind/force/statement on publish_context_record (#3302)"
+  },
+  {
+    "baseRefOid": "23f5c708f62e408da80bca8cc83c4c75839b33dc",
+    "headRefOid": "a96d3c9f8047a68a0c11be0aad7466d7aae7b340",
+    "mergeCommit": {
+      "oid": "f779d4e7842f064988a2e5e5f96b75572aee175f"
+    },
+    "mergedAt": "2026-09-19T22:52:03Z",
+    "number": 3484,
+    "title": "fix(mandates): refuse a non-ISO-4217 unit on an amount measure at declaration"
+  },
+  {
+    "baseRefOid": "6e669a9a538e98afd312f5348ef5fc77aaddafc1",
+    "headRefOid": "672d65279c3c32f5bed42f06fad309a235b05724",
+    "mergeCommit": {
+      "oid": "604e37a97d02479ec8f288e67337c659c1852c39"
+    },
+    "mergedAt": "2026-09-20T00:06:00Z",
+    "number": 3483,
+    "title": "Configuration tab as a form over the file; syntax-coloured source editor; dark-mode tokens"
+  },
+  {
+    "baseRefOid": "79d393a33480b440779594534d7c0b1c47501a23",
+    "headRefOid": "6fe2e08aace610927ff5045cd95bb56e388b14f6",
+    "mergeCommit": {
+      "oid": "23f5c708f62e408da80bca8cc83c4c75839b33dc"
+    },
+    "mergedAt": "2026-09-19T21:49:53Z",
+    "number": 3482,
+    "title": "Finish #3237: fix stale ADR-109 reference, complete the one-time stale-merge audit"
+  },
+  {
+    "baseRefOid": "756469151e607377c5dc508bfa780dbc6cb27a34",
+    "headRefOid": "59e8cac78755a9be0d0630c8636973e5443aa1b3",
+    "mergeCommit": {
+      "oid": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a"
+    },
+    "mergedAt": "2026-09-19T21:57:08Z",
+    "number": 3481,
+    "title": "Remove stale documentation and align guides with current code"
+  },
+  {
+    "baseRefOid": "024597f6a3d6d411ab0df9879eb6c068a4661e1a",
+    "headRefOid": "0fccf5a9809ce3e0884b4653c89bc6ef14c9ce2e",
+    "mergeCommit": {
+      "oid": "6e669a9a538e98afd312f5348ef5fc77aaddafc1"
+    },
+    "mergedAt": "2026-09-19T23:44:51Z",
+    "number": 3480,
+    "title": "feat(cms): sync website leads to Attio"
+  },
+  {
+    "baseRefOid": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+    "headRefOid": "f086fe52b9daaedab99130457d6006c6b7b96dbc",
+    "mergeCommit": {
+      "oid": "024597f6a3d6d411ab0df9879eb6c068a4661e1a"
+    },
+    "mergedAt": "2026-09-19T23:44:17Z",
+    "number": 3479,
+    "title": "Mission Control: create a skill, an agent or a context record through a pull request"
+  },
+  {
+    "baseRefOid": "5a89a419bdc11e93bb80943e0a776b77e3c8c9ed",
+    "headRefOid": "da3fd5fdf081ab3dbcb75f784d2cb1cc88ec0a3f",
+    "mergeCommit": {
+      "oid": "756469151e607377c5dc508bfa780dbc6cb27a34"
+    },
+    "mergedAt": "2026-09-19T21:56:35Z",
+    "number": 3476,
+    "title": "fix(tacho): keep Claude Code's tool search on behind the loopback proxy"
+  },
+  {
+    "baseRefOid": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+    "headRefOid": "9d00238b4c074ca30eb6ea4d3471a1a2532f2d66",
+    "mergeCommit": {
+      "oid": "a604fce5e9b9b5b9ae976563bdc2cc16c538ab1f"
+    },
+    "mergedAt": "2026-09-19T21:56:23Z",
+    "number": 3475,
+    "title": "Fix invalid logo on auth pages and favicon background"
+  },
+  {
+    "baseRefOid": "8d8f792a291e6d7030fc695367c500ae53b174da",
+    "headRefOid": "25a68490029ab1c11d1e3e9e69b743057ed37dde",
+    "mergeCommit": {
+      "oid": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119"
+    },
+    "mergedAt": "2026-09-19T20:39:19Z",
+    "number": 3471,
+    "title": "fix(kill-switch): accept usr_ public id for operator target"
+  },
+  {
+    "baseRefOid": "f74733235505fe942a9e7977d72ad731b75aa92a",
+    "headRefOid": "4d64533df00148b05d81d7b61e964a9a1442cd72",
+    "mergeCommit": {
+      "oid": "bfac22fbe9785d9255520fb6fe8ffd7052848ff2"
+    },
+    "mergedAt": "2026-09-19T19:11:00Z",
+    "number": 3470,
+    "title": "Advisory check for a stale-merge-base squash-merge revert, and a machine-key-scope purpose guard (#3237)"
+  },
+  {
+    "baseRefOid": "f74733235505fe942a9e7977d72ad731b75aa92a",
+    "headRefOid": "abdb243bff0e500b6d011c8270f79b3d65094167",
+    "mergeCommit": {
+      "oid": "96ed08717b6485563c0b9df93394a1717adad725"
+    },
+    "mergedAt": "2026-09-19T21:56:10Z",
+    "number": 3469,
+    "title": "ADR-103 phase 1b: the wrapping commands land on `oxagen agent`"
+  },
+  {
+    "baseRefOid": "8d8f792a291e6d7030fc695367c500ae53b174da",
+    "headRefOid": "1ed77348e08f599a2c7179c71a70f8779dd07210",
+    "mergeCommit": {
+      "oid": "5a89a419bdc11e93bb80943e0a776b77e3c8c9ed"
+    },
+    "mergedAt": "2026-09-19T20:12:51Z",
+    "number": 3468,
+    "title": "iam: gateway-forwarded calls attribute evidence to the credential, not the enroller (#3151)"
+  },
+  {
+    "baseRefOid": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+    "headRefOid": "a47a5e9eb2c0a963ff5fe05aefc7c81916f426be",
+    "mergeCommit": {
+      "oid": "79d393a33480b440779594534d7c0b1c47501a23"
+    },
+    "mergedAt": "2026-09-19T21:35:57Z",
+    "number": 3467,
+    "title": "fix(agent): read back a resolved approval, including one auto-approved with no person (#3153)"
+  },
+  {
+    "baseRefOid": "4493965157691ab234beda058a842a1fac9f2e5a",
+    "headRefOid": "d1b513cf5308832dd1e319f2b68a07ed35927fa8",
+    "mergeCommit": {
+      "oid": "8d8f792a291e6d7030fc695367c500ae53b174da"
+    },
+    "mergedAt": "2026-09-19T19:20:47Z",
+    "number": 3466,
+    "title": "feat(migrations): db:lint-migrations catches a migration stamped behind its merge base"
+  },
+  {
+    "baseRefOid": "f74733235505fe942a9e7977d72ad731b75aa92a",
+    "headRefOid": "118a0264b7469acad99f4ebd0e24d62cfa155548",
+    "mergeCommit": {
+      "oid": "762d2d27e1c991021e4960fb0658a24bd79395f2"
+    },
+    "mergedAt": "2026-09-19T19:20:45Z",
+    "number": 3465,
+    "title": "fix(tacho): restore recorder sticky state when a seal refuses a record"
+  },
+  {
+    "baseRefOid": "e7b67dcf63f69dd4ddfe9963ef64dbc92db81119",
+    "headRefOid": "0ad1ed3f1641be34c098f7fe8ddb5c0562f1c73d",
+    "mergeCommit": {
+      "oid": "89de4525fd02992be4c0f2f89b80aff6d3372458"
+    },
+    "mergedAt": "2026-09-19T22:13:40Z",
+    "number": 3464,
+    "title": "cost rollup runs again, and tachod stops parsing its whole WAL per drain"
+  },
+  {
+    "baseRefOid": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+    "headRefOid": "3f28e0d63b59b1ddf7e27aa7cd30daabd670289b",
+    "mergeCommit": {
+      "oid": "f74733235505fe942a9e7977d72ad731b75aa92a"
+    },
+    "mergedAt": "2026-09-19T18:21:07Z",
+    "number": 3463,
+    "title": "ADR-103 and phase 1a: take `oxagen tacho` out of --help, keep every command working"
+  },
+  {
+    "baseRefOid": "8d8f792a291e6d7030fc695367c500ae53b174da",
+    "headRefOid": "d41e17f7acc4595cdd2b019bdfb569e226df13a0",
+    "mergeCommit": {
+      "oid": "2e9967b787757db7e4878163090255b32eaefef1"
+    },
+    "mergedAt": "2026-09-19T21:55:57Z",
+    "number": 3462,
+    "title": "web: theme control keeps a choice without storage and colours the browser chrome"
+  },
+  {
+    "baseRefOid": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+    "headRefOid": "c788a568806107d8f23878fe1ce193f4b6bcdedc",
+    "mergeCommit": {
+      "oid": "4493965157691ab234beda058a842a1fac9f2e5a"
+    },
+    "mergedAt": "2026-09-19T18:11:54Z",
+    "number": 3460,
+    "title": "web: fix the three Codex P2s on the theme control"
+  },
+  {
+    "baseRefOid": "89918dc2cdcd951b807dfa95c7665bc5c2a894a7",
+    "headRefOid": "1f772bf14d415d6d475057394919294699c20f47",
+    "mergeCommit": {
+      "oid": "8f003567fbda6f3922d95c50ba81e2a3f6d9565c"
+    },
+    "mergedAt": "2026-09-20T00:10:18Z",
+    "number": 3459,
+    "title": "Repositories page, and Settings leaves the workspace menu"
+  },
+  {
+    "baseRefOid": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+    "headRefOid": "75a2c734d0878819fd918703670b2412dbbb2ae2",
+    "mergeCommit": {
+      "oid": "d70ce7ea1dea13fe05b2539744c754a9d7b2e1f8"
+    },
+    "mergedAt": "2026-09-19T18:15:30Z",
+    "number": 3457,
+    "title": "fix(iam): backfill the mandate grants #3440 added for existing enterprise orgs"
+  },
+  {
+    "baseRefOid": "8d8f792a291e6d7030fc695367c500ae53b174da",
+    "headRefOid": "c938ef7f20d9243ddb8c8518dc8a6e34911ac4c7",
+    "mergeCommit": {
+      "oid": "cc9e072e27f5d6c10c3b908d39e09cc078190fd2"
+    },
+    "mergedAt": "2026-09-19T21:55:45Z",
+    "number": 3456,
+    "title": "book: the second edition, 21 parts, built from one manuscript, with print fixed (ADR-109)"
+  },
+  {
+    "baseRefOid": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+    "headRefOid": "4d7bd17ec5c52a41ab8319994d20f558280f206b",
+    "mergeCommit": {
+      "oid": "37b98fa37f68be36566a294e95d2c840cf6a7eb2"
+    },
+    "mergedAt": "2026-09-19T18:17:11Z",
+    "number": 3455,
+    "title": "chore(backlog): triage cleanup, 2 issues"
+  },
+  {
+    "baseRefOid": "2ed193333e488fba1bb6e0a1a6de6b056fccd089",
+    "headRefOid": "09061a75adda174284e4de269d0d517c72e404b9",
+    "mergeCommit": {
+      "oid": "e1285479c2cbc95bc96086d9626c255e13fee2eb"
+    },
+    "mergedAt": "2026-09-19T18:20:53Z",
+    "number": 3454,
+    "title": "tacho: a refused OTel record no longer poisons the records after it"
+  },
+  {
+    "baseRefOid": "80424b9a11ad5c171e49fdf849138c071df38c78",
+    "headRefOid": "cf88b43c7090b63c5b59b1ba130445a7772f658e",
+    "mergeCommit": {
+      "oid": "2ed193333e488fba1bb6e0a1a6de6b056fccd089"
+    },
+    "mergedAt": "2026-09-19T17:51:42Z",
+    "number": 3453,
+    "title": "Bound a review at three rounds, then carry what is left"
+  },
+  {
+    "baseRefOid": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+    "headRefOid": "3996f0602d03d40fc670bcceeec878c4675834d9",
+    "mergeCommit": {
+      "oid": "e857c2804a5c5635ec1458a26a99c2b5f7c4c284"
+    },
+    "mergedAt": "2026-09-19T17:49:15Z",
+    "number": 3443,
+    "title": "web, docs: System / Light / Dark theme control in the footer; web footer in columns"
+  },
+  {
+    "baseRefOid": "275fc0bcd8a80796870fada2757b94b0c62cda17",
+    "headRefOid": "ecbf83c072773faf48aaf2e9e847a74ef53ad754",
+    "mergeCommit": {
+      "oid": "accaa23b68e50079e90d90fad6c75b4b59eb9402"
+    },
+    "mergedAt": "2026-09-19T13:29:27Z",
+    "number": 3442,
+    "title": "Store a mandate limit's measure kind instead of guessing it (ADR-108)"
+  },
+  {
+    "baseRefOid": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+    "headRefOid": "26820574224c2b8c8b4134873ad259bc42bab2b8",
+    "mergeCommit": {
+      "oid": "f5db811b560e450915b0825ecff5c0a17e27df79"
+    },
+    "mergedAt": "2026-09-19T09:43:40Z",
+    "number": 3441,
+    "title": "docs: the app route map names the mandate page and says whose [orgSlug] segments are"
+  },
+  {
+    "baseRefOid": "accaa23b68e50079e90d90fad6c75b4b59eb9402",
+    "headRefOid": "489f1ead93baa1d71b28016ca85eb88f38c2cd98",
+    "mergeCommit": {
+      "oid": "80424b9a11ad5c171e49fdf849138c071df38c78"
+    },
+    "mergedAt": "2026-09-19T14:13:06Z",
+    "number": 3440,
+    "title": "fix(mandates): list_mandates admits the roles request_mandate admits"
+  },
+  {
+    "baseRefOid": "5eb96f4b50de2788300299e1a4ca8dba62f82a5a",
+    "headRefOid": "0b1e00dd8238c9f5a86a7b62a46fcd0f70199685",
+    "mergeCommit": {
+      "oid": "5e60e6ab535f38f6d4bba3ccff0fc82ab3a7102f"
+    },
+    "mergedAt": "2026-09-19T23:43:17Z",
+    "number": 3439,
+    "title": "Tools: the Auto-approvals tab and Grant a mandate"
+  },
+  {
+    "baseRefOid": "88823c40fa4f2e62d3232d0113b8bab4bfa5c738",
+    "headRefOid": "560b2d3945c5323d6e024ebbbafc9376e6f76ad7",
+    "mergeCommit": {
+      "oid": "275fc0bcd8a80796870fada2757b94b0c62cda17"
+    },
+    "mergedAt": "2026-09-19T12:01:24Z",
+    "number": 3437,
+    "title": "fix(mandates): a retired agent's mandate is revoked, not left active"
+  },
+  {
+    "baseRefOid": "6651347332fcbd1f010f31edcd5cb3f9d1998d98",
+    "headRefOid": "e56ab03841ee8119f67348d65fa6b2a2618a9a2c",
+    "mergeCommit": {
+      "oid": "2752159aa315e88867a19a44f5e5ca4cc8cd4bd7"
+    },
+    "mergedAt": "2026-09-19T09:47:33Z",
+    "number": 3433,
+    "title": "fix(skills): round-trip harness labels instead of splitting on newline"
+  },
+  {
+    "baseRefOid": "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b",
+    "headRefOid": "53095cb89630d899d5cfbee27489c3858547f7dd",
+    "mergeCommit": {
+      "oid": "88823c40fa4f2e62d3232d0113b8bab4bfa5c738"
+    },
+    "mergedAt": "2026-09-19T10:23:48Z",
+    "number": 3432,
+    "title": "An archived workspace accepts no machine credential (ADR-104)"
+  },
+  {
+    "baseRefOid": "566b23723c5fff888a6bda7ef55c45358fb87696",
+    "headRefOid": "6d8503db1043b213f330eba1732789cb79d434c3",
+    "mergeCommit": {
+      "oid": "05175cc76e6332e28ba7ca6a11cdff0deec6cc5b"
+    },
+    "mergedAt": "2026-09-19T09:49:12Z",
+    "number": 3425,
+    "title": "tacho: one unfamiliar OTel field no longer drops a whole export"
+  },
+  {
+    "baseRefOid": "8a4f3c19553404015f32f57f24e08547347c7c2d",
+    "headRefOid": "abbb8b6b40e5167569178f310c2282661b665453",
+    "mergeCommit": {
+      "oid": "b7acce8f4e2c2b5552fb0fbd20f3b9912e0ae919"
+    },
+    "mergedAt": "2026-09-19T04:05:10Z",
+    "number": 3412,
+    "title": "HOTFIX: stop leaking the lead's email from the public /book/redeem response"
+  },
+  {
+    "baseRefOid": "853ebbf8719aeed640232f605e769f6b612d3d87",
+    "headRefOid": "f62e0eb7d040240e02b126cf90bb0805afa9de0d",
+    "mergeCommit": {
+      "oid": "a8ba511c7c215d2afc1e6c9e4dc952297a7833d2"
+    },
+    "mergedAt": "2026-09-19T03:43:22Z",
+    "number": 3402,
+    "title": "tacho: keep the detector's enrollment id paired with its harness list"
+  },
+  {
+    "baseRefOid": "853ebbf8719aeed640232f605e769f6b612d3d87",
+    "headRefOid": "a3f75dcfe1b272a4d27bcedf5ab3c5a33efb4dc6",
+    "mergeCommit": {
+      "oid": "fdc930036d45001b33203ecf10d5fe45acd656be"
+    },
+    "mergedAt": "2026-09-19T03:03:36Z",
+    "number": 3401,
+    "title": "run-db-migrations.sh can apply an out-of-order migration on request"
+  },
+  {
+    "baseRefOid": "08b8996eeb28c8c44d2dc0d7cbe0ac90b415db10",
+    "headRefOid": "c235f1c8b228e2835de55f89d4f523f64b6926f7",
+    "mergeCommit": {
+      "oid": "4bdc73c75f8ed5dfc61f8054f8b2564e92a732cd"
+    },
+    "mergedAt": "2026-09-19T04:06:20Z",
+    "number": 3392,
+    "title": "fix(billing): restore Stripe Checkout for upgrades and GAU purchases"
+  },
+  {
+    "baseRefOid": "4bdc73c75f8ed5dfc61f8054f8b2564e92a732cd",
+    "headRefOid": "9998dec71f324c61981fec2c43456f8006dadb4f",
+    "mergeCommit": {
+      "oid": "b35d47eb3033b895117f7f59835678b82a4d993c"
+    },
+    "mergedAt": "2026-09-19T04:46:18Z",
+    "number": 3390,
+    "title": "web: restore the demo and contact lead forms after ADR-043 dropped cms"
+  },
+  {
+    "baseRefOid": "853ebbf8719aeed640232f605e769f6b612d3d87",
+    "headRefOid": "ee9d05a37844305209fb1e94602e43fea906d7f3",
+    "mergeCommit": {
+      "oid": "8a4f3c19553404015f32f57f24e08547347c7c2d"
+    },
+    "mergedAt": "2026-09-19T03:44:42Z",
+    "number": 3389,
+    "title": "Restore ebook lead gate and move contacts to oxagen.sh"
+  },
+  {
+    "baseRefOid": "853ebbf8719aeed640232f605e769f6b612d3d87",
+    "headRefOid": "d18efd90d0a3a88b162e971f7a702fa8e24a6d62",
+    "mergeCommit": {
+      "oid": "bc627397fa4966e7f3dce23dabb27b7797996c60"
+    },
+    "mergedAt": "2026-09-19T03:43:16Z",
+    "number": 3388,
+    "title": "Fix OAuth login errors that looked like a blank login page"
+  },
+  {
+    "baseRefOid": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0",
+    "headRefOid": "8bdd811673bde7c4b9217fb2453c3a6d61344f2e",
+    "mergeCommit": {
+      "oid": "3985213735ece9c24a018d600f3bbc4d50069801"
+    },
+    "mergedAt": "2026-09-19T02:19:38Z",
+    "number": 3386,
+    "title": "docs(mission-control): page-by-page gap inventory vs roadmap spec"
+  },
+  {
+    "baseRefOid": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+    "headRefOid": "454942df7c95b73fc64a3c02ffa2c1abf9d17fd5",
+    "mergeCommit": {
+      "oid": "1e4c197aa8727c9bf49c5873b9a321e55774f4a7"
+    },
+    "mergedAt": "2026-09-19T07:12:09Z",
+    "number": 3385,
+    "title": "brand: re-sync every frontend to house kit 2.3.0, and the Mission Control ship audit"
+  },
+  {
+    "baseRefOid": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+    "headRefOid": "f538137b734a4117c69ca380649fd07f64c154c8",
+    "mergeCommit": {
+      "oid": "4c0610c396498e5fd9fdb39b1dc2f675e702e4e0"
+    },
+    "mergedAt": "2026-09-19T01:59:13Z",
+    "number": 3381,
+    "title": "iam: a Tacho host key may poll for commands again"
+  },
+  {
+    "baseRefOid": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+    "headRefOid": "92a20e1637ae7674cacf3ce36f9bdc71ae0ca5f4",
+    "mergeCommit": {
+      "oid": "f789da208900d7a0cb43e859b5dc3caabbf5f9c0"
+    },
+    "mergedAt": "2026-09-19T01:16:29Z",
+    "number": 3380,
+    "title": "Sync frontend PWA assets and Mission Control messaging from oxagen-brand tip"
+  },
+  {
+    "baseRefOid": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+    "headRefOid": "89228f6f4c12ea6d3095e49c27cb95679ca29d24",
+    "mergeCommit": {
+      "oid": "08b8996eeb28c8c44d2dc0d7cbe0ac90b415db10"
+    },
+    "mergedAt": "2026-09-19T02:35:15Z",
+    "number": 3376,
+    "title": "chore(backlog): triage cleanup, 1 issue"
+  },
+  {
+    "baseRefOid": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+    "headRefOid": "20b97d1b20fe273409ea29b4be6ccee254e43935",
+    "mergeCommit": {
+      "oid": "0855f14d88bb8e20bef480f22da10a8b731eeb7d"
+    },
+    "mergedAt": "2026-09-19T00:22:59Z",
+    "number": 3364,
+    "title": "tacho: fix the three P1 review findings that missed the merge of #3342"
+  },
+  {
+    "baseRefOid": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+    "headRefOid": "b304acbe8e7ee96cb0606f83e0447b3b97682577",
+    "mergeCommit": {
+      "oid": "93329d51a27255ab3261134290f500322ed67904"
+    },
+    "mergedAt": "2026-09-19T02:34:59Z",
+    "number": 3363,
+    "title": "tacho: pack ingest batches under the route's request limit, and split a 413"
+  },
+  {
+    "baseRefOid": "0855f14d88bb8e20bef480f22da10a8b731eeb7d",
+    "headRefOid": "dc157d622691d2e4b577ac07a5946c13a67531b7",
+    "mergeCommit": {
+      "oid": "6a0c51fbb5a6146e4e8d38233f1fdabad327102f"
+    },
+    "mergedAt": "2026-09-19T02:34:38Z",
+    "number": 3361,
+    "title": "tacho: keep a drained transcript cursor until the registry forgets the session"
+  },
+  {
+    "baseRefOid": "566b23723c5fff888a6bda7ef55c45358fb87696",
+    "headRefOid": "cda98f98a3e44e4e4895622179d8547031145765",
+    "mergeCommit": {
+      "oid": "6651347332fcbd1f010f31edcd5cb3f9d1998d98"
+    },
+    "mergedAt": "2026-09-19T08:48:51Z",
+    "number": 3352,
+    "title": "run replay 2/3: transcript steps with tool i/o, chain and seal, live stream"
+  },
+  {
+    "baseRefOid": "b6261450c8b384a869dc2414d37996e0e66d06d0",
+    "headRefOid": "c75e66885b68c3da274e4a057ea6a72b96338019",
+    "mergeCommit": {
+      "oid": "29da3bdcee28a4c2e265a99d9c5983dcde8972f7"
+    },
+    "mergedAt": "2026-09-18T23:25:45Z",
+    "number": 3351,
+    "title": "run replay 1/3: capture frame bodies at the host and the assistant"
+  },
+  {
+    "baseRefOid": "d9aa25791f42f895588015533656abdc8649c239",
+    "headRefOid": "8a04d7dceedf8076368bcea645461d945e61cd24",
+    "mergeCommit": {
+      "oid": "b6261450c8b384a869dc2414d37996e0e66d06d0"
+    },
+    "mergedAt": "2026-09-18T22:41:25Z",
+    "number": 3350,
+    "title": "app: fix the five review findings left on the assistant reveal"
+  },
+  {
+    "baseRefOid": "61ef2997b7f9a80966cbaea544ef0848bc818985",
+    "headRefOid": "9d3dce5fca108a4599600e6025b435f1f52a5cd5",
+    "mergeCommit": {
+      "oid": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f"
+    },
+    "mergedAt": "2026-09-19T00:40:50Z",
+    "number": 3347,
+    "title": "Cursor is the fourth wrapped harness, and every export must load in all four (ADR-099)"
+  },
+  {
+    "baseRefOid": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+    "headRefOid": "8bca6ad3c82f5ca64c9a9682eb21b141bb15bbd4",
+    "mergeCommit": {
+      "oid": "36304eb7ffe9d729a1222f5b141b677f06203289"
+    },
+    "mergedAt": "2026-09-18T22:11:59Z",
+    "number": 3346,
+    "title": "Brand: obsidian and white palette, three faces, across the design system and apps"
+  },
+  {
+    "baseRefOid": "b9beb0e5c898ec937aa1dddcfe604858b0e6e3db",
+    "headRefOid": "a7722e20e65eb89c003704e5b8af236d1bed921d",
+    "mergeCommit": {
+      "oid": "c3e8dc704eaf843b24d59274cb63954d85fe1107"
+    },
+    "mergedAt": "2026-09-18T23:02:28Z",
+    "number": 3345,
+    "title": "app: the Mission Control transcript on every run's page"
+  },
+  {
+    "baseRefOid": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+    "headRefOid": "ec9b3a6073c1e4b73fb18ed1ea48e5889d037ec6",
+    "mergeCommit": {
+      "oid": "b9beb0e5c898ec937aa1dddcfe604858b0e6e3db"
+    },
+    "mergedAt": "2026-09-18T22:27:26Z",
+    "number": 3342,
+    "title": "tacho: ship prompts, transcripts and per-call tokens so the Run page has cost and content"
+  },
+  {
+    "baseRefOid": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+    "headRefOid": "62214fe757260553d82ccf18c79a57e55012590f",
+    "mergeCommit": {
+      "oid": "d9aa25791f42f895588015533656abdc8649c239"
+    },
+    "mergedAt": "2026-09-18T21:43:14Z",
+    "number": 3341,
+    "title": "app: the in-app assistant renders markdown, highlights code, and reve…"
+  },
+  {
+    "baseRefOid": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f",
+    "headRefOid": "20b78e8f0f0c445f8980e9d6d53e2d5eb7c1383b",
+    "mergeCommit": {
+      "oid": "853ebbf8719aeed640232f605e769f6b612d3d87"
+    },
+    "mergedAt": "2026-09-19T02:41:50Z",
+    "number": 3337,
+    "title": "Every date in the app renders in your time zone, Pacific by default"
+  },
+  {
+    "baseRefOid": "f62edacf9847af3949ca4e4bb341abc80b13dddb",
+    "headRefOid": "689d5b565dc1095237dab9b290cfd339bdd6bd7d",
+    "mergeCommit": {
+      "oid": "dacf3fa7d13606c493b6fea3122c8405cc62c3bd"
+    },
+    "mergedAt": "2026-09-19T06:53:38Z",
+    "number": 3332,
+    "title": "desktop: sign-in stops holding the setup wizard for five minutes, and a spec for the remaining gateway gaps"
+  },
+  {
+    "baseRefOid": "b35d47eb3033b895117f7f59835678b82a4d993c",
+    "headRefOid": "cda0079a8d04e310513f99d1c51bbe144be54afa",
+    "mergeCommit": {
+      "oid": "f62edacf9847af3949ca4e4bb341abc80b13dddb"
+    },
+    "mergedAt": "2026-09-19T06:18:41Z",
+    "number": 3327,
+    "title": "app: Account dialog, avatar editor and user menu as the W11 mockup draws them"
+  },
+  {
+    "baseRefOid": "d9aa25791f42f895588015533656abdc8649c239",
+    "headRefOid": "2130fdff096f567a327b8a52d94882805836e4a6",
+    "mergeCommit": {
+      "oid": "837f93a533cee151c49755b5a8bf2ff68e5e00be"
+    },
+    "mergedAt": "2026-09-18T22:36:11Z",
+    "number": 3326,
+    "title": "M0: a workspace is born with its main repository; a second repository links and unlinks (§17 M0)"
+  },
+  {
+    "baseRefOid": "c3e8dc704eaf843b24d59274cb63954d85fe1107",
+    "headRefOid": "bf13cfa08581363dd28f6d7a6d148316edb22268",
+    "mergeCommit": {
+      "oid": "61ef2997b7f9a80966cbaea544ef0848bc818985"
+    },
+    "mergedAt": "2026-09-18T23:44:34Z",
+    "number": 3325,
+    "title": "tacho: compile steering from the pinned version, and cache it on the steering version (#3311, #3312)"
+  },
+  {
+    "baseRefOid": "b7a0f0989b2ff8193df748e0931f32d321a5704f",
+    "headRefOid": "fc8cf4598de318a6efc61518bbebb57f7fa4709b",
+    "mergeCommit": {
+      "oid": "c5c714e130b0fb0378f3498d293df69cc2b0e920"
+    },
+    "mergedAt": "2026-09-18T21:36:05Z",
+    "number": 3322,
+    "title": "billing: bill the in-app agent's platform-funded tokens at exactly cost"
+  },
+  {
+    "baseRefOid": "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4",
+    "headRefOid": "29faedf15014fb01a5acc9e568fe1337f6ae63a8",
+    "mergeCommit": {
+      "oid": "cc26fe14ed3935d657bcdd35892cb3901cd8da32"
+    },
+    "mergedAt": "2026-09-18T20:05:55Z",
+    "number": 3321,
+    "title": "desktop: a line-by-line review; install and uninstall fixed and proven against a snapshot rig"
+  },
+  {
+    "baseRefOid": "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4",
+    "headRefOid": "4ce3ab50e61dd7c70120f59054eda45c7d55533b",
+    "mergeCommit": {
+      "oid": "0d39610e324beccdb946945496d4a5977025cf78"
+    },
+    "mergedAt": "2026-09-18T20:04:11Z",
+    "number": 3319,
+    "title": "tacho: the loopback model proxy, observed metering, an enforced session budget and a real interrupt (Phase 4)"
+  },
+  {
+    "baseRefOid": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+    "headRefOid": "1d4296a16f169812b79a96a6229a9309074c7b52",
+    "mergeCommit": {
+      "oid": "1608d2e0c5668b59524124ad5e15a994e91be1cd"
+    },
+    "mergedAt": "2026-09-18T19:53:52Z",
+    "number": 3310,
+    "title": "M0: organisation graph placement, a real-Neo4j cross-tenant probe, and per-pattern tenant anchors"
+  },
+  {
+    "baseRefOid": "86b91de815aba772bebe66ab30c5a33aafd704ea",
+    "headRefOid": "763fcb48d995ceea19f484eaf771bbe741d35ce9",
+    "mergeCommit": {
+      "oid": "4a45e2c398b84326d9e670fc08ce3ea9edf75453"
+    },
+    "mergedAt": "2026-09-18T18:39:51Z",
+    "number": 3309,
+    "title": "app: lay the Billing page out as the Mission Control design draws it, and wire Change plan"
+  },
+  {
+    "baseRefOid": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566",
+    "headRefOid": "ad64a20e1549fe4a1bf445982080c0698de6120b",
+    "mergeCommit": {
+      "oid": "fef22b88a8f7ab2add5b811dd36597981d1a966a"
+    },
+    "mergedAt": "2026-09-18T20:20:03Z",
+    "number": 3308,
+    "title": "Organization › Model funding: bring your own model key from the app"
+  },
+  {
+    "baseRefOid": "66c51714328442d03d1b27beb05a7f8f140d9065",
+    "headRefOid": "e26e1262cf768c245d8bcd5c9c000f506ef4da9d",
+    "mergeCommit": {
+      "oid": "b7a0f0989b2ff8193df748e0931f32d321a5704f"
+    },
+    "mergedAt": "2026-09-18T20:49:21Z",
+    "number": 3307,
+    "title": "Spec and plan: one assembler, two planes, the gateway, and the four-word tier ladder"
+  },
+  {
+    "baseRefOid": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+    "headRefOid": "fc853387dc6f1bbe6a17244618280383e6201702",
+    "mergeCommit": {
+      "oid": "d6ac5576a7fc35b9e8562585ab6d4ea25f148ae4"
+    },
+    "mergedAt": "2026-09-18T18:04:20Z",
+    "number": 3306,
+    "title": "app: workspace Settings is the last item in the Workspace nav section"
+  },
+  {
+    "baseRefOid": "9933c72713d774b583651cf3964d5bfbb0dcf7e1",
+    "headRefOid": "ede62e65300dfeb9903b725711a064b064130234",
+    "mergeCommit": {
+      "oid": "66c51714328442d03d1b27beb05a7f8f140d9065"
+    },
+    "mergedAt": "2026-09-18T18:31:11Z",
+    "number": 3294,
+    "title": "ADRs and architecture: steering and gating, the assembler, the gateway, the tier ladder, the contained tier"
+  },
+  {
+    "baseRefOid": "4a45e2c398b84326d9e670fc08ce3ea9edf75453",
+    "headRefOid": "2fb0cea950ab173e90a29fd0990e2570ecbb0002",
+    "mergeCommit": {
+      "oid": "65f70a910644d517f8cb4e95e17ff439e7d8e86e"
+    },
+    "mergedAt": "2026-09-18T19:01:02Z",
+    "number": 3292,
+    "title": "app: a turn the person walks away from is owned to completion, not discarded (ADR-092)"
+  },
+  {
+    "baseRefOid": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+    "headRefOid": "507cf88cd2f637c2342d92072bc86dede78a8010",
+    "mergeCommit": {
+      "oid": "9933c72713d774b583651cf3964d5bfbb0dcf7e1"
+    },
+    "mergedAt": "2026-09-18T16:26:54Z",
+    "number": 3291,
+    "title": "docs: make clear-prose a required skill for any prose, internal or external"
+  },
+  {
+    "baseRefOid": "9933c72713d774b583651cf3964d5bfbb0dcf7e1",
+    "headRefOid": "438718d4a97563f5672a5c56d5b98c569d524417",
+    "mergeCommit": {
+      "oid": "4f86e753b91f0f3aa409fb6fdc0c856d7a8ae566"
+    },
+    "mergedAt": "2026-09-18T19:12:00Z",
+    "number": 3290,
+    "title": "BYOK for any OpenAI-compatible endpoint, and close an SSRF bypass in the outbound-URL guard"
+  },
+  {
+    "baseRefOid": "2dcf28146a438f5fbd28e200e5cb7962457449ef",
+    "headRefOid": "888223be7bfeb8d5b2eb84a681199fc18d76f601",
+    "mergeCommit": {
+      "oid": "c9db463e954a8a6ade37211a05c2c1b1639b20ed"
+    },
+    "mergedAt": "2026-09-18T16:26:41Z",
+    "number": 3289,
+    "title": "steering: one record steers one agent — must/should records compile into the bundle's context.system (ADR-091)"
+  },
+  {
+    "baseRefOid": "02278c9132914d5754f2165f5b720410c80f688b",
+    "headRefOid": "dad74f3d8f3cae99c052f2469d76c7acb92f5e06",
+    "mergeCommit": {
+      "oid": "2dcf28146a438f5fbd28e200e5cb7962457449ef"
+    },
+    "mergedAt": "2026-09-18T15:36:48Z",
+    "number": 3287,
+    "title": "app: the assistant flyout's header stops saying the run id is not a link"
+  },
+  {
+    "baseRefOid": "85377729aec595ffd62cfa316ee2989d21c317b2",
+    "headRefOid": "4a1918b1b84723db2a262e2805e62f005f86d1de",
+    "mergeCommit": {
+      "oid": "216a5f1424d76454f9e1606f63f3dc587e9a5a7c"
+    },
+    "mergedAt": "2026-09-18T07:29:12Z",
+    "number": 3284,
+    "title": "ADR-090: Oxagen governs skill resolution — reverse the 2026-09-15 narrowing and go all in on Skills"
+  },
+  {
+    "baseRefOid": "85377729aec595ffd62cfa316ee2989d21c317b2",
+    "headRefOid": "3ef1689f8fb5bb416b65df282022aaf7f1295f49",
+    "mergeCommit": {
+      "oid": "02278c9132914d5754f2165f5b720410c80f688b"
+    },
+    "mergedAt": "2026-09-18T15:07:17Z",
+    "number": 3282,
+    "title": "app: the Run page, and runs you can tell apart in the Fleet list (WL-35)"
+  },
+  {
+    "baseRefOid": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+    "headRefOid": "c815071f81819576c712b8bdd65454ab8227f0c8",
+    "mergeCommit": {
+      "oid": "ae542258e303341175a75db7a52d5e65fe4d0c6f"
+    },
+    "mergedAt": "2026-09-18T05:50:26Z",
+    "number": 3280,
+    "title": "spec: list W13 in §19, mark it out of rev1, and correct a status line reading `complete`"
+  },
+  {
+    "baseRefOid": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+    "headRefOid": "e5d18c76d50a82c5cfa490abef8cbf38b8e7be73",
+    "mergeCommit": {
+      "oid": "85377729aec595ffd62cfa316ee2989d21c317b2"
+    },
+    "mergedAt": "2026-09-18T06:08:10Z",
+    "number": 3278,
+    "title": "handlers: stamp Context records with the approved repository name, and make the steering rig pin its projection"
+  },
+  {
+    "baseRefOid": "9b6219ca3ff0213f46b24f3c4096d233c4575a1f",
+    "headRefOid": "5b027c0f065731ea415712852d0dfbe97fd3a7b4",
+    "mergeCommit": {
+      "oid": "e5f8fb71025e84c1c0404600838c74c4416c76df"
+    },
+    "mergedAt": "2026-09-19T01:58:06Z",
+    "number": 3276,
+    "title": "feat(steering): warn and optionally refuse a prompt when a checkout's .oxagen/ is behind the production branch"
+  },
+  {
+    "baseRefOid": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+    "headRefOid": "05c359a53650b9cbe7cede37777a377453974ea3",
+    "mergeCommit": {
+      "oid": "ddea5d3e94f8a77dcedc8a304333385d339db5fa"
+    },
+    "mergedAt": "2026-09-18T05:30:27Z",
+    "number": 3275,
+    "title": "app: the page declares the record it is showing, and the shell stops reading the URL (Refs #3230)"
+  },
+  {
+    "baseRefOid": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+    "headRefOid": "e8be16076659ef22fe124339aff8fc008c2984dc",
+    "mergeCommit": {
+      "oid": "0aa9af27811b585e1735cb55944c498153507d67"
+    },
+    "mergedAt": "2026-09-18T05:37:04Z",
+    "number": 3274,
+    "title": "fix(agent): the assistant run store carries an archive, so a turn can seal"
+  },
+  {
+    "baseRefOid": "1e4c197aa8727c9bf49c5873b9a321e55774f4a7",
+    "headRefOid": "29212e7e6218aabfab52d174f8afcbd1de0ab70c",
+    "mergeCommit": {
+      "oid": "566b23723c5fff888a6bda7ef55c45358fb87696"
+    },
+    "mergedAt": "2026-09-19T07:50:45Z",
+    "number": 3271,
+    "title": "cost: record and show run cost — auto-seeded price book, negotiated rates, unpriced-model surfacing"
+  },
+  {
+    "baseRefOid": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+    "headRefOid": "291f0d9f7dd9c075442b324e19443bbc9c4b7ccd",
+    "mergeCommit": {
+      "oid": "237eade28dec7857e32ff3753d53a10508feee03"
+    },
+    "mergedAt": "2026-09-18T05:35:53Z",
+    "number": 3270,
+    "title": "feat(app): hide revoked API keys by default and page the roster"
+  },
+  {
+    "baseRefOid": "02278c9132914d5754f2165f5b720410c80f688b",
+    "headRefOid": "1031dcdf94839749a34966768bd35371f32a265e",
+    "mergeCommit": {
+      "oid": "86b91de815aba772bebe66ab30c5a33aafd704ea"
+    },
+    "mergedAt": "2026-09-18T16:04:59Z",
+    "number": 3269,
+    "title": "fix(iam): role-change lockout + feat(ingestion): one main repository per workspace, globally"
+  },
+  {
+    "baseRefOid": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c",
+    "headRefOid": "e0a0e16fdcc42b4377348554acb4a6f182fe4971",
+    "mergeCommit": {
+      "oid": "8713a429bacc238e32bec9f37b5163f2596c6577"
+    },
+    "mergedAt": "2026-09-18T06:07:08Z",
+    "number": 3267,
+    "title": "docs: name the two eras, and register what changes when the second one starts (Refs #3268)"
+  },
+  {
+    "baseRefOid": "a44c54151988534878534c8d828030b2a16432d1",
+    "headRefOid": "c5a09770c298bc2c87468ac907a071916d7c988f",
+    "mergeCommit": {
+      "oid": "ad25ec704a716c7e247a81facd3d08eab2f3ae6c"
+    },
+    "mergedAt": "2026-09-18T05:13:29Z",
+    "number": 3265,
+    "title": "handlers: steer on the ref the binding approved, and settle the ADR-087 collision"
+  },
+  {
+    "baseRefOid": "42ac9827132b1da2d3107ba2c3c92c3ac919bca0",
+    "headRefOid": "8f372f9800d285ac8ea5600c615f1bb8927fbae7",
+    "mergeCommit": {
+      "oid": "5e08d60c8d16f9c7666a6c4743786716bd7e6aed"
+    },
+    "mergedAt": "2026-09-18T02:37:55Z",
+    "number": 3261,
+    "title": "app: the assistant asks about the agent being registered, and focus survives the md boundary (Refs #3230)"
+  },
+  {
+    "baseRefOid": "6f7da3476ead84f1d3751d6ce2cc0ca359232715",
+    "headRefOid": "585227f10fd0d02f1aefb72ef7890ec6ffa6d100",
+    "mergeCommit": {
+      "oid": "3355510d005da6566bd72610638d46be646b8f21"
+    },
+    "mergedAt": "2026-09-17T23:10:51Z",
+    "number": 3248,
+    "title": "handlers: extend the pg-test timeout budget to onboarding.pg.test.ts"
+  },
+  {
+    "baseRefOid": "425df76c0b6c6eea7927a49e61a3fcc491cb138a",
+    "headRefOid": "0ed7668941c63e4f14786343cc203868569e2e72",
+    "mergeCommit": {
+      "oid": "a44c54151988534878534c8d828030b2a16432d1"
+    },
+    "mergedAt": "2026-09-18T02:38:08Z",
+    "number": 3242,
+    "title": "spec: repository binding, working copies, and one pull-request lifecycle for every governed file"
+  },
+  {
+    "baseRefOid": "a5f542ea19aa7222386283392fab62fcffb3065f",
+    "headRefOid": "ce5703d485295c33e188c96dcc1885dbfa459d55",
+    "mergeCommit": {
+      "oid": "5ce06b58793679c60190231e177e062b35a02e69"
+    },
+    "mergedAt": "2026-09-18T00:51:01Z",
+    "number": 3238,
+    "title": "The gateway enforcement tier, the probe's plane key, and two provisioning guards"
+  },
+  {
+    "baseRefOid": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+    "headRefOid": "8d34242c0dadd3b3ec8e625894f9f44ee12bb50a",
+    "mergeCommit": {
+      "oid": "a7542142b11fd71987f525ff22052c1f27bf7e09"
+    },
+    "mergedAt": "2026-09-17T21:25:36Z",
+    "number": 3234,
+    "title": "mcp: a CLI session key acts for its person here too, and the exemption fails closed"
+  },
+  {
+    "baseRefOid": "5ef612e22f3ba36fd370e00ce14f9100cd920a33",
+    "headRefOid": "aa722188e4ddf59f75a194fb5a1225f5d5fd015a",
+    "mergeCommit": {
+      "oid": "e3b1b49c5afaed279cb1ebcee72cfbc77774b2bf"
+    },
+    "mergedAt": "2026-09-18T02:37:41Z",
+    "number": 3233,
+    "title": "app: a Workspace settings dialog that binds a main repository"
+  },
+  {
+    "baseRefOid": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+    "headRefOid": "6c777457c1a01d0277009adbb7556e8cebec0821",
+    "mergeCommit": {
+      "oid": "425df76c0b6c6eea7927a49e61a3fcc491cb138a"
+    },
+    "mergedAt": "2026-09-17T21:59:16Z",
+    "number": 3229,
+    "title": "docs: what a CLI session key acts as, and where apps/app keeps its UI"
+  },
+  {
+    "baseRefOid": "127571f733eb418dd3bdf2569919e33a66126923",
+    "headRefOid": "1c4b72ef69a091783cd8459103d52276f7f00ad7",
+    "mergeCommit": {
+      "oid": "e42e997e61b44a2c0d67661ad14c381ca9d63f0c"
+    },
+    "mergedAt": "2026-09-17T20:23:24Z",
+    "number": 3222,
+    "title": "iam: a CLI session key acts for its creator, not a machine mandate"
+  },
+  {
+    "baseRefOid": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b",
+    "headRefOid": "daf8cacd45360340d45cc72ad374aa816bc3405c",
+    "mergeCommit": {
+      "oid": "86e26d6b65123d4cbe75bf8ad5ea400a552c56bc"
+    },
+    "mergedAt": "2026-09-17T21:23:36Z",
+    "number": 3216,
+    "title": "app: the in-app assistant answers again (Refs #2968)"
+  },
+  {
+    "baseRefOid": "efb68b586973fb7497c933092b77e40638eb1802",
+    "headRefOid": "c1ac664b7816399ac147e89d7020ae78851518db",
+    "mergeCommit": {
+      "oid": "70f55ef97fd472561132e704dcd54f7ff30bcc3d"
+    },
+    "mergedAt": "2026-09-17T19:44:42Z",
+    "number": 3215,
+    "title": "docs: residue merges, it does not iterate — and CI is the gate, not your laptop"
+  },
+  {
+    "baseRefOid": "30adbbb3672d54f82b9f62e9fd1cf1704b1c22f2",
+    "headRefOid": "93586824e9a8391014d00cca6369964d8e07b4da",
+    "mergeCommit": {
+      "oid": "b1dcefdcaca72fbe2c9a36678d0a81db0794b76b"
+    },
+    "mergedAt": "2026-09-17T20:27:37Z",
+    "number": 3209,
+    "title": "app: a person can change their own name and avatar again"
+  },
+  {
+    "baseRefOid": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+    "headRefOid": "2d28cae0c18ec5852cd7525d6d5df1b2da1d6253",
+    "mergeCommit": {
+      "oid": "5a74a10a3d567a423734b5dc2c1a27783f2e39a8"
+    },
+    "mergedAt": "2026-09-17T18:27:28Z",
+    "number": 3208,
+    "title": "desktop: entitle the macOS sidecars to a JIT, or signing kills them"
+  },
+  {
+    "baseRefOid": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+    "headRefOid": "77f0f2ce905555dc68cb126138292d7d0f0ab755",
+    "mergeCommit": {
+      "oid": "5b722d1d4cb166740b447905ef0ead4ec95f2b2a"
+    },
+    "mergedAt": "2026-09-17T18:25:46Z",
+    "number": 3206,
+    "title": "db: control_commands outcome CHECK comes off before the rows are remapped"
+  },
+  {
+    "baseRefOid": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+    "headRefOid": "950829c017e1e50533fc4c24a03dfedb5e42d590",
+    "mergeCommit": {
+      "oid": "53c299b6004e63cf746f95bc5954bf69db91ff9a"
+    },
+    "mergedAt": "2026-09-17T18:27:22Z",
+    "number": 3205,
+    "title": "iam: an allowlist that judges the wrong address is a false control, not a weak one"
+  },
+  {
+    "baseRefOid": "5aea6daa8ace5040b70d7fd04a297cf4f207db27",
+    "headRefOid": "199bcf26ddd0eb85f73614ba46e71f1267adac81",
+    "mergeCommit": {
+      "oid": "c0d40b1d47174196a2a2d7f02f442d6f1674faee"
+    },
+    "mergedAt": "2026-09-17T18:24:20Z",
+    "number": 3204,
+    "title": "tacho: pace ingest against the reported budget, and stop a re-enrollment wedging the WAL forever"
+  },
+  {
+    "baseRefOid": "9d6cf3277503987dc3a13219a36b2d0799a91169",
+    "headRefOid": "2cae97d5fecffbb7cb05d62bf162ca00e32a1971",
+    "mergeCommit": {
+      "oid": "efb68b586973fb7497c933092b77e40638eb1802"
+    },
+    "mergedAt": "2026-09-17T18:28:17Z",
+    "number": 3203,
+    "title": "tacho: the daemon hook test raced a production connect budget, and threw the reason away"
+  },
+  {
+    "baseRefOid": "522fec3065a7f28fd80b575fb678365305de589d",
+    "headRefOid": "7e895a836c29b338aa071c8d6104e11dec3c4836",
+    "mergeCommit": {
+      "oid": "339fa92b240192e815772415e34dd85d004eecb8"
+    },
+    "mergedAt": "2026-09-17T18:01:43Z",
+    "number": 3196,
+    "title": "test: give whole-tree architecture probes their own timeout budget"
+  },
+  {
+    "baseRefOid": "127571f733eb418dd3bdf2569919e33a66126923",
+    "headRefOid": "28f3e9f2056c62ecdc5784fe6e4f6d04d1a00e58",
+    "mergeCommit": {
+      "oid": "4dc85bae09b032bc61a819efcaf6885e7834c45f"
+    },
+    "mergedAt": "2026-09-17T19:17:48Z",
+    "number": 3195,
+    "title": "database: an org-only read of a workspace-scoped table raises, and the static check retires"
+  },
+  {
+    "baseRefOid": "522fec3065a7f28fd80b575fb678365305de589d",
+    "headRefOid": "5e01aa8f5590fa993aabe5649819cdf34e111ab5",
+    "mergeCommit": {
+      "oid": "301350d1af00404fee283403653b4ae2c9a2a70d"
+    },
+    "mergedAt": "2026-09-17T17:22:40Z",
+    "number": 3194,
+    "title": "app: the Tools import gate reads the workspace role its capability grants"
+  },
+  {
+    "baseRefOid": "a5f542ea19aa7222386283392fab62fcffb3065f",
+    "headRefOid": "5c1de2d4c9d0d25ed101da19d39c9b2dc13efef8",
+    "mergeCommit": {
+      "oid": "42ac9827132b1da2d3107ba2c3c92c3ac919bca0"
+    },
+    "mergedAt": "2026-09-18T01:11:59Z",
+    "number": 3193,
+    "title": "ontology: make the Neo4j tenancy seam guard test scoping, not spelling"
+  },
+  {
+    "baseRefOid": "301350d1af00404fee283403653b4ae2c9a2a70d",
+    "headRefOid": "cf9dc105449fe7a05240c3b5f7c997d61f3798ab",
+    "mergeCommit": {
+      "oid": "74e40e73c2feb23d632fdced66ed953da89f8bf9"
+    },
+    "mergedAt": "2026-09-17T17:56:35Z",
+    "number": 3192,
+    "title": "telemetry: integrity guards on the ClickHouse migration runner"
+  },
+  {
+    "baseRefOid": "301350d1af00404fee283403653b4ae2c9a2a70d",
+    "headRefOid": "d78fff98b1a705c9edd2a7a5a36923f2573eaa8e",
+    "mergeCommit": {
+      "oid": "e308dba3d31ad9dcee6121a0875e77890d6133b5"
+    },
+    "mergedAt": "2026-09-17T17:37:08Z",
+    "number": 3191,
+    "title": "app: restore /cli/complete and metadataBase after the WL-52 cutover"
+  },
+  {
+    "baseRefOid": "522fec3065a7f28fd80b575fb678365305de589d",
+    "headRefOid": "15a08bbbacfdd4e45ff13b74f0e33ead795a1ada",
+    "mergeCommit": {
+      "oid": "c16b381255fc4073d7eab95c35118cba7cad606d"
+    },
+    "mergedAt": "2026-09-17T17:22:25Z",
+    "number": 3190,
+    "title": "infra: alarm on a container restarting in a loop on the app node"
+  },
+  {
+    "baseRefOid": "a7542142b11fd71987f525ff22052c1f27bf7e09",
+    "headRefOid": "a9db65fbb42168cf670262ee3247d74420582c5e",
+    "mergeCommit": {
+      "oid": "a5f542ea19aa7222386283392fab62fcffb3065f"
+    },
+    "mergedAt": "2026-09-17T23:03:57Z",
+    "number": 3187,
+    "title": "billing: a refunded or disputed GAU purchase withdraws its units"
+  },
+  {
+    "baseRefOid": "a7542142b11fd71987f525ff22052c1f27bf7e09",
+    "headRefOid": "51e9df950bf07bb7032b85117982087339dcbdc6",
+    "mergeCommit": {
+      "oid": "6f7da3476ead84f1d3751d6ce2cc0ca359232715"
+    },
+    "mergedAt": "2026-09-17T22:03:14Z",
+    "number": 3183,
+    "title": "api: reconcile the two rate-limiter fixes, which are green apart and red together"
+  },
+  {
+    "baseRefOid": "4dc85bae09b032bc61a819efcaf6885e7834c45f",
+    "headRefOid": "9e3921d1ee45d7c4e48664bd29ebd7e6e27398b6",
+    "mergeCommit": {
+      "oid": "a0d7afa759a43c4b1ddca4de76f1bd923aa1c8d5"
+    },
+    "mergedAt": "2026-09-17T19:58:03Z",
+    "number": 3182,
+    "title": "tacho: reserve the gateway credential, and serve a connected app only what its mandate permits"
+  },
+  {
+    "baseRefOid": "522fec3065a7f28fd80b575fb678365305de589d",
+    "headRefOid": "206d550f3adde6bc4de2ba272a14d07f9c751cd5",
+    "mergeCommit": {
+      "oid": "127571f733eb418dd3bdf2569919e33a66126923"
+    },
+    "mergedAt": "2026-09-17T18:30:54Z",
+    "number": 3181,
+    "title": "tacho: persist the local MCP endpoint so tachod can read it"
+  },
+  {
+    "baseRefOid": "e42e997e61b44a2c0d67661ad14c381ca9d63f0c",
+    "headRefOid": "d98301fa11af02d8848ec20aa95ae105ee4d1d43",
+    "mergeCommit": {
+      "oid": "30adbbb3672d54f82b9f62e9fd1cf1704b1c22f2"
+    },
+    "mergedAt": "2026-09-17T20:25:39Z",
+    "number": 3178,
+    "title": "Sweep: the P0/P1 review findings that merged without their fix"
+  },
+  {
+    "baseRefOid": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+    "headRefOid": "a3ff276f192ac8cd2bab88b4aad9fa3b2b2a4c1d",
+    "mergeCommit": {
+      "oid": "40a42ca3f03049e4b2615d444de301b11b9a0c51"
+    },
+    "mergedAt": "2026-09-17T15:44:17Z",
+    "number": 3175,
+    "title": "desktop: ad-hoc sign macOS bundles so an unsigned build can actually be opened"
+  },
+  {
+    "baseRefOid": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+    "headRefOid": "af44da3c44a9eb51d531eef1357942a8b63ec4ef",
+    "mergeCommit": {
+      "oid": "c212383c86cf301eaa977fa60a5bec54b6e8c305"
+    },
+    "mergedAt": "2026-09-17T19:39:03Z",
+    "number": 3174,
+    "title": "desktop: make publish:downloads survive a coloured shell and a republish"
+  },
+  {
+    "baseRefOid": "339fa92b240192e815772415e34dd85d004eecb8",
+    "headRefOid": "a023160574a79625693dc2822cc46447880444f0",
+    "mergeCommit": {
+      "oid": "37e8e265dd5204aa3105847db9d47d1ee2e58bda"
+    },
+    "mergedAt": "2026-09-17T18:29:22Z",
+    "number": 3173,
+    "title": "tacho: digest the Anthropic user email instead of storing the address"
+  },
+  {
+    "baseRefOid": "5ce06b58793679c60190231e177e062b35a02e69",
+    "headRefOid": "8e4bd7851bbd33501750d7d8a3e8a7f4b94224a1",
+    "mergeCommit": {
+      "oid": "5ef612e22f3ba36fd370e00ce14f9100cd920a33"
+    },
+    "mergedAt": "2026-09-18T01:42:58Z",
+    "number": 3171,
+    "title": "billing: measure the plan-change proration direction instead of approximating it"
+  },
+  {
+    "baseRefOid": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+    "headRefOid": "2b73debcedbe2ebb7607185f84120576d938dc2d",
+    "mergeCommit": {
+      "oid": "9d6cf3277503987dc3a13219a36b2d0799a91169"
+    },
+    "mergedAt": "2026-09-17T15:46:42Z",
+    "number": 3170,
+    "title": "Two halves of the tacho outage the rate limiter did not cover: a BigInt that JSON drops, and a daemon with no backoff"
+  },
+  {
+    "baseRefOid": "522fec3065a7f28fd80b575fb678365305de589d",
+    "headRefOid": "e164ece127f983ed55b56ba18ca6b58d18e4a205",
+    "mergeCommit": {
+      "oid": "5aea6daa8ace5040b70d7fd04a297cf4f207db27"
+    },
+    "mergedAt": "2026-09-17T15:47:14Z",
+    "number": 3169,
+    "title": "api: the distributed rate limiter has never written a counter, and tacho paid for it in 503s"
+  },
+  {
+    "baseRefOid": "765fdb7fc01d3d32cf1c1d79a135eb07855a420a",
+    "headRefOid": "3865bac1b77dbbfbd310e1f05cea7b77fb72b7e4",
+    "mergeCommit": {
+      "oid": "33aad5b30408c751b8d86c0ef872f11f0f137c84"
+    },
+    "mergedAt": "2026-09-17T06:14:03Z",
+    "number": 3166,
+    "title": "app: reconcile the nav expectations #3163 and #3164 each half-wrote"
+  },
+  {
+    "baseRefOid": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+    "headRefOid": "6d235d426cd019547b86e7565652d0ac5299d359",
+    "mergeCommit": {
+      "oid": "2c9a3f3ec4149bc43e30ee57d97d8a1cf45d83e3"
+    },
+    "mergedAt": "2026-09-17T06:04:27Z",
+    "number": 3165,
+    "title": "ci: a commit seconds old has no run yet, which is not the same as no run"
+  },
+  {
+    "baseRefOid": "2c9a3f3ec4149bc43e30ee57d97d8a1cf45d83e3",
+    "headRefOid": "267be157d7ba88762ec31323067f75c7d05b9b69",
+    "mergeCommit": {
+      "oid": "765fdb7fc01d3d32cf1c1d79a135eb07855a420a"
+    },
+    "mergedAt": "2026-09-17T06:04:56Z",
+    "number": 3164,
+    "title": "app: Fleet is a fourth primary destination, so Agents overflows on mobile"
+  },
+  {
+    "baseRefOid": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+    "headRefOid": "a694da60346d6e8f4ba01104bedd134f1fd041bc",
+    "mergeCommit": {
+      "oid": "0217c5ff3e5d8962b92e71106950b07204ea09a1"
+    },
+    "mergedAt": "2026-09-17T06:04:12Z",
+    "number": 3163,
+    "title": "app: put Fleet in the nav spec, and keep Agents in the four thumb slots"
+  },
+  {
+    "baseRefOid": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+    "headRefOid": "7e147f6bc6cb8482b278026a651b01a5ac6abc4a",
+    "mergeCommit": {
+      "oid": "88e8e71934597c39bcc671415a611bec9718dcf1"
+    },
+    "mergedAt": "2026-09-17T06:04:04Z",
+    "number": 3162,
+    "title": "desktop: document what a local bundle actually needs"
+  },
+  {
+    "baseRefOid": "78396892c777f21c566f0e9c5d82eb70e5535cb8",
+    "headRefOid": "a538664ebd846c4a8f97dc79ed8b789d08a67792",
+    "mergeCommit": {
+      "oid": "c0f3482ec90be27895f57dc1b91894e8de67d554"
+    },
+    "mergedAt": "2026-09-17T06:03:54Z",
+    "number": 3161,
+    "title": "tacho: the connected tier in the spec, and the gateway comment that still named the host key"
+  },
+  {
+    "baseRefOid": "3c0206f439ddc61088ace6b1fd3714b9eb7b7c11",
+    "headRefOid": "71285772731a5131aefc16cb4b131d3d56aec119",
+    "mergeCommit": {
+      "oid": "69b031027ff3932d20add4d13c887db41e79a84e"
+    },
+    "mergedAt": "2026-09-17T02:45:53Z",
+    "number": 3159,
+    "title": "app: remove the graph-paper background from the content panel"
+  },
+  {
+    "baseRefOid": "9c1cfd2e66b7fe46fb3851a2678837117b0a5985",
+    "headRefOid": "a60131edb5bc60509999f8ac5f5e63e5d5fe5ecc",
+    "mergeCommit": {
+      "oid": "40411258486fd0ca3eeaeb870776a7591e4521ec"
+    },
+    "mergedAt": "2026-09-17T05:45:48Z",
+    "number": 3158,
+    "title": "ci: a main commit no run will ever answer stops being the finding"
+  },
+  {
+    "baseRefOid": "40411258486fd0ca3eeaeb870776a7591e4521ec",
+    "headRefOid": "cf5573aa203c0a21d761f68143d25daf29e11ecc",
+    "mergeCommit": {
+      "oid": "6415b815f12ae8feb2b7440d07450ae709c70b95"
+    },
+    "mergedAt": "2026-09-17T05:46:10Z",
+    "number": 3156,
+    "title": "desktop: wear the hive, and cut light, dark and maskable icons from one source"
+  },
+  {
+    "baseRefOid": "6415b815f12ae8feb2b7440d07450ae709c70b95",
+    "headRefOid": "8e93670a005f105875cfd0f146af59814d704f0f",
+    "mergeCommit": {
+      "oid": "78396892c777f21c566f0e9c5d82eb70e5535cb8"
+    },
+    "mergedAt": "2026-09-17T05:47:32Z",
+    "number": 3154,
+    "title": "iam: a machine key may invoke only what its purpose is for"
+  },
+  {
+    "baseRefOid": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+    "headRefOid": "540595d9e3c3428a742cfae96eadb84ad0a1fc46",
+    "mergeCommit": {
+      "oid": "5fb695c9aa9fb173a2604202746ebdb7102b3ec3"
+    },
+    "mergedAt": "2026-09-17T00:02:49Z",
+    "number": 3144,
+    "title": "web: carry the LinkedIn Insight Tag on every published page"
+  },
+  {
+    "baseRefOid": "52cd30adc09a30709e120efe2981fc29e700c95a",
+    "headRefOid": "0f298746f6dbf3c7368d29807fc7e9772667bd14",
+    "mergeCommit": {
+      "oid": "9c1cfd2e66b7fe46fb3851a2678837117b0a5985"
+    },
+    "mergedAt": "2026-09-17T05:43:37Z",
+    "number": 3140,
+    "title": "billing: provision an org onto enterprise with a credit floor it cannot exhaust"
+  },
+  {
+    "baseRefOid": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+    "headRefOid": "a119bf5995ecb733180a1c101fd70c39498e9e6a",
+    "mergeCommit": {
+      "oid": "3c0206f439ddc61088ace6b1fd3714b9eb7b7c11"
+    },
+    "mergedAt": "2026-09-17T02:17:59Z",
+    "number": 3139,
+    "title": "billing: bind production to the Stripe sandbox end-to-end — plan prices, the chat upgrade card, and production billing.plans"
+  },
+  {
+    "baseRefOid": "583d7f87f89874ae7dcb0a162b19387c38733aa1",
+    "headRefOid": "1216d1ebe01b2de37603e8aac117acfa25742806",
+    "mergeCommit": {
+      "oid": "52cd30adc09a30709e120efe2981fc29e700c95a"
+    },
+    "mergedAt": "2026-09-17T00:31:49Z",
+    "number": 3134,
+    "title": "desktop: the control plane for every AI app on this machine, developer or not"
+  },
+  {
+    "baseRefOid": "33aad5b30408c751b8d86c0ef872f11f0f137c84",
+    "headRefOid": "871432aaf667dbc33e79ce786b414344bb5f61b1",
+    "mergeCommit": {
+      "oid": "522fec3065a7f28fd80b575fb678365305de589d"
+    },
+    "mergedAt": "2026-09-17T08:51:58Z",
+    "number": 2997,
+    "title": "Mission Control app rebuild (integration: app-rebuild → main)"
+  }
+]
