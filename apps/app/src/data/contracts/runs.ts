@@ -31,6 +31,24 @@ export const RunSummary = z.object({
 export type RunSummary = z.infer<typeof RunSummary>;
 
 /**
+ * The witness verdict the rollup recorded (spec §8.5, §12.8; ADR-064), from
+ * the closed vocabulary the runner writes. Only `flipped` marks a run proven.
+ * Null when no witness reported on the run or the rollup has not rebuilt it;
+ * a null reads "not recorded", never `unverified`, which is itself a recorded
+ * answer a runner reached.
+ */
+export const ProofVerdict = z.enum([
+  "flipped",
+  "failing",
+  "unmoved",
+  "unsatisfied",
+  "tampered",
+  "unverified",
+  "waived",
+]);
+export type ProofVerdict = z.infer<typeof ProofVerdict>;
+
+/**
  * Where the run's actions were observed from (spec §8.4). `observe` records
  * what an agent did and gives Oxagen no connection point, so every direct
  * command is refused: a page draws the controls disabled rather than offering
@@ -112,6 +130,7 @@ export const RunRow = z.object({
   name: z.string().min(1).nullable(),
   summary: RunSummary.nullable(),
   replayGrade: ReplayGrade.nullable(),
+  verdict: ProofVerdict.nullable(),
   enforcementTier: EnforcementTier,
   /** Empty while the run is live, or where the seal recorded none. */
   completenessGaps: z.array(CompletenessGap),

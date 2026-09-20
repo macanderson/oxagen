@@ -19,6 +19,7 @@ import type { RunMachine, RunModel, RunRow } from "@/data/contracts/runs";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
 import { eyebrow, mono } from "@/ui/control-styles";
+import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { GeneratedSummary } from "@/ui/generated-summary";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
@@ -193,12 +194,10 @@ export function RunHeader({
           )}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <StatusBadge status={run.status} />
-            <span
-              data-testid="run-tier"
-              className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
-            >
-              {t(`tier.${run.enforcementTier}`)}
-            </span>
+            <EnforcementTierBadge
+              tier={run.enforcementTier}
+              testId="run-tier"
+            />
             {run.replayGrade === null ? null : (
               <ReplayGradeBadge grade={run.replayGrade} />
             )}

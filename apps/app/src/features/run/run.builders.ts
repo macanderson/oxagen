@@ -60,6 +60,7 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
       model: "z-ai/glm-flash-latest",
     },
     replayGrade: "fork",
+    verdict: "flipped",
     enforcementTier: "harness",
     completenessGaps: [],
     canSummarize: true,

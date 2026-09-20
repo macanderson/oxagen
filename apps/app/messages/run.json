@@ -287,11 +287,6 @@
       "chain_break": "the hash chain does not hold end to end",
       "telemetry_gap": "telemetry stopped for part of the run"
     },
-    "tier": {
-      "gateway": "observed at the gateway",
-      "harness": "observed at the harness",
-      "observe": "observed from the side"
-    },
     "chain": {
       "title": "Chain and seal",
       "hashRule": "Hash rule",

@@ -1622,7 +1622,9 @@ type Messages = {
         agent: string;
         operator: string;
         status: string;
+        tier: string;
         replay: string;
+        verdict: string;
         cost: string;
         frames: string;
         started: string;
@@ -1630,6 +1632,18 @@ type Messages = {
       noSummary: string;
       notRecorded: string;
       basisNotRecorded: string;
+      verdict: {
+        flipped: string;
+        failing: string;
+        unmoved: string;
+        unsatisfied: string;
+        tampered: string;
+        unverified: string;
+        waived: string;
+      };
+      legend: string;
+      unpriced: string;
+      unpricedLink: string;
       source: {
         ledger: string;
         tacho: string;
@@ -2702,11 +2716,6 @@ type Messages = {
       unobserved_tail: string;
       chain_break: string;
       telemetry_gap: string;
-    };
-    tier: {
-      gateway: string;
-      harness: string;
-      observe: string;
     };
     chain: {
       title: string;
@@ -4245,6 +4254,11 @@ type Messages = {
         label: string;
         help: string;
       };
+    };
+    enforcementTier: {
+      gateway: string;
+      harness: string;
+      observe: string;
     };
     readFailure: {
       denied: string;
