@@ -3,6 +3,7 @@
 // decision and rule per tool, and what the agent cannot see. The decision is
 // the runtime pipeline's own; this section prints it and nothing stronger.
 import { useLocale, useTranslations } from "next-intl";
+import { Fragment } from "react";
 import type { Toolbelt } from "@/data/contracts/agents";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
@@ -10,6 +11,7 @@ import { formatCount } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, Table } from "@/ui/table";
 import { Facts, Instant, NotRecordedValue, Panel } from "./parts";
+import { ToolSchema } from "./tool-schema";
 
 function Computation({ belt }: { belt: Toolbelt }) {
   const t = useTranslations("agents.detail.toolbelt");
@@ -85,29 +87,45 @@ function Tools({ tools }: { tools: Toolbelt["tools"] }) {
           ]}
         >
           {tools.map((tool) => (
-            <tr key={tool.name} data-testid="belt-tool">
-              <td className={cell}>
-                <span className={`${mono} break-all`}>{tool.name}</span>
-                {tool.server === null ? null : (
-                  <span
-                    className={`${mono} block text-xs text-muted-foreground`}
-                  >
-                    {tool.server}
-                  </span>
-                )}
-              </td>
-              <td className={cell}>{tool.category ?? <NotRecordedValue />}</td>
-              <td className={cell}>{t(`risk.${tool.riskLevel}`)}</td>
-              <td className={cell} data-decision={tool.decision}>
-                {t(`decision.${tool.decision}`)}
-              </td>
-              <td className={cell}>
-                <span className={mono}>{tool.rule}</span>
-              </td>
-              <td className={cell}>
-                {tool.readOnly ? t("readOnly") : t("writes")}
-              </td>
-            </tr>
+            <Fragment key={tool.name}>
+              <tr data-testid="belt-tool">
+                <td className={cell}>
+                  <span className={`${mono} break-all`}>{tool.name}</span>
+                  {tool.server === null ? null : (
+                    <span
+                      className={`${mono} block text-xs text-muted-foreground`}
+                    >
+                      {tool.server}
+                    </span>
+                  )}
+                </td>
+                <td className={cell}>
+                  {tool.category ?? <NotRecordedValue />}
+                </td>
+                <td className={cell}>{t(`risk.${tool.riskLevel}`)}</td>
+                <td className={cell} data-decision={tool.decision}>
+                  {t(`decision.${tool.decision}`)}
+                </td>
+                <td className={cell}>
+                  <span className={mono}>{tool.rule}</span>
+                </td>
+                <td className={cell}>
+                  {tool.readOnly ? t("readOnly") : t("writes")}
+                </td>
+              </tr>
+              {/*
+               * The schema in a row of its own: a JSON Schema in one of six
+               * columns is unreadable. On a phone the shell turns each row
+               * into a labelled card (features/shell/card-tables.ts), and a
+               * spanning cell takes no label, so the schema reads as a block
+               * under its tool rather than a field with a wrong name.
+               */}
+              <tr data-testid="belt-tool-schema">
+                <td className={`${cell} pt-0`} colSpan={6}>
+                  <ToolSchema tool={tool} />
+                </td>
+              </tr>
+            </Fragment>
           ))}
         </Table>
       )}

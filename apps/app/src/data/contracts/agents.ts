@@ -149,6 +149,17 @@ export const Toolbelt = z.object({
       decision: z.enum(["allow", "require_approval"]),
       rule: z.string().min(1),
       readOnly: z.boolean(),
+      /**
+       * The JSON Schema the model is handed for this tool. Null when nothing
+       * records one, and null when the schema is over the size the belt
+       * carries inline; `schemaTruncated` tells the two apart.
+       */
+      inputSchema: z.record(z.string(), z.unknown()).nullable(),
+      /** Where the schema came from; null exactly when none resolved. */
+      schemaOrigin: z.enum(["declared", "imported"]).nullable(),
+      /** SHA-256 over the canonical schema JSON; present whenever one resolved. */
+      schemaDigest: z.string().nullable(),
+      schemaTruncated: z.boolean(),
     }),
   ),
   cannotSee: z.array(

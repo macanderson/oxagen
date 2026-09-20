@@ -138,6 +138,12 @@ export function toToolbelt(
       decision: tool.decision,
       rule: tool.rule,
       readOnly: tool.readOnly,
+      // The four schema fields are optional on the contract, so a control
+      // plane that predates them reports no schema rather than undefined.
+      inputSchema: tool.inputSchema ?? null,
+      schemaOrigin: tool.schemaOrigin ?? null,
+      schemaDigest: tool.schemaDigest ?? null,
+      schemaTruncated: tool.schemaTruncated ?? false,
     })),
     cannotSee: out.cannotSee.map((tool) => ({
       name: tool.name,

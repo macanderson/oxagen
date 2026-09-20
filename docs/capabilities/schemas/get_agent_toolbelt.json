@@ -1,7 +1,7 @@
 {
   "name": "get_agent_toolbelt",
   "domain": "agent",
-  "description": "Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, how the belt was computed, what the model receives in full or searchable mode, and what the agent cannot see.",
+  "description": "Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, each tool's input schema and schema digest, how the belt was computed, what the model receives in full or searchable mode, and what the agent cannot see.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -191,6 +191,44 @@
               "minLength": 1
             },
             "readOnly": {
+              "type": "boolean"
+            },
+            "inputSchema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "schemaOrigin": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "declared",
+                    "imported"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "schemaDigest": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "schemaTruncated": {
               "type": "boolean"
             }
           },

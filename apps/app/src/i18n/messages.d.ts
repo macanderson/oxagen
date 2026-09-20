@@ -238,6 +238,20 @@ type Messages = {
           };
           readOnly: string;
           writes: string;
+          schema: {
+            title: string;
+            none: string;
+            origin: {
+              declared: string;
+              imported: string;
+            };
+            digest: string;
+            copySchema: string;
+            copyDigest: string;
+            copied: string;
+            copyFailed: string;
+            truncated: string;
+          };
         };
         cannotSee: {
           title: string;
