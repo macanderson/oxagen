@@ -89,6 +89,42 @@
                 ]
               }
             },
+            "missingClassWindows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tokenClass": {
+                    "type": "string",
+                    "enum": [
+                      "input_uncached",
+                      "cache_read",
+                      "cache_write_5m",
+                      "cache_write_1h",
+                      "output",
+                      "reasoning",
+                      "server_tool_request",
+                      "embedding_input",
+                      "rerank",
+                      "image",
+                      "video_second"
+                    ]
+                  },
+                  "unpricedFrom": {
+                    "type": "string"
+                  },
+                  "unpricedTo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "tokenClass",
+                  "unpricedFrom",
+                  "unpricedTo"
+                ],
+                "additionalProperties": false
+              }
+            },
             "fullyUnpriced": {
               "type": "boolean"
             }
@@ -101,6 +137,7 @@
             "firstSeen",
             "lastSeen",
             "missingClasses",
+            "missingClassWindows",
             "fullyUnpriced"
           ],
           "additionalProperties": false

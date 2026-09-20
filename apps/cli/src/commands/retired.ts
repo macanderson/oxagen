@@ -15,7 +15,7 @@ export function printRetiredNotice(what: string): void {
 }
 
 /**
- * The notice for a command that has been renamed and still works (ADR-103
+ * The notice for a command that has been renamed and still works (ADR-112
  * phase 1). It differs from `printRetiredNotice` in both halves: it leaves the
  * exit code alone, because the command runs and a script that depends on it
  * keeps passing, and it names the replacement.

@@ -174,6 +174,23 @@ describe("captureLead — marketing consent on conflict", () => {
     expect(onConflictSets[0]).toMatchObject({ marketingConsent: false });
   });
 
+  it("clears the CRM sync marker on every resubmission", async () => {
+    const onConflictSets: Record<string, unknown>[] = [];
+    h.tx = makeFakeTx({
+      inserts: [[{ id: "lead-1", email: "ada@example.com" }]],
+      onConflictSets,
+    });
+    await captureLead({
+      email: "ada@example.com",
+      firstName: "Ada",
+      lastName: "Lovelace",
+    });
+    // The record id is kept (the next sync updates the same person); only
+    // the "seen" marker is cleared so the backfill finds the new version.
+    expect(onConflictSets[0]).toMatchObject({ crmSyncedAt: null });
+    expect(onConflictSets[0]).not.toHaveProperty("crmRecordId");
+  });
+
   it("omits marketingConsent from the conflict set when the caller left it unset", async () => {
     const onConflictSets: Record<string, unknown>[] = [];
     h.tx = makeFakeTx({

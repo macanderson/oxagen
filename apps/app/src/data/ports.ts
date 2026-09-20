@@ -74,6 +74,7 @@ import type {
   SteeringFreshness,
 } from "./contracts/steering";
 import type {
+  ApprovalRuleSet,
   CredentialGrantPage,
   KillSwitchBoard,
   ToolVersionPage,
@@ -185,8 +186,9 @@ export interface DataSource {
   };
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:
-   * list_agents, one cursor page of the workspace's identities, caller
-   * features/agents/agents.tsx; get_agent, the identity with its credentials,
+   * list_agents, one cursor page of the workspace's identities, callers
+   * features/agents/agents.tsx and features/tools/tools.tsx (the grant
+   * dialog's agent picker); get_agent, the identity with its credentials,
    * roles, hosts and cached definition, callers features/agents/agent.tsx and
    * agent-source.tsx; get_agent_toolbelt, the computed belt, and
    * list_incidents narrowed to the agent, one cursor page, caller
@@ -350,7 +352,7 @@ export interface DataSource {
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
   };
   /**
-   * The Tools page's three noBillingGate reads on the workspace (#2958), each
+   * The Tools page's four noBillingGate reads on the workspace (#2958), each
    * role-checked in its handler (INV-29); caller: features/tools/tools.tsx.
    */
   tools: {
@@ -366,5 +368,7 @@ export interface DataSource {
     ): Promise<Read<CredentialGrantPage>>;
     /** list_kill_switches: the switches reaching this workspace, with the deny generation */
     killSwitches(ctx: WsCtx): Promise<Read<KillSwitchBoard>>;
+    /** list_approval_rules: the workspace's auto-approval rules with their 30-day counters */
+    approvalRules(ctx: WsCtx): Promise<Read<ApprovalRuleSet>>;
   };
 }

@@ -191,7 +191,36 @@ async function assertToolsWithinCeiling(
   tools: readonly string[],
   now: Date,
 ): Promise<void> {
-  if (tools.length === 0) return;
+  const exceeded = await toolsBeyondCeiling(tx, ctx, tools, now);
+  if (exceeded === "no_principal") {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "delegation_ceiling",
+      message: "The committer has no active principal to grant from",
+    });
+  }
+  if (exceeded.length > 0) {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "delegation_ceiling",
+      message: `The definition names tools you do not hold: ${exceeded.join(", ")}`,
+    });
+  }
+}
+
+/**
+ * The capabilities in `tools` the user's own human principal is denied, or
+ * `no_principal` when the user holds no active principal in the org to
+ * grant from. `propose_agent` reads the list to fail its authority check;
+ * `commit_agent_definition` refuses on it.
+ */
+export async function toolsBeyondCeiling(
+  tx: Tx,
+  ctx: { orgId: string; workspaceId: string; userId: string },
+  tools: readonly string[],
+  now: Date,
+): Promise<string[] | "no_principal"> {
+  if (tools.length === 0) return [];
   const [human] = await tx
     .select({ id: schema.principals.id })
     .from(schema.principals)
@@ -204,13 +233,7 @@ async function assertToolsWithinCeiling(
       ),
     )
     .limit(1);
-  if (!human) {
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "delegation_ceiling",
-      message: "The committer has no active principal to grant from",
-    });
-  }
+  if (!human) return "no_principal";
   const snapshot = await fetchAgentRunAuthz({
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -218,7 +241,7 @@ async function assertToolsWithinCeiling(
     humanPrincipalId: null,
     now,
   });
-  const exceeded = tools.filter(
+  return tools.filter(
     (capability) =>
       resolveIam({
         principal: {
@@ -241,13 +264,6 @@ async function assertToolsWithinCeiling(
         now,
       }).outcome === "deny",
   );
-  if (exceeded.length > 0) {
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "delegation_ceiling",
-      message: `The definition names tools you do not hold: ${exceeded.join(", ")}`,
-    });
-  }
 }
 
 /** Tries after the first unique violation on (agent, version); each try re-reads the latest row. */

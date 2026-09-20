@@ -4,10 +4,10 @@
 // lane adds no route), and a value the page does not know falls back to the
 // default rather than failing the page.
 //
-// Four of the mockup's six tabs are backed today: the three #2958's
-// capabilities back, and the Mandates ledger #2957 brought. Policy and
-// Auto-approvals are still their own lanes; each adds its name to TOOLS_TABS
-// and its case to the body, and nothing else here moves.
+// Five of the mockup's six tabs are backed today: the three #2958's
+// capabilities back, the Mandates ledger #2957 brought, and Auto-approvals
+// over the ADR-070 rule set. Policy is still its own lane; it adds its name to
+// TOOLS_TABS and its case to the body, and nothing else here moves.
 import type {
   KillSwitch,
   KillSwitchKind,
@@ -20,6 +20,7 @@ export const TOOLS_TABS = [
   "connections",
   "switches",
   "mandates",
+  "autoapprovals",
 ] as const;
 export type ToolsTab = (typeof TOOLS_TABS)[number];
 
@@ -166,4 +167,94 @@ export function splitTags(raw: string): string[] {
         .filter((tag) => tag !== ""),
     ),
   ];
+}
+
+/**
+ * A comma-separated list as the values it names, in order, each trimmed, blank
+ * entries dropped, and each value once.
+ *
+ * A target glob is `z.string().min(1).max(256)`, so `vendor:* prod` is one
+ * legal glob. It cannot go through `splitTags`, which also splits on
+ * whitespace: that would turn the one glob into `vendor:*` and `prod`, and the
+ * first of those admits every vendor target the author did not write. The
+ * comma is the delimiter the allow-list hint documents and the one the editor
+ * writes the stored globs back with.
+ */
+export function splitCommas(raw: string): string[] {
+  return [
+    ...new Set(
+      raw
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => value !== ""),
+    ),
+  ];
+}
+
+/**
+ * True when `split` gives `values` back, one for one and in order, from the
+ * text a field shows them as: `values.join(separator)`.
+ *
+ * A form that shows a stored list as delimited text and reads it back has one
+ * value it cannot carry: one that contains the delimiter. A target glob and a
+ * tool pattern are each `z.string().min(1).max(256)`, so `vendor:*,prod` is one
+ * legal glob, and a comma-separated field shows it as two globs, the first of
+ * which admits every vendor target the author did not write. The only sound
+ * test is the round trip itself, so a stored list is edited in a field only
+ * when this says the field would write it back unchanged.
+ */
+export function carriedBy(
+  values: readonly string[],
+  separator: string,
+  split: (raw: string) => string[],
+): boolean {
+  const back = split(values.join(separator));
+  return (
+    back.length === values.length &&
+    back.every((value, index) => value === values[index])
+  );
+}
+
+/**
+ * `measure = value` lines as the pairs they name, in order, or null when a
+ * line has no `=`, an empty side, or repeats a measure.
+ *
+ * The auto-approval dialog writes its ceilings and allow lists this way, one
+ * measure per line. A malformed line is refused whole rather than skipped,
+ * because a rule that silently lost a ceiling releases more calls than the
+ * person wrote it to.
+ */
+export function parseMeasureLines(
+  raw: string,
+): readonly (readonly [measure: string, value: string])[] | null {
+  const pairs: (readonly [string, string])[] = [];
+  const seen = new Set<string>();
+  for (const line of splitLines(raw)) {
+    const at = line.indexOf("=");
+    if (at < 0) return null;
+    const measure = line.slice(0, at).trim();
+    const value = line.slice(at + 1).trim();
+    if (measure === "" || value === "" || seen.has(measure)) return null;
+    seen.add(measure);
+    pairs.push([measure, value]);
+  }
+  return pairs;
+}
+
+/** ISO weekdays as `tools.autoApprovals.days` keys them, Monday first. */
+const WEEKDAY_KEYS = ["1", "2", "3", "4", "5", "6", "7"] as const;
+export type WeekdayKey = (typeof WEEKDAY_KEYS)[number];
+
+/**
+ * The catalogue key for an ISO weekday (1 is Monday, 7 is Sunday). The return
+ * is a literal union rather than `String(day)`, so the translator's key type
+ * and the catalog-used arch test can both see which keys are read. The
+ * contract bounds a rule's days to 1–7, so any other value is a bug upstream.
+ */
+export function weekdayKey(day: number): WeekdayKey {
+  const key = WEEKDAY_KEYS[day - 1];
+  if (key === undefined) {
+    throw new RangeError(`not an ISO weekday: ${String(day)}`);
+  }
+  return key;
 }

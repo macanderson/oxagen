@@ -144,8 +144,28 @@ export const leads = cmsSchema.table(
     message: text("message"),
     /** Explicit marketing-contact consent (defaults true; the form states it). */
     marketingConsent: boolean("marketing_consent").notNull().default(true),
+    // CRM sync ----------------------------------------------------------------
+    /**
+     * The Attio person record this lead was last upserted into, null until the
+     * first successful sync. The sync (apps/api/src/lib/cms/crm-sync.ts) runs
+     * after the Postgres write returns, so a row with `crmSyncedAt` null is a
+     * lead the CRM has not seen yet, and `pnpm --filter @oxagen/api
+     * cms:crm-backfill` re-syncs those rows.
+     */
+    crmRecordId: text("crm_record_id"),
+    crmSyncedAt: timestamp("crm_synced_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    /** Last sync failure, cleared on success; the writer caps it at 500. */
+    crmSyncError: text("crm_sync_error"),
   },
   (t) => ({
+    // Partial: the backfill only ever asks "which leads has the CRM not seen",
+    // so index exactly that set rather than every row.
+    crmPendingIdx: index("cms_leads_crm_pending_idx")
+      .on(t.createdAt)
+      .where(sql`${t.crmSyncedAt} IS NULL`),
     // cms_leads_email_idx was dropped (2026-07-11 audit §4.2): duplicate of
     // the email.unique() constraint declared above (citext, both unique).
     trackingIdx: index("cms_leads_tracking_code_idx").on(t.trackingCode),

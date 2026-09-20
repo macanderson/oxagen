@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp, agent
 **Sensitivity:** high
 **Metering:** none (`noBillingGate`, a settings write)
+**App:** Tools › Auto-approvals › Create rule, and Edit on a row. The app reads the set, splices the one rule in, and writes the whole set back with the read as `replaces` and the rule's id in `saving`. An edit also carries the rule as the dialog rendered it, and the app refuses the save when the read no longer matches it, so a rule changed while the dialog was open is not written back from the stale editor. A rule whose tool pattern holds a line break or whose allow-list glob holds a comma opens with no **Save**: those are the delimiters the fields split on, so saving any field would write the pattern back as two and widen the rule. Edit such a rule here; it can still be switched off or deleted in the app.
 
 ## Intent
 
@@ -19,6 +20,13 @@ first. An agent's call waits for a person (`agent.requiresApproval`).
 | Field | Type | Notes |
 | --- | --- | --- |
 | `rules` | `ApprovalRuleBody[]` | Up to 256. An empty array clears the clause. |
+| `replaces` | `ApprovalRuleBody[]`, optional | The set the caller read and edited. The write is refused as `rule_set_changed` unless the stored rules still match it, so an edit to one rule cannot write back a rule someone else deleted or switched off meanwhile. |
+| `saving` | `string[]`, optional | Ids of rules to check and stamp even when sent back unchanged. |
+
+A rule sent back exactly as stored keeps its stamp: only new and changed
+rules, and the ones `saving` names, run the role check and are re-stamped. An
+edit to one rule therefore cannot re-authorise another rule that is held back
+as `consequences_changed`.
 
 A rule body is the rule shape without `createdBy`, `createdAt` and
 `authoredConsequences`, which the handler records. Every condition defaults
@@ -53,6 +61,7 @@ every consequence the rules' tools carry.
 | `forbidden` | `no_role_covers_all_tags` | No single org role is accountable for every consequence the matched tools carry together. |
 | `conflict` | `no_tool_matches` | A tool pattern matches no declared, enabled tool in this workspace. |
 | `conflict` | `measure_not_declared` | A condition names a measure a matched tool does not declare. |
+| `conflict` | `rule_set_changed` | `replaces` no longer matches the stored rules; nothing was written. |
 | `not_found` | `workspace_not_found` | The workspace is not readable in this scope. |
 
 ## SPEC references

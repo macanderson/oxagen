@@ -89,7 +89,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const { runInTenantScope } = await import("@oxagen/tenancy");
     const { eq } = await import("drizzle-orm");
     const { clearDecisionRulesCache } = await import("@oxagen/rules");
-    const { writeRules } = await import("./_approval_rule");
+    const { readRules, writeRules } = await import("./_approval_rule");
     const { approvalRuleListHandler } = await import("./approval_rule.list");
     const { approvalRuleSetHandler } = await import("./approval_rule.set");
     const { approvalRuleDeleteHandler } = await import(
@@ -144,8 +144,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       businessHours: null,
     };
 
-    const set = (userId: string, rules: unknown[]) =>
-      inScope(() => approvalRuleSetHandler({ rules } as never, ctx(userId)));
+    const set = (userId: string, rules: unknown[], saving?: string[]) =>
+      inScope(() =>
+        approvalRuleSetHandler({ rules, saving } as never, ctx(userId)),
+      );
     const list = (userId: string) =>
       inScope(() => approvalRuleListHandler({}, ctx(userId)));
 
@@ -588,11 +590,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // refused a step later by the consequence gate, because accountability
       // for money is not seniority. Every other handler in this file takes an
       // Admin; only authoring a rule over this tool does not.
+      // Explicitly save the existing rule to exercise its authoring gate.
       // No user row: the consequence gate refuses before anything reads a
       // public id, and the role is the double's.
       const adminOnlyId = randomUUID();
       doubles.roles.set(adminOnlyId, "Admin");
-      await expect(set(adminOnlyId, [RULE])).rejects.toSatisfy(
+      await expect(set(adminOnlyId, [RULE], [RULE.id])).rejects.toSatisfy(
         forbidden("org_role_required"),
       );
     });
@@ -626,12 +629,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where(eq(schema.toolVersions.id, paymentVersionId)),
       );
       try {
-        await expect(set(adminId, [RULE])).rejects.toSatisfy(
+        await expect(set(adminId, [RULE], [RULE.id])).rejects.toSatisfy(
           forbidden("org_role_required"),
         );
         // An Owner is accountable for money and may still author it, so the
         // gate refuses the unaccountable caller rather than the tool.
-        await expect(set(ownerUserId, [RULE])).resolves.toBeDefined();
+        await expect(set(ownerUserId, [RULE], [RULE.id])).resolves.toBeDefined();
       } finally {
         await withSystemDb((tx) =>
           tx
@@ -713,6 +716,94 @@ describe.skipIf(!process.env.DATABASE_URL)(
             .where(eq(schema.toolVersions.id, paymentVersionId)),
         );
       }
+    });
+
+    it("refuses a write whose `replaces` no longer matches the stored set, and writes nothing", async () => {
+      // The one-rule save in the app reads the set, splices one rule in and
+      // sends the read back as `replaces`. A rule deleted in between must not
+      // be written back by that save.
+      const other = { ...RULE, id: "release-tooling" };
+      await set(ownerUserId, [RULE, other]);
+      const read = [RULE, other];
+      await inScope(() =>
+        approvalRuleDeleteHandler({ ruleId: other.id }, ctx(ownerUserId)),
+      );
+      const before = await settingsOf();
+      await expect(
+        inScope(() =>
+          approvalRuleSetHandler(
+            {
+              rules: [{ ...RULE, name: "Edited" }, other],
+              replaces: read,
+              saving: [RULE.id],
+            } as never,
+            ctx(ownerUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("rule_set_changed"));
+      expect(await settingsOf()).toEqual(before);
+
+      // Against the set as it stands now, the same edit goes through.
+      const out = await inScope(() =>
+        approvalRuleSetHandler(
+          {
+            rules: [{ ...RULE, name: "Edited" }],
+            replaces: [RULE],
+            saving: [RULE.id],
+          } as never,
+          ctx(ownerUserId),
+        ),
+      );
+      expect(out.items.map((r) => [r.id, r.name])).toEqual([
+        [RULE.id, "Edited"],
+      ]);
+    });
+
+    it("keeps an unchanged rule's stamp when another rule is edited, and re-stamps a rule `saving` names", async () => {
+      // Re-stamping an unchanged rule would re-authorise it without anyone
+      // choosing to: a rule held back as `consequences_changed` would start
+      // releasing calls because a different rule was edited.
+      const other = { ...RULE, id: "release-tooling" };
+      await set(ownerUserId, [RULE, other]);
+      const before = (await list(ownerUserId)).items.find(
+        (r) => r.id === other.id,
+      )!;
+      // Clear the stored stamp on the other rule, so a re-stamp would show.
+      await inScope(() =>
+        withTenantDb(async (tx) => {
+          const stored = await readRules(tx, workspaceId);
+          await writeRules(
+            tx,
+            workspaceId,
+            stored.map((r) =>
+              r.id === other.id ? { ...r, authoredConsequences: [] } : r,
+            ),
+          );
+        }),
+      );
+
+      const edited = await inScope(() =>
+        approvalRuleSetHandler(
+          { rules: [{ ...RULE, name: "Edited" }, other] } as never,
+          ctx(ownerUserId),
+        ),
+      );
+      const kept = edited.items.find((r) => r.id === other.id)!;
+      expect(kept.authoredConsequences).toEqual([]);
+      expect(kept.createdAt).toBe(before.createdAt);
+
+      const resaved = await inScope(() =>
+        approvalRuleSetHandler(
+          {
+            rules: [{ ...RULE, name: "Edited" }, other],
+            saving: [other.id],
+          } as never,
+          ctx(ownerUserId),
+        ),
+      );
+      expect(
+        resaved.items.find((r) => r.id === other.id)!.authoredConsequences,
+      ).toEqual(["moves_money"]);
     });
 
     it("refuses two rules under one id and leaves the stored document as it was", async () => {
