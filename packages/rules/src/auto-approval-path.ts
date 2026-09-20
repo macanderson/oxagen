@@ -25,7 +25,7 @@
  * never sees it.
  */
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
-import { HandlerError } from "@oxagen/oxagen";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { loadRuleSetIn, lockDecisionRulesIn } from "./rule-store";
 import { policyApprover } from "@oxagen/oxagen/approval-rules/schemas";
 import { and, eq } from "drizzle-orm";
