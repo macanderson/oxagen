@@ -3,6 +3,7 @@
     "tabs": {
       "label": "Steering views",
       "records": "Records",
+      "skills": "Skills",
       "proposals": "Proposals",
       "prs": "Context PRs"
     },
@@ -179,6 +180,10 @@
         "pendingApproval": "The change is waiting for approval: {accessRequestId}.",
         "unavailable": "The change could not be made: {code}. Nothing was changed."
       }
+    },
+    "create": {
+      "skill": "Add a skill",
+      "record": "Write a context record"
     }
   }
 }

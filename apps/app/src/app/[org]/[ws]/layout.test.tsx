@@ -5,15 +5,24 @@
 import { renderToReadableStream } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-const { NotFound, requireViewer } = vi.hoisted(() => ({
+const { NotFound, requireViewer, CreateHost } = vi.hoisted(() => ({
   NotFound: class NotFound extends Error {},
   requireViewer: vi.fn((org: string, ws?: string) => {
     if (org === "acme" && ws === "core-platform")
-      return Promise.resolve({ userId: "u1" });
+      return Promise.resolve({
+        userId: "u1",
+        orgSlug: "acme",
+        wsSlug: "core-platform",
+        wsName: "Core platform",
+      });
     return Promise.reject(new NotFound("NEXT_NOT_FOUND"));
   }),
+  CreateHost: vi.fn((props: { org: string; ws: string; wsName: string }) => (
+    <div data-testid="create-host" data-ws={props.ws} />
+  )),
 }));
 vi.mock("@/server/viewer", () => ({ requireViewer }));
+vi.mock("@/features/create", () => ({ CreateHost }));
 
 import WorkspaceLayout from "./layout";
 
@@ -46,6 +55,16 @@ describe("WorkspaceLayout", () => {
     expect(errors).toEqual([]);
   });
 
+  it("mounts the creation wizards' host with the viewer's workspace", async () => {
+    const { html } = await render("acme", "core-platform");
+    expect(html).toContain('data-testid="create-host"');
+    expect(CreateHost.mock.calls[0]?.[0]).toMatchObject({
+      org: "acme",
+      ws: "core-platform",
+      wsName: "Core platform",
+    });
+  });
+
   it("is not found for a non-member workspace slug, and the page never renders", async () => {
     const { html, errors } = await render("acme", "finops");
     expect(errors).toHaveLength(1);
@@ -54,5 +73,6 @@ describe("WorkspaceLayout", () => {
     // component stack in the error template, and that stack carries absolute
     // file paths, so a bare substring matches whatever the checkout is called.
     expect(html).not.toContain('data-testid="page"');
+    expect(html).not.toContain('data-testid="create-host"');
   });
 });

@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { FrameBody } from "../evidence/frame-body";
 import { minimalSession } from "../test-helpers";
 import { scratchPaths } from "./test-support";
@@ -38,6 +38,52 @@ describe("Wal", () => {
       readFileSync(join(paths.wal, "cursor.json"), "utf8"),
     ) as { sealed: Record<string, string> };
     expect(cursor.sealed[uuid]).toBe(session[session.length - 1]?.ts);
+  });
+
+  it("skips a fully shipped session without reading its file again", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const session = minimalSession();
+    const uuid = session[0]?.session_uuid as string;
+    wal.append(session);
+    wal.markShipped(uuid, session[session.length - 1]?.seq as number);
+    // The first pass learns the session's last seq. Every pass after it
+    // answers from the index, so a host holding hundreds of shipped files
+    // does not parse them on each drain and health probe.
+    expect(wal.stats().unshipped).toBe(0);
+    const read = vi.spyOn(wal, "read");
+    expect(wal.unshipped(100)).toEqual([]);
+    expect(wal.stats()).toMatchObject({ sessions: 1, unshipped: 0 });
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("keeps the index current as events arrive after it was filled", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const session = minimalSession();
+    const uuid = session[0]?.session_uuid as string;
+    wal.append(session.slice(0, 2));
+    wal.markShipped(uuid, 1);
+    expect(wal.unshipped(100)).toEqual([]);
+    wal.append(session.slice(2));
+    expect(wal.unshipped(100).map((e) => e.seq)).toEqual(
+      session.slice(2).map((e) => e.seq),
+    );
+    expect(wal.stats().unshipped).toBe(session.length - 2);
+  });
+
+  it("forgets a compacted session, so a new file under its id is read afresh", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const session = minimalSession();
+    const uuid = session[0]?.session_uuid as string;
+    const last = session[session.length - 1]?.seq as number;
+    wal.append(session);
+    wal.markShipped(uuid, last);
+    expect(wal.stats().unshipped).toBe(0);
+    expect(wal.compact(Date.now() + 10 * 86_400_000, 1)).toEqual([uuid]);
+    wal.append(session.slice(0, 1));
+    expect(wal.unshipped(100).map((e) => e.seq)).toEqual([session[0]?.seq]);
   });
 
   it("compacts only sealed, fully shipped, old sessions", () => {

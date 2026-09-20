@@ -256,6 +256,12 @@ export const baseEnvSchema = z.object({
 
   LINEAR_API_KEY: z.string().optional(),
 
+  // ── CRM (Attio) ──────────────────────────────────────────────────────────
+  // Optional: when set, every lead captured by /v1/cms/leads is also upserted
+  // into Attio (apps/api/src/lib/cms/crm-sync.ts). Unset means leads stay in
+  // cms.leads only, which is the local and CI state.
+  ATTIO_API_KEY: z.string().min(1).optional(),
+
   NEXT_PUBLIC_APP_URL: z.string().url(),
   NEXT_PUBLIC_API_URL: z.string().url(),
   // Server-side app origin for plugin OAuth authorize/callback URLs

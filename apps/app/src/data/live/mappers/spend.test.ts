@@ -465,6 +465,18 @@ describe("toUnpricedModels", () => {
           firstSeen: "2026-08-20T00:00:00.000Z",
           lastSeen: "2026-09-15T00:00:00.000Z",
           missingClasses: ["input_uncached", "output"],
+          missingClassWindows: [
+            {
+              tokenClass: "input_uncached",
+              unpricedFrom: "2026-08-20T00:00:00.000Z",
+              unpricedTo: "2026-09-15T00:00:00.000Z",
+            },
+            {
+              tokenClass: "output",
+              unpricedFrom: "2026-08-20T00:00:00.000Z",
+              unpricedTo: "2026-09-15T00:00:00.000Z",
+            },
+          ],
           fullyUnpriced: true,
         },
       ],

@@ -206,7 +206,7 @@ export const publishedRecordSchema = z
     /**
      * Every write path has required agent.context_records.kind since #3302,
      * but the DB-level NOT NULL is a deliberate follow-up migration (see
-     * `20260920140000`'s comment) rather than shipped with the write
+     * `20260920150000`'s comment) rather than shipped with the write
      * requirement itself, so a genuinely unclassified row can still exist.
      * Nullable here for that reason, and because
      * context_record_versions.kind still is (a legacy version

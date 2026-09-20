@@ -288,12 +288,14 @@ import { agentCredentialRotateRoute } from "./routes/v1/agent.credential.rotate"
 import { agentSuspendRoute } from "./routes/v1/agent.suspend";
 import { agentRetireRoute } from "./routes/v1/agent.retire";
 import { agentDefinitionCommitRoute } from "./routes/v1/agent.definition.commit";
+import { agentProposeRoute } from "./routes/v1/agent.propose";
 import { agentToolbeltGetRoute } from "./routes/v1/agent.toolbelt.get";
 import { tachoIncidentListRoute } from "./routes/v1/tacho.incident.list";
 import { spendGetRoute } from "./routes/v1/spend.get";
 import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
 import { skillListRoute } from "./routes/v1/skill.list";
+import { skillProposeRoute } from "./routes/v1/skill.propose";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
 import { findingListRoute } from "./routes/v1/finding.list";
 import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
@@ -618,6 +620,8 @@ orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // The skills a workspace's harness sessions reported at start (#3098): a
 // noBillingGate read of tacho.sessions.
 orgScoped.route("/skills", skillListRoute);
+// A skill added or replaced as a pull request against the main repository (ADR-090).
+orgScoped.route("/skills/propose", skillProposeRoute);
 orgScoped.route("/spend/findings", findingListRoute);
 orgScoped.route("/spend/findings/evidence", findingEvidenceGetRoute);
 orgScoped.route("/spend/findings/fix", findingFixRecordRoute);
@@ -765,6 +769,8 @@ orgScoped.route("/agents/credential/rotate", agentCredentialRotateRoute);
 orgScoped.route("/agents/suspend", agentSuspendRoute);
 orgScoped.route("/agents/retire", agentRetireRoute);
 orgScoped.route("/agents/definition/commit", agentDefinitionCommitRoute);
+// New agent: the definition as a pull request against the main repository, never a row.
+orgScoped.route("/agents/propose", agentProposeRoute);
 orgScoped.route("/agents/toolbelt", agentToolbeltGetRoute);
 orgScoped.route("/agents", agentListRoute);
 // Tamper and integrity incidents on the workspace's hosts.

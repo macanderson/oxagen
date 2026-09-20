@@ -94,6 +94,8 @@ import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
+import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
+import { agentPropose } from "@oxagen/oxagen/contracts/agent.propose";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
@@ -205,6 +207,8 @@ import { contextProposalCreateRoute } from "./context.proposal.create";
 import { contextProposalListRoute } from "./context.proposal.list";
 import { contextProposalDismissRoute } from "./context.proposal.dismiss";
 import { contextPrOpenRoute } from "./context.pr.open";
+import { skillProposeRoute } from "./skill.propose";
+import { agentProposeRoute } from "./agent.propose";
 import { contextPrGetRoute } from "./context.pr.get";
 import { contextPrMergeRoute } from "./context.pr.merge";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
@@ -425,6 +429,38 @@ const ROUTES: ThinRoute[] = [
     capability: contextPrOpen.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "ctr_1" },
+    status: 200,
+  },
+  {
+    file: "skill.propose",
+    route: skillProposeRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: skillPropose.name,
+    body: {
+      origin: "describe",
+      name: "release-notes",
+      body: "---\nname: release-notes\nversion: 0.1.0\nscope: workspace:core\n---\n",
+    },
+    expectedInput: {
+      origin: "describe",
+      name: "release-notes",
+      body: "---\nname: release-notes\nversion: 0.1.0\nscope: workspace:core\n---\n",
+      files: [],
+    },
+    invalidBody: { origin: "describe", name: "Release Notes", body: "x" },
+    status: 200,
+  },
+  {
+    file: "agent.propose",
+    route: agentProposeRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentPropose.name,
+    body: {
+      slug: "perf-watch",
+      harness: "cursor",
+      source: 'schema = "agent-definition/v0.1"\n',
+    },
+    invalidBody: { slug: "Perf Watch", harness: "cursor", source: "x" },
     status: 200,
   },
   {

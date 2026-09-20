@@ -2,26 +2,31 @@
 // renders, each built from the contract-parsed record through the same mapper
 // the live port uses, so a fixture cannot drift from the contract.
 import {
+  toApprovalRuleSet,
   toCredentialGrantPage,
   toKillSwitchBoard,
   toToolVersionPage,
 } from "@/data/live/mappers/tools";
 import type { DataSource } from "@/data/ports";
 import type {
+  ApprovalRuleSet,
   CredentialGrantPage,
   KillSwitchBoard,
   ToolVersionPage,
 } from "@/data/contracts/tools";
 import {
+  ApprovalRuleSet as ApprovalRuleSetShape,
   CredentialGrantPage as CredentialGrantPageShape,
   KILL_SWITCH_BOARD_LIMIT,
   KillSwitchBoard as KillSwitchBoardShape,
   ToolVersionPage as ToolVersionPageShape,
 } from "@/data/contracts/tools";
+import type { AgentPage, AgentStatus } from "@/data/contracts/agents";
 import type { MandateList } from "@/data/contracts/mandates";
 import type { MemberList } from "@/data/contracts/org";
-import { readOk, type Read } from "@/data/read";
+import { type Read, readOk } from "@/data/read";
 import {
+  approvalRuleListOutput,
   credentialGrantListOutput,
   killSwitchListOutput,
   toolVersionListOutput,
@@ -53,6 +58,49 @@ export function killSwitchBoard(
   );
 }
 
+/** One agent as `list_agents` pages it, for the grant dialog's picker. */
+export function agentPageRow(
+  slug: string,
+  status: AgentStatus = "enrolled",
+): AgentPage["agents"][number] {
+  return {
+    id: `agt_${slug.replace(/[^0-9a-z]/g, "")}`,
+    slug,
+    name: slug,
+    agentKey: null,
+    harness: "custom",
+    operatorId: null,
+    status,
+    runs30d: 0,
+    spend30d: null,
+    incidents: 0,
+  };
+}
+
+/** A page of the workspace's agents; `nextCursor` marks it as the first of several. */
+export function agentPage(
+  agents: AgentPage["agents"],
+  nextCursor: string | null = null,
+): AgentPage {
+  return {
+    agents,
+    nextCursor,
+    totals: {
+      identities: agents.length,
+      enrolled: agents.filter((agent) => agent.status === "enrolled").length,
+      tamperIncidents: 0,
+    },
+  };
+}
+
+export function approvalRuleSet(
+  over: Parameters<typeof approvalRuleListOutput>[0] = {},
+): ApprovalRuleSet {
+  return ApprovalRuleSetShape.parse(
+    toApprovalRuleSet(approvalRuleListOutput(over)),
+  );
+}
+
 type ToolsReads = {
   versions?: Read<ToolVersionPage>;
   grants?: Read<CredentialGrantPage>;
@@ -60,6 +108,13 @@ type ToolsReads = {
   /** The Mandates tab's read (#2957); built by `@/test/mandate-views`, which
    * three features share because no feature may reach into another's folder. */
   mandates?: Read<MandateList>;
+  /**
+   * The agents the Mandates tab reads for a reader who may grant. Defaults to
+   * one enrolled agent, since every such reader makes this read; a test that
+   * cares what the picker offers hands its own.
+   */
+  agents?: Read<AgentPage>;
+  approvalRules?: Read<ApprovalRuleSet>;
   /** The switches tab's operator picker (#3147). */
   members?: Read<MemberList>;
 };
@@ -71,6 +126,8 @@ export function toolsSource(reads: ToolsReads) {
     grants: [],
     killSwitches: [],
     mandates: [],
+    agents: [],
+    approvalRules: [],
     members: [],
   };
   const refuse = () => Promise.reject(new Error("not a Tools read"));
@@ -102,7 +159,10 @@ export function toolsSource(reads: ToolsReads) {
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {
-      list: refuse,
+      list: answer(
+        reads.agents ?? readOk(agentPage([agentPageRow("invoice-bot")])),
+        "agents",
+      ),
       get: refuse,
       toolbelt: refuse,
       incidents: refuse,
@@ -139,6 +199,7 @@ export function toolsSource(reads: ToolsReads) {
       versions: answer(reads.versions, "versions"),
       grants: answer(reads.grants, "grants"),
       killSwitches: answer(reads.killSwitches, "killSwitches"),
+      approvalRules: answer(reads.approvalRules, "approvalRules"),
     },
     mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
   };

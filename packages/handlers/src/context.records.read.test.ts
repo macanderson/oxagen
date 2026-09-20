@@ -61,7 +61,7 @@ describe("list_records", () => {
     // path — that path writes no PR, so nothing merges it — but it always
     // carries a real classification now (#3302): the contract requires
     // kind and force on every call, even though the DB-level NOT NULL is a
-    // deliberate follow-up migration (see `20260920140000`'s comment).
+    // deliberate follow-up migration (see `20260920150000`'s comment).
     h.store.records.push({
       ...h.store.records[0]!,
       id: "direct-publish",
