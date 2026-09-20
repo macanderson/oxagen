@@ -48,7 +48,7 @@ export {
   readDeclaredMeasures,
   type DeclaredTool,
 } from "./call-facts";
-export { loadRuleSetIn } from "./rule-store";
+export { loadRuleSetIn, lockDecisionRulesIn } from "./rule-store";
 export {
   ExternalToolAuthorityError,
   createDecisionRulesGate,

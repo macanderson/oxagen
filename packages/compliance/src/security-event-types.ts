@@ -198,6 +198,7 @@ export const SECURITY_EVENT_TYPES = [
   // The rules themselves: written, switched off, or deleted. Emitted by
   // packages/handlers/src/approval_rule.*.ts.
   "approval_rule.changed",
+  "approval_rule.invalidated",
   "approval_rule.deleted",
   // Access review
   "access.review_completed",
@@ -299,4 +300,19 @@ export function isSecurityEventType(value: string): value is SecurityEventType {
 /** Type guard: is `value` a known SecurityOutcome? */
 export function isSecurityOutcome(value: string): value is SecurityOutcome {
   return OUTCOME_SET.has(value);
+}
+
+/** Evidence recorded when a tool change disables a previously authorized rule. */
+export interface ApprovalRuleInvalidationDetail {
+  ruleId: string;
+  tool: string;
+  reason: "classification_changed" | "measure_changed" | "tool_scope_changed";
+  before: ApprovalToolChangeEvidence | null;
+  after: ApprovalToolChangeEvidence;
+}
+
+export interface ApprovalToolChangeEvidence {
+  consequenceTags: readonly string[];
+  measures: unknown;
+  classification: unknown;
 }

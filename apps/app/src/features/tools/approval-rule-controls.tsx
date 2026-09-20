@@ -205,11 +205,7 @@ export function RuleEditor({
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-<<<<<<< ours
     if (pending || refused) return;
-=======
-    if (pending) return;
->>>>>>> theirs
     const parsed = draftOf(
       new FormData(event.currentTarget),
       existing,

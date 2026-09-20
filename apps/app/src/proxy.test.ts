@@ -238,10 +238,7 @@ describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
     ["/acme/core/marketplace/integrations", "/acme/core/tools"],
     ["/acme/core/marketplace/integrations/github", "/acme/core/tools"],
     ["/acme/core/settings/mcp-server-registries", "/acme/core/tools"],
-    [
-      "/acme/core/workbench/tools/skills",
-      "/acme/core/steering?tab=skills",
-    ],
+    ["/acme/core/workbench/tools/skills", "/acme/core/steering?tab=skills"],
     [
       "/acme/core/workbench/tools/skills/release-notes",
       "/acme/core/steering?tab=skills",

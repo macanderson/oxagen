@@ -149,6 +149,39 @@
               ],
               "default": null
             },
+            "disabledReason": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "classification_changed",
+                    "measure_changed",
+                    "tool_scope_changed"
+                  ]
+                },
+                "tool": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "at": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                }
+              },
+              "required": [
+                "code",
+                "tool",
+                "at",
+                "detail"
+              ],
+              "additionalProperties": false
+            },
             "createdBy": {
               "anyOf": [
                 {

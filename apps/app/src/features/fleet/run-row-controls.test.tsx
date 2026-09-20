@@ -116,8 +116,8 @@ describe("run row controls", () => {
       expect(screen.getByTestId("row-command-failure")).toHaveTextContent(
         "This run has ended, so nothing can receive the command.",
       );
+      expect(screen.queryByTestId("row-command-state")).toBeNull();
     });
-    expect(screen.queryByTestId("row-command-state")).toBeNull();
     expect(screen.getByTestId("row-pause-form")).toBeInTheDocument();
   });
 
@@ -134,8 +134,8 @@ describe("run row controls", () => {
       expect(screen.getByTestId("row-command-failure")).toHaveTextContent(
         "No live run took this command.",
       );
+      expect(screen.queryByTestId("row-command-state")).toBeNull();
     });
-    expect(screen.queryByTestId("row-command-state")).toBeNull();
   });
 
   it("names a write that threw before it answered rather than falling silent (negative)", async () => {
@@ -148,8 +148,8 @@ describe("run row controls", () => {
       expect(screen.getByTestId("row-command-failure")).toHaveTextContent(
         "command_failed",
       );
+      expect(screen.queryByTestId("row-command-state")).toBeNull();
     });
-    expect(screen.queryByTestId("row-command-state")).toBeNull();
   });
 
   it("re-reads the table when the person asks, so the status is what says the agent obeyed", async () => {

@@ -166,8 +166,7 @@ export async function writeRules(
       updatedAt: new Date(),
     })
     .where(eq(schema.workspaces.id, workspaceId));
-  // The loader caches for 30 seconds; the process that made the change sees it
-  // at once, and every other process inside that window.
+  // Retained invalidation seam; decision reads no longer use a process cache.
   clearDecisionRulesCache(workspaceId);
 }
 
@@ -200,6 +199,7 @@ export function stamp(
 ): AutoApprovalRule {
   return {
     ...body,
+    disabledReason: undefined,
     createdBy,
     createdAt: at.toISOString(),
     authoredConsequences: authoredConsequences
@@ -326,7 +326,7 @@ export type AuthoredConsequences = ReadonlyMap<string, string[]>;
 
 export async function assertRulesSavable(
   tx: Tx,
-  ctx: CheckedContext,
+  ctx: Pick<CheckedContext, "orgId" | "workspaceId" | "userId" | "apiKeyId">,
   workspaceId: string,
   rules: readonly AutoApprovalRuleBody[],
 ): Promise<AuthoredConsequences> {
@@ -429,7 +429,7 @@ export async function assertRulesSavable(
   }
 
   if (tags.size > 0) {
-    await assertConsequenceRole(ctx, [...tags].sort(), overrides);
+    await assertConsequenceRole(ctx, [...tags].sort(), overrides, tx);
   }
   return authored;
 }
