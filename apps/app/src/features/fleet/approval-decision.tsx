@@ -217,11 +217,11 @@ export function ApprovalDecision({
   /** The code a refused re-read answered; the recorded line stays either way. */
   const [unread, setUnread] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
-  const readGeneration = useRef(0);
+  const readGenerationRef = useRef(0);
   const noteId = `approval-note-${approvalId}`;
 
   function reset() {
-    readGeneration.current += 1;
+    readGenerationRef.current += 1;
     setReading(false);
     setNote("");
     setFailure(null);
@@ -230,11 +230,11 @@ export function ApprovalDecision({
   }
 
   async function load() {
-    const generation = ++readGeneration.current;
+    const generation = ++readGenerationRef.current;
     setReading(true);
     try {
       const result = await readApprovalEligibility(org, ws, approvalId, on);
-      if (generation !== readGeneration.current) return;
+      if (generation !== readGenerationRef.current) return;
       if (result.ok) setFresh(result.value);
       else
         setUnread(
@@ -243,9 +243,9 @@ export function ApprovalDecision({
             : result.code,
         );
     } catch {
-      if (generation === readGeneration.current) setUnread("action_failed");
+      if (generation === readGenerationRef.current) setUnread("action_failed");
     } finally {
-      if (generation === readGeneration.current) setReading(false);
+      if (generation === readGenerationRef.current) setReading(false);
     }
   }
 
