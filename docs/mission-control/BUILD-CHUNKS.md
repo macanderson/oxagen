@@ -121,10 +121,10 @@ Lanes:
 Done when:
 
 - [ ] Rules can be listed, created, edited, enabled, disabled, deleted, and explained
-- [ ] A mandate can be granted from Tools and from a request
-- [ ] Every ledger row opens the mandate page, and page-load walks it
-- [ ] Connections are listed and can be added; servers are listed and registered
-- [ ] Eleven bindings with real proofs
+- [x] A mandate can be granted from Tools and from a request
+- [ ] Every ledger row opens the mandate page, and page-load walks it (the rows link; the `page-load` row waits on the e2e seed, `apps/app/ARCHITECTURE.md` 2026-09-19 known issue)
+- [x] Connections are listed and can be added; servers are listed and registered
+- [ ] Eleven bindings with real proofs (ten bound; `get_auto_eligibility` is the eleventh and is still unbound)
 
 ## Session 3: agents and people
 
