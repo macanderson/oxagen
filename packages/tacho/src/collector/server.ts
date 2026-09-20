@@ -10,8 +10,9 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
-import { chmodSync, existsSync, unlinkSync } from "node:fs";
+import { chmodSync, existsSync, statSync, unlinkSync } from "node:fs";
 import { randomBytes } from "node:crypto";
+import { createConnection } from "node:net";
 import type { TachoHarness } from "../wire";
 import type { ExportFormat } from "./exporters";
 import type { HookReplay } from "./hook-handler";
@@ -271,63 +272,116 @@ export interface CollectorServer {
   close: () => Promise<void>;
 }
 
+/** Only a refused connection establishes that an existing Unix socket is stale. */
+async function removeStaleSocket(socketPath: string): Promise<void> {
+  if (!existsSync(socketPath)) return;
+  if (!statSync(socketPath).isSocket()) {
+    throw new Error(`collector socket path is not a socket: ${socketPath}`);
+  }
+  const stale = await new Promise<boolean>((resolve, reject) => {
+    const probe = createConnection(socketPath);
+    probe.once("connect", () => {
+      probe.destroy();
+      resolve(false);
+    });
+    probe.once("error", (error: NodeJS.ErrnoException) => {
+      probe.destroy();
+      if (error.code === "ECONNREFUSED" || error.code === "ENOENT")
+        resolve(true);
+      else reject(error);
+    });
+    probe.setTimeout(500, () => {
+      probe.destroy();
+      resolve(false);
+    });
+  });
+  if (!stale)
+    throw new Error(`another collector is listening on ${socketPath}`);
+  try {
+    unlinkSync(socketPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
 export function createCollectorServer(
-  api: CollectorApi,
+  api: CollectorApi | (() => CollectorApi | undefined),
   log: (line: string) => void = () => undefined,
 ): CollectorServer {
+  const handle = (
+    req: IncomingMessage,
+    res: ServerResponse,
+    guardPort?: number,
+  ) => {
+    const ready = typeof api === "function" ? api() : api;
+    if (ready === undefined) {
+      send(res, 503, { error: "collector is starting" });
+      return;
+    }
+    createRequestHandler(
+      ready,
+      log,
+      guardPort === undefined ? {} : { guardPort },
+    )(req, res);
+  };
   const servers: Server[] = [];
+  const close = async () => {
+    await Promise.all(
+      servers.map(
+        (server) =>
+          new Promise<void>((resolve) => {
+            server.close(() => resolve());
+            server.closeAllConnections?.();
+          }),
+      ),
+    );
+    servers.length = 0;
+  };
   return {
     listen: async (options) => {
       let port: number | undefined;
-      if (options.socketPath !== undefined) {
-        if (existsSync(options.socketPath)) unlinkSync(options.socketPath);
-        const unix = createServer(createRequestHandler(api, log));
-        servers.push(unix);
-        await new Promise<void>((resolve, reject) => {
-          unix.once("error", reject);
-          unix.listen(options.socketPath, () => {
-            unix.off("error", reject);
-            resolve();
+      try {
+        // Claim the host's port before touching its Unix socket. A competing
+        // daemon must not replace the hook listener and then fail its TCP bind.
+        if (options.port !== undefined) {
+          let boundPort = options.port;
+          const tcp = createServer((req, res) => handle(req, res, boundPort));
+          servers.push(tcp);
+          await new Promise<void>((resolve, reject) => {
+            tcp.once("error", reject);
+            tcp.listen(options.port, options.host ?? "127.0.0.1", () => {
+              tcp.off("error", reject);
+              resolve();
+            });
           });
-        });
-        chmodSync(options.socketPath, 0o600);
-      }
-      if (options.port !== undefined) {
-        // The guard needs the port it will actually answer on. `listen(0)`
-        // picks one, so the handler reads it from the server after binding
-        // rather than from the requested option.
-        let boundPort = options.port;
-        const tcp = createServer((req, res) =>
-          createRequestHandler(api, log, { guardPort: boundPort })(req, res),
-        );
-        servers.push(tcp);
-        await new Promise<void>((resolve, reject) => {
-          tcp.once("error", reject);
-          tcp.listen(options.port, options.host ?? "127.0.0.1", () => {
-            tcp.off("error", reject);
-            resolve();
+          const address = tcp.address();
+          port =
+            typeof address === "object" && address !== null
+              ? address.port
+              : options.port;
+          boundPort = port;
+        }
+        if (options.socketPath !== undefined) {
+          await removeStaleSocket(options.socketPath);
+          const unix = createServer((req, res) => handle(req, res));
+          servers.push(unix);
+          await new Promise<void>((resolve, reject) => {
+            unix.once("error", reject);
+            unix.listen(options.socketPath, () => {
+              unix.off("error", reject);
+              resolve();
+            });
           });
-        });
-        const address = tcp.address();
-        port =
-          typeof address === "object" && address !== null
-            ? address.port
-            : options.port;
-        boundPort = port;
+          chmodSync(options.socketPath, 0o600);
+        }
+        return { port };
+      } catch (error) {
+        // A partial bind must not leave an orphan hook listener alive after
+        // the CLI reports a failed startup.
+        await close();
+        throw error;
       }
-      return { port };
     },
-    close: async () => {
-      await Promise.all(
-        servers.map(
-          (server) =>
-            new Promise<void>((resolve) => {
-              server.close(() => resolve());
-              server.closeAllConnections?.();
-            }),
-        ),
-      );
-      servers.length = 0;
-    },
+    close,
   };
 }

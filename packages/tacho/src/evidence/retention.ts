@@ -46,6 +46,7 @@ export const RETENTION_CLASS_BY_KIND: Readonly<
   turn_end: "model_call",
   llm_call: "model_call",
   "oxagen:message": "model_call",
+  "oxagen:compaction": "model_call",
   subagent_stop: "model_call",
   // What a tool was handed and what it returned. `tool_requested` carries
   // the arguments as the agent proposed them, which is the only record of

@@ -643,3 +643,45 @@ describe("holding bodies beside the chain", () => {
     expect(recorder.takeBodies()).toEqual([]);
   });
 });
+
+describe("compaction summaries", () => {
+  it.each(["PreCompact", "PostCompact"])(
+    "seals a long %s summary through the content path",
+    (eventName) => {
+      const summary = "Keep the operator's constraints. ".repeat(300);
+      const recorder = testRecorder();
+      const [event] = recorder.ingestHook(
+        {
+          session_id: SESSION,
+          hook_event_name: eventName,
+          compact_summary: summary,
+        },
+        ENV,
+      );
+      expect(event?.kind).toBe("oxagen:compaction");
+      expect(event?.attrs["hook.compact_summary"]).toBeUndefined();
+      expect(event?.content?.digest).toBe(digestBytes(summary));
+      const [body] = recorder.takeBodies();
+      expect(body?.content_class).toBe("model_call");
+      expect(dec.decode(body?.bytes)).toBe(summary);
+    },
+  );
+
+  it("redacts credentials in a compaction summary before retaining it", () => {
+    const secret = `ghp_${"a".repeat(36)}`;
+    const summary = `Continue work with ${secret}`;
+    const recorder = testRecorder();
+    const [event] = recorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "PostCompact",
+        compact_summary: summary,
+      },
+      ENV,
+    );
+    const retained = `Continue work with ${redactionMarker("github_token")}`;
+    expect(dec.decode(recorder.takeBodies()[0]?.bytes)).toBe(retained);
+    expect(event?.content?.digest).toBe(digestBytes(retained));
+    expect(JSON.stringify(event)).not.toContain(secret);
+  });
+});
