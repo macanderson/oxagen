@@ -104,6 +104,8 @@ async function renderWorkspaces(
       grants: vi.fn(),
       killSwitches: vi.fn(),
       approvalRules: vi.fn(),
+      connections: vi.fn(),
+      mcpServers: vi.fn(),
     },
   };
   const view = render(

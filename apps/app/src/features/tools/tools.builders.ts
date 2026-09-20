@@ -3,22 +3,28 @@
 // the live port uses, so a fixture cannot drift from the contract.
 import {
   toApprovalRuleSet,
+  toConnectionList,
   toCredentialGrantPage,
   toKillSwitchBoard,
+  toMcpServerList,
   toToolVersionPage,
 } from "@/data/live/mappers/tools";
 import type { DataSource } from "@/data/ports";
 import type {
   ApprovalRuleSet,
+  ConnectionList,
   CredentialGrantPage,
   KillSwitchBoard,
+  McpServerList,
   ToolVersionPage,
 } from "@/data/contracts/tools";
 import {
   ApprovalRuleSet as ApprovalRuleSetShape,
+  ConnectionList as ConnectionListShape,
   CredentialGrantPage as CredentialGrantPageShape,
   KILL_SWITCH_BOARD_LIMIT,
   KillSwitchBoard as KillSwitchBoardShape,
+  McpServerList as McpServerListShape,
   ToolVersionPage as ToolVersionPageShape,
 } from "@/data/contracts/tools";
 import type { AgentPage, AgentStatus } from "@/data/contracts/agents";
@@ -27,8 +33,10 @@ import type { MemberList } from "@/data/contracts/org";
 import { type Read, readOk } from "@/data/read";
 import {
   approvalRuleListOutput,
+  connectionListOutput,
   credentialGrantListOutput,
   killSwitchListOutput,
+  mcpServerListOutput,
   toolVersionListOutput,
 } from "@/test/tools-outputs";
 
@@ -101,6 +109,20 @@ export function approvalRuleSet(
   );
 }
 
+export function connectionList(
+  over: Parameters<typeof connectionListOutput>[0] = {},
+): ConnectionList {
+  return ConnectionListShape.parse(
+    toConnectionList(connectionListOutput(over)),
+  );
+}
+
+export function mcpServerList(
+  over: Parameters<typeof mcpServerListOutput>[0] = {},
+): McpServerList {
+  return McpServerListShape.parse(toMcpServerList(mcpServerListOutput(over)));
+}
+
 type ToolsReads = {
   versions?: Read<ToolVersionPage>;
   grants?: Read<CredentialGrantPage>;
@@ -117,6 +139,10 @@ type ToolsReads = {
   approvalRules?: Read<ApprovalRuleSet>;
   /** The switches tab's operator picker (#3147). */
   members?: Read<MemberList>;
+  /** The connections tab's own list; defaults to the two-row fixture. */
+  connections?: Read<ConnectionList>;
+  /** The registry tab's server roster; defaults to the two-row fixture. */
+  mcpServers?: Read<McpServerList>;
 };
 
 /** A DataSource answering the Tools reads it was handed; `calls` records each read's arguments. */
@@ -129,6 +155,8 @@ export function toolsSource(reads: ToolsReads) {
     agents: [],
     approvalRules: [],
     members: [],
+    connections: [],
+    mcpServers: [],
   };
   const refuse = () => Promise.reject(new Error("not a Tools read"));
   const answer =
@@ -200,6 +228,16 @@ export function toolsSource(reads: ToolsReads) {
       grants: answer(reads.grants, "grants"),
       killSwitches: answer(reads.killSwitches, "killSwitches"),
       approvalRules: answer(reads.approvalRules, "approvalRules"),
+      // Both tabs make these reads on every load beside the one under test,
+      // so they default rather than making every test supply one.
+      connections: answer(
+        reads.connections ?? readOk(connectionList()),
+        "connections",
+      ),
+      mcpServers: answer(
+        reads.mcpServers ?? readOk(mcpServerList()),
+        "mcpServers",
+      ),
     },
     mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
   };

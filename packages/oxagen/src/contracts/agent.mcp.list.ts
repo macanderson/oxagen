@@ -25,8 +25,9 @@ export const agentMcpList = registerCapability({
     "List registered external MCP servers in the active workspace with their current health",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
+  noBillingGate: true,
   agent: {
     requiresApproval: false,
     riskLevel: "low",

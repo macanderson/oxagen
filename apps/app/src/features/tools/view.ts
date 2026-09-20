@@ -258,3 +258,50 @@ export function weekdayKey(day: number): WeekdayKey {
   }
   return key;
 }
+
+/**
+ * The credential schemes the add-connection dialog can collect, and the fields
+ * each one needs, in the order the form shows them.
+ *
+ * `create_connection` takes the credential as an open record, so the set of
+ * schemes a form can offer is decided here rather than by the contract. These
+ * four are the ones whose fields are plain text a person can be asked for; a
+ * service-account JSON, an SSH key pair or an AWS role is created over the API
+ * until a form can collect it without pasting a key into a text box.
+ *
+ * The connectors read the credential's `scheme` (`AuthCredential`,
+ * packages/ingestion/src/connectors/types.ts) and `create_connection` records
+ * the connection's `authScheme` from the credential's `type`, so the action
+ * sends both, set to the scheme the person picked.
+ */
+export const CONNECTION_SCHEMES = {
+  api_key: ["apiKey"],
+  bearer_token: ["token"],
+  basic_auth: ["username", "password"],
+  connection_string: ["connectionString"],
+} as const satisfies Record<string, readonly string[]>;
+
+export type ConnectionScheme = keyof typeof CONNECTION_SCHEMES;
+
+/**
+ * The schemes in the order the select offers them. Written out rather than
+ * taken from `Object.keys`, which types its answer as `string[]` and would
+ * need an assertion to get the union back.
+ */
+export const CONNECTION_SCHEME_NAMES = [
+  "api_key",
+  "bearer_token",
+  "basic_auth",
+  "connection_string",
+] as const satisfies readonly ConnectionScheme[];
+
+/** The scheme the dialog opens on, and what an unreadable form value falls back to. */
+export const DEFAULT_CONNECTION_SCHEME: ConnectionScheme = "api_key";
+
+/** A form value as one of the schemes the dialog offers, or the default. */
+export function connectionSchemeOf(raw: string): ConnectionScheme {
+  return (
+    CONNECTION_SCHEME_NAMES.find((scheme) => scheme === raw) ??
+    DEFAULT_CONNECTION_SCHEME
+  );
+}

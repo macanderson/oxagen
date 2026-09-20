@@ -1,16 +1,20 @@
-// The four Tools reads to the page's view models (ARCHITECTURE.md §3.4).
+// The Tools reads to the page's view models (ARCHITECTURE.md §3.4).
 // Typed from each contract's `_output`, so a field the contract may leave null
 // cannot land in a required view field, and every figure is copied as the
 // handler counted it — no count, digest or duration is computed here.
+import type { agentMcpList } from "@oxagen/oxagen/contracts/agent.mcp.list";
 import type { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
+import type { connectionList } from "@oxagen/oxagen/contracts/connection.list";
 import type { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import type { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import type { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import type { z } from "zod";
 import type {
   ApprovalRuleSet,
+  ConnectionList,
   CredentialGrantPage,
   KillSwitchBoard,
+  McpServerList,
   ToolVersionPage,
 } from "@/data/contracts/tools";
 import type { ContractOutput } from "@/server/kernel";
@@ -142,5 +146,54 @@ export function toApprovalRuleSet(
       held: item.skipped30d,
     })),
     windowDays: out.windowDays,
+  };
+}
+
+// ── Connections and tool servers (lane: connections) ────────────────────────
+
+/**
+ * `list_connections` as the connections table reads it. The contract carries
+ * the row's database uuid beside its `con_…`; only the public id is copied,
+ * because INV-11 keeps a uuid off the page.
+ */
+export function toConnectionList(
+  out: ContractOutput<typeof connectionList>,
+): z.input<typeof ConnectionList> {
+  return {
+    connections: out.connections.map((item) => ({
+      id: item.publicId,
+      connector: item.connectorId,
+      displayName: item.displayName,
+      authScheme: item.authScheme,
+      deliveryMethod: item.deliveryMethod,
+      status: item.status,
+      entityCount: item.entityCount,
+      lastSyncAt: item.lastSyncAt,
+      healthStatus: item.healthStatus,
+      lastPollAt: item.lastPollAt,
+      nextPollAt: item.nextPollAt,
+      createdAt: item.createdAt,
+    })),
+  };
+}
+
+/**
+ * `list_mcp_servers` as the registry's servers section reads it. `publicId` is
+ * the `mcs_…` `import_tools` names a server by, so the view model carries it
+ * as the server's id and the import picker submits it unchanged.
+ */
+export function toMcpServerList(
+  out: ContractOutput<typeof agentMcpList>,
+): z.input<typeof McpServerList> {
+  return {
+    servers: out.servers.map((item) => ({
+      id: item.publicId,
+      name: item.name,
+      transportType: item.transportType,
+      endpointUrl: item.endpointUrl,
+      healthStatus: item.healthStatus,
+      lastHealthcheckAt: item.lastHealthcheckAt,
+      toolCount: item.toolCount,
+    })),
   };
 }

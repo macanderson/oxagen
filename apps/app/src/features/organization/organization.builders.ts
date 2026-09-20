@@ -165,6 +165,8 @@ export function orgSource(reads: OrgReads): {
       grants: refuse,
       killSwitches: refuse,
       approvalRules: refuse,
+      connections: refuse,
+      mcpServers: refuse,
     },
   };
   return { source, calls };

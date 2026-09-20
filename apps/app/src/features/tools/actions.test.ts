@@ -27,14 +27,19 @@ const kernel =
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
+  addConnection,
   deleteApprovalRule,
   flipKillSwitch,
   importTools,
+  readConnection,
+  registerServer,
   saveApprovalRule,
   setApprovalRuleEnabled,
   setToolClassification,
 } = await import("./actions");
-const { approvalRuleListOutput } = await import("@/test/tools-outputs");
+const { approvalRuleListOutput, connectionGetOutput } = await import(
+  "@/test/tools-outputs"
+);
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -42,6 +47,19 @@ const ctx = unsafeMint(WsCtx, {
   orgSlug: "acme",
   orgName: "Acme Robotics",
   orgRole: "admin",
+  workspaceId: "7b000000-0000-4000-8000-000000000001",
+  wsSlug: "core-platform",
+  wsName: "Core platform",
+  wsRole: "member",
+});
+
+/** The same viewer without an accountable org role, for the gates in the actions. */
+const member = unsafeMint(WsCtx, {
+  userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "member",
   workspaceId: "7b000000-0000-4000-8000-000000000001",
   wsSlug: "core-platform",
   wsName: "Core platform",
@@ -756,6 +774,226 @@ describe("deleteApprovalRule", () => {
     expect(
       await deleteApprovalRule("acme", "core-platform", "Not A Slug"),
     ).toMatchObject({ ok: false, reason: "invalid" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("addConnection", () => {
+  const output = {
+    connectionId: "7c000000-0000-4000-8000-0000000000c9",
+    publicId: "con_01k5n9",
+    status: "pending_setup" as const,
+    connectorId: "linear",
+    displayName: "Acme Linear",
+  };
+
+  it("sends the credential under the scheme picked and answers no part of it", async () => {
+    invoke.mockResolvedValue(output);
+    const result = await addConnection("acme", "core-platform", {
+      connectorId: " linear ",
+      displayName: " Acme Linear ",
+      scheme: "bearer_token",
+      secrets: { token: " tok-live-secret " },
+      deliveryMethod: "",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "create_connection",
+      {
+        connectorId: "linear",
+        displayName: "Acme Linear",
+        // `scheme` is what the connectors read; `type` is what the handler
+        // records as the connection's authScheme. Both name the same scheme.
+        authCredential: {
+          scheme: "bearer_token",
+          type: "bearer_token",
+          token: " tok-live-secret ",
+        },
+      },
+      expect.objectContaining(TENANT),
+    );
+    // The value the page is handed carries the connection, never the secret.
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        id: "con_01k5n9",
+        status: "pending_setup",
+        connectorId: "linear",
+        displayName: "Acme Linear",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("tok-live-secret");
+  });
+
+  it("carries a delivery method only when one was typed", async () => {
+    invoke.mockResolvedValue(output);
+    await addConnection("acme", "core-platform", {
+      connectorId: "linear",
+      displayName: "Acme Linear",
+      scheme: "api_key",
+      secrets: { apiKey: "k" },
+      deliveryMethod: " webhook ",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "create_connection",
+      expect.objectContaining({ deliveryMethod: "webhook" }),
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("is refused before the kernel when a scheme field is blank", async () => {
+    expect(
+      await addConnection("acme", "core-platform", {
+        connectorId: "linear",
+        displayName: "Acme Linear",
+        scheme: "basic_auth",
+        secrets: { username: "ops", password: "  " },
+        deliveryMethod: "",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "secrets",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns the handler's reason when the role gate refuses it", async () => {
+    invoke.mockRejectedValue(refused("org_role_required"));
+    expect(
+      await addConnection("acme", "core-platform", {
+        connectorId: "linear",
+        displayName: "Acme Linear",
+        scheme: "api_key",
+        secrets: { apiKey: "k" },
+        deliveryMethod: "",
+      }),
+    ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
+  });
+});
+
+describe("readConnection", () => {
+  it("answers the connection as the drawer's view model, with no uuid on it", async () => {
+    invoke.mockResolvedValue(connectionGetOutput());
+    const result = await readConnection(
+      "acme",
+      "core-platform",
+      " con_01k5n1 ",
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      "get_connection",
+      { connectionId: "con_01k5n1" },
+      expect.objectContaining(TENANT),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // INV-11: the contract carries the row's uuid and the view model does not.
+    expect(result.value.id).toBe("con_01k5n1");
+    expect(JSON.stringify(result.value)).not.toContain(
+      "7c000000-0000-4000-8000-0000000000c1",
+    );
+  });
+
+  it("reports a refused read with the permission the page names", async () => {
+    // A read's denial is carried as the Tools page's own permission, not as
+    // the handler's reason: `kernelRead` classifies it before the action does.
+    invoke.mockRejectedValue(refused("org_role_required"));
+    expect(await readConnection("acme", "core-platform", "con_01k5n1")).toEqual(
+      { ok: false, reason: "denied", code: "tools.read" },
+    );
+  });
+});
+
+describe("registerServer", () => {
+  const output = {
+    mcpServerId: "mcs_01k5s9",
+    healthStatus: "healthy" as const,
+    discoveredTools: ["get_page"],
+  };
+
+  it("registers the server and answers the probe's health and pins", async () => {
+    invoke.mockResolvedValue(output);
+    expect(
+      await registerServer("acme", "core-platform", {
+        name: " Notion ",
+        transportType: "streamable-http",
+        endpointUrl: " https://mcp.notion.example/v1 ",
+        authStrategy: "bearer",
+        authConfig: { token: " secret-value " },
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        serverId: "mcs_01k5s9",
+        healthStatus: "healthy",
+        discoveredTools: ["get_page"],
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "register_mcp_server",
+      {
+        name: "Notion",
+        transportType: "streamable-http",
+        endpointUrl: "https://mcp.notion.example/v1",
+        authStrategy: "bearer",
+        authConfig: { token: "secret-value" },
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("sends no auth config when the strategy carries no secret", async () => {
+    invoke.mockResolvedValue(output);
+    await registerServer("acme", "core-platform", {
+      name: "Notion",
+      transportType: "streamable-http",
+      endpointUrl: "https://mcp.notion.example/v1",
+      authStrategy: "none",
+      authConfig: {},
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "register_mcp_server",
+      {
+        name: "Notion",
+        transportType: "streamable-http",
+        endpointUrl: "https://mcp.notion.example/v1",
+        authStrategy: "none",
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("is refused before the kernel when a bearer strategy carries no secret", async () => {
+    expect(
+      await registerServer("acme", "core-platform", {
+        name: "Notion",
+        transportType: "streamable-http",
+        endpointUrl: "https://mcp.notion.example/v1",
+        authStrategy: "bearer",
+        authConfig: { token: "   " },
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "authConfig",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a viewer without the org role the contract declares", async () => {
+    // `register_mcp_server`'s handler asserts nothing and checkIAM fast-paths
+    // a non-enterprise org, so this gate is the one that holds (#3258).
+    requireViewer.mockResolvedValue(member);
+    expect(
+      await registerServer("acme", "core-platform", {
+        name: "Notion",
+        transportType: "streamable-http",
+        endpointUrl: "https://mcp.notion.example/v1",
+        authStrategy: "none",
+        authConfig: {},
+      }),
+    ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
     expect(invoke).not.toHaveBeenCalled();
   });
 });

@@ -4496,6 +4496,10 @@ type Messages = {
       pending: string;
       done: string;
       serverIdPlaceholder: string;
+      serverPick: string;
+      serverPickHint: string;
+      serverFallbackHint: string;
+      serverNone: string;
     };
     connections: {
       title: string;
@@ -4531,6 +4535,94 @@ type Messages = {
         active: string;
         expired: string;
         revoked: string;
+      };
+      list: {
+        title: string;
+        lead: string;
+        empty: {
+          title: string;
+          body: string;
+        };
+        columns: {
+          connection: string;
+          connector: string;
+          auth: string;
+          health: string;
+          entities: string;
+          lastSync: string;
+          owner: string;
+          reviewed: string;
+          nextReview: string;
+          status: string;
+        };
+        notCarriedNote: string;
+        open: string;
+        status: {
+          pending_setup: string;
+          connected: string;
+          paused: string;
+          error: string;
+          deleting: string;
+          deleted: string;
+        };
+        health: {
+          healthy: string;
+          degraded: string;
+          errored: string;
+        };
+        facts: {
+          id: string;
+          connector: string;
+          auth: string;
+          delivery: string;
+          status: string;
+          health: string;
+          entities: string;
+          lastSync: string;
+          lastPoll: string;
+          nextPoll: string;
+          failures: string;
+          lastError: string;
+          errorMessage: string;
+          created: string;
+          updated: string;
+        };
+        loading: string;
+        credentialNote: string;
+        denied: string;
+        failed: string;
+      };
+      add: {
+        open: string;
+        title: string;
+        body: string;
+        connector: string;
+        connectorHint: string;
+        connectorPlaceholder: string;
+        connectorInUse: string;
+        displayName: string;
+        displayNameHint: string;
+        scheme: string;
+        schemeHint: string;
+        delivery: string;
+        deliveryHint: string;
+        fields: {
+          apiKey: string;
+          token: string;
+          username: string;
+          password: string;
+          connectionString: string;
+        };
+        schemes: {
+          api_key: string;
+          bearer_token: string;
+          basic_auth: string;
+          connection_string: string;
+        };
+        secretNote: string;
+        confirm: string;
+        pending: string;
+        done: string;
       };
     };
     switches: {
@@ -4868,6 +4960,58 @@ type Messages = {
         switchOff: string;
         confirm: string;
         pending: string;
+      };
+    };
+    servers: {
+      title: string;
+      lead: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      columns: {
+        server: string;
+        transport: string;
+        endpoint: string;
+        health: string;
+        checked: string;
+        tools: string;
+      };
+      health: {
+        healthy: string;
+        degraded: string;
+        unreachable: string;
+        unknown: string;
+      };
+      transport: {
+        "streamable-http": string;
+        sse: string;
+        stdio: string;
+      };
+      unknownNote: string;
+      register: {
+        open: string;
+        title: string;
+        body: string;
+        name: string;
+        nameHint: string;
+        transport: string;
+        transportHint: string;
+        endpoint: string;
+        endpointHint: string;
+        authStrategy: string;
+        authConfig: string;
+        authConfigHint: string;
+        authConfigPlaceholder: string;
+        confirm: string;
+        pending: string;
+        done: string;
+        doneHealth: {
+          healthy: string;
+          degraded: string;
+          unreachable: string;
+        };
+        stdioNote: string;
       };
     };
   };

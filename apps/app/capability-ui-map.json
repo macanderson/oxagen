@@ -92,6 +92,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "create_connection": {
+      "route": "/[org]/[ws]/tools?tab=connections",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Connections: “Add a connection” opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
+      "testid": "connection-add-open",
+      "proof": "apps/app/src/features/tools/connections.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc2-connections"
+    },
     "create_enrollment_token": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
@@ -257,6 +266,15 @@
       "proof": "apps/app/src/features/agents/toolbelt.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-mc-3-schemas"
+    },
+    "get_connection": {
+      "route": "/[org]/[ws]/tools?tab=connections",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
+      "testid": "connection-open-con_01k5n1",
+      "proof": "apps/app/src/features/tools/connections.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc2-connections"
     },
     "get_context_pr": {
       "route": "/[org]/[ws]/steering",
@@ -494,6 +512,14 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
     },
+    "list_connections": {
+      "route": "/[org]/[ws]/tools?tab=connections",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Connections: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "proof": "apps/app/src/features/tools/connections.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc2-connections"
+    },
     "list_credential_grants": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
@@ -565,6 +591,14 @@
       "proof": "apps/app/src/features/agents/mandates.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_mcp_servers": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Registry: the Tool servers section under the registry, and the server picker in the import dialog (features/tools/servers.tsx, features/tools/import-controls.tsx, data/live/tools.ts)",
+      "proof": "apps/app/src/features/tools/servers.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc2-connections"
     },
     "list_members": {
       "route": "/[org]",
@@ -725,6 +759,15 @@
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "register_mcp_server": {
+      "route": "/[org]/[ws]/tools",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Registry › Tool servers: “Register a server” opens the dialog that invokes register_mcp_server (features/tools/register-server.tsx, features/tools/actions.ts)",
+      "testid": "server-register-open",
+      "proof": "apps/app/src/features/tools/servers.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc2-connections"
     },
     "remove_org_member": {
       "route": "/[org]",

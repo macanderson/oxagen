@@ -157,6 +157,8 @@ export function onboardingSource(reads: Reads): {
       grants: refuse("tools.grants"),
       killSwitches: refuse("tools.killSwitches"),
       approvalRules: refuse("tools.approvalRules"),
+      connections: refuse("tools.connections"),
+      mcpServers: refuse("tools.mcpServers"),
     },
   };
   return { source, calls };

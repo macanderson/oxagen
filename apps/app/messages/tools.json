@@ -137,7 +137,11 @@
       "confirm": "Import",
       "pending": "Importing…",
       "done": "{published, plural, =0 {No new version} one {# new version} other {# new versions}} · {unchanged, plural, =0 {nothing unchanged} one {# already registered} other {# already registered}}.",
-      "serverIdPlaceholder": "mcs_…"
+      "serverIdPlaceholder": "mcs_…",
+      "serverPick": "Pick a registered server",
+      "serverPickHint": "Every server registered in this workspace. Registering one is below the registry.",
+      "serverFallbackHint": "The server roster could not be read, so the server is named by its id.",
+      "serverNone": "No server is registered yet, so there is nothing to import from."
     },
     "connections": {
       "title": "Credential grants",
@@ -173,6 +177,94 @@
         "active": "Active",
         "expired": "Expired",
         "revoked": "Revoked"
+      },
+      "list": {
+        "title": "Connections",
+        "lead": "Every stored connection this workspace can reach a tool server through. A connection holds the credential; a grant below is one use of it.",
+        "empty": {
+          "title": "No connection is stored",
+          "body": "Until a connection is added, no run in this workspace can reach a tool server that needs a credential."
+        },
+        "columns": {
+          "connection": "Connection",
+          "connector": "Connector",
+          "auth": "Auth",
+          "health": "Health",
+          "entities": "Entities",
+          "lastSync": "Last sync",
+          "owner": "Owner",
+          "reviewed": "Reviewed",
+          "nextReview": "Next review",
+          "status": "Status"
+        },
+        "notCarriedNote": "Owner, Reviewed and Next review have no field on the connection record, so they are shown as not recorded rather than guessed.",
+        "open": "Open this connection",
+        "status": {
+          "pending_setup": "Pending setup",
+          "connected": "Connected",
+          "paused": "Paused",
+          "error": "Error",
+          "deleting": "Deleting",
+          "deleted": "Deleted"
+        },
+        "health": {
+          "healthy": "Healthy",
+          "degraded": "Degraded",
+          "errored": "Errored"
+        },
+        "facts": {
+          "id": "Connection id",
+          "connector": "Connector",
+          "auth": "Auth scheme",
+          "delivery": "Delivery",
+          "status": "Status",
+          "health": "Health",
+          "entities": "Entities",
+          "lastSync": "Last sync",
+          "lastPoll": "Last poll",
+          "nextPoll": "Next poll",
+          "failures": "Consecutive failures",
+          "lastError": "Last error",
+          "errorMessage": "Error",
+          "created": "Created",
+          "updated": "Updated"
+        },
+        "loading": "Loading this connection",
+        "credentialNote": "The stored credential is never read back to this page. The broker mints a narrowed credential per call and records the grant below.",
+        "denied": "Reading this connection needs a role this workspace has not given you.",
+        "failed": "This connection could not be read: {code}."
+      },
+      "add": {
+        "open": "Add a connection",
+        "title": "Add a connection",
+        "body": "Stores a credential for one connector and names it. The credential is encrypted before it reaches a row, and nothing reads it back to this page.",
+        "connector": "Connector",
+        "connectorHint": "The connector type slug, such as github or stripe. A slug this deployment has no connector for is refused.",
+        "connectorPlaceholder": "github",
+        "connectorInUse": "Connectors already in use here",
+        "displayName": "Name",
+        "displayNameHint": "What this connection is called in the ledger and on a grant. Up to 255 characters.",
+        "scheme": "Credential",
+        "schemeHint": "Which credential the connector authenticates with. Another scheme is created over the API until a form can collect it safely.",
+        "delivery": "Delivery method",
+        "deliveryHint": "Leave it blank to keep the connector's own default.",
+        "fields": {
+          "apiKey": "API key",
+          "token": "Bearer token",
+          "username": "Username",
+          "password": "Password",
+          "connectionString": "Connection string"
+        },
+        "schemes": {
+          "api_key": "API key",
+          "bearer_token": "Bearer token",
+          "basic_auth": "Username and password",
+          "connection_string": "Connection string"
+        },
+        "secretNote": "The credential is sent once and is not shown again. Nothing here logs it and no answer carries it back.",
+        "confirm": "Add connection",
+        "pending": "Adding…",
+        "done": "{name} is stored as {id}. Its status is pending setup: the credential is held and nothing has drawn on it yet."
       }
     },
     "switches": {
@@ -510,6 +602,58 @@
         "switchOff": "Switch off instead",
         "confirm": "Delete rule",
         "pending": "Deleting"
+      }
+    },
+    "servers": {
+      "title": "Tool servers",
+      "lead": "The MCP servers registered in this workspace. Importing takes a server's pinned tools into the registry above; the server row is what a tool server kill switch names.",
+      "empty": {
+        "title": "No server is registered",
+        "body": "Registering a server health checks its endpoint and records the tools it pins. Nothing reaches the registry until those tools are imported."
+      },
+      "columns": {
+        "server": "Server",
+        "transport": "Transport",
+        "endpoint": "Endpoint",
+        "health": "Health",
+        "checked": "Last health check",
+        "tools": "Pinned tools"
+      },
+      "health": {
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "unreachable": "Unreachable",
+        "unknown": "Not checked"
+      },
+      "transport": {
+        "streamable-http": "Streamable HTTP",
+        "sse": "SSE",
+        "stdio": "stdio"
+      },
+      "unknownNote": "A server installed by a plugin is written with the SSE transport and no health check, so its health reads as not checked until one runs.",
+      "register": {
+        "open": "Register a server",
+        "title": "Register an MCP server",
+        "body": "Health checks the endpoint, encrypts any auth config and records the tools the server pins. Importing those tools into the registry is the next step.",
+        "name": "Name",
+        "nameHint": "Up to 120 characters.",
+        "transport": "Transport",
+        "transportHint": "Register an HTTP endpoint. SSE servers are installed through plugins.",
+        "endpoint": "Endpoint URL",
+        "endpointHint": "An address reachable from the public internet. One that resolves inside this deployment is refused, because the health check carries the auth config to it.",
+        "authStrategy": "Auth",
+        "authConfig": "Auth config",
+        "authConfigHint": "One name = value per line: the bearer token, or the header and its value. It is encrypted before storage and is not shown again.",
+        "authConfigPlaceholder": "token = …",
+        "confirm": "Register server",
+        "pending": "Registering…",
+        "done": "{name} is registered as {id}, {health}, with {tools, plural, =0 {no pinned tool} one {# pinned tool} other {# pinned tools}}.",
+        "doneHealth": {
+          "healthy": "reachable",
+          "degraded": "not health checked",
+          "unreachable": "unreachable"
+        },
+        "stdioNote": "A stdio server is not probed from here, so it is recorded as not health checked and pins no tool until one is discovered."
       }
     }
   }

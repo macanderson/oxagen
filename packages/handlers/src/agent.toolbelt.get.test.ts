@@ -159,11 +159,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         principalStatus: "suspended",
       });
       await support.seedAgent(tenant, { slug: "bare", principalStatus: null });
-      // Three MCP servers, each with one cached tool. "live" is installed and
+      // Four MCP servers, each with one cached tool. "live" is installed and
       // enabled. "offplugin" is enabled while its install row is off (what
       // set_plugin_enabled at org scope leaves). "unlisted" has no install row
       // (what register_mcp_server writes), and is healthy so the missing
-      // listing is the only reason the runtime skips it.
+      // listing is the only difference from a plugin-installed server.
       await withSystemDb(async (tx) => {
         const installs = await tx
           .insert(schema.pluginInstalledPlugins)
@@ -184,12 +184,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           });
         const listing = new Map(installs.map((row) => [row.name, row.id]));
         await tx.insert(schema.mcpServers).values(
-          (["live", "offplugin", "unlisted"] as const).map((name) => ({
+          (["live", "offplugin", "unlisted", "stdio"] as const).map((name) => ({
             orgId: tenant.orgId,
             workspaceId: tenant.workspaceId,
             orgListingId: listing.get(name) ?? null,
             name,
-            transportType: "streamable-http",
+            transportType: name === "stdio" ? "stdio" : "streamable-http",
             endpointUrl: `https://${name}.mcp.example.com`,
             authStrategy: "none",
             healthStatus: name === "live" ? "unknown" : "healthy",
@@ -297,7 +297,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
     });
 
-    it("lists MCP tools only from the servers the runtime loads: an install that is off and a server with no listing contribute nothing", async () => {
+    it("lists standalone HTTP servers but excludes disabled installs", async () => {
       const out = agentToolbeltGet.output.parse(await belt("granted"));
       // The server's cached tools/list snapshot holds names only, and these
       // tools were never imported into the registry, so the entry reports no
@@ -315,7 +315,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ...out.cannotSee.map((c) => c.name),
       ];
       expect(listed).not.toContain("offplugin__ping");
-      expect(listed).not.toContain("unlisted__ping");
+      expect(listed).not.toContain("stdio__ping");
+      expect(listed).toContain("unlisted__ping");
     });
 
     it("a forced presentation wins over the size rule", async () => {

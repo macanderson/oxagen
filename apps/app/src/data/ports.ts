@@ -78,8 +78,11 @@ import type {
 } from "./contracts/steering";
 import type {
   ApprovalRuleSet,
+  ConnectionList,
+  ConnectionStatus,
   CredentialGrantPage,
   KillSwitchBoard,
+  McpServerList,
   ToolVersionPage,
 } from "./contracts/tools";
 import type { Read } from "./read";
@@ -361,8 +364,12 @@ export interface DataSource {
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
   };
   /**
-   * The Tools page's four noBillingGate reads on the workspace (#2958), each
-   * role-checked in its handler (INV-29); caller: features/tools/tools.tsx.
+   * The Tools page's six reads on the workspace (#2958), each role-checked in
+   * its handler or in IAM (INV-29); caller: features/tools/tools.tsx.
+   *
+   * The first four are `noBillingGate`. `list_connections` and
+   * `list_mcp_servers` are not, so an org out of credits is refused those two
+   * as `exhausted`, which the seam answers with the page's error state.
    */
   tools: {
     /** list_tool_versions: one cursor page of the registry, optionally one consequence tag */
@@ -379,5 +386,12 @@ export interface DataSource {
     killSwitches(ctx: WsCtx): Promise<Read<KillSwitchBoard>>;
     /** list_approval_rules: the workspace's auto-approval rules with their 30-day counters */
     approvalRules(ctx: WsCtx): Promise<Read<ApprovalRuleSet>>;
+    /** list_connections: every data-source connection the filter admits; no cursor */
+    connections(
+      ctx: WsCtx,
+      q: { status: ConnectionStatus | null; connectorId: string | null },
+    ): Promise<Read<ConnectionList>>;
+    /** list_mcp_servers: every registered MCP server in the workspace; no filter, no cursor */
+    mcpServers(ctx: WsCtx): Promise<Read<McpServerList>>;
   };
 }

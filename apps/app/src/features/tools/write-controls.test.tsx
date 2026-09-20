@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// The three Tools writes as a person makes them: the import dialog, the tool
-// dialog's reclassification form, and the switch dialog — which states the
+// The three Tools writes as a person makes them: the import dialog, which
+// picks its server from the registered roster, the tool dialog's
+// reclassification form, and the switch dialog — which states the
 // blast radius before the confirming button, never after. A completed write
 // reloads the view it leads to; a refusal is named where the person acted and
 // navigates nowhere. Every refusal code the three handlers throw has its own
@@ -125,7 +126,7 @@ describe("ImportControls", () => {
       ok: true,
       value: { importDigest: "d1", published: 2, unchanged: 1 },
     });
-    withIntl(<ImportControls at={at} />);
+    withIntl(<ImportControls at={at} servers={null} />);
     fireEvent.click(screen.getByTestId("tools-import-open"));
     fill("Server", "mcs_01k5s1");
     fill("Tools", "get_page create_page");
@@ -148,7 +149,7 @@ describe("ImportControls", () => {
       reason: "denied",
       code: "org_role_required",
     });
-    withIntl(<ImportControls at={at} />);
+    withIntl(<ImportControls at={at} servers={null} />);
     fireEvent.click(screen.getByTestId("tools-import-open"));
     fill("Server", "mcs_01k5s1");
     fireEvent.submit(formOf(screen.getByText("Import")));
@@ -158,9 +159,55 @@ describe("ImportControls", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
+  it("picks a registered server by name and submits its id", async () => {
+    importTools.mockResolvedValue({
+      ok: true,
+      value: { importDigest: "d1", published: 1, unchanged: 0 },
+    });
+    withIntl(
+      <ImportControls
+        at={at}
+        servers={[
+          { id: "mcs_01k5s1", name: "Stripe" },
+          { id: "mcs_01k5s2", name: "GitHub" },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-import-open"));
+    // The picker shows the server's name; what goes to the kernel is the id
+    // `import_tools` names a server by, never the name a person reads.
+    fill("Server", "mcs_01k5s2");
+    fireEvent.submit(formOf(screen.getByText("Import")));
+    await waitFor(() => {
+      expect(importTools).toHaveBeenCalledWith("acme", "core-platform", {
+        serverId: "mcs_01k5s2",
+        tools: [],
+      });
+    });
+  });
+
+  it("says so when no server is registered to import from", () => {
+    withIntl(<ImportControls at={at} servers={[]} />);
+    fireEvent.click(screen.getByTestId("tools-import-open"));
+    expect(
+      screen.getByText(
+        "No server is registered yet, so there is nothing to import from.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("falls back to a typed id when the server roster could not be read", () => {
+    withIntl(<ImportControls at={at} servers={null} />);
+    fireEvent.click(screen.getByTestId("tools-import-open"));
+    expect(screen.getByLabelText("Server")).toHaveAttribute(
+      "placeholder",
+      "mcs_\u2026",
+    );
+  });
+
   it("names a write that threw before it answered", async () => {
     importTools.mockRejectedValue(new Error("network"));
-    withIntl(<ImportControls at={at} />);
+    withIntl(<ImportControls at={at} servers={null} />);
     fireEvent.click(screen.getByTestId("tools-import-open"));
     fill("Server", "mcs_01k5s1");
     fireEvent.submit(formOf(screen.getByText("Import")));

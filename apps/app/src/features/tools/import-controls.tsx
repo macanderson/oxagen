@@ -3,10 +3,13 @@
 // pull a registered server's pinned `tools/list` into the workspace registry,
 // one immutable version per changed manifest.
 //
-// The dialog names the server by its registered id and, optionally, the pinned
-// tools to take; leaving the tools blank takes every pin. Re-importing an
-// unchanged server changes nothing and says so. Registering the server itself
-// is `register_mcp_server`, not this lane.
+// The dialog picks the server from the workspace's roster (`list_mcp_servers`)
+// and, optionally, names the pinned tools to take; leaving the tools blank
+// takes every pin. Re-importing an unchanged server changes nothing and says
+// so. Registering a server is the section under the registry.
+//
+// When the roster could not be read the field falls back to a typed `mcs_…`,
+// so a failed read costs the picker rather than the import.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import { routes } from "@/shared/safe-path";
@@ -18,7 +21,14 @@ import { UNANSWERED, useActionFailure } from "./action-failure";
 import { importTools } from "./actions";
 import { splitTags, textValue, type ToolsAt } from "./view";
 
-export function ImportControls({ at }: { at: ToolsAt }) {
+export function ImportControls({
+  at,
+  servers,
+}: {
+  at: ToolsAt;
+  /** The workspace's registered servers, or null when the roster read failed. */
+  servers: readonly { id: string; name: string }[] | null;
+}) {
   const t = useTranslations("tools.import");
   const failureText = useActionFailure();
   const navigate = useNavigate();
@@ -90,13 +100,42 @@ export function ImportControls({ at }: { at: ToolsAt }) {
             >
               {t("serverId")}
             </label>
-            <input
-              id="serverId"
-              name="serverId"
-              required
-              placeholder={t("serverIdPlaceholder")}
-              className={`${inputBase} ${mono}`}
-            />
+            {servers === null ? (
+              <>
+                <input
+                  id="serverId"
+                  name="serverId"
+                  required
+                  placeholder={t("serverIdPlaceholder")}
+                  className={`${inputBase} ${mono}`}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("serverFallbackHint")}
+                </p>
+              </>
+            ) : (
+              <>
+                <select
+                  id="serverId"
+                  name="serverId"
+                  required
+                  defaultValue=""
+                  className={inputBase}
+                >
+                  <option value="" disabled>
+                    {t("serverPick")}
+                  </option>
+                  {servers.map((server) => (
+                    <option key={server.id} value={server.id}>
+                      {server.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  {servers.length === 0 ? t("serverNone") : t("serverPickHint")}
+                </p>
+              </>
+            )}
           </div>
           <div className="flex min-w-0 flex-col gap-1.5">
             <label

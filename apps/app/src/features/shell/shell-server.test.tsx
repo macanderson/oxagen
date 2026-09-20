@@ -111,6 +111,8 @@ describe("ShellChrome", () => {
         grants: vi.fn(),
         killSwitches: vi.fn(),
         approvalRules: vi.fn(),
+        connections: vi.fn(),
+        mcpServers: vi.fn(),
       },
     };
     // The chrome is wrapped in the viewer's zone, so its own dates agree with
