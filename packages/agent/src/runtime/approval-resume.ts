@@ -11,6 +11,7 @@ import {
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import {
   bootstrapDecisionRulesRuntime,
+  autoApproveParkedCall,
   createDecisionRulesGate,
   inputDigest,
   ruleSetSchema,
@@ -276,6 +277,7 @@ export async function resumeApprovedCall(
           const rules = raw == null ? null : ruleSetSchema.parse(raw);
           await createDecisionRulesGate({
             loadRuleSet: async () => rules,
+            autoApprove: autoApproveParkedCall,
             onError: (error) => {
               throw error;
             },

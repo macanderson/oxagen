@@ -71,6 +71,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ),
       );
       expect(parked[0]?.approvalId).toBe(parked[1]?.approvalId);
+      expect(parked[0]?.expiresAt).toEqual(parked[1]?.expiresAt);
       const id = parked[0]!.approvalId;
       const row = await withSystemDb((tx) =>
         tx.query.approvalRequests.findFirst({
@@ -112,6 +113,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         approvalId: id,
         resolution: "approved",
         resumeStatus: "failed",
+        expiresAt: row?.expiresAt,
       });
       const history = await within(() =>
         agentApprovalListResolvedHandler(

@@ -11,6 +11,8 @@ const h = vi.hoisted(() => ({
   tools: vi.fn(),
   budgets: vi.fn(),
   gate: vi.fn(),
+  autoApprove: vi.fn(),
+  realRules: null as unknown,
   kill: vi.fn(),
   open: vi.fn(),
   seal: vi.fn(),
@@ -67,7 +69,7 @@ vi.mock("@oxagen/database", () => {
               ? h.dedicatedOrgIds.map((orgId) => ({ orgId }))
               : table === workspaces
                 ? projection.settings
-                  ? [{ settings: {} }]
+                  ? [{ settings: { decisionRules: h.realRules } }]
                   : [{ orgId: h.row.orgId, workspaceId: h.row.workspaceId }]
                 : predicate(h.row)
                   ? [{ ...h.row }]
@@ -108,11 +110,17 @@ vi.mock("@oxagen/billing", () => ({
 vi.mock("@oxagen/plugins", () => ({ bootstrapEntitlementRuntime: vi.fn() }));
 vi.mock("@oxagen/rules", async () => {
   const { createHash } = await import("node:crypto");
+  const realGate =
+    await vi.importActual<typeof import("@oxagen/rules")>("@oxagen/rules");
   return {
-    DecisionRuleDeniedError: class extends Error {},
-    DecisionRuleApprovalRequiredError: class extends Error {},
+    DecisionRuleDeniedError: realGate.DecisionRuleDeniedError,
+    DecisionRuleApprovalRequiredError:
+      realGate.DecisionRuleApprovalRequiredError,
     bootstrapDecisionRulesRuntime: vi.fn(),
-    createDecisionRulesGate: () => h.gate,
+    autoApproveParkedCall: h.autoApprove,
+    createDecisionRulesGate: (
+      options: Parameters<typeof realGate.createDecisionRulesGate>[0],
+    ) => (h.realRules ? realGate.createDecisionRulesGate(options) : h.gate),
     inputDigest: (input: unknown) =>
       createHash("sha256").update(JSON.stringify(input)).digest("hex"),
     ruleSetSchema: { parse: (input: unknown) => input },
@@ -166,6 +174,7 @@ beforeEach(async () => {
   vi.resetAllMocks();
   h.dedicatedOrgIds = [];
   h.seams = [];
+  h.realRules = null;
   vi.stubEnv(
     "AUTH_TOKEN_ENCRYPTION_KEY",
     Buffer.alloc(32, 17).toString("base64"),
@@ -247,6 +256,42 @@ describe("approved call resumption", () => {
       h.row.resolution = resolution;
       expect(await resumeApprovedCall(ref)).toBe("not_claimed");
       expect(h.invoke).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["require_approval", "deny"] as const)(
+    "honors a standing approval only when the fresh rule allows it (%s)",
+    async (effect) => {
+      h.realRules = {
+        schema: "oxagen.decision-rules.v1",
+        rules: [
+          {
+            id: "fresh-rule",
+            description: "govern resumed writes",
+            capability: "write_test",
+            when: { all: [] },
+            effect,
+          },
+        ],
+      };
+      const commit = vi.fn().mockResolvedValue(undefined);
+      h.autoApprove.mockResolvedValue({ ok: true, commit });
+      expect(await resumeApprovedCall(ref)).toBe(
+        effect === "deny" ? "failed" : "succeeded",
+      );
+      if (effect === "deny") {
+        expect(h.row.resumeError).toBe("decision_rule_denied");
+        expect(h.invoke).not.toHaveBeenCalled();
+        expect(commit).not.toHaveBeenCalled();
+      } else {
+        expect(h.autoApprove).toHaveBeenCalledWith(
+          expect.objectContaining({
+            capability: "write_test",
+            input: { ...(payload.rawInput as object), count: 1 },
+          }),
+        );
+        expect(commit).toHaveBeenCalledTimes(1);
+        expect(h.invoke).toHaveBeenCalledTimes(1);
+      }
     },
   );
   it("refuses revoked membership", async () => {

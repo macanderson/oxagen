@@ -168,6 +168,7 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
   approvalId: string;
   resolution?: string | null;
   resumeStatus?: string | null;
+  expiresAt?: Date;
 }> {
   if (args.resumeRequesterUserId) return createResumableApproval(args);
   const expiresAt = new Date(Date.now() + (args.ttlMs ?? DEFAULT_TTL_MS));
@@ -301,6 +302,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
         approvalId: existing.id,
         resolution: existing.resolution,
         resumeStatus: existing.resumeStatus,
+        expiresAt: existing.expiresAt,
       };
     const expiresAt = new Date(Date.now() + (args.ttlMs ?? DEFAULT_TTL_MS));
     const [row] = await tx
@@ -328,7 +330,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
       riskLevel: args.riskLevel,
       expiresAt,
     });
-    return { ...row, resolution: null, resumeStatus: "waiting" };
+    return { ...row, resolution: null, resumeStatus: "waiting", expiresAt };
   });
 }
 

@@ -538,7 +538,7 @@ export async function materializeTools(
             // request to in the chat DAG. Direct API / MCP callers skip the
             // gate (their auth surface is responsible for authorization).
             if (requiresApproval && ctx.messageId) {
-              const expiresAt = new Date(
+              let expiresAt = new Date(
                 Date.now() + APPROVAL_TTL_MS,
               ).toISOString();
               // createApprovalRequest writes the approval row via withTenantDb,
@@ -604,6 +604,7 @@ export async function materializeTools(
                   }),
               );
               const { approvalId } = approval;
+              expiresAt = approval.expiresAt?.toISOString() ?? expiresAt;
               if (opts.approvalMode === "park" && approval.resolution) {
                 return {
                   approvalId,
