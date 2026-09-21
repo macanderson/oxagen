@@ -1,3 +1,4 @@
+import { skillSearchPreview } from "@oxagen/oxagen/contracts/skill.search.preview";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GitHubClient } from "@oxagen/github";
 import { skillConfigSchema } from "@oxagen/oxagen/skills";
@@ -78,7 +79,7 @@ describe("preview_skill_search", () => {
       makeCTX(),
     );
     expect(catalog).toHaveBeenCalledWith(repo, currentSha, "workspace");
-    expect(result).toMatchObject({
+    expect(skillSearchPreview.output.parse(result)).toMatchObject({
       version: "skl_v1",
       repositoryCommitSha: currentSha,
       results: [],

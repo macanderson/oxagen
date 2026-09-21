@@ -2,6 +2,7 @@
   "name": "get_skill_config",
   "domain": "skill",
   "description": "Read the published skill resolution configuration and its immutable version history. A workspace with no imported configuration starts with skills off.",
+  "mode": "sync",
   "surfaces": [
     "api",
     "mcp"

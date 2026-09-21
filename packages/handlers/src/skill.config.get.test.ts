@@ -1,3 +1,4 @@
+import { skillConfigGet } from "@oxagen/oxagen/contracts/skill.config.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { skillConfigSchema } from "@oxagen/oxagen/skills";
 import { createSkillConfigGetHandler } from "./skill.config.get";
@@ -20,7 +21,7 @@ describe("get_skill_config", () => {
       store,
       vi.fn().mockResolvedValue(undefined),
     )({}, makeCTX());
-    expect(result).toMatchObject({
+    expect(skillConfigGet.output.parse(result)).toMatchObject({
       config: { enabled: false },
       current: null,
       versions: [],
