@@ -121,3 +121,42 @@ describe("skills.inventory", () => {
     expect(captureError).toHaveBeenCalledOnce();
   });
 });
+
+describe("skills.configuration", () => {
+  it("preserves version provenance and maps only the display contract", async () => {
+    const value = {
+      config: {
+        enabled: false,
+        search: { budget: 6000, cutoff: 0, limit: 10 },
+        sources: [],
+      },
+      draftText: "enabled = false\n",
+      current: null,
+      versions: [],
+    };
+    kernelRead.mockResolvedValue(readOk(value));
+    expect(await skills.configuration(ctx)).toEqual(
+      readOk({
+        ...value,
+        config: { enabled: false, search: value.config.search },
+      }),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: expect.objectContaining({ name: "get_skill_config" }),
+      input: {},
+      page: "skills",
+    });
+  });
+  it("preserves denial and reports malformed configuration without fabricating an off value", async () => {
+    const denied = { ok: false, reason: "denied", permission: "skills.read" };
+    kernelRead.mockResolvedValueOnce(denied);
+    expect(await skills.configuration(ctx)).toEqual(denied);
+    kernelRead.mockResolvedValueOnce(
+      readOk({ config: { enabled: true }, current: null, versions: [] }),
+    );
+    expect(await skills.configuration(ctx)).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});

@@ -1,4 +1,5 @@
 // audit-exempt: read-only configuration history; the kernel audits access.
+import { stringify } from "smol-toml";
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { skillConfigGet } from "@oxagen/oxagen/contracts/skill.config.get";
 import {
@@ -46,6 +47,7 @@ export function createSkillConfigGetHandler(
       });
     return {
       config: current?.config ?? skillConfigSchema.parse({}),
+      draftText: stringify(current?.config ?? skillConfigSchema.parse({})),
       current: current ?? null,
       versions,
     };

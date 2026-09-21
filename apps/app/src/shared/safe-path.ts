@@ -303,6 +303,7 @@ export const routes = {
       offset?: string;
       proposal?: string;
       cursor?: string;
+      view?: string;
     } = {},
   ): SafePath =>
     withQuery(pathOf(org, ws, "steering"), {
@@ -311,6 +312,7 @@ export const routes = {
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,
+      view: q.view,
     }),
 };
 
