@@ -1,5 +1,5 @@
 import { wordsOf } from "./draft-text";
-export { wordsOf, estimateTokens } from "./draft-text";
+export { estimateTokens } from "./draft-text";
 import { readSkillFrontmatter } from "@oxagen/oxagen/skill-frontmatter";
 import { GRANTING_FRONTMATTER_KEYS } from "@oxagen/oxagen/contracts/skill.propose";
 import { skillSourceName } from "@/shared/skill-source-identity";
