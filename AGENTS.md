@@ -322,7 +322,10 @@ macanderson org repos.
   (inner loop):** Never compile or run the full test suite while developing.
   Build and test only the crates/packages/modules touched by the change
   (plus direct dependents on interface changes). The full suite is CI's job.
-  Here: `pnpm --filter <package> test` / `turbo run test:unit --filter <package>`, never bare `pnpm test` or `turbo run test:unit`.
+  Here: `pnpm --filter <package> test:unit <file>.test.ts`, never bare `pnpm test`
+  or `turbo run test:unit`. **Not `... test`**: no package in this repository
+  defines a `test` script, so `pnpm --filter <package> test` exits 0 having run
+  nothing at all.
 - **[SCR-002](docs/scr/SCR-002-durability-first-architecture.md) —
   Architecture decisions:** Do not ask. Choose the most durable option — the
   one that can't be questioned in 10 years as the right move. Cheap-and-easy
