@@ -53,6 +53,83 @@ describe("audit partition maintenance", () => {
     ).rejects.toMatchObject({ code: "42883" });
   });
 
+  it("moves legacy rows before restoring an unvalidated event-type check", async () => {
+    const org = randomUUID();
+    const legacyId = randomUUID();
+    const expiredId = randomUUID();
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
+        const [check] = await tx`
+          SELECT pg_get_constraintdef(oid) AS definition FROM pg_catalog.pg_constraint
+          WHERE conrelid = 'security.security_events'::regclass
+            AND conname = 'security_events_event_type_check'
+        `;
+        const children = await tx`
+          SELECT c.oid::regclass::text AS name FROM pg_catalog.pg_inherits i
+          JOIN pg_catalog.pg_class c ON c.oid = i.inhrelid
+          WHERE i.inhparent = 'security.security_events'::regclass
+            AND pg_get_expr(c.relpartbound, c.oid) <> 'DEFAULT'
+        `;
+        for (const child of children) {
+          await tx.unsafe(
+            `ALTER TABLE security.security_events DETACH PARTITION ${child.name}`,
+          );
+          await tx.unsafe(
+            `ALTER TABLE ${child.name} RENAME TO audit_fixture_${randomUUID().replaceAll("-", "")}`,
+          );
+        }
+        // Model rows written before the event-type allowlist was narrowed.
+        await tx`ALTER TABLE security.security_events DROP CONSTRAINT security_events_event_type_check`;
+        await tx`INSERT INTO security.security_events(id, org_id, occurred_at, event_type, outcome) VALUES
+          (${legacyId}, ${org}, CURRENT_TIMESTAMP, 'billing.reseller_legacy', 'allow'),
+          (${expiredId}, ${org}, CURRENT_TIMESTAMP - interval '8 years', 'billing.reseller_legacy', 'allow')`;
+        await tx.unsafe(
+          `ALTER TABLE security.security_events ADD CONSTRAINT security_events_event_type_check ${check!.definition} NOT VALID`,
+        );
+        await tx`SET LOCAL ROLE oxagen_app`;
+        const [maintenance] =
+          await tx`SELECT security.maintain_audit_partitions() AS result`;
+        expect(maintenance?.result.created).toHaveLength(3);
+        expect(maintenance?.result.expiredDefaultRows).toBeGreaterThanOrEqual(
+          1,
+        );
+        const rows = await tx`
+          SELECT id, event_type, tableoid::regclass::text AS partition
+          FROM security.security_events WHERE org_id = ${org}
+        `;
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+          id: legacyId,
+          event_type: "billing.reseller_legacy",
+        });
+        expect(rows[0]?.partition).toMatch(
+          /^security.security_events_\d{4}_\d{2}$/,
+        );
+        const restoredChecks = await tx`
+          SELECT convalidated, pg_get_constraintdef(oid) AS definition
+          FROM pg_catalog.pg_constraint
+          WHERE conrelid = ${rows[0]!.partition}::regclass
+            AND conname = 'security_events_event_type_check'
+        `;
+        expect(restoredChecks).toEqual([
+          { convalidated: false, definition: `${check!.definition} NOT VALID` },
+        ]);
+        // NOT VALID preserves old rows, but still refuses new invalid evidence.
+        await expect(
+          tx.savepoint(async (savepoint) => {
+            await savepoint`INSERT INTO security.security_events(org_id, occurred_at, event_type, outcome)
+            VALUES (${org}, CURRENT_TIMESTAMP, 'billing.reseller_legacy', 'allow')`;
+          }),
+        ).rejects.toMatchObject({ code: "23514" });
+        const [retry] =
+          await tx`SELECT security.maintain_audit_partitions() AS result`;
+        expect(retry?.result.created).toEqual([]);
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+  });
+
   it("preserves current DEFAULT rows, expires calendar-old rows, and holds the cross-process lock", async () => {
     const org = randomUUID();
     const currentId = randomUUID();

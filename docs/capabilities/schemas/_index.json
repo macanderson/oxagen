@@ -1,5 +1,5 @@
 {
-  "generatedCount": 334,
+  "generatedCount": 335,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2228,7 +2228,8 @@
       "domain": "cost",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -3240,6 +3241,18 @@
       "domain": "evidence",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_governance_mode",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

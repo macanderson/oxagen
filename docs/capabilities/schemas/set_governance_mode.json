@@ -1,0 +1,163 @@
+{
+  "name": "set_governance_mode",
+  "domain": "workspace",
+  "description": "Set the steering governance mode of a workspace by writing .oxagen/rules/governance.toml on its main repository. Under solo the change is committed to the production branch; under team or regulated it opens a pull request for review, which an org Owner or Admin, or a workspace Owner or Admin, may skip with applyImmediately. The active workspace unless workspaceId names another one in the organization.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "workspace"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "workspaceId": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "solo",
+          "team",
+          "regulated"
+        ]
+      },
+      "applyImmediately": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "required": [
+      "mode"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "applied",
+          "proposed",
+          "unchanged"
+        ]
+      },
+      "requestedMode": {
+        "type": "string",
+        "enum": [
+          "solo",
+          "team",
+          "regulated"
+        ]
+      },
+      "previousMode": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "solo",
+              "team",
+              "regulated"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "effectiveMode": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "solo",
+              "team",
+              "regulated"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "fullName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "productionBranch": {
+        "type": "string",
+        "minLength": 1
+      },
+      "commitSha": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pullRequest": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "htmlUrl": {
+                "type": "string",
+                "format": "uri"
+              },
+              "reused": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "number",
+              "htmlUrl",
+              "reused"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "overrodeReview": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "outcome",
+      "requestedMode",
+      "previousMode",
+      "effectiveMode",
+      "fullName",
+      "productionBranch",
+      "commitSha",
+      "pullRequest",
+      "overrodeReview"
+    ],
+    "additionalProperties": false
+  }
+}

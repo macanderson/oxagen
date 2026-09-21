@@ -80,6 +80,12 @@ export const auditEventFilters = {
 
 const auditEvent = z.object({
   id: z.string().describe("The security event's id"),
+  detail: z
+    .record(z.string(), z.unknown())
+    .nullish()
+    .describe(
+      "Stored event evidence, including approval-rule invalidation facts",
+    ),
   source: z
     .enum(["security"])
     .describe("Which audit spine the event came from"),

@@ -2278,11 +2278,22 @@ async function initializeDaemon(
         // control path is done, or a fourteen-minute git drain would drop every
         // poll in between and put the stall straight back.
         controlTick()
-          .catch((error) =>
+          .catch((error) => {
+            // The code and the first frame name the site. A message alone
+            // ("Cannot create a string longer than 0x1fffffe8 characters",
+            // nine thousand times over nine hours) named nothing.
+            const code =
+              error instanceof Error && "code" in error
+                ? ` [${String((error as { code: unknown }).code)}]`
+                : "";
+            const site =
+              error instanceof Error && typeof error.stack === "string"
+                ? (error.stack.split("\n")[1]?.trim() ?? "")
+                : "";
             log(
-              `tick failed: ${error instanceof Error ? error.message : String(error)}`,
-            ),
-          )
+              `tick failed${code}: ${error instanceof Error ? error.message : String(error)}${site ? ` at ${site}` : ""}`,
+            );
+          })
           .finally(() => {
             ticking = false;
           });

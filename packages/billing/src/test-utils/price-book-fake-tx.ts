@@ -132,6 +132,10 @@ function matches(row: PriceRow, cond: PriceCond): boolean {
       return cond.conds.some((c) => matches(row, c));
     case "isNull":
       return valueOf(row, cond.col) === null;
+    case "gt":
+      return (valueOf(row, cond.col) as Date).getTime() > cond.val.getTime();
+    case "lte":
+      return (valueOf(row, cond.col) as Date).getTime() <= cond.val.getTime();
     case "eq":
       return sameValue(valueOf(row, cond.col), cond.val);
     case "inArray":
@@ -412,6 +416,25 @@ export function fakePriceExecutor(store: FakePriceStore) {
         const chain = {
           where: (cond: PriceCond) => {
             rows = rows.filter((r) => matches(r, cond));
+            return chain;
+          },
+          orderBy: (...order: unknown[]) => {
+            rows.sort((a, b) => {
+              for (const col of order) {
+                if (is(col, SQL)) {
+                  const result =
+                    (b.effectiveFrom as Date).getTime() -
+                    (a.effectiveFrom as Date).getTime();
+                  if (result !== 0) return result;
+                } else {
+                  const result = String(valueOf(a, col)).localeCompare(
+                    String(valueOf(b, col)),
+                  );
+                  if (result !== 0) return result;
+                }
+              }
+              return 0;
+            });
             return chain;
           },
           // A select is thenable at every stage in drizzle — an unlimited read
