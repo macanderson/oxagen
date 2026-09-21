@@ -205,7 +205,7 @@ export async function readUsageBreakdown(args: {
       query: `
         SELECT ${keyExpr} AS group_key${extraSelect ? `, ${extraSelect}` : ""},
           ${AGG_SELECT}
-        FROM token_usage
+        FROM metered_token_usage
         ${where}
         GROUP BY group_key
         ORDER BY cost_micros DESC, executions DESC
@@ -222,7 +222,7 @@ export async function readUsageBreakdown(args: {
       query: `
         SELECT toString(toDate(created_at)) AS day,
           ${AGG_SELECT}
-        FROM token_usage
+        FROM metered_token_usage
         ${where}
         GROUP BY day
         ORDER BY day ASC

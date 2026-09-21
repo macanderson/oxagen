@@ -6,6 +6,7 @@ import {
   type LanguageModel,
   type ToolSet,
   type StreamTextResult,
+  type LanguageModelUsage,
 } from "ai";
 import type { JSONObject } from "@ai-sdk/provider";
 import {
@@ -13,21 +14,13 @@ import {
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
-import { recordTokenUsage } from "./record-token-usage";
-import {
-  chargeUsageCredits,
-  providerCostUsdMicros,
-  type CreditReason,
-} from "@oxagen/billing";
-import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
+import { admitTokenUsage, recordTokenUsage } from "./record-token-usage";
+import { providerCostUsdMicros, type CreditReason } from "@oxagen/billing";
 import { trace, context, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import { defaultModel, modelIdOf } from "./models";
 import type { EffortLevel } from "./catalog";
 
-const logger = pino({
-  level: process.env.LOG_LEVEL ?? "info",
-  base: { app: "ai.stream" },
-});
+const logger = pino({ name: "ai.stream" });
 
 // ── Reasoning token budget per effort level (tokens allocated to thinking) ──
 const REASONING_BUDGET: Record<EffortLevel, number> = {
@@ -229,8 +222,7 @@ export interface StreamAgentReplyArgs {
      * `token_usage.execution_step_id` (a UUID column) and
      * `credit_ledger.reference_id` (a Postgres `uuid` column), so it MUST be a
      * valid UUID. A free-form string like "unknown" breaks BOTH writes — the
-     * ClickHouse row is dropped and the credit charge throws and is swallowed,
-     * leaving the turn unbilled. Unlike the generateObject/embed paths this
+     * delivery and settlement cannot complete. Unlike the generateObject/embed paths this
      * field is not nullable, so there is no "no step" escape hatch: mint a UUID.
      */
     messageId: string;
@@ -280,15 +272,6 @@ export function streamAgentReply(
   // know token counts.  No-op when OTEL SDK is not initialised (NoopTracer).
   // Attributes are PII-safe: model/provider/surface only — never prompt text.
   //
-  // KNOWN GAP — onFinish is the ONLY terminal path wired here. The SDK fires it
-  // on a clean finish, and routes an abort to `onAbort` and a failure to
-  // `onError`, neither of which this function supplies (`args.onError` is the
-  // caller's own handler and is forwarded verbatim, not chained). So a turn the
-  // client cancels mid-stream — the agent-engine step loop passes a real
-  // AbortSignal — leaves this span open forever and charges the org nothing for
-  // the tokens the provider already produced. Wiring `onEnd` (fires on every
-  // terminal outcome) is the fix; it is a behavior change and deliberately not
-  // made here.
   const _otelSpan = trace.getTracer("oxagen.ai.stream").startSpan("ai.stream", {
     kind: SpanKind.CLIENT,
     attributes: {
@@ -301,19 +284,10 @@ export function streamAgentReply(
   // it for proper parent↔child span linkage in the trace backend.
   const _capturedOtelCtx = trace.setSpan(context.active(), _otelSpan);
 
-  // Capture the tenant scope NOW, before the stream starts. The AI SDK's
-  // onFinish callback fires asynchronously after the stream completes — by then
-  // the AsyncLocalStorage context has ended, so withTenantDb / requireScope
-  // throw TenantScopeError. We re-establish the scope inside onFinish via
-  // runInTenantScope. Prefer the active ALS scope, but FALL BACK to the
-  // telemetry org/workspace (always provided) when streamAgentReply was invoked
-  // outside an ALS scope (e.g. the chat route handler isn't itself wrapped in
-  // runInTenantScope) — otherwise the credit charge runs scopeless and the
-  // org is never billed for the turn (a silent revenue leak).
-  const capturedScope: TenantScope = getScope() ?? {
-    orgId: args.telemetry.orgId,
-    workspaceId: args.telemetry.workspaceId,
-  };
+  const completedUsage: LanguageModelUsage[] = [];
+  let usageId: string | undefined;
+  let promptHash: string | undefined;
+  let settlement: Promise<void> | undefined;
   // Render the user-message content into a stable hash key. The prompt
   // text itself stays in Postgres `chat.messages.content` — we ship only
   // the cohort key to ClickHouse per memory.
@@ -349,33 +323,23 @@ export function streamAgentReply(
       ]
     : [];
 
-  return streamText({
-    model,
-    messages: [...cachedSystem, ...args.messages],
-    // AI SDK v7 rejects system-role entries inside `messages` by default. We
-    // deliberately carry the system prompt as a leading system message (only
-    // message-level providerOptions can hold the cache_control marker above),
-    // and proxy callers (agent.llm) forward client system messages verbatim.
-    allowSystemInMessages: true,
-    tools: args.tools,
-    // When the provider locks temperature (Anthropic extended thinking,
-    // OpenAI reasoning models) we must omit the field entirely — sending
-    // any value, even the default, causes the upstream to reject the request.
-    ...(rc.temperatureLocked ? {} : { temperature: args.temperature ?? 0.7 }),
-    // Vendor-specific reasoning/thinking options, or nothing when effort is
-    // undefined or the vendor has no knob (deepseek).
-    ...(rc.providerOptions ? { providerOptions: rc.providerOptions } : {}),
-    ...(args.stopWhen !== undefined ? { stopWhen: args.stopWhen } : {}),
-    ...(args.onError !== undefined ? { onError: args.onError } : {}),
-    ...(args.maxRetries !== undefined ? { maxRetries: args.maxRetries } : {}),
-    ...(args.maxOutputTokens !== undefined
-      ? { maxOutputTokens: args.maxOutputTokens }
-      : {}),
-    ...(args.toolChoice !== undefined ? { toolChoice: args.toolChoice } : {}),
-    ...(args.abortSignal !== undefined
-      ? { abortSignal: args.abortSignal }
-      : {}),
-    onFinish: async (event) => {
+  const finish = (
+    event: {
+      totalUsage: {
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+        inputTokenDetails?: {
+          cacheReadTokens?: number;
+          cacheWriteTokens?: number;
+        };
+      };
+      text: string;
+      finishReason: string;
+    },
+    complete: boolean,
+  ): Promise<void> => {
+    settlement ??= (async () => {
       const durationMs = Date.now() - startedAt;
       // AI SDK v6: usage fields are inputTokens/outputTokens (was
       // promptTokens/completionTokens in v4). `totalUsage` aggregates every
@@ -423,77 +387,148 @@ export function streamAgentReply(
           "ai.cost_usd_micros": costUsdMicros,
           "ai.duration_ms": durationMs,
         });
-        _otelSpan.setStatus({ code: SpanStatusCode.OK });
+        _otelSpan.setStatus({
+          code: complete ? SpanStatusCode.OK : SpanStatusCode.ERROR,
+        });
         _otelSpan.end();
       });
 
-      // Telemetry write is best-effort; if ClickHouse is unreachable, the
-      // chat still completes and the message persists in Postgres.
-      try {
-        const promptHash = await hashPrompt(promptTextForHash);
-        await recordTokenUsage([
-          {
-            execution_step_id: args.telemetry.messageId,
-            org_id: args.telemetry.orgId,
-            workspace_id: args.telemetry.workspaceId,
-            model: modelId,
-            provider,
-            input_tokens: inputTokens,
-            output_tokens: outputTokens,
-            cached_tokens: cachedTokens,
-            cache_write_tokens: cacheWriteTokens,
-            cost_usd_micros: costUsdMicros,
-            duration_ms: durationMs,
-            surface: args.telemetry.surface,
-            prompt_hash: promptHash,
-            created_at: new Date().toISOString(),
-          },
-        ]);
-      } catch (err) {
-        // Swallow — telemetry must never fail the chat turn.
-        logger.error({ err }, "stream telemetry write failed");
-      }
-
-      // The gate: debit the org's credits for what this call cost us, marked
-      // up to the target margin. Best-effort and post-call — a metering
-      // failure must never fail the user's turn. Admission control (refusing a
-      // turn when the balance is empty) is the caller's pre-turn guard via
-      // billing.hasCreditBalance.
-      //
-      // chargeUsageCredits calls withTenantDb internally, which calls
-      // requireScope(). The AI SDK fires onFinish after the stream ends, outside
-      // the original request ALS context. We re-establish the scope using the
-      // context captured synchronously before the stream was started.
-      //
-      // ADR-053 §3: only when the platform key paid. A call the organisation's
-      // own key answered is reported above and charged nothing here.
-      if (args.fundedBy === "platform") {
-        try {
-          // capturedScope is always set (active ALS scope, or rebuilt from the
-          // telemetry org/workspace above), so chargeUsageCredits → withTenantDb →
-          // requireScope always runs inside a valid tenant scope.
-          await runInTenantScope(capturedScope, async () => {
-            await chargeUsageCredits({
+      if (promptHash === undefined)
+        throw new Error("Usage prompt hash is missing.");
+      if (!usageId) throw new Error("Usage admission is missing.");
+      await recordTokenUsage(
+        usageId,
+        {
+          execution_step_id: args.telemetry.messageId,
+          org_id: args.telemetry.orgId,
+          workspace_id: args.telemetry.workspaceId,
+          model: modelId,
+          provider,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          cached_tokens: cachedTokens,
+          cache_write_tokens: cacheWriteTokens,
+          cost_usd_micros: costUsdMicros,
+          duration_ms: durationMs,
+          surface: args.telemetry.surface,
+          prompt_hash: promptHash,
+          created_at: new Date().toISOString(),
+        },
+        args.fundedBy === "platform"
+          ? {
               orgId: args.telemetry.orgId,
               referenceId: args.telemetry.messageId,
               reason: args.chargeReason,
               ...usage,
-            });
-          });
-        } catch (err) {
-          // Swallow — credit metering must never fail the chat turn.
-          logger.error({ err }, "stream credit charge failed");
-        }
+            }
+          : undefined,
+        complete &&
+          event.totalUsage.inputTokens !== undefined &&
+          event.totalUsage.outputTokens !== undefined,
+      );
+      if (complete) {
+        await args.onFinish?.({
+          text: event.text,
+          usage: {
+            promptTokens: inputTokens,
+            completionTokens: outputTokens,
+            totalTokens: event.totalUsage.totalTokens ?? 0,
+          },
+          finishReason: event.finishReason,
+        });
       }
-      await args.onFinish?.({
-        text: event.text,
-        usage: {
-          promptTokens: inputTokens,
-          completionTokens: outputTokens,
-          totalTokens: event.totalUsage.totalTokens ?? 0,
+    })().catch((err: unknown) => {
+      logger.error(
+        { err, usageId, alert: "billing_usage_finalize_failed" },
+        "Usage settlement remains pending",
+      );
+      throw err;
+    });
+    return settlement;
+  };
+
+  const finishPartial = async (
+    usages: readonly LanguageModelUsage[],
+  ): Promise<void> => {
+    const totalUsage = usages.reduce(
+      (total, usage) => ({
+        inputTokens: total.inputTokens + (usage.inputTokens ?? 0),
+        outputTokens: total.outputTokens + (usage.outputTokens ?? 0),
+        totalTokens: total.totalTokens + (usage.totalTokens ?? 0),
+        inputTokenDetails: {
+          cacheReadTokens:
+            total.inputTokenDetails.cacheReadTokens +
+            (usage.inputTokenDetails?.cacheReadTokens ?? 0),
+          cacheWriteTokens:
+            total.inputTokenDetails.cacheWriteTokens +
+            (usage.inputTokenDetails?.cacheWriteTokens ?? 0),
         },
-        finishReason: event.finishReason,
-      });
+      }),
+      {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        inputTokenDetails: { cacheReadTokens: 0, cacheWriteTokens: 0 },
+      },
+    );
+    if (usages.length > 0)
+      await finish({ totalUsage, text: "", finishReason: "other" }, false);
+    else {
+      _otelSpan.setStatus({ code: SpanStatusCode.ERROR });
+      _otelSpan.end();
+    }
+  };
+
+  return streamText({
+    model,
+    prepareStep: async () => {
+      promptHash ??= await hashPrompt(promptTextForHash);
+      usageId ??= await admitTokenUsage(
+        args.telemetry.orgId,
+        args.telemetry.workspaceId,
+      );
+      return {};
     },
+    messages: [...cachedSystem, ...args.messages],
+    // AI SDK v7 rejects system-role entries inside `messages` by default. We
+    // deliberately carry the system prompt as a leading system message (only
+    // message-level providerOptions can hold the cache_control marker above),
+    // and proxy callers (agent.llm) forward client system messages verbatim.
+    allowSystemInMessages: true,
+    tools: args.tools,
+    // When the provider locks temperature (Anthropic extended thinking,
+    // OpenAI reasoning models) we must omit the field entirely — sending
+    // any value, even the default, causes the upstream to reject the request.
+    ...(rc.temperatureLocked ? {} : { temperature: args.temperature ?? 0.7 }),
+    // Vendor-specific reasoning/thinking options, or nothing when effort is
+    // undefined or the vendor has no knob (deepseek).
+    ...(rc.providerOptions ? { providerOptions: rc.providerOptions } : {}),
+    ...(args.stopWhen !== undefined ? { stopWhen: args.stopWhen } : {}),
+    onStepEnd: (event) => {
+      completedUsage.push(event.usage);
+    },
+    onError: async (event) => {
+      _otelSpan.setStatus({ code: SpanStatusCode.ERROR });
+      _otelSpan.end();
+      logger.error(
+        { usageId, alert: "billing_usage_incomplete" },
+        "Provider call ended before complete usage was reported",
+      );
+      try {
+        await finishPartial(completedUsage);
+      } finally {
+        await args.onError?.(event);
+      }
+    },
+    ...(args.maxRetries !== undefined ? { maxRetries: args.maxRetries } : {}),
+    ...(args.maxOutputTokens !== undefined
+      ? { maxOutputTokens: args.maxOutputTokens }
+      : {}),
+    ...(args.toolChoice !== undefined ? { toolChoice: args.toolChoice } : {}),
+    ...(args.abortSignal !== undefined
+      ? { abortSignal: args.abortSignal }
+      : {}),
+    onFinish: (event) => finish(event, true),
+    onAbort: ({ steps }) => finishPartial(steps.map((step) => step.usage)),
   });
 }

@@ -1,4 +1,3 @@
-import pino from "pino";
 import type { TurnFunding } from "./funding-source";
 import { withOutputBudgetRetry } from "./output-budget";
 import { generateObject, type LanguageModel, type ModelMessage } from "ai";
@@ -8,13 +7,8 @@ import {
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
-import { recordTokenUsage } from "./record-token-usage";
-import {
-  chargeUsageCredits,
-  providerCostUsdMicros,
-  type CreditReason,
-} from "@oxagen/billing";
-import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
+import { admitTokenUsage, recordTokenUsage } from "./record-token-usage";
+import { providerCostUsdMicros, type CreditReason } from "@oxagen/billing";
 import { defaultModel, modelIdOf } from "./models";
 import {
   readCache,
@@ -23,11 +17,6 @@ import {
   type CacheOptions,
   type CachedUsage,
 } from "./cache";
-
-const logger = pino({
-  level: process.env.LOG_LEVEL ?? "info",
-  base: { app: "ai.object" },
-});
 
 export interface GenerateObjectArgs<T> {
   /**
@@ -173,10 +162,10 @@ export interface GenerateObjectResult<T> {
  * AI SDK `generateObject` primitive, with full telemetry instrumentation.
  *
  * After generation the function records:
- * - A `token_usage` row to ClickHouse via @oxagen/telemetry (best-effort).
- * - A credit debit through @oxagen/billing (best-effort, post-call).
+ * - A durable delivery row and its credit debit in one Postgres transaction.
+ * - A scheduled worker delivers the usage to ClickHouse.
  *
- * Both writes are swallowed on failure — they must never fail the caller.
+ * Admission failure refuses the provider call. Settlement failure propagates.
  *
  * @example
  * ```ts
@@ -263,6 +252,11 @@ export async function generateObjectFor<T>(
   // refusal names the ceiling it can afford, so it is answerable: ask once more
   // at that number (#2629). Anything that is not a credit refusal propagates
   // untouched, and a second refusal is not retried again.
+  const promptHash = cachePromptHash ?? (await hashPrompt(promptTextForHash));
+  const usageId = await admitTokenUsage(
+    args.telemetry.orgId,
+    args.telemetry.workspaceId,
+  );
   const result = await withOutputBudgetRetry(
     (maxOutputTokens) =>
       generateObject({
@@ -306,6 +300,35 @@ export async function generateObjectFor<T>(
   };
   const costUsdMicros = providerCostUsdMicros(usage);
 
+  await recordTokenUsage(
+    usageId,
+    {
+      execution_step_id: args.telemetry.messageId,
+      org_id: args.telemetry.orgId,
+      workspace_id: args.telemetry.workspaceId,
+      model: modelId,
+      provider,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cached_tokens: cachedTokens,
+      cache_write_tokens: cacheWriteTokens,
+      cost_usd_micros: costUsdMicros,
+      duration_ms: durationMs,
+      surface: args.telemetry.surface,
+      prompt_hash: promptHash,
+      created_at: new Date().toISOString(),
+    },
+    args.fundedBy === "platform"
+      ? {
+          orgId: args.telemetry.orgId,
+          referenceId: args.telemetry.messageId ?? undefined,
+          reason: args.chargeReason,
+          ...usage,
+        }
+      : undefined,
+    result.usage.inputTokens !== undefined &&
+      result.usage.outputTokens !== undefined,
+  );
   // Populate the cache on a miss so the next identical call is free. Best-effort
   // inside writeCache; reuses the query embedding computed during the read.
   if (cacheOptions && cachePromptHash) {
@@ -333,67 +356,6 @@ export async function generateObjectFor<T>(
       "object",
       cacheQueryEmbedding,
     );
-  }
-
-  // Telemetry write is best-effort; if ClickHouse is unreachable the caller
-  // still gets the object back (same contract as stream.ts).
-  try {
-    const promptHash = cachePromptHash ?? (await hashPrompt(promptTextForHash));
-    await recordTokenUsage([
-      {
-        execution_step_id: args.telemetry.messageId,
-        org_id: args.telemetry.orgId,
-        workspace_id: args.telemetry.workspaceId,
-        model: modelId,
-        provider,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cached_tokens: cachedTokens,
-        cache_write_tokens: cacheWriteTokens,
-        cost_usd_micros: costUsdMicros,
-        duration_ms: durationMs,
-        surface: args.telemetry.surface,
-        prompt_hash: promptHash,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-  } catch (err) {
-    // Swallow — telemetry must never fail a capability call.
-    logger.error({ err }, "generateObject telemetry write failed");
-  }
-
-  // Debit the org's credits for what this call cost us at the target margin.
-  // Best-effort and post-call — a metering failure must not fail the caller.
-  //
-  // chargeUsageCredits → consumeCredits → withTenantDb → requireScope, which
-  // needs an active tenant scope. Request-path callers have one; Inngest workers
-  // keep tenant scope tight around their own DB ops and do NOT wrap the LLM step,
-  // so this charge would otherwise run scopeless and throw TenantScopeError
-  // (silently swallowed → unbilled calls, a revenue leak). Prefer the active ALS
-  // scope, else rebuild it from the trusted telemetry org/workspace. Mirrors
-  // stream.ts's onFinish handling.
-  const capturedScope: TenantScope = getScope() ?? {
-    orgId: args.telemetry.orgId,
-    workspaceId: args.telemetry.workspaceId,
-  };
-  //
-  // ADR-053 §3: only when the platform key paid. A call the organisation's own
-  // key answered is reported above and charged nothing here.
-  if (args.fundedBy === "platform") {
-    try {
-      await runInTenantScope(capturedScope, async () => {
-        await chargeUsageCredits({
-          orgId: args.telemetry.orgId,
-          // null → undefined → NULL reference_id; never a non-UUID string.
-          referenceId: args.telemetry.messageId ?? undefined,
-          reason: args.chargeReason,
-          ...usage,
-        });
-      });
-    } catch (err) {
-      // Swallow — credit metering must never fail a capability call.
-      logger.error({ err }, "generateObject credit charge failed");
-    }
   }
 
   return {
