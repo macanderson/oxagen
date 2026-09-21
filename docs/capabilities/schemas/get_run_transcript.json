@@ -44,6 +44,7 @@
             "errors"
           ]
         },
+        "maxItems": 7,
         "default": []
       },
       "after": {
@@ -1589,7 +1590,8 @@
             "cumulativeCost"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 500
       },
       "cursor": {
         "anyOf": [

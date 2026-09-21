@@ -11,7 +11,8 @@ const gate = vi.hoisted(() => ({
   keyCreator: "u_key_creator" as string | null,
   actors: [] as (string | null)[],
 }));
-const audit = vi.hoisted(() => ({ emitSecurityEvent: vi.fn() }));
+const audit = vi.hoisted(() => ({ emitSecurityEvent: vi.fn(), info: vi.fn() }));
+vi.mock("./logger", () => ({ logger: { info: audit.info, error: vi.fn() } }));
 const plane = vi.hoisted(() => ({ resolveDataPlane: vi.fn() }));
 
 vi.mock("@oxagen/tenancy", async (importOriginal) => {
@@ -235,5 +236,76 @@ describe("set_price_entry", () => {
         outcome: "success",
       }),
     );
+  });
+});
+
+describe("atomic rate card", () => {
+  it("submits all classes in one store call and audits only committed cards", async () => {
+    const setNegotiatedPriceEntry = vi.fn();
+    const setNegotiatedPriceCard = vi.fn().mockResolvedValue([
+      { entry: entry(), closed: null },
+      {
+        entry: entry({ tokenClass: "output", microsPerMillion: 15_000_000n }),
+        closed: entry({ tokenClass: "output", microsPerMillion: 20_000_000n }),
+      },
+    ]);
+    const handler = createPriceEntrySetHandler({
+      setNegotiatedPriceEntry,
+      setNegotiatedPriceCard,
+    });
+    const card = input({
+      additionalRates: [{ tokenClass: "output", usdPerMillion: 15 }],
+    });
+    const result = await handler(card, ctx());
+    expect(setNegotiatedPriceEntry).not.toHaveBeenCalled();
+    expect(setNegotiatedPriceCard).toHaveBeenCalledOnce();
+    expect(setNegotiatedPriceCard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: SCOPE.orgId,
+        rates: [
+          { tokenClass: "input_uncached", microsPerMillion: 2_400_000n },
+          { tokenClass: "output", microsPerMillion: 15_000_000n },
+        ],
+      }),
+    );
+    expect(result.additionalEntries?.[0]?.entry.tokenClass).toBe("output");
+    expect(audit.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        additionalRates: [
+          {
+            tokenClass: "output",
+            microsPerMillion: "15000000",
+            previousMicrosPerMillion: "20000000",
+          },
+        ],
+      }),
+      expect.any(String),
+    );
+    audit.emitSecurityEvent.mockClear();
+    setNegotiatedPriceCard.mockRejectedValue(new Error("second class refused"));
+    await expect(handler(card, ctx())).rejects.toThrow("second class refused");
+    expect(audit.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses a repeated primary class before any mutation", async () => {
+    const setNegotiatedPriceEntry = vi.fn();
+    const setNegotiatedPriceCard = vi.fn();
+    const handler = createPriceEntrySetHandler({
+      setNegotiatedPriceEntry,
+      setNegotiatedPriceCard,
+    });
+    await expect(
+      handler(
+        input({
+          additionalRates: [{ tokenClass: "input_uncached", usdPerMillion: 3 }],
+        }),
+        ctx(),
+      ),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "duplicate_price_class",
+    });
+    expect(setNegotiatedPriceEntry).not.toHaveBeenCalled();
+    expect(setNegotiatedPriceCard).not.toHaveBeenCalled();
   });
 });

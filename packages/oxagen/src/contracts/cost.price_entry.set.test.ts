@@ -36,7 +36,7 @@ describe("set_price_entry contract", () => {
     ).toBe(true);
   });
 
-  it("prices exactly one token class per call", () => {
+  it("requires the primary token class", () => {
     expect(
       costPriceEntrySet.input.safeParse({
         ...input,
@@ -47,16 +47,37 @@ describe("set_price_entry contract", () => {
       costPriceEntrySet.input.safeParse({ ...input, tokenClass: "thinking" })
         .success,
     ).toBe(false);
-    // No whole-card shape: a partial write would leave an org priced at a
-    // blend of negotiated input and list output that nobody agreed to.
+    // A card still needs its primary class.
     const { tokenClass: _omitted, ...withoutClass } = input;
     expect(costPriceEntrySet.input.safeParse(withoutClass).success).toBe(false);
   });
 
   it("answers with the row now in effect and the row it closed", () => {
     expect(Object.keys(costPriceEntrySet.output.shape).sort()).toEqual([
+      "additionalEntries",
       "closed",
       "entry",
     ]);
   });
+});
+
+it("accepts bounded additional classes and refuses invalid prices", () => {
+  expect(
+    costPriceEntrySet.input.parse({
+      ...input,
+      additionalRates: [{ tokenClass: "output", usdPerMillion: 15 }],
+    }).additionalRates,
+  ).toHaveLength(1);
+  for (const additionalRates of [
+    [],
+    [{ tokenClass: "output", usdPerMillion: -1 }],
+    Array.from({ length: 11 }, () => ({
+      tokenClass: "output",
+      usdPerMillion: 15,
+    })),
+  ]) {
+    expect(
+      costPriceEntrySet.input.safeParse({ ...input, additionalRates }).success,
+    ).toBe(false);
+  }
 });

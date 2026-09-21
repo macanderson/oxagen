@@ -62,6 +62,7 @@
           ],
           "additionalProperties": false
         },
+        "maxItems": 100,
         "default": []
       },
       "daemon": {
@@ -90,7 +91,8 @@
             "items": {
               "type": "string",
               "maxLength": 64
-            }
+            },
+            "maxItems": 32
           }
         },
         "additionalProperties": false
@@ -260,7 +262,8 @@
                 "expires_at"
               ],
               "additionalProperties": false
-            }
+            },
+            "maxItems": 100
           }
         },
         "required": [
