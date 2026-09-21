@@ -4,6 +4,7 @@ import { CapabilityError, invoke } from "@oxagen/oxagen/kernel";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
+import { logger } from "../../middleware/logger";
 
 /**
  * How long one read waits inside the handler for a frame past the cursor
@@ -102,15 +103,16 @@ runStreamRoute.get("/", async (c) => {
   void (async () => {
     let page = first as Awaited<ReturnType<typeof readRun>>;
     let cursor = after;
-    const deadline = Date.now() + IDLE_MS;
+    let deadline = Date.now() + IDLE_MS;
     write(`event: run\ndata: ${JSON.stringify({ run: page.run })}\n\n`);
     try {
       for (;;) {
         for (const frame of page.frames.frames) {
           write(`id: ${frame.cursor}\ndata: ${JSON.stringify(frame)}\n\n`);
+          if (!closed) cursor = frame.cursor;
         }
-        if (page.frames.cursor !== null) cursor = page.frames.cursor;
         if (closed) break;
+        if (page.frames.frames.length > 0) deadline = Date.now() + IDLE_MS;
         // A sealed or halted run whose page had nothing behind it is done:
         // nothing will ever lie past it. A `live` run with a null cursor is
         // merely caught up — no frames yet, or a reconnect that landed
@@ -133,10 +135,20 @@ runStreamRoute.get("/", async (c) => {
       }
     } catch (err) {
       // The stream is open, so a failure is a typed event and not a status.
+      const code = streamErrorCode(err);
+      if (code === undefined) {
+        logger.error(
+          { err, runId, requestId: ctx.requestId },
+          "run stream failed",
+        );
+      }
       write(
         `event: error\ndata: ${JSON.stringify({
-          message: err instanceof Error ? err.message : "Stream error",
-          code: streamErrorCode(err),
+          message:
+            code !== undefined && err instanceof Error
+              ? err.message
+              : "Run stream unavailable",
+          code: code ?? "stream_unavailable",
           cursor: cursor ?? null,
         })}\n\n`,
       );

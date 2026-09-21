@@ -17,7 +17,6 @@
 // signal is coalesced: the hook calls back once per `COALESCE_MS`, however
 // many frames landed in that window.
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "@/ui/navigation";
 
 /** How long frames are gathered before the player is told to read the tail. */
 const COALESCE_MS = 750;
@@ -29,6 +28,8 @@ export type StreamState =
   | "open"
   /** The run ended and the stream said so; nothing more will arrive. */
   | "sealed"
+  /** The server refused further reads after access changed. */
+  | "denied"
   /** The connection dropped and did not come back. The run kept recording. */
   | "lost";
 
@@ -58,7 +59,13 @@ export function useRunStream({
   const latest = useRef(onFrames);
   latest.current = onFrames;
 
+  const deniedUrl = useRef<string | null>(null);
+
   useEffect(() => {
+    if (deniedUrl.current === url) {
+      setState("denied");
+      return;
+    }
     if (!enabled) {
       setState("off");
       return;
@@ -79,12 +86,20 @@ export function useRunStream({
       }, COALESCE_MS);
     }
 
+    function flushSignal(force = false) {
+      const pending = timer !== null;
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      if (!stopped && (pending || force)) latest.current();
+    }
+
     function open(after: string | null) {
       if (stopped) return;
       const target =
         after === null ? url : `${url}?after=${encodeURIComponent(after)}`;
       const es = new EventSource(target, { withCredentials: true });
       source = es;
+      let terminalError = false;
       es.onopen = () => {
         if (!stopped) setState("open");
       };
@@ -108,17 +123,43 @@ export function useRunStream({
         }
         // Whatever the reason, the tail is read once more: the last frames
         // arrived in the same batch as the terminator.
-        latest.current();
+        flushSignal(true);
         if (reason === "sealed") {
           setState("sealed");
           return;
         }
         open(cursor);
       });
+      es.addEventListener("error", (event: Event) => {
+        if (stopped || !(event instanceof MessageEvent)) return;
+        // A named server error is terminal. Native transport errors carry no
+        // payload and retain EventSource's retry behavior below.
+        let code: string | null = null;
+        try {
+          const payload: unknown = JSON.parse(String(event.data));
+          if (
+            payload !== null &&
+            typeof payload === "object" &&
+            "code" in payload &&
+            typeof payload.code === "string"
+          ) {
+            code = payload.code;
+          }
+        } catch {
+          // A malformed server error is still a terminal stream failure.
+        }
+        terminalError = true;
+        es.close();
+        flushSignal(code === "invalid_input");
+        const denied = code === "authz_denied" || code === "forbidden";
+        if (denied) deniedUrl.current = url;
+        setState(denied ? "denied" : "lost");
+      });
       es.onerror = () => {
         // EventSource reconnects on its own unless the connection is closed
         // for good; only that second case is a loss the person should see.
-        if (es.readyState === EventSource.CLOSED && !stopped) setState("lost");
+        if (es.readyState === EventSource.CLOSED && !stopped && !terminalError)
+          setState("lost");
       };
     }
 
@@ -132,33 +173,4 @@ export function useRunStream({
   }, [url, enabled]);
 
   return state;
-}
-
-/**
- * Keep a live run's empty Transcript tab subscribed to the stream. Without
- * this, an empty filter (or a run with no frames yet) renders a static panel
- * and never mounts the player that opens EventSource, so later matching
- * frames never appear. A frame landing re-reads the page so the first
- * matching entry can mount the full player.
- */
-export function LiveEmptyFollow({
-  org,
-  ws,
-  runId,
-}: {
-  org: string;
-  ws: string;
-  runId: string;
-}): null {
-  const navigate = useNavigate();
-  useRunStream({
-    url: `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(
-      ws,
-    )}/runs/${encodeURIComponent(runId)}/stream`,
-    enabled: true,
-    onFrames: () => {
-      navigate.refresh();
-    },
-  });
-  return null;
 }
