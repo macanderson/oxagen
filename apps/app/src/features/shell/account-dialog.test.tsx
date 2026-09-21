@@ -440,6 +440,33 @@ describe("Profile", () => {
     );
   });
 
+  it.each(["cancel", "save"] as const)(
+    "preserves the name draft through avatar %s",
+    async (action) => {
+      const { user } = await openDialog();
+      await user.clear(screen.getByTestId("account-display-name"));
+      await user.type(
+        screen.getByTestId("account-display-name"),
+        "New draft name",
+      );
+      await user.click(screen.getByTestId("edit-avatar"));
+      await screen.findByTestId("avatar-dialog");
+      if (action === "cancel") {
+        await user.click(screen.getByRole("button", { name: "Cancel" }));
+      } else {
+        await user.click(screen.getByTestId("avatar-save"));
+        await waitFor(() => expect(updateProfile).toHaveBeenCalledOnce());
+        expect(updateProfile.mock.calls[0]?.[1]).not.toHaveProperty(
+          "displayName",
+        );
+      }
+      await screen.findByTestId("account-dialog");
+      expect(screen.getByTestId("account-display-name")).toHaveValue(
+        "New draft name",
+      );
+    },
+  );
+
   it("previews a designed avatar as the avatar it is, not as initials", async () => {
     await openDialog(
       "profile",
@@ -834,6 +861,26 @@ describe("Security", () => {
     ).toBeNull();
   });
 
+  it.each(["refused", "thrown"] as const)(
+    "keeps devices and retries a %s revoke",
+    async (failure) => {
+      if (failure === "refused") liveRevokeSession.mockResolvedValueOnce(false);
+      else liveRevokeSession.mockRejectedValueOnce(new Error("offline"));
+      const { user } = await openDialog("security");
+      const sessions = await screen.findByTestId("account-sessions");
+      await user.click(within(sessions).getByTestId("account-session-revoke"));
+      expect(
+        await screen.findByTestId("account-session-revoke-failed"),
+      ).toHaveTextContent("Try again");
+      expect(sessions).toHaveTextContent("iPhone");
+      expect(screen.queryByTestId("account-sessions-failed")).toBeNull();
+      liveRevokeSession.mockResolvedValueOnce(true);
+      await user.click(within(sessions).getByTestId("account-session-revoke"));
+      await waitFor(() => expect(sessions).not.toHaveTextContent("iPhone"));
+      expect(liveRevokeSession).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it("reissues recovery codes after the password, and shows them once", async () => {
     const { user } = await openDialog("security");
     await user.click(screen.getByTestId("account-codes-open"));
@@ -967,7 +1014,7 @@ describe("Security", () => {
   // keyed on the tab name and unmounted when the dialog closes, so if it held
   // the only copy, a switch or a close mid-flight voided one set and dropped
   // the next. That is a locked-out account on the next lost authenticator.
-  it("keeps codes that arrive after the tab is left, and shows them on return", async () => {
+  it("holds the Security tab and dismissal until issued codes are acknowledged", async () => {
     let issue: ((result: unknown) => void) | undefined;
     liveRegenerateBackupCodes.mockImplementation(
       () =>
@@ -980,7 +1027,10 @@ describe("Security", () => {
     await user.type(screen.getByTestId("account-codes-password"), "hunter2");
     await user.click(screen.getByTestId("account-codes-confirm"));
 
-    // Away while it is in flight, which unmounts the tab that asked.
+    expect(screen.getByTestId("account-tab-profile")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(screen.getByTestId("account-dialog")).toBeTruthy();
     await user.click(screen.getByTestId("account-tab-profile"));
     expect(screen.queryByTestId("account-codes")).toBeNull();
     issue?.({ ok: true, codes: ["zzzz-1111", "zzzz-2222"] });
@@ -990,9 +1040,13 @@ describe("Security", () => {
     expect(shown).toHaveTextContent("zzzz-1111");
     expect(shown).toHaveTextContent("zzzz-2222");
     expect(screen.getByTestId("account-codes-held")).toBeTruthy();
+    expect(screen.getByTestId("account-tab-profile")).toBeDisabled();
+    await user.click(screen.getByTestId("account-codes-saved"));
+    expect(screen.getByTestId("account-tab-profile")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
   });
 
-  it("holds them across a closed dialog too", async () => {
+  it("keeps the dialog open while issued codes await acknowledgement", async () => {
     const { user } = await openDialog("security");
     await user.click(screen.getByTestId("account-codes-open"));
     await user.type(screen.getByTestId("account-codes-password"), "hunter2");
@@ -1000,7 +1054,7 @@ describe("Security", () => {
     await screen.findByTestId("account-codes");
 
     await user.keyboard("{Escape}");
-    await user.click(screen.getByRole("button", { name: "open security" }));
+    expect(screen.getByTestId("account-dialog")).toBeTruthy();
     expect(await screen.findByTestId("account-codes")).toHaveTextContent(
       "aaaa-bbbb",
     );

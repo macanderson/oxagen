@@ -20,6 +20,8 @@ import { KeyRound, Lock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   type KeyboardEvent,
+  type Dispatch,
+  type SetStateAction,
   type SyntheticEvent,
   useCallback,
   useEffect,
@@ -81,7 +83,14 @@ type Outcome = "saved" | "invalid" | "denied" | "failed";
 const tabClass =
   "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
 
+type ProfileDraft = { userId: string; value: string };
+type ProfileDraftProps = {
+  profileDraft: ProfileDraft | null;
+  setProfileDraft: Dispatch<SetStateAction<ProfileDraft | null>>;
+};
+
 export function AccountDialog({ data }: { data: ShellData }) {
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
   const t = useTranslations("shell.account");
   const {
     accountOpen,
@@ -115,6 +124,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
   const userId = data.viewer.id;
   const vault = useRecoveryCodeVault(userId);
   const heldCodes = vault.codes;
+  const codesNeedAttention = vault.rotating || heldCodes !== null;
   const setHeldCodes = useCallback(
     (codes: string[] | null) => {
       if (codes) recoveryCodeVault.hold(userId, codes);
@@ -169,6 +179,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // dialog already holds.
   const tabRef = useRef(new Map<AccountTab, HTMLButtonElement | null>());
   const onTabKeyDown = (event: KeyboardEvent, index: number) => {
+    if (codesNeedAttention) return;
     const last = ACCOUNT_TABS.length - 1;
     const target =
       event.key === "ArrowRight"
@@ -193,8 +204,12 @@ export function AccountDialog({ data }: { data: ShellData }) {
   return (
     <SheetDialog
       open={accountOpen}
-      onOpenChange={setAccountOpen}
+      onOpenChange={(open) => {
+        if (!open) setProfileDraft(null);
+        setAccountOpen(open);
+      }}
       title={t("title")}
+      dismissible={!codesNeedAttention}
       testId="account-dialog"
       wide
       tabs={
@@ -211,6 +226,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
               }}
               type="button"
               role="tab"
+              disabled={codesNeedAttention}
               id={`account-tab-${tab}`}
               data-testid={`account-tab-${tab}`}
               aria-selected={accountTab === tab}
@@ -242,6 +258,8 @@ export function AccountDialog({ data }: { data: ShellData }) {
             key={accountTab}
             tab={accountTab}
             data={data}
+            profileDraft={profileDraft}
+            setProfileDraft={setProfileDraft}
             heldCodes={heldCodes}
             setHeldCodes={setHeldCodes}
             rotation={rotation}
@@ -289,12 +307,14 @@ type CodeVault = {
 };
 
 function AccountPanel({
+  profileDraft,
+  setProfileDraft,
   tab,
   data,
   heldCodes,
   setHeldCodes,
   rotation,
-}: { tab: AccountTab; data: ShellData } & CodeVault) {
+}: { tab: AccountTab; data: ShellData } & CodeVault & ProfileDraftProps) {
   if (tab === "preferences") return <PreferencesTab data={data} />;
   if (tab === "security")
     return (
@@ -306,19 +326,34 @@ function AccountPanel({
       />
     );
   if (tab === "privacy") return <PrivacyTab data={data} />;
-  return <ProfileTab data={data} />;
+  return (
+    <ProfileTab
+      data={data}
+      profileDraft={profileDraft}
+      setProfileDraft={setProfileDraft}
+    />
+  );
 }
 
 /* ============================== Profile ============================== */
 
-function ProfileTab({ data }: { data: ShellData }) {
+function ProfileTab({
+  data,
+  profileDraft,
+  setProfileDraft,
+}: { data: ShellData } & ProfileDraftProps) {
   const t = useTranslations("shell.account");
   const navigate = useNavigate();
   const { setAvatarOpen } = useShellState();
   const { viewer, org } = data;
   const nameId = useId();
   const emailId = useId();
-  const [displayName, setDisplayName] = useState(viewer.name ?? "");
+  const displayName =
+    profileDraft?.userId === viewer.id
+      ? profileDraft.value
+      : (viewer.name ?? "");
+  const setDisplayName = (value: string) =>
+    setProfileDraft({ userId: viewer.id, value });
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const operation = useAccountOperation(data.viewer.id, "profile");
   const { pending } = operation;
@@ -362,7 +397,14 @@ function ProfileTab({ data }: { data: ShellData }) {
         // every reason to act on. When the draft has moved on, the newer text
         // stands, and nothing claims it is saved, which is the truth.
         if (editsRef.current === sentAt) {
-          setDisplayName(result.value.displayName ?? displayName);
+          setProfileDraft((current) =>
+            current === profileDraft
+              ? {
+                  userId: viewer.id,
+                  value: result.value.displayName ?? displayName,
+                }
+              : current,
+          );
           setOutcome("saved");
         }
         // The shell renders the same person: the top bar's user menu reads
@@ -874,6 +916,7 @@ function SecurityTab({
   );
   const [revoking, setRevoking] = useState<string | null>(null);
   const [revoked, setRevoked] = useState(false);
+  const [revokeFailed, setRevokeFailed] = useState<string | null>(null);
 
   // The rotation that fills the vault can belong to an earlier mount of this
   // tab: started here, left mid-flight, and returned to before it settled. That
@@ -918,6 +961,7 @@ function SecurityTab({
     if (revoking) return;
     setRevoking(token);
     setRevoked(false);
+    setRevokeFailed(null);
     try {
       const ok = await liveRevokeSession(token);
       if (ok) {
@@ -930,9 +974,9 @@ function SecurityTab({
             : s,
         );
         setRevoked(true);
-      } else setSessions({ kind: "failed" });
+      } else setRevokeFailed(token);
     } catch {
-      setSessions({ kind: "failed" });
+      setRevokeFailed(token);
     } finally {
       setRevoking(null);
     }
@@ -1199,6 +1243,11 @@ function SecurityTab({
                   <p className={listText}>
                     {s.ipAddress ?? t("unknownAddress")}
                   </p>
+                  {revokeFailed === s.token ? (
+                    <FormAlert testId="account-session-revoke-failed">
+                      {t("revokeFailed")}
+                    </FormAlert>
+                  ) : null}
                 </div>
                 <time className={listTime} dateTime={s.updatedAt.toISOString()}>
                   {s.current

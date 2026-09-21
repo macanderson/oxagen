@@ -3660,6 +3660,7 @@ type Messages = {
         now: string;
         revoke: string;
         revoking: string;
+        revokeFailed: string;
         revoked: string;
         sessionsHint: string;
         codesBlockedByOther: string;

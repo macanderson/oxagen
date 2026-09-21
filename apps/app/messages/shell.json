@@ -161,6 +161,7 @@
         "now": "now",
         "revoke": "Revoke",
         "revoking": "Revoking",
+        "revokeFailed": "This sign-in could not be ended. Try again.",
         "revoked": "Sign-in ended. The device stops at its next request.",
         "sessionsHint": "Ending a sign-in stops that device at its next request. It does not touch an agent credential or a run token. Those are revoked on the Agents page, and that is what makes a halt stick.",
         "codesBlockedByOther": "New codes cannot be issued yet. An earlier sign-in on this page left recovery codes that were never saved, and issuing now would destroy them. Reload the page to continue.",
