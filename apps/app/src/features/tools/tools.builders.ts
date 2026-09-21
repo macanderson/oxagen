@@ -220,6 +220,7 @@ export function toolsSource(reads: ToolsReads) {
     audit: { events: refuse, exportEvents: refuse },
     steering: {
       records: refuse,
+      record: refuse,
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,

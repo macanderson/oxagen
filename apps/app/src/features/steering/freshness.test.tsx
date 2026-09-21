@@ -8,7 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { steeringFreshness } from "./steering.builders";
+import { steeringFreshness } from "@/test/steering-views";
 
 const { setSteeringGate } = vi.hoisted(() => ({ setSteeringGate: vi.fn() }));
 vi.mock("./actions", () => ({ setSteeringGate }));

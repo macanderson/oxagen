@@ -17,11 +17,20 @@ import {
   tokenizeToml,
 } from "@/shared/toml-highlight";
 
-export type CodeLanguage = "toml";
+export type CodeLanguage = "toml" | "text";
 
-/** The scanner for each language the product edits; TOML is the one today. */
+/**
+ * The scanner for each language the product edits.
+ *
+ * `text` colours nothing on purpose. A record's statement is prose, not a
+ * grammar (features/record/statement-editor.tsx), and it is edited here for
+ * the gutter, the fixed grid and the caret behaviour rather than for colour.
+ * Painting it with TOML's scanner would highlight a word that happens to look
+ * like a key, which is worse than no colour at all.
+ */
 const SCANNERS: Record<CodeLanguage, (source: string) => TomlToken[]> = {
   toml: tokenizeToml,
+  text: (source) => (source === "" ? [] : [{ kind: "text", text: source }]),
 };
 
 const TOKEN_CLASS: Record<TomlTokenKind, string | null> = {
@@ -67,6 +76,7 @@ export function CodeEditor({
   language,
   label,
   minRows = 16,
+  onCaret,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -74,6 +84,12 @@ export function CodeEditor({
   /** The accessible name of the textarea. */
   label: string;
   minRows?: number;
+  /**
+   * The caret's offset into `value`, whenever it moves. The textarea owns the
+   * caret, so an editor that prints Ln and Col reads it from here rather than
+   * reaching into the DOM for the element it does not own.
+   */
+  onCaret?: (offset: number) => void;
 }) {
   const painted = useMemo(() => highlight(value, language), [value, language]);
   const lines = value.split("\n").length;
@@ -102,6 +118,10 @@ export function CodeEditor({
           value={value}
           onChange={(event) => {
             onChange(event.target.value);
+            onCaret?.(event.target.selectionStart);
+          }}
+          onSelect={(event) => {
+            onCaret?.(event.currentTarget.selectionStart);
           }}
           rows={Math.max(lines, minRows)}
           wrap="off"

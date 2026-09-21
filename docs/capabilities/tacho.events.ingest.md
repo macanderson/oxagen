@@ -40,3 +40,5 @@ A `proof.observed` event is a witness verdict on the worker's run (Mission Contr
 ## Honesty
 
 Records from a Tacho host are `client_attested` evidence (ADR-040 section 4): Oxagen can prove what was reported and detect tampering and gaps, and hook-based denial is enforcement at the harness, not at a gateway. Every session carries its `enforcementTier`; nothing here claims prevention where it has observation.
+
+When the cached retention mandate is unproven, an event with a retained body waits with its session suffix. This preserves the dense chain and keeps the body in the same ingest request as its event. Other sessions continue to drain, even if the held session fills a batch. The hold ends 24 hours after the event timestamp, which survives a daemon restart. An invalid or future timestamp releases immediately. Release sends the event body-missing and logs the reason and count. A proven narrowing still drops the body and ships the event.

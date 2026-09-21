@@ -122,6 +122,7 @@ const source: DataSource = {
   mandates: { list: refuse, get: refuse },
   steering: {
     records: refuse,
+    record: refuse,
     proposals: refuse,
     contextPr: refuse,
     freshness: refuse,

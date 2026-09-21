@@ -132,3 +132,168 @@ export function serializeRecordFile(file: RecordFile): string {
 export function parseRecordFile(text: string): unknown {
   return parse(text);
 }
+
+/** One record as it was read back out of a file, typed. */
+export interface ParsedRecordFile {
+  setId: string;
+  lineageId: string;
+  recordId: string;
+  recordHash: string;
+  kind: RecordKind;
+  force: RecordForce;
+  sharingScope: PublishedSharingScope;
+  statement: string;
+  origin: string;
+  status: string;
+  /** Where the record came from; a proposal's uri for one Oxagen published. */
+  provenanceSourceUri: string | null;
+}
+
+const RECORD_KINDS = [
+  "rule",
+  "constraint",
+  "procedure",
+  "fact",
+  "memory",
+  "preference",
+] as const;
+const RECORD_FORCES = ["must", "should", "may", "info"] as const;
+const SHARING_SCOPES = ["repository", "workspace"] as const;
+
+function str(source: Record<string, unknown>, key: string): string | null {
+  const value = source[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function oneOf<T extends string>(
+  value: string | null,
+  allowed: readonly T[],
+): T | null {
+  return value !== null && (allowed as readonly string[]).includes(value)
+    ? (value as T)
+    : null;
+}
+
+/**
+ * The first record in a file, typed, or null when the text is not a
+ * context-record/v0.1 file with at least one complete record in it.
+ *
+ * Null rather than a throw: a file that does not parse is a lineage this
+ * workspace cannot answer for, which is the same answer as a lineage nothing
+ * holds — a 404 the page renders as not-found. A throw here would turn a
+ * hand-edited rule file into a 500 on a page whose whole job is to show the
+ * reader what is in force.
+ */
+/**
+ * The `[[record]]` table array of a rule file, or null when the file carries
+ * none. `Array.isArray` on an `unknown` narrows to `any[]`, which would spread
+ * `any` through every field read off it, so the narrowing is spelled out once
+ * here and the callers stay typed.
+ */
+function recordTables(file: Record<string, unknown>): unknown[] | null {
+  const records: unknown = file.record;
+  if (!Array.isArray(records) || records.length === 0) return null;
+  return records as unknown[];
+}
+
+export function readRecordFile(text: string): ParsedRecordFile | null {
+  let tree: unknown;
+  try {
+    tree = parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof tree !== "object" || tree === null) return null;
+  const file = tree as Record<string, unknown>;
+  if (file.schema !== RECORD_SCHEMA_TAG) return null;
+  const records = recordTables(file);
+  if (records === null) return null;
+  const first = records[0];
+  if (typeof first !== "object" || first === null) return null;
+  const raw = first as Record<string, unknown>;
+
+  const lineageId = str(raw, "lineage_id");
+  const statement = str(raw, "statement");
+  const kind = oneOf(str(raw, "kind"), RECORD_KINDS);
+  const sharingScope = oneOf(str(raw, "sharing_scope"), SHARING_SCOPES);
+  const steering = raw.steering;
+  const force =
+    typeof steering === "object" && steering !== null
+      ? oneOf(str(steering as Record<string, unknown>, "force"), RECORD_FORCES)
+      : null;
+  if (!lineageId || !statement || !kind || !sharingScope || !force) return null;
+
+  const provenance = raw.provenance;
+  return {
+    setId: str(file, "set_id") ?? "",
+    lineageId,
+    recordId: str(raw, "record_id") ?? "",
+    recordHash: str(raw, "record_hash") ?? "",
+    kind,
+    force,
+    sharingScope,
+    statement,
+    origin: str(raw, "origin") ?? "user",
+    status: str(raw, "status") ?? "active",
+    provenanceSourceUri:
+      typeof provenance === "object" && provenance !== null
+        ? str(provenance as Record<string, unknown>, "source_uri")
+        : null,
+  };
+}
+
+/**
+ * The same file with one record's statement replaced and its identity
+ * re-stamped over the new bytes.
+ *
+ * Everything else is carried through untouched, including keys Oxagen does not
+ * write: a file a person hand-edited is still that person's file, and an
+ * revision that silently dropped a field it did not recognise would change
+ * the record in ways nobody proposed. The lineage is deliberately preserved —
+ * an revised record is the same record, not a new one — while `record_id` and
+ * `record_hash` are re-derived, because they are the content's identity and
+ * the content just changed. The old hash stays true of every run that carried
+ * the old bytes.
+ *
+ * Returns null when the text is not a record file this can revise, which the
+ * caller reports rather than committing a guess.
+ */
+export function reviseRecordStatement(
+  text: string,
+  statement: string,
+): string | null {
+  let tree: unknown;
+  try {
+    tree = parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof tree !== "object" || tree === null) return null;
+  const file = tree as Record<string, unknown>;
+  if (file.schema !== RECORD_SCHEMA_TAG) return null;
+  const records = recordTables(file);
+  if (records === null) return null;
+  const first = records[0];
+  if (typeof first !== "object" || first === null) return null;
+
+  const raw: Record<string, unknown> = {
+    ...(first as Record<string, unknown>),
+    statement,
+  };
+  const { record_id, record_hash } = stampRecordObject(raw);
+  // Rebuilt key by key rather than spread, so the revised record serializes in
+  // Stella's field order: `smol-toml` writes keys in insertion order, and a
+  // file whose fields moved reads as a whole-file rewrite in the PR diff.
+  const revised: Record<string, unknown> = {};
+  for (const key of Object.keys(first as Record<string, unknown>)) {
+    if (key === "record_id") revised[key] = record_id;
+    else if (key === "record_hash") revised[key] = record_hash;
+    else if (key === "statement") revised[key] = statement;
+    else revised[key] = raw[key];
+  }
+  if (!("record_id" in revised)) revised.record_id = record_id;
+  if (!("record_hash" in revised)) revised.record_hash = record_hash;
+  if (!("statement" in revised)) revised.statement = statement;
+
+  return `${stringify({ ...file, record: [revised, ...records.slice(1)] })}\n`;
+}

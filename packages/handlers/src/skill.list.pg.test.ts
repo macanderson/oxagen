@@ -11,7 +11,7 @@
 // migrates Postgres with Atlas before `turbo run build test:unit`; a local
 // run without one is skipped, not red. Every row it writes is removed in
 // afterAll.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import {
   SKILL_HARNESS_CAP,
@@ -21,6 +21,31 @@ import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { eq, inArray } from "drizzle-orm";
 import { createSkillListHandler, postgresSkillQueries } from "./skill.list";
+
+const concurrent = vi.hoisted(() => ({
+  afterInventoryRead: null as (() => Promise<void>) | null,
+}));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  const withTenantDb: typeof real.withTenantDb = async (fn) => {
+    const value = await real.withTenantDb(fn);
+    const record = value as unknown as { totals?: unknown };
+    const isInventory =
+      record?.totals !== undefined ||
+      (Array.isArray(value) &&
+        value[0] !== null &&
+        typeof value[0] === "object" &&
+        "sessions" in value[0] &&
+        "reported" in value[0]);
+    if (isInventory && concurrent.afterInventoryRead) {
+      const commit = concurrent.afterInventoryRead;
+      concurrent.afterInventoryRead = null;
+      await commit();
+    }
+    return value;
+  };
+  return { ...real, withTenantDb, withOrgDb: real.withOrgDb };
+});
 
 const enabled = Boolean(process.env.DATABASE_URL);
 
@@ -281,13 +306,46 @@ describe.skipIf(!enabled)("list_skills against Postgres", () => {
     expect(skillList.output.parse(out)).toEqual(out);
   });
 
+  it("keeps counts and rows together when ingestion commits after the first inventory read", async () => {
+    const window = {
+      from: new Date("2026-06-01T00:00:00Z"),
+      to: new Date("2026-06-02T00:00:00Z"),
+    };
+    const late = session({
+      startedAt: "2026-06-01T12:00:00Z",
+      skills: ["late-arrival"],
+    });
+    concurrent.afterInventoryRead = async () => {
+      await withSystemDb((tx) => tx.insert(schema.tachoSessions).values(late));
+    };
+    const cursor = Buffer.from(
+      JSON.stringify([window.from.toISOString(), window.to.toISOString(), "a"]),
+    ).toString("base64url");
+    try {
+      const before = await call({}, { cursor });
+      expect(before.sessions).toBe(0);
+      expect(before.skills).toEqual([]);
+      const after = await call({}, { cursor });
+      expect(after.sessions).toBe(1);
+      expect(after.skills).toHaveLength(1);
+      expect(after.skills[0]?.name).toBe("late-arrival");
+    } finally {
+      concurrent.afterInventoryRead = null;
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.tachoSessions)
+          .where(eq(schema.tachoSessions.id, late.id)),
+      );
+    }
+  });
+
   it("keeps a session with an empty or newline-bearing harness label, and caps a skill's harness list while carrying its true count (#3103)", async () => {
     const window = {
       from: new Date("2026-07-01T00:00:00.000Z"),
       to: new Date("2026-07-02T00:00:00.000Z"),
     };
-    const rows = await runInTenantScope({ orgId, workspaceId }, () =>
-      postgresSkillQueries.names({ orgId, workspaceId }, window, {
+    const { rows } = await runInTenantScope({ orgId, workspaceId }, () =>
+      postgresSkillQueries.read({ orgId, workspaceId }, window, {
         after: null,
         limit: 100,
       }),

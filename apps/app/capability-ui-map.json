@@ -649,6 +649,22 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_record": {
+      "route": "/[org]/[ws]/steering/records/[lineage]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
+      "entry": "/[org]/[ws]/steering/records/[lineage] — the page for one published record, which reads it through get_record (data/live/steering.ts, features/record/record.tsx)",
+      "proof": "apps/app/src/features/record/record.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
+    },
+    "revise_context_record": {
+      "route": "/[org]/[ws]/steering/records/[lineage]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
+      "entry": "Record › Revise this statement — the statement editor raises a revision proposal through revise_context_record (features/record/statement-editor.tsx, features/record/actions.ts)",
+      "proof": "apps/app/src/features/record/record.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
+    },
     "list_resolved_approvals": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",

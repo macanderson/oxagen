@@ -320,6 +320,14 @@ export const routes = {
       cursor: q.cursor,
       view: q.view,
     }),
+  /**
+   * One published record, by its lineage (#3395). The lineage is a file stem
+   * under `.oxagen/rules/`, so it reaches here from the repository rather
+   * than from us; `pathOf` percent-encodes it, which is what keeps a lineage
+   * carrying a slash or a dot segment inside this one route.
+   */
+  steeringRecord: (org: string, ws: string, lineage: string): SafePath =>
+    pathOf(org, ws, "steering", "records", lineage),
 };
 
 /**

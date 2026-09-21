@@ -5,6 +5,7 @@
 // production bundle.
 import type { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import type { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
+import type { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
 import type { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -13,6 +14,10 @@ type RecordOutput = RecordsOutput["records"][number];
 type ProposalsOutput = ContractOutput<typeof contextProposalList>;
 type ProposalOutput = ProposalsOutput["proposals"][number];
 type ContextPrOutput = ContractOutput<typeof contextPrGet>;
+type RecordGetOutput = Extract<
+  ContractOutput<typeof contextRecordsGet>,
+  { source: "published" }
+>;
 
 export const LINEAGE = "ctx.release.no-reread-changelog";
 export const RECORD_PATH = `.oxagen/rules/${LINEAGE}.toml`;
@@ -47,6 +52,40 @@ export function recordsOutput(
   total: number = records.length,
 ): RecordsOutput {
   return { records, total };
+}
+
+/**
+ * `get_record` on a published record (#3395): the file answered, its history
+ * carries the publishing commit, and the rollup carries the effect.
+ */
+export function recordGetOutput(
+  overrides: Partial<RecordGetOutput> = {},
+): RecordGetOutput {
+  return {
+    source: "published",
+    record: { ...recordOutput(), version: 3 },
+    backing: "file",
+    provenance: {
+      commit: "4d5e6f7a8b9c1d2e3f4a5b6c7d8e9f0a1b2c3d4e",
+      authorName: "Dana Reyes",
+      authorLogin: "dreyes",
+      committedAt: AT,
+      summary: `context: publish ${LINEAGE}`,
+    },
+    effect: { rendered: 214, cited: 37 },
+    versions: [
+      {
+        id: "crv_9m2x4q7r",
+        version: 3,
+        checksum: "sha256:b7f1c2d3",
+        isLatest: true,
+        publishedAt: AT,
+      },
+    ],
+    proposalId: "prp_01k5ru4a",
+    prUrl: PR_URL,
+    ...overrides,
+  };
 }
 
 export function proposalOutput(

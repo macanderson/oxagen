@@ -18,7 +18,7 @@ per capability with its input + output JSON Schema, chain metadata
 - **chat** (2): get_message_execution, send_message
 - **command** (2): search_command_menu, suggest_commands
 - **connection** (10): create_connection, delete_connection, get_connection, get_connection_mappings, list_connections, pause_connection, preview_connection, set_connection_mappings, suggest_connection_mappings, update_connection
-- **context** (13): append_record, dismiss_proposal, get_context_pr, get_record, get_steering_freshness, list_context_records, list_proposals, list_records, merge_context_pr, open_context_pr, promote_context_record, propose_record, publish_context_record
+- **context** (14): append_record, dismiss_proposal, get_context_pr, get_record, get_steering_freshness, list_context_records, list_proposals, list_records, merge_context_pr, open_context_pr, promote_context_record, propose_record, publish_context_record, revise_context_record
 - **control** (3): dispatch_command, fetch_commands, list_commands
 - **conversation** (9): add_conversation_attachment, archive_conversation, delete_conversation, export_conversation, list_conversation_files, list_conversations, post_conversation_message, purge_conversations, rename_conversation
 - **cost** (4): list_price_entries, list_unpriced_models, remove_price_entry, set_price_entry
