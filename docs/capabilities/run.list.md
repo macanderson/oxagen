@@ -41,6 +41,7 @@ Each row:
 | `operatorKind` | `human` \| `agent` \| `service` or null | what the initiating principal is; null when none was recorded, or when the row's kind is outside the column's CHECK |
 | `operatorName` | string or null | the person's name, from `auth.users.display_name` for the user the principal acts for. Null for every principal that is not a person, and null for a person whose user record carries no name; `operatorKind` separates the two. Never an email address, and never a name derived from one |
 | `status` | enum | `live`, `sealed`, `halted` |
+| `outcome` | enum | how the run ended, in the word its own store recorded: `running`, `completed`, `failed`, `cancelled`, `crashed`, `unknown`. Required on every row, and never derived. `status` is the lifecycle, and three words cannot tell a run that finished from one that failed, so the outcome travels beside it. A ledger `pending` reads `running`, because that is the only thing an open run can be said to be doing. A wrapped session's `aborted` reads `cancelled`, the reading `status` already gives it. `crashed` is a harness that died mid-run. `unknown` is a session that stopped reporting before it recorded an end, and it stays `unknown`: a run that may have finished is not a run that finished |
 | `turns` | integer or null | null for a ledger run whose model-call payloads are encrypted |
 | `steps` | integer | model calls plus tool calls |
 | `frames` | integer | recorded events (ledger) or hash-chained events (tacho) |
