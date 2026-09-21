@@ -811,3 +811,38 @@ describe("a step carrying both halves", () => {
     expect(screen.queryByTestId("transcript-half")).toBeNull();
   });
 });
+
+describe("live access changes", () => {
+  it("names the required access instead of suggesting transport recovery", () => {
+    const sources: EventTarget[] = [];
+    class DeniedSource extends EventTarget {
+      static readonly CLOSED = 2;
+      readyState = 1;
+      constructor() {
+        super();
+        sources.push(this);
+      }
+      close() {
+        this.readyState = DeniedSource.CLOSED;
+      }
+    }
+    vi.stubGlobal("EventSource", DeniedSource);
+    renderSection({
+      read: readOk(mockupTranscript({ cursor: "ZjoxMQ", complete: false })),
+      status: "live",
+    });
+    act(() => {
+      sources[0]?.dispatchEvent(
+        new MessageEvent("error", {
+          data: JSON.stringify({ code: "authz_denied" }),
+        }),
+      );
+    });
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      "Ask a workspace Owner or organization Admin",
+    );
+    expect(screen.getByTestId("transcript-count")).not.toHaveTextContent(
+      "connection",
+    );
+  });
+});

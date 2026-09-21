@@ -989,9 +989,11 @@ export function TranscriptView({
         />
         <span data-testid="transcript-count">
           {live
-            ? stream === "lost"
-              ? t("followLost")
-              : t("recording")
+            ? stream === "denied"
+              ? t("followDenied")
+              : stream === "lost"
+                ? t("followLost")
+                : t("recording")
             : stream === "sealed"
               ? t("followSealed")
               : cursor !== null

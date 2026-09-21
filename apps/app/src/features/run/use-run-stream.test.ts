@@ -72,6 +72,7 @@ class FakeEventSource {
 
   serverErrorRaw(data: string) {
     this.listeners.get("error")?.(new MessageEvent("error", { data }));
+    this.onerror?.();
   }
 
   /** The connection dropped. `forGood` is the case the person should be told about. */
@@ -223,7 +224,7 @@ describe("useRunStream", () => {
     expect(result.current).toBe("lost");
   });
 
-  it.each(["forbidden", "stream_unavailable", "invalid_input"])(
+  it.each(["stream_unavailable", "invalid_input"])(
     "stops retrying after a typed server error %s",
     (code) => {
       const { result, onFrames } = follow();
@@ -235,6 +236,24 @@ describe("useRunStream", () => {
       expect(latest().closed).toBe(true);
       expect(opened).toHaveLength(1);
       expect(onFrames).toHaveBeenCalledTimes(code === "invalid_input" ? 1 : 0);
+    },
+  );
+
+  it.each(["authz_denied", "forbidden"])(
+    "retains the server refusal %s through the native error callback",
+    (code) => {
+      const { result, onFrames } = follow();
+      act(() => {
+        latest().open();
+        latest().frame();
+        latest().serverError({ code });
+      });
+      expect(result.current).toBe("denied");
+      expect(latest().closed).toBe(true);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onFrames).not.toHaveBeenCalled();
     },
   );
 

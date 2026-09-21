@@ -29,6 +29,8 @@ export type StreamState =
   | "open"
   /** The run ended and the stream said so; nothing more will arrive. */
   | "sealed"
+  /** The server refused further reads after access changed. */
+  | "denied"
   /** The connection dropped and did not come back. The run kept recording. */
   | "lost";
 
@@ -85,6 +87,7 @@ export function useRunStream({
         after === null ? url : `${url}?after=${encodeURIComponent(after)}`;
       const es = new EventSource(target, { withCredentials: true });
       source = es;
+      let terminalError = false;
       es.onopen = () => {
         if (!stopped) setState("open");
       };
@@ -133,14 +136,22 @@ export function useRunStream({
         } catch {
           // A malformed server error is still a terminal stream failure.
         }
+        terminalError = true;
         es.close();
-        setState("lost");
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        setState(
+          code === "authz_denied" || code === "forbidden" ? "denied" : "lost",
+        );
         if (code === "invalid_input") latest.current();
       });
       es.onerror = () => {
         // EventSource reconnects on its own unless the connection is closed
         // for good; only that second case is a loss the person should see.
-        if (es.readyState === EventSource.CLOSED && !stopped) setState("lost");
+        if (es.readyState === EventSource.CLOSED && !stopped && !terminalError)
+          setState("lost");
       };
     }
 
