@@ -80,7 +80,7 @@ export interface StatusReport {
   service?: {
     kind: string;
     installed: boolean;
-    running: boolean;
+    running: boolean | null;
     detail?: string;
   };
   daemon?: Record<string, unknown> | null;
@@ -342,7 +342,7 @@ export async function status(
     `Bundle      v${b.version} (${b.etag}) fetched ${b.age_s}s ago, expires ${b.expires_at}`,
   );
   deps.out(
-    `Service     ${deps.serviceManager.kind}: ${service.installed ? "installed" : "not installed"}, ${service.running ? "running" : "not running"}`,
+    `Service     ${deps.serviceManager.kind}: ${service.installed ? "installed" : "not installed"}, ${service.running === null ? `state unknown${service.detail ? `: ${service.detail}` : ""}` : service.running ? "running" : "not running"}`,
   );
   if (daemon === null) {
     deps.out(`Daemon      not answering on 127.0.0.1:${h.port}`);
