@@ -23,6 +23,7 @@ export async function readSkillRepositoryBinding(scope: SkillScope) {
     const [row] = await tx
       .select({
         bindingId: binding.id,
+        connectionId: head.connectionId,
         repositoryId: binding.providerRepositoryId,
         owner: binding.providerOwner,
         repo: binding.providerName,
@@ -64,7 +65,9 @@ export function createSkillRepositoryResolver(deps: {
         message:
           "Bind the workspace's main repository before configuring skills",
       });
-    const github = deps.client(await deps.token(scope));
+    const github = deps.client(
+      await deps.token({ ...scope, connectionId: bound.connectionId }),
+    );
     const current = await github.getRepoInfo({
       owner: bound.owner,
       repo: bound.repo,

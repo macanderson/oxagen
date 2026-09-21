@@ -1,6 +1,8 @@
 #!/usr/bin/env tsx
 /**
  * Backfill Claude Code session telemetry into internal.claude_sessions.
+ * Omit the retired email field. Existing stores supply its empty-string default
+ * until the forward erasure migration removes it (#3072, ADR-084).
  *
  * Scans (project dir derived from this repo's absolute path):
  *   ~/.claude/projects/<project-slug>/*.jsonl       → parent sessions
@@ -201,7 +203,6 @@ export interface ClaudeSessionRow {
   message_id: string;
   request_id: string;
   parent_uuid: string;
-  user_email: string;
   model: string;
   version: string;
   entrypoint: string;
@@ -234,7 +235,6 @@ export interface ClaudeSessionRow {
 // ── File parsing ──────────────────────────────────────────────────────────────
 
 const NULL_UUID = "00000000-0000-0000-0000-000000000000";
-const USER_EMAIL = process.env["USER_EMAIL"] ?? "mac@macanderson.com";
 
 function extractText(content: string | ContentBlock[]): string {
   if (typeof content === "string") return content.slice(0, 1000);
@@ -336,7 +336,6 @@ async function parseFile(
       message_id: msg.id ?? "",
       request_id: entry.requestId ?? "",
       parent_uuid: entry.parentUuid ?? NULL_UUID,
-      user_email: USER_EMAIL,
       model: msg.model,
       version: entry.version ?? "",
       entrypoint: entry.entrypoint ?? "cli",
@@ -423,12 +422,15 @@ async function discoverFiles(basePath: string): Promise<FileRef[]> {
 
 // ── ClickHouse insert ─────────────────────────────────────────────────────────
 
-async function insertRows(rows: ClaudeSessionRow[]): Promise<void> {
+export async function insertRows(
+  rows: ClaudeSessionRow[],
+  request: typeof fetch = fetch,
+): Promise<number> {
   const url = process.env["PRODUCTION_ANALYTICS_URL"];
   const user = process.env["PRODUCTION_ANALYTICS_USER"];
   const pass = process.env["PRODUCTION_ANALYTICS_PASSWORD"];
 
-  if (!url || !user || !pass) {
+  if (!url || !user || pass === undefined) {
     throw new Error(
       "Set PRODUCTION_ANALYTICS_URL, PRODUCTION_ANALYTICS_USER, PRODUCTION_ANALYTICS_PASSWORD",
     );
@@ -437,12 +439,74 @@ async function insertRows(rows: ClaudeSessionRow[]): Promise<void> {
   const auth = btoa(`${user}:${pass}`);
   const CHUNK = 200;
 
+  let inserted = 0;
+  const identity = (
+    row: Pick<ClaudeSessionRow, "session_id" | "entry_uuid" | "timestamp">,
+  ) =>
+    JSON.stringify([
+      row.session_id.toLowerCase(),
+      new Date(row.timestamp).getTime(),
+      row.entry_uuid.toLowerCase(),
+    ]);
+  const uuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK);
-    const ndjson = chunk.map((r) => JSON.stringify(r)).join("\n");
-    const body = `INSERT INTO internal.claude_sessions FORMAT JSONEachRow\n${ndjson}`;
-
-    const res = await fetch(url, {
+    const chunk = [
+      ...new Map(
+        rows.slice(i, i + CHUNK).map((row) => [identity(row), row]),
+      ).values(),
+    ];
+    // Email was part of the legacy replacement key. Re-emitting a stored
+    // identity without it would create a second row instead of replacing it.
+    const keys = chunk.map((row) => {
+      if (!uuid.test(row.session_id) || !uuid.test(row.entry_uuid))
+        throw new Error("Invalid backfill entry identity");
+      const timestamp = new Date(row.timestamp).toISOString();
+      return `(toUUID('${row.session_id}'), parseDateTime64BestEffort('${timestamp}', 3), toUUID('${row.entry_uuid}'))`;
+    });
+    const lookup = await request(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain", Authorization: `Basic ${auth}` },
+      body: `SELECT session_id, toUnixTimestamp64Milli(timestamp) AS timestamp_ms, entry_uuid FROM internal.claude_sessions WHERE (session_id, timestamp, entry_uuid) IN (${keys.join(",")}) FORMAT JSONEachRow`,
+    });
+    if (!lookup.ok)
+      throw new Error(`ClickHouse identity lookup ${lookup.status}`);
+    const existing = new Set<string>();
+    for (const line of (await lookup.text()).split("\n").filter(Boolean)) {
+      const value: unknown = JSON.parse(line);
+      if (
+        value === null ||
+        typeof value !== "object" ||
+        !("session_id" in value) ||
+        typeof value.session_id !== "string" ||
+        !("entry_uuid" in value) ||
+        typeof value.entry_uuid !== "string" ||
+        !("timestamp_ms" in value) ||
+        (typeof value.timestamp_ms !== "number" &&
+          typeof value.timestamp_ms !== "string") ||
+        !Number.isFinite(Number(value.timestamp_ms))
+      )
+        throw new Error("Invalid ClickHouse identity response");
+      existing.add(
+        JSON.stringify([
+          value.session_id.toLowerCase(),
+          Number(value.timestamp_ms),
+          value.entry_uuid.toLowerCase(),
+        ]),
+      );
+    }
+    const missing = chunk.filter((row) => !existing.has(identity(row)));
+    if (missing.length === 0) continue;
+    const ndjson = missing.map((r) => JSON.stringify(r)).join("\n");
+    // The rows carry ISO-8601 timestamps with a `Z` suffix, which ClickHouse's
+    // default `basic` date parser rejects mid-value. The read side above already
+    // reads the same strings through parseDateTime64BestEffort; this is the
+    // write side of that same decision.
+    const body =
+      `INSERT INTO internal.claude_sessions ` +
+      `SETTINGS date_time_input_format = 'best_effort' ` +
+      `FORMAT JSONEachRow\n${ndjson}`;
+    const res = await request(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-ndjson",
@@ -450,16 +514,14 @@ async function insertRows(rows: ClaudeSessionRow[]): Promise<void> {
       },
       body,
     });
-
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`ClickHouse ${res.status}: ${text.slice(0, 400)}`);
     }
-
-    process.stdout.write(
-      `  inserted ${Math.min(i + CHUNK, rows.length)}/${rows.length}\n`,
-    );
+    inserted += missing.length;
+    process.stdout.write(`  inserted ${inserted} new rows\n`);
   }
+  return inserted;
 }
 
 // ── Parse loop ────────────────────────────────────────────────────────────────
@@ -482,7 +544,10 @@ export interface ParseAllSummary {
  */
 export async function parseAllFiles(
   files: readonly FileRef[],
-  parse: (path: string, isSubagent: boolean) => Promise<ClaudeSessionRow[]>,
+  parse: (
+    path: string,
+    isSubagent: boolean,
+  ) => Promise<ClaudeSessionRow[]> = parseFile,
   write: (line: string) => void = (line) => process.stdout.write(line),
 ): Promise<ParseAllSummary> {
   const allRows: ClaudeSessionRow[] = [];
@@ -533,12 +598,7 @@ async function main(): Promise<void> {
     `Found ${files.length} JSONL files (top-level + subagents)\n\n`,
   );
 
-  const {
-    rows: allRows,
-    ok,
-    fail,
-    failures,
-  } = await parseAllFiles(files, parseFile);
+  const { rows: allRows, ok, fail, failures } = await parseAllFiles(files);
 
   if (failures.length > 0) {
     process.stdout.write("\nFailed files:\n");
@@ -557,9 +617,9 @@ async function main(): Promise<void> {
   }
 
   process.stdout.write("\nInserting into ClickHouse...\n");
-  await insertRows(allRows);
+  const inserted = await insertRows(allRows);
   process.stdout.write(
-    `\n✓ Inserted ${allRows.length} rows into internal.claude_sessions\n`,
+    `\n✓ Inserted ${inserted} new rows into internal.claude_sessions\n`,
   );
 }
 

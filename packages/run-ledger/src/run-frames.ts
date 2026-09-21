@@ -88,7 +88,6 @@ export interface FrameTiming {
   durationMs: number | null;
 }
 
-
 const NO_IDENTITY: FrameIdentity = {
   tool: null,
   toolStatus: null,
