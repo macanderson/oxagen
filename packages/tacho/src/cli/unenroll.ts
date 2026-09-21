@@ -34,6 +34,7 @@ import {
 } from "../host/host-file";
 import {
   modelBaseUrlBackupPath,
+  hasOrphanedModelBaseUrl,
   type ModelBaseUrlHarness,
 } from "../host/model-base-url";
 import { stripTachoSettings } from "../host/settings-writer";
@@ -174,8 +175,8 @@ export async function restoreModelBaseUrlsFor(
         try {
           lstatSync(modelBaseUrlBackupPath(harness, deps.home));
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
-          throw error;
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          if (!hasOrphanedModelBaseUrl(harness, deps.home)) continue;
         }
       }
       const state = await deps.modelBaseUrls.restore({

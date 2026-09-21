@@ -25,6 +25,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { codexHookPresence } from "../host/codex-writer";
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
+import { modelBaseUrlBackupPath } from "../host/model-base-url";
 import { readHostFile } from "../host/host-file";
 import { tachoHookPresence } from "../host/settings-writer";
 import { readStellaHooksFile, stellaHookPresence } from "../host/stella-writer";
@@ -495,6 +496,38 @@ describe("install rig: failure injection", () => {
         expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(false);
         expect(rig.serviceLoaded()).toBe(true);
         expect(existsSync(rig.deps.paths.deviceKey)).toBe(true);
+        writeFileSync(config, routed);
+      }
+      expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+      expect(readFileSync(config, "utf8")).not.toContain(
+        String(RIG_GATEWAY_PORT),
+      );
+      expect(rig.serviceLoaded()).toBe(false);
+    },
+  );
+
+  it.each(["claude-code", "codex"] as const)(
+    "removes a dropped %s proxy URL when its receipt is missing",
+    async (dropped) => {
+      const rig = buildRig(seedHome());
+      expect(
+        (await enroll({ harnesses: ["claude-code", "codex"] }, rig.deps)).ok,
+      ).toBe(true);
+      const retained = dropped === "codex" ? "claude-code" : "codex";
+      expect((await reassign({ harnesses: [retained] }, rig.deps)).ok).toBe(
+        true,
+      );
+      rmSync(modelBaseUrlBackupPath(dropped, rig.deps.home));
+      const config =
+        dropped === "codex"
+          ? join(rig.deps.home, ".codex", "config.toml")
+          : rig.deps.paths.claudeSettings;
+      const routed = readFileSync(config, "utf8");
+      expect(routed).toContain(String(RIG_GATEWAY_PORT));
+      if (dropped === "claude-code") {
+        writeFileSync(config, routed.trimEnd().slice(0, -1));
+        expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(false);
+        expect(rig.serviceLoaded()).toBe(true);
         writeFileSync(config, routed);
       }
       expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);

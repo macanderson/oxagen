@@ -467,6 +467,23 @@ function currentValue(
   return tomlValueAt(lines, findTomlKey(lines));
 }
 
+/** A dropped harness with no receipt can still point at the removed gateway. */
+export function hasOrphanedModelBaseUrl(
+  harness: ModelBaseUrlHarness,
+  home: string,
+): boolean {
+  const file = fileFor(harness, home);
+  const text = readTextIfExists(file);
+  try {
+    return isModelProxyBaseUrl(harness, currentValue(harness, file, text));
+  } catch (error) {
+    // Unrelated malformed files were never ours to repair. A visible proxy
+    // URL makes the malformed document part of cleanup and keeps it blocked.
+    if (text?.includes("http://127.0.0.1:")) throw error;
+    return false;
+  }
+}
+
 function describe(
   harness: ModelBaseUrlHarness,
   options: ModelBaseUrlOptions,
