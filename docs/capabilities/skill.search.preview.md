@@ -14,3 +14,5 @@ Provide a published `version` and a `query`. The preview reads the approved repo
 The handler checks the role on every plan. Configuration comes only from the approved main repository binding. The live GitHub default branch cannot change the configured production branch. Historical snapshots are append-only and remain available after a later publication.
 
 See [the version 1 configuration format](../specs/skill-resolution-config.md). This is the configuration and human preview increment of #3098. Agent run pinning, belt injection, interjections, reflection quarantine and the Steering console remain separate integration work. Oxagen resolves skills; the harness runs them.
+
+The server coalesces catalog reads for the same repository binding, immutable commit, and source name. It retains at most eight catalogs per process and drops failed reads. A new commit or binding gets a new read. Credential resolution uses the approved binding's connection and refuses a shared-token fallback for that connection.

@@ -14,3 +14,5 @@ Use `action: propose` with TOML `text` to open a pull request. Use `action: publ
 The handler checks the role on every plan. Configuration comes only from the approved main repository binding. The live GitHub default branch cannot change the configured production branch. Historical snapshots are append-only and remain available after a later publication.
 
 See [the version 1 configuration format](../specs/skill-resolution-config.md). This is the configuration and human preview increment of #3098. Agent run pinning, belt injection, interjections, reflection quarantine and the Steering console remain separate integration work. Oxagen resolves skills; the harness runs them.
+
+Publication requires the merged PR's changed files to include `.oxagen/skills.toml` without deleting it. A PR that only changes another file cannot supply review provenance for the configuration.

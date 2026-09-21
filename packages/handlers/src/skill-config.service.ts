@@ -76,6 +76,20 @@ export function createSkillConfigService(deps: SkillConfigServiceDeps) {
               "The configuration must be merged into the approved production branch before publication",
           });
         }
+        const files = await github.listPullRequestFiles({
+          owner,
+          repo,
+          number: pullRequestNumber,
+        });
+        if (
+          !files.some((file) => file.path === PATH && file.status !== "removed")
+        )
+          throw new HandlerError({
+            code: "conflict",
+            reason: "skill_config_pr_unrelated",
+            message:
+              "This pull request did not change the skill configuration file.",
+          });
         commitSha = pr.mergeCommitSha;
         publishedAt = pr.mergedAt;
       } else {

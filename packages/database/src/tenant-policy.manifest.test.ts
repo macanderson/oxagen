@@ -204,9 +204,11 @@ describe("tenant policy manifest", () => {
     // which version answered. Both carry org_id and workspace_id and are
     // read and written through withTenantDb, so both are `standard`.
     //
-    // 114: billing.usage_outbox retains scoped usage delivery state.
+    // Was 114 as of billing.usage_outbox, which retains scoped usage
+    // delivery state. Both sides of this merge branched from 113, so the
+    // merged manifest holds 113 + 2 + 1.
     //
-    // 113: `org.assistant_model_keys` (ADR-131) is the OpenRouter key
+    // Was 113 as of `org.assistant_model_keys` (ADR-131), the OpenRouter key
     // Oxagen mints for one organisation at signup. One row per
     // organisation, carrying the enveloped key and the vendor's key hash,
     // with org_id and no workspace_id, so org_only. It is read and written
