@@ -9,6 +9,7 @@ import {
 } from "@oxagen/oxagen/contracts/user.preferences.read";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { captureError } from "@oxagen/telemetry";
+import { cache } from "react";
 import { ShellContext, ViewerPreferences } from "@/data/contracts/shell";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
@@ -29,6 +30,19 @@ function isTimeZone(name: string): boolean {
     return false;
   }
 }
+
+// ShellChrome and ViewerClock read preferences independently. React limits
+// this report to one call per viewer, organization, and zone in a render.
+const reportUnsupportedTimeZone = cache(
+  (orgId: string, _userId: string, zone: string) => {
+    captureError({
+      error: new Error(`unsupported time zone ${JSON.stringify(zone)}`),
+      source: "app",
+      orgId,
+      context: "shell.preferences time_zone_unsupported",
+    });
+  },
+);
 
 export const shell: DataSource["shell"] = {
   async context(ctx) {
@@ -71,12 +85,7 @@ export const shell: DataSource["shell"] = {
     const stored = read.value.timezone;
     let timeZone = stored;
     if (!isTimeZone(stored)) {
-      captureError({
-        error: new Error(`unsupported time zone ${JSON.stringify(stored)}`),
-        source: "app",
-        orgId: ctx.orgId,
-        context: "shell.preferences time_zone_unsupported",
-      });
+      reportUnsupportedTimeZone(ctx.orgId, ctx.userId, stored);
       timeZone = DEFAULT_TIME_ZONE;
     }
     return readOk(ViewerPreferences.parse({ timeZone }));

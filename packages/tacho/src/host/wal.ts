@@ -90,7 +90,7 @@ interface StoredBody {
 
 export interface WalBodyFailure {
   session_uuid: string;
-  operation: "append" | "read";
+  operation: "append" | "read" | "cleanup";
   code: string;
 }
 
@@ -632,6 +632,23 @@ export class Wal {
    * for `tacho export` and incident review.
    */
   compact(now: number, retainMs: number): string[] {
+    // Only the daemon compacts. Rewrites and this scan are synchronous under
+    // its single-writer ownership, so no live rewrite can overlap the scan.
+    // Readers (status and export) construct a Wal too and must not clean here.
+    // Report each unlink failure and keep compacting unrelated evidence.
+    const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+    const abandonedRewrite = new RegExp(
+      `^${uuid}\\.bodies\\.jsonl\\.${uuid}\\.tmp$`,
+    );
+    for (const name of readdirSync(this.dir)) {
+      if (abandonedRewrite.test(name)) {
+        try {
+          unlinkSync(join(this.dir, name));
+        } catch (error) {
+          this.bodyFailure(name.slice(0, 36), "cleanup", error);
+        }
+      }
+    }
     const removed: string[] = [];
     for (const session of this.sessions()) {
       const sealedAt = this.cursor.sealed[session];

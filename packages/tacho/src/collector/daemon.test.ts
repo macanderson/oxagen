@@ -8,7 +8,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyChain } from "../chain";
 import { runTachoHook } from "../claude-code/hook-client";
 import type { TachoEvent } from "../envelope";
@@ -555,6 +555,47 @@ describe("tachod", () => {
     expect(
       (await getHttp(port, host.local_token, "/sessions/nope/export")).status,
     ).toBe(404);
+  });
+
+  it("sends pending command acknowledgements when a queued body cannot be read", async () => {
+    const plane = fakeControlPlane("etag-3");
+    const { handle } = await boot(plane);
+    await handle.api.handleHook({
+      payload: {
+        session_id: "body-failure",
+        hook_event_name: "SessionStart",
+        cwd: "/repo",
+      },
+      env: {},
+    });
+    const sessionUuid =
+      handle.registry.get("body-failure")!.recorder.sessionUuid;
+    plane.queue({
+      id: "pause-before-body-failure",
+      command: "pause",
+      session_uuid: sessionUuid,
+      payload: {},
+      issued_at: "2026-09-10T10:00:00.000Z",
+      expires_at: null,
+    });
+    await handle.shipper.drain();
+    expect(plane.acks).toEqual([]);
+    const read = vi
+      .spyOn(handle.wal, "bodiesFor")
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error("body read failed"), { code: "EIO" });
+      });
+    await expect(handle.tick()).resolves.toBeUndefined();
+    expect(handle.shipper.lastError).toBe("body read failed");
+    expect(plane.acks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command_id: "pause-before-body-failure",
+          status: "applied",
+        }),
+      ]),
+    );
+    read.mockRestore();
   });
 
   it("applies pause, message, cancel, and revoke commands from the ingest response", async () => {
