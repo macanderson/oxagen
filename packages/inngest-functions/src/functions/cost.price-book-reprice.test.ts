@@ -40,7 +40,7 @@ mocks.createFunction.mockImplementation(
 
 await import("./cost.price-book-reprice");
 
-const sendEvent = vi.fn(async () => {});
+const sendEvent = vi.fn(async (_label: string, _event: unknown) => {});
 const step = {
   run: (_: string, fn: () => Promise<unknown>) => fn(),
   sendEvent,
@@ -85,7 +85,11 @@ describe("cost.price-book-reprice", () => {
     expect(mocks.rebuildDailyTotals.mock.calls.map((c) => c[0])).toEqual([
       { orgId: "org-1", workspaceId: "ws-1", day: "2026-09-14" },
     ]);
-    expect(sendEvent).not.toHaveBeenCalled();
+    expect(sendEvent).toHaveBeenCalledOnce();
+    expect(sendEvent).toHaveBeenCalledWith("findings-org-1-ws-1", {
+      name: "cost/findings.requested",
+      data: { orgId: "org-1", workspaceId: "ws-1" },
+    });
     expect(out).toEqual({
       pending: 2,
       retried: 0,
@@ -96,6 +100,60 @@ describe("cost.price-book-reprice", () => {
       workspaceDays: 1,
       more: false,
     });
+  });
+
+  it("requests findings once per workspace after all daily totals finish", async () => {
+    mocks.listRunsWithIncompleteCost.mockResolvedValue([
+      row(1),
+      row(2),
+      row(3),
+    ]);
+    mocks.rebuildRunTotals
+      .mockResolvedValueOnce(RECORD)
+      .mockResolvedValueOnce({
+        ...RECORD,
+        startedAt: new Date("2026-09-15T10:00:00Z"),
+      })
+      .mockResolvedValueOnce({ ...RECORD, workspaceId: "ws-2" });
+    const order: string[] = [];
+    mocks.rebuildDailyTotals.mockImplementation(async () => {
+      order.push("daily");
+      return [];
+    });
+    sendEvent
+      .mockImplementationOnce(async () => {
+        order.push("findings");
+      })
+      .mockImplementationOnce(async () => {
+        order.push("findings");
+      });
+    await handler!({ event: { data: {} }, step });
+    expect(order).toEqual(["daily", "daily", "daily", "findings", "findings"]);
+    expect(sendEvent.mock.calls).toEqual([
+      [
+        "findings-org-1-ws-1",
+        {
+          name: "cost/findings.requested",
+          data: { orgId: "org-1", workspaceId: "ws-1" },
+        },
+      ],
+      [
+        "findings-org-1-ws-2",
+        {
+          name: "cost/findings.requested",
+          data: { orgId: "org-1", workspaceId: "ws-2" },
+        },
+      ],
+    ]);
+  });
+
+  it("does not request findings before a failed daily rebuild can retry", async () => {
+    mocks.listRunsWithIncompleteCost.mockResolvedValue([row(1)]);
+    mocks.rebuildDailyTotals.mockRejectedValue(new Error("daily unavailable"));
+    await expect(handler!({ event: { data: {} }, step })).rejects.toThrow(
+      "daily unavailable",
+    );
+    expect(sendEvent).not.toHaveBeenCalled();
   });
 
   it("sends itself the last row of a full page as the next cursor", async () => {
@@ -132,9 +190,9 @@ describe("cost.price-book-reprice", () => {
     for (let i = 0; i < 10 && data !== null; i += 1) {
       sendEvent.mockClear();
       await handler!({ event: { data }, step });
-      const next = sendEvent.mock.calls[0] as unknown as
-        | [string, { data: unknown }]
-        | undefined;
+      const next = sendEvent.mock.calls.find(
+        ([label]) => label === "next-page",
+      ) as unknown as [string, { data: unknown }] | undefined;
       data = next ? next[1].data : null;
     }
     expect(data).toBeNull();
@@ -205,7 +263,9 @@ describe("cost.price-book-reprice", () => {
         i === 0 ? [row(1)] : [],
       );
       await handler!({ event: { data }, step });
-      const next = sendEvent.mock.calls[0] as unknown as
+      const next = sendEvent.mock.calls.find(
+        ([label]) => label === "next-page",
+      ) as unknown as
         | [string, { data: { retry: { attempt: number }[] } }]
         | undefined;
       if (!next) {
