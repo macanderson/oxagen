@@ -1,4 +1,4 @@
-import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema, type Tx } from "@oxagen/database";
 import { and, asc, eq, isNull, or, sql, gt } from "drizzle-orm";
 import { CREDIT_REASONS } from "./constants";
 import { MICRO_CREDITS_PER_CREDIT } from "./pricing";
@@ -296,6 +296,7 @@ export interface ConsumeCreditsResult {
  */
 export async function consumeCredits(
   args: ConsumeCreditsArgs,
+  transaction?: Tx,
 ): Promise<ConsumeCreditsResult> {
   if (!ALLOWED_REASONS.has(args.reason)) {
     throw new Error(`invalid credit reason: ${args.reason}`);
@@ -312,7 +313,7 @@ export async function consumeCredits(
     };
   }
 
-  return await withTenantDb(async (tx) => {
+  const run = async (tx: Tx): Promise<ConsumeCreditsResult> => {
     const now = new Date();
 
     // Resolve the sub-credit carry BEFORE touching the lots, so the whole-credit
@@ -472,5 +473,6 @@ export async function consumeCredits(
       balanceCents: newBalance,
       carryMicroCents,
     };
-  });
+  };
+  return transaction ? run(transaction) : withTenantDb(run);
 }

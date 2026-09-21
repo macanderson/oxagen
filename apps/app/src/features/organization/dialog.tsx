@@ -23,6 +23,7 @@ export function WriteDialog<O>({
   testId,
   submit,
   onDone,
+  done,
   children,
 }: {
   copy: DialogCopy;
@@ -32,8 +33,27 @@ export function WriteDialog<O>({
   /**
    * Runs after the write answered ok, with the dialog already closed, and is
    * handed what the write returned — a create navigates to the record it made.
+   *
+   * With `done` below, it runs when the person dismisses the result instead,
+   * because the dialog stays open to show it first.
    */
   onDone: (value: O) => void;
+  /**
+   * What the write left the person to read, when it left anything: a pull
+   * request they now have to merge, a count they should see. Returning a node
+   * keeps the dialog open with that node in place of the form and a button that
+   * closes it, which is what then runs `onDone`. Returning null closes
+   * immediately, so a write whose answer is only sometimes worth reading —
+   * `proposed` yes, `unchanged` no — needs no second dialog.
+   *
+   * It exists because `onDone` navigates, and there is nowhere after a
+   * navigation to put a URL the person cannot reconstruct.
+   */
+  done?: {
+    /** Dismisses the panel. Part of `done` so a panel cannot exist unlabelled. */
+    close: string;
+    render: (value: O) => ReactNode;
+  };
   /** The dialog's fields; a confirmation has a sentence instead. */
   children?: ReactNode;
 }) {
@@ -41,10 +61,25 @@ export function WriteDialog<O>({
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // The answer being read, when `done` asked to keep the dialog open for it.
+  const [result, setResult] = useState<{ value: O } | null>(null);
+
+  function finish(value: O) {
+    setOpen(false);
+    setResult(null);
+    onDone(value);
+  }
 
   function openChange(next: boolean) {
     setOpen(next);
-    if (!next) setFailure(null);
+    if (!next) {
+      setFailure(null);
+      // Dismissing the dialog is dismissing the result: the write already
+      // happened, so `onDone` still runs and the section still reloads.
+      const pendingResult = result;
+      setResult(null);
+      if (pendingResult) onDone(pendingResult.value);
+    }
   }
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
@@ -54,12 +89,13 @@ export function WriteDialog<O>({
     setPending(true);
     setFailure(null);
     try {
-      const result = await submit(form);
-      if (result.ok) {
-        setOpen(false);
-        onDone(result.value);
+      const answer = await submit(form);
+      if (answer.ok) {
+        const panel = done?.render(answer.value) ?? null;
+        if (panel === null) finish(answer.value);
+        else setResult({ value: answer.value });
       } else {
-        setFailure(failureText(result));
+        setFailure(failureText(answer));
       }
     } catch {
       setFailure(failureText(UNANSWERED));
@@ -85,20 +121,35 @@ export function WriteDialog<O>({
         title={copy.title}
         testId={testId}
       >
-        <form
-          onSubmit={(e) => void onSubmit(e)}
-          className="flex flex-col gap-3"
-        >
-          {children}
-          {failure === null ? null : (
-            <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
-          )}
-          <SubmitButton
-            pending={pending}
-            label={copy.confirm}
-            pendingLabel={copy.pending}
-          />
-        </form>
+        {result === null ? (
+          <form
+            onSubmit={(e) => void onSubmit(e)}
+            className="flex flex-col gap-3"
+          >
+            {children}
+            {failure === null ? null : (
+              <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
+            )}
+            <SubmitButton
+              pending={pending}
+              label={copy.confirm}
+              pendingLabel={copy.pending}
+            />
+          </form>
+        ) : (
+          <div className="flex flex-col gap-3" data-testid={`${testId}-done`}>
+            {done?.render(result.value)}
+            <button
+              type="button"
+              className={buttonSecondary}
+              onClick={() => {
+                finish(result.value);
+              }}
+            >
+              {done?.close}
+            </button>
+          </div>
+        )}
       </SheetDialog>
     </>
   );

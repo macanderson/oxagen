@@ -176,6 +176,8 @@ import { organizationCreate } from "./org.create";
 import { orgMemberAdd } from "./org.member.add";
 import { orgMemberInviteAccept } from "./org.member_invite.accept";
 import { orgMemberInviteDecline } from "./org.member_invite.decline";
+import { resendMemberInvite } from "./org.member_invite.resend";
+import { revokeMemberInvite } from "./org.member_invite.revoke";
 import { orgMemberRemove } from "./org.member.remove";
 import { orgMemberRoleChange } from "./org.member_role.change";
 import { orgList } from "./org.list";
@@ -245,6 +247,7 @@ import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
 import { contextSteeringFreshness } from "./context.steering.freshness";
+import { contextGovernanceModeSet } from "./context.governance_mode.set";
 import { connectionList } from "./connection.list";
 import { connectionCreate } from "./connection.create";
 import { connectionGet } from "./connection.get";
@@ -699,6 +702,8 @@ export {
   orgMemberAdd,
   orgMemberInviteAccept,
   orgMemberInviteDecline,
+  resendMemberInvite,
+  revokeMemberInvite,
   orgMemberRemove,
   orgMemberRoleChange,
   workspaceCreate,
@@ -767,6 +772,7 @@ export {
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
+  contextGovernanceModeSet,
   connectionList,
   connectionCreate,
   connectionGet,
@@ -1045,6 +1051,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgMemberAdd,
   orgMemberInviteAccept,
   orgMemberInviteDecline,
+  resendMemberInvite,
+  revokeMemberInvite,
   orgMemberRemove,
   orgMemberRoleChange,
   workspaceCreate,
@@ -1112,6 +1120,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
+  contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,

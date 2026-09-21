@@ -1,3 +1,4 @@
+import { sealPriceCancellation } from "./lib/price-cancellation-token";
 // The role gate reads iam.principal_role_assignments and the key's creator
 // from auth.api_keys; the tests decide both. `emitSecurityEvent` is the audit
 // row this handler is required to leave.
@@ -121,6 +122,84 @@ beforeEach(() => {
 });
 
 describe("remove_price_entry", () => {
+  it("opens the management token and passes its selected ID to the store", async () => {
+    vi.stubEnv("BETTER_AUTH_SECRET", "test-price-secret-with-32-characters");
+    try {
+      const cancellationToken = sealPriceCancellation({
+        id: openEntry.id,
+        orgId: openEntry.orgId!,
+        provider: openEntry.provider,
+        model: openEntry.model,
+        tokenClass: openEntry.tokenClass,
+        region: openEntry.region,
+        source: "negotiated",
+        effectiveFrom: openEntry.effectiveFrom.toISOString(),
+      });
+      const h = harness(null, [], [openEntry]);
+      await h.handler(input({ cancellationToken }), ctx());
+      expect(h.closeNegotiatedPriceEntry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scheduledEntryId: openEntry.id,
+          orgId: openEntry.orgId,
+        }),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each(["orgId", "model", "provider", "tokenClass", "region"] as const)(
+    "rejects a cancellation token bound to another %s",
+    async (field) => {
+      vi.stubEnv("BETTER_AUTH_SECRET", "test-price-secret-with-32-characters");
+      try {
+        const payload = {
+          id: openEntry.id,
+          orgId: openEntry.orgId!,
+          provider: openEntry.provider,
+          model: openEntry.model,
+          tokenClass: openEntry.tokenClass,
+          region: openEntry.region,
+          source: "negotiated" as const,
+          effectiveFrom: openEntry.effectiveFrom.toISOString(),
+          [field]:
+            field === "orgId"
+              ? "00000000-0000-4000-8000-000000000099"
+              : "other",
+        };
+        const h = harness(null);
+        await expect(
+          h.handler(
+            input({ cancellationToken: sealPriceCancellation(payload) }),
+            ctx(),
+          ),
+        ).rejects.toMatchObject({ reason: "price_cancellation_invalid" });
+        expect(h.closeNegotiatedPriceEntry).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
+
+  it("passes ID-scoped cancellation without treating the active predecessor as a close", async () => {
+    const h = harness(null, [], [openEntry]);
+    await h.handler(input({ scheduledEntryId: openEntry.id }), ctx());
+    expect(h.closeNegotiatedPriceEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduledEntryId: openEntry.id }),
+    );
+  });
+
+  it("refuses a scheduled cancellation combined with an end instant", async () => {
+    const h = harness();
+    await expect(
+      h.handler(
+        input({ scheduledEntryId: openEntry.id, at: NOW.toISOString() }),
+        ctx(),
+      ),
+    ).rejects.toMatchObject({ reason: "scheduled_cancellation_at" });
+    expect(h.closeNegotiatedPriceEntry).not.toHaveBeenCalled();
+  });
+
   it("is refused for a role the gate excludes, and closes nothing", async () => {
     const h = harness();
     gate.refuse = true;

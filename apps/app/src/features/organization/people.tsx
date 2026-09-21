@@ -1,3 +1,4 @@
+import { InvitationControls } from "./invitation-controls";
 // Organization › People (ARCHITECTURE.md §1.2): the organization's members and
 // its pending invitations from list_members {scope:"org"}, under the tabs that
 // link People and API keys. A refused or failed read replaces both sections;
@@ -228,6 +229,9 @@ function Invitations({
               <th scope="col" className={headCell}>
                 {t("invitations.expires")}
               </th>
+              <th scope="col" className={headCell}>
+                {t("invitations.actions")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -248,6 +252,13 @@ function Invitations({
                   ) : (
                     <DateCell iso={invitation.expiresAt} />
                   )}
+                </td>
+                <td className={cell}>
+                  <InvitationControls
+                    org={org}
+                    invitationId={invitation.id}
+                    allowed={writes}
+                  />
                 </td>
               </tr>
             ))}

@@ -49,3 +49,7 @@ At most 500 models are returned, the heaviest first: an organization running mor
 ## Tenancy
 
 The frame read is fenced on `org_id` in both stores, and on `workspace_id` as well when the caller's scope names a real workspace — the org-only mount's nil sentinel means the whole organization, not a workspace whose id is nil. The price book is read the way `loadPriceBook` reads it for the rollup: the list rows plus this organization's own negotiated rows, and never another organization's.
+
+An observation window with `since` after `at` is refused with HTTP 409, code
+`conflict`, reason `unpriced_model_window_reversed`, before usage is read.
+Equal endpoints are accepted as an empty interval.
