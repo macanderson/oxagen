@@ -130,7 +130,11 @@ export function parsePriceOverrides(body: unknown): PublishedModelPrice[] {
       cacheWrite5mPer1M: cacheWrite5m,
       cacheWrite1hPer1M:
         rate.cacheWrite1hPer1M ??
-        deriveCacheWrite1h(rate.inputPer1M, cacheWrite5m),
+        deriveCacheWrite1h(
+          rate.provider ?? vendorOf(model),
+          rate.inputPer1M,
+          cacheWrite5m,
+        ),
       reasoningPer1M: rate.reasoningPer1M ?? rate.outputPer1M,
       // Still a list row in the book — the operator is stating what the
       // provider bills *this installation*, which is what a list price is —

@@ -232,13 +232,9 @@ export const PriceTokenClass = z.enum([
 ]);
 export type PriceTokenClass = z.infer<typeof PriceTokenClass>;
 
-/**
- * One row of the price book. The entry's row id is deliberately not carried:
- * nothing on the page addresses a row by it — a negotiated row is ended by its
- * key (provider, model, class, region), the way `remove_price_entry` takes it —
- * and a raw database id is not a view-model field (INV-11).
- */
+/** One rate and its opaque cancellation token for management actions. */
 const PriceEntry = z.object({
+  cancellationToken: z.string().optional(),
   provider: z.string().min(1),
   model: z.string().min(1),
   /** Other names a frame's model id may arrive under, priced by this row. */

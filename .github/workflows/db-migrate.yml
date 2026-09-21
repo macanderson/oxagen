@@ -21,6 +21,16 @@
 # targets an ephemeral Postgres service container in CI, never production.
 # `PRODUCTION_DATABASE_URL` is read here and in no other workflow.
 #
+# There is deliberately no Atlas Cloud workflow. The atlasgo.cloud onboarding
+# wizard generates one (`.github/workflows/ci-atlas.yaml`, added in #3646 and
+# removed in #3648) that cannot work here and should not be re-added as-is:
+# it selects `--env local`, whose `dev` URL is a Postgres on the developer's
+# own machine at localhost:5433 and whose `src` shells out to `drizzle-kit
+# export`, so both steps fail on a hosted runner. Its `migrate/apply` step
+# also writes to a real database on every push to main, against a `DB_URL`
+# secret this repo does not define. Applying to production stays manual, as
+# described above. Use `--env ci` in any workflow that talks to Atlas.
+#
 # Safe by default: a run with apply=false only prints `atlas migrate status`
 # (the pending list) and changes nothing. Re-run with apply=true to apply.
 # Always read the status output first — if it shows migrations you did not

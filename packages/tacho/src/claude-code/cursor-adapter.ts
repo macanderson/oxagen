@@ -188,10 +188,8 @@ export function translateCursorPayload(raw: unknown): unknown {
   // one, survives as an attribute rather than being dropped.
   const id = str(conversationId) ?? str(cursorSessionId);
   if (id === undefined) return raw;
-  // Only preToolUse carries a cwd. The first workspace root is the directory
-  // the other events are about, and without it the recorder has no repository
-  // to attribute a session to. Cursor documents multi-root workspaces, so the
-  // whole list stays as an attribute and only the first becomes the cwd.
+  // A root is an initial location, not evidence that a later hook moved.
+  // Mark inferred values so the daemon can retain the session's last cwd.
   const workspaceRoot = Array.isArray(workspaceRoots)
     ? str(workspaceRoots[0])
     : undefined;
@@ -201,6 +199,9 @@ export function translateCursorPayload(raw: unknown): unknown {
     session_id: id,
     hook_event_name: CURSOR_TO_CLAUDE_EVENT[event as CursorHookEventName],
     ...(derivedCwd !== undefined ? { cwd: derivedCwd } : {}),
+    ...(str(cwd) === undefined && workspaceRoot !== undefined
+      ? { cursor_cwd_inferred: true }
+      : {}),
     // A generation "changes with every user message", which is a turn.
     ...(str(generationId) !== undefined ? { turn_id: str(generationId) } : {}),
   };

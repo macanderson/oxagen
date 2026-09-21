@@ -269,6 +269,7 @@ reads as an incident history:
 | Alarm | Fires when | The failure it is for |
 |---|---|---|
 | `oxagen-target-5xx` | The node answers real requests with 5xx | 2026-09-08: a node replacement came back with no services on it and passed its health check for two hours |
+| `oxagen-tacho-ingress-5xx` | At least one Tacho intake 5xx in each of three consecutive 5-minute periods | #3167: the rate-limit store refused enrolled hosts while other requests succeeded |
 | `oxagen-elb-5xx` | The load balancer itself errors | The ALB failing rather than the target |
 | `oxagen-no-healthy-host` | The target group has no healthy target | |
 | `oxagen-node-status-check` | The instance fails its EC2 status checks | |
@@ -357,3 +358,19 @@ and writes nothing until `--apply`, and even then writes only the first:
   written, because copying a known-exposed secret into a system-of-record
   makes it look clean without making it secret.
 - **CONFIG** — not a secret. A flag, a public key, a model name, a URL.
+
+### Tacho intake failure alert
+
+`oxagen-tacho-ingress-5xx` counts JSON request records from `/oxagen-app/api`
+with `msg: request`, a `/v1/tacho/` path, and status 500 through 599. It excludes
+429 rate-limit refusals and failures on other API paths. Three consecutive
+5-minute periods with at least one failure raise the alarm. A single deploy
+burst does not. No traffic is non-breaching, so this alarm does not detect a
+host that stops sending requests or an API process that emits no request logs.
+The existing target and load-balancer alarms cover failures before request logging.
+
+Apply the infrastructure change through the reviewed infrastructure workflow.
+Confirm the SNS subscription before relying on notification delivery. Verify
+`TachoIngress5xx` under `Oxagen/API`, then inspect the alarm state history and
+confirm an alert arrives during a controlled canary. A filter-pattern test
+validates selection without creating log records or changing alarm state.

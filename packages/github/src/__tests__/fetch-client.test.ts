@@ -646,6 +646,38 @@ describe("createBranch", () => {
 // openPullRequest
 // ---------------------------------------------------------------------------
 
+describe("updatePullRequest", () => {
+  it("patches only metadata on the existing pull request", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        number: 42,
+        html_url: "https://github.com/acme/my-repo/pull/42",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+    await expect(
+      client.updatePullRequest({
+        owner: "acme",
+        repo: "my-repo",
+        number: 42,
+        title: "Updated",
+        body: "Current files",
+      }),
+    ).resolves.toEqual({
+      number: 42,
+      htmlUrl: "https://github.com/acme/my-repo/pull/42",
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.github.com/repos/acme/my-repo/pulls/42");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({
+      title: "Updated",
+      body: "Current files",
+    });
+  });
+});
+
 describe("openPullRequest", () => {
   it("sends POST /pulls with all args and maps response", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(

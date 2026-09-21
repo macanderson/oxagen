@@ -1,6 +1,6 @@
 // list_members with the database stubbed: which query each scope runs and how
 // rows become contract output. The behaviour against real rows (cross-org
-// isolation, a Member listing, expired invitations left out) is in
+// isolation, a Member listing, expired pending invitations retained) is in
 // workspace.member.list.pg.test.ts.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";

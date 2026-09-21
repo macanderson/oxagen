@@ -6,7 +6,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, asc, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
 const memberColumns = {
@@ -36,7 +36,6 @@ export const listMembersHandler: CapabilityHandler<typeof listMembers> = async (
   ctx,
 ) => {
   if (input.scope === "org") {
-    const now = new Date();
     const { members, invitations } = await withTenantDb(async (tx) => {
       const ou = schema.orgUsers;
       const inv = schema.invitations;
@@ -55,13 +54,7 @@ export const listMembersHandler: CapabilityHandler<typeof listMembers> = async (
           expiresAt: inv.expiresAt,
         })
         .from(inv)
-        .where(
-          and(
-            eq(inv.orgId, ctx.orgId),
-            eq(inv.status, "pending"),
-            or(isNull(inv.expiresAt), gt(inv.expiresAt, now)),
-          ),
-        )
+        .where(and(eq(inv.orgId, ctx.orgId), eq(inv.status, "pending")))
         .orderBy(desc(inv.createdAt));
       return { members, invitations };
     });

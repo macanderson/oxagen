@@ -811,3 +811,148 @@ describe("a step carrying both halves", () => {
     expect(screen.queryByTestId("transcript-half")).toBeNull();
   });
 });
+
+describe("live access changes", () => {
+  it("names the required access instead of suggesting transport recovery", () => {
+    const sources: EventTarget[] = [];
+    class DeniedSource extends EventTarget {
+      static readonly CLOSED = 2;
+      readyState = 1;
+      constructor() {
+        super();
+        sources.push(this);
+      }
+      close() {
+        this.readyState = DeniedSource.CLOSED;
+      }
+    }
+    vi.stubGlobal("EventSource", DeniedSource);
+    renderSection({
+      read: readOk(mockupTranscript({ cursor: "ZjoxMQ", complete: false })),
+      status: "live",
+    });
+    act(() => {
+      sources[0]?.dispatchEvent(
+        new MessageEvent("error", {
+          data: JSON.stringify({ code: "authz_denied" }),
+        }),
+      );
+    });
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      "Ask a workspace Owner or organization Admin",
+    );
+    expect(screen.getByTestId("transcript-count")).not.toHaveTextContent(
+      "connection",
+    );
+    expect(screen.getByTestId("transcript-more")).toBeDisabled();
+    expect(
+      screen.getByTestId("transcript").querySelector(".animate-pulse"),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: /go live/i })).toBeNull();
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "0" } });
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      "Ask a workspace Owner",
+    );
+    expect(sources).toHaveLength(1);
+    const slider = screen.getByRole("slider");
+    fireEvent.change(slider, { target: { value: slider.getAttribute("max") } });
+    expect(sources).toHaveLength(1);
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      "Ask a workspace Owner",
+    );
+  });
+});
+
+describe("empty transcript access changes", () => {
+  const accessCases: { kinds: TranscriptKind[] }[] = [
+    { kinds: [] },
+    { kinds: ["errors"] },
+  ];
+  it.each(accessCases)("shows access refusal for filter %j", ({ kinds }) => {
+    const sources: EventTarget[] = [];
+    class Source extends EventTarget {
+      static readonly CLOSED = 2;
+      readyState = 1;
+      constructor() {
+        super();
+        sources.push(this);
+      }
+      close() {
+        this.readyState = Source.CLOSED;
+      }
+    }
+    vi.stubGlobal("EventSource", Source);
+    renderSection({
+      read: readOk(runTranscript({ entries: [] })),
+      kinds,
+      status: "live",
+    });
+    act(() => {
+      sources[0]?.dispatchEvent(
+        new MessageEvent("error", {
+          data: JSON.stringify({ code: "forbidden" }),
+        }),
+      );
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Ask a workspace Owner or organization Admin",
+    );
+    expect(screen.getByTestId("transcript-empty")).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+// Run-relative time. A transcript reads in the run's own clock: the rail
+// counts from the run's first frame and the frame head names the elapsed
+// time. The wall clock was drawn here as minute-of-hour and second-of-minute
+// with no hour, so a run that crossed an hour boundary appeared to run
+// backwards, and no reading told anyone where in the run they were. The
+// absolute instant is not dropped — it stays on the rail's `dateTime`.
+describe("run-relative time", () => {
+  const START = "2026-09-20T08:07:09.000Z";
+  const LATER = "2026-09-20T08:19:43.000Z";
+
+  function twoFrames() {
+    return readOk(
+      runTranscript({
+        entries: [
+          transcriptEntry({
+            seq: "1",
+            endSeq: "1",
+            at: START,
+            elapsedMs: 0,
+          }),
+          transcriptEntry({
+            seq: "2",
+            endSeq: "2",
+            at: LATER,
+            elapsedMs: 754_000,
+          }),
+        ],
+      }),
+    );
+  }
+
+  it("counts the step rail from the run's start and keeps the instant in dateTime", () => {
+    renderSection({ read: twoFrames(), zoom: "everything" });
+    const rails = screen
+      .getAllByTestId("transcript-step")
+      .map((step) => step.querySelector("time"));
+    expect(rails.map((time) => time?.textContent)).toEqual(["0:00", "12:34"]);
+    expect(rails.map((time) => time?.getAttribute("dateTime"))).toEqual([
+      START,
+      LATER,
+    ]);
+  });
+
+  it("names the frame head's time as elapsed, not as a wall-clock reading", () => {
+    renderSection({ read: twoFrames(), zoom: "everything" });
+    const heads = screen
+      .getAllByTestId("transcript-frame")
+      .map((frame) => frame.textContent);
+    expect(heads[0]).toContain("+0 ms");
+    expect(heads[1]).toContain("+12:34");
+    // The hour the run happened to start in is not a reading of the run.
+    for (const head of heads) expect(head).not.toContain("08:");
+  });
+});

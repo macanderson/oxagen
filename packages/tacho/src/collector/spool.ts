@@ -1,7 +1,7 @@
 /**
  * The shipper (spec section 3.1 step 3): drains unshipped WAL events to
  * `ingest_tacho_events` in batches, at least once, with exponential backoff
- * on transport failure and bisection on a refused batch so one bad event
+ * on transport or body-read failure and bisection on a refused batch so one bad event
  * cannot block a session's chain forever. Every accepted response's control
  * envelope goes to the daemon through `onControl`.
  *
@@ -320,7 +320,14 @@ export class Shipper {
       return { shipped: 0, quarantined: 0, reachable: this.reachable };
     const { own, foreign } = this.partitionByEnrollment(batch);
     // Complete body reads before ingest or quarantine can advance any cursor.
-    const batchBodies = this.options.wal.bodiesFor(own);
+    let batchBodies: TachoBody[];
+    try {
+      batchBodies = this.options.wal.bodiesFor(own);
+    } catch (error) {
+      this.fail(error);
+      this.options.log(`WAL body read failed: ${this.lastError ?? "unknown"}`);
+      return { shipped: 0, quarantined: 0, reachable: this.reachable };
+    }
     const quarantined = this.setAsideForeignEvents(foreign);
     if (own.length === 0)
       return { shipped: 0, quarantined, reachable: this.reachable };

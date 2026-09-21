@@ -68,6 +68,26 @@
         "confirm": "Save",
         "pending": "Saving"
       },
+      "governance": {
+        "heading": "Steering governance",
+        "about": "Who merges a Context PR in this workspace. It is kept in .oxagen/rules/governance.toml on the main repository's production branch, read afresh every time a Context PR opens or merges.",
+        "unchanged": "Leave unchanged",
+        "unchangedHint": "Nothing is read from GitHub and nothing is written, so this page does not say which mode is in force. The workspace's Repositories page does.",
+        "solo": "Any workspace member merges, the author included.",
+        "team": "An org Owner or Admin, or a workspace Owner, other than the author merges.",
+        "regulated": "An org Owner or Admin other than the author merges, recorded as the accountable approver.",
+        "override": "Apply now, without review",
+        "overrideHint": "Under team or regulated the change goes to a pull request for someone else to merge. You may commit it straight to the production branch instead. The skipped review is recorded against your name.",
+        "done": {
+          "applied": "{mode} is in force now, committed to {branch} on {repo}.",
+          "overridden": "You committed it without the review the previous mode asked for. That is recorded as steering.governance_overridden.",
+          "proposed": "The change to {mode} is waiting on a pull request against {branch}. It is not in force until someone merges it on GitHub.",
+          "reused": "It updated the pull request already open on oxagen/governance.",
+          "openPr": "Open pull request #{number}",
+          "refused": "The name was saved. The governance mode was not changed: {reason}",
+          "close": "Done"
+        }
+      },
       "archiveWorkspace": {
         "open": "Archive",
         "title": "Archive {name}",
@@ -125,7 +145,18 @@
       "sent": "Sent",
       "expires": "Expires",
       "never": "Never",
-      "empty": "No invitations are waiting for an answer."
+      "empty": "No invitations are waiting for an answer.",
+      "actions": "Actions",
+      "resend": "Resend",
+      "revoke": "Revoke",
+      "working": "Saving invitation",
+      "resent": "Invitation email sent. It expires in seven days.",
+      "revoked": "Invitation revoked.",
+      "deliveryFailed": "The invitation now expires in seven days, but its email could not be sent. Resend to try again.",
+      "confirmTitle": "Revoke invitation",
+      "confirmBody": "This invitation will stop working. You can send a new invitation later.",
+      "confirmRevoke": "Confirm revoke",
+      "keepInvitation": "Keep invitation"
     },
     "invite": {
       "open": "Invite",

@@ -66,7 +66,7 @@ function renderForm() {
 
 function renderWrap(
   gated: boolean,
-  harness: "claude-code" | "claude-agent-sdk",
+  harness: "claude-code" | "claude-agent-sdk" | "custom" | "stella",
 ) {
   render(
     <IntlProvider>
@@ -74,7 +74,6 @@ function renderWrap(
         org={ORG}
         ws={WS}
         agentId="agt_releasebot"
-        agentKey="acme.core.release-bot"
         harness={harness}
         gated={gated}
         back={BACK}
@@ -251,7 +250,7 @@ describe("the wrap step", () => {
 
   it("moves no gate for a workspace that carries none (negative)", async () => {
     const user = userEvent.setup();
-    renderWrap(false, "claude-agent-sdk");
+    renderWrap(false, "claude-code");
     await user.click(
       screen.getByRole("button", { name: "I have already installed it" }),
     );
@@ -341,5 +340,35 @@ describe("the run step", () => {
       "No GitHub App installation reaches this workspace",
     );
     expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("supported wrapping paths", () => {
+  it.each(["claude-agent-sdk", "custom"] as const)(
+    "keeps %s on an honest unavailable step",
+    async (harness) => {
+      renderWrap(true, harness);
+      expect(screen.getByTestId("wrap-unavailable")).toHaveTextContent(
+        "Wrapping is not available for this harness",
+      );
+      expect(
+        screen.queryByRole("button", { name: "I have already installed it" }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: "Mint the one-time token" }),
+      ).toBeNull();
+      expect(document.body.textContent).not.toContain("@oxagen/sdk");
+      expect(document.body.textContent).not.toContain("oxagen.agent.wrap");
+      expect(advanceOnboarding).not.toHaveBeenCalled();
+      expect(router.push).not.toHaveBeenCalled();
+      await expectNoAxe(document.body);
+    },
+  );
+  it("offers Stella the existing host enrollment path", () => {
+    renderWrap(true, "stella");
+    expect(
+      screen.getByRole("button", { name: "Mint the one-time token" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("wrap-unavailable")).toBeNull();
   });
 });

@@ -66,6 +66,15 @@ class FakeEventSource {
     this.listeners.get("done")?.(new MessageEvent("done", { data }));
   }
 
+  serverError(payload: unknown) {
+    this.serverErrorRaw(JSON.stringify(payload));
+  }
+
+  serverErrorRaw(data: string) {
+    this.listeners.get("error")?.(new MessageEvent("error", { data }));
+    this.onerror?.();
+  }
+
   /** The connection dropped. `forGood` is the case the person should be told about. */
   fail(forGood: boolean) {
     this.readyState = forGood
@@ -213,6 +222,67 @@ describe("useRunStream", () => {
       latest().fail(true);
     });
     expect(result.current).toBe("lost");
+  });
+
+  it.each(["stream_unavailable", "invalid_input"])(
+    "stops retrying after a typed server error %s",
+    (code) => {
+      const { result, onFrames } = follow();
+      act(() => {
+        latest().open();
+        latest().serverError({ code });
+      });
+      expect(result.current).toBe("lost");
+      expect(latest().closed).toBe(true);
+      expect(opened).toHaveLength(1);
+      expect(onFrames).toHaveBeenCalledTimes(code === "invalid_input" ? 1 : 0);
+    },
+  );
+
+  it.each(["authz_denied", "forbidden"])(
+    "retains the server refusal %s through the native error callback",
+    (code) => {
+      const { result, onFrames } = follow();
+      act(() => {
+        latest().open();
+        latest().frame();
+        latest().serverError({ code });
+      });
+      expect(result.current).toBe("denied");
+      expect(latest().closed).toBe(true);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onFrames).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(["stream_unavailable", "invalid_input", "unknown"])(
+    "flushes delivered frames once before %s terminates",
+    (code) => {
+      const { onFrames } = follow();
+      act(() => {
+        latest().open();
+        latest().frame();
+        latest().serverError({ code });
+      });
+      expect(onFrames).toHaveBeenCalledOnce();
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onFrames).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("stops on a malformed server error without claiming the run sealed", () => {
+    const { result } = follow();
+    act(() => {
+      latest().open();
+      latest().serverErrorRaw("not json");
+    });
+    expect(result.current).toBe("lost");
+    expect(latest().closed).toBe(true);
+    expect(opened).toHaveLength(1);
   });
 
   it("closes the stream and drops a pending callback when the view goes away", () => {

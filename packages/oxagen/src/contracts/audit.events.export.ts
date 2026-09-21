@@ -30,6 +30,7 @@ export const AUDIT_EXPORT_COLUMNS = [
   "ip",
   "user_agent",
   "request_id",
+  "detail",
 ] as const;
 
 /** The most events one export carries. */
