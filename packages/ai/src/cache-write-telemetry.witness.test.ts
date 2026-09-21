@@ -29,6 +29,13 @@ vi.mock("@oxagen/billing", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/billing")>()),
   providerCostUsdMicros: mocks.providerCostUsdMicros,
   chargeUsageCredits: mocks.chargeUsageCredits,
+  admitUsage: vi.fn(async () => "00000000-0000-4000-8000-000000000099"),
+  finalizeUsage: vi.fn(
+    async ({ row, charge }: { row: unknown; charge?: unknown }) => {
+      await mocks.insertTokenUsage([row]);
+      if (charge) await mocks.chargeUsageCredits(charge);
+    },
+  ),
   recordSpend: mocks.recordSpend,
 }));
 vi.mock("@opentelemetry/api", () => ({
@@ -91,6 +98,7 @@ describe("cache-write token telemetry", () => {
     }) as ReturnType<typeof streamAgentReply> & {
       _onFinish: (event: unknown) => Promise<void>;
     };
+    await mocks.streamText.mock.calls[0]![0].prepareStep();
     await result._onFinish({
       text: "hi",
       totalUsage: {
