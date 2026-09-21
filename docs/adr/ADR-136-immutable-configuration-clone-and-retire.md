@@ -34,4 +34,4 @@ A clone's PR grants no authority. Its review can alter the new configuration, an
 
 Legacy retired rows have no recorded validity end. The migration initializes it from `updated_at`, the best retained timestamp. It does not claim to reconstruct the original retirement time. New retirement actions record their own end date.
 
-This increment adds cloning and validity dates to existing retirement actions. The skill pin retirement control and Context retirement PR remain follow-up work. ADR-091’s deployment proof still gates additions to steering governance process.
+This increment adds cloning and validity dates to existing retirement actions. The skill pin retirement control and Context retirement PR remain follow-up work. ADR-091’s deployment proof still gates additions to steering governance process. The one column this increment adds to `context_proposals`, an optional `title`, is exempted by the 2026-09-21 amendment to ADR-091 §6 on the ground that nothing decides on it. The rest of that freeze stands, and it lifts only on the #2592 proof.
