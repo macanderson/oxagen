@@ -607,3 +607,5 @@ after the registered name separately when their contract uses a dotted stem.
 
 - [get_clone_draft](configuration.clone.get.md)
 - [propose_configuration_clone](configuration.clone.propose.md)
+| [resend_member_invite](org.member_invite.resend.md) | [org.member_invite.resend.ts](../../packages/oxagen/src/contracts/org.member_invite.resend.ts) | api, mcp |
+| [revoke_member_invite](org.member_invite.revoke.md) | [org.member_invite.revoke.ts](../../packages/oxagen/src/contracts/org.member_invite.revoke.ts) | api, mcp |

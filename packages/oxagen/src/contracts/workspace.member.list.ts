@@ -13,7 +13,7 @@ import { registerCapability } from "../registry";
  *
  * The scope is an argument. `org` answers the Organization › People page:
  * every membership row of the org joined to its user, plus every pending,
- * unexpired invitation. `workspace` answers the existing API and MCP callers,
+ * invitation, including expired ones that can be renewed. `workspace` answers the existing API and MCP callers,
  * which pass no scope: the members of the workspace the request is scoped
  * to. A workspace has no invitations of its own (invitations are org rows),
  * so the workspace branch of the output carries none.

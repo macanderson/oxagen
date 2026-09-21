@@ -1129,6 +1129,24 @@
       "proof": "apps/app/src/features/create/clone-editor.test.tsx",
       "verifiedAt": "2026-09-21",
       "verifiedBy": "skills-lifecycle-ci-witness"
+    },
+    "resend_member_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "People pending invitations: resend",
+      "testid": "invitation-controls",
+      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "assigned-issue-batch; CI pending"
+    },
+    "revoke_member_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "People pending invitations: revoke",
+      "testid": "invitation-controls",
+      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "assigned-issue-batch; CI pending"
     }
   }
 }

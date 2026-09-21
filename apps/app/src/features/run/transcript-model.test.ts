@@ -1,5 +1,6 @@
 // The transcript's grouping, digests and transport arithmetic, without a render.
 import { describe, expect, it } from "vitest";
+import type { TranscriptEntry } from "@/data/contracts/run";
 import {
   mockupTranscript,
   transcriptBody,
@@ -387,6 +388,142 @@ describe("the transport", () => {
   it("finds the turn and step holding a position", () => {
     expect(idsAt(turns, 6)).toEqual(["t2", "s5"]);
     expect(idsAt(turns, 99)).toEqual([]);
+  });
+});
+
+describe("effect frames fold into the call they belong to", () => {
+  // The recorder writes `command`, `file_io` and `network` as their own
+  // frames beside the `tool_call` they describe, so a Bash call used to draw
+  // two rows: `Bash`, then a `command` row with no body under it.
+  const tool = (over: Partial<TranscriptEntry> = {}) =>
+    transcriptEntry({
+      kind: "tool_call",
+      type: "tool_call",
+      label: "Bash",
+      turn: 1,
+      ...over,
+    });
+  const effect = (over: Partial<TranscriptEntry> = {}) =>
+    transcriptEntry({
+      kind: "tool_call",
+      type: "command",
+      label: "command",
+      turn: 1,
+      ...over,
+    });
+
+  it("draws one step for a call and its effect frame", () => {
+    const steps = buildTranscript([
+      tool({ seq: "1", callKey: "toolu_a" }),
+      effect({ seq: "2", callKey: "toolu_a" }),
+    ])[0]?.steps;
+    expect(steps).toHaveLength(1);
+    expect(steps?.[0]?.kind).toBe("tool");
+    // Nothing is dropped: the folded frame is still evidence under the step.
+    expect(steps?.[0]?.frames).toHaveLength(2);
+  });
+
+  it("folds a request, its call and its effect frame into one step", () => {
+    const steps = buildTranscript([
+      transcriptEntry({
+        seq: "1",
+        kind: "tool_call",
+        type: "tool_requested",
+        label: "Bash",
+        callKey: "toolu_a",
+        turn: 1,
+      }),
+      tool({ seq: "2", callKey: "toolu_a" }),
+      effect({ seq: "3", callKey: "toolu_a" }),
+    ])[0]?.steps;
+    expect(steps).toHaveLength(1);
+    expect(steps?.[0]?.frames).toHaveLength(3);
+  });
+
+  it("folds every effect frame a call wrote, not only the first", () => {
+    const steps = buildTranscript([
+      tool({ seq: "1", callKey: "toolu_a" }),
+      effect({ seq: "2", callKey: "toolu_a" }),
+      effect({
+        seq: "3",
+        type: "file_io",
+        label: "file_io",
+        callKey: "toolu_a",
+      }),
+    ])[0]?.steps;
+    expect(steps).toHaveLength(1);
+    expect(steps?.[0]?.frames).toHaveLength(3);
+  });
+
+  it("leaves an effect frame that names a different call as its own step", () => {
+    // Two calls in flight. Folding by adjacency alone would put B's effect
+    // under A, which is a claim the record does not support.
+    const steps = buildTranscript([
+      tool({ seq: "1", callKey: "toolu_a" }),
+      effect({ seq: "2", callKey: "toolu_b" }),
+    ])[0]?.steps;
+    expect(steps).toHaveLength(2);
+  });
+
+  it("falls back to adjacency only when neither side recorded a key", () => {
+    const steps = buildTranscript([
+      tool({ seq: "1", callKey: null }),
+      effect({ seq: "2", callKey: null }),
+    ])[0]?.steps;
+    expect(steps).toHaveLength(1);
+  });
+
+  it("stops at the next call rather than swallow it", () => {
+    const steps = buildTranscript([
+      tool({ seq: "1", callKey: "toolu_a" }),
+      effect({ seq: "2", callKey: "toolu_a" }),
+      tool({ seq: "3", label: "Read", callKey: "toolu_b" }),
+    ])[0]?.steps;
+    expect(steps).toHaveLength(2);
+    expect(steps?.[1]?.frames).toHaveLength(1);
+  });
+});
+
+describe("stepDigest on a gate frame", () => {
+  const gate = (label: string, type = "policy_decision") => {
+    const frame = transcriptEntry({
+      seq: "1",
+      kind: "policy",
+      type,
+      label,
+      turn: 1,
+      cost: null,
+      cumulativeCost: null,
+    });
+    return stepDigest({
+      id: "g1",
+      kind: "event",
+      from: 1,
+      to: 1,
+      first: frame,
+      last: frame,
+      frames: [frame],
+    });
+  };
+
+  it("says what was decided, and on which call", () => {
+    const digest = gate("deny Bash");
+    expect(digest.name).toBe("deny");
+    expect(digest.arg).toBe("Bash");
+    // The name already is the decision, so an outcome chip beside it would
+    // say the same word twice.
+    expect(digest.outcome).toBeNull();
+  });
+
+  it("says the decision alone when the record named no call", () => {
+    const digest = gate("policy allow");
+    expect(digest.name).toBe("allow");
+    expect(digest.arg).toBeNull();
+  });
+
+  it("reads an approval the same way", () => {
+    expect(gate("allow Write", "approval_decision").name).toBe("allow");
+    expect(gate("allow Write", "approval_decision").arg).toBe("Write");
   });
 });
 
