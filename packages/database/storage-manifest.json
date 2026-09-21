@@ -3549,7 +3549,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d03ec821ad94e54ec5743b463a2967c625b056a04f938a4b9303ed788d5f560a",
+  "contentHash": "ef83b8407a8aa6ad426ac5a1f5910bfe568f8cd1b0486b9fdb26ff44da0f9764",
   "domains": [
     {
       "name": "agent",
@@ -19953,6 +19953,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "machine_snapshot",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
         },
         {
           "name": "runtime",

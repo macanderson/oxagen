@@ -41,6 +41,7 @@ import {
   IN_APP_AGENT_SURFACES,
   type RunItem,
   runList,
+  runMachineSnapshotSchema,
   type RunListOutput,
 } from "@oxagen/oxagen/contracts/run.list";
 import {
@@ -501,6 +502,8 @@ const tachoColumns = {
     summary: sessions.summary,
     summaryGeneratedAt: sessions.summaryGeneratedAt,
     summaryModel: sessions.summaryModel,
+    // JSON lookup remains safe before the additive column migration.
+    machineSnapshot: sql<unknown>`to_jsonb(${sessions})->'machine_snapshot'`,
     modelInitial: sessions.modelInitial,
     modelFinal: sessions.modelFinal,
   },
@@ -669,6 +672,7 @@ export type RunCost = {
 type RunRollup = { cost: RunCost | null; verdict: RunItem["verdict"] };
 
 export type TachoSessionColumns = GeneratedSummaryColumns & {
+  machineSnapshot?: unknown;
   /** `tacho.sessions.id`; foreign key for checkpoints and rollups. */
   id: string;
   publicId: string;
@@ -875,12 +879,15 @@ export function principalKind(kind: string | null): RunItem["operatorKind"] {
  */
 export function toRunMachine(
   host: TachoHostColumns | null | undefined,
+  snapshot?: unknown,
 ): RunItem["machine"] {
   const hostname = host?.hostname?.trim() ?? "";
   const platform = host?.platform?.trim() ?? "";
   if (hostname.length === 0 || platform.length === 0) return null;
+  const recorded = runMachineSnapshotSchema.safeParse(snapshot);
   return {
     hostname,
+    ...(recorded.success ? { recorded: recorded.data } : {}),
     platform,
     osVersion: blankToNull(host?.osVersion),
     arch: blankToNull(host?.arch),
@@ -1020,7 +1027,7 @@ export function toTachoRunItem(
     // it is the one a row reports; a session that never recorded a switch has
     // only the one it started on.
     model: modelFactsOf(session.modelFinal ?? session.modelInitial),
-    machine: toRunMachine(row.host),
+    machine: toRunMachine(row.host, row.session.machineSnapshot),
     // The model-written name when `summarize_run` has produced one, and the
     // derived title until then. A run always has something to be called.
     name: session.name ?? session.title ?? null,

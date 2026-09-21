@@ -881,6 +881,8 @@ describe("a run row names who ran it, on what, with which model", () => {
     // round trips at the contract's maximum limit.
     expect(query.sql.match(/\bselect\b/gi)).toHaveLength(1);
     expect(query.sql).toContain('left join "tacho"."hosts"');
+    expect(query.sql).toContain("machine_snapshot");
+    expect(query.sql).toContain('to_jsonb("tacho"."sessions")');
     expect(query.sql).toContain('left join "auth"."users"');
   });
 
@@ -920,6 +922,35 @@ describe("a run row names who ran it, on what, with which model", () => {
         nodeVersion: "v24.4.0",
       },
     });
+  });
+
+  it("keeps session host observations separate from later enrollment metadata", async () => {
+    const fixture = tachoSession({ publicId: "tse_snapshot" });
+    const recorded = {
+      platform: "linux",
+      osVersion: "6.12",
+      arch: "x64",
+      recordedAt: "2026-09-20T00:00:00Z",
+      eventHash: `sha256:${"a".repeat(64)}`,
+    };
+    fixture.session.machineSnapshot = recorded;
+    const { list } = handlerOver([], [fixture]);
+    expect((await list({ limit: 50 }, ctx())).runs[0]?.machine).toMatchObject({
+      platform: "darwin",
+      recorded,
+    });
+  });
+
+  it("does not publish malformed stored machine facts as a runtime observation", async () => {
+    const fixture = tachoSession({ publicId: "tse_malformed" });
+    fixture.session.machineSnapshot = {
+      platform: "linux",
+      recordedAt: "not-a-date",
+    };
+    const { list } = handlerOver([], [fixture]);
+    const machine = (await list({ limit: 50 }, ctx())).runs[0]?.machine;
+    expect(machine).toMatchObject({ platform: "darwin" });
+    expect(machine).not.toHaveProperty("recorded");
   });
 
   it("reports the model the session started on when it recorded no final one", async () => {

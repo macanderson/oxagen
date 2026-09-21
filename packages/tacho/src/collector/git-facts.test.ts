@@ -8,7 +8,6 @@ import {
   parsePorcelainZ,
   readGitFacts,
   readWorkingTreeChanges,
-  resolveNumstatPath,
   worktreeReconciledBody,
 } from "./git-facts";
 import { MAX_OBSERVED_CHANGES, observedChangeSchema } from "../envelope";
@@ -198,7 +197,9 @@ describe("readGitFacts", () => {
 
 describe("parsePorcelainZ", () => {
   it("separates entries on NUL and keeps the status code", async () => {
-    const parsed = parsePorcelainZ(" M src/a.ts\0?? new.txt\0 D gone.ts\0");
+    const parsed = parsePorcelainZ(
+      " M src/a.ts\x00?? new.txt\x00 D gone.ts\x00",
+    );
     expect(parsed).toEqual([
       { code: " M", path: "src/a.ts" },
       { code: "??", path: "new.txt" },
@@ -207,7 +208,7 @@ describe("parsePorcelainZ", () => {
   });
 
   it("consumes the original path that follows a rename", async () => {
-    const parsed = parsePorcelainZ("R  new.ts\0old.ts\0 M other.ts\0");
+    const parsed = parsePorcelainZ("R  new.ts\x00old.ts\x00 M other.ts\x00");
     expect(parsed).toEqual([
       { code: "R ", path: "new.ts" },
       { code: " M", path: "other.ts" },
@@ -215,42 +216,38 @@ describe("parsePorcelainZ", () => {
   });
 });
 
-describe("resolveNumstatPath", () => {
-  it("resolves the arrow form to the new path", async () => {
-    expect(resolveNumstatPath("old.ts => new.ts")).toBe("new.ts");
-  });
-
-  it("resolves the braced form to the new path", async () => {
-    expect(resolveNumstatPath("src/{old => new}/a.ts")).toBe("src/new/a.ts");
-  });
-
-  it("collapses the empty half of a braced rename", async () => {
-    expect(resolveNumstatPath("src/{ => nested}/a.ts")).toBe("src/nested/a.ts");
-  });
-
-  it("leaves an ordinary path alone", async () => {
-    expect(resolveNumstatPath("src/a.ts")).toBe("src/a.ts");
-  });
-});
-
 describe("parseNumstat", () => {
-  it("reads counts and treats a binary file as zero on both", async () => {
-    const parsed = parseNumstat("12\t3\tsrc/a.ts\n-\t-\tlogo.png\n");
+  it("reads counts and binary entries without interpreting filename text", () => {
+    const parsed = parseNumstat("12\t3\tsrc/a.ts\x00-\t-\tlogo.png\x00");
     expect(parsed.get("src/a.ts")).toEqual({ added: 12, removed: 3 });
     expect(parsed.get("logo.png")).toEqual({ added: 0, removed: 0 });
   });
-
-  it("unquotes a path git escaped", async () => {
-    const parsed = parseNumstat('1\t0\t"a\\tb.ts"\n');
-    expect(parsed.get("a\tb.ts")).toEqual({ added: 1, removed: 0 });
+  it.each([
+    "a => b",
+    "src/{old => new}.ts",
+    "é space.ts",
+    "a\tb.ts",
+    "a\nb.ts",
+    "a\\b.ts",
+    '"quoted"',
+  ])("keeps literal filename %s", (path) => {
+    expect(parseNumstat(`1\t2\t${path}\x00`).get(path)).toEqual({
+      added: 1,
+      removed: 2,
+    });
+  });
+  it("uses the structural destination of a rename", () => {
+    expect([
+      ...parseNumstat("1\t2\t\x00old => literal\x00new\nname\x00"),
+    ]).toEqual([["new\nname", { added: 1, removed: 2 }]]);
   });
 });
 
 describe("readWorkingTreeChanges", () => {
   const status =
-    " M src/a.ts\0?? new.txt\0 D gone.ts\0R  renamed-new.ts\0renamed-old.ts\0";
+    " M src/a.ts\x00?? new.txt\x00 D gone.ts\x00R  renamed-new.ts\x00renamed-old.ts\x00";
   const numstat =
-    "12\t3\tsrc/a.ts\n0\t9\tgone.ts\n2\t2\trenamed-old.ts => renamed-new.ts\n";
+    "12\t3\tsrc/a.ts\x000\t9\tgone.ts\x002\t2\t\x00renamed-old.ts\x00renamed-new.ts\x00";
 
   it("reports work the session committed, with a clean worktree", async () => {
     // The loss this closes: an agent edits files through a shell command or a
@@ -263,8 +260,8 @@ describe("readWorkingTreeChanges", () => {
     const exec = fakeGit(
       {
         "status --porcelain=v1 -z": "",
-        "diff --name-status -z base-sha": "M\0src/a.ts\0A\0src/b.ts\0",
-        "diff --numstat base-sha": "12\t3\tsrc/a.ts\n40\t0\tsrc/b.ts\n",
+        "diff --name-status -z base-sha": "M\x00src/a.ts\x00A\x00src/b.ts\x00",
+        "diff --numstat base-sha": "12\t3\tsrc/a.ts\x0040\t0\tsrc/b.ts\x00",
         "rev-parse --show-toplevel": "/repo\n",
       },
       calls,
@@ -291,41 +288,56 @@ describe("readWorkingTreeChanges", () => {
     expect(calls.some((c) => c.includes("HEAD"))).toBe(false);
   });
 
-  it("falls back to HEAD when the baseline is no longer in the graph", async () => {
-    // A rebase, an amend or a reset can take the baseline out of the graph.
-    // Answering from the empty tree instead would report every file in the
-    // repository as added by this run, so the read falls back to the question
-    // it can still answer.
+  it("reports unknown when the baseline can no longer be read", async () => {
     const exec = fakeGit({
-      "status --porcelain=v1 -z": " M src/a.ts\0",
-      "diff --name-status -z gone-sha": {
-        status: 128,
-        stdout: "",
-        stderr: "bad object",
-      },
-      "diff --numstat HEAD": "12\t3\tsrc/a.ts\n",
-      "rev-parse --show-toplevel": "/repo\n",
+      "status --porcelain=v1 -z": " M src/a.ts\x00",
+      "diff --name-status -z gone-sha": FAIL,
+      "diff --numstat HEAD": "12\t3\tsrc/a.ts\x00",
     });
-    expect(await readWorkingTreeChanges(exec, "/repo/src", "gone-sha")).toEqual(
-      [
-        {
-          path: "/repo/src/a.ts",
-          repo_relative_path: "src/a.ts",
-          status: "modified",
-          lines_added: 12,
-          lines_removed: 3,
-        },
-      ],
+    expect(
+      await readWorkingTreeChanges(exec, "/repo", "gone-sha"),
+    ).toBeUndefined();
+  });
+
+  it("does not turn a failed HEAD diff into an initial addition", async () => {
+    const calls: string[][] = [];
+    const exec = fakeGit(
+      {
+        "status --porcelain=v1 -z": " M src/a.ts\x00",
+        "diff --numstat HEAD": FAIL,
+        "rev-parse --verify HEAD": "a".repeat(40),
+        "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904":
+          "900\t0\tsrc/a.ts\x00",
+      },
+      calls,
     );
+    expect(await readWorkingTreeChanges(exec, "/repo")).toBeUndefined();
+    expect(
+      calls.some((call) =>
+        call.includes("4b825dc642cb6eb9a060e54bf8d69288fbee4904"),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a failed symbolic HEAD probe unknown", async () => {
+    const exec = fakeGit({
+      "status --porcelain=v1 -z": " M src/a.ts\x00",
+      "diff --numstat HEAD": FAIL,
+      "rev-parse --verify HEAD": FAIL,
+      "symbolic-ref -q HEAD": FAIL,
+      "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904":
+        "900\t0\tsrc/a.ts\x00",
+    });
+    expect(await readWorkingTreeChanges(exec, "/repo")).toBeUndefined();
   });
 
   it("keeps untracked files, which are in no diff", async () => {
     // The untracked half still comes from `status`: a file git does not track
     // appears in no diff against any commit, baseline included.
     const exec = fakeGit({
-      "status --porcelain=v1 -z": "?? new.txt\0",
-      "diff --name-status -z base-sha": "M\0src/a.ts\0",
-      "diff --numstat base-sha": "12\t3\tsrc/a.ts\n",
+      "status --porcelain=v1 -z": "?? new.txt\x00",
+      "diff --name-status -z base-sha": "M\x00src/a.ts\x00",
+      "diff --numstat base-sha": "12\t3\tsrc/a.ts\x00",
       "rev-parse --show-toplevel": "/repo\n",
       "hash-object": "",
     });
@@ -378,14 +390,14 @@ describe("readWorkingTreeChanges", () => {
     const calls: string[][] = [];
     const exec = fakeGit(
       {
-        "status --porcelain=v1 -z": "?? new.txt\0",
+        "status --porcelain=v1 -z": "?? new.txt\x00",
         "diff --numstat HEAD": "",
         "rev-parse --show-toplevel": "/repo\n",
         // `--no-index` exits 1 to say the two inputs differ, which is the
         // answer, not a failure.
         "--no-index": {
           status: 1,
-          stdout: "412\t0\t/dev/null => /repo/new.txt\n",
+          stdout: "412\t0\t/dev/null => /repo/new.txt\x00",
           stderr: "",
         },
       },
@@ -402,7 +414,7 @@ describe("readWorkingTreeChanges", () => {
 
   it("leaves an untracked count at zero when the probe cannot answer", async () => {
     const exec = fakeGit({
-      "status --porcelain=v1 -z": "?? new.txt\0",
+      "status --porcelain=v1 -z": "?? new.txt\x00",
       "diff --numstat HEAD": "",
       "rev-parse --show-toplevel": "/repo\n",
       "--no-index": FAIL,
@@ -417,7 +429,7 @@ describe("readWorkingTreeChanges", () => {
     const exec = fakeGit(
       {
         // A mode change: git reports the path and no line count for it.
-        "status --porcelain=v1 -z": " M src/a.ts\0",
+        "status --porcelain=v1 -z": " M src/a.ts\x00",
         "diff --numstat HEAD": "",
         "rev-parse --show-toplevel": "/repo\n",
       },
@@ -434,7 +446,7 @@ describe("readWorkingTreeChanges", () => {
     const calls: string[][] = [];
     const exec = fakeGit(
       {
-        "status --porcelain=v1 -z": "?? build/\0",
+        "status --porcelain=v1 -z": "?? build/\x00",
         "diff --numstat HEAD": "",
         "rev-parse --show-toplevel": "/repo\n",
       },
@@ -456,11 +468,11 @@ describe("readWorkingTreeChanges", () => {
     const exec = fakeGit(
       {
         "status --porcelain=v1 -z": paths
-          .map((name) => `?? ${name}.txt\0`)
+          .map((name) => `?? ${name}.txt\x00`)
           .join(""),
         "diff --numstat HEAD": "",
         "rev-parse --show-toplevel": "/repo\n",
-        "--no-index": { status: 1, stdout: "1\t0\tx\n", stderr: "" },
+        "--no-index": { status: 1, stdout: "1\t0\tx\x00", stderr: "" },
       },
       calls,
     );
@@ -482,7 +494,7 @@ describe("readWorkingTreeChanges", () => {
     const calls: string[][] = [];
     const exec = fakeGit(
       {
-        "status --porcelain=v1 -z": "?? new.txt\0",
+        "status --porcelain=v1 -z": "?? new.txt\x00",
         "diff --numstat HEAD": "",
         "rev-parse --show-toplevel": FAIL,
       },
@@ -496,10 +508,17 @@ describe("readWorkingTreeChanges", () => {
     const calls: string[][] = [];
     const exec = fakeGit(
       {
-        "status --porcelain=v1 -z": " M src/a.ts\0",
+        "status --porcelain=v1 -z": " M src/a.ts\x00",
         "diff --numstat HEAD": FAIL,
+        "rev-parse --verify HEAD": FAIL,
+        "symbolic-ref -q HEAD": "refs/heads/main\n",
+        "show-ref --verify --quiet refs/heads/main": {
+          status: 1,
+          stdout: "",
+          stderr: "",
+        },
         "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904":
-          "4\t1\tsrc/a.ts\n",
+          "4\t1\tsrc/a.ts\x00",
         "rev-parse --show-toplevel": "/repo\n",
       },
       calls,
@@ -517,12 +536,19 @@ describe("readWorkingTreeChanges", () => {
     // real distance from an empty repository is 4/0, and one diff naming
     // the empty tree is what asks for it.
     const exec = fakeGit({
-      "status --porcelain=v1 -z": "A  src/a.ts\0",
+      "status --porcelain=v1 -z": "A  src/a.ts\x00",
       "diff --numstat HEAD": FAIL,
+      "rev-parse --verify HEAD": FAIL,
+      "symbolic-ref -q HEAD": "refs/heads/main\n",
+      "show-ref --verify --quiet refs/heads/main": {
+        status: 1,
+        stdout: "",
+        stderr: "",
+      },
       "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904":
-        "4\t0\tsrc/a.ts\n",
-      "diff --numstat --cached": "3\t0\tsrc/a.ts\n",
-      "diff --numstat": "2\t1\tsrc/a.ts\n",
+        "4\t0\tsrc/a.ts\x00",
+      "diff --numstat --cached": "3\t0\tsrc/a.ts\x00",
+      "diff --numstat": "2\t1\tsrc/a.ts\x00",
       "rev-parse --show-toplevel": "/repo\n",
     });
     const [only] = (await readWorkingTreeChanges(exec, "/repo")) ?? [];
@@ -537,12 +563,12 @@ describe("readWorkingTreeChanges", () => {
     const calls: string[][] = [];
     const exec = fakeGit(
       {
-        "status --porcelain=v1 -z": "?? new/a.ts\0?? new/b.ts\0",
+        "status --porcelain=v1 -z": "?? new/a.ts\x00?? new/b.ts\x00",
         "diff --numstat HEAD": "",
         "rev-parse --show-toplevel": "/repo\n",
         "--no-index": {
           status: 1,
-          stdout: "7\t0\t/dev/null => /repo/new/a.ts\n",
+          stdout: "7\t0\t/dev/null => /repo/new/a.ts\x00",
           stderr: "",
         },
       },
@@ -559,19 +585,19 @@ describe("readWorkingTreeChanges", () => {
 
   it("falls back to the repo-relative path when the root cannot be read", async () => {
     const exec = fakeGit({
-      "status --porcelain=v1 -z": " M src/a.ts\0",
+      "status --porcelain=v1 -z": " M src/a.ts\x00",
       "diff --numstat HEAD": "",
       "rev-parse --show-toplevel": FAIL,
     });
-    expect(((await readWorkingTreeChanges(exec, "/repo")) ?? [])[0]?.path).toBe(
-      "src/a.ts",
-    );
+    const row = (await readWorkingTreeChanges(exec, "/repo"))?.[0];
+    expect(row?.path).toBe("src/a.ts");
+    expect(row?.repo_relative_path).toBe("");
   });
 
   it("reports a binary file that changed, with zero on both counts", async () => {
     const exec = fakeGit({
-      "status --porcelain=v1 -z": " M logo.png\0",
-      "diff --numstat HEAD": "-\t-\tlogo.png\n",
+      "status --porcelain=v1 -z": " M logo.png\x00",
+      "diff --numstat HEAD": "-\t-\tlogo.png\x00",
       "rev-parse --show-toplevel": "/repo\n",
     });
     expect(

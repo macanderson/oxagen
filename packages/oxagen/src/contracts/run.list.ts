@@ -145,9 +145,20 @@ export const runModelSchema = z
  * named by `operatorName` and a second, weaker identifier for the same person
  * buys the reader nothing.
  */
+export const runMachineSnapshotSchema = z
+  .object({
+    platform: z.string().nullable(),
+    osVersion: z.string().nullable(),
+    arch: z.string().nullable(),
+    recordedAt: z.string().datetime(),
+    eventHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  })
+  .strict();
+
 export const runMachineSchema = z
   .object({
     hostname: z.string(),
+    recorded: runMachineSnapshotSchema.optional(),
     /** The OS family the host enrolled as, e.g. `darwin`, `linux`. */
     platform: z.string(),
     osVersion: z.string().nullable(),

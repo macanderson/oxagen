@@ -3117,6 +3117,9 @@ type Messages = {
         agent: string;
         service: string;
       };
+      machineNotRecorded: string;
+      machineRecorded: string;
+      machineEnrollment: string;
     };
     resolvedApprovals: {
       title: string;

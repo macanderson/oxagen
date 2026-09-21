@@ -132,6 +132,15 @@ export type RunModel = z.infer<typeof RunModel>;
 
 /** The machine a wrapped agent ran on. Null for a ledger run, which names no host. */
 export const RunMachine = z.object({
+  recorded: z
+    .object({
+      platform: z.string().nullable(),
+      osVersion: z.string().nullable(),
+      arch: z.string().nullable(),
+      recordedAt: z.string().datetime(),
+      eventHash: z.string(),
+    })
+    .optional(),
   hostname: z.string().min(1),
   platform: z.string().min(1),
   osVersion: z.string().min(1).nullable(),

@@ -59,19 +59,15 @@ import { recordSpend } from "@oxagen/billing";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { type AssemblyTiming, writeAssembly } from "@oxagen/run-ledger";
-import {
-  languageOf,
-  observedChangesOf,
-  repoRelativePathOf,
-  WORKTREE_RECONCILED_KIND,
-  worktreeRootOf,
-} from "./lib/file-facts";
+import { machineSnapshotOf } from "./lib/machine-facts";
+import { rollupFiles } from "./lib/file-facts-rollup";
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
   gatewayInvocationColumnReady,
   sessionFileObservedStatusColumnReady,
   sessionGatewayColumnReady,
   sessionPushesColumnReady,
+  sessionMachineSnapshotColumnReady,
 } from "./lib/tacho-gateway-columns";
 import { eventClient } from "./event-client";
 import { recordProofFrames } from "./lib/proof";
@@ -998,13 +994,17 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // Asked once for the whole batch rather than per session: the answer is
     // per-process and cached, and a batch cannot straddle a migration it holds
     // a transaction across.
-    const sessionGatewayColumn = await sessionGatewayColumnReady(tx);
+    const sessionGatewayColumn = await sessionGatewayColumnReady(tx, true);
     // The two columns this branch adds, asked the same way and for the same
     // window. Probed separately from each other because one migration adds
     // both and a run that fails between its two statements leaves exactly the
     // half-applied state an inference would get wrong.
-    const pushesColumn = await sessionPushesColumnReady(tx);
-    const observedStatusColumn = await sessionFileObservedStatusColumnReady(tx);
+    const pushesColumn = await sessionPushesColumnReady(tx, true);
+    const machineColumn = await sessionMachineSnapshotColumnReady(tx, true);
+    const observedStatusColumn = await sessionFileObservedStatusColumnReady(
+      tx,
+      true,
+    );
     // Which of this batch's chains the control plane's own records say it
     // served a gateway call for (#3221). One grouped read for the whole batch,
     // and skipped entirely when no promotion is possible — including while
@@ -1014,7 +1014,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       tx,
       host,
       [...bySession.keys()],
-      await gatewayInvocationColumnReady(tx),
+      await gatewayInvocationColumnReady(tx, true),
     );
 
     for (const [sessionUuid, events] of bySession) {
@@ -1262,7 +1262,11 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           : {}),
         pullRequests: sql`${schema.tachoSessions.pullRequests} + ${delta.pullRequests}`,
       };
+      const machineSnapshot = machineColumn
+        ? machineSnapshotOf(fresh)
+        : undefined;
       const common = {
+        ...(machineSnapshot === undefined ? {} : { machineSnapshot }),
         lastEventAt: now,
         seqCount: sql`GREATEST(${schema.tachoSessions.seqCount}, ${last.seq + 1})`,
         chainVerified: ok,
@@ -1399,6 +1403,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           .insert(schema.tachoSessions)
           .values({
             ...row,
+            ...(machineSnapshot === undefined ? {} : { machineSnapshot }),
             ...terminalColumns,
             ...(firstObserved !== undefined
               ? { costBasis: TACHO_METERING_OBSERVED }
@@ -1821,255 +1826,6 @@ async function rollupModels(
           thinkingTokens: sql`${schema.tachoSessionModels.thinkingTokens} + ${entry.thinking}`,
           costMicros: sql`${schema.tachoSessionModels.costMicros} + ${entry.cost}`,
           apiDurationMs: sql`${schema.tachoSessionModels.apiDurationMs} + ${entry.duration}`,
-          updatedAt: now,
-        },
-      });
-  }
-}
-
-async function rollupFiles(
-  tx: Tx,
-  ctx: Scope,
-  sessionId: string,
-  events: TachoEvent[],
-  now: Date,
-  // Whether `tacho.session_files.observed_status` exists yet. Same window as
-  // the gateway columns: the node deploys on merge and the migration is
-  // applied by hand afterwards, so naming the column in between raises 42703
-  // and takes the batch with it.
-  observedStatusColumn: boolean,
-): Promise<void> {
-  // The worktree the batch agrees on, used to turn every absolute path into
-  // the repo-relative form that is stable across hosts.
-  const root = worktreeRootOf(events.map((event) => event.context));
-  const byPath = new Map<
-    string,
-    {
-      reads: number;
-      writes: number;
-      edits: number;
-      deletes: number;
-      first: number;
-      last: number;
-      bytes: number;
-      /** The path the row stores, preferring an absolute one. */
-      path: string;
-      /** What the last reconciliation in this batch observed, if any. */
-      observed?: {
-        status: string;
-        linesAdded: number;
-        linesRemoved: number;
-        repoRelativePath?: string;
-      };
-    }
-  >();
-  /**
-   * The identity two passes agree on for one file.
-   *
-   * The attested pass keys on whatever the tool reported, which is often a
-   * relative `src/a.ts`. The observed pass keys on what git reported, which
-   * is the absolute `/repo/src/a.ts`. Keyed on those raw strings the same
-   * file became two rows, one carrying the writes and the other the observed
-   * status and line counts, and the Run page showed the file twice with half
-   * the truth on each. The repo-relative form is what both can reach, so it
-   * is the key, and a path with no root to measure against keeps its own
-   * string rather than colliding with anything.
-   */
-  const identityOf = (path: string): string =>
-    repoRelativePathOf(path, root) ?? path;
-  const entryFor = (path: string, seq: number) => {
-    const existing = byPath.get(identityOf(path));
-    if (existing !== undefined) return existing;
-    return {
-      reads: 0,
-      writes: 0,
-      edits: 0,
-      deletes: 0,
-      first: seq,
-      last: seq,
-      bytes: 0,
-      // The path the row stores. An absolute one wins if either pass has it,
-      // since it is the one a person can act on.
-      path,
-    };
-  };
-  for (const event of events) {
-    if (event.kind !== "tool_call" && event.kind !== "file_io") continue;
-    if (event.kind === "tool_call" && event.source !== "hook") continue;
-    const body = event.body as Body;
-    const kind = str(body["effect_kind"]);
-    const target = str(body["tool_target"]);
-    if (!target || !kind || !kind.startsWith("file_")) continue;
-    if (event.kind === "tool_call" && kind !== "file_read") continue;
-    const entry = entryFor(target, event.seq);
-    if (kind === "file_read") entry.reads += 1;
-    else if (kind === "file_write") {
-      entry.writes += 1;
-      entry.bytes += num(body["tool_input_bytes"]);
-    } else if (kind === "file_edit") entry.edits += 1;
-    else if (kind === "file_delete") entry.deletes += 1;
-    entry.first = Math.min(entry.first, event.seq);
-    entry.last = Math.max(entry.last, event.seq);
-    byPath.set(identityOf(target), entry);
-  }
-  // The observed pass, second so that a path both announced and seen lands
-  // on one row. A reconciliation frame reports the whole worktree as git
-  // holds it, so a path it names may have no attested frame at all: that is
-  // the point of reading it, since a `sed -i`, a formatter or a build
-  // changes files no tool announced.
-  for (const event of events) {
-    if (event.kind !== WORKTREE_RECONCILED_KIND) continue;
-    for (const change of observedChangesOf(event.body)) {
-      const entry = entryFor(change.path, event.seq);
-      entry.observed = {
-        status: change.status,
-        linesAdded: change.lines_added,
-        linesRemoved: change.lines_removed,
-        ...(change.repo_relative_path.length > 0
-          ? { repoRelativePath: change.repo_relative_path }
-          : {}),
-      };
-      entry.first = Math.min(entry.first, event.seq);
-      entry.last = Math.max(entry.last, event.seq);
-      // Git reports an absolute path, which is the better one to store when
-      // the attested pass only had a relative one.
-      if (change.path.startsWith("/")) entry.path = change.path;
-      byPath.set(identityOf(change.path), entry);
-    }
-  }
-  if (byPath.size === 0) return;
-  // Identity has to hold across batches, not only inside one.
-  //
-  // The conflict key on this table is (session_id, path), so two batches
-  // naming one file differently still make two rows: the attested frame
-  // arrives with a relative `src/a.ts` and the reconciliation, which is
-  // asynchronous and usually lands a batch or more later, arrives with the
-  // absolute `/repo/src/a.ts`. Normalizing inside the batch fixed only the
-  // case where both happen to travel together, which is the case a test
-  // constructs and the rarer one in practice.
-  //
-  // So the rows this session already has are read once and keyed the same
-  // way, and an entry that matches one reuses that row's stored path. The
-  // insert then conflicts as it should and enriches the row rather than
-  // adding a second. One query per rollup, not one per file.
-  const stored = await tx
-    .select({
-      path: schema.tachoSessionFiles.path,
-      repoRelativePath: schema.tachoSessionFiles.repoRelativePath,
-    })
-    .from(schema.tachoSessionFiles)
-    .where(eq(schema.tachoSessionFiles.sessionId, sessionId));
-  //
-  // A repo-relative identity is only an identity inside one worktree. One
-  // session can work in two repositories that both hold `src/a.ts`, and
-  // keying on the relative form alone would hand the second repository's
-  // reconciliation the first repository's row and merge two different files
-  // into one. So a stored row joins the map only when its absolute path sits
-  // under the root this batch is measured against; a row from elsewhere
-  // keeps its own absolute path and stays a separate row, which is what it
-  // is. With no root to measure against nothing is relative and the question
-  // does not arise.
-  const pathByIdentity = new Map<string, string>();
-  const inThisWorktree = (path: string): boolean =>
-    root === undefined ||
-    !path.startsWith("/") ||
-    repoRelativePathOf(path, root) !== undefined;
-  for (const row of stored) {
-    if (!inThisWorktree(row.path)) continue;
-    pathByIdentity.set(row.repoRelativePath ?? row.path, row.path);
-    pathByIdentity.set(identityOf(row.path), row.path);
-  }
-  for (const entry of byPath.values()) {
-    const path =
-      pathByIdentity.get(
-        entry.observed?.repoRelativePath ?? identityOf(entry.path),
-      ) ?? entry.path;
-    await tx
-      .insert(schema.tachoSessionFiles)
-      .values({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        sessionId,
-        path,
-        // The observed frame carries the repository it read the path in, so
-        // it is preferred over deriving one from the batch's worktree
-        // context: git answered the question the derivation guesses at.
-        repoRelativePath:
-          entry.observed?.repoRelativePath ?? repoRelativePathOf(path, root),
-        language: languageOf(path),
-        reads: entry.reads,
-        writes: entry.writes,
-        edits: entry.edits,
-        deletes: entry.deletes,
-        bytesWritten: entry.bytes,
-        // Zero for a row with no observation, which is the column's default
-        // and stays honest: nobody looked.
-        linesAdded: entry.observed?.linesAdded ?? 0,
-        linesRemoved: entry.observed?.linesRemoved ?? 0,
-        ...(observedStatusColumn
-          ? { observedStatus: entry.observed?.status }
-          : {}),
-        firstSeq: entry.first,
-        lastSeq: entry.last,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [
-          schema.tachoSessionFiles.sessionId,
-          schema.tachoSessionFiles.path,
-        ],
-        set: {
-          reads: sql`${schema.tachoSessionFiles.reads} + ${entry.reads}`,
-          writes: sql`${schema.tachoSessionFiles.writes} + ${entry.writes}`,
-          edits: sql`${schema.tachoSessionFiles.edits} + ${entry.edits}`,
-          deletes: sql`${schema.tachoSessionFiles.deletes} + ${entry.deletes}`,
-          bytesWritten: sql`${schema.tachoSessionFiles.bytesWritten} + ${entry.bytes}`,
-          // COALESCE and not an overwrite: a later batch may carry no
-          // worktree context, and a path that was once placed in its
-          // repository does not stop being there because the next frame
-          // arrived without the fact.
-          repoRelativePath: sql`COALESCE(${entry.observed?.repoRelativePath ?? null}, ${schema.tachoSessionFiles.repoRelativePath}, ${repoRelativePathOf(path, root) ?? null})`,
-          language: sql`COALESCE(${schema.tachoSessionFiles.language}, ${languageOf(path) ?? null})`,
-          lastSeq: sql`GREATEST(${schema.tachoSessionFiles.lastSeq}, ${entry.last})`,
-          // The two line counts do NOT accumulate, alone on this row among
-          // columns that all do. Every other column here counts events, and
-          // two batches carrying two tool calls are two tool calls. These
-          // two are a measurement, not a count: each reconciliation reports
-          // the whole difference between the worktree and HEAD, so the same
-          // unchanged file observed on three turns would add up to three
-          // times the lines it holds.
-          //
-          // GREATEST rather than a plain set, because the measure resets.
-          // A commit moves HEAD, and the lines the agent wrote are then in
-          // HEAD rather than in the diff, so the next observation of that
-          // path is honestly zero. Assigning it would erase work the record
-          // already watched happen.
-          //
-          // Within an observation the two counts are assigned together,
-          // because they are one measurement of one worktree against HEAD,
-          // not two running totals. Taking the larger of each column on its
-          // own crossed observations: 12/3 followed by 2/10 left 12/10, a
-          // state git never reported and nobody could have produced. The
-          // envelope contract says these are assigned rather than
-          // accumulated, and this is the same reasoning `observedStatus`
-          // below already follows.
-          //
-          // Left alone when this batch carried no observation of the path,
-          // so an attested frame arriving later does not zero a count that
-          // git supplied.
-          ...(entry.observed === undefined
-            ? {}
-            : {
-                linesAdded: entry.observed.linesAdded,
-                linesRemoved: entry.observed.linesRemoved,
-                // Assigned, not kept: the latest observation is the current
-                // condition of the path, and a file created and then deleted
-                // is deleted.
-                ...(observedStatusColumn
-                  ? { observedStatus: entry.observed.status }
-                  : {}),
-              }),
           updatedAt: now,
         },
       });

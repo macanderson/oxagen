@@ -302,6 +302,8 @@ export const tachoSessions = tachoSchema.table(
     anthropicAccountId: text("anthropic_account_id"),
     anthropicOrgUuid: text("anthropic_org_uuid"),
     apiKeySource: text("api_key_source"),
+    /** Latest host facts carried by this session, separate from enrollment. */
+    machineSnapshot: jsonb("machine_snapshot"),
     // Harness
     runtime: text("runtime").notNull(),
     harness: text("harness").notNull(),
@@ -617,8 +619,8 @@ export const tachoSessionFiles = tachoSchema.table(
     linesRemoved: integer("lines_removed").notNull().default(0),
     /**
      * What git said about this path at the last reconciliation: added,
-     * modified, deleted or renamed. Null means no reconciliation covered it,
-     * which is not the same as git finding it unchanged. The counters above
+     * modified, deleted or renamed. Null means no current changed-file
+     * observation, including a later complete snapshot that cleared it. The counters above
      * count tool calls; this states a condition, so it is assigned and never
      * incremented.
      */
@@ -909,6 +911,13 @@ export const SESSION_PUSHES_COLUMN = {
   schema: "tacho",
   table: "sessions",
   column: "pushes",
+} as const;
+
+/** Session-time host facts, omitted until the additive migration is applied. */
+export const SESSION_MACHINE_SNAPSHOT_COLUMN = {
+  schema: "tacho",
+  table: "sessions",
+  column: "machine_snapshot",
 } as const;
 
 /** What git observed about one path, on the file row. Same window, same rule. */

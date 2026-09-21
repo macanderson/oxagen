@@ -77,8 +77,18 @@ function normalizeRoot(root: string): string {
  * this module verbatim, separators and all. Comparing them without this
  * makes every Windows path look relative.
  */
-function toForwardSlashes(path: string): string {
-  return path.replace(/\\/g, "/");
+function toForwardSlashes(path: string, root?: string): string {
+  // A backslash is a legal POSIX filename character. Normalize separators
+  // only when the path or its recorded root identifies Windows.
+  const windows =
+    /^[A-Za-z]:[\\/]/.test(path) ||
+    path.startsWith("\\\\") ||
+    path.startsWith("//") ||
+    (root !== undefined &&
+      (/^[A-Za-z]:[\\/]/.test(root) ||
+        root.startsWith("\\\\") ||
+        root.startsWith("//")));
+  return windows ? path.replace(/\\/g, "/") : path;
 }
 
 /** A drive-letter path (`C:/repo`) or a UNC share (`//server/share`). */
@@ -174,10 +184,10 @@ export function repoRelativePathOf(
   path: string,
   root: string | undefined,
 ): string | undefined {
-  if (path.length === 0) return undefined;
+  if (path.length === 0 || root === undefined) return undefined;
   // Dot segments are resolved before anything is measured, so a path that
   // climbs out of the worktree says so instead of passing the prefix test.
-  const absolute = normalizeDotSegments(toForwardSlashes(path));
+  const absolute = normalizeDotSegments(toForwardSlashes(path, root));
   if (absolute.length === 0) return undefined;
   // An already relative path is returned normalized, not as it arrived. A
   // tool on Windows reports `src\\a.ts` for the file a POSIX host calls
@@ -190,7 +200,6 @@ export function repoRelativePathOf(
     if (absolute === ".." || absolute.startsWith("../")) return undefined;
     return absolute;
   }
-  if (root === undefined) return undefined;
   const base = normalizeDotSegments(toForwardSlashes(root));
   if (!base.startsWith("/") && !isWindowsAbsolute(base)) return undefined;
   // Compare against the root plus its separator, so the boundary is checked
@@ -325,4 +334,27 @@ export function observedChangesOf(body: unknown): readonly ObservedChange[] {
     });
   }
   return out;
+}
+
+/** One file key across batches, qualified by the worktree that was recorded. */
+export function fileIdentityOf(
+  path: string,
+  root?: string,
+): {
+  key: string;
+  path: string;
+  repoRelativePath?: string;
+} {
+  const normalized = normalizeDotSegments(toForwardSlashes(path, root));
+  const relative = repoRelativePathOf(normalized, root);
+  const absolute = normalized.startsWith("/") || isWindowsAbsolute(normalized);
+  const placed =
+    !absolute && root !== undefined && relative !== undefined
+      ? normalizeDotSegments(`${normalizeRoot(root)}/${relative}`)
+      : normalized;
+  return {
+    key: `${placed.startsWith("/") || isWindowsAbsolute(placed) ? "absolute" : "unplaced"}:${comparablePath(placed)}`,
+    path: placed,
+    ...(relative === undefined ? {} : { repoRelativePath: relative }),
+  };
 }

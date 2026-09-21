@@ -46,13 +46,13 @@ function fakeGit(
 const REPO_ANSWERS: Record<string, string> = {
   "rev-parse HEAD": `${"a".repeat(40)}\n`,
   "rev-parse --abbrev-ref HEAD": "main\n",
-  "status --porcelain=v1 -z": " M src/a.ts\0?? src/new.ts\0",
+  "status --porcelain=v1 -z": " M src/a.ts\x00?? src/new.ts\x00",
   "status --porcelain": " M src/a.ts\n",
   "remote get-url origin": "git@github.com:acme/repo.git\n",
-  "diff --numstat HEAD": "4\t1\tsrc/a.ts\n",
+  "diff --numstat HEAD": "4\t1\tsrc/a.ts\x00",
   "rev-parse --show-toplevel": `${CWD}\n`,
   // The untracked probe: `--no-index` exits 1 to say the inputs differ.
-  "--no-index": "27\t0\t/dev/null => /repo/src/new.ts\n",
+  "--no-index": "27\t0\t\x00/dev/null\x00/repo/src/new.ts\x00",
 };
 
 function hook(name: string, extra: Record<string, unknown> = {}) {
@@ -432,7 +432,7 @@ describe("the daemon's git seam", () => {
     const handle = await boot(
       fakeGit(
         () => ({
-          "status --porcelain=v1 -z": "?? src/new.ts\0",
+          "status --porcelain=v1 -z": "?? src/new.ts\x00",
           "rev-parse --show-toplevel": "/repo\n",
         }),
         [],

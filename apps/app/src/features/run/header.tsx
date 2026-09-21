@@ -59,12 +59,7 @@ function ModelFact({ label, model }: { label: string; model: RunModel }) {
   );
 }
 
-/**
- * The machine the run ran on: its hostname, with the operating system, the
- * architecture and the Node version the host enrolled with under it. Each part
- * the enrolment did not record is left out, so the line never pads itself to a
- * fixed shape.
- */
+/** Session observations and enrollment facts keep their source labels. */
 function MachineFact({
   label,
   machine,
@@ -72,18 +67,40 @@ function MachineFact({
   label: string;
   machine: RunMachine;
 }) {
-  const os =
-    machine.osVersion === null
-      ? machine.platform
-      : `${machine.platform} ${machine.osVersion}`;
-  const parts = [os, machine.arch, machine.nodeVersion].filter(
-    (part): part is string => part !== null,
-  );
+  const t = useTranslations("run.facts");
+  const enrollment = [
+    machine.platform,
+    machine.osVersion,
+    machine.arch,
+    machine.nodeVersion,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+  const recorded = machine.recorded;
+  const runtime =
+    recorded === undefined
+      ? undefined
+      : [recorded.platform, recorded.osVersion, recorded.arch]
+          .filter((part): part is string => part !== null)
+          .join(" · ");
   return (
     <Fact
       label={label}
       value={<span className={`${mono} break-all`}>{machine.hostname}</span>}
-      detail={parts.join(" · ")}
+      detail={
+        <>
+          {runtime === undefined ? (
+            <span className="block">{t("machineNotRecorded")}</span>
+          ) : (
+            <span className="block">
+              {t("machineRecorded", { facts: runtime })}
+            </span>
+          )}
+          <span className="block">
+            {t("machineEnrollment", { facts: enrollment })}
+          </span>
+        </>
+      }
     />
   );
 }
