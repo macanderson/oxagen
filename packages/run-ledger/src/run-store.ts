@@ -2311,6 +2311,15 @@ export function createPostgresRunStore(
           return readSealedHandleInTx(tx, locked as LockedAttemptRow);
         }
         const attempt = assertAttemptWritable(input.attemptId, locked);
+        // Cancellation fences new evidence the same way `appendAttemptBatch`
+        // does. A seal that carries a terminal event is an append first — an
+        // engine finishing after an operator cancels must not smuggle its
+        // outcome frame in under `sealAttempt` when the normal append path
+        // would have refused it. A seal with no terminal event only closes
+        // out rows already on the ledger, so cancellation never blocks that
+        // reconciliation.
+        if (terminalEvent && attempt.cancel_requested)
+          throw new AttemptNotWritableError(input.attemptId, "cancelled");
 
         const { state, rows } = await readAttemptStateInTx(tx, input.attemptId);
         const appended = terminalEvent

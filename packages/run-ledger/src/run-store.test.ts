@@ -1867,6 +1867,61 @@ describe("sealAttempt", () => {
     expect(ranSql(executed, FINISH_RUN)).toBe(true);
   });
 
+  it("refuses to append a terminal event once cancellation is requested", async () => {
+    const { tx, executed } = makeRoutingTx([
+      {
+        match: LOCK_ATTEMPT,
+        rows: [makeAttemptRow({ cancel_requested: true })],
+      },
+    ]);
+    useTx(tx);
+    await expect(
+      createPostgresRunStore({
+        archive: fakeArchiveStore().store,
+      }).sealAttempt({
+        attemptId: UUID_ATTEMPT,
+        terminalStatus: "completed",
+        terminalEvent: terminalEvent(1),
+        sealerId: "drain-1",
+        result: { ok: true },
+      }),
+    ).rejects.toMatchObject({
+      code: "run_attempt_not_writable",
+      reason: "cancelled",
+    });
+    // The engine's late outcome frame never lands, and no seal is minted for
+    // it — cancellation refuses this append exactly as `appendAttemptBatch`
+    // already does.
+    expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
+    expect(ranSql(executed, INSERT_SEAL)).toBe(false);
+  });
+
+  it("still seals a cancelled attempt from its already-durable rows", async () => {
+    // A seal with no NEW terminal event only closes out evidence already on
+    // the ledger — cancellation fences further appends, not this
+    // reconciliation.
+    const prepared = prepareAttemptEvent(terminalEvent(1));
+    const { tx, executed } = makeRoutingTx([
+      {
+        match: LOCK_ATTEMPT,
+        rows: [makeAttemptRow({ cancel_requested: true })],
+      },
+      { match: ATTEMPT_STATE, rows: [durableRow(prepared, "event-1", "5")] },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    const handle = await createPostgresRunStore({
+      archive: fakeArchiveStore().store,
+    }).sealAttempt({
+      attemptId: UUID_ATTEMPT,
+      terminalStatus: "cancelled",
+      sealerId: "drain-1",
+    });
+    expect(handle.eventCount).toBe(1);
+    expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
+    expect(ranSql(executed, INSERT_SEAL)).toBe(true);
+  });
+
   it("seals a zero-event attempt with the empty-stream sentinel", async () => {
     const { tx, executed } = makeRoutingTx([
       { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
