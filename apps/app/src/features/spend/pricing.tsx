@@ -397,7 +397,9 @@ function PriceTable({
           <button
             type="button"
             disabled={current === 0}
-            onClick={() => setPage(current - 1)}
+            onClick={() => {
+              setPage(current - 1);
+            }}
           >
             {t("book.previous")}
           </button>
@@ -405,7 +407,9 @@ function PriceTable({
           <button
             type="button"
             disabled={current + 1 === pages}
-            onClick={() => setPage(current + 1)}
+            onClick={() => {
+              setPage(current + 1);
+            }}
           >
             {t("book.next")}
           </button>
