@@ -2,7 +2,14 @@ import { useLocale, useTranslations } from "next-intl";
 import type { RunMachine, RunModel, RunRow } from "@/data/contracts/runs";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
-import { eyebrow, mono } from "@/ui/control-styles";
+import {
+  eyebrow,
+  mono,
+  statStrip,
+  statTerm,
+  statTile,
+  statValue,
+} from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { GeneratedSummary } from "@/ui/generated-summary";
 import { Money } from "@/ui/money";
@@ -111,6 +118,13 @@ function operatorFact(
   return { value: kindLabel(run.operatorKind), detail };
 }
 
+/**
+ * One figure of the run, drawn as the house stat tile (`.stat`, engine.css)
+ * so the Run page's strip reads like the Fleet page's: the label in caps
+ * over a large tabular figure. A row of small labelled numbers in one bordered
+ * box was the same six facts at a third of the weight, and the cost, which is
+ * the figure a person opens a run for, read no larger than its frame count.
+ */
 function Figure({
   label,
   children,
@@ -119,9 +133,9 @@ function Figure({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium tabular-nums">{children}</span>
+    <div className={statTile}>
+      <span className={statTerm}>{label}</span>
+      <span className={`${statValue} min-w-0 truncate`}>{children}</span>
     </div>
   );
 }
@@ -248,7 +262,7 @@ export function RunHeader({
           <MachineFact label={t("facts.machine")} machine={run.machine} />
         )}
       </div>
-      <div className="flex flex-wrap gap-x-8 gap-y-3 rounded-lg border border-border px-4 py-3">
+      <div data-testid="run-figures" className={statStrip}>
         <Figure label={t("figures.cost")}>
           {run.cost === null ? (
             <NoValue />
@@ -256,7 +270,7 @@ export function RunHeader({
             <>
               <Money value={run.cost} />
               <span
-                className={`${mono} ml-2 text-[11px] text-muted-foreground`}
+                className={`${mono} ml-2 text-[11px] font-normal tracking-normal text-muted-foreground`}
               >
                 {run.cost.basis ?? t("basisNotRecorded")}
               </span>

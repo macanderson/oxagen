@@ -169,6 +169,11 @@ export interface DeduplicationResult {
    * still needs embedding and re-resolution once the backend is healthy.
    */
   similarityDeferred?: boolean;
+  /** Legacy identity could not be proved; these nodes require reconciliation. */
+  identityReconciliation?: {
+    reason: "ambiguous_legacy_identity" | "legacy_source_unverified";
+    candidateNodeIds: string[];
+  };
 }
 
 export const ALIAS_THRESHOLD = 0.7;

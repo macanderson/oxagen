@@ -6,5 +6,6 @@
 // `run_id`, and `list_approvals` filters on it). One component, so an approval
 // and its mandate bar read the same on Fleet and on the run it was parked in.
 export { Fleet } from "./fleet";
+export { FleetLoading } from "./loading";
 export { FleetRegister } from "./fleet-actions";
 export { ApprovalsPanel } from "./approvals-panel";
