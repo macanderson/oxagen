@@ -167,12 +167,14 @@ describe("Skills › loaded", () => {
     "shows omitted harness names only above the cap (%s)",
     async (count) => {
       const model = inventory();
+      const [first] = model.skills;
+      if (!first) throw new Error("inventory() must hold at least one skill");
       model.skills = [
         {
-          ...model.skills[0]!,
+          ...first,
           harnesses: Array.from(
             { length: 20 },
-            (_, index) => `harness-${index}`,
+            (_, index) => `harness-${String(index)}`,
           ),
           harnessCount: count,
         },
