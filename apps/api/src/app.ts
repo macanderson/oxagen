@@ -191,6 +191,7 @@ import { killSwitchSetRoute } from "./routes/v1/kill_switch.set";
 import { killSwitchListRoute } from "./routes/v1/kill_switch.list";
 import { contextRecordPublishRoute } from "./routes/v1/context.record.publish";
 import { contextRecordListRoute } from "./routes/v1/context.record.list";
+import { contextRecordReviseRoute } from "./routes/v1/context.record.revise";
 import { contextRecordPromoteRoute } from "./routes/v1/context.record.promote";
 import { contextRecordsListRoute } from "./routes/v1/context.records.list";
 import { contextRecordsGetRoute } from "./routes/v1/context.records.get";
@@ -300,6 +301,9 @@ import { tachoIncidentListRoute } from "./routes/v1/tacho.incident.list";
 import { spendGetRoute } from "./routes/v1/spend.get";
 import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
+import { skillConfigGetRoute } from "./routes/v1/skill.config.get";
+import { skillConfigUpdateRoute } from "./routes/v1/skill.config.update";
+import { skillSearchPreviewRoute } from "./routes/v1/skill.search.preview";
 import { skillListRoute } from "./routes/v1/skill.list";
 import { skillProposeRoute } from "./routes/v1/skill.propose";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
@@ -308,6 +312,9 @@ import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
 import { findingFixRecordRoute } from "./routes/v1/finding.fix.record";
 import { findingDismissRoute } from "./routes/v1/finding.dismiss";
 import { runCostGetRoute } from "./routes/v1/run.cost";
+import { runOutputsGetRoute } from "./routes/v1/run.outputs.get";
+import { runTokenIssueRoute } from "./routes/v1/run.token.issue";
+import { runFramesIngestRoute } from "./routes/v1/run.frames.ingest";
 import { runProofGetRoute } from "./routes/v1/run.proof.get";
 import { evidenceDisclosureGrainSetRoute } from "./routes/v1/evidence.disclosure_grain.set";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
@@ -456,6 +463,27 @@ app.use(
   }),
 );
 
+app.use(
+  "/v1/run-ingest/*",
+  distributedRateLimiter({
+    keyPrefix: "ledger-preauth-ip",
+    max: 6000,
+    bucketKey: trustedClientIpBucketKey,
+    methods: "all",
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
+app.use(
+  "/v1/run-ingest/*",
+  distributedRateLimiter({
+    keyPrefix: "ledger-preauth-credential",
+    max: 120,
+    bucketKey: authorizationFingerprintBucketKey,
+    methods: "all",
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
+
 // /v1 user-level routes (org + workspace CRUD) require auth but no
 // org scope: a freshly-authenticated user can create their first
 // org without one existing.
@@ -510,6 +538,19 @@ app.route("/v1/telemetry/stella", stellaTelemetryScoped);
 // The post-auth ceilings (TACHO_INGEST_PER_MIN, TACHO_HOST_PER_MIN) are
 // declared above the pre-auth mounts, which derive their credential ceiling
 // from them.
+const ledgerIngress = new Hono<AppEnv>();
+ledgerIngress.use("*", authMiddleware);
+ledgerIngress.use(
+  "*",
+  distributedRateLimiter({
+    keyPrefix: "ledger-ingest",
+    max: 120,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
+ledgerIngress.route("/", runFramesIngestRoute);
+app.route("/v1/run-ingest", ledgerIngress);
+
 const tachoScoped = new Hono<AppEnv>();
 tachoScoped.use("*", authMiddleware);
 tachoScoped.use(
@@ -633,6 +674,9 @@ orgScoped.route("/spend/waste", spendWasteListRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // The skills a workspace's harness sessions reported at start (#3098): a
 // noBillingGate read of tacho.sessions.
+orgScoped.route("/skills/config", skillConfigGetRoute);
+orgScoped.route("/skills/config/update", skillConfigUpdateRoute);
+orgScoped.route("/skills/search/preview", skillSearchPreviewRoute);
 orgScoped.route("/skills", skillListRoute);
 // A skill added or replaced as a pull request against the main repository (ADR-090).
 orgScoped.route("/skills/propose", skillProposeRoute);
@@ -641,9 +685,11 @@ orgScoped.route("/spend/findings/evidence", findingEvidenceGetRoute);
 orgScoped.route("/spend/findings/fix", findingFixRecordRoute);
 orgScoped.route("/spend/findings/dismiss", findingDismissRoute);
 orgScoped.route("/runs/cost", runCostGetRoute);
+orgScoped.route("/runs/outputs", runOutputsGetRoute);
 // Proof (ADR-064): a run's witness record and the workspace's disclosure grain.
 // Both handlers refuse an API-key caller; the session auth above is the path.
 orgScoped.route("/runs/proof", runProofGetRoute);
+orgScoped.route("/runs/token", runTokenIssueRoute);
 orgScoped.route("/evidence/disclosure-grain", evidenceDisclosureGrainSetRoute);
 orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
 orgScoped.route("/cost/price-entries/set", costPriceEntrySetRoute);
@@ -919,6 +965,7 @@ orgScoped.route("/kill-switches/list", killSwitchListRoute);
 orgScoped.route("/context/record/publish", contextRecordPublishRoute);
 orgScoped.route("/context/record/list", contextRecordListRoute);
 orgScoped.route("/context/record/promote", contextRecordPromoteRoute);
+orgScoped.route("/context/record/revise", contextRecordReviseRoute);
 // Steering (ADR-061): published records, proposals, the Context PR.
 orgScoped.route("/context/records", contextRecordsListRoute);
 orgScoped.route("/context/records/get", contextRecordsGetRoute);

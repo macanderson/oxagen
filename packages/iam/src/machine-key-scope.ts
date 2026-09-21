@@ -69,11 +69,12 @@
  * org/workspace picker was denied outright again. The tests below pin the
  * behaviour rather than the prose.
  */
+import { LEDGER_RUN_SCOPE_PURPOSE } from "@oxagen/oxagen/ledger-run-token";
 import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/oxagen/cli-session";
 import {
   ambientPlaneKey,
   GATEWAY_CHAIN_COLUMN,
-  hasColumn,
+  hasColumnFresh,
   HOST_GATEWAY_COLUMN,
   schema,
   withOrgPlaneSystemDb,
@@ -113,6 +114,7 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
     "get_tacho_bundle",
     "fetch_commands",
   ]),
+  [LEDGER_RUN_SCOPE_PURPOSE]: new Set(["ingest_run_frames"]),
   [STELLA_TELEMETRY_PURPOSE]: new Set(["ingest_stella_operational_telemetry"]),
 };
 
@@ -331,8 +333,9 @@ async function recordGatewayInvocation(
     // about (discussion_r4040352870). Probed separately rather than inferred
     // from one another: they ship in different migrations and either can be
     // the one still pending.
-    const hostColumn = await hasColumn(tx, HOST_GATEWAY_COLUMN, planeKey);
-    const chains = await hasColumn(tx, GATEWAY_CHAIN_COLUMN, planeKey);
+    // A cached miss cannot suppress this permanent observation after migration.
+    const hostColumn = await hasColumnFresh(tx, HOST_GATEWAY_COLUMN, planeKey);
+    const chains = await hasColumnFresh(tx, GATEWAY_CHAIN_COLUMN, planeKey);
     if (!hostColumn && !chains) return;
 
     // The host row, read once and by the server's own attribution: the public

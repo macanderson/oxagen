@@ -88,6 +88,8 @@ p { margin: 0; max-width: 66ch; }
 /* A figure inside a sentence. Gold, tabular, never a link. */
 .hl { color: var(--accent-text); font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: .94em; }
 .hl.w { font-family: var(--font); font-size: 1em; }
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); font-weight: 500; }
+.eyebrow.first { color: var(--accent-text); }
 .lead { font-size: 20px; color: var(--body); max-width: 60ch; }
 .muted { color: var(--muted); }
 a { color: var(--fg); }
@@ -111,6 +113,7 @@ section.hero { border-top: 0; padding-block: 64px 40px; }
 .note { border-left: 2px solid var(--accent-text); padding: 4px 0 4px 16px; color: var(--muted); font-size: 15px; max-width: 72ch; }
 .note a { color: var(--accent-text); }
 .pull { border-left: 2px solid var(--accent-text); padding: 2px 0 2px 18px; margin: 4px 0; font-family: var(--font-display); font-size: clamp(19px, 2.1vw, 23px); line-height: 1.4; color: var(--fg); max-width: 40ch; font-weight: 500; text-wrap: balance; }
+.note { border-left: 2px solid var(--rule); padding: 4px 0 4px 16px; color: var(--muted); font-size: 15px; max-width: 72ch; }
 
 /* The hive */
 .hive-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 28px; }

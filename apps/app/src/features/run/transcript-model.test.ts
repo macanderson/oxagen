@@ -1,5 +1,6 @@
 // The transcript's grouping, digests and transport arithmetic, without a render.
 import { describe, expect, it } from "vitest";
+import type { TranscriptBody } from "@/data/contracts/run";
 import type { TranscriptEntry } from "@/data/contracts/run";
 import {
   mockupTranscript,
@@ -12,8 +13,10 @@ import {
   openAtZoom,
   playDelay,
   stepDigest,
+  stepModel,
   toolExchange,
   visibleFrames,
+  visibleSteps,
 } from "./transcript-model";
 
 const { entries } = mockupTranscript();
@@ -713,5 +716,153 @@ describe("a tool call sealed by three sources", () => {
       throw new Error("expected the request and the call");
     const [turn] = buildTranscript([requested, called, other, none]);
     expect(turn?.steps.map((s) => s.id)).toEqual(["s0", "s3", "s4"]);
+  });
+});
+
+describe("a model step reads as what it did", () => {
+  const reply = (blocks: NonNullable<TranscriptBody["blocks"]>) =>
+    transcriptEntry({
+      seq: "3",
+      endSeq: "3",
+      kind: "model_call",
+      type: "llm_call",
+      label: "anthropic/claude-opus-5",
+      request: null,
+      response: transcriptBody({
+        seq: "3",
+        type: "llm_call",
+        text: null,
+        blocks,
+      }),
+      turn: 1,
+    });
+
+  it("names the tool the reply called, with the command's first line, and keeps the model as a chip", () => {
+    const [turn] = buildTranscript([
+      reply([
+        { kind: "text", text: "Checking the tree." },
+        {
+          kind: "tool_use",
+          name: "Bash",
+          input: {
+            command: "git status --short\ngit log -3",
+            description: "Tree",
+          },
+          callKey: "toolu_1",
+        },
+        {
+          kind: "tool_use",
+          name: "Read",
+          input: { file_path: "/repo/README.md" },
+          callKey: "toolu_2",
+        },
+      ]),
+    ]);
+    const step = turn?.steps[0];
+    if (step === undefined) throw new Error("expected the model step");
+    const detail = stepModel(step);
+    expect(detail?.name).toBe("Bash");
+    expect(detail?.group).toBe("shell");
+    expect(detail?.headline).toBe("git status --short");
+    expect(detail?.multiline).toBe(true);
+    expect(detail?.detail).toBe("+1");
+    expect(detail?.panes.map((pane) => pane.label)).toEqual(["command"]);
+    expect(stepDigest(step).name).toBe("claude-opus-5");
+  });
+
+  it("reads a reply with no call as a reply, first line first", () => {
+    const [turn] = buildTranscript([
+      reply([{ kind: "text", text: "Done.\nThe pager reaches every run." }]),
+    ]);
+    const step = turn?.steps[0];
+    if (step === undefined) throw new Error("expected the model step");
+    const detail = stepModel(step);
+    expect(detail?.name).toBe("reply");
+    expect(detail?.headline).toBe("Done.");
+    expect(detail?.multiline).toBe(true);
+    expect(detail?.panes).toEqual([
+      {
+        kind: "note",
+        label: "reply",
+        text: "Done.\nThe pager reaches every run.",
+      },
+    ]);
+  });
+
+  it("is null without blocks, and for a tool step (negative)", () => {
+    const [turn] = buildTranscript([
+      transcriptEntry({ seq: "3", endSeq: "3", turn: 1 }),
+      transcriptEntry({
+        seq: "4",
+        endSeq: "4",
+        kind: "tool_call",
+        type: "tool_call",
+        label: "Read ok",
+        turn: 1,
+      }),
+    ]);
+    const [plain, tool] = turn?.steps ?? [];
+    if (plain === undefined || tool === undefined)
+      throw new Error("expected a model step and a tool step");
+    expect(stepModel(plain)).toBeNull();
+    expect(stepModel(tool)).toBeNull();
+  });
+});
+
+describe("visibleSteps", () => {
+  it("drops steps with nothing to read and keeps decisions and bodies", () => {
+    const bare = (seq: number, type: string) =>
+      transcriptEntry({
+        seq: String(seq),
+        endSeq: String(seq),
+        kind: "frame",
+        type,
+        label: type,
+        request: null,
+        response: null,
+        decision: null,
+        turn: 1,
+        cost: null,
+        cumulativeCost: null,
+        kinds: [],
+      });
+    const [turn] = buildTranscript([
+      bare(0, "oxagen:hook_health"),
+      bare(1, "oxagen:hook_health"),
+      transcriptEntry({ seq: "2", endSeq: "2", turn: 1 }),
+      transcriptEntry({
+        seq: "3",
+        endSeq: "3",
+        kind: "policy",
+        type: "policy_decision",
+        label: "policy deny",
+        request: null,
+        response: null,
+        decision: {
+          seq: "3",
+          decision: "deny",
+          type: "policy_decision",
+          at: transcriptEntry().at,
+        },
+        turn: 1,
+      }),
+      transcriptEntry({
+        seq: "4",
+        endSeq: "4",
+        kind: "model_call",
+        type: "llm_call",
+        request: null,
+        response: transcriptBody({
+          seq: "4",
+          fidelity: "digest_only",
+          bytesRef: null,
+          text: null,
+        }),
+        turn: 1,
+      }),
+    ]);
+    if (turn === undefined) throw new Error("expected a turn");
+    expect(turn.steps.map((s) => s.id)).toEqual(["s0", "s2", "s3", "s4"]);
+    expect(visibleSteps(turn).map((s) => s.id)).toEqual(["s2", "s3"]);
   });
 });

@@ -742,6 +742,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .openContextPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "revise_context_record",
+    async () =>
+      (await import("./context.record.revise"))
+        .reviseRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_context_pr",
     async () =>
       (await import("./context.pr.get"))
@@ -1182,6 +1188,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./run.cost")).runCostHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_run_outputs",
+    async () =>
+      (await import("./run.outputs.get"))
+        .runOutputsGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "create_run_token",
+    async () =>
+      (await import("./run.token.issue"))
+        .runTokenIssueHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "ingest_run_frames",
+    async () =>
+      (await import("./run.frames.ingest"))
+        .runFramesIngestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_run_proof",
     async () =>
       (await import("./run.proof.get")).runProofHandler as CapabilityHandlerFn,
@@ -1206,6 +1230,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "list_waste",
     async () =>
       (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_skill_config",
+    async () =>
+      (await import("./skill.config.get"))
+        .skillConfigGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "update_skill_config",
+    async () =>
+      (await import("./skill.config.update"))
+        .skillConfigUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "preview_skill_search",
+    async () =>
+      (await import("./skill.search.preview"))
+        .skillSearchPreviewHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_skills",

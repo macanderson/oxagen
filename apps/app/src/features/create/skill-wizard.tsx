@@ -12,7 +12,10 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { ActionResult } from "@/server/kernel";
-import { renameSkillSource, skillSourceName } from "@/shared/source-identity";
+import {
+  renameSkillSource,
+  skillSourceName,
+} from "@/shared/skill-source-identity";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
@@ -36,6 +39,7 @@ import {
   draftSkill,
   estimateTokens,
   frontmatterOf,
+  validSkillPreview,
   isSemver,
   skillNameOf,
   slugFromDescription,
@@ -355,6 +359,9 @@ function ReviewStep({ api, ctx }: StepProps<SkillDraft>) {
       {skillSourceName(file.text) === null ? (
         <FormAlert>{t("invalidName")}</FormAlert>
       ) : null}
+      {!validSkillPreview(file.text) ? (
+        <FormAlert>{t("invalidFrontmatter")}</FormAlert>
+      ) : null}
       <FileEditor
         path={`.oxagen/skills/${file.name}/SKILL.md`}
         value={file.text}
@@ -530,7 +537,7 @@ function useSkillStep(props: StepProps<SkillDraft>): StepView {
       body: <ReviewStep {...props} />,
       primary: {
         label: t("toPullRequest"),
-        enabled: skillSourceName(file.text) !== null,
+        enabled: validSkillPreview(file.text),
       },
     };
   if (d.submit.state === "opened")
@@ -541,7 +548,7 @@ function useSkillStep(props: StepProps<SkillDraft>): StepView {
     };
   const submit = async () => {
     if (d.path !== "describe" && d.path !== "upload") return;
-    if (skillSourceName(file.text) === null) return;
+    if (!validSkillPreview(file.text)) return;
     api.update({ submit: { state: "pending" } });
     try {
       const result = await proposeSkill(ctx.org, ctx.ws, {
@@ -576,7 +583,7 @@ function useSkillStep(props: StepProps<SkillDraft>): StepView {
       enabled:
         ctx.repo.state === "bound" &&
         d.submit.state !== "pending" &&
-        skillSourceName(file.text) !== null,
+        validSkillPreview(file.text),
       run: submit,
     },
   };

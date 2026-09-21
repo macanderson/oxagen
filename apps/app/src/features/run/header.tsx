@@ -15,6 +15,7 @@ import { GeneratedSummary } from "@/ui/generated-summary";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { StatusBadge } from "@/ui/status-badge";
+import { OperatorName } from "@/ui/operator";
 import { NoValue } from "./parts";
 import { RecordActions } from "./record-actions";
 import { RunControls } from "./run-controls";
@@ -66,12 +67,7 @@ function ModelFact({ label, model }: { label: string; model: RunModel }) {
   );
 }
 
-/**
- * The machine the run ran on: its hostname, with the operating system, the
- * architecture and the Node version the host enrolled with under it. Each part
- * the enrolment did not record is left out, so the line never pads itself to a
- * fixed shape.
- */
+/** Session observations and enrollment facts keep their source labels. */
 function MachineFact({
   label,
   machine,
@@ -79,18 +75,40 @@ function MachineFact({
   label: string;
   machine: RunMachine;
 }) {
-  const os =
-    machine.osVersion === null
-      ? machine.platform
-      : `${machine.platform} ${machine.osVersion}`;
-  const parts = [os, machine.arch, machine.nodeVersion].filter(
-    (part): part is string => part !== null,
-  );
+  const t = useTranslations("run.facts");
+  const enrollment = [
+    machine.platform,
+    machine.osVersion,
+    machine.arch,
+    machine.nodeVersion,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+  const recorded = machine.recorded;
+  const runtime =
+    recorded === undefined
+      ? undefined
+      : [recorded.platform, recorded.osVersion, recorded.arch]
+          .filter((part): part is string => part !== null)
+          .join(" · ");
   return (
     <Fact
       label={label}
       value={<span className={`${mono} break-all`}>{machine.hostname}</span>}
-      detail={parts.join(" · ")}
+      detail={
+        <>
+          {runtime === undefined ? (
+            <span className="block">{t("machineNotRecorded")}</span>
+          ) : (
+            <span className="block">
+              {t("machineRecorded", { facts: runtime })}
+            </span>
+          )}
+          <span className="block">
+            {t("machineEnrollment", { facts: enrollment })}
+          </span>
+        </>
+      }
     />
   );
 }
@@ -109,13 +127,32 @@ function operatorFact(
   run: RunRow,
   kindLabel: (kind: NonNullable<RunRow["operatorKind"]>) => string,
 ): { value: React.ReactNode; detail?: React.ReactNode } {
-  const detail =
-    run.operatorId === null ? undefined : (
-      <span className={`${mono} break-all`}>{run.operatorId}</span>
-    );
-  if (run.operatorName !== null) return { value: run.operatorName, detail };
-  if (run.operatorKind === null) return { value: <NoValue />, detail };
-  return { value: kindLabel(run.operatorKind), detail };
+  // The id is never the label and never a line under it: it lives in the
+  // operator's hover card, copyable, with the rest of who they are.
+  if (run.operatorId === null && run.operatorName === null) {
+    return {
+      value:
+        run.operatorKind === null ? <NoValue /> : kindLabel(run.operatorKind),
+    };
+  }
+  return {
+    value: (
+      <OperatorName
+        operator={{
+          id: run.operatorId,
+          name: run.operatorName,
+          kind: run.operatorKind,
+        }}
+      >
+        {run.operatorName ??
+          (run.operatorKind === null ? (
+            <NoValue />
+          ) : (
+            kindLabel(run.operatorKind)
+          ))}
+      </OperatorName>
+    ),
+  };
 }
 
 /**
@@ -220,6 +257,8 @@ export function RunHeader({
             status={run.status}
             source={run.source}
             enforcementTier={run.enforcementTier}
+            ingressRevoked={run.ingressRevoked}
+            ingressPaused={run.ingressPaused}
             orgRole={orgRole}
             wsRole={wsRole}
           />

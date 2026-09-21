@@ -103,7 +103,9 @@ vi.mock("@oxagen/database", () => ({
   // Per column, not one answer for both. The host column and the invocations
   // table ship in DIFFERENT migrations, so either can be the one still pending
   // and a shared answer would describe a state no deployment is ever in.
-  hasColumn: async (_tx: unknown, ref: { table: string }) =>
+  // A read may retain a pre-migration miss. Writes must use the fresh seam.
+  hasColumn: async () => false,
+  hasColumnFresh: async (_tx: unknown, ref: { table: string }) =>
     ref.table === "hosts" ? gatewayColumnPresent : chainTablePresent,
   // The plane `withOrgPlaneSystemDb` opened the transaction on, published by
   // the seam rather than resolved a second time by the probe (#3223).
@@ -288,6 +290,35 @@ describe("a key that is no longer there", () => {
         capabilityName: "set_model_credential",
       }),
     ).toMatch(/set_model_credential/);
+  });
+});
+
+describe("a ledger run credential", () => {
+  it("may ingest evidence but cannot issue credentials or control another run", async () => {
+    keyWithScope({ purpose: "ledger_run_v1" });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_run",
+        userId: null,
+        capabilityName: "ingest_run_frames",
+      }),
+    ).toBeUndefined();
+    for (const capabilityName of [
+      "create_run_token",
+      "dispatch_command",
+      "get_run_proof",
+      "set_model_credential",
+    ]) {
+      expect(
+        await machineKeyDenial({
+          orgId: ORG,
+          apiKeyId: "aky_run",
+          userId: null,
+          capabilityName,
+        }),
+      ).toContain(capabilityName);
+    }
   });
 });
 
@@ -488,6 +519,31 @@ describe("a served gateway call is recorded where the tier can read it", () => {
       // the credential is entitled to make.
     ).toBeUndefined();
     expect(hostUpdates).toEqual([]);
+  });
+
+  it("records the first gateway call after migration without trusting a cached miss", async () => {
+    gatewayColumnPresent = false;
+    chainTablePresent = false;
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const request = {
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      userId: null,
+      capabilityName: "query_ontology",
+      gatewaySessionUuid: "tachod-abc",
+    };
+    await machineKeyDenial(request);
+    expect(hostUpdates).toEqual([]);
+    expect(chainUpserts).toEqual([]);
+    gatewayColumnPresent = true;
+    chainTablePresent = true;
+    await machineKeyDenial(request);
+    expect(hostUpdates).toHaveLength(1);
+    expect(chainUpserts).toHaveLength(1);
   });
 
   it("stamps the host on a call it REFUSED", async () => {

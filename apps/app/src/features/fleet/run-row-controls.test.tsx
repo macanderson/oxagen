@@ -184,7 +184,7 @@ describe("run row controls", () => {
   it("draws the recorded reason and no controls on a ledger run (negative)", () => {
     renderRow({ source: "ledger" });
     expect(screen.getByTestId("row-ledger-no-control")).toHaveTextContent(
-      "Oxagen holds no run token it can revoke",
+      "steering needs a producer connection",
     );
     expect(screen.queryByTestId("row-cancel")).toBeNull();
   });

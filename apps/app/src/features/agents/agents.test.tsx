@@ -89,7 +89,7 @@ describe("Agents", () => {
     expect(cells.map((c) => c.textContent)).toEqual([
       "reacme.core.release-botRelease bot",
       "Claude Code",
-      "usr_marcusbell",
+      "Operator",
       "enrolled",
       "42",
       "$12.50client_attested",

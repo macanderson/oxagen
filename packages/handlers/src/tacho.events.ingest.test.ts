@@ -530,7 +530,10 @@ function sessionNamed(db: FakeDb, where: unknown) {
  * probe (three strings in that order) is answered "present", which keeps every
  * case that predates `pendingColumns` on the migrated path.
  */
-function probeAnswer(db: FakeDb, query: unknown): Array<Record<string, number>> {
+function probeAnswer(
+  db: FakeDb,
+  query: unknown,
+): Array<Record<string, number>> {
   const chunks = (query as { queryChunks?: unknown[] }).queryChunks ?? [];
   const named = chunks.filter((c): c is string => typeof c === "string");
   if (named.length !== 3) return [{ "?column?": 1 }];
@@ -811,6 +814,63 @@ beforeEach(() => {
 });
 
 describe("ingest_tacho_events", () => {
+  it("stores the latest session host facts from fresh frames and keeps them on retry", async () => {
+    const db = fakeDb();
+    wire(db);
+    const first = sealEvent(
+      unsealed("agent_start", {}, "hook", CLAUDE_CODE, {
+        host: { os_type: "linux", os_version: "6.12", host_arch: "x64" },
+      }),
+      GENESIS_CURSOR,
+    );
+    const second = sealEvent(
+      unsealed("turn_start", {}, "hook", CLAUDE_CODE, {
+        host: { os_type: "linux", os_version: "6.13" },
+      }),
+      first.next,
+    );
+    await tachoEventsIngestHandler(batch([first.event, second.event]), CONTEXT);
+    const snapshot = {
+      platform: "linux",
+      osVersion: "6.13",
+      arch: null,
+      recordedAt: second.event.ts,
+      eventHash: second.event.hash,
+    };
+    expect(db.sessions.get(SESSION)?.["machineSnapshot"]).toEqual(snapshot);
+    await tachoEventsIngestHandler(batch([first.event, second.event]), CONTEXT);
+    expect(db.sessions.get(SESSION)?.["machineSnapshot"]).toEqual(snapshot);
+    const third = sealEvent(unsealed("turn_start", {}), second.next);
+    await tachoEventsIngestHandler(batch([third.event]), CONTEXT);
+    expect(db.sessions.get(SESSION)?.["machineSnapshot"]).toEqual(snapshot);
+  });
+
+  it("keeps ingest working while the machine snapshot column is pending", async () => {
+    const db = fakeDb();
+    db.pendingColumns.add("tacho.sessions.machine_snapshot");
+    wire(db);
+    const event = sealEvent(
+      unsealed("agent_start", {}, "hook", CLAUDE_CODE, {
+        host: { os_type: "linux" },
+      }),
+      GENESIS_CURSOR,
+    );
+    await tachoEventsIngestHandler(batch([event.event]), CONTEXT);
+    expect(db.sessions.get(SESSION)).not.toHaveProperty("machineSnapshot");
+    db.pendingColumns.clear();
+    const next = sealEvent(
+      unsealed("turn_start", {}, "hook", CLAUDE_CODE, {
+        host: { os_type: "linux" },
+      }),
+      event.next,
+    );
+    await tachoEventsIngestHandler(batch([next.event]), CONTEXT);
+    expect(db.sessions.get(SESSION)?.["machineSnapshot"]).toMatchObject({
+      platform: "linux",
+      eventHash: next.event.hash,
+    });
+  });
+
   it("accepts a verified session, rolls it up, and answers the control envelope", async () => {
     const db = fakeDb();
     wire(db);
@@ -2204,11 +2264,8 @@ describe("ingestion survives a pending migration", () => {
   });
 
   it("writes both columns again once the migration lands, without a restart", async () => {
-    // The same process, the same probe cache. A negative answer expires
-    // (NEGATIVE_PROBE_TTL_MS), so an instance that started before the
-    // migration picks the columns up rather than waiting to be recycled — the
-    // half of the guard that a "skip it forever" implementation would pass the
-    // first assertion of and fail here.
+    // No clock advance or cache reset: the very next accepted batch must
+    // observe a column added since the previous negative probe.
     const pending = fakeDb();
     for (const column of PENDING) pending.pendingColumns.add(column);
     wire(pending);
@@ -2217,7 +2274,6 @@ describe("ingestion survives a pending migration", () => {
       pending.updates.find((u) => u.table === "sessions")?.values,
     ).not.toHaveProperty("pushes");
 
-    resetColumnProbesForTests();
     const migrated = fakeDb();
     wire(migrated);
     await tachoEventsIngestHandler(batch(pushingSession()), CONTEXT);

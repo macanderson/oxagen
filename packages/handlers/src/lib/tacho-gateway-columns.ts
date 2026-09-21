@@ -36,10 +36,12 @@ import {
   ambientPlaneKey,
   GATEWAY_CHAIN_COLUMN,
   hasColumn,
+  hasColumnFresh,
   HOST_GATEWAY_COLUMN,
   SESSION_FILE_OBSERVED_STATUS_COLUMN,
   SESSION_GATEWAY_COLUMN,
   SESSION_PUSHES_COLUMN,
+  SESSION_MACHINE_SNAPSHOT_COLUMN,
   type ProbeTx,
 } from "@oxagen/database";
 
@@ -55,9 +57,19 @@ export async function hostGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
   return hasColumn(tx, HOST_GATEWAY_COLUMN, await ambientPlaneKey());
 }
 
-/** Whether `tacho.sessions.gateway_observed_at` is present. */
-export async function sessionGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
-  return hasColumn(tx, SESSION_GATEWAY_COLUMN, await ambientPlaneKey());
+/**
+ * Reads may cache a missing column. Writes recheck a miss immediately: omitting
+ * a fresh fact after migration would leave a permanent hole in the record.
+ */
+export async function sessionGatewayColumnReady(
+  tx: ProbeTx,
+  forWrite = false,
+): Promise<boolean> {
+  return (forWrite ? hasColumnFresh : hasColumn)(
+    tx,
+    SESSION_GATEWAY_COLUMN,
+    await ambientPlaneKey(),
+  );
 }
 
 /**
@@ -70,8 +82,27 @@ export async function sessionGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
  * lands raises 42703 and refuses the batch outright. A host would report
  * healthy and record nothing.
  */
-export async function sessionPushesColumnReady(tx: ProbeTx): Promise<boolean> {
-  return hasColumn(tx, SESSION_PUSHES_COLUMN, await ambientPlaneKey());
+export async function sessionPushesColumnReady(
+  tx: ProbeTx,
+  forWrite = false,
+): Promise<boolean> {
+  return (forWrite ? hasColumnFresh : hasColumn)(
+    tx,
+    SESSION_PUSHES_COLUMN,
+    await ambientPlaneKey(),
+  );
+}
+
+/** Whether the session-time machine facts column is available on this plane. */
+export async function sessionMachineSnapshotColumnReady(
+  tx: ProbeTx,
+  forWrite = false,
+): Promise<boolean> {
+  return (forWrite ? hasColumnFresh : hasColumn)(
+    tx,
+    SESSION_MACHINE_SNAPSHOT_COLUMN,
+    await ambientPlaneKey(),
+  );
 }
 
 /**
@@ -84,8 +115,9 @@ export async function sessionPushesColumnReady(tx: ProbeTx): Promise<boolean> {
  */
 export async function sessionFileObservedStatusColumnReady(
   tx: ProbeTx,
+  forWrite = false,
 ): Promise<boolean> {
-  return hasColumn(
+  return (forWrite ? hasColumnFresh : hasColumn)(
     tx,
     SESSION_FILE_OBSERVED_STATUS_COLUMN,
     await ambientPlaneKey(),
@@ -112,28 +144,18 @@ export async function hostReadColumns(
 export async function sessionReadColumns(
   tx: ProbeTx,
 ): Promise<
-  | { gatewayObservedAt: false; pushes: false }
-  | { gatewayObservedAt: false }
-  | { pushes: false }
+  | { gatewayObservedAt?: false; pushes?: false; machineSnapshot?: false }
   | undefined
 > {
-  // Both of this table's pending columns, in one projection.
-  //
-  // `pushes` is here because a relational read selects every column the schema
-  // DECLARES, so `tacho.session.list` and `tacho.session.get` named it from the
-  // moment the declaration landed — for a column neither of them returns. The
-  // write gate on the ingest path is not enough on its own: guarding the
-  // statement the migration is about is not the same as guarding every
-  // statement the new declaration reaches (discussion_r4051911079).
-  //
-  // One projection rather than one per column, because Drizzle takes a single
-  // `columns` object and a caller holding two would have to merge them — and
-  // the merge is the part that gets forgotten when a third column arrives.
   const gateway = await sessionGatewayColumnReady(tx);
   const pushes = await sessionPushesColumnReady(tx);
-  if (gateway && pushes) return undefined;
-  if (!gateway && !pushes) return { gatewayObservedAt: false, pushes: false };
-  return gateway ? { pushes: false } : { gatewayObservedAt: false };
+  const machine = await sessionMachineSnapshotColumnReady(tx);
+  if (gateway && pushes && machine) return undefined;
+  return {
+    ...(!gateway ? { gatewayObservedAt: false as const } : {}),
+    ...(!pushes ? { pushes: false as const } : {}),
+    ...(!machine ? { machineSnapshot: false as const } : {}),
+  };
 }
 
 /**
@@ -164,6 +186,11 @@ export async function sessionFileReadColumns(
  */
 export async function gatewayInvocationColumnReady(
   tx: ProbeTx,
+  forWrite = false,
 ): Promise<boolean> {
-  return hasColumn(tx, GATEWAY_CHAIN_COLUMN, await ambientPlaneKey());
+  return (forWrite ? hasColumnFresh : hasColumn)(
+    tx,
+    GATEWAY_CHAIN_COLUMN,
+    await ambientPlaneKey(),
+  );
 }

@@ -14,6 +14,7 @@ import { linkText, mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { OperatorName } from "@/ui/operator";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { RetireAgent } from "./agent-actions";
@@ -112,12 +113,9 @@ function IdentityRows({
               {agent.operatorId === null ? (
                 <NotRecordedValue />
               ) : (
-                <span
-                  className={`${mono} block max-w-48 truncate`}
-                  title={agent.operatorId}
-                >
-                  {agent.operatorId}
-                </span>
+                <OperatorName
+                  operator={{ id: agent.operatorId, name: null, kind: null }}
+                />
               )}
             </td>
             <td className={cell}>

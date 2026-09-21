@@ -145,9 +145,20 @@ export const runModelSchema = z
  * named by `operatorName` and a second, weaker identifier for the same person
  * buys the reader nothing.
  */
+export const runMachineSnapshotSchema = z
+  .object({
+    platform: z.string().nullable(),
+    osVersion: z.string().nullable(),
+    arch: z.string().nullable(),
+    recordedAt: z.string().datetime(),
+    eventHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  })
+  .strict();
+
 export const runMachineSchema = z
   .object({
     hostname: z.string(),
+    recorded: runMachineSnapshotSchema.optional(),
     /** The OS family the host enrolled as, e.g. `darwin`, `linux`. */
     platform: z.string(),
     osVersion: z.string().nullable(),
@@ -161,6 +172,9 @@ export const runItemSchema = z
   .object({
     id: runPublicIdSchema,
     source: runSourceSchema,
+    /** A ledger append fence, independent of the external process status. */
+    ingressRevoked: z.boolean().optional(),
+    ingressPaused: z.boolean().optional(),
     /** `org_ns.ws_ns.slug` (ADR-024); null when the ledger row names no agent. */
     agentKey: z.string().nullable(),
     /** The initiating principal's public id; null when none was recorded. */

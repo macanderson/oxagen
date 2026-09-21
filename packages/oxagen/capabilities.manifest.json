@@ -2117,6 +2117,22 @@
       }
     },
     {
+      "name": "revise_context_record",
+      "file": "context.record.revise.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "append_record",
       "file": "context.records.append.ts",
       "domain": "context",
@@ -2149,7 +2165,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2357,7 +2374,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "layers": {
         "schema": true,
@@ -3900,11 +3918,13 @@
       "domain": "privacy",
       "mode": "sync",
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
         "unit": true,
         "docs": true,
         "app": true
@@ -4535,6 +4555,21 @@
       }
     },
     {
+      "name": "ingest_run_frames",
+      "file": "run.frames.ingest.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "get_run",
       "file": "run.get.ts",
       "domain": "run",
@@ -4568,6 +4603,22 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "get_run_outputs",
+      "file": "run.outputs.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -4616,6 +4667,21 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "create_run_token",
+      "file": "run.token.issue.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": false,
+        "docs": true
       }
     },
     {
@@ -5203,6 +5269,42 @@
       }
     },
     {
+      "name": "get_skill_config",
+      "file": "skill.config.get.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "update_skill_config",
+      "file": "skill.config.update.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "list_skills",
       "file": "skill.list.ts",
       "domain": "skill",
@@ -5232,6 +5334,24 @@
         "schema": true,
         "api": true,
         "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "preview_skill_search",
+      "file": "skill.search.preview.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
         "docs": true,
         "app": true
       }

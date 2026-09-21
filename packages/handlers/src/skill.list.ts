@@ -2,19 +2,18 @@
 // sessions reported at start from tacho.sessions; mutates nothing, and the
 // kernel's capability.invoke_* audit records the access.
 //
-// `list_skills` (#3098): the one record of skills Oxagen keeps is
+// `list_skills` (#3098) reads observed inventory from
 // `tacho.sessions.skills_available`, the name list a wrapped harness reports
 // when a session starts (packages/tacho/src/envelope.ts, written by
-// ingest_tacho_events). Oxagen does not run, resolve or author a skill
-// (ADR-043), so this read answers which skills the harness had and nothing
+// ingest_tacho_events). This read answers which skills the harness had and nothing
 // else: no version, digest, source, cost or decision exists to return.
 //
 // A session whose inventory is null, or anything but a JSON array, did not
 // report one. It is counted as not reported and never as a session with no
 // skills; `reportedSessions` is null when no session in the window reported.
 //
-// The kernel enters the tenant scope before this handler runs, so both reads
-// go through withTenantDb, whose RLS is the tenant filter. The queries ALSO
+// The kernel enters the tenant scope before this handler runs. One statement
+// reads counts and names through withTenantDb and RLS. Its scans also
 // name org_id and workspace_id: a local stack runs with the RLS bypass on,
 // and another workspace's sessions must still stay out of the counts.
 //
@@ -114,13 +113,11 @@ export type SkillScope = { orgId: string; workspaceId: string };
 export type SessionTotals = { sessions: number; reported: number };
 
 export type SkillQueries = {
-  totals: (scope: SkillScope, window: SkillWindow) => Promise<SessionTotals>;
-  /** Names after `after`, by name, at most `limit` rows. */
-  names: (
+  read: (
     scope: SkillScope,
     window: SkillWindow,
     q: { after: string | null; limit: number },
-  ) => Promise<SkillInventoryRow[]>;
+  ) => Promise<{ totals: SessionTotals; rows: SkillInventoryRow[] }>;
 };
 
 const sessions = schema.tachoSessions;
@@ -144,8 +141,10 @@ export function totalsQuery(
 ) {
   return db
     .select({
-      sessions: sql<number>`count(*)::int`,
-      reported: sql<number>`(count(*) filter (where ${REPORTED}))::int`,
+      sessions: sql<number>`count(*)::int`.as("sessions"),
+      reported: sql<number>`(count(*) filter (where ${REPORTED}))::int`.as(
+        "reported",
+      ),
     })
     .from(sessions)
     .where(inWindow(scope, window));
@@ -252,17 +251,29 @@ export function toInventoryRow(raw: unknown): SkillInventoryRow {
 }
 
 export const postgresSkillQueries: SkillQueries = {
-  totals: async (scope, window) => {
-    const [row] = await withTenantDb((tx) => totalsQuery(tx, scope, window));
-    if (!row) throw new Error("count(*) returned no row");
-    return { sessions: row.sessions, reported: row.reported };
-  },
-  names: async (scope, window, q) => {
-    const rows = await withTenantDb((tx) =>
-      tx.execute(namesQuery(scope, window, q)),
-    );
-    return [...rows].map(toInventoryRow);
-  },
+  read: (scope, window, q) =>
+    withTenantDb(async (tx) => {
+      // One statement gives counts and rows the same Postgres snapshot, including
+      // when ingestion commits while this read is running.
+      const [raw] = await tx.execute(sql`
+      with totals as (${totalsQuery(tx, scope, window)}),
+      names as (${namesQuery(scope, window, q)})
+      select totals.*,
+        coalesce((select jsonb_agg(names order by name) from names), '[]'::jsonb) as names
+      from totals
+    `);
+      const snapshot = z
+        .object({
+          sessions: z.coerce.number().int().nonnegative(),
+          reported: z.coerce.number().int().nonnegative(),
+          names: z.array(z.unknown()),
+        })
+        .parse(raw);
+      return {
+        totals: { sessions: snapshot.sessions, reported: snapshot.reported },
+        rows: snapshot.names.map(toInventoryRow),
+      };
+    }),
 };
 
 // ---- The handler ------------------------------------------------------------------------
@@ -293,8 +304,7 @@ export function createSkillListHandler(
 
     // ── Read ──────────────────────────────────────────────────────────────
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
-    const totals = await deps.queries.totals(scope, window);
-    const rows = await deps.queries.names(scope, window, {
+    const { totals, rows } = await deps.queries.read(scope, window, {
       after: cursor?.after ?? null,
       limit: SKILL_PAGE_SIZE,
     });

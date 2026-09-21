@@ -44,3 +44,5 @@ A skill row's `harnesses` round-trips exactly what its sessions reported, byte-f
 |---|---|
 | `forbidden` (`org_role_required`, `no_principal`) | the acting user holds none of the roles above, or an API key has no creator |
 | `invalid_input` (`invalid_cursor`) | the cursor was not written by this capability, or its window is longer than the 90 days `windowDays` allows |
+
+Counts and the current page of names come from one Postgres statement and share its snapshot. The response shape is unchanged. The Skills section shows `+N more` when the harness count exceeds the returned harness names.

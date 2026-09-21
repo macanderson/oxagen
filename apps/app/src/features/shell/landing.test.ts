@@ -47,6 +47,7 @@ const source = {
     cost: vi.fn(),
     transcript: vi.fn(),
     chain: vi.fn(),
+    outputs: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn() },
   agents: {
@@ -76,9 +77,10 @@ const source = {
   },
   mandates: { list: vi.fn(), get: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
-  skills: { inventory: vi.fn() },
+  skills: { inventory: vi.fn(), configuration: vi.fn() },
   steering: {
     records: vi.fn(),
+    record: vi.fn(),
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),

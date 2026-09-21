@@ -19,6 +19,7 @@ import {
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { OperatorName } from "@/ui/operator";
 import { CostFigure, CountFigure, NotRecordedValue } from "./figures";
 import type { SpendAt } from "./view";
 
@@ -120,6 +121,29 @@ export function GroupTable({
                 >
                   {kind === "model" ? (
                     <span className={mono}>{row.key}</span>
+                  ) : kind === "operator" ? (
+                    // The person, by name. The id is a key the drill route
+                    // needs and the hover card holds; it is never the label.
+                    <OperatorName
+                      operator={{
+                        id: row.key,
+                        name: row.operator?.name ?? null,
+                        kind: "human",
+                        email: row.operator?.email ?? null,
+                        avatarUrl: row.operator?.avatarUrl ?? null,
+                        role: row.operator?.role ?? null,
+                      }}
+                    >
+                      <SafeLink
+                        to={routes.spend(at.org, at.ws, {
+                          tab: kind,
+                          drill: row.key,
+                        })}
+                        className={linkText}
+                      >
+                        {row.operator?.name ?? t("groups.operator.unnamed")}
+                      </SafeLink>
+                    </OperatorName>
                   ) : (
                     <SafeLink
                       to={routes.spend(at.org, at.ws, {

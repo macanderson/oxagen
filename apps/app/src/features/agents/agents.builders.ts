@@ -283,6 +283,7 @@ export function agentsSource(reads: AgentReads) {
       cost: refuse,
       transcript: refuse,
       chain: refuse,
+      outputs: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {
@@ -312,9 +313,10 @@ export function agentsSource(reads: AgentReads) {
       modelCredential: refuse,
     },
     audit: { events: refuse, exportEvents: refuse },
-    skills: { inventory: refuse },
+    skills: { inventory: refuse, configuration: refuse },
     steering: {
       records: refuse,
+      record: refuse,
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,

@@ -365,6 +365,15 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
     },
+    "get_run_outputs": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — the outputs spine between the run header and the tabs reads get_run_outputs and draws what the run produced in the order it produced it, with `?reads=hide` folding the read marks and `?spine=` opening a folded group (data/live/runs.ts, features/run/outputs.tsx). It is not a tab: the spine renders on every tab.",
+      "testid": "run-outputs",
+      "proof": "apps/app/src/features/run/outputs.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "d19046fa"
+    },
     "fork_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
@@ -639,6 +648,22 @@
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "get_record": {
+      "route": "/[org]/[ws]/steering/records/[lineage]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
+      "entry": "/[org]/[ws]/steering/records/[lineage] — the page for one published record, which reads it through get_record (data/live/steering.ts, features/record/record.tsx)",
+      "proof": "apps/app/src/features/record/record.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
+    },
+    "revise_context_record": {
+      "route": "/[org]/[ws]/steering/records/[lineage]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
+      "entry": "Record › Revise this statement — the statement editor raises a revision proposal through revise_context_record (features/record/statement-editor.tsx, features/record/actions.ts)",
+      "proof": "apps/app/src/features/record/record.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
     },
     "list_resolved_approvals": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -1129,6 +1154,30 @@
       "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "assigned-issue-batch; CI pending"
+    },
+    "get_skill_config": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering Skills Versions reads the published configuration and history",
+      "proof": "apps/app/src/features/skills/versions.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "skills-console-ci"
+    },
+    "update_skill_config": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering Skills Versions opens a configuration PR, imports repository settings, or publishes a verified merged PR",
+      "proof": "apps/app/src/features/skills/versions.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "skills-console-ci"
+    },
+    "preview_skill_search": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering Skills Search previews descriptions and withheld reasons at a selected immutable version",
+      "proof": "apps/app/src/features/skills/search.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "skills-console-ci"
     }
   }
 }

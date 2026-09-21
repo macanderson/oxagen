@@ -1,0 +1,222 @@
+{
+  "name": "get_run_outputs",
+  "domain": "run",
+  "description": "Read what one run produced, in the order it produced it: a file or media node per path a wrapped session wrote, a change, commit and pull-request node per receipt a ledger run recorded, a read node per path the run only looked at, and a gate node where a governed call stopped it.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "wrapped",
+          "ledger"
+        ]
+      },
+      "nodes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "seq": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "file",
+                "media",
+                "change",
+                "commit",
+                "pr",
+                "gate",
+                "would",
+                "read"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "nameIsLocator": {
+              "type": "boolean"
+            },
+            "where": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "created",
+                "written",
+                "deleted",
+                "renamed",
+                "pushed",
+                "open",
+                "read",
+                "awaiting",
+                "blocked",
+                "withheld"
+              ]
+            },
+            "note": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stat": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "added": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "removed": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "added",
+                    "removed"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "observedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "digestBefore": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "digestAfter": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "seq",
+            "kind",
+            "name",
+            "nameIsLocator",
+            "where",
+            "state",
+            "note",
+            "stat",
+            "observedAt",
+            "digestBefore",
+            "digestAfter"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "tally": {
+        "type": "object",
+        "properties": {
+          "artifacts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reads": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gates": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "artifacts",
+          "reads",
+          "gates"
+        ],
+        "additionalProperties": false
+      },
+      "complete": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "runId",
+      "source",
+      "nodes",
+      "tally",
+      "complete"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -4,6 +4,7 @@
 // axe check in every one. The tiles count the rows the sections render, and a
 // card whose parked call drew on a mandate carries the mandate bar.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/read";
@@ -357,8 +358,9 @@ describe("runs table", () => {
       "1,204",
       "Sep 15, 2026, 8:00 AM",
       // A live ledger run carries the recorded reason in place of controls:
-      // Oxagen holds no run token it could revoke (WL-61).
-      "View onlyThis run's evidence comes from an external engine. Oxagen holds no run token it can revoke, so there is nothing here to pause, steer or cancel.",
+      // pause and resume govern evidence ingress, cancel revokes the run
+      // credentials, and steering needs a producer connection.
+      "View onlyPause refuses the next evidence batch. Resume reopens evidence ingress. Cancel revokes the run credentials. These controls do not stop the external process; steering needs a producer connection.",
     ]);
     // The run cell leads with what the run was, keeps the id under it, and
     // labels the model's sentence so it cannot read as the record.
@@ -423,7 +425,7 @@ describe("runs table", () => {
     expect(runsSection()).not.toHaveTextContent(/trust/i);
   });
 
-  it("distinguishes unnamed operators with a visible secondary principal identifier", async () => {
+  it("keeps unnamed operators apart by id without printing the id as a label", async () => {
     await renderFleet({
       runs: runPage([
         runRow({
@@ -443,10 +445,24 @@ describe("runs table", () => {
     const rows = within(runsSection()).getAllByTestId("run-row");
     const first = within(rows[0] ?? runsSection()).getAllByRole("cell")[2];
     const second = within(rows[1] ?? runsSection()).getAllByRole("cell")[2];
-    expect(first).toHaveTextContent("Serviceprn_service_alpha");
-    expect(second).toHaveTextContent("Serviceprn_service_beta");
-    expect(screen.getByText("prn_service_alpha")).toBeVisible();
-    expect(screen.getByText("prn_service_beta")).toBeVisible();
+    if (first === undefined || second === undefined)
+      throw new Error("expected two operator cells");
+    // The id is never printed as a label: each cell reads "Service" and the
+    // rows stay apart by the id the operator element carries, which the
+    // hover card shows on demand.
+    expect(first).toHaveTextContent(/^Service$/);
+    expect(second).toHaveTextContent(/^Service$/);
+    expect(screen.queryByText("prn_service_alpha")).toBeNull();
+    expect(
+      within(first).getByTestId("operator").getAttribute("data-operator-id"),
+    ).toBe("prn_service_alpha");
+    expect(
+      within(second).getByTestId("operator").getAttribute("data-operator-id"),
+    ).toBe("prn_service_beta");
+    await userEvent.hover(within(first).getByTestId("operator"));
+    expect(within(first).getByTestId("operator-card")).toHaveTextContent(
+      "prn_service_alpha",
+    );
   });
 
   it("omits proof, replay, and verdict columns from the operator table", async () => {

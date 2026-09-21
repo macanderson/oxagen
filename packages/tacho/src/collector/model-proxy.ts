@@ -105,6 +105,7 @@ import {
 } from "../wire";
 import { GUARD_MESSAGES, guardLoopbackRequest } from "./loopback-guard";
 import { priceObservedUsage, usdToMicros } from "./model-pricing";
+import { RequestPrefixMemory } from "./request-prefix";
 import {
   DEFAULT_MODEL_UPSTREAMS,
   downstreamResponseHeaders,
@@ -376,6 +377,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
   const inFlight = new Map<string, Set<InFlight>>();
   const spent = new Map<string, number>();
   const observed = new Map<string, number>();
+  // What each session's previous call carried, so the next call's body holds
+  // only what is new (`request-prefix.ts`).
+  const priors = new RequestPrefixMemory();
   let callsObserved = 0;
   let refused = 0;
 
@@ -417,7 +421,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     }
     if (id !== undefined && !isInternalSession(id) && id.length <= 256) {
       const known = deps.registry.get(id);
-      if (known !== undefined && !known.sealed) return { record: known, how };
+      if (known !== undefined && !known.sealed && !known.pendingTerminal)
+        return { record: known, how };
       // Seen here before any hook named it: open it as ambient, the way a
       // session first seen through OTel is opened, and let the hook adopt it.
       const { record } = deps.registry.ensure(id, { harness, ambient: true });
@@ -682,6 +687,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       sent !== undefined && !requestTooLarge
         ? sent.toString("utf8")
         : undefined;
+    // The body stores the request with the prefix the previous call already
+    // holds cut out. The digests of the full request stay on the frame, so a
+    // reader can tell the stored text from what crossed the wire.
+    const fold =
+      requestText === undefined
+        ? undefined
+        : priors.fold(sessionKey, requestText);
     // Nothing else of the request is kept past this point but its bytes to send.
     decoded = undefined;
     parsed = undefined;
@@ -777,7 +789,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         : responseText === undefined && responseBytes > 0
           ? "not_decoded"
           : undefined;
-      const exchange = exchangeContent(requestText, responseText);
+      const exchange = exchangeContent(fold?.text, responseText);
       deps.record(
         [
           recorder.sealCollectorEvent(
@@ -856,6 +868,23 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                 ...(injected ? { "oxagen.request_injected": "1" } : {}),
                 ...(requestTooLarge
                   ? { "oxagen.request_body_omitted": "too_large" }
+                  : {}),
+                ...(fold !== undefined
+                  ? {
+                      "oxagen.request_full_digest": fold.fullDigest,
+                      "oxagen.request_full_bytes": String(fold.fullBytes),
+                      "oxagen.request_stored_bytes": String(fold.storedBytes),
+                    }
+                  : {}),
+                ...(fold?.prior !== undefined
+                  ? {
+                      "oxagen.request_prior_digest": fold.prior.unchanged_from,
+                      "oxagen.request_prior_messages": String(
+                        fold.prior.messages,
+                      ),
+                      "oxagen.request_prior_fields":
+                        fold.prior.fields.join(","),
+                    }
                   : {}),
                 ...(responseOmitted !== undefined
                   ? { "oxagen.response_body_omitted": responseOmitted }

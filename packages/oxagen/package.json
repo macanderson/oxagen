@@ -14,6 +14,7 @@
     "./handler-error": "./src/handler-error.ts",
     "./agent-credential": "./src/agent-credential.ts",
     "./cli-session": "./src/cli-session.ts",
+    "./ledger-run-token": "./src/ledger-run-token.ts",
     "./agent-schema": "./src/agent-schema.ts",
     "./avatar": "./src/avatar.ts",
     "./interactive-agent": "./src/interactive-agent.ts",
@@ -28,7 +29,9 @@
     "./mandates/schemas": "./src/mandates/schemas.ts",
     "./approval-rules/schemas": "./src/approval-rules/schemas.ts",
     "./mandates/schemas.sample": "./src/mandates/schemas.sample.ts",
-    "./client-ip": "./src/client-ip.ts"
+    "./client-ip": "./src/client-ip.ts",
+    "./skill-frontmatter": "./src/skill-frontmatter.ts",
+    "./skills": "./src/skills.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -42,7 +45,8 @@
     "@oxagen/run-evidence": "workspace:*",
     "@oxagen/tacho": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
     "typescript": "6.0.3",

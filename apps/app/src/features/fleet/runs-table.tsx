@@ -14,6 +14,7 @@ import {
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { OperatorName } from "@/ui/operator";
 import { GeneratedSummary } from "@/ui/generated-summary";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, numericCell, Table } from "@/ui/table";
@@ -107,19 +108,22 @@ function RunsPageView({
               />
             </td>
             <td className={`${cell} min-w-36 whitespace-nowrap`}>
-              <span title={run.operatorId ?? undefined}>
-                {run.operatorName ??
-                  (run.operatorKind === null
-                    ? notRecorded
-                    : t(`operatorKind.${run.operatorKind}`))}
-              </span>
-              {run.operatorName === null && run.operatorId !== null ? (
-                <span
-                  className={`${mono} block max-w-40 truncate text-xs text-muted-foreground`}
+              {run.operatorId === null && run.operatorName === null ? (
+                notRecorded
+              ) : (
+                <OperatorName
+                  operator={{
+                    id: run.operatorId,
+                    name: run.operatorName,
+                    kind: run.operatorKind,
+                  }}
                 >
-                  {run.operatorId}
-                </span>
-              ) : null}
+                  {run.operatorName ??
+                    (run.operatorKind === null
+                      ? notRecorded
+                      : t(`operatorKind.${run.operatorKind}`))}
+                </OperatorName>
+              )}
             </td>
             <td className={cell}>
               <StatusBadge status={run.status} outcome={run.outcome} />

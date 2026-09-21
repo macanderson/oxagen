@@ -132,7 +132,8 @@ describe("get_record", () => {
     expect(byLineage.prUrl).toBe(
       "https://github.com/a-intel/platform/pull/519",
     );
-    const byId = await get({ recordId: byLineage.record.id }, ctx());
+    expect(byLineage.record.id).not.toBeNull();
+    const byId = await get({ recordId: byLineage.record.id ?? "" }, ctx());
     expect(byId).toEqual(byLineage);
     expect(() => contextRecordsGet.output.parse(byId)).not.toThrow();
   });

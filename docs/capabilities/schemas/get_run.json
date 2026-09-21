@@ -61,6 +61,12 @@
               "tacho"
             ]
           },
+          "ingressRevoked": {
+            "type": "boolean"
+          },
+          "ingressPaused": {
+            "type": "boolean"
+          },
           "agentKey": {
             "anyOf": [
               {
@@ -310,6 +316,55 @@
                 "properties": {
                   "hostname": {
                     "type": "string"
+                  },
+                  "recorded": {
+                    "type": "object",
+                    "properties": {
+                      "platform": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "osVersion": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "arch": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "recordedAt": {
+                        "type": "string"
+                      },
+                      "eventHash": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "platform",
+                      "osVersion",
+                      "arch",
+                      "recordedAt",
+                      "eventHash"
+                    ],
+                    "additionalProperties": false
                   },
                   "platform": {
                     "type": "string"

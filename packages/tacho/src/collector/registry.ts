@@ -153,6 +153,18 @@ export interface SessionRecord extends SessionFacts {
   lastSeenAt: string;
   /** True once `agent_stop` sealed the chain. */
   sealed: boolean;
+  /**
+   * True while a `SessionEnd` terminal has been computed but has not yet
+   * reached the WAL. `sealed` reports `false` for this window (the chain is
+   * not durably closed), but the record must still refuse new frames: a
+   * concurrent write here would seal a sequence number after the terminal
+   * event's, and a later WAL failure that discards the terminal would leave
+   * the retry appending behind a chain that has already moved on. Every
+   * writer that gates on `sealed` gates on this too. Not persisted to
+   * `state.json` — it is derived on load from `pending-session-ends.json`,
+   * which is the durable record of "this session has a terminal pending".
+   */
+  pendingTerminal?: boolean;
   /** The chain seq the last checkpoint covered. */
   lastCheckpointSeq: number;
   /** The session never sent a hook; only OTel or a transcript showed it. */
@@ -533,11 +545,15 @@ export class SessionRegistry {
    * that only ever showed up through OTel or a transcript: the harness
    * never told us it ended.
    */
-  sweep(isAlive: (pid: number) => boolean, idleMs: number): TachoEvent[] {
+  sweep(
+    isAlive: (pid: number) => boolean,
+    idleMs: number,
+    deferSeal: (session: SessionRecord) => boolean = () => false,
+  ): TachoEvent[] {
     const out: TachoEvent[] = [];
     const now = this.options.now();
     for (const record of this.sessions.values()) {
-      if (record.sealed) continue;
+      if (record.sealed || deferSeal(record)) continue;
       const gone = record.pid !== undefined ? !isAlive(record.pid) : false;
       const idle = now - Date.parse(record.lastSeenAt) > idleMs;
       if (!gone && !(record.pid === undefined && idle)) continue;

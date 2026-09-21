@@ -20,6 +20,8 @@ import { KeyRound, Lock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   type KeyboardEvent,
+  type Dispatch,
+  type SetStateAction,
   type SyntheticEvent,
   useCallback,
   useEffect,
@@ -62,6 +64,12 @@ import {
 import { initials } from "./format";
 import { recoveryCodeVault, useRecoveryCodeVault } from "./recovery-code-vault";
 import {
+  accountOperations,
+  useAccountPreferences,
+  useAccountOperation,
+  useAccountExport,
+} from "./account-operations";
+import {
   liveListSessions,
   liveRegenerateBackupCodes,
   liveRevokeSession,
@@ -80,7 +88,14 @@ type Outcome = "saved" | "invalid" | "denied" | "failed";
 const tabClass =
   "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
 
+type ProfileDraft = { userId: string; value: string };
+type ProfileDraftProps = {
+  profileDraft: ProfileDraft | null;
+  setProfileDraft: Dispatch<SetStateAction<ProfileDraft | null>>;
+};
+
 export function AccountDialog({ data }: { data: ShellData }) {
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
   const t = useTranslations("shell.account");
   const {
     accountOpen,
@@ -114,6 +129,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
   const userId = data.viewer.id;
   const vault = useRecoveryCodeVault(userId);
   const heldCodes = vault.codes;
+  const codesNeedAttention = vault.rotating || heldCodes !== null;
   const setHeldCodes = useCallback(
     (codes: string[] | null) => {
       if (codes) recoveryCodeVault.hold(userId, codes);
@@ -168,6 +184,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // dialog already holds.
   const tabRef = useRef(new Map<AccountTab, HTMLButtonElement | null>());
   const onTabKeyDown = (event: KeyboardEvent, index: number) => {
+    if (codesNeedAttention) return;
     const last = ACCOUNT_TABS.length - 1;
     const target =
       event.key === "ArrowRight"
@@ -192,8 +209,12 @@ export function AccountDialog({ data }: { data: ShellData }) {
   return (
     <SheetDialog
       open={accountOpen}
-      onOpenChange={setAccountOpen}
+      onOpenChange={(open) => {
+        if (!open) setProfileDraft(null);
+        setAccountOpen(open);
+      }}
       title={t("title")}
+      dismissible={!codesNeedAttention}
       testId="account-dialog"
       wide
       tabs={
@@ -210,6 +231,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
               }}
               type="button"
               role="tab"
+              disabled={codesNeedAttention}
               id={`account-tab-${tab}`}
               data-testid={`account-tab-${tab}`}
               aria-selected={accountTab === tab}
@@ -241,6 +263,8 @@ export function AccountDialog({ data }: { data: ShellData }) {
             key={accountTab}
             tab={accountTab}
             data={data}
+            profileDraft={profileDraft}
+            setProfileDraft={setProfileDraft}
             heldCodes={heldCodes}
             setHeldCodes={setHeldCodes}
             rotation={rotation}
@@ -288,12 +312,14 @@ type CodeVault = {
 };
 
 function AccountPanel({
+  profileDraft,
+  setProfileDraft,
   tab,
   data,
   heldCodes,
   setHeldCodes,
   rotation,
-}: { tab: AccountTab; data: ShellData } & CodeVault) {
+}: { tab: AccountTab; data: ShellData } & CodeVault & ProfileDraftProps) {
   if (tab === "preferences") return <PreferencesTab data={data} />;
   if (tab === "security")
     return (
@@ -305,21 +331,38 @@ function AccountPanel({
       />
     );
   if (tab === "privacy") return <PrivacyTab data={data} />;
-  return <ProfileTab data={data} />;
+  return (
+    <ProfileTab
+      data={data}
+      profileDraft={profileDraft}
+      setProfileDraft={setProfileDraft}
+    />
+  );
 }
 
 /* ============================== Profile ============================== */
 
-function ProfileTab({ data }: { data: ShellData }) {
+function ProfileTab({
+  data,
+  profileDraft,
+  setProfileDraft,
+}: { data: ShellData } & ProfileDraftProps) {
   const t = useTranslations("shell.account");
   const navigate = useNavigate();
   const { setAvatarOpen } = useShellState();
   const { viewer, org } = data;
   const nameId = useId();
   const emailId = useId();
-  const [displayName, setDisplayName] = useState(viewer.name ?? "");
+  const displayName =
+    profileDraft?.userId === viewer.id
+      ? profileDraft.value
+      : (viewer.name ?? "");
+  const setDisplayName = (value: string) => {
+    setProfileDraft({ userId: viewer.id, value });
+  };
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [pending, setPending] = useState(false);
+  const operation = useAccountOperation(data.viewer.id, "profile");
+  const { pending } = operation;
 
   /**
    * Counts edits, so a save that lands late can tell whether the field it is
@@ -342,10 +385,9 @@ function ProfileTab({ data }: { data: ShellData }) {
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
+    if (!operation.begin()) return;
     const sentAt = editsRef.current;
     setOutcome(null);
-    setPending(true);
     try {
       // The name alone. `viewer.avatarUrl` is what the server rendered with,
       // so sending it back would revert an avatar saved since (in the
@@ -361,7 +403,14 @@ function ProfileTab({ data }: { data: ShellData }) {
         // every reason to act on. When the draft has moved on, the newer text
         // stands, and nothing claims it is saved, which is the truth.
         if (editsRef.current === sentAt) {
-          setDisplayName(result.value.displayName ?? displayName);
+          setProfileDraft((current) =>
+            current === profileDraft
+              ? {
+                  userId: viewer.id,
+                  value: result.value.displayName ?? displayName,
+                }
+              : current,
+          );
           setOutcome("saved");
         }
         // The shell renders the same person: the top bar's user menu reads
@@ -375,7 +424,7 @@ function ProfileTab({ data }: { data: ShellData }) {
     } catch {
       setOutcome("failed");
     } finally {
-      setPending(false);
+      operation.end();
     }
   }
 
@@ -501,12 +550,6 @@ function ProfileTab({ data }: { data: ShellData }) {
 
 /* ============================== Preferences ============================== */
 
-type PrefsState =
-  | { kind: "loading" }
-  | { kind: "denied" }
-  | { kind: "failed" }
-  | { kind: "ready"; draft: PreferencesDraft };
-
 const THEMES: readonly Theme[] = ["system", "dark", "light"];
 
 /** The zones the browser knows, plus UTC, with the stored one kept even when it is not among them. */
@@ -554,103 +597,114 @@ function previewFor(locale: string, timeZone: string) {
 function PreferencesTab({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account.preferences");
   const navigate = useNavigate();
-  const { theme, setTheme } = useShellState();
+  const { setTheme, previewTheme, themeRevision } = useShellState();
   const localeId = useId();
   const zoneId = useId();
   const themeId = useId();
-  const [state, setState] = useState<PrefsState>({ kind: "loading" });
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [pending, setPending] = useState(false);
-  /** Edit counter, for the same reason as the Profile tab's: see `onSubmit`. */
-  const editsRef = useRef(0);
+  const { state, outcome, update } = useAccountPreferences(data.viewer.id);
+  const operation = useAccountOperation(data.viewer.id, "preferences");
+  const { pending } = operation;
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     let live = true;
-    void readPreferences(data.org.slug)
-      .then((result) => {
-        if (!live) return;
-        if (result.ok) setState({ kind: "ready", draft: result.value });
-        else if (result.reason === "denied") setState({ kind: "denied" });
-        else setState({ kind: "failed" });
-      })
-      .catch(() => {
-        if (live) setState({ kind: "failed" });
-      });
+    mountedRef.current = true;
+    const expectedTheme = themeRevision();
+    const cached = accountOperations.readPreferences(data.viewer.id);
+    if (
+      cached.state.kind !== "ready" ||
+      (!cached.dirty &&
+        !accountOperations.isPending(data.viewer.id, "preferences"))
+    ) {
+      update((current) => ({
+        ...current,
+        state: { kind: "loading" },
+        outcome: null,
+      }));
+      void readPreferences(data.org.slug)
+        .then((result) => {
+          if (!live) return;
+          update((current) => ({
+            ...current,
+            state: result.ok
+              ? { kind: "ready", draft: result.value }
+              : { kind: result.reason === "denied" ? "denied" : "failed" },
+          }));
+          if (result.ok) setTheme(result.value.theme, expectedTheme);
+        })
+        .catch(() => {
+          if (live)
+            update((current) => ({ ...current, state: { kind: "failed" } }));
+        });
+    }
     return () => {
       live = false;
+      mountedRef.current = false;
+      previewTheme(null);
     };
-  }, [data.org.slug]);
-
-  // The page follows the draft theme, wherever the draft came from: the store
-  // on load, or the selector after that.
-  //
-  // It used to follow only the selector, and `useTheme` seeds itself from the
-  // theme cookie, which is per browser. So in a new browser, or after the
-  // cookie was cleared, a stored "dark" was shown selected in this form while
-  // the page rendered the system theme: the tab contradicted the page, and
-  // the saved preference was honoured only if the person toggled the control
-  // that already showed the value they wanted.
-  //
-  // Writing the cookie on load is a commit rather than a preview, which is the
-  // distinction #3333 §13 turns on: the value came from the store, so the
-  // cookie is being brought into line with a decision already taken.
-  //
-  // What this does not do is fix the first paint. Someone who never opens
-  // Preferences still gets the cookie's answer, because the shell does not
-  // read the preference server-side. Closing that means seeding the theme
-  // from the preference before the page renders, which is a change to the
-  // shell's data loading and the pre-paint script rather than to this tab.
-  const draftTheme = state.kind === "ready" ? state.draft.theme : null;
-  useEffect(() => {
-    if (draftTheme !== null && draftTheme !== theme) setTheme(draftTheme);
-  }, [draftTheme, theme, setTheme]);
+  }, [
+    data.viewer.id,
+    data.org.slug,
+    setTheme,
+    previewTheme,
+    themeRevision,
+    update,
+  ]);
 
   function edit(patch: Partial<PreferencesDraft>) {
-    if (outcome === "saved") setOutcome(null);
-    editsRef.current += 1;
-    setState((s) =>
-      s.kind === "ready"
-        ? { kind: "ready", draft: { ...s.draft, ...patch } }
-        : s,
-    );
+    if (patch.theme !== undefined) previewTheme(patch.theme);
+    update((current) => ({
+      state:
+        current.state.kind === "ready"
+          ? { kind: "ready", draft: { ...current.state.draft, ...patch } }
+          : current.state,
+      revision: current.revision + 1,
+      dirty: true,
+      outcome: null,
+    }));
   }
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending || state.kind !== "ready") return;
-    const sentAt = editsRef.current;
-    setOutcome(null);
-    setPending(true);
+    if (state.kind !== "ready" || !operation.begin()) return;
+    const sentAt = accountOperations.readPreferences(data.viewer.id).revision;
+    const expectedTheme = themeRevision();
+    const unchanged = () =>
+      accountOperations.readPreferences(data.viewer.id).revision === sentAt;
+    update((current) => ({ ...current, outcome: null }));
     try {
       const result = await savePreferences(data.org.slug, state.draft);
       if (result.ok) {
-        // Only if the form is still the one that was sent, and for the same
-        // reason as the Profile tab: a selection made while the save was in
-        // flight is a decision the person has taken, and replacing it with the
-        // older answer under a "Saved." line hides that it was thrown away.
-        // It bites harder here, because the theme selector commits on change:
-        // the page would already be following the newer theme while the form
-        // reverted to the older one and called it saved.
-        if (editsRef.current === sentAt) {
-          setState({ kind: "ready", draft: result.value });
-          setOutcome("saved");
-        }
-        // The zone this row holds is the one every date in the app renders in:
-        // the organization layout reads it server-side and hands it to
-        // <ViewerClock> and the chrome's <TimeZoneProvider>. Without this the
-        // stored zone changes and every date on the page keeps the zone the
-        // request started in until a full reload, across client-side
-        // navigation too, because the shell lives in the layout. Re-rendered
-        // only when the zone actually moved, and at the URL already showing,
-        // so the dialog stays open.
+        setTheme(result.value.theme, expectedTheme);
+        if (mountedRef.current && unchanged()) previewTheme(null);
+        update((current) =>
+          current.revision === sentAt
+            ? {
+                ...current,
+                state: { kind: "ready", draft: result.value },
+                outcome: "saved",
+                dirty: false,
+              }
+            : current,
+        );
         if (result.value.timezone !== data.viewer.timeZone) navigate.refresh();
-      } else if (result.reason === "invalid") setOutcome("invalid");
-      else if (result.reason === "denied") setOutcome("denied");
-      else setOutcome("failed");
+      } else {
+        if (mountedRef.current && unchanged()) previewTheme(null);
+        update((current) => ({
+          ...current,
+          outcome:
+            result.reason === "invalid"
+              ? "invalid"
+              : result.reason === "denied"
+                ? "denied"
+                : "failed",
+        }));
+      }
     } catch {
-      setOutcome("failed");
+      if (mountedRef.current && unchanged()) previewTheme(null);
+      update((current) => ({ ...current, outcome: "failed" }));
     } finally {
-      setPending(false);
+      operation.end();
     }
   }
 
@@ -881,6 +935,7 @@ function SecurityTab({
   );
   const [revoking, setRevoking] = useState<string | null>(null);
   const [revoked, setRevoked] = useState(false);
+  const [revokeFailed, setRevokeFailed] = useState<string | null>(null);
 
   // The rotation that fills the vault can belong to an earlier mount of this
   // tab: started here, left mid-flight, and returned to before it settled. That
@@ -925,6 +980,7 @@ function SecurityTab({
     if (revoking) return;
     setRevoking(token);
     setRevoked(false);
+    setRevokeFailed(null);
     try {
       const ok = await liveRevokeSession(token);
       if (ok) {
@@ -937,9 +993,9 @@ function SecurityTab({
             : s,
         );
         setRevoked(true);
-      } else setSessions({ kind: "failed" });
+      } else setRevokeFailed(token);
     } catch {
-      setSessions({ kind: "failed" });
+      setRevokeFailed(token);
     } finally {
       setRevoking(null);
     }
@@ -1206,6 +1262,11 @@ function SecurityTab({
                   <p className={listText}>
                     {s.ipAddress ?? t("unknownAddress")}
                   </p>
+                  {revokeFailed === s.token ? (
+                    <FormAlert testId="account-session-revoke-failed">
+                      {t("revokeFailed")}
+                    </FormAlert>
+                  ) : null}
                 </div>
                 <time className={listTime} dateTime={s.updatedAt.toISOString()}>
                   {s.current
@@ -1241,15 +1302,6 @@ function SecurityTab({
 
 /* ============================== Privacy ============================== */
 
-type ExportState =
-  | { kind: "idle" }
-  | { kind: "pending"; scope: "user" | "org" }
-  | { kind: "queued"; scope: "user" | "org"; exportId: string }
-  | { kind: "ready"; scope: "user" | "org"; exportId: string }
-  | { kind: "expired"; scope: "user" | "org"; exportId: string }
-  | { kind: "denied"; scope: "user" | "org" }
-  | { kind: "failed"; scope: "user" | "org" };
-
 /**
  * How often the queued state asks after the bundle. `export_data` answers the
  * moment it queues and the bundle is written later by an Inngest function, so
@@ -1262,11 +1314,13 @@ const EXPORT_POLL_MS = 3_000;
 
 function PrivacyTab({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account.privacy");
-  const [state, setState] = useState<ExportState>({ kind: "idle" });
+  const { state, setState, begin } = useAccountExport(
+    data.viewer.id,
+    data.org.key,
+  );
 
   async function ask(scope: "user" | "org") {
-    if (state.kind === "pending") return;
-    setState({ kind: "pending", scope });
+    if (!begin(scope)) return;
     try {
       const result = await requestExport(data.org.slug, scope);
       if (result.ok)
@@ -1337,7 +1391,7 @@ function PrivacyTab({ data }: { data: ShellData }) {
       live = false;
       clearInterval(timer);
     };
-  }, [queuedId, queuedScope, orgSlug]);
+  }, [queuedId, queuedScope, orgSlug, setState]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -1352,7 +1406,9 @@ function PrivacyTab({ data }: { data: ShellData }) {
           <button
             type="button"
             data-testid="account-export-user"
-            aria-disabled={state.kind === "pending" || undefined}
+            aria-disabled={
+              state.kind === "pending" || state.kind === "queued" || undefined
+            }
             className={buttonPrimary}
             onClick={() => void ask("user")}
           >
@@ -1363,7 +1419,9 @@ function PrivacyTab({ data }: { data: ShellData }) {
           <button
             type="button"
             data-testid="account-export-org"
-            aria-disabled={state.kind === "pending" || undefined}
+            aria-disabled={
+              state.kind === "pending" || state.kind === "queued" || undefined
+            }
             className={buttonSmall}
             onClick={() => void ask("org")}
           >

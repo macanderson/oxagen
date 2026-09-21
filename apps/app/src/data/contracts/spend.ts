@@ -35,11 +35,23 @@ const SpendFigure = z.object({
 });
 export type SpendFigure = z.infer<typeof SpendFigure>;
 
+/** Who an operator row names: the person, never the id as a label. */
+const OperatorFacts = z.object({
+  id: PublicId,
+  name: z.string().min(1).nullable(),
+  email: z.string().min(1).nullable(),
+  avatarUrl: z.string().min(1).nullable(),
+  role: z.string().min(1).nullable(),
+});
+type OperatorFacts = z.infer<typeof OperatorFacts>;
+
 const SpendRow = SpendFigure.extend({
   /** A principal public id, an agent key, a model id or a tool name. */
   key: z.string().min(1),
   /** The model's provider on a model row; null elsewhere. */
   provider: z.string().nullable(),
+  /** The person an operator row names; null on every other row. */
+  operator: OperatorFacts.nullable(),
 });
 
 /** `get_spend` at one level: the period total and its groups, largest spend first. */

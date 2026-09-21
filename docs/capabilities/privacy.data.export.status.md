@@ -3,7 +3,7 @@
 **Domain:** privacy
 **Mode:** sync
 **Scope:** the calling user's own export requests
-**Surfaces:** api
+**Surfaces:** api, mcp
 **Risk level:** low
 
 ## Intent
@@ -50,7 +50,7 @@ bundle. A field here would be a way to enumerate other people's exports.
 
 | Code | When |
 |---|---|
-| `forbidden` / `no_principal` | A machine credential: MCP builds every context with `userId: null`, so this can only refuse there. That is why the capability has no MCP surface. |
+| `forbidden` / `no_principal` | A machine credential with no authenticated user. CLI-session MCP credentials retain their approving user and may read that person's exports. |
 | `not_found` / `export_not_found` | No such id, **or** an id belonging to someone else. The two are deliberately the same answer: distinguishing them would tell a caller whether a stranger's export id is real. |
 | `forbidden` / `org_export_requires_admin` | The export's scope is `org` and the caller is no longer an Owner or Admin of the organization that governed it. See below. |
 | `forbidden` / `org_export_not_permitted` | The export's scope is `org` and an explicit rule now denies `export_data`, either in the workspace that queued the export or in the one the read comes through. See below. |
@@ -90,6 +90,9 @@ refused rather than released on a check that may be asking the wrong
 workspace.
 
 ## Surfaces
+
+The MCP `get_export_status` tool completes the polling path for `export_data`.
+It uses the same handler and user and organization authorization as the API.
 
 `GET /v1/{org}/{workspace}/privacy/export/{exportId}` dispatches this
 contract. The route file spells its paths relative to the mount; `apps/api`

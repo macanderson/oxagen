@@ -88,11 +88,17 @@ import { repositoryInstallationCandidates } from "./repository.installation.cand
 import { repositoryInstallationAttach } from "./repository.installation.attach";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
+import { runOutputsGet } from "./run.outputs.get";
+import { runTokenIssue } from "./run.token.issue";
+import { runFramesIngest } from "./run.frames.ingest";
 import { runProofGet } from "./run.proof.get";
 import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
+import { skillConfigGet } from "./skill.config.get";
+import { skillConfigUpdate } from "./skill.config.update";
+import { skillSearchPreview } from "./skill.search.preview";
 import { skillList } from "./skill.list";
 import { skillPropose } from "./skill.propose";
 import { spendStatementExport } from "./spend.statement.export";
@@ -237,6 +243,7 @@ import { killSwitchList } from "./kill_switch.list";
 import { contextRecordPublish } from "./context.record.publish";
 import { contextRecordList } from "./context.record.list";
 import { contextRecordPromote } from "./context.record.promote";
+import { contextRecordRevise } from "./context.record.revise";
 import { contextRecordsList } from "./context.records.list";
 import { contextRecordsGet } from "./context.records.get";
 import { contextRecordsAppend } from "./context.records.append";
@@ -387,6 +394,10 @@ export type {
   SpendGroupKind,
   TokenCounts,
 } from "./spend.shared";
+// Who an operator is, shared by the rows that name one (get_spend). Not a
+// capability, so exported here to satisfy the file-coverage guard.
+export { operatorFactsSchema } from "./operator.shared";
+export type { OperatorFacts } from "./operator.shared";
 // Steering vocabulary (ADR-061) shared by the context.* contracts. Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export {
@@ -657,11 +668,17 @@ export {
   userPreferencesSet,
   userProfileUpdate,
   runCostGet,
+  runOutputsGet,
   runProofGet,
+  runTokenIssue,
+  runFramesIngest,
   evidenceDisclosureGrainSet,
   spendGet,
   spendDrill,
   spendWasteList,
+  skillConfigGet,
+  skillConfigUpdate,
+  skillSearchPreview,
   skillList,
   skillPropose,
   spendStatementExport,
@@ -762,6 +779,7 @@ export {
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
+  contextRecordRevise,
   contextRecordsList,
   contextRecordsGet,
   contextSteeringFreshness,
@@ -1006,11 +1024,17 @@ export const contracts: readonly CapabilityDeclaration[] = [
   userPreferencesSet,
   userProfileUpdate,
   runCostGet,
+  runOutputsGet,
   runProofGet,
+  runTokenIssue,
+  runFramesIngest,
   evidenceDisclosureGrainSet,
   spendGet,
   spendDrill,
   spendWasteList,
+  skillConfigGet,
+  skillConfigUpdate,
+  skillSearchPreview,
   skillList,
   skillPropose,
   spendStatementExport,
@@ -1110,6 +1134,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
+  contextRecordRevise,
   contextRecordsList,
   contextRecordsGet,
   contextSteeringFreshness,

@@ -36,6 +36,7 @@
  * instant it is judging against and a test does not depend on the clock the
  * suite runs on.
  */
+import { requestsReservedLedgerRunPurpose } from "@oxagen/oxagen/ledger-run-token";
 import { requestsReservedCliSessionPurpose } from "@oxagen/oxagen/cli-session";
 import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { requestsReservedStellaTelemetryPurpose } from "./stella-telemetry-enrollment";
@@ -105,6 +106,11 @@ interface ReservedPurpose {
 }
 
 const RESERVED_PURPOSES: readonly ReservedPurpose[] = [
+  {
+    matches: requestsReservedLedgerRunPurpose,
+    log: "api.key.rotate: reserved ledger run credential",
+    denial: "Run credentials refresh through evidence ingress",
+  },
   {
     matches: requestsReservedTachoPurpose,
     log: "api.key.rotate: rejected — reserved Tacho host purpose",

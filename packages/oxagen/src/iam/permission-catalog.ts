@@ -175,9 +175,11 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
   {
     id: "steering.propose",
     group: "Graph and steering",
-    description: "Promote, publish, demote and dismiss steering records",
+    description:
+      "Promote, publish, revise, demote and dismiss steering records",
     capabilities: [
       "promote_context_record",
+      "revise_context_record",
       "publish_context_record",
       "promote_memory",
       "demote_memory",

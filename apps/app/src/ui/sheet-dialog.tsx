@@ -41,9 +41,11 @@ export function SheetDialog({
   footer,
   closeLabel,
   wide = false,
+  dismissible = true,
   testId,
   children,
 }: {
+  dismissible?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -63,7 +65,12 @@ export function SheetDialog({
   const t = useTranslations("ui.dialog");
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (next || dismissible) onOpenChange(next);
+      }}
+    >
       <Dialog.Portal>
         <Dialog.Backdrop
           data-scrim=""
@@ -98,7 +105,11 @@ export function SheetDialog({
             data-sheet-footer=""
             className="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3"
           >
-            <Dialog.Close data-touch-target="" className={buttonSecondary}>
+            <Dialog.Close
+              disabled={!dismissible}
+              data-touch-target=""
+              className={buttonSecondary}
+            >
               {closeLabel ?? t("close")}
             </Dialog.Close>
             {footer}

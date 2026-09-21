@@ -29,6 +29,8 @@ interface EncryptedToken {
 export interface GitHubWorkspaceScope {
   orgId: string;
   workspaceId: string;
+  /** An approved repository binding can require this exact connection. */
+  connectionId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +63,9 @@ export async function resolveGitHubToken(
       .from(schema.sourceConnections)
       .where(
         and(
+          ...(ctx.connectionId
+            ? [eq(schema.sourceConnections.id, ctx.connectionId)]
+            : []),
           eq(schema.sourceConnections.orgId, ctx.orgId),
           eq(schema.sourceConnections.workspaceId, ctx.workspaceId),
           eq(schema.sourceConnections.connectorId, "github"),
@@ -130,6 +135,11 @@ export async function resolveGitHubToken(
       }
     }
   }
+
+  if (ctx.connectionId)
+    throw new Error(
+      "The approved repository connection has no usable GitHub credential. Reconnect that connection.",
+    );
 
   // ── Path 3: local-only dev/demo env-var fallback ──────────────────────
   const envToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;

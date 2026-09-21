@@ -218,18 +218,22 @@ beforeEach(() => {
 });
 
 describe("get_export_status", () => {
-  it("refuses a machine principal", async () => {
-    await expect(
-      privacyDataExportStatusHandler(
-        { exportId: EXPORT_ID },
-        ctx({
-          userId: null,
-        } as Partial<CapabilityContext>),
-      ),
-    ).rejects.toSatisfy(
-      (error: unknown) => isHandlerError(error) && error.code === "forbidden",
-    );
-  });
+  it.each(["api", "mcp"] as const)(
+    "refuses a machine principal on %s",
+    async (surface) => {
+      await expect(
+        privacyDataExportStatusHandler(
+          { exportId: EXPORT_ID },
+          ctx({
+            userId: null,
+            surface,
+          } as Partial<CapabilityContext>),
+        ),
+      ).rejects.toSatisfy(
+        (error: unknown) => isHandlerError(error) && error.code === "forbidden",
+      );
+    },
+  );
 
   it("answers not_found for an id that is not this person's", async () => {
     queueSelects([]);

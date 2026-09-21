@@ -28,6 +28,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       cost: refuse,
       transcript: refuse,
       chain: refuse,
+      outputs: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {
@@ -55,10 +56,11 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       apiKeys: refuse,
       modelCredential: refuse,
     },
-    skills: { inventory: refuse },
+    skills: { inventory: refuse, configuration: refuse },
     audit: { events: refuse, exportEvents: refuse },
     steering: {
       records: refuse,
+      record: refuse,
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,

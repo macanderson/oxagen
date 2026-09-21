@@ -353,6 +353,8 @@ export interface RunSecurityEventSink {
 }
 
 export interface RunStoreOptions {
+  /** Runs under the append's run lock, before any evidence is written. */
+  authorizeAppend?: (tx: Tx, attempt: LockedAttemptRow) => Promise<void>;
   /**
    * Default sink: writes the conflict to `console.error`. Deliberately loud
    * rather than a silent no-op — a dropped integrity conflict is the failure
@@ -709,6 +711,8 @@ export interface AttemptRow {
   forked_from_run_seq: string | number | null;
   claimed_at: string | Date;
   seal_id: string | null;
+  cancel_requested?: boolean;
+  ingress_paused?: boolean;
   terminal_status: string | null;
   reason_code: string | null;
   event_count: number | string | null;
@@ -1085,6 +1089,8 @@ export interface LockedAttemptRow {
   workspace_id: string;
   attempt_number: number | string;
   seal_id: string | null;
+  cancel_requested?: boolean;
+  ingress_paused?: boolean;
   /** The run's pinned retention policy (`agent_runs.retention_policy_id`). */
   retention_mode: string | null;
   retained_content_classes: readonly string[] | string | null;
@@ -1234,7 +1240,7 @@ export function buildCreateRunSql(
  */
 export function buildLockRunForAttemptSql(runId: string): SQL {
   return sql`
-    SELECT id, org_id, workspace_id, spec_version, status, attempt_count, max_attempts
+    SELECT id, org_id, workspace_id, spec_version, status, cancel_requested, ingress_paused, attempt_count, max_attempts
     FROM agent.agent_runs
     WHERE id = ${runId}::uuid
     FOR UPDATE
@@ -1318,7 +1324,7 @@ export function buildMarkRunAttemptedSql(
 export function buildLockAttemptForWriteSql(attemptId: string): SQL {
   return sql`
     WITH locked AS (
-      SELECT r.id
+      SELECT r.id, r.cancel_requested, r.ingress_paused
       FROM agent.agent_runs r
       WHERE r.id = (
         SELECT run_id FROM agent.agent_run_attempts WHERE id = ${attemptId}::uuid
@@ -1332,6 +1338,8 @@ export function buildLockAttemptForWriteSql(attemptId: string): SQL {
       a.org_id,
       a.workspace_id,
       a.attempt_number,
+      lk.cancel_requested,
+      lk.ingress_paused,
       s.id            AS seal_id,
       rpv.mode        AS retention_mode,
       rpv.retained_content_classes
@@ -2127,6 +2135,8 @@ export function createPostgresRunStore(
           workspace_id: string;
           spec_version: number | string;
           status: string;
+          cancel_requested?: boolean;
+          ingress_paused?: boolean;
           attempt_count: number | string;
           max_attempts: number | string | null;
         }>;
@@ -2141,6 +2151,12 @@ export function createPostgresRunStore(
             `run ${input.runId} is a preserved legacy row and cannot take attempts`,
           );
         }
+        if (run.cancel_requested)
+          throw new RunStoreStateError(`run ${input.runId} was cancelled`);
+        if (run.ingress_paused)
+          throw new RunStoreStateError(
+            `run ${input.runId} evidence ingress is paused`,
+          );
         const maxAttempts = Number(run.max_attempts);
         const attemptNumber = Number(run.attempt_count) + 1;
         if (attemptNumber > maxAttempts) {
@@ -2213,6 +2229,11 @@ export function createPostgresRunStore(
             input.attemptId,
             await lockAttemptInTx(tx, input.attemptId),
           );
+          if (attempt.cancel_requested)
+            throw new AttemptNotWritableError(input.attemptId, "cancelled");
+          if (attempt.ingress_paused)
+            throw new AttemptNotWritableError(input.attemptId, "paused");
+          await options.authorizeAppend?.(tx, attempt);
           conflictScope = {
             orgId: attempt.org_id,
             workspaceId: attempt.workspace_id,
@@ -2290,6 +2311,15 @@ export function createPostgresRunStore(
           return readSealedHandleInTx(tx, locked as LockedAttemptRow);
         }
         const attempt = assertAttemptWritable(input.attemptId, locked);
+        // Cancellation fences new evidence the same way `appendAttemptBatch`
+        // does. A seal that carries a terminal event is an append first — an
+        // engine finishing after an operator cancels must not smuggle its
+        // outcome frame in under `sealAttempt` when the normal append path
+        // would have refused it. A seal with no terminal event only closes
+        // out rows already on the ledger, so cancellation never blocks that
+        // reconciliation.
+        if (terminalEvent && attempt.cancel_requested)
+          throw new AttemptNotWritableError(input.attemptId, "cancelled");
 
         const { state, rows } = await readAttemptStateInTx(tx, input.attemptId);
         const appended = terminalEvent

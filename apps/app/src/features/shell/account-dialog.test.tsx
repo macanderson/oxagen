@@ -29,6 +29,7 @@ import { IntlProvider } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
 import { recoveryCodeVault } from "./recovery-code-vault";
 import { shellData } from "./shell.builders";
+import { accountOperations } from "./account-operations";
 import type { ShellData } from "./shell-data";
 import {
   type AccountTab,
@@ -77,7 +78,7 @@ const { AvatarDialog } = await import("./avatar-dialog");
 
 /** The dialog renders from shell state, so a test needs the way a person opens it. */
 function OpenIt() {
-  const { openAccount, avatarOpen, accountOpen } = useShellState();
+  const { openAccount, avatarOpen, accountOpen, setTheme } = useShellState();
   return (
     <>
       {(["profile", "preferences", "security", "privacy"] as const).map(
@@ -93,6 +94,14 @@ function OpenIt() {
           </button>
         ),
       )}
+      <button
+        type="button"
+        onClick={() => {
+          setTheme("light");
+        }}
+      >
+        choose light from menu
+      </button>
       <output data-testid="which">
         {avatarOpen ? "avatar" : accountOpen ? "account" : "none"}
       </output>
@@ -157,6 +166,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  accountOperations.resetForTests();
   // The vault outlives a render, as it outlives a page's transitions.
   recoveryCodeVault.resetForTests();
   refresh.mockReset();
@@ -304,6 +314,35 @@ describe("the tabs", () => {
 });
 
 describe("Profile", () => {
+  it("keeps one profile save across a tab switch", async () => {
+    let finish: ((result: unknown) => void) | undefined;
+    updateProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openDialog("profile");
+    await user.click(screen.getByTestId("account-save"));
+    await user.click(screen.getByRole("tab", { name: "Preferences" }));
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    await user.click(screen.getByTestId("account-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(1);
+    finish?.({
+      ok: true,
+      value: { displayName: "Marcus Bell", avatarUrl: null },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("account-save")).not.toBeDisabled(),
+    );
+    await user.click(screen.getByTestId("account-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(2);
+    finish?.({
+      ok: true,
+      value: { displayName: "Marcus Bell", avatarUrl: null },
+    });
+  });
+
   it("saves a new display name through update_profile, and sends nothing else", async () => {
     const { user } = await openDialog(
       "profile",
@@ -409,6 +448,35 @@ describe("Profile", () => {
     );
   });
 
+  it.each(["cancel", "save"] as const)(
+    "preserves the name draft through avatar %s",
+    async (action) => {
+      const { user } = await openDialog();
+      await user.clear(screen.getByTestId("account-display-name"));
+      await user.type(
+        screen.getByTestId("account-display-name"),
+        "New draft name",
+      );
+      await user.click(screen.getByTestId("edit-avatar"));
+      await screen.findByTestId("avatar-dialog");
+      if (action === "cancel") {
+        await user.click(screen.getByRole("button", { name: "Cancel" }));
+      } else {
+        await user.click(screen.getByTestId("avatar-save"));
+        await waitFor(() => {
+          expect(updateProfile).toHaveBeenCalledOnce();
+        });
+        expect(updateProfile.mock.calls[0]?.[1]).not.toHaveProperty(
+          "displayName",
+        );
+      }
+      await screen.findByTestId("account-dialog");
+      expect(screen.getByTestId("account-display-name")).toHaveValue(
+        "New draft name",
+      );
+    },
+  );
+
   it("previews a designed avatar as the avatar it is, not as initials", async () => {
     await openDialog(
       "profile",
@@ -475,6 +543,37 @@ describe("Profile", () => {
 });
 
 describe("Preferences", () => {
+  it("keeps one preferences save across a tab switch", async () => {
+    let finish: ((result: unknown) => void) | undefined;
+    savePreferences.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openDialog("preferences");
+    await screen.findByTestId("account-timezone");
+    await user.click(screen.getByTestId("account-preferences-save"));
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    await user.click(screen.getByRole("tab", { name: "Preferences" }));
+    await screen.findByTestId("account-timezone");
+    await user.click(screen.getByTestId("account-preferences-save"));
+    expect(savePreferences).toHaveBeenCalledTimes(1);
+    finish?.({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "system" },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("account-preferences-save")).not.toBeDisabled(),
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    expect(savePreferences).toHaveBeenCalledTimes(2);
+    finish?.({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "system" },
+    });
+  });
+
   it("reads the stored preferences on open and writes the three fields on save", async () => {
     const { user } = await openDialog("preferences");
     expect(readPreferences).toHaveBeenCalledWith("acme");
@@ -559,6 +658,8 @@ describe("Preferences", () => {
     });
 
     expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.cookie).toContain("theme=system");
     expect(screen.queryByTestId("account-preferences-saved")).toBeNull();
   });
 
@@ -634,6 +735,61 @@ describe("Preferences", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
     await user.selectOptions(theme, "dark");
     expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+
+  it("discards a theme preview on a tab change without persisting it", async () => {
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "light" },
+    });
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "dark",
+    );
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.cookie).toContain("theme=light");
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.cookie).toContain("theme=light");
+  });
+
+  it("restores the saved theme when the preference write is refused", async () => {
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "light" },
+    });
+    savePreferences.mockResolvedValue({ ok: false, reason: "denied" });
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "dark",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("light");
+    });
+    expect(document.cookie).toContain("theme=light");
+    expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+  });
+
+  it("keeps a successfully saved theme after the preview panel closes", async () => {
+    savePreferences.mockResolvedValue({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "dark" },
+    });
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "dark",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    await waitFor(() => {
+      expect(document.cookie).toContain("theme=dark");
+    });
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.cookie).toContain("theme=dark");
   });
 
   it("previews a date, a number and money under the chosen locale and zone", async () => {
@@ -714,6 +870,26 @@ describe("Security", () => {
       ),
     ).toBeNull();
   });
+
+  it.each(["refused", "thrown"] as const)(
+    "keeps devices and retries a %s revoke",
+    async (failure) => {
+      if (failure === "refused") liveRevokeSession.mockResolvedValueOnce(false);
+      else liveRevokeSession.mockRejectedValueOnce(new Error("offline"));
+      const { user } = await openDialog("security");
+      const sessions = await screen.findByTestId("account-sessions");
+      await user.click(within(sessions).getByTestId("account-session-revoke"));
+      expect(
+        await screen.findByTestId("account-session-revoke-failed"),
+      ).toHaveTextContent("Try again");
+      expect(sessions).toHaveTextContent("iPhone");
+      expect(screen.queryByTestId("account-sessions-failed")).toBeNull();
+      liveRevokeSession.mockResolvedValueOnce(true);
+      await user.click(within(sessions).getByTestId("account-session-revoke"));
+      await waitFor(() => expect(sessions).not.toHaveTextContent("iPhone"));
+      expect(liveRevokeSession).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it("reissues recovery codes after the password, and shows them once", async () => {
     const { user } = await openDialog("security");
@@ -848,7 +1024,7 @@ describe("Security", () => {
   // keyed on the tab name and unmounted when the dialog closes, so if it held
   // the only copy, a switch or a close mid-flight voided one set and dropped
   // the next. That is a locked-out account on the next lost authenticator.
-  it("keeps codes that arrive after the tab is left, and shows them on return", async () => {
+  it("holds the Security tab and dismissal until issued codes are acknowledged", async () => {
     let issue: ((result: unknown) => void) | undefined;
     liveRegenerateBackupCodes.mockImplementation(
       () =>
@@ -861,7 +1037,10 @@ describe("Security", () => {
     await user.type(screen.getByTestId("account-codes-password"), "hunter2");
     await user.click(screen.getByTestId("account-codes-confirm"));
 
-    // Away while it is in flight, which unmounts the tab that asked.
+    expect(screen.getByTestId("account-tab-profile")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(screen.getByTestId("account-dialog")).toBeTruthy();
     await user.click(screen.getByTestId("account-tab-profile"));
     expect(screen.queryByTestId("account-codes")).toBeNull();
     issue?.({ ok: true, codes: ["zzzz-1111", "zzzz-2222"] });
@@ -871,9 +1050,13 @@ describe("Security", () => {
     expect(shown).toHaveTextContent("zzzz-1111");
     expect(shown).toHaveTextContent("zzzz-2222");
     expect(screen.getByTestId("account-codes-held")).toBeTruthy();
+    expect(screen.getByTestId("account-tab-profile")).toBeDisabled();
+    await user.click(screen.getByTestId("account-codes-saved"));
+    expect(screen.getByTestId("account-tab-profile")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
   });
 
-  it("holds them across a closed dialog too", async () => {
+  it("keeps the dialog open while issued codes await acknowledgement", async () => {
     const { user } = await openDialog("security");
     await user.click(screen.getByTestId("account-codes-open"));
     await user.type(screen.getByTestId("account-codes-password"), "hunter2");
@@ -881,7 +1064,7 @@ describe("Security", () => {
     await screen.findByTestId("account-codes");
 
     await user.keyboard("{Escape}");
-    await user.click(screen.getByRole("button", { name: "open security" }));
+    expect(screen.getByTestId("account-dialog")).toBeTruthy();
     expect(await screen.findByTestId("account-codes")).toHaveTextContent(
       "aaaa-bbbb",
     );
@@ -1158,6 +1341,21 @@ describe("Security", () => {
 });
 
 describe("Privacy", () => {
+  it("keeps the queued export when Privacy unmounts and refuses another request", async () => {
+    const { user } = await openDialog("privacy");
+    await user.click(screen.getByTestId("account-export-user"));
+    await screen.findByTestId("account-export-queued");
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    await user.click(screen.getByRole("tab", { name: "Privacy" }));
+    await screen.findByTestId("account-export-queued");
+    await user.click(screen.getByTestId("account-export-org"));
+    expect(requestExport).toHaveBeenCalledTimes(1);
+    expect(readExportStatus).toHaveBeenCalledWith(
+      "acme",
+      "7a000000-0000-4000-8000-0000000000e1",
+    );
+  });
+
   it("queues an export of the person's own data and names the export", async () => {
     const { user } = await openDialog("privacy");
     await user.click(screen.getByTestId("account-export-user"));
@@ -1323,3 +1521,113 @@ it.each(["profile", "preferences", "security", "privacy"] as const)(
   },
   60_000,
 );
+
+it.each(["denied", "throw"])(
+  "keeps a newer preview when an earlier save fails: %s",
+  async (failure) => {
+    let finish: ((result: unknown) => void) | undefined;
+    let reject: ((reason: Error) => void) | undefined;
+    savePreferences.mockImplementation(
+      () =>
+        new Promise((resolve, refuse) => {
+          finish = resolve;
+          reject = refuse;
+        }),
+    );
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "light",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    await user.selectOptions(screen.getByTestId("account-theme"), "dark");
+    if (failure === "throw") reject?.(new Error("offline"));
+    else finish?.({ ok: false, reason: "denied" });
+    await screen.findByTestId(
+      `account-preferences-${failure === "throw" ? "failed" : "denied"}`,
+    );
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+  },
+);
+
+it.each([true, false])(
+  "retains the submitted draft and settlement across a tab remount, success=%s",
+  async (success) => {
+    let finish: ((result: unknown) => void) | undefined;
+    savePreferences.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "dark",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    await user.click(screen.getByRole("tab", { name: "Preferences" }));
+    expect(await screen.findByTestId("account-theme")).toHaveValue("dark");
+    expect(screen.getByTestId("account-preferences-save")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    finish?.(
+      success
+        ? { ok: true, value: { locale: "en", timezone: "UTC", theme: "dark" } }
+        : { ok: false, reason: "denied" },
+    );
+    await screen.findByTestId(
+      `account-preferences-${success ? "saved" : "denied"}`,
+    );
+    expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+    expect(readPreferences).toHaveBeenCalledTimes(1);
+  },
+);
+
+it("keeps a menu theme chosen after the pending preferences panel closes", async () => {
+  let finish: ((result: unknown) => void) | undefined;
+  savePreferences.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { user } = await openDialog("preferences");
+  await user.selectOptions(await screen.findByTestId("account-theme"), "dark");
+  await user.click(screen.getByTestId("account-preferences-save"));
+  await user.click(screen.getByRole("tab", { name: "Profile" }));
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  await user.click(
+    screen.getByRole("button", { name: "choose light from menu" }),
+  );
+  finish?.({
+    ok: true,
+    value: { locale: "en", timezone: "UTC", theme: "dark" },
+  });
+  await waitFor(() => {
+    expect(
+      accountOperations.isPending(shellData().viewer.id, "preferences"),
+    ).toBe(false);
+  });
+  expect(document.cookie).toContain("theme=light");
+  expect(document.documentElement.dataset.theme).toBe("light");
+});
+
+it("revalidates a clean preference draft when reopening after an external change", async () => {
+  const { user } = await openDialog("preferences");
+  await screen.findByTestId("account-theme");
+  await user.click(screen.getByRole("tab", { name: "Profile" }));
+  readPreferences.mockResolvedValueOnce({
+    ok: true,
+    value: { locale: "en", timezone: "Asia/Tokyo", theme: "dark" },
+  });
+  await user.click(screen.getByRole("tab", { name: "Preferences" }));
+  expect(await screen.findByTestId("account-timezone")).toHaveValue(
+    "Asia/Tokyo",
+  );
+  expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+  expect(readPreferences).toHaveBeenCalledTimes(2);
+});
