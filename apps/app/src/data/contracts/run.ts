@@ -416,8 +416,6 @@ const RunOutputState = z.enum([
   "blocked",
   "withheld",
 ]);
-export type RunOutputState = z.infer<typeof RunOutputState>;
-
 export const RunOutputNode = z.object({
   /** The frame that produced it, for the `fr N` chip; null on a gate, which the record gives no frame. */
   seq: z.string().regex(/^\d+$/).nullable(),

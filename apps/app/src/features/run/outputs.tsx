@@ -134,13 +134,13 @@ type Place = { org: string; ws: string; runId: string };
 type View = { reads: boolean; open: ReadonlySet<number> };
 
 /** One run of adjacent nodes of the same kind, as the fold rule groups them. */
-export type OutputGroup = {
+type OutputGroup = {
   kind: RunOutputKind;
   items: RunOutputNode[];
   index: number;
 };
 
-export function groupNodes(nodes: readonly RunOutputNode[]): OutputGroup[] {
+function groupNodes(nodes: readonly RunOutputNode[]): OutputGroup[] {
   const groups: OutputGroup[] = [];
   for (const node of nodes) {
     const last = groups.at(-1);
@@ -151,7 +151,7 @@ export function groupNodes(nodes: readonly RunOutputNode[]): OutputGroup[] {
 }
 
 /** `?spine=1,4`: the groups a person opened. A word that is not an index opens none. */
-export function parseOpen(raw: string | null): Set<number> {
+function parseOpen(raw: string | null): Set<number> {
   const open = new Set<number>();
   if (raw === null) return open;
   for (const part of raw.split(",")) {
