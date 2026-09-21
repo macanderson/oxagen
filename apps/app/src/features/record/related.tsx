@@ -17,7 +17,7 @@ import { Section } from "./section";
 import { recordLink, type RecordAt } from "./view";
 
 /** The mockup's count: three is a sample, and a fourth is a list page. */
-export const RELATED_SHOWN = 3;
+const RELATED_SHOWN = 3;
 
 export function Related({
   at,

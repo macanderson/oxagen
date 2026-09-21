@@ -46,7 +46,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Record, RecordLoading } = await import("./record");
-const { Related, RELATED_SHOWN } = await import("./related");
+const { Related } = await import("./related");
 
 const viewer = (orgRole: OrgRole, wsRole: OrgRole) =>
   unsafeMint(WsCtx, {
@@ -393,7 +393,10 @@ describe("Record › other records of this kind", () => {
       </IntlProvider>,
     );
     const panel = screen.getByTestId("record-related");
-    expect(within(panel).getAllByRole("listitem")).toHaveLength(RELATED_SHOWN);
+    // Pins `RELATED_SHOWN` in related.tsx: three is a sample, a fourth is a
+    // list page. Importing the constant would make this tautological — the
+    // component slices by the same value, so the assertion could never fail.
+    expect(within(panel).getAllByRole("listitem")).toHaveLength(3);
     expect(panel.textContent).not.toContain("CHANGELOG.md");
   });
 

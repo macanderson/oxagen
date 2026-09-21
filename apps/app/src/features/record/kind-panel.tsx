@@ -41,7 +41,7 @@ import { formatCount } from "@/ui/money-format";
  * (success, warning, destructive) and none is the brand gold, so a reader
  * never mistakes what a record IS for how it is DOING.
  */
-export const KIND_FACE: Record<RecordKind, { icon: LucideIcon; hue: string }> =
+const KIND_FACE: Record<RecordKind, { icon: LucideIcon; hue: string }> =
   {
     rule: { icon: Scale, hue: "text-kind-rule" },
     constraint: { icon: ShieldBan, hue: "text-kind-constraint" },
