@@ -149,7 +149,7 @@
 .h-findings .v small{font-size:11px;color:var(--faint)}
 .h-findings .dg-track{grid-column:2/-1}
 
-/* learn: a context record reviewed as a pull request, and the witness */
+/* learn: a context record reviewed as a pull request */
 .h-file{border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;background:var(--panel)}
 .h-file>.dg-m{display:block;padding:8px 12px;border-bottom:1px solid var(--line);color:var(--ink-3)}
 .h-diff{padding:8px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.75}
@@ -159,9 +159,6 @@
 .h-flow{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:10px 22px}
 .h-flow li{position:relative}
 .h-flow li+li::before{content:"";position:absolute;left:-17px;top:50%;width:12px;height:1px;background:var(--ink-3)}
-.h-wit{display:grid;grid-template-columns:auto auto 1fr;gap:8px 12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);font-size:13.5px;color:var(--ink-3)}
-.h-wit .dg-k{grid-column:1/-1}
-.h-wit p{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;align-items:center;color:var(--ink-2)}
 
 /* the four promises */
 .h-pillars .card{display:flex;flex-direction:column}
@@ -493,12 +490,11 @@
         <ul>
           <li>Every run draws on one knowledge graph built from your own sources, with provenance on every fact.</li>
           <li>When an agent learns something, it proposes a context record. A person reviews it as a pull request on your repo, and only merged steering reaches the next run.</li>
-          <li>A run counts as proven only when a witness Oxagen wrote fails on the target branch and passes on the pull request, in an environment the agent cannot reach.</li>
-          <li>The agent learns only pass or fail. Proven runs are stored in the shape a training set needs.</li>
+          <li>Nothing steers a run until a person merges it. The agent's own claim that it learned something is not enough.</li>
         </ul>
       </div>
 
-      <figure class="dg reveal" role="img" aria-label="Illustration: a context pull request adds one line of steering about refunds, proposed by an agent and waiting on review. Below, the witness failed on the merge base and passed on the pull request, so the run is proven.">
+      <figure class="dg reveal" role="img" aria-label="Illustration: a context pull request adds one line of steering about refunds, proposed by an agent and waiting on review, then merged so the next run reads it.">
         <div class="dg-bar"><b>Context PR #218</b> into acme/main<span class="end">proposed by agent ci-fixer</span></div>
         <div class="dg-body">
           <div class="h-file dg-in" style="--i:0">
@@ -515,12 +511,6 @@
             <li class="dg-in" style="--i:3"><span class="dg-tag">merged</span></li>
             <li class="dg-in" style="--i:4"><span class="dg-tag">next run reads it</span></li>
           </ol>
-          <div class="h-wit dg-in" style="--i:5">
-            <span class="dg-k">witness, run where the agent cannot reach</span>
-            <span class="dg-m">merge base</span><span class="dg-tag is-no">fail</span><span></span>
-            <span class="dg-m">pull request</span><span class="dg-tag is-ok">pass</span><span></span>
-            <p><span class="dg-tag is-ok">flipped</span> The run is proven. The agent was told pass, and nothing else.</p>
-          </div>
         </div>
       </figure>
     </div>
