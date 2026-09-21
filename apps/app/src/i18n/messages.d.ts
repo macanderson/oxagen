@@ -651,6 +651,7 @@ type Messages = {
       ip: string;
       request: string;
       userAgent: string;
+      detail: string;
       notRecorded: string;
     };
     outcomes: {
@@ -1742,6 +1743,7 @@ type Messages = {
     };
   };
   fleet: {
+    loading: string;
     actions: {
       register: string;
     };
@@ -2198,12 +2200,6 @@ type Messages = {
           pending: string;
           again: string;
         };
-        sdk: {
-          title: string;
-          body: string;
-          install: string;
-          credential: string;
-        };
         token: {
           label: string;
           once: string;
@@ -2213,6 +2209,10 @@ type Messages = {
         back: string;
         continue: string;
         advancing: string;
+        unavailable: {
+          title: string;
+          body: string;
+        };
       };
       run: {
         title: string;
@@ -2332,6 +2332,26 @@ type Messages = {
         title: string;
         confirm: string;
         pending: string;
+      };
+      governance: {
+        heading: string;
+        about: string;
+        unchanged: string;
+        unchangedHint: string;
+        solo: string;
+        team: string;
+        regulated: string;
+        override: string;
+        overrideHint: string;
+        done: {
+          applied: string;
+          overridden: string;
+          proposed: string;
+          reused: string;
+          openPr: string;
+          refused: string;
+          close: string;
+        };
       };
       archiveWorkspace: {
         open: string;
@@ -3161,6 +3181,7 @@ type Messages = {
       agent: string;
       stepCount: string;
       frameCount: string;
+      repeats: string;
       seqSpan: string;
       ms: string;
       live: string;
@@ -4056,6 +4077,11 @@ type Messages = {
         until: string;
         anyRegion: string;
         platformPriced: string;
+        scheduled: string;
+        pagination: string;
+        previous: string;
+        next: string;
+        page: string;
       };
       dialog: {
         open: string;
@@ -4103,6 +4129,8 @@ type Messages = {
         confirmUnpriced: string;
         confirmUnpricedSubmit: string;
         confirmUnpricedCancel: string;
+        cancelScheduled: string;
+        cancelScheduledSubmit: string;
       };
       failure: {
         orgRoleRequired: string;

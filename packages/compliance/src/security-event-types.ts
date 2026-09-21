@@ -210,6 +210,17 @@ export const SECURITY_EVENT_TYPES = [
   // Steering (ADR-061): a Context PR merged and published a record — the
   // bundle a workspace's agents read changed. Emitted by merge_context_pr.
   "steering.published",
+  // The mode itself changed: `.oxagen/rules/governance.toml` was committed to
+  // the production branch, so a different rule now decides who may merge a
+  // Context PR. Emitted by set_governance_mode. A change that went to review
+  // instead emits nothing — the pull request is the record, and the mode in
+  // force has not moved until a person merges it.
+  "steering.governance_changed",
+  // The same commit, made although the mode in force asked for review. It
+  // rides ALONGSIDE steering.governance_changed rather than replacing it, so
+  // that "every governance change" and "every skipped review" are each one
+  // event-type filter and neither answer is missing rows.
+  "steering.governance_overridden",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -316,3 +327,43 @@ export interface ApprovalToolChangeEvidence {
   measures: unknown;
   classification: unknown;
 }
+
+/**
+ * Evidence recorded when `set_governance_mode` commits
+ * `.oxagen/rules/governance.toml` to a repository's production branch.
+ *
+ * `previousMode` is null when the file was absent or could not be parsed —
+ * not `"team"`. The default a missing file falls back to is a read-time rule
+ * in `parseGovernanceMode`; writing it here would claim the repository said
+ * something it never said, which is the one thing an audit row must not do.
+ *
+ * `overrodeReview` is the fact the override exists to leave behind: the mode
+ * in force asked for a pull request and this caller committed anyway. The
+ * same call emits `steering.governance_overridden` when it is true.
+ */
+export interface GovernanceChangeDetail {
+  /** `owner/name` of the repository whose governance file was written. */
+  fullName: string;
+  /** The branch the commit landed on. */
+  productionBranch: string;
+  /** The mode the file declared before, or null when absent or unparseable. */
+  previousMode: "solo" | "team" | "regulated" | null;
+  /** The mode in force from this commit onwards. */
+  mode: "solo" | "team" | "regulated";
+  /** The commit that carries the change. */
+  commitSha: string;
+  /** Whether the review route the mode in force asked for was skipped. */
+  overrodeReview: boolean;
+}
+
+/**
+ * Everything `security_events.detail` may carry.
+ *
+ * The column is jsonb with no CHECK, so this union is the only thing keeping
+ * it a small set of known shapes rather than a scratch pad. Widen it by
+ * adding a named interface, never by reaching for `Record<string, unknown>`:
+ * an audit reader has to be able to know what a row means.
+ */
+export type SecurityEventDetail =
+  | ApprovalRuleInvalidationDetail
+  | GovernanceChangeDetail;

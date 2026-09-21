@@ -86,6 +86,7 @@ export async function readAuditEvents(
       ip: se.ip,
       userAgent: se.userAgent,
       requestId: se.requestId,
+      detail: se.detail,
     })
     .from(se)
     .leftJoin(schema.users, eq(schema.users.id, se.actorUserId))
@@ -116,6 +117,7 @@ export async function readAuditEvents(
       ip: r.ip,
       userAgent: r.userAgent,
       requestId: r.requestId,
+      detail: r.detail == null ? null : { ...r.detail },
     },
     cursor: { at: r.at, id: r.id },
   }));

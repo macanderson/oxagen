@@ -596,6 +596,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_workspace_settings](workspace.settings.read.md) | [workspace.settings.read.ts](../../packages/oxagen/src/contracts/workspace.settings.read.ts) | api, mcp, agent |
 | [list_workspaces](workspace.list.md) | [workspace.list.ts](../../packages/oxagen/src/contracts/workspace.list.ts) | api, mcp, agent |
 | [send_workspace_invite](workspace.invite.send.md) | [workspace.invite.send.ts](../../packages/oxagen/src/contracts/workspace.invite.send.ts) | api, mcp |
+| [set_governance_mode](context.governance_mode.set.md) | [context.governance_mode.set.ts](../../packages/oxagen/src/contracts/context.governance_mode.set.ts) | api, mcp, cli |
 | [update_budget_policy](workspace.budget_policy.write.md) | [workspace.budget_policy.write.ts](../../packages/oxagen/src/contracts/workspace.budget_policy.write.ts) | api, mcp, agent |
 | [update_model_settings](workspace.model_settings.write.md) | [workspace.model_settings.write.ts](../../packages/oxagen/src/contracts/workspace.model_settings.write.ts) | api, mcp, agent |
 | [update_prompt_settings](prompt.settings.write.md) | [prompt.settings.write.ts](../../packages/oxagen/src/contracts/prompt.settings.write.ts) | api, mcp, agent |

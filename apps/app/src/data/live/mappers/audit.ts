@@ -22,6 +22,7 @@ export function toAuditPage(
       ip: event.ip,
       userAgent: event.userAgent,
       request: event.requestId,
+      detail: event.detail ?? null,
     })),
     hasMore: out.hasMore,
     offset: out.offset,

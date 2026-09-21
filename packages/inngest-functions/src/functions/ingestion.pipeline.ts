@@ -271,6 +271,7 @@ export const [ingestionPipeline] = createFunction(
         principalNodeId: string;
         confidence: number;
         similarityDeferred?: boolean;
+        identityReconciliation?: { reason: string; candidateNodeIds: string[] };
       }> => {
         if (dedupPassA.nodeId) {
           return {
@@ -303,9 +304,26 @@ export const [ingestionPipeline] = createFunction(
           principalNodeId: resolved.principalNodeId,
           confidence: resolved.confidence,
           ...(resolved.similarityDeferred ? { similarityDeferred: true } : {}),
+          ...(resolved.identityReconciliation
+            ? { identityReconciliation: resolved.identityReconciliation }
+            : {}),
         };
       },
     );
+
+    if (dedup.identityReconciliation) {
+      logger.warn(
+        {
+          orgId,
+          workspaceId,
+          connectionId,
+          naturalKey: mutation.naturalKey,
+          principalNodeId: dedup.principalNodeId,
+          ...dedup.identityReconciliation,
+        },
+        "ingestion-pipeline: legacy identity needs reconciliation; canonical and legacy nodes remain separate",
+      );
+    }
 
     // Pass B was skipped because the embedding backend could not answer. The
     // entity is in the graph rather than discarded, but it was resolved without

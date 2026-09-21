@@ -4,6 +4,8 @@
  * `at` and the organization's own negotiated rows, which win over the list
  * row for the same model and class. Prices are integer micro-USD per one
  * million units; a cost record names the entry ids it was priced with.
+ * `includeScheduled` opts management views into future negotiated rows for
+ * this organization. Other callers retain the effective-at-instant read.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -26,6 +28,8 @@ export const priceTokenClassSchema = z.enum([
 export const priceEntrySchema = z
   .object({
     id: z.string().uuid(),
+    /** Opaque app token for cancelling this future negotiated row. */
+    cancellationToken: z.string().optional(),
     /** Null for a list price every organization reads. */
     orgId: z.string().uuid().nullable(),
     provider: z.string(),
@@ -49,7 +53,7 @@ export const costPriceEntryList = registerCapability({
   description:
     "List the price book this organization is priced against: every provider list price effective at an instant and the organization's negotiated rows, in integer micros per million units with the window each is effective over.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "cli"],
   layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
@@ -64,6 +68,7 @@ export const costPriceEntryList = registerCapability({
     .object({
       /** RFC 3339; the read instant when omitted. */
       at: z.string().datetime().optional(),
+      includeScheduled: z.boolean().optional(),
     })
     .strict(),
   output: z

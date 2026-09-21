@@ -1,9 +1,12 @@
 import { schema } from "@oxagen/database";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { describe, expect, it } from "vitest";
 import {
+  beforeCursor,
   addCompactedRollup,
   createRunListHandler,
   decodeRunCursor,
@@ -563,6 +566,32 @@ describe("list_runs", () => {
       id: "tse_4q8r1t6v3x5z0b2d7h2k9m",
     };
     expect(decodeRunCursor(encodeRunCursor(cursor))).toEqual(cursor);
+  });
+
+  it("binds the cursor instant as a string the driver can send (negative)", () => {
+    // Production paged with a JS Date in a raw `sql` fragment. postgres.js has
+    // no serializer for that param and threw "The string argument must be of
+    // type string or an instance of Buffer": page one loaded, every later page
+    // was a 500. The mocked queries above never reach the driver, so this
+    // compiles the predicate and checks what the driver would receive.
+    const cursor = {
+      at: "2026-09-20T07:33:36.659Z",
+      id: "tse_nnktff51cryamp5betw49m",
+    };
+    const predicate = beforeCursor(
+      sql`${schema.tachoSessions.startedAt}`,
+      schema.tachoSessions.publicId,
+      cursor,
+    );
+    expect(predicate).toBeDefined();
+    const query = new PgDialect().sqlToQuery(
+      predicate as NonNullable<typeof predicate>,
+    );
+    for (const param of query.params) {
+      expect(typeof param).toBe("string");
+    }
+    expect(query.params).toEqual([cursor.at, cursor.at, cursor.id]);
+    expect(query.sql).toContain("::timestamptz");
   });
 });
 

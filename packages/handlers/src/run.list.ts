@@ -147,14 +147,22 @@ const ledgerStartedAt = sql`coalesce(${runs.startedAt}, ${runs.createdAt})`;
 const byteOrder = (publicId: typeof runs.publicId | typeof sessions.publicId) =>
   sql`${publicId} collate "C"`;
 
-/** Newest first from the cursor, ties broken on public id. */
-function beforeCursor(
+/**
+ * Newest first from the cursor, ties broken on public id.
+ *
+ * The instant travels as an ISO string cast in SQL. A JS `Date` compared
+ * against a raw `sql` fragment has no column to borrow a driver mapping from,
+ * so drizzle hands the Date object itself to postgres.js, which rejects it
+ * ("The string argument must be of type string or an instance of Buffer") and
+ * every page after the first fails.
+ */
+export function beforeCursor(
   at: SQL,
   publicId: typeof runs.publicId | typeof sessions.publicId,
   cursor: RunCursor | null,
 ): SQL | undefined {
   if (!cursor) return undefined;
-  const instant = new Date(cursor.at);
+  const instant = sql`${new Date(cursor.at).toISOString()}::timestamptz`;
   return or(
     lt(ms(at), instant),
     and(eq(ms(at), instant), sql`${byteOrder(publicId)} < ${cursor.id}`),

@@ -2029,6 +2029,7 @@
       "reads": [],
       "surfaces": [
         "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2954,6 +2955,17 @@
       "writes": []
     },
     {
+      "domain": "workspace",
+      "name": "set_governance_mode",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "kill_switch",
       "name": "set_kill_switch",
       "reads": [],
@@ -3549,7 +3561,7 @@
       "writes": []
     }
   ],
-  "contentHash": "b43ea584ccbb7fa7bc21290b6871ce83e36d3190ae781e8c2f1b2220a40f2974",
+  "contentHash": "653d28606071935168b5b5c3c720803e53f7f929963fafab9e7940ead8192eeb",
   "domains": [
     {
       "name": "agent",
