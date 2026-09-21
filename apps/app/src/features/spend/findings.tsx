@@ -218,7 +218,7 @@ function FindingCard({
           <Instant iso={finding.window.to} />
         </p>
       </div>
-      <div className="flex flex-none flex-col items-start gap-2 rounded-lg bg-data-surface p-3 sm:items-end">
+      <div className="flex flex-none flex-col items-start gap-2 rounded-lg bg-hl p-3 sm:items-end">
         <span className="text-xs text-muted-foreground">
           {t("findings.saving")}
         </span>
@@ -296,7 +296,7 @@ export function FindingsSection({
           </h2>
         </div>
         <div className="flex flex-col gap-4 p-4">
-          <dl className="grid gap-6 rounded-lg bg-data-surface p-4 lg:grid-cols-[minmax(240px,1.3fr)_repeat(3,minmax(0,1fr))]">
+          <dl className="grid gap-6 rounded-lg bg-hl p-4 lg:grid-cols-[minmax(240px,1.3fr)_repeat(3,minmax(0,1fr))]">
             <div className="flex flex-col gap-2">
               <dt className="text-sm text-muted-foreground">
                 {t("findings.saving")}

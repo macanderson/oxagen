@@ -21,7 +21,10 @@ export default async function AgentSourcePage({
       id="main"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader title={t("agentSource")} />
+      <PageHeader
+        eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
+        title={t("agentSource")}
+      />
       <AgentSource ctx={ctx} source={dataSource()} agent={agent} />
     </main>
   );

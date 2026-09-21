@@ -16,6 +16,8 @@
     "register": "Register an agent",
     "cliAuthorize": "Authorize the Oxagen CLI",
     "cliComplete": "The Oxagen CLI is signed in",
+    "workspaceEyebrow": "Workspace · {workspace}",
+    "organizationEyebrow": "Organization · {organization}",
     "fleet": "Fleet",
     "run": "Run",
     "agents": "Agents",

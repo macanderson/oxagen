@@ -53,7 +53,7 @@ export function SidebarNav({
         <div key={section.key} className="mb-3">
           <p
             id={`${labelId}-${section.key}`}
-            className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-nav-label-fg"
+            className="px-2 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-dim"
           >
             {t(`sidebar.sections.${section.key}`)}
           </p>
@@ -61,6 +61,15 @@ export function SidebarNav({
             {section.items.map((item) => {
               const Icon = NAV_ICONS[item.key];
               const current = isNavItemCurrent(item.key, pathname);
+              // `.navitem .ct.hot`: the one count the workspace nav carries is
+              // what waits on a person (ARCHITECTURE.md §1.2); null is "the
+              // read could not say", and draws nothing rather than a zero.
+              const waiting =
+                item.key === "fleet" &&
+                data.fleetWaiting !== null &&
+                data.fleetWaiting > 0
+                  ? data.fleetWaiting
+                  : null;
               return (
                 <li key={item.key}>
                   <SafeLink
@@ -68,9 +77,9 @@ export function SidebarNav({
                     aria-current={current ? "page" : undefined}
                     data-nav={item.key}
                     onClick={onNavigate}
-                    className={`mb-px flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
+                    className={`mb-px flex items-center gap-2.5 rounded-lg px-[9px] py-[7px] text-[13.5px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
                       current
-                        ? "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg shadow-[inset_2px_0_0_var(--primary)]"
+                        ? "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg shadow-[inset_2px_0_0_var(--gold)]"
                         : "text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg"
                     }`}
                   >
@@ -79,6 +88,14 @@ export function SidebarNav({
                       className="size-4 flex-none opacity-85"
                     />
                     <span className="flex-1">{t(`nav.${item.key}`)}</span>
+                    {waiting === null ? null : (
+                      <span
+                        data-count={item.key}
+                        className="rounded-[5px] border border-info/40 bg-card px-[5px] font-mono text-[10.5px] text-info"
+                      >
+                        {waiting}
+                      </span>
+                    )}
                   </SafeLink>
                 </li>
               );

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
-import { Fleet } from "@/features/fleet";
+import { Fleet, FleetRegister } from "@/features/fleet";
 import { OnboardingGate } from "@/features/onboarding";
 import { FleetSpendTiles } from "@/features/spend";
 import { requireViewer } from "@/server/viewer";
@@ -28,7 +28,11 @@ export default async function FleetPage({
       id="main"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader title={t("fleet")} />
+      <PageHeader
+        eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
+        title={t("fleet")}
+        actions={<FleetRegister org={org} ws={ws} />}
+      />
       <OnboardingGate ctx={ctx} source={dataSource()} />
       <Fleet
         ctx={ctx}

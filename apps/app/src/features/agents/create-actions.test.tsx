@@ -8,7 +8,7 @@ import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
-import { buttonGold } from "@/ui/control-styles";
+import { buttonPrimary } from "@/ui/control-styles";
 import { AgentsCreate } from "./create-actions";
 
 const t = translator("agents.list.create");
@@ -35,7 +35,7 @@ describe("AgentsCreate", () => {
     window.addEventListener(CREATE_EVENT, seen);
     mount();
     const button = screen.getByRole("button", { name: t("newAgent") });
-    expect(button.className).toBe(buttonGold);
+    expect(button.className).toBe(buttonPrimary);
     fireEvent.click(button);
     expect(seen.mock.results[0]?.value).toEqual({ kind: "agent" });
     window.removeEventListener(CREATE_EVENT, seen);

@@ -19,6 +19,8 @@ type Messages = {
     register: string;
     cliAuthorize: string;
     cliComplete: string;
+    workspaceEyebrow: string;
+    organizationEyebrow: string;
     fleet: string;
     run: string;
     agents: string;
@@ -1741,6 +1743,9 @@ type Messages = {
     };
   };
   fleet: {
+    actions: {
+      register: string;
+    };
     stats: {
       label: string;
       live: {

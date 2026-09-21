@@ -442,7 +442,7 @@ export interface GitHubClient {
 export interface GitHubClientOptions {
   /** Per-attempt timeout, including the response body. Defaults to 30 seconds. */
   timeoutMs?: number;
-  /** Cancels requests and prevents further retries. */
+  /** Cancels requests and retry/polling waits, and prevents further retries. */
   signal?: AbortSignal;
   /** Refuse longer server waits instead of retrying early. Defaults to two minutes. */
   maxRateLimitWaitMs?: number;

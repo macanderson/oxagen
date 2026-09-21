@@ -1,5 +1,8 @@
 {
   "fleet": {
+    "actions": {
+      "register": "Register an agent"
+    },
     "stats": {
       "label": "Fleet summary",
       "live": {

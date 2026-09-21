@@ -22,7 +22,10 @@ export default async function OrganizationPage({
       id="main"
       className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader title={t("people")} />
+      <PageHeader
+        eyebrow={t("organizationEyebrow", { organization: ctx.orgName })}
+        title={t("people")}
+      />
       <People ctx={ctx} source={source} />
       <Workspaces ctx={ctx} source={source} />
     </main>

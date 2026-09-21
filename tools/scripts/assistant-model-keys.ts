@@ -42,13 +42,19 @@
  */
 
 import { URL } from "node:url";
-import { isNull, sql } from "drizzle-orm";
+import { and, isNull, ne, sql } from "drizzle-orm";
 import kleur from "kleur";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { listAssistantModelKeyHandles } from "@oxagen/database/assistant-model-key";
 import { ensureAssistantModelKey } from "@oxagen/ai/key-provisioning";
 import { listAssistantKeys } from "@oxagen/ai/openrouter-provisioning";
 import { formatError } from "./lib/format-error";
+import {
+  classifyBackfillOutcome,
+  hasCeilingDrift,
+  isLiveAtVendorButDisabledHere,
+  parseLimitFlag,
+} from "./lib/assistant-model-keys";
 
 // ── flags ────────────────────────────────────────────────────────────────────
 
@@ -56,10 +62,17 @@ const argv = process.argv.slice(2);
 const MODE = argv[0] === "backfill" ? "backfill" : "reconcile";
 const APPLY = argv.includes("--apply");
 const LIMIT = (() => {
-  const at = argv.indexOf("--limit");
-  if (at === -1) return Number.POSITIVE_INFINITY;
-  const n = Number(argv[at + 1]);
-  return Number.isFinite(n) && n > 0 ? n : Number.POSITIVE_INFINITY;
+  const flag = parseLimitFlag(argv);
+  if (!flag.ok) {
+    console.error(
+      kleur.red(
+        `--limit needs a positive whole number; got ${flag.got === undefined ? "nothing" : `"${flag.got}"`}.`,
+      ),
+      kleur.red("\nLeave the flag off to run without a cap."),
+    );
+    process.exit(1);
+  }
+  return flag.limit;
 })();
 
 function target(): string {
@@ -107,13 +120,25 @@ async function orgsWithoutKey(): Promise<OrgRow[]> {
       )
       .innerJoin(
         schema.orgUsers,
-        sql`${schema.orgUsers.orgId} = ${schema.organizations.id} and ${schema.orgUsers.role} = 'owner'`,
+        // lower(role), because org_users records the role in both casings and
+        // its own CHECK is written `lower(role) IN (...)`. Matching 'owner'
+        // exactly skips an organisation whose owner row reads 'Owner', and
+        // skips it with no output at all.
+        sql`${schema.orgUsers.orgId} = ${schema.organizations.id} and lower(${schema.orgUsers.role}) = 'owner'`,
       )
       .innerJoin(
         schema.users,
         sql`${schema.users.id} = ${schema.orgUsers.userId}`,
       )
-      .where(isNull(schema.assistantModelKeys.orgId)),
+      .where(
+        and(
+          isNull(schema.assistantModelKeys.orgId),
+          // A deleted organisation is a retained row, not an absent one.
+          // Minting for it would put a live, spendable credential behind an
+          // organisation the rest of the product treats as gone.
+          ne(schema.organizations.status, "deleted"),
+        ),
+      ),
   );
   // An organisation with two owner rows would otherwise be minted for twice;
   // the second attempt loses the unique index and deletes its own key, which
@@ -148,12 +173,18 @@ async function backfill(): Promise<number> {
         // person as having done something they did not do.
         actorUserId: null,
       });
-      if (result.provisioned) {
-        counts.provisioned += 1;
-        console.log(kleur.green(`  minted   ${org.slug}`));
-      } else {
-        counts.skipped += 1;
-        console.log(kleur.dim(`  skipped  ${org.slug}  (${result.reason})`));
+      switch (classifyBackfillOutcome(result)) {
+        case "minted":
+          counts.provisioned += 1;
+          console.log(kleur.green(`  minted   ${org.slug}`));
+          break;
+        case "skipped":
+          counts.skipped += 1;
+          console.log(kleur.dim(`  skipped  ${org.slug}  (${result.reason})`));
+          break;
+        default:
+          counts.failed += 1;
+          console.log(kleur.red(`  failed   ${org.slug}  (${result.reason})`));
       }
     } catch (err) {
       // ensureAssistantModelKey answers its own failures, so reaching here
@@ -195,14 +226,12 @@ async function reconcile(): Promise<number> {
 
   const orphans = mine.filter((k) => !byHash.has(k.hash));
   const phantoms = ours.filter((r) => !vendorHashes.has(r.keyHash));
-  const disabledHere = ours.filter(
-    (r) =>
-      r.status !== "active" &&
-      !mine.find((k) => k.hash === r.keyHash)?.disabled,
+  const disabledHere = ours.filter((r) =>
+    isLiveAtVendorButDisabledHere(r, mine),
   );
   const ceilingDrift = mine.flatMap((k) => {
     const row = byHash.get(k.hash);
-    if (!row || k.limit === row.dailyLimitUsd) return [];
+    if (!row || !hasCeilingDrift(k, row.dailyLimitUsd)) return [];
     return [{ key: k, expected: row.dailyLimitUsd }];
   });
 
@@ -210,11 +239,16 @@ async function reconcile(): Promise<number> {
     `${mine.length} Oxagen key(s) at the vendor, ${ours.length} row(s) here.\n`,
   );
 
-  console.log("Spend since creation, by organisation:");
+  // The since-creation total is the wrong period to hand an operator checking
+  // an invoice, and it drifts further from the right one as the key ages. The
+  // vendor already reports the month, so print it beside the total rather than
+  // leaving the report with no comparable aggregate at all.
+  console.log("Spend by organisation (total since the key was minted):");
   for (const k of [...mine].sort((a, b) => b.usage - a.usage)) {
     const row = byHash.get(k.hash);
     console.log(
       `  ${k.name.padEnd(56)} ${`$${k.usage.toFixed(2)}`.padStart(10)}` +
+        `  month $${k.usageMonthly.toFixed(2)}` +
         `  today $${k.usageDaily.toFixed(2)}` +
         `  limit ${k.limit === null ? "none" : `$${k.limit}/${k.limitReset ?? "?"}`}` +
         `  ${row ? row.orgId : kleur.yellow("no row")}`,
@@ -255,7 +289,16 @@ async function reconcile(): Promise<number> {
     kleur.yellow,
   );
 
-  const faults = orphans.length + phantoms.length;
+  // Every category above is a disagreement between the vendor and Postgres,
+  // so every category counts. Leaving two of them out let the report print its
+  // drift and then print "Vendor and Postgres agree." underneath it, and exit
+  // 0, so an automated reconciliation recorded success on a live disabled key
+  // or a wrong ceiling.
+  const faults =
+    orphans.length +
+    phantoms.length +
+    disabledHere.length +
+    ceilingDrift.length;
   if (faults === 0) console.log(kleur.green("\nVendor and Postgres agree."));
   return faults > 0 ? 1 : 0;
 }

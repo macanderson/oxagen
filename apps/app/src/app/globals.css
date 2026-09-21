@@ -20,6 +20,17 @@
   --color-banner: var(--banner-bg);
   --color-app-canvas: var(--ink);
   --color-data-surface: var(--data-surface);
+  /* The mockup's palette names (engine.css :root), so a recipe can say what the
+     design says: gold for identity, dim for a label, hl for a wash. */
+  --color-gold: var(--gold);
+  --color-on-gold: var(--on-gold);
+  --color-accent-text: var(--accent-text);
+  --color-dim: var(--dim);
+  --color-hl: var(--hl);
+  --color-rule: var(--rule);
+  --color-void: var(--void);
+  --color-proven: var(--proven);
+  --color-critical: var(--critical);
   /* The six record kinds (features/record): kind is an icon and a hue, and the
    * hues are their own family. None of them is a state hue and none is the
    * gold, so a reader never mistakes what a record IS for how it is doing. The
@@ -89,6 +100,23 @@
     --banner-bg: var(--hl);
     --button-disabled-bg: var(--muted-surface);
     --input-disabled-bg: var(--muted-surface);
+    /* The mockup's `.btn.primary` is gold in both themes (engine.css), so the
+       kit's ink primary is overridden here once rather than per screen. */
+    --button-primary-bg: var(--gold);
+    --button-primary-fg: var(--on-gold);
+    --button-primary-border: var(--gold);
+    --button-primary-hover-bg: var(--gold-bright);
+    --button-primary-active-bg: var(--gold-deep);
+    /* `.btn { background:var(--panel); border-color:var(--border) }` and the
+       wash on hover; the kit's default button is transparent. */
+    --button-default-bg: var(--panel);
+    --button-default-border: var(--border);
+    --button-default-hover-bg: var(--hl);
+    --button-default-active-bg: var(--hl);
+    /* `.tab[aria-selected] { border-bottom-color: var(--gold) }` */
+    --tab-border-active: var(--gold);
+    /* `.navitem { color: var(--muted) }`; current and hover take the ink. */
+    --sidebar-nav-link-fg: var(--muted);
     --shadow:
       0 1px 0 rgba(255, 255, 255, 0.7), 0 18px 44px rgba(9, 9, 11, 0.08);
     --shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.06);
@@ -138,10 +166,6 @@
     --data-surface: var(--ox-hl);
     --banner-bg: var(--ox-hl);
     --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
-    --button-primary-bg: var(--gold);
-    --button-primary-fg: var(--on-gold);
-    --button-primary-hover-bg: var(--gold-bright);
-    --button-primary-active-bg: var(--gold-deep);
     --button-disabled-bg: var(--hl);
     --input-disabled-bg: var(--hl);
     --app-panel-bg: var(--panel);
@@ -172,13 +196,9 @@
       --muted: var(--ox-muted);
       --dim: var(--ox-dim);
       --muted-surface: var(--ox-hl);
-    --data-surface: var(--ox-hl);
+      --data-surface: var(--ox-hl);
       --banner-bg: var(--ox-hl);
       --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
-      --button-primary-bg: var(--gold);
-      --button-primary-fg: var(--on-gold);
-      --button-primary-hover-bg: var(--gold-bright);
-      --button-primary-active-bg: var(--gold-deep);
       --button-disabled-bg: var(--hl);
       --input-disabled-bg: var(--hl);
       --app-panel-bg: var(--panel);
@@ -198,19 +218,24 @@
 [data-shell-page] table {
   border-collapse: collapse;
   font-size: 13px;
-  background: var(--data-surface);
 }
 
+/* `th { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
+   color:var(--dim); background:var(--panel) }` — the header is flat on the
+   panel; the caps and the tracking mark it, not a band of grey. */
 [data-shell-page] table thead th {
   padding: 9px 12px;
   white-space: nowrap;
-  background: var(--data-surface);
-  font-size: 11px;
+  background: var(--panel);
+  font-size: 10.5px;
   font-weight: 600;
-  color: var(--muted-foreground);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dim);
 }
 
 [data-shell-page] table tbody :is(td, th) {
+  padding: 9px 12px;
   vertical-align: middle;
 }
 

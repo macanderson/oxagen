@@ -3251,6 +3251,73 @@ describe("priceBookBoundaries", () => {
     expect(priceBookBoundaries(book)).toEqual([FROM.getTime(), T3.getTime()]);
   });
 
+  it("keeps inclusive in-window endpoints without discarding an overlapping rate", () => {
+    const book = [
+      entry({
+        id: "a",
+        model: "claude-sonnet-5",
+        effectiveFrom: FROM,
+        effectiveTo: T2,
+      }),
+      entry({
+        id: "b",
+        model: "claude-sonnet-5",
+        effectiveFrom: T2,
+        effectiveTo: T3,
+      }),
+      entry({
+        id: "c",
+        model: "claude-sonnet-5",
+        effectiveFrom: T3,
+        effectiveTo: T4,
+      }),
+      entry({ id: "d", model: "claude-sonnet-5", effectiveFrom: T4 }),
+    ];
+    expect(priceBookBoundaries(book, { since: T2, until: T3 })).toEqual([
+      T2.getTime(),
+      T3.getTime(),
+    ]);
+    expect(priceBookBoundaries(book)).toEqual([
+      FROM.getTime(),
+      T2.getTime(),
+      T3.getTime(),
+      T4.getTime(),
+    ]);
+    expect(priceBookBoundaries(book, { since: T3, until: T3 })).toEqual([
+      T3.getTime(),
+    ]);
+    expect(
+      priceBookBoundaries(
+        [
+          entry({
+            id: "a",
+            model: "claude-sonnet-5",
+            effectiveFrom: FROM,
+            effectiveTo: T3,
+          }),
+        ],
+        {
+          since: T2,
+          until: T3,
+        },
+      ),
+    ).toEqual([T3.getTime()]);
+  });
+
+  it("supports either report bound independently and an empty window", () => {
+    const book = [
+      entry({
+        id: "a",
+        model: "claude-sonnet-5",
+        effectiveFrom: FROM,
+        effectiveTo: T4,
+      }),
+    ];
+    expect(priceBookBoundaries(book, { since: T2 })).toEqual([T4.getTime()]);
+    expect(priceBookBoundaries(book, { until: T3 })).toEqual([FROM.getTime()]);
+    expect(priceBookBoundaries(book, { since: T2, until: T3 })).toEqual([]);
+  });
+
   // The observed-usage read scans this array once per frame, so a boundary
   // that no observed model could ever be priced at is both a per-frame cost
   // and a bucket split whose two sides answer identically. An organization
