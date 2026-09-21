@@ -135,7 +135,8 @@ export function parseBody(text: string | null): unknown {
   // failed parse on every frame of a long run is not free.
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
   try {
-    return JSON.parse(trimmed) as unknown;
+    const parsed: unknown = JSON.parse(trimmed);
+    return parsed;
   } catch {
     return null;
   }
@@ -324,9 +325,9 @@ function readDetail(name: string, input: Json | null): ToolDetail {
   const limit = input?.["limit"];
   const range =
     typeof offset === "number" || typeof limit === "number"
-      ? `lines ${typeof offset === "number" ? offset + 1 : 1}${
+      ? `lines ${String(typeof offset === "number" ? offset + 1 : 1)}${
           typeof limit === "number"
-            ? `–${(typeof offset === "number" ? offset : 0) + limit}`
+            ? `–${String((typeof offset === "number" ? offset : 0) + limit)}`
             : "+"
         }`
       : null;
@@ -382,7 +383,7 @@ function editDetail(name: string, input: Json | null): ToolDetail {
     name,
     group: groupOf(name),
     headline: shortPath(path),
-    detail: panes.length === 0 ? null : `+${total} −${cut}`,
+    detail: panes.length === 0 ? null : `+${String(total)} −${String(cut)}`,
     multiline: false,
     panes,
   };
@@ -407,7 +408,7 @@ function createDetail(name: string, input: Json | null): ToolDetail {
     name,
     group: groupOf(name),
     headline: path === null ? null : shortPath(path),
-    detail: lineCount === null ? null : `${lineCount} lines`,
+    detail: lineCount === null ? null : `${String(lineCount)} lines`,
     multiline: false,
     panes,
   };
@@ -438,7 +439,7 @@ function webDetail(name: string, input: Json | null): ToolDetail {
     panes:
       prompt === null
         ? []
-        : [{ kind: "note", label: "asked", text: prompt } as ToolPane],
+        : [{ kind: "note", label: "asked", text: prompt }],
   };
 }
 
@@ -485,7 +486,7 @@ function planDetail(name: string, input: Json | null): ToolDetail {
     name,
     group: "plan",
     headline:
-      count === null ? plan === null ? null : firstLine(plan).head : `${count} items`,
+      count === null ? plan === null ? null : firstLine(plan).head : `${String(count)} items`,
     detail: null,
     multiline: false,
     panes: plan === null ? [] : [{ kind: "note", label: "plan", text: plan }],
