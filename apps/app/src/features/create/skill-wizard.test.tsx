@@ -31,6 +31,10 @@ vi.mock("./bundle", async (importOriginal) => ({
   readBundle,
 }));
 
+// Await real module transformation before asserting UI behavior.
+const { WIZARDS } = await import("./kinds");
+await Promise.all([WIZARDS.skill?.()]);
+
 const { CreateHost } = await import("./create-host");
 const { BundleReadError } = await import("./bundle");
 
@@ -137,8 +141,7 @@ afterEach(async () => {
 describe("the skill wizard: source", () => {
   it("offers three ways in, keeps the registry closed and says why, and waits for a choice", async () => {
     mount();
-    // The first lazy import includes Vitest transformation under CI load.
-    await screen.findByTestId("create-skill", {}, { timeout: 5000 });
+    await screen.findByTestId("create-skill");
     expect(primary().disabled).toBe(true);
     const registry = screen
       .getByText(t("skill.source.registry.title"))

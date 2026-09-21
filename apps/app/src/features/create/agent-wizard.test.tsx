@@ -32,6 +32,10 @@ vi.mock("./actions", () => ({
   proposeSkill: vi.fn(),
 }));
 
+// Await real module transformation before asserting UI behavior.
+const { WIZARDS } = await import("./kinds");
+await Promise.all([WIZARDS.agent?.()]);
+
 const { CreateHost } = await import("./create-host");
 
 const t = translator("createAgent");
@@ -164,8 +168,7 @@ afterEach(async () => {
 describe("the agent wizard: describe", () => {
   it("opens on Describe with five steps, and says it is not Register an agent", async () => {
     mount();
-    // The first lazy import includes Vitest transformation under CI load.
-    await screen.findByTestId("create-agent", {}, { timeout: 5000 });
+    await screen.findByTestId("create-agent");
     expect(currentStep()).toContain(shell("steps.describe"));
     const rail = screen.getByTestId("wizard-rail").textContent;
     for (const step of ["identity", "definition", "toolbelt", "pullRequest"])

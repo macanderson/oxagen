@@ -24,6 +24,10 @@ const { readMainRepository, proposeSkill } = vi.hoisted(() => ({
 }));
 vi.mock("./actions", () => ({ readMainRepository, proposeSkill }));
 
+// Await real module transformation before asserting UI behavior.
+const { WIZARDS } = await import("./kinds");
+await Promise.all([WIZARDS.skill?.(), WIZARDS.agent?.()]);
+
 const { CreateHost } = await import("./create-host");
 
 const t = translator("create");
@@ -109,8 +113,7 @@ describe("CreateHost", () => {
     const card = dialog.querySelector<HTMLButtonElement>('[data-kind="skill"]');
     if (card === null) throw new Error("no skill card");
     fireEvent.click(card);
-    // The first lazy import includes Vitest transformation under CI load.
-    await screen.findByTestId("create-skill", {}, { timeout: 5000 });
+    await screen.findByTestId("create-skill");
     const rail = screen.getByTestId("wizard-rail");
     const current = rail.querySelector('[aria-current="step"]');
     expect(current?.textContent).toContain(t("steps.source"));
