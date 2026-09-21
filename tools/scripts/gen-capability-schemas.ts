@@ -46,6 +46,9 @@ interface ZodDefLike {
   checks?: Array<{ kind: string; value?: number }>;
   defaultValue?: () => unknown;
   items?: Array<{ _def: ZodDefLike }>;
+  minLength?: { value: number } | null;
+  maxLength?: { value: number } | null;
+  exactLength?: { value: number } | null;
 }
 
 interface ZodLike {
@@ -134,7 +137,16 @@ function convert(schema: ZodLike): { schema: JsonSchema; optional: boolean } {
     case "ZodArray": {
       const item = convert(d.type as ZodLike);
       return {
-        schema: withDesc({ type: "array", items: item.schema }),
+        schema: withDesc({
+          type: "array",
+          items: item.schema,
+          ...((d.exactLength ?? d.minLength)
+            ? { minItems: (d.exactLength ?? d.minLength)!.value }
+            : {}),
+          ...((d.exactLength ?? d.maxLength)
+            ? { maxItems: (d.exactLength ?? d.maxLength)!.value }
+            : {}),
+        }),
         optional: false,
       };
     }

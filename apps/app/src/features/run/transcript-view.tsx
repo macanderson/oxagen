@@ -50,16 +50,21 @@ import {
   type TranscriptZoom,
 } from "@/data/contracts/run";
 import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
+import { languageForPath } from "@/shared/code-highlight";
 import { routes } from "@/shared/safe-path";
+import { CodePanel, DiffPanel } from "@/ui/code-panel";
 import { linkText } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatClock, formatCount, formatDuration } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
+import type { ToolDetail } from "./tool-detail";
+import { StepIcon } from "./tool-icon";
 import { kindsParam } from "./transcript";
 import {
   buildTranscript,
+  decisionSubject,
   type Frames,
   frameAt,
   frameCost,
@@ -69,6 +74,7 @@ import {
   type StepDigest,
   type StepNode,
   stepDigest,
+  stepTool,
   toolExchange,
   type TranscriptStep,
   type TranscriptTurn,
@@ -142,15 +148,34 @@ function Chip({
   );
 }
 
-/** The decision a rule or a person made about the call this frame records. */
-function Decision({ decision }: { decision: TranscriptDecision }) {
+/**
+ * The decision a rule or a person made, and the call it was made on.
+ *
+ * The subject is the point: a line that says a decision was `allow` and not
+ * what was allowed is a line a reader has to open the envelope to act on.
+ * It falls back to the decision alone where the frame recorded no tool,
+ * which a gate on something other than a tool call legitimately does.
+ */
+function Decision({
+  decision,
+  subject,
+}: {
+  decision: TranscriptDecision;
+  subject: string | null;
+}) {
   const t = useTranslations("run.transcript");
   return (
     <p
       data-testid="entry-decision"
       className="m-0 text-xs text-muted-foreground"
     >
-      {t("decision", { decision: decision.decision, seq: decision.seq })}
+      {subject === null
+        ? t("decision", { decision: decision.decision, seq: decision.seq })
+        : t("decisionOn", {
+            decision: decision.decision,
+            subject,
+            seq: decision.seq,
+          })}
     </p>
   );
 }
@@ -277,7 +302,10 @@ function FrameDetail({
           </p>
         ) : null}
         {frame.decision === null ? null : (
-          <Decision decision={frame.decision} />
+          <Decision
+            decision={frame.decision}
+            subject={decisionSubject(frame)}
+          />
         )}
         {neither ? (
           <p
@@ -336,6 +364,65 @@ function FrameDetail({
   );
 }
 
+/**
+ * What a tool step did, drawn as the thing it is: a command as shell source,
+ * an edit as a diff, a file's contents as numbered lines, a brief as prose.
+ *
+ * This is the half of the step a reader came for, so it sits above the frame
+ * envelopes rather than below them. It is a *reading* of the record and never
+ * a replacement for it: every byte it draws came out of a body the recorder
+ * kept, and the frames it was read from are directly beneath, unchanged, with
+ * their digests and their links into the Frames tab.
+ */
+function ToolPanes({ detail }: { detail: ToolDetail }) {
+  const t = useTranslations("run.transcript");
+  if (detail.panes.length === 0) return null;
+  return (
+    <div data-testid="tool-panes" className="flex flex-col gap-2 pb-2.5">
+      {detail.panes.map((pane, index) => {
+        const key = `${pane.kind}-${pane.label}-${String(index)}`;
+        if (pane.kind === "diff") {
+          return (
+            <DiffPanel
+              key={key}
+              diff={pane.diff}
+              path={pane.path}
+              language={languageForPath(pane.path)}
+              label={t(`pane.${pane.label}`)}
+            />
+          );
+        }
+        if (pane.kind === "note") {
+          return (
+            <div
+              key={key}
+              className="overflow-hidden rounded-md border border-border bg-code-bg"
+            >
+              <div className="border-b border-border px-2.5 py-1 font-mono text-[10.5px] tracking-[0.08em] text-muted-foreground uppercase">
+                {t(`pane.${pane.label}`)}
+              </div>
+              <p className="m-0 max-h-60 overflow-auto whitespace-pre-wrap break-words px-2.5 py-2 text-[12px] leading-relaxed text-foreground">
+                {pane.text}
+              </p>
+            </div>
+          );
+        }
+        return (
+          <CodePanel
+            key={key}
+            code={pane.text}
+            language={pane.language}
+            startLine={pane.startLine}
+            preview={pane.preview}
+            label={t(`pane.${pane.label}`)}
+            expandLabel={t("showAll")}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function StepRow({
   step,
   digest,
@@ -356,6 +443,25 @@ function StepRow({
   const { first } = step;
   const isNow = pos >= step.from && pos <= step.to;
   const isFuture = step.from > pos;
+  // Held across renders because it parses the recorded body, where the digest
+  // beside it is cheap enough to recompute.
+  const detail = useMemo(() => stepTool(step), [step]);
+  // The tool's own name beats the label's first word wherever the body was
+  // kept. A skill load is the one exception: it is the step that changes what
+  // the agent CAN do rather than recording what it did, so the line says so
+  // in words — `Loaded skill file-inbox`, not `Skill file-inbox`.
+  const name =
+    detail?.group === "skill"
+      ? t("loadedSkill")
+      : (detail?.name ?? digest.name);
+  // The headline read out of the body says what the call acted on — a
+  // command, a path, a pattern — where `digest.arg` had only the frame's
+  // label, which for a tool is the tool's name a second time.
+  const arg = detail?.headline ?? digest.arg;
+  // A detail with nothing to draw — every body was `digest_only` — is not a
+  // reading of the step, so the frames below stay open rather than folding
+  // behind a disclosure that would reveal nothing new.
+  const panes = detail === null || detail.panes.length === 0 ? null : detail;
   return (
     <details
       data-testid="transcript-step"
@@ -386,13 +492,22 @@ function StepRow({
           <span className="flex min-w-0 flex-wrap items-baseline gap-2">
             <Chevron />
             <span
-              className={`font-mono text-xs font-semibold ${NAME[digest.node]}`}
+              className={`flex shrink-0 items-baseline gap-1.5 font-mono text-xs font-semibold ${NAME[digest.node]}`}
             >
-              {digest.name}
+              {/* The mark takes its colour from this span, so the palette on
+                  the rail stays the four the node already spends and a new
+                  tool family can never add a fifth. */}
+              <StepIcon node={digest.node} group={detail?.group ?? null} />
+              {name}
             </span>
-            {digest.arg === null ? null : (
+            {arg === null ? null : (
               <span className="max-w-[46ch] overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11.5px] text-muted-foreground">
-                {digest.arg}
+                {arg}
+              </span>
+            )}
+            {detail?.detail == null ? null : (
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground/80">
+                {detail.detail}
               </span>
             )}
             <span className="ml-auto flex flex-wrap gap-1.5">
@@ -432,12 +547,36 @@ function StepRow({
         </div>
       </summary>
       {open ? (
-        <div className="pr-3 pb-2.5">
-          <div className="ml-0 overflow-hidden rounded-md border border-border bg-background md:ml-[76px]">
-            {visibleFrames(step).map((frame) => (
-              <FrameDetail key={frame.seq} frame={frame} {...place} />
-            ))}
-          </div>
+        <div className="pr-3 pb-2.5 pl-3 md:pl-[76px]">
+          {panes === null ? null : <ToolPanes detail={panes} />}
+          {/* The record under the reading of it. Where the panes above already
+              say what the step did, the envelopes they were read from fold
+              away behind one more click — still one step away, never a page
+              away — and where there are no panes the frames ARE the reading,
+              so they stay open. A digest-only duplicate of a frame whose body
+              is already shown elsewhere in the step is left out here too. */}
+          {panes === null ? (
+            <div className="overflow-hidden rounded-md border border-border bg-background">
+              {visibleFrames(step).map((frame) => (
+                <FrameDetail key={frame.seq} frame={frame} {...place} />
+              ))}
+            </div>
+          ) : (
+            <details className="group/raw overflow-hidden rounded-md border border-border bg-background">
+              <summary className="cursor-pointer list-none px-3 py-1.5 text-[11px] text-muted-foreground select-none hover:text-foreground group-open/raw:border-b group-open/raw:border-border [&::-webkit-details-marker]:hidden">
+                <span
+                  aria-hidden="true"
+                  className="mr-1.5 inline-block text-[8px] transition-transform group-open/raw:rotate-90"
+                >
+                  ▶
+                </span>
+                {t("frameCount", { count: step.frames.length })}
+              </summary>
+              {visibleFrames(step).map((frame) => (
+                <FrameDetail key={frame.seq} frame={frame} {...place} />
+              ))}
+            </details>
+          )}
         </div>
       ) : null}
     </details>
@@ -488,65 +627,72 @@ function TurnBlock({
   const cost = frameCost(turn.frames);
   const seconds = (Date.parse(last.at) - Date.parse(first.at)) / 1000;
   return (
-    <details
-      data-testid="transcript-turn"
-      open={openIds.has(turn.id)}
-      onToggle={(e) => {
-        onToggle(turn.id, e.currentTarget.open);
-      }}
-      className="group/turn"
-    >
-      <summary className="cursor-pointer list-none border-b border-border bg-muted px-3 py-2.5 select-none hover:bg-card [&::-webkit-details-marker]:hidden">
-        <div className="flex flex-wrap items-baseline gap-2.5">
-          <span
-            aria-hidden="true"
-            className="inline-block w-2.5 shrink-0 text-[8px] text-muted-foreground transition-transform group-open/turn:rotate-90"
-          >
-            ▶
-          </span>
-          <span className="text-[13px] font-semibold text-foreground">
-            {/* A turn marker is structure, not identity and not an action, so
-                it does not spend the screen's one gold. */}
-            <span aria-hidden="true" className="text-muted-foreground">
-              ▍
-            </span>
-            {turn.turn === null ? t("runStart") : t("turn", { n: turn.turn })}
-          </span>
-          {turn.turn === null ? null : running ? (
-            <span className="text-[11px] tracking-[0.06em] text-info">
-              {t("turnRunning")}
-            </span>
-          ) : (
-            <span className="text-[11px] tracking-[0.06em] text-success">
-              {t("turnDone")}
-            </span>
-          )}
-          <span className="ml-auto flex flex-wrap gap-1.5">
-            <Chip>{t("stepCount", { count: turn.steps.length })}</Chip>
-            <Chip>{t("seqSpan", { from: first.seq, to: last.seq })}</Chip>
-            <Chip>{formatClock(seconds, locale)}</Chip>
-            {cost === null ? null : (
-              <Chip tone="cost">
-                <Money value={cost} precision="exact" />
-              </Chip>
-            )}
-          </span>
-        </div>
-      </summary>
+    <>
+      {/* What was asked sits ABOVE the turn it opened, outside the
+          disclosure, so it is the first thing on the transcript and it is
+          there at every zoom. Inside the disclosure it was the one line a
+          reader needed to read the rest and the one line a collapsed turn
+          hid. */}
       {turn.prompt === null ? null : <Role who="you" text={turn.prompt} />}
-      {turn.steps.map((step) => (
-        <StepRow
-          key={step.id}
-          step={step}
-          digest={stepDigest(step)}
-          pos={pos}
-          open={openIds.has(step.id)}
-          onToggle={onToggle}
-          place={place}
-        />
-      ))}
-      {turn.reply === null ? null : <Role who="agent" text={turn.reply} />}
-    </details>
+      <details
+        data-testid="transcript-turn"
+        open={openIds.has(turn.id)}
+        onToggle={(e) => {
+          onToggle(turn.id, e.currentTarget.open);
+        }}
+        className="group/turn"
+      >
+        <summary className="cursor-pointer list-none border-b border-border bg-muted px-3 py-2.5 select-none hover:bg-card [&::-webkit-details-marker]:hidden">
+          <div className="flex flex-wrap items-baseline gap-2.5">
+            <span
+              aria-hidden="true"
+              className="inline-block w-2.5 shrink-0 text-[8px] text-muted-foreground transition-transform group-open/turn:rotate-90"
+            >
+              ▶
+            </span>
+            <span className="text-[13px] font-semibold text-foreground">
+              {/* A turn marker is structure, not identity and not an action, so
+                  it does not spend the screen's one gold. */}
+              <span aria-hidden="true" className="text-muted-foreground">
+                ▍
+              </span>
+              {turn.turn === null ? t("runStart") : t("turn", { n: turn.turn })}
+            </span>
+            {turn.turn === null ? null : running ? (
+              <span className="text-[11px] tracking-[0.06em] text-info">
+                {t("turnRunning")}
+              </span>
+            ) : (
+              <span className="text-[11px] tracking-[0.06em] text-success">
+                {t("turnDone")}
+              </span>
+            )}
+            <span className="ml-auto flex flex-wrap gap-1.5">
+              <Chip>{t("stepCount", { count: turn.steps.length })}</Chip>
+              <Chip>{t("seqSpan", { from: first.seq, to: last.seq })}</Chip>
+              <Chip>{formatClock(seconds, locale)}</Chip>
+              {cost === null ? null : (
+                <Chip tone="cost">
+                  <Money value={cost} precision="exact" />
+                </Chip>
+              )}
+            </span>
+          </div>
+        </summary>
+        {turn.steps.map((step) => (
+          <StepRow
+            key={step.id}
+            step={step}
+            digest={stepDigest(step)}
+            pos={pos}
+            open={openIds.has(step.id)}
+            onToggle={onToggle}
+            place={place}
+          />
+        ))}
+        {turn.reply === null ? null : <Role who="agent" text={turn.reply} />}
+      </details>
+    </>
   );
 }
 

@@ -2,23 +2,8 @@
 // Set a negotiated rate (Mission Control spec §12.2, ADR-060 §1): the rate
 // card a person has in front of them, written into the price book.
 //
-// ── Why one form and several calls ──────────────────────────────────────────
-//
-// `set_price_entry` takes ONE token class, because `cost.price_entries` holds
-// one effective-dated row per (provider, model, class, region) and each write
-// is atomic on exactly the row the resolver later picks. A contract, though,
-// names several classes at once — input, cached read, cache write, output —
-// under one effective date, and asking a person to open this dialog four times
-// and retype the model each time would be the store's shape leaking into
-// theirs. So the form takes the card and sends it as a sequence of calls under
-// one `effectiveFrom`, in class order.
-//
-// A sequence can stop halfway, and half a rate card is a blend nobody agreed
-// to: negotiated input, list output. That is never reported as a success. If a
-// call is refused, the dialog stays open and says exactly which classes are
-// now in effect and which are not, so the person knows what the book holds
-// before they retry — retrying a class already written is safe (it supersedes
-// its own row), so the honest answer is also the actionable one.
+// The dialog sends every filled class in one call. The store commits the
+// complete card or rolls it back.
 import { useFormatter, useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { PriceTokenClass } from "@/data/contracts/spend";
@@ -207,13 +192,7 @@ export function PriceDialog({
       setAlert(t("dialog.errors.ratesEmpty"));
       return;
     }
-    // One instant for the whole card. With the date left blank each server
-    // action would otherwise pick its own `new Date()`, so a four-class card
-    // would start at four different instants and a frame in between would be
-    // priced at negotiated input and list output — the very blend the
-    // one-class-per-call design exists to keep out of the book. The instant is
-    // taken once, here, and every class carries it; a day the person typed
-    // is already one instant (its UTC midnight).
+    // One request carries every class and one effective instant.
     const effectiveFrom =
       shared.effectiveFrom.trim().length === 0
         ? new Date().toISOString()
@@ -257,22 +236,23 @@ export function PriceDialog({
     }
 
     setPending(true);
-    const written: PriceTokenClass[] = [];
     try {
-      for (const [index, payload] of payloads.entries()) {
-        const result = await setPriceEntryAction(at, payload);
-        if (!result.ok) {
-          setReport({ written, notWritten: filled.slice(index) });
-          setAlert(failureText(result));
-          return;
-        }
-        const tokenClass = filled[index];
-        if (tokenClass !== undefined) written.push(tokenClass);
+      const [first, ...additional] = payloads;
+      if (!first) return;
+      const result = await setPriceEntryAction(at, first, additional);
+      if (!result.ok) {
+        setReport(
+          result.reason === "unavailable"
+            ? null
+            : { written: [], notWritten: filled },
+        );
+        setAlert(failureText(result));
+        return;
       }
       setOpen(false);
       navigate.replace(routes.spend(at.org, at.ws, { tab: "pricing" }));
     } catch {
-      setReport({ written, notWritten: filled.slice(written.length) });
+      setReport(null);
       setAlert(failureText(UNANSWERED));
     } finally {
       setPending(false);

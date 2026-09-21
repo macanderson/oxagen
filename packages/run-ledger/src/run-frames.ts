@@ -387,8 +387,20 @@ export function tachoFrameSummary(row: TachoFrameRowLike): string {
           ? `${row.provider}/${row.model}`
           : row.model
         : row.kind;
+    // A gate frame is about a call, and until now the summary dropped which
+    // one: `policy allow` told a reader that something had been allowed and
+    // gave them no way to learn what without opening the envelope. The
+    // decision still leads, because that is what a reader scanning a run for
+    // trouble is scanning for, and the subject follows it.
     case "policy_decision":
-      return row.policyDecision ? `policy ${row.policyDecision}` : row.kind;
+    case "approval_request":
+    case "approval_decision": {
+      if (row.policyDecision === "")
+        return row.toolName === "" ? row.kind : `${row.kind} ${row.toolName}`;
+      return row.toolName === ""
+        ? `policy ${row.policyDecision}`
+        : `${row.policyDecision} ${row.toolName}`;
+    }
     default:
       return row.kind;
   }
