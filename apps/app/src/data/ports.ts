@@ -54,7 +54,7 @@ import type {
   ViewerPreferences,
   WorkspaceChoice,
 } from "./contracts/shell";
-import type { SkillInventory } from "./contracts/skills";
+import type { SkillInventory, SkillConfiguration } from "./contracts/skills";
 import type {
   DayRange,
   FleetSpend,
@@ -341,6 +341,7 @@ export interface DataSource {
    * features/skills/skills.tsx.
    */
   skills: {
+    configuration(ctx: WsCtx): Promise<Read<SkillConfiguration>>;
     inventory(
       ctx: WsCtx,
       q: { cursor: string | null },
