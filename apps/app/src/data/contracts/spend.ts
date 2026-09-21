@@ -36,14 +36,14 @@ const SpendFigure = z.object({
 export type SpendFigure = z.infer<typeof SpendFigure>;
 
 /** Who an operator row names: the person, never the id as a label. */
-export const OperatorFacts = z.object({
+const OperatorFacts = z.object({
   id: z.string().min(1),
   name: z.string().min(1).nullable(),
   email: z.string().min(1).nullable(),
   avatarUrl: z.string().min(1).nullable(),
   role: z.string().min(1).nullable(),
 });
-export type OperatorFacts = z.infer<typeof OperatorFacts>;
+type OperatorFacts = z.infer<typeof OperatorFacts>;
 
 const SpendRow = SpendFigure.extend({
   /** A principal public id, an agent key, a model id or a tool name. */

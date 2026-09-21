@@ -26,7 +26,7 @@ export type OperatorIdentity = {
 };
 
 /** Two letters from a name: first letters of its first two words. */
-export function initialsOf(name: string): string {
+function initialsOf(name: string): string {
   const words = name
     .trim()
     .split(/\s+/)

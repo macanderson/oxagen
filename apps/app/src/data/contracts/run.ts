@@ -199,7 +199,7 @@ export const TRANSCRIPT_ENTRY_DEFAULT = 200;
  * shows the input it was called with and the result it returned, in one entry.
  */
 /** One block of a model reply: a passage, a thought, a tool the model called, or a result it read. */
-export const TranscriptBlock = z.discriminatedUnion("kind", [
+const TranscriptBlock = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text: z.string() }),
   z.object({ kind: z.literal("thinking"), text: z.string() }),
   z.object({
@@ -215,7 +215,7 @@ export const TranscriptBlock = z.discriminatedUnion("kind", [
     summary: z.string(),
   }),
 ]);
-export type TranscriptBlock = z.infer<typeof TranscriptBlock>;
+type TranscriptBlock = z.infer<typeof TranscriptBlock>;
 
 export const TranscriptBody = z.object({
   seq: z.string().regex(/^\d+$/),
