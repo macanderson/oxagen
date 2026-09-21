@@ -753,6 +753,29 @@ export function ledgerRunStatus(status: string): RunItem["status"] {
   return mapped;
 }
 
+const LEDGER_RUN_OUTCOME: Readonly<Record<string, RunItem["outcome"]>> = {
+  pending: "running",
+  running: "running",
+  completed: "completed",
+  failed: "failed",
+  cancelled: "cancelled",
+};
+
+/**
+ * The word the ledger row holds, carried through. `status` folds `completed`
+ * and `failed` into one word because both are sealed, so a reader who needs
+ * to know which of the two happened reads this instead. A word outside the
+ * column's CHECK is a broken row, and the read fails rather than guesses.
+ */
+export function ledgerRunOutcome(status: string): RunItem["outcome"] {
+  const mapped = Object.hasOwn(LEDGER_RUN_OUTCOME, status)
+    ? LEDGER_RUN_OUTCOME[status]
+    : undefined;
+  if (!mapped)
+    throw new RangeError(`ledger run status outside the CHECK: ${status}`);
+  return mapped;
+}
+
 /**
  * The recorded grade, or null: a seal the recorder never graded, an open run,
  * or a word outside the ladder (a broken row reads as ungraded, never as a
@@ -873,6 +896,7 @@ export function toLedgerRunItem(
 ): RunItem {
   const { run, identity, rollup } = record;
   const status = ledgerRunStatus(run.status);
+  const outcome = ledgerRunOutcome(run.status);
   // A live run has sealed nothing, so it has recorded no gaps — not "none".
   const gaps =
     status === "live" ? [] : publishedGaps(record.seal?.completenessGaps);
@@ -889,6 +913,7 @@ export function toLedgerRunItem(
     operatorKind: principalKind(identity.operatorKind),
     operatorName: blankToNull(identity.operatorUserName),
     status,
+    outcome,
     turns: rollup.opaqueModelCalls === 0 ? rollup.turnIndexes : null,
     steps: rollup.modelCalls + rollup.toolCalls,
     frames: rollup.frames,
@@ -925,8 +950,43 @@ export function tachoRunStatus(outcome: string): RunItem["status"] {
       return "live";
     case "aborted":
       return "halted";
-    default:
+    case "completed":
+    case "crashed":
+    case "unknown":
       return "sealed";
+    default:
+      // A word outside the column's CHECK is a broken row. Reading it as
+      // sealed would say the record is complete when nothing said so, which
+      // is the one direction a status may never be wrong in. The ledger's
+      // reader already fails here, and this one now fails the same way.
+      throw new RangeError(
+        `tacho session outcome outside the CHECK: ${outcome}`,
+      );
+  }
+}
+
+/**
+ * The word the session row holds. `aborted` reads `cancelled`, the reading
+ * `tachoRunStatus` already gives it, and `unknown` stays `unknown`: a session
+ * whose harness stopped reporting before it recorded an end has not been
+ * shown to have finished.
+ */
+export function tachoRunOutcome(outcome: string): RunItem["outcome"] {
+  switch (outcome) {
+    case "running":
+      return "running";
+    case "aborted":
+      return "cancelled";
+    case "completed":
+      return "completed";
+    case "crashed":
+      return "crashed";
+    case "unknown":
+      return "unknown";
+    default:
+      throw new RangeError(
+        `tacho session outcome outside the CHECK: ${outcome}`,
+      );
   }
 }
 
@@ -936,6 +996,7 @@ export function toTachoRunItem(
 ): RunItem {
   const { session } = row;
   const status = tachoRunStatus(session.outcome);
+  const outcome = tachoRunOutcome(session.outcome);
   const gaps = status === "live" ? [] : publishedGaps(session.completenessGaps);
   return {
     id: session.publicId,
@@ -945,6 +1006,7 @@ export function toTachoRunItem(
     operatorKind: principalKind(row.operatorKind),
     operatorName: blankToNull(row.operatorUserName),
     status,
+    outcome,
     turns: session.numTurns,
     steps: session.numModelCalls + session.numToolCalls,
     frames: session.seqCount,

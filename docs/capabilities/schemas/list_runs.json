@@ -107,6 +107,17 @@
                 "halted"
               ]
             },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "running",
+                "completed",
+                "failed",
+                "cancelled",
+                "crashed",
+                "unknown"
+              ]
+            },
             "turns": {
               "anyOf": [
                 {
@@ -387,6 +398,7 @@
             "operatorKind",
             "operatorName",
             "status",
+            "outcome",
             "turns",
             "steps",
             "frames",

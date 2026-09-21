@@ -52,6 +52,30 @@ export const runSourceSchema = z.enum(["ledger", "tacho"]);
 export const runStatusSchema = z.enum(["live", "sealed", "halted"]);
 
 /**
+ * How a run ended, in the word its store recorded. `status` is the lifecycle
+ * (open, sealed, halted) and three words cannot tell a run that finished from
+ * one that failed, so the outcome travels beside it rather than folded into
+ * it. Nothing here is derived: each word is the one the row holds.
+ *
+ * The ledger records `pending`, `running`, `completed`, `failed`, and
+ * `cancelled`; `pending` is an admitted run with no attempt yet, which reads
+ * `running` because that is the only thing an open run can be said to be
+ * doing. A wrapped session records `running`, `completed`, `aborted`,
+ * `crashed`, and `unknown`. `aborted` reads `cancelled`, the reading `status`
+ * already gives it. `crashed` is a harness that died mid-run. `unknown` is a
+ * session that stopped reporting before it recorded an end, and it stays
+ * `unknown`: a run that may have finished is not a run that finished.
+ */
+export const runOutcomeSchema = z.enum([
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+  "crashed",
+  "unknown",
+]);
+
+/**
  * A metered cost, read from the run's `cost.run_totals` row (ADR-060). `basis`
  * says who observed the figure: the gateway, the harness that ran the agent,
  * both (`mixed`), or nobody with a price for the model (`estimated`). A
@@ -153,6 +177,7 @@ export const runItemSchema = z
      */
     operatorName: z.string().nullable(),
     status: runStatusSchema,
+    outcome: runOutcomeSchema,
     /**
      * Distinct turns. Null for a ledger run whose model-call payloads are
      * encrypted, since the turn index travels inside them.

@@ -164,7 +164,7 @@ export function RunHeader({
             {run.id}
           </p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <StatusBadge status={run.status} />
+            <StatusBadge status={run.status} outcome={run.outcome} />
             <EnforcementTierBadge
               tier={run.enforcementTier}
               testId="run-tier"
