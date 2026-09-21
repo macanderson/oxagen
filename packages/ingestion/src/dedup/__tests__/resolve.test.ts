@@ -631,8 +631,18 @@ describe("GitHub legacy record identity", () => {
     ],
   ])("does not overwrite %s", async (_case, rows) => {
     legacyRows(rows);
+    mocks.embedText.mockResolvedValue([1, 0]);
     const result = await resolveEntity(mutation, "org-1");
     expect(result.action).toBe("created_principal");
+    expect(result.identityReconciliation).toEqual({
+      reason:
+        rows.length > 1
+          ? "ambiguous_legacy_identity"
+          : "legacy_source_unverified",
+      candidateNodeIds: rows.map((row) => row.nodeId),
+    });
+    expect(mocks.embedText).not.toHaveBeenCalled();
+    expect(mocks.createAliasEdge).not.toHaveBeenCalled();
     expect(mocks.upsertEntityNode).toHaveBeenCalledWith(
       expect.objectContaining({ naturalKey: mutation.naturalKey }),
       "org-1",

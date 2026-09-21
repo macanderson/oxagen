@@ -63,10 +63,15 @@ function rejectedResult(
 export async function resolveNaturalKey(
   mutation: EntityMutation,
   orgId: string,
-): Promise<{ nodeId: string | null; mutation: EntityMutation }> {
+): Promise<{
+  nodeId: string | null;
+  mutation: EntityMutation;
+  identityReconciliation?: DeduplicationResult["identityReconciliation"];
+}> {
   // ── Pass A: exact naturalKey lookup ─────────────────────────────────────────
   const session = scopedSession();
   let passANodeId: string | null = null;
+  let identityReconciliation: DeduplicationResult["identityReconciliation"];
   try {
     const result = await session.run(
       `MATCH (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
@@ -141,13 +146,28 @@ export async function resolveNaturalKey(
           canonicalNaturalKey: mutation.naturalKey,
           naturalKey: mutation.legacyNaturalKey,
         };
+      } else if (legacy.records.length > 0) {
+        identityReconciliation = {
+          reason:
+            legacy.records.length > 1
+              ? "ambiguous_legacy_identity"
+              : "legacy_source_unverified",
+          candidateNodeIds: legacy.records.flatMap((row) => {
+            const id: unknown = row.get("nodeId");
+            return typeof id === "string" ? [id] : [];
+          }),
+        };
       }
     }
   } finally {
     await session.close();
   }
 
-  return { nodeId: passANodeId, mutation };
+  return {
+    nodeId: passANodeId,
+    mutation,
+    ...(identityReconciliation ? { identityReconciliation } : {}),
+  };
 }
 
 /**
@@ -176,6 +196,21 @@ export async function resolveEntity(
       confidence: 1.0,
       matchReason: "natural_key_exact",
       conformanceScore: updated.conformanceScore,
+    };
+  }
+
+  // Similarity cannot establish a provider identity rejected by Pass A.
+  // Keep the canonical record separate and return the candidate IDs for review.
+  if (match.identityReconciliation) {
+    const created = await upsertEntityNode(mutation, orgId, opts);
+    if (created.rejected || created.nodeId == null)
+      return rejectedResult(created.conformanceScore);
+    return {
+      principalNodeId: created.nodeId,
+      action: "created_principal",
+      confidence: 1,
+      conformanceScore: created.conformanceScore,
+      identityReconciliation: match.identityReconciliation,
     };
   }
 
