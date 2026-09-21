@@ -120,12 +120,6 @@
           "pending": "Minting…",
           "again": "Mint another token"
         },
-        "sdk": {
-          "title": "Wrap it in your own process",
-          "body": "oxagen.agent.wrap() installs the proxy base URL, a frame emitter, the checkpoint gate before each turn, and the Oxagen MCP endpoint as the agent's tool server.",
-          "install": "Install the SDK, then wrap the agent where it starts:",
-          "credential": "Set the credential that was shown once at registration as OXAGEN_AGENT_TOKEN. The gateway mints short-lived run tokens from it at run start, and revoking the credential ends every run token at the next call."
-        },
         "token": {
           "label": "One-time enrollment token",
           "once": "Shown once, single use, and consumed the first time it is presented.",
@@ -134,7 +128,11 @@
         },
         "back": "Back",
         "continue": "I have already installed it",
-        "advancing": "Saving…"
+        "advancing": "Saving…",
+        "unavailable": {
+          "title": "Wrapping is not available for this harness",
+          "body": "This agent identity is registered, but its harness has no supported wrapping adapter here. Choose Claude Code, Codex, Cursor or Stella to enrol a host and record its first run."
+        }
       },
       "run": {
         "title": "Wait for the first frame",

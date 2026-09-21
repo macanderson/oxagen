@@ -2198,12 +2198,6 @@ type Messages = {
           pending: string;
           again: string;
         };
-        sdk: {
-          title: string;
-          body: string;
-          install: string;
-          credential: string;
-        };
         token: {
           label: string;
           once: string;
@@ -2213,6 +2207,10 @@ type Messages = {
         back: string;
         continue: string;
         advancing: string;
+        unavailable: {
+          title: string;
+          body: string;
+        };
       };
       run: {
         title: string;

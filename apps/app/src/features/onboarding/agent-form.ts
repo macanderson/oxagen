@@ -17,11 +17,12 @@ const HOST_WRAPPED: ReadonlySet<Harness> = new Set([
   "claude-code",
   "codex",
   "cursor",
+  "stella",
 ]);
 
-/** Hook-based harnesses enrol a host; the rest are wrapped in the agent's own process. */
-export function wrapPathOf(harness: Harness): "host" | "sdk" {
-  return HOST_WRAPPED.has(harness) ? "host" : "sdk";
+/** Only harnesses with an installed host adapter have a wrapping path. */
+export function wrapPathOf(harness: Harness): "host" | "unavailable" {
+  return HOST_WRAPPED.has(harness) ? "host" : "unavailable";
 }
 
 const AGENT_FORM_ERROR_KEYS = [
