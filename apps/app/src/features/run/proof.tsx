@@ -50,12 +50,12 @@ export function ProofSection({
           <ul className="flex min-w-0 flex-col gap-4">
             {proof.witnesses.map((witness) => (
               <li
-                key={witness.witnessId}
+                key={witness.witnessRef}
                 className="min-w-0 rounded-lg border border-border p-3"
                 data-testid="proof-witness"
               >
                 <h4 className="break-all font-mono text-sm font-semibold">
-                  {witness.witnessId}
+                  {witness.witnessRef}
                 </h4>
                 <Facts>
                   <Fact label={t("oracle")}>
@@ -152,7 +152,7 @@ export function ProofSection({
                         </p>
                         <Facts>
                           <Fact label={t("key")} code>
-                            {attempt.runnerAttestation.keyId}
+                            {attempt.runnerAttestation.keyRef}
                           </Fact>
                           <Fact label={t("signature")} code>
                             {attempt.runnerAttestation.signature}

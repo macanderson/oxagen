@@ -11,9 +11,19 @@ export function toRunProof(
     runId: out.runId,
     verdict: out.verdict,
     disclosureGrain: out.disclosureGrain,
-    witnesses: out.witnesses.map((witness) => ({
+    witnesses: out.witnesses.map(({ witnessId, attempts, ...witness }) => ({
       ...witness,
-      attempts: witness.attempts.map((attempt) => ({ ...attempt })),
+      // INV-11: the kernel's witness and signing-key identifiers are the
+      // witness plane's own, not public ids Oxagen mints, so the view model
+      // carries them as `…Ref`.
+      witnessRef: witnessId,
+      attempts: attempts.map(({ runnerAttestation, ...attempt }) => ({
+        ...attempt,
+        runnerAttestation: {
+          keyRef: runnerAttestation.keyId,
+          signature: runnerAttestation.signature,
+        },
+      })),
     })),
     witnessRuns: out.witnessRuns.map((run) => ({
       runId: run.runId,

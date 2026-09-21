@@ -32,7 +32,7 @@ const Attempt = z.object({
     .nullable(),
   disclosureGrain: Grain,
   witnessRunId: PublicId.nullable(),
-  runnerAttestation: z.object({ keyId: z.string(), signature: z.string() }),
+  runnerAttestation: z.object({ keyRef: z.string(), signature: z.string() }),
 });
 
 export const RunProof = z.object({
@@ -41,7 +41,7 @@ export const RunProof = z.object({
   disclosureGrain: Grain,
   witnesses: z.array(
     z.object({
-      witnessId: z.string(),
+      witnessRef: z.string(),
       oracle: z.enum([
         "test_flip",
         "build_or_type",

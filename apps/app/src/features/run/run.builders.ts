@@ -610,7 +610,7 @@ export function runProof(overrides: Partial<RunProof> = {}): RunProof {
     disclosureGrain: "L0",
     witnesses: [
       {
-        witnessId: "witness-tests",
+        witnessRef: "witness-tests",
         oracle: "test_flip",
         commandDigest: "sha256:command",
         heldOut: true,
@@ -634,7 +634,7 @@ export function runProof(overrides: Partial<RunProof> = {}): RunProof {
             disclosureGrain: "L0",
             witnessRunId: "arun_witness1",
             runnerAttestation: {
-              keyId: "runner-key-1",
+              keyRef: "runner-key-1",
               signature: "recorded-signature",
             },
           },
