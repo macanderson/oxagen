@@ -1,0 +1,1 @@
+- [2026-09-20] Check current source and issue reopening comments before implementing an assigned defect. A DoD guard can reopen already-fixed behavior. (source: reflections/2026-09-20-assigned-kernel.md, agent: kernel-fixes)
