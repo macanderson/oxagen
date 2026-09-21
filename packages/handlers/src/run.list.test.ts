@@ -911,7 +911,10 @@ describe("a run row names who ran it, on what, with which model", () => {
     expect(query.sql.match(/\bselect\b/gi)).toHaveLength(1);
     expect(query.sql).toContain('left join "tacho"."hosts"');
     expect(query.sql).toContain("machine_snapshot");
-    expect(query.sql).toContain('to_jsonb("tacho"."sessions")');
+    // `to_jsonb` takes the FROM-clause's own correlation name, which is
+    // never schema-qualified even though every column reference is
+    // (see the comment on `machineSnapshot` in run.list.ts).
+    expect(query.sql).toContain('to_jsonb("sessions")');
     expect(query.sql).toContain('left join "auth"."users"');
   });
 
