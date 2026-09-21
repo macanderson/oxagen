@@ -369,6 +369,8 @@ async function routeHook(
     );
   }
   const at = replay?.receivedAt ?? toProtocolTimestamp(deps.now());
+  const inferredCwd =
+    harness === "cursor" && input["cursor_cwd_inferred"] === true;
   const { record } = deps.registry.ensure(input.session_id, {
     ambient: false,
     lastHookEvent: input.hook_event_name,
@@ -377,9 +379,12 @@ async function routeHook(
     ...(input.transcript_path !== undefined
       ? { transcriptPath: input.transcript_path }
       : {}),
-    ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
+    ...(input.cwd !== undefined && !inferredCwd ? { cwd: input.cwd } : {}),
     ...(pidFromEnv(env) !== undefined ? { pid: pidFromEnv(env) } : {}),
   });
+  if (inferredCwd && record.cwd === undefined && input.cwd !== undefined) {
+    record.cwd = input.cwd;
+  }
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
   const payload = invocationToolUseId(raw, input, record);
@@ -391,6 +396,9 @@ async function routeHook(
       : {};
   const withReplay = (draft: HookDraft): HookDraft => ({
     ...draft,
+    ...(inferredCwd && record.cwd !== undefined
+      ? { context: { ...draft.context, cwd: record.cwd } }
+      : {}),
     attrs: { ...draft.attrs, ...replayAttrs },
   });
 
@@ -545,7 +553,7 @@ async function routeHook(
         ...record.recorder.ingestHook(payload, env, at, (draft) =>
           draft.kind === "tool_requested"
             ? {
-                ...draft,
+                ...withReplay(draft),
                 kind: denied ? "token_denied" : "tool_requested",
                 body: { ...draft.body, ...facts },
                 attrs: { ...draft.attrs, ...attrs },

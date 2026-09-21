@@ -75,6 +75,7 @@
             "frame.read"
           ]
         },
+        "minItems": 1,
         "description": "Catalogue permission ids the role allows (ADR-063)"
       }
     },

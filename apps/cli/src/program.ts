@@ -348,6 +348,12 @@ export function buildProgram(): Command {
     // regional rate would apply everywhere and `set_price_entry` refuses one.
     // `price remove` keeps the flag, because it addresses a row that exists.
     .option(
+      "--additional-rate <class=usd>",
+      "Add a token class to the atomic card",
+      (value: string, previous: string[]) => [...previous, value],
+      [],
+    )
+    .option(
       "--alias <model>",
       "Extra model id the rate also prices; repeatable",
       (value: string, previous: string[] = []) => [...previous, value],

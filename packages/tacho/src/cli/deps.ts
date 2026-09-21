@@ -522,34 +522,13 @@ export function claudeDesktopFacts(
   return { installed: false };
 }
 
-/**
- * The names Cursor's CLI answers to, most specific first. Its own docs call
- * the binary `agent` and the installer also links `cursor-agent`, so both are
- * probed: a machine carrying only one of the two is a machine Oxagen governs,
- * and reporting it as having no CLI at all is the one answer that is wrong
- * either way. `cursor-agent` goes first because it names Cursor
- * unambiguously, so finding it means no generic name has to be trusted.
- */
-export const CURSOR_CLI_NAMES = ["cursor-agent", "agent"] as const;
+/** Only this alias identifies Cursor without trusting a generic executable name. */
+export const CURSOR_CLI_NAMES = ["cursor-agent"] as const;
 
 /**
- * Cursor's CLI, verified 2026-09-18 against
- * https://cursor.com/docs/cli/installation (fetched that day): the installer
- * puts the binary in `~/.local/bin` and `--version` reports the version.
- * Two caveats the caller has to live with.
- *
- * `agent` is a generic name. Another program of that name earlier on PATH
- * would be found instead, so the version string is sanity-checked before this
- * counts as Cursor: a `--version` that carries no dotted number is treated as
- * "not Cursor" rather than as Cursor of unknown version.
- *
- * No primary source documents where Cursor's GUI installs itself on any
- * platform. So a person who runs Cursor only as an editor and never installed
- * the CLI is reported here as not installed, even though the hooks Oxagen
- * writes to `~/.cursor/hooks.json` would still govern that GUI. Enrollment
- * says so rather than refusing: unlike Claude Desktop on Linux, where no
- * build exists and the file would be read by nothing, here the file is read
- * and only the probe is blind.
+ * Probe Cursor's specific CLI alias. A generic `agent` executable can belong
+ * to unrelated software, even when its version output contains a semver.
+ * GUI-only installations and installs without the alias remain undetected.
  */
 export function cursorFacts(
   exec: Exec,
@@ -563,10 +542,6 @@ export function cursorFacts(
       exists === undefined
         ? harnessFacts(exec, name, platform, env, home)
         : harnessFacts(exec, name, platform, env, home, exists);
-    // `harnessFacts` sets `version` only when `--version` printed a dotted
-    // number, so an unrelated `agent` on PATH answers with no version and is
-    // not reported as an install. Both names go through that check, so
-    // neither can report an install it did not find.
     if (facts.version !== undefined) return facts;
   }
   return {};

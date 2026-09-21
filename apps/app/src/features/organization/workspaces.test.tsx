@@ -93,7 +93,7 @@ async function renderWorkspaces(
     },
     mandates: { list: vi.fn(), get: vi.fn() },
     audit: { events: vi.fn(), exportEvents: vi.fn() },
-    skills: { inventory: vi.fn() },
+    skills: { inventory: vi.fn(), configuration: vi.fn() },
     steering: {
       records: vi.fn(),
       proposals: vi.fn(),

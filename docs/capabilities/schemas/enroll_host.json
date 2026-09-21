@@ -62,7 +62,9 @@
             "stella",
             "claude-desktop"
           ]
-        }
+        },
+        "minItems": 1,
+        "maxItems": 5
       },
       "claudeVersion": {
         "type": "string",
@@ -85,7 +87,8 @@
         "items": {
           "type": "string",
           "maxLength": 64
-        }
+        },
+        "maxItems": 32
       },
       "shell": {
         "type": "string",
@@ -210,7 +213,8 @@
                     "stella",
                     "claude-desktop"
                   ]
-                }
+                },
+                "minItems": 1
               },
               "issued_at_unix_s": {
                 "type": "integer"
@@ -311,21 +315,24 @@
                 "items": {
                   "type": "string",
                   "maxLength": 512
-                }
+                },
+                "maxItems": 1024
               },
               "deny": {
                 "type": "array",
                 "items": {
                   "type": "string",
                   "maxLength": 512
-                }
+                },
+                "maxItems": 1024
               },
               "ask": {
                 "type": "array",
                 "items": {
                   "type": "string",
                   "maxLength": 512
-                }
+                },
+                "maxItems": 1024
               }
             },
             "required": [
@@ -423,7 +430,8 @@
                 "items": {
                   "type": "string",
                   "maxLength": 64
-                }
+                },
+                "maxItems": 32
               }
             },
             "required": [
@@ -469,7 +477,8 @@
             "items": {
               "type": "string",
               "maxLength": 256
-            }
+            },
+            "maxItems": 4096
           },
           "model_prices": {
             "type": "array",
@@ -518,7 +527,8 @@
                 "cache_write"
               ],
               "additionalProperties": false
-            }
+            },
+            "maxItems": 1024
           },
           "signature": {
             "type": "object",

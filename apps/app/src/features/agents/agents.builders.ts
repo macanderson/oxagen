@@ -313,7 +313,7 @@ export function agentsSource(reads: AgentReads) {
       modelCredential: refuse,
     },
     audit: { events: refuse, exportEvents: refuse },
-    skills: { inventory: refuse },
+    skills: { inventory: refuse, configuration: refuse },
     steering: {
       records: refuse,
       proposals: refuse,

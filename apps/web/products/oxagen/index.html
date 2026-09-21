@@ -152,23 +152,11 @@
 .p-row>:nth-child(2),.p-row>:nth-child(3){text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums;color:var(--ink-2)}
 .p-row>:nth-child(4){justify-self:end}
 @media (max-width:560px){.p-row{grid-template-columns:minmax(0,1fr) auto}.p-row>:nth-child(2),.p-row>:nth-child(3){display:none}}
-.p-outcome .dg-legend{grid-template-columns:repeat(3,minmax(0,1fr))}
-@media (max-width:520px){.p-outcome .dg-legend{grid-template-columns:1fr}}
 .p-spark{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;align-items:end}
 .p-spark svg{width:100%;height:46px}
 .p-spark polyline{fill:none;stroke:var(--ink-2);stroke-width:1.6;stroke-linejoin:round}
 .p-spark .dg-m{color:var(--ink);text-align:right}
 .p-spark .dg-k{grid-column:1/-1}
-
-/* proven, not claimed: the three outcomes a witness can reach */
-.p-wit{display:grid;gap:8px}
-.p-wrow{display:grid;grid-template-columns:repeat(2,minmax(0,.7fr)) minmax(0,1.3fr);gap:8px;align-items:stretch}
-.p-wrow.head{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
-.p-cell{display:grid;align-content:center;gap:2px;min-height:52px;padding:8px 12px;border:1px solid var(--rule);border-radius:var(--r);background:var(--panel);font-size:13px;color:var(--ink-3)}
-.p-cell b{font-size:14.5px;font-weight:560;color:var(--ink)}
-.p-cell.is-ok{border:3px double var(--ink-3);padding:6px 10px}
-.p-cell.is-no{border-color:var(--fail)}
-.p-cell.m{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink-2);text-align:center}
 
 /* the shape of your business: a graph with provenance */
 .p-graph svg{width:100%;height:auto}
@@ -306,14 +294,12 @@
           <ol>
             <li><a href="#dollars">Every dollar, every operator</a></li>
             <li><a href="#mandates">Limits read from the call</a></li>
-            <li><a href="#proven">Proven spend on its own line</a></li>
           </ol>
         </div>
         <div>
           <h3>Equipment</h3>
           <p>Give agents the business context their work requires.</p>
           <ol>
-            <li><a href="#proven">A witness the agent never sees</a></li>
             <li><a href="#graph">A map of your business</a></li>
             <li><a href="#more">It learned. You approved. It changed.</a></li>
           </ol>
@@ -505,7 +491,7 @@
         </ul>
       </div>
 
-      <figure class="dg reveal" role="img" aria-label="Illustration: the reconciler matches Oxagen's ledger to the provider export by request, by key and day, and by invoice line. Three rows match and one invoice line opens an exception for a three cent variance. Below, spend split into proven, accepted by a person, and unproven, and spend per proven run falling over eight weeks.">
+      <figure class="dg reveal" role="img" aria-label="Illustration: the reconciler matches Oxagen's ledger to the provider export by request, by key and day, and by invoice line. Three rows match and one invoice line opens an exception for a three cent variance. Below, spend per run for one agent falling over eight weeks.">
         <div class="dg-bar"><b>Reconciler</b> ledger against provider export<span class="end">Sep 1 to 15</span></div>
         <div class="p-row head"><span>matched on</span><span>Oxagen</span><span>provider</span><span>result</span></div>
         <div class="p-row dg-in" style="--i:0"><span class="dg-m">request req_8f2a</span><span>$0.1400</span><span>$0.1400</span><span class="dg-tag is-ok">matched</span></div>
@@ -513,50 +499,12 @@
         <div class="p-row dg-in" style="--i:2"><span class="dg-m">invoice line 6</span><span>$612.08</span><span>$612.08</span><span class="dg-tag is-ok">matched</span></div>
         <div class="p-row dg-in" style="--i:3"><span class="dg-m">invoice line 7</span><span>$1,902.40</span><span>$1,902.43</span><span class="dg-tag is-no">exception $0.03</span></div>
         <div class="dg-body p-outcome">
-          <div class="dg-in" style="--i:4;display:grid;gap:10px">
-            <span class="dg-k">spend by outcome</span>
-            <div class="dg-stack" aria-hidden="true"><span data-s="1" style="--w:.58;--i:5"></span><span data-s="2" style="--w:.27;--i:6"></span><span data-s="4" style="--w:.15;--i:7"></span></div>
-            <ul class="dg-legend">
-              <li data-s="1">proven <b>58%</b></li>
-              <li data-s="2">accepted <b>27%</b></li>
-              <li data-s="4">unproven <b>15%</b></li>
-            </ul>
-          </div>
-          <div class="p-spark dg-in" style="--i:8">
-            <span class="dg-k">spend per proven run, agent ci-fixer, 8 weeks</span>
+          <div class="p-spark dg-in" style="--i:4">
+            <span class="dg-k">spend per run, agent ci-fixer, 8 weeks</span>
             <svg viewBox="0 0 280 46" preserveAspectRatio="none" aria-hidden="true"><polyline points="2,6 40,10 80,9 120,18 160,22 200,27 240,34 278,38"/></svg>
             <span class="dg-m">$3.10 to $1.95</span>
           </div>
         </div>
-      </figure>
-    </div>
-  </section>
-
-  <!-- ================= PROVEN ================= -->
-  <section class="sec sec-alt" id="proven">
-    <div class="wrap split">
-      <div class="dg-copy reveal">
-        <p class="eyebrow">Record and budget</p>
-        <h2>A witness the agent never sees</h2>
-        <p class="lede">An agent saying the work is done is not evidence. Oxagen writes a witness
-        for the task: a test, a build check, a contract check, or a behavioral probe.</p>
-        <ul>
-          <li>The witness runs in an isolated runner with its own credentials, no network path from the agent, and no file the agent can reach.</li>
-          <li>The agent is told pass or fail and nothing else: no test name, no expected value, no path, so it cannot overfit to the check.</li>
-          <li>A pull request that edits the test infrastructure or adds a skip marker is detected and recorded as tampered. The Spend page reports proven spend on its own line.</li>
-        </ul>
-      </div>
-
-      <figure class="dg reveal reveal-d1" role="img" aria-label="Illustration: the three outcomes a witness can reach. Failing on the merge base and passing on the pull request is a flip, and the run is proven. Passing on both proves nothing. Failing on both is unsatisfied. A pull request that edits the tests is recorded as tampered.">
-        <div class="dg-bar"><b>Witness</b> written by Oxagen<span class="end">the agent cannot reach it</span></div>
-        <div class="dg-body p-wit">
-          <div class="p-wrow head"><span>merge base</span><span>pull request</span><span>verdict</span></div>
-          <div class="p-wrow dg-in" style="--i:0"><span class="p-cell m">fail</span><span class="p-cell m">pass</span><span class="p-cell is-ok"><b>flipped</b>the run is proven</span></div>
-          <div class="p-wrow dg-in" style="--i:1"><span class="p-cell m">pass</span><span class="p-cell m">pass</span><span class="p-cell"><b>proves nothing</b>the check never failed</span></div>
-          <div class="p-wrow dg-in" style="--i:2"><span class="p-cell m">fail</span><span class="p-cell m">fail</span><span class="p-cell is-no"><b>unsatisfied</b>the work is not done</span></div>
-        </div>
-        <div class="p-note dg-in" style="--i:3"><span class="dg-tag is-no">tampered</span> A pull request that edits the test infrastructure or adds a skip marker.</div>
-        <div class="p-note dg-in" style="--i:4"><span class="dg-k">the agent learns</span><span class="dg-tag">pass</span>or<span class="dg-tag">fail</span></div>
       </figure>
     </div>
   </section>
@@ -626,7 +574,7 @@
         <article class="card reveal">
           <span class="dg-k">explain and govern</span>
           <h3>One accountable operator per run</h3>
-          <p>Every run has exactly one human operator, even when a schedule or a webhook started it. Spend, progress, and proof roll up operator by operator.</p>
+          <p>Every run has exactly one human operator, even when a schedule or a webhook started it. Spend and progress roll up operator by operator.</p>
           <div class="p-mini" aria-hidden="true"><span class="dg-tag">webhook</span>→<span class="dg-tag">trigger owner</span>→<span class="dg-tag is-ok">operator</span></div>
         </article>
         <article class="card reveal reveal-d1">
@@ -669,7 +617,7 @@
         <div><dt>Access</dt><dd>The agent asks, a rule you wrote answers: allowed, denied, or routed to a person. The credential stays in Oxagen. No model in the decision.</dd></div>
         <div><dt>Record</dt><dd>Every run a chain of hash-linked frames, sealed with a signature, kept seven years in write-once storage by default.</dd></div>
         <div><dt>Budget and rules</dt><dd>Priced per call by token class, rolled up to the operator, reconciled to the cent against provider statements.</dd></div>
-        <div><dt>Equipment</dt><dd>A knowledge graph from your own sources. Context records reviewed as pull requests. Proof from a witness the agent never sees.</dd></div>
+        <div><dt>Equipment</dt><dd>A knowledge graph from your own sources. Context records reviewed as pull requests.</dd></div>
         <div><dt>Fleet</dt><dd>Every agent on one page, with its mandate, its open requests, its spend, and its last run.</dd></div>
         <div><dt>Harnesses</dt><dd>Claude Code and Codex with one click, on macOS, Windows, and Linux. Any harness with a base URL setting.</dd></div>
         <div><dt>Models</dt><dd>The Anthropic Messages API and the OpenAI Chat Completions and Responses APIs, so any vendor's model routes through.</dd></div>

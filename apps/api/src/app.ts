@@ -300,6 +300,9 @@ import { tachoIncidentListRoute } from "./routes/v1/tacho.incident.list";
 import { spendGetRoute } from "./routes/v1/spend.get";
 import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
+import { skillConfigGetRoute } from "./routes/v1/skill.config.get";
+import { skillConfigUpdateRoute } from "./routes/v1/skill.config.update";
+import { skillSearchPreviewRoute } from "./routes/v1/skill.search.preview";
 import { skillListRoute } from "./routes/v1/skill.list";
 import { skillProposeRoute } from "./routes/v1/skill.propose";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
@@ -634,6 +637,9 @@ orgScoped.route("/spend/waste", spendWasteListRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // The skills a workspace's harness sessions reported at start (#3098): a
 // noBillingGate read of tacho.sessions.
+orgScoped.route("/skills/config", skillConfigGetRoute);
+orgScoped.route("/skills/config/update", skillConfigUpdateRoute);
+orgScoped.route("/skills/search/preview", skillSearchPreviewRoute);
 orgScoped.route("/skills", skillListRoute);
 // A skill added or replaced as a pull request against the main repository (ADR-090).
 orgScoped.route("/skills/propose", skillProposeRoute);

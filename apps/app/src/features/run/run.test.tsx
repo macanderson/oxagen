@@ -478,10 +478,12 @@ describe("transcript", () => {
     expect(turns[1]).toHaveTextContent("done");
     expect(turns[1]).toHaveTextContent("4 steps");
     expect(turns[1]).toHaveTextContent("seq 2 to 8");
-    expect(turns[1]).toContainElement(screen.getByTestId("transcript-you"));
-    expect(screen.getByTestId("transcript-you")).toHaveTextContent(
-      "Cut the 2026.9.2 release candidate.",
-    );
+    // What was asked sits above the turn it opened, outside the disclosure,
+    // so a collapsed turn still shows it.
+    const asked = screen.getByTestId("transcript-you");
+    expect(turns[1]).not.toContainElement(asked);
+    expect(asked.nextElementSibling).toBe(turns[1]);
+    expect(asked).toHaveTextContent("Cut the 2026.9.2 release candidate.");
     expect(turns[1]).toContainElement(screen.getByTestId("transcript-agent"));
     expect(screen.getByTestId("transcript-agent")).toHaveTextContent(
       "Both failures predate the release scope.",

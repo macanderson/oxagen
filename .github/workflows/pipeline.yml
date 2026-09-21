@@ -109,6 +109,28 @@ env:
   INGESTION_ENCRYPTION_KEY: Z+kVBYRa3uc8nyyvgm+Z5tayV3Nawkg/YMzgzJnLh0U=
 
 jobs:
+  # A push to main gets its own concurrency group (see the comment above) so
+  # a queued run can never be evicted, but nothing stopped an already-started
+  # run from spending the full ~75-minute gate on a commit a later push
+  # already supersedes — deploy-web/deploy-node already refuse to ship that
+  # commit (check-deploy-tip.mjs, #2874), so the work bought nothing but a
+  # held runner. This job asks once, cheaply, before the expensive jobs
+  # start; see check-main-preflight.mjs for the full reasoning and why this
+  # checks tips at the front rather than cancelling a run in flight.
+  preflight:
+    name: Preflight (skip the gate for a superseded commit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      proceed: ${{ steps.preflight-tip.outputs.proceed }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Decide whether this commit still needs the full gate
+        id: preflight-tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/scripts/check-main-preflight.mjs
+
   atlas-validate:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -125,7 +147,10 @@ jobs:
         run: atlas migrate validate --dir "file://atlas/migrations"
 
   checks:
-    if: github.event_name != 'workflow_dispatch'
+    needs: [preflight]
+    if: >-
+      github.event_name != 'workflow_dispatch' &&
+      needs.preflight.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/macanderson/oxagen-ci-base:latest
@@ -266,7 +291,10 @@ jobs:
         run: pnpm check:manifest:tickets
 
   test:
-    if: github.event_name != 'workflow_dispatch'
+    needs: [preflight]
+    if: >-
+      github.event_name != 'workflow_dispatch' &&
+      needs.preflight.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/macanderson/oxagen-ci-base:latest
@@ -403,7 +431,10 @@ jobs:
           pnpm turbo run test:coverage --concurrency=3 --continue $TURBO_FILTER
 
   e2e:
-    if: github.event_name != 'workflow_dispatch'
+    needs: [preflight]
+    if: >-
+      github.event_name != 'workflow_dispatch' &&
+      needs.preflight.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/macanderson/oxagen-ci-e2e:latest
@@ -622,7 +653,10 @@ jobs:
           if-no-files-found: ignore
 
   rls-integration:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: [preflight]
+    if: >-
+      (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
+      needs.preflight.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/macanderson/oxagen-ci-base:latest
@@ -699,7 +733,10 @@ jobs:
   # refuses, and self-tests that it is still refusing before trusting its own
   # pass. Its own database, so the RLS suite above is untouched. See #1347.
   rds-compatibility:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: [preflight]
+    if: >-
+      (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
+      needs.preflight.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/macanderson/oxagen-ci-base:latest

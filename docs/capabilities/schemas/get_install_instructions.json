@@ -77,7 +77,8 @@
             "label"
           ],
           "additionalProperties": false
-        }
+        },
+        "minItems": 1
       },
       "render": {
         "type": "object",

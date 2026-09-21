@@ -25,3 +25,4 @@ export function toSkillInventory(
     nextCursor: out.nextCursor,
   };
 }
+
