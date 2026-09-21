@@ -179,6 +179,8 @@ import { organizationCreate } from "./org.create";
 import { orgMemberAdd } from "./org.member.add";
 import { orgMemberInviteAccept } from "./org.member_invite.accept";
 import { orgMemberInviteDecline } from "./org.member_invite.decline";
+import { resendMemberInvite } from "./org.member_invite.resend";
+import { revokeMemberInvite } from "./org.member_invite.revoke";
 import { orgMemberRemove } from "./org.member.remove";
 import { orgMemberRoleChange } from "./org.member_role.change";
 import { orgList } from "./org.list";
@@ -706,6 +708,8 @@ export {
   orgMemberAdd,
   orgMemberInviteAccept,
   orgMemberInviteDecline,
+  resendMemberInvite,
+  revokeMemberInvite,
   orgMemberRemove,
   orgMemberRoleChange,
   workspaceCreate,
@@ -1056,6 +1060,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgMemberAdd,
   orgMemberInviteAccept,
   orgMemberInviteDecline,
+  resendMemberInvite,
+  revokeMemberInvite,
   orgMemberRemove,
   orgMemberRoleChange,
   workspaceCreate,

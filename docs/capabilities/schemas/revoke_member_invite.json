@@ -1,0 +1,59 @@
+{
+  "name": "revoke_member_invite",
+  "domain": "org",
+  "description": "Revoke a pending invitation in the calling organization.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "invitationPublicId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "invitationPublicId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "invitationPublicId": {
+        "type": "string"
+      },
+      "status": {
+        "const": "revoked"
+      },
+      "expiresAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "invitationPublicId",
+      "status",
+      "expiresAt"
+    ],
+    "additionalProperties": false
+  }
+}

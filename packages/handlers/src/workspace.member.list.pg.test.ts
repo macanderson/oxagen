@@ -151,7 +151,7 @@ describe.skipIf(!enabled)("list_members against Postgres", () => {
           invitedByUserId: owner,
           expiresAt: null,
         },
-        // Pending but expired: not listed.
+        // Pending but expired: listed so an owner can renew or revoke it.
         {
           orgId: orgA,
           email: email("expired"),
@@ -208,7 +208,7 @@ describe.skipIf(!enabled)("list_members against Postgres", () => {
     await closeDatabase();
   });
 
-  it("org scope returns the org's members and its pending, unexpired invitations, and nothing from another org", async () => {
+  it("org scope returns the org's members and its pending invitations including expired ones, and nothing from another org", async () => {
     const out = await list({ scope: "org" }, ctxFor(orgA, workspaceA, owner));
     expect(listMembers.output.safeParse(out).success).toBe(true);
     if (out.scope !== "org") throw new Error("unreachable");
@@ -226,10 +226,20 @@ describe.skipIf(!enabled)("list_members against Postgres", () => {
     expect(out.members[0]?.id).toBe(publicIds[0]?.publicId);
     expect(out.members[0]?.joinedAt).toBe("2026-01-01T00:00:00.000Z");
 
-    expect(out.invitations.map((i) => [i.email, i.role])).toEqual([
-      [email("open"), "Admin"],
-      [email("pending"), "Member"],
-    ]);
+    expect(out.invitations.map((i) => [i.email, i.role])).toEqual(
+      expect.arrayContaining([
+        [email("open"), "Admin"],
+        [email("pending"), "Member"],
+        [email("expired"), "Member"],
+      ]),
+    );
+    expect(out.invitations).toHaveLength(3);
+    expect(
+      Date.parse(
+        out.invitations.find((i) => i.email === email("expired"))?.expiresAt ??
+          "",
+      ),
+    ).toBeLessThan(Date.now());
     expect(
       out.invitations.find((i) => i.email === email("open"))?.expiresAt,
     ).toBeNull();
@@ -240,7 +250,7 @@ describe.skipIf(!enabled)("list_members against Postgres", () => {
     const out = await list({ scope: "org" }, ctxFor(orgA, workspaceA2, member));
     if (out.scope !== "org") throw new Error("unreachable");
     expect(out.members).toHaveLength(2);
-    expect(out.invitations).toHaveLength(2);
+    expect(out.invitations).toHaveLength(3);
   });
 
   it("the other org sees only its own roster", async () => {

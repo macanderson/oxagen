@@ -389,13 +389,8 @@
   ],
   "packages/handlers/src/org.member_invite.accept.ts": [
     "50e7979272eccae189c894e1aaefce19e7b0ea323586cd31a82398b7b03c4981",
-    "7b01f93e2bb7b944ea94db97bcea910579de5408195d82d6a1b34889e71f9d61",
     "8baee4a04bdea3bbed82fe611f524692eddc90faaff9290b78c492cface6a3ba",
     "a40adc7d53fa45180ff60c28568aae4560e8a0b24436873cc3fa74cbd79379ec"
-  ],
-  "packages/handlers/src/org.member_invite.decline.ts": [
-    "e7c223a159d8cca8572467310980fd422021df6a4101a680c528b8b857ba41a8",
-    "ec7e79c2f4ba5794580f017e7230a390ff51a48dd678090c70b5754eac543031"
   ],
   "packages/handlers/src/org.member.add.ts": [
     "780c6670b198195a45095dc6936f5323d5c665344dc9ee220423f93ccb29b205"

@@ -12,6 +12,16 @@ import {
 // Wrapped in `registerHandlersOnce` so a dev bundler re-evaluating this module
 // on hot reload is a no-op instead of tripping the kernel's duplicate guard.
 registerHandlersOnce("@oxagen/handlers", () => {
+  registerHandler("revoke_member_invite", () =>
+    import("./org.member_invite.revoke").then(
+      (m) => m.handler as CapabilityHandlerFn,
+    ),
+  );
+  registerHandler("resend_member_invite", () =>
+    import("./org.member_invite.resend").then(
+      (m) => m.handler as CapabilityHandlerFn,
+    ),
+  );
   registerHandler(
     "suggest_agent_def",
     async () =>
