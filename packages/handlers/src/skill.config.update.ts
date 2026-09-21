@@ -14,7 +14,12 @@ export function createSkillConfigUpdateHandler(
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);
     const actor = { ...ctx, userId: actingUserId };
-    await assertOrgRole(actor, { org: ["Owner", "Admin"] });
+    // INV-29 reads the object literal at the call site, so the acting user is
+    // named here rather than through `actor` (packages/handlers/src/role-check.test.ts).
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin"] },
+    );
     if (
       input.action === "propose" &&
       input.text !== undefined &&

@@ -80,6 +80,9 @@ CREATE POLICY tenant_isolation ON skills.config_versions
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (
     org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND
     workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+CREATE POLICY tenant_org_wide_read ON skills.config_versions
+  FOR SELECT
+  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
 
 ALTER TABLE skills.resolutions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE skills.resolutions FORCE ROW LEVEL SECURITY;
@@ -90,10 +93,6 @@ CREATE POLICY tenant_isolation ON skills.resolutions
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (
     org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND
     workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
-
-CREATE POLICY tenant_org_wide_read ON skills.config_versions
-  FOR SELECT
-  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
 CREATE POLICY tenant_org_wide_read ON skills.resolutions
   FOR SELECT
   USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
