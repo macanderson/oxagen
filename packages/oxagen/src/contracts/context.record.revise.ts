@@ -54,7 +54,9 @@ export const contextRecordRevise = registerCapability({
   output: contextPrSchema,
 });
 
-export type ContextRecordReviseInput = z.output<typeof contextRecordRevise.input>;
+export type ContextRecordReviseInput = z.output<
+  typeof contextRecordRevise.input
+>;
 export type ContextRecordReviseOutput = z.output<
   typeof contextRecordRevise.output
 >;

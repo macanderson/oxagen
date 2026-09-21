@@ -4555,6 +4555,21 @@
       }
     },
     {
+      "name": "ingest_run_frames",
+      "file": "run.frames.ingest.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "get_run",
       "file": "run.get.ts",
       "domain": "run",
@@ -4636,6 +4651,21 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "create_run_token",
+      "file": "run.token.issue.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": false,
+        "docs": true
       }
     },
     {

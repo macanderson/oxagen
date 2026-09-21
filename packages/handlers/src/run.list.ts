@@ -209,6 +209,8 @@ const ledgerColumns = {
     runId: runs.id,
     publicId: runs.publicId,
     status: runs.status,
+    ingressRevoked: runs.cancelRequested,
+    ingressPaused: runs.ingressPaused,
     createdAt: runs.createdAt,
     startedAt: runs.startedAt,
     name: runs.name,
@@ -607,6 +609,8 @@ type LedgerRunCore = GeneratedSummaryColumns & {
   publicId: string;
   /** `agent_runs.status` (CHECK: pending, running, completed, failed, cancelled). */
   status: string;
+  ingressRevoked?: boolean;
+  ingressPaused?: boolean;
   createdAt: Date;
   startedAt: Date | null;
 };
@@ -924,6 +928,8 @@ export function toLedgerRunItem(
   return {
     id: run.publicId,
     source: "ledger",
+    ingressRevoked: run.ingressRevoked ?? false,
+    ingressPaused: run.ingressPaused ?? false,
     agentKey: composeAgentKey(
       identity.orgNamespace,
       identity.workspaceNamespace,

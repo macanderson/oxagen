@@ -336,16 +336,19 @@ describe("controls", () => {
     }
   });
 
-  it("disables every control on a live ledger run and says why (negative)", async () => {
+  it("allows ledger ingress control and explains the remaining control limit", async () => {
     await renderRun({
       detail: ok(
         runDetail({ run: runRow({ status: "live", source: "ledger" }) }),
       ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-pause")).toBeDisabled();
-    expect(screen.getByTestId("ledger-no-control")).toHaveTextContent(
-      "Oxagen holds no run token it can revoke",
+    expect(screen.getByTestId("run-pause")).toBeEnabled();
+    expect(screen.queryByTestId("run-resume")).toBeNull();
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
+    expect(screen.getByTestId("run-cancel")).toBeEnabled();
+    expect(screen.getByTestId("ledger-control-limit")).toHaveTextContent(
+      "Cancel revokes",
     );
   });
 

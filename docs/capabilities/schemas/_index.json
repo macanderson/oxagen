@@ -1,5 +1,5 @@
 {
-  "generatedCount": 341,
+  "generatedCount": 343,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -353,6 +353,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "create_run_token",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -1677,6 +1687,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "ingest_run_frames",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
