@@ -60,7 +60,10 @@ Updates `agent.tool_versions` (`classified_risk_grade`, `classification`, `class
 ## Tool changes and disabled rules
 
 Tool classification and publication recheck matching enabled approval rules in
-the same transaction as the tool write (ADR-119). A rule whose recorded author
+the same transaction as the tool write (ADR-119). Classification rechecks rules
+only for the active version. Classifying a retained inactive version preserves
+current rules. The workspace lock serializes classification with publication.
+A rule whose recorded author
 no longer has authority is disabled. A changed measure path, type, unit, or
 scale used by the rule, or a newly matching tool, requires explicit review.
 The tool change itself is not refused because an existing rule fails that check.
