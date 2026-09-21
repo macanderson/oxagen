@@ -444,6 +444,99 @@ describe("the daemon's git seam", () => {
     expect(reconciliations(handle)).toHaveLength(1);
   });
 
+  it.each([false, true])(
+    "retries the exact terminal event after a WAL failure, restart=%s",
+    async (restart) => {
+      const paths = scratchPaths();
+      const exec = fakeGit(() => REPO_ANSWERS, []);
+      const first = await boot(
+        exec,
+        () => 1000,
+        undefined,
+        undefined,
+        undefined,
+        paths,
+      );
+      await first.api.handleHook(hook("SessionStart"));
+      await first.api.handleHook(hook("SessionEnd"));
+      const append = first.wal.append.bind(first.wal);
+      let expected: TachoEvent | undefined;
+      const fault = vi
+        .spyOn(first.wal, "append")
+        .mockImplementation((events, bodies) => {
+          const terminal = events.find(
+            (event) =>
+              event.kind === "agent_stop" && event.session_id === SESSION,
+          );
+          if (terminal !== undefined && expected === undefined) {
+            expected = terminal;
+            throw Object.assign(new Error("event disk full"), {
+              code: "ENOSPC",
+            });
+          }
+          append(events, bodies);
+        });
+      await first.tick();
+      expect(expected).toBeDefined();
+      expect(first.registry.get(SESSION)?.sealed).toBe(false);
+      const uuid = first.registry.get(SESSION)!.recorder.sessionUuid;
+      expect(
+        first.wal.read(uuid).some((event) => event.kind === "agent_stop"),
+      ).toBe(false);
+      fault.mockRestore();
+      let next = first;
+      if (restart) {
+        await first.stop();
+        next = await boot(
+          exec,
+          () => 2000,
+          undefined,
+          undefined,
+          undefined,
+          paths,
+        );
+      }
+      await next.tick();
+      const stops = next.wal
+        .read(uuid)
+        .filter((event) => event.kind === "agent_stop");
+      expect(stops).toEqual([expected]);
+      expect(next.registry.get(SESSION)?.sealed).toBe(true);
+    },
+  );
+
+  it("does not duplicate a terminal event when only the WAL cursor write failed", async () => {
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1000,
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("SessionEnd"));
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = false;
+    vi.spyOn(handle.wal, "append").mockImplementation((events, bodies) => {
+      append(events, bodies);
+      if (
+        !failed &&
+        events.some(
+          (event) =>
+            event.kind === "agent_stop" && event.session_id === SESSION,
+        )
+      ) {
+        failed = true;
+        throw new Error("cursor write failed");
+      }
+    });
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    await handle.tick();
+    const uuid = handle.registry.get(SESSION)!.recorder.sessionUuid;
+    expect(
+      handle.wal.read(uuid).filter((event) => event.kind === "agent_stop"),
+    ).toHaveLength(1);
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+  });
+
   it("polls control state before it spawns any git", async () => {
     // The git reads are the slow lane: one session can put 64 untracked-file
     // probes through a four-worker pool at ten seconds each, and the tick

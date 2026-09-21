@@ -1424,7 +1424,14 @@ describe("shipper", () => {
         .some((event) => event.session_uuid === other[0]!.session_uuid),
     ).toBe(true);
     expect(bodies).toHaveLength(0);
-    expect(log.some((line) => line.includes("held"))).toBe(true);
+    expect(log.filter((line) => line.includes("retention: held"))).toHaveLength(
+      1,
+    );
+    await shipper.drain();
+    await shipper.drain();
+    expect(log.filter((line) => line.includes("retention: held"))).toHaveLength(
+      1,
+    );
     proven = true;
     await shipper.drain();
     expect(wal.stats().unshipped).toBe(0);

@@ -21,7 +21,7 @@ import { execFile, spawnSync } from "node:child_process";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
 import type { SessionRecorder } from "../claude-code/recorder";
-import type { TachoEvent } from "../envelope";
+import { tachoEventSchema, type TachoEvent } from "../envelope";
 import { type FrameBody, retentionAllows } from "../evidence/frame-body";
 import { verifyBundle } from "../host/bundle";
 import {
@@ -101,6 +101,7 @@ import {
   parseRegistryState,
   sessionMapKey,
   type SessionRecord,
+  type RegistryState,
   SessionRegistry,
 } from "./registry";
 import {
@@ -1164,7 +1165,26 @@ async function initializeDaemon(
    */
   const gitPending = new Map<string, { force: boolean; reconcile: boolean }>();
   const pendingEndsPath = join(paths.root, "pending-session-ends.json");
-  const pendingSessionEnds = new Map<string, HookEnvelope>();
+  const terminalSchema = z.object({
+    events: z.array(tachoEventSchema),
+    state: z.custom<RegistryState>(
+      (value) => parseRegistryState(value) !== undefined,
+    ),
+    bodies: z.array(
+      z.object({
+        event_id_idem: z.string(),
+        session_uuid: z.string().uuid(),
+        seq: z.number().int(),
+        content_type: z.string(),
+        content_class: z.enum(["model_call", "tool_call", "approval_receipt"]),
+        bytes_base64: z.string(),
+      }),
+    ),
+  });
+  type PendingSessionEnd = HookEnvelope & {
+    terminal?: z.infer<typeof terminalSchema>;
+  };
+  const pendingSessionEnds = new Map<string, PendingSessionEnd>();
   const pendingEndSchema = z.tuple([
     z.string().uuid(),
     z.object({
@@ -1175,6 +1195,7 @@ async function initializeDaemon(
       harness: tachoHarnessSchema.optional(),
       agent: z.string().optional(),
       replay: z.object({ receivedAt: z.string().datetime() }).optional(),
+      terminal: terminalSchema.optional(),
     }),
   ]);
   try {
@@ -1192,7 +1213,7 @@ async function initializeDaemon(
       if (
         session === undefined ||
         sessionMapKey(session.harnessSessionId, session) !==
-          sessionMapKey(envelope.payload.session_id, {
+          sessionMapKey(hookInputSchema.parse(envelope.payload).session_id, {
             harness: envelope.harness,
             customAgent: envelope.agent,
           })
@@ -1300,10 +1321,15 @@ async function initializeDaemon(
       const session = registry.byUuid(harnessSessionId);
       const ending = pendingSessionEnds.get(harnessSessionId);
       const cwd = session?.cwd;
-      if (session === undefined || session.sealed || cwd === undefined) {
+      if (
+        session === undefined ||
+        session.sealed ||
+        cwd === undefined ||
+        ending?.terminal !== undefined
+      ) {
         if (ending !== undefined) {
           await serial.run(async () => {
-            if (session?.sealed !== true) await recordHookOutcome(ending);
+            await recordHookOutcome(ending, harnessSessionId);
             persistState();
             pendingSessionEnds.delete(harnessSessionId);
             persistPendingEnds();
@@ -1387,7 +1413,7 @@ async function initializeDaemon(
           pendingSessionEnds.get(session.recorder.sessionUuid) === ending
         ) {
           record(events.splice(0));
-          await recordHookOutcome(ending);
+          await recordHookOutcome(ending, session.recorder.sessionUuid);
           persistState();
           pendingSessionEnds.delete(session.recorder.sessionUuid);
           persistPendingEnds();
@@ -1479,7 +1505,17 @@ async function initializeDaemon(
 
   async function recordHookOutcome(
     envelope: HookEnvelope,
+    pendingUuid?: string,
   ): Promise<Record<string, unknown>> {
+    const pending =
+      pendingUuid === undefined
+        ? undefined
+        : pendingSessionEnds.get(pendingUuid);
+    if (pending?.terminal !== undefined) {
+      flushPendingTerminal(pending.terminal);
+      return {};
+    }
+    const before = pending === undefined ? undefined : registry.state();
     const outcome = await handleHookEvent(
       envelope.payload,
       envelope.env ?? {},
@@ -1498,8 +1534,76 @@ async function initializeDaemon(
       envelope.harness,
       envelope.agent,
     );
-    record(outcome.events, outcome.bodies);
+    if (pending !== undefined) {
+      const state = registry.state();
+      state.sessions = state.sessions.filter(
+        (session) =>
+          sessionMapKey(session.harnessSessionId, session) ===
+          sessionMapKey(hookInputSchema.parse(envelope.payload).session_id, {
+            harness: envelope.harness,
+            customAgent: envelope.agent,
+          }),
+      );
+      state.agents = [];
+      const retention = retentionInForce();
+      pending.terminal = {
+        events: outcome.events,
+        state,
+        bodies: outcome.bodies
+          .filter((body) =>
+            retentionAllows(retention.mandate, body.content_class),
+          )
+          .map(({ bytes, ...body }) => ({
+            ...body,
+            bytes_base64: Buffer.from(bytes).toString("base64"),
+          })),
+      };
+      try {
+        persistPendingEnds();
+      } catch (error) {
+        delete pending.terminal;
+        if (before !== undefined) registry.restore(before);
+        throw error;
+      }
+      // A sealed registry flag means its terminal event is durable. The
+      // journal preserves the exact event bytes and recorder cursor until then.
+      if (outcome.record !== undefined) outcome.record.sealed = false;
+      flushPendingTerminal(pending.terminal);
+    } else record(outcome.events, outcome.bodies);
     return outcome.response;
+  }
+
+  function flushPendingTerminal(
+    terminal: z.infer<typeof terminalSchema>,
+  ): void {
+    const retention = retentionInForce();
+    const bodies = terminal.bodies
+      .filter((body) => retentionAllows(retention.mandate, body.content_class))
+      .map(({ bytes_base64, ...body }) => ({
+        ...body,
+        bytes: Buffer.from(bytes_base64, "base64"),
+      }));
+    wal.appendRecovered(terminal.events, bodies);
+    const saved = terminal.state.sessions[0];
+    const current =
+      saved === undefined
+        ? undefined
+        : registry
+            .list()
+            .find(
+              (session) =>
+                sessionMapKey(session.harnessSessionId, session) ===
+                sessionMapKey(saved.harnessSessionId, saved),
+            );
+    if (
+      current !== undefined &&
+      saved !== undefined &&
+      current.recorder.chainCursor.seq === saved.recorder.cursor.seq &&
+      current.recorder.chainCursor.prevHash === saved.recorder.cursor.prevHash
+    )
+      current.sealed = true;
+    else registry.restore(terminal.state);
+    stateDirty = true;
   }
 
   /** Replay what `tacho-hook` spooled while the daemon was down, in order. */

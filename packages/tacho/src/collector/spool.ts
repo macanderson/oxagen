@@ -150,6 +150,7 @@ export class Shipper {
   private readonly options: ShipperOptions;
   private backoffMs: number;
   private nextAttemptAt = 0;
+  private lastRetentionHoldLogAt: number | undefined;
   private consecutiveFailures = 0;
   private lastRateLimit: RateLimitHint | undefined;
   lastSuccessAt: number | undefined;
@@ -407,10 +408,17 @@ export class Shipper {
     const ready = own.filter(
       (event) => event.seq < (held.get(event.session_uuid) ?? Infinity),
     );
-    if (held.size > 0)
+    if (
+      held.size > 0 &&
+      (this.lastRetentionHoldLogAt === undefined ||
+        this.options.now() - this.lastRetentionHoldLogAt >= 300_000)
+    ) {
+      this.lastRetentionHoldLogAt = this.options.now();
       this.options.log(
         `retention: held ${own.length - ready.length} event(s) in ${held.size} session(s): body authority unproven`,
       );
+    }
+    if (retention.proven) this.lastRetentionHoldLogAt = undefined;
     if (released > 0)
       this.options.log(
         `retention: releasing ${released} event(s) body-missing: unproven authority exceeded the 24-hour event-age ceiling or event time is invalid`,
