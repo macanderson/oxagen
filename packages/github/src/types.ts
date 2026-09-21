@@ -138,6 +138,22 @@ export interface GitHubInstallationRepositories {
   truncated: boolean;
 }
 
+/**
+ * One commit in a path's history: enough to name who published a file and
+ * when, without a second round trip for the author.
+ */
+export interface GitHubPathCommit {
+  sha: string;
+  /** The author's name as git recorded it on the commit. */
+  authorName: string;
+  /** The author's GitHub login, when GitHub matched the commit to an account. */
+  authorLogin: string | null;
+  /** The author date, ISO-8601. */
+  committedAt: string;
+  /** The first line of the commit message. */
+  summary: string;
+}
+
 export interface GitHubClient {
   /**
    * Create a new repository.
@@ -255,6 +271,23 @@ export interface GitHubClient {
     path: string;
     ref?: string;
   }): Promise<string | null>;
+
+  /**
+   * The commits that touched one path, newest first, on the given ref. Empty
+   * when the path has no history there, and empty rather than a throw when
+   * GitHub answers 404 — a repository with no commits has no history to list.
+   *
+   * This is how a file-backed record learns who published it and when: a
+   * record's provenance is the commit that put its bytes on the approved
+   * branch, not a column somebody wrote by hand.
+   */
+  listPathCommits(args: {
+    owner: string;
+    repo: string;
+    path: string;
+    ref?: string;
+    limit?: number;
+  }): Promise<GitHubPathCommit[]>;
 
   /**
    * Return all blob paths in the repository tree at the given ref (defaults to

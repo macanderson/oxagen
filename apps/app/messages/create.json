@@ -147,7 +147,8 @@
         "tokens": "about {tokens, number} tokens to load",
         "revert": "Revert",
         "cost": "Every token in this file is paid for on every turn it is loaded into, by every agent that loads it. The estimate is four characters a token. The model’s tokenizer has the real count.",
-        "invalidName": "Set the frontmatter name to a lowercase name with hyphens, up to 48 characters."
+        "invalidName": "Set the frontmatter name to a lowercase name with hyphens, up to 48 characters.",
+        "invalidFrontmatter": "Fix the skill frontmatter. Name, semantic version, and scope are required. Duplicate keys, aliases, merge keys, and permission grants are not supported."
       },
       "pr": {
         "title": "Open the pull request",
@@ -237,6 +238,12 @@
       "changed": "The source changed after this draft opened. Close and reopen the draft before submitting.",
       "refused": "The clone did not pass validation. Check the source and submit again.",
       "retry": "Retry"
+    },
+    "loading": "Loading creation form",
+    "loadFailed": {
+      "title": "The form did not load",
+      "body": "Oxagen could not read this wizard. Nothing was written. This usually means the page has been open since before a release.",
+      "retry": "Try again"
     }
   }
 }

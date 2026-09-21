@@ -246,15 +246,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
                 .insert(schema.skillResolutions)
                 .values(resolution(seeded[1]!));
             else
-              await tx
-                .insert(schema.skillConfigVersions)
-                .values({
-                  ...seeded[1]!,
-                  id: crypto.randomUUID(),
-                  publicId: `skv_${crypto.randomUUID()}`,
-                  versionLabel: "refused",
-                  commitSha: "f".repeat(40),
-                });
+              await tx.insert(schema.skillConfigVersions).values({
+                ...seeded[1]!,
+                id: crypto.randomUUID(),
+                publicId: `skv_${crypto.randomUUID()}`,
+                versionLabel: "refused",
+                commitSha: "f".repeat(40),
+              });
           }),
         ).rejects.toMatchObject({ cause: { code: "42501" } });
       },

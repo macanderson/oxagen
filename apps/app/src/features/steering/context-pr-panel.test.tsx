@@ -11,7 +11,7 @@ import type { ContextPr } from "@/data/contracts/steering";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { readOk } from "@/data/read";
-import { AT, contextPr, PR_URL } from "./steering.builders";
+import { AT, contextPr, PR_URL } from "@/test/steering-views";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),

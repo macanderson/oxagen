@@ -9,6 +9,7 @@ export type {
   GitHubCiChecks,
   GitHubPrFile,
   GitHubBranch,
+  GitHubPathCommit,
   GitHubRepoInfo,
   GitHubInstallationRepo,
   GitHubInstallationRepositories,

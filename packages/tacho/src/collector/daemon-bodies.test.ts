@@ -216,6 +216,7 @@ describe("tachod and frame bodies", () => {
         reason: "other",
       }),
     ).toBe(200);
+    await handles.find((handle) => handle.port === port)?.flushGitReads();
   }
 
   it("ships the bodies the bundle retains, each with its own event", async () => {
@@ -629,6 +630,7 @@ describe("tachod and frame bodies", () => {
         reason: "other",
       }),
     ).toBe(200);
+    await handle.flushGitReads();
     await handle.tick();
     expect(
       batches.flatMap((b) => b.events).some((e) => e.kind === "agent_stop"),

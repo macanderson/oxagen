@@ -28,6 +28,10 @@ const { readMainRepository, proposeSkill, readCloneDraft, proposeClone } =
 vi.mock("./actions", () => ({ readMainRepository, proposeSkill }));
 vi.mock("./clone-actions", () => ({ readCloneDraft, proposeClone }));
 
+// Await real module transformation before asserting UI behavior.
+const { WIZARDS } = await import("./kinds");
+await Promise.all([WIZARDS.skill?.(), WIZARDS.agent?.()]);
+
 const { CreateHost } = await import("./create-host");
 
 const t = translator("create");
@@ -206,4 +210,38 @@ it("prefills a finding in the context wizard and leaves it editable", async () =
     "Review and narrow this instruction.",
   );
   expect(proposeSkill).not.toHaveBeenCalled();
+});
+
+describe("CreateHost when a wizard module does not arrive", () => {
+  // A tab opened before a deployment asks for a chunk that is no longer
+  // served. The host has to say so and offer the next attempt itself: React's
+  // global error page would re-render the same rejection on its own retry.
+  it("says the form did not load, and a retry re-imports rather than replaying the failure", async () => {
+    const loads = vi.fn<() => Promise<never>>();
+    const original = WIZARDS.skill;
+    let calls = 0;
+    WIZARDS.skill = () => {
+      calls += 1;
+      void loads();
+      return calls === 1
+        ? Promise.reject(new Error("chunk 404"))
+        : (original?.() ?? Promise.reject(new Error("no wizard")));
+    };
+    try {
+      mount();
+      open("skill");
+      await screen.findByTestId("create-load-failed");
+      expect(screen.queryByTestId("create-skill")).toBeNull();
+      expect(calls).toBe(1);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: t("loadFailed.retry") }),
+      );
+      await screen.findByTestId("create-skill");
+      // The second attempt is a fresh import, not the cached rejection.
+      expect(calls).toBe(2);
+    } finally {
+      if (original !== undefined) WIZARDS.skill = original;
+    }
+  });
 });

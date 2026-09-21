@@ -6,19 +6,9 @@
  * model and class is priced at the contracted rate instead of the provider's
  * published one.
  *
- * ── Why the call is one token class, not a whole rate card ──────────────────
- *
- * A negotiated contract usually names several classes at once, so a whole-card
- * input is the shape a human has in front of them. It is not the shape the
- * store can honour: `cost.price_entries` records one row per (provider, model,
- * token class, region, effective_from), each effective-dated on its own, and
- * the writer upserts one row per statement. A four-class card would therefore
- * be four statements, and a failure after the second would leave the
- * organization priced at a blend — negotiated input, list output — that nobody
- * agreed to and that nothing in the book would flag. One class per call keeps
- * the capability atomic on exactly the row the resolver later picks, and a
- * whole card is a loop the caller (`oxagen price set`, a script, an operator)
- * runs with one `effectiveFrom` for every class.
+ * `additionalRates` writes other token classes for this model in the same
+ * transaction and at the same instant. Every class commits or none does.
+ * Existing callers that omit it keep the one-class input and output shape.
  *
  * Prices arrive as USD per one million units — a person types `2.40`, the way
  * the contract reads — and are recorded as integer micro-USD per million by
@@ -59,7 +49,7 @@ export const costPriceEntrySet = registerCapability({
   name: "set_price_entry",
   domain: "cost",
   description:
-    "Set this organization's negotiated rate for one model and token class, in USD per one million units, effective from an instant. The negotiated row wins over the provider list price from then on; the row it supersedes is closed, never overwritten, so a run priced earlier keeps the entry it was priced with. Owner / Admin / Billing only.",
+    "Set this organization's negotiated rate for one model and token class, in USD per one million units, effective from an instant. Optional additionalRates commit other classes of the same model in one transaction. The negotiated row wins over the provider list price from then on; the row it supersedes is closed, never overwritten, so a run priced earlier keeps the entry it was priced with. Owner / Admin / Billing only.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
   // No "cli" layer: CapabilityLayer has no such member, and check_manifest
@@ -85,6 +75,19 @@ export const costPriceEntrySet = registerCapability({
       modelAliases: z.array(z.string().min(1).max(256)).max(32).optional(),
       /** The contracted price in USD per one million units. */
       usdPerMillion: usdPerMillionSchema,
+      /** Other classes in this card. Duplicate classes are refused before writing. */
+      additionalRates: z
+        .array(
+          z
+            .object({
+              tokenClass: priceTokenClassSchema,
+              usdPerMillion: usdPerMillionSchema,
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(10)
+        .optional(),
       /** RFC 3339; the write instant when omitted. Never earlier than the open row's. */
       effectiveFrom: z.string().datetime().optional(),
     })
@@ -93,6 +96,16 @@ export const costPriceEntrySet = registerCapability({
     .object({
       /** The row now in effect for the key. */
       entry: priceEntrySchema,
+      additionalEntries: z
+        .array(
+          z
+            .object({
+              entry: priceEntrySchema,
+              closed: priceEntrySchema.nullable(),
+            })
+            .strict(),
+        )
+        .optional(),
       /**
        * The row this write closed at `effectiveFrom`, or null when nothing was
        * open for the key or the write corrected a row that had not shipped yet.

@@ -174,7 +174,8 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 128
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "floor": {
                       "type": "boolean"
@@ -250,7 +251,8 @@
             "chain"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 100
       },
       "nextCursor": {
         "anyOf": [

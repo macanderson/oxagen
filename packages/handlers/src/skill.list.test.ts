@@ -45,8 +45,10 @@ const skillRow = (name: string) => ({
 
 function handlerWith(over: Partial<SkillQueries> = {}) {
   const queries: SkillQueries = {
-    totals: vi.fn(async () => ({ sessions: 3, reported: 2 })),
-    names: vi.fn(async () => [skillRow("release-notes")]),
+    read: vi.fn(async () => ({
+      totals: { sessions: 3, reported: 2 },
+      rows: [skillRow("release-notes")],
+    })),
     ...over,
   };
   const handler = createSkillListHandler({ queries, now: () => NOW });
@@ -77,8 +79,7 @@ describe("list_skills handler", () => {
     );
     const { queries, list } = handlerWith();
     await expect(list({})).rejects.toMatchObject({ code: "forbidden" });
-    expect(queries.totals).not.toHaveBeenCalled();
-    expect(queries.names).not.toHaveBeenCalled();
+    expect(queries.read).not.toHaveBeenCalled();
   });
 
   it("reads the last 30 days up to now in this workspace by default, and the asked window otherwise", async () => {
@@ -89,8 +90,7 @@ describe("list_skills handler", () => {
       from: new Date("2026-08-16T12:00:00.000Z"),
       to: NOW,
     };
-    expect(queries.totals).toHaveBeenCalledWith(scope, window);
-    expect(queries.names).toHaveBeenCalledWith(scope, window, {
+    expect(queries.read).toHaveBeenCalledWith(scope, window, {
       after: null,
       limit: 100,
     });
@@ -100,10 +100,14 @@ describe("list_skills handler", () => {
     });
 
     await list({ windowDays: 7 });
-    expect(queries.totals).toHaveBeenLastCalledWith(scope, {
-      from: new Date("2026-09-08T12:00:00.000Z"),
-      to: NOW,
-    });
+    expect(queries.read).toHaveBeenLastCalledWith(
+      scope,
+      {
+        from: new Date("2026-09-08T12:00:00.000Z"),
+        to: NOW,
+      },
+      { after: null, limit: 100 },
+    );
   });
 
   it("returns the window's counts, with sessions that reported nothing counted as not reported", async () => {
@@ -121,8 +125,10 @@ describe("list_skills handler", () => {
 
   it("returns a null reported count, never a zero, when no session in the window reported an inventory", async () => {
     const { list } = handlerWith({
-      totals: vi.fn(async () => ({ sessions: 2, reported: 0 })),
-      names: vi.fn(async () => []),
+      read: vi.fn(async () => ({
+        totals: { sessions: 2, reported: 0 },
+        rows: [],
+      })),
     });
     const out = await list({});
     expect(out.reportedSessions).toBeNull();
@@ -134,11 +140,17 @@ describe("list_skills handler", () => {
     const full = Array.from({ length: 101 }, (_, i) =>
       skillRow(`skill-${String(i).padStart(3, "0")}`),
     );
-    const names = vi
-      .fn<SkillQueries["names"]>()
-      .mockResolvedValueOnce(full)
-      .mockResolvedValueOnce([skillRow("skill-100")]);
-    const { queries, list } = handlerWith({ names });
+    const read = vi
+      .fn<SkillQueries["read"]>()
+      .mockResolvedValueOnce({
+        totals: { sessions: 101, reported: 101 },
+        rows: full,
+      })
+      .mockResolvedValueOnce({
+        totals: { sessions: 101, reported: 101 },
+        rows: [skillRow("skill-100")],
+      });
+    const { queries, list } = handlerWith({ read });
     const first = await list({});
     expect(first.skills).toHaveLength(100);
     expect(first.nextCursor).not.toBeNull();
@@ -149,7 +161,7 @@ describe("list_skills handler", () => {
       skillList.input.parse({ cursor: first.nextCursor, windowDays: 7 }),
       ctx,
     );
-    expect(names).toHaveBeenLastCalledWith(
+    expect(read).toHaveBeenLastCalledWith(
       { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
       { from: new Date("2026-08-16T12:00:00.000Z"), to: NOW },
       { after: "skill-099", limit: 100 },
@@ -170,7 +182,7 @@ describe("list_skills handler", () => {
       await expect(list({ cursor })).rejects.toMatchObject({
         code: "invalid_input",
       });
-    expect(queries.totals).not.toHaveBeenCalled();
+    expect(queries.read).not.toHaveBeenCalled();
   });
 });
 

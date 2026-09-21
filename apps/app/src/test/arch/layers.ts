@@ -282,6 +282,13 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
 const PLATFORM_NAMED_ROWS: Readonly<
   Record<string, Readonly<Record<string, readonly string[]>>>
 > = {
+  // Skill-only parsing subpath has no kernel, handler, or contract-registry import.
+  "src/features/create/skill-file.ts": {
+    "@oxagen/oxagen/skill-frontmatter": ["readSkillFrontmatter"],
+  },
+  "src/shared/skill-source-identity.ts": {
+    "@oxagen/oxagen/skill-frontmatter": ["readSkillFrontmatter"],
+  },
   // Browser controls read the shared ceiling without loading the contract registry.
   "src/features/fleet/run-row-controls.tsx": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],

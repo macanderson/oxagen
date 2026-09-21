@@ -40,9 +40,8 @@
  * exactly the real roles at each scope. The four system org roles are Owner,
  * Admin, Compliance and Billing, and there is no org-level Member or Viewer.
  *
- * API only, no MCP surface, on `update_profile`'s reasoning: MCP builds every
- * context with `userId: null`, so this could only ever answer `forbidden`
- * there.
+ * MCP CLI-session credentials preserve the approving user. Machine credentials
+ * with no user remain refused by the handler.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -65,8 +64,8 @@ export const privacyDataExportStatus = registerCapability({
   description:
     "Read the status of one of the calling user's own data exports. Answers a storage key rather than a URL: once ready, fetch the archive from GET /v1/{org}/{workspace}/privacy/export/{exportId}/download.",
   mode: "sync",
-  surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs", "app"],
+  surfaces: ["api", "mcp"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   mutates: false,
   noBillingGate: true,

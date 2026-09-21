@@ -1766,24 +1766,38 @@
     {
       "name": "get_clone_draft",
       "file": "configuration.clone.get.ts",
-      "domain": "unknown",
+      "domain": "configuration",
       "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
       ],
-      "layers": {}
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
     },
     {
       "name": "propose_configuration_clone",
       "file": "configuration.clone.propose.ts",
-      "domain": "unknown",
+      "domain": "configuration",
       "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
       ],
-      "layers": {}
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
     },
     {
       "name": "create_connection",
@@ -2139,6 +2153,22 @@
       }
     },
     {
+      "name": "revise_context_record",
+      "file": "context.record.revise.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "append_record",
       "file": "context.records.append.ts",
       "domain": "context",
@@ -2171,7 +2201,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2379,7 +2410,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "layers": {
         "schema": true,
@@ -3922,11 +3954,13 @@
       "domain": "privacy",
       "mode": "sync",
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
         "unit": true,
         "docs": true,
         "app": true
@@ -5238,7 +5272,8 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -5255,7 +5290,8 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -5306,7 +5342,8 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {

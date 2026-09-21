@@ -75,7 +75,8 @@
               "Compliance",
               "Billing"
             ]
-          }
+          },
+          "minItems": 1
         }
       },
       "steering": {
@@ -137,7 +138,8 @@
               "Compliance",
               "Billing"
             ]
-          }
+          },
+          "minItems": 1
         }
       },
       "steering": {

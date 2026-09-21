@@ -8,7 +8,8 @@ import {
   type RecordPage,
 } from "@/data/contracts/steering";
 import type { Read } from "@/data/read";
-import { mono } from "@/ui/control-styles";
+import { buttonSecondary, mono } from "@/ui/control-styles";
+import { routes } from "@/shared/safe-path";
 import { SafeLink } from "@/ui/navigation";
 import { CloneButton } from "@/ui/clone-button";
 import { RecordCard } from "@/ui/record-card";
@@ -120,6 +121,15 @@ export function Records({
                     </Fact>
                   )}
                 </Facts>
+                {/* The way into the record's own page (#3395). The lineage is
+                    the address, because a record read out of a file the
+                    registry has no row for carries no public id. */}
+                <SafeLink
+                  to={routes.steeringRecord(at.org, at.ws, record.lineage)}
+                  className={`${buttonSecondary} self-start`}
+                >
+                  {t("open")}
+                </SafeLink>
               </RecordCard>
             </li>
           ))}

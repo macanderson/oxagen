@@ -578,9 +578,10 @@ export function runSource(reads: RunReads) {
     },
     mandates: { list: answer("mandates", reads.mandates), get: refuse },
     audit: { events: refuse, exportEvents: refuse },
-    skills: { inventory: refuse },
+    skills: { inventory: refuse, configuration: refuse },
     steering: {
       records: refuse,
+      record: refuse,
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,

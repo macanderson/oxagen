@@ -116,7 +116,6 @@ export async function readSkillCatalog(
   }
   return (await promise).map((row) => ({ ...row }));
 }
-
 export function createSkillSearchPreviewHandler(deps: {
   store: SkillConfigStore;
   repository: typeof resolveSkillRepository;

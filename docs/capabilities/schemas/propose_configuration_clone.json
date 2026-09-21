@@ -73,7 +73,8 @@
             "content"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 16
       },
       "harness": {
         "anyOf": [

@@ -29,6 +29,7 @@
     "./approval-rules/schemas": "./src/approval-rules/schemas.ts",
     "./mandates/schemas.sample": "./src/mandates/schemas.sample.ts",
     "./client-ip": "./src/client-ip.ts",
+    "./skill-frontmatter": "./src/skill-frontmatter.ts",
     "./skills": "./src/skills.ts",
     "./configuration-clone": "./src/configuration-clone.ts"
   },
@@ -44,7 +45,8 @@
     "@oxagen/run-evidence": "workspace:*",
     "@oxagen/tacho": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
     "typescript": "6.0.3",

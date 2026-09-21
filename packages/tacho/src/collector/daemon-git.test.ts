@@ -83,8 +83,9 @@ describe("the daemon's git seam", () => {
     // Run the real interval driver, for the one case that is about the driver's
     // `ticking` guard rather than about the order inside a single tick.
     driver?: { shipMs: number },
+    existingPaths?: ReturnType<typeof scratchPaths>,
   ) {
-    const paths = scratchPaths();
+    const paths = existingPaths ?? scratchPaths();
     const signer = bundleSigner();
     const bundle = signer.sign(
       unsignedBundle({
@@ -265,6 +266,369 @@ describe("the daemon's git seam", () => {
         lines_removed: 0,
       },
     ]);
+  });
+
+  it.each([true, false])(
+    "finishes a pending final read before sealing, including unavailable Git: %s",
+    async (available) => {
+      const calls: string[][] = [];
+      const handle = await boot(
+        fakeGit(() => (available ? REPO_ANSWERS : {}), calls),
+        () => 1_000,
+      );
+      await handle.api.handleHook(hook("SessionStart"));
+      await handle.api.handleHook(hook("Stop"));
+      await handle.api.handleHook(hook("SessionEnd"));
+      expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+      await handle.tick();
+      const events = frames(handle);
+      expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+      expect(reconciliations(handle)).toHaveLength(available ? 1 : 0);
+      const end = events.findIndex((event) => event.kind === "agent_stop");
+      expect(end).toBeGreaterThan(-1);
+      if (available)
+        expect(
+          events.findIndex(
+            (event) => event.kind === "oxagen:worktree_reconciled",
+          ),
+        ).toBeLessThan(end);
+    },
+  );
+
+  it("recovers a deferred session end after the daemon restarts", async () => {
+    const paths = scratchPaths();
+    const exec = fakeGit(() => REPO_ANSWERS, []);
+    const first = await boot(
+      exec,
+      () => 1_000,
+      undefined,
+      undefined,
+      undefined,
+      paths,
+    );
+    await first.api.handleHook(hook("SessionStart"));
+    await first.api.handleHook(hook("Stop"));
+    await first.api.handleHook(hook("SessionEnd"));
+    await first.stop();
+    const next = await boot(
+      exec,
+      () => 2_000,
+      undefined,
+      undefined,
+      undefined,
+      paths,
+    );
+    await next.tick();
+    expect(next.registry.get(SESSION)?.sealed).toBe(true);
+    expect(reconciliations(next)).toHaveLength(1);
+    const events = [
+      ...next.wal.read(next.registry.get(SESSION)!.recorder.sessionUuid),
+    ];
+    expect(
+      events.findIndex((event) => event.kind === "oxagen:worktree_reconciled"),
+    ).toBeLessThan(events.findIndex((event) => event.kind === "agent_stop"));
+  });
+
+  it("does not let a dead-process sweep seal ahead of the final read", async () => {
+    let release = (): void => undefined;
+    let started = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const exec = fakeGit(() => REPO_ANSWERS, []);
+    const handle = await boot(
+      exec,
+      () => 1_000,
+      async (command, args) => {
+        started();
+        await held;
+        return exec(command, args);
+      },
+    );
+    await handle.api.handleHook({
+      ...hook("SessionStart"),
+      env: { CLAUDE_PID: "2147483647" },
+    });
+    await handle.api.handleHook(hook("Stop"));
+    await handle.api.handleHook(hook("SessionEnd"));
+    const ticking = handle.tick();
+    await entered;
+    try {
+      expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    } finally {
+      release();
+    }
+    await ticking;
+    expect(reconciliations(handle)).toHaveLength(1);
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+  });
+
+  it("requeues a throttled Stop until its observation is eligible", async () => {
+    let time = 1_000;
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => time,
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    await handle.tick();
+    await handle.api.handleHook(hook("Stop"));
+    await handle.tick();
+    expect(reconciliations(handle)).toHaveLength(1);
+    time += 15_000;
+    await handle.tick();
+    expect(reconciliations(handle)).toHaveLength(2);
+  });
+
+  it("keeps final reads separate when two harnesses reuse a session id", async () => {
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+    );
+    for (const harness of ["claude-code", "codex"] as const) {
+      await handle.api.handleHook({ ...hook("SessionStart"), harness });
+      await handle.api.handleHook({ ...hook("Stop"), harness });
+    }
+    await handle.api.handleHook({ ...hook("SessionEnd"), harness: "codex" });
+    await handle.tick();
+    const sessions = handle.registry
+      .list()
+      .filter((session) => session.harnessSessionId === SESSION);
+    expect(sessions).toHaveLength(2);
+    expect(
+      new Set(sessions.map((session) => session.recorder.sessionUuid)).size,
+    ).toBe(2);
+    expect(
+      sessions.find((session) => session.harness === "codex")?.sealed,
+    ).toBe(true);
+    expect(
+      sessions.find((session) => session.harness !== "codex")?.sealed,
+    ).toBe(false);
+    for (const session of sessions)
+      expect(
+        session.recorder.sealedEvents.filter(
+          (event) => event.kind === "oxagen:worktree_reconciled",
+        ),
+      ).toHaveLength(1);
+  });
+
+  it("starts with a malformed pending-end file without inventing a seal", async () => {
+    const paths = scratchPaths();
+    writeSensitiveFileAtomic(
+      `${paths.root}/pending-session-ends.json`,
+      "{broken",
+    );
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      undefined,
+      undefined,
+      undefined,
+      paths,
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+  });
+
+  it("preserves Cursor's explicit directory when SessionEnd carries only an inferred root", async () => {
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+    );
+    await handle.api.handleHook({
+      ...hook("SessionStart", { cwd: "/active" }),
+      harness: "cursor",
+    });
+    await handle.api.handleHook({
+      ...hook("SessionEnd", { cwd: "/fallback", cursor_cwd_inferred: true }),
+      harness: "cursor",
+    });
+    expect(handle.registry.get(SESSION)?.cwd).toBe("/active");
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+  });
+
+  it("retries a pending final read after the Git lane fails while applying it", async () => {
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("SessionEnd"));
+    const recorder = handle.registry.get(SESSION)!.recorder;
+    const seal = recorder.sealCollectorEvent.bind(recorder);
+    let fail = true;
+    vi.spyOn(recorder, "sealCollectorEvent").mockImplementation((...args) => {
+      if (fail && args[0] === "oxagen:worktree_reconciled") {
+        fail = false;
+        throw new Error("read application failed");
+      }
+      return seal(...args);
+    });
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+    expect(reconciliations(handle)).toHaveLength(1);
+  });
+
+  it.each([false, true])(
+    "retries the exact terminal event after a WAL failure, restart=%s",
+    async (restart) => {
+      const paths = scratchPaths();
+      const exec = fakeGit(() => REPO_ANSWERS, []);
+      const first = await boot(
+        exec,
+        () => 1000,
+        undefined,
+        undefined,
+        undefined,
+        paths,
+      );
+      await first.api.handleHook(hook("SessionStart"));
+      await first.api.handleHook(hook("SessionEnd"));
+      const append = first.wal.append.bind(first.wal);
+      let expected: TachoEvent | undefined;
+      const fault = vi
+        .spyOn(first.wal, "append")
+        .mockImplementation((events, bodies) => {
+          const terminal = events.find(
+            (event) =>
+              event.kind === "agent_stop" && event.session_id === SESSION,
+          );
+          if (terminal !== undefined && expected === undefined) {
+            expected = terminal;
+            throw Object.assign(new Error("event disk full"), {
+              code: "ENOSPC",
+            });
+          }
+          append(events, bodies);
+        });
+      await first.tick();
+      expect(expected).toBeDefined();
+      expect(first.registry.get(SESSION)?.sealed).toBe(false);
+      const uuid = first.registry.get(SESSION)!.recorder.sessionUuid;
+      expect(
+        first.wal.read(uuid).some((event) => event.kind === "agent_stop"),
+      ).toBe(false);
+      fault.mockRestore();
+      let next = first;
+      if (restart) {
+        await first.stop();
+        next = await boot(
+          exec,
+          () => 2000,
+          undefined,
+          undefined,
+          undefined,
+          paths,
+        );
+      }
+      await next.tick();
+      const stops = next.wal
+        .read(uuid)
+        .filter((event) => event.kind === "agent_stop");
+      expect(stops).toEqual([expected]);
+      expect(next.registry.get(SESSION)?.sealed).toBe(true);
+    },
+  );
+
+  it("refuses a checkpoint for a session whose terminal is stuck behind a WAL failure", async () => {
+    // `sealed` reports `false` for the whole pending window (its terminal
+    // is not durable yet), but that must not reopen the chain to a
+    // checkpoint sealed in between: a checkpoint frame ahead of the stuck
+    // terminal would fork the chain the next retry rebuilds against.
+    const exec = fakeGit(() => REPO_ANSWERS, []);
+    const handle = await boot(exec, () => 1000);
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("SessionEnd"));
+    const append = handle.wal.append.bind(handle.wal);
+    let expected: TachoEvent | undefined;
+    let failuresLeft = 2;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        const terminal = events.find(
+          (event) =>
+            event.kind === "agent_stop" && event.session_id === SESSION,
+        );
+        if (terminal !== undefined && failuresLeft > 0) {
+          failuresLeft -= 1;
+          expected = terminal;
+          throw Object.assign(new Error("event disk full"), {
+            code: "ENOSPC",
+          });
+        }
+        append(events, bodies);
+      });
+    await handle.tick();
+    const uuid = handle.registry.get(SESSION)!.recorder.sessionUuid;
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    expect(handle.registry.get(SESSION)?.pendingTerminal).toBe(true);
+    const cursorWhilePending =
+      handle.registry.get(SESSION)!.recorder.chainCursor.seq;
+    // This tick's own checkpoint (SessionEnd had not yet reached the git
+    // lane) is legitimate; the count from here on is what must not move.
+    const checkpointsWhilePending = handle.wal
+      .read(uuid)
+      .filter((event) => event.kind === "checkpoint").length;
+    // checkpointMs: 0 makes every tick checkpoint-eligible. Before this fix,
+    // `session.sealed === false` here read as "still live" and this tick
+    // would seal a checkpoint frame ahead of the stuck terminal event.
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    expect(handle.registry.get(SESSION)?.pendingTerminal).toBe(true);
+    expect(
+      handle.wal.read(uuid).filter((event) => event.kind === "checkpoint"),
+    ).toHaveLength(checkpointsWhilePending);
+    expect(handle.registry.get(SESSION)!.recorder.chainCursor.seq).toBe(
+      cursorWhilePending,
+    );
+    // The retry succeeds now, and the chain a checkpoint would have forked
+    // still holds exactly the one terminal event, in its original position.
+    await handle.tick();
+    expect(
+      handle.wal.read(uuid).filter((event) => event.kind === "agent_stop"),
+    ).toEqual([expected]);
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+    expect(handle.registry.get(SESSION)?.pendingTerminal).toBe(false);
+    fault.mockRestore();
+  });
+
+  it("does not duplicate a terminal event when only the WAL cursor write failed", async () => {
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1000,
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("SessionEnd"));
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = false;
+    vi.spyOn(handle.wal, "append").mockImplementation((events, bodies) => {
+      append(events, bodies);
+      if (
+        !failed &&
+        events.some(
+          (event) =>
+            event.kind === "agent_stop" && event.session_id === SESSION,
+        )
+      ) {
+        failed = true;
+        throw new Error("cursor write failed");
+      }
+    });
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    await handle.tick();
+    const uuid = handle.registry.get(SESSION)!.recorder.sessionUuid;
+    expect(
+      handle.wal.read(uuid).filter((event) => event.kind === "agent_stop"),
+    ).toHaveLength(1);
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
   });
 
   it("polls control state before it spawns any git", async () => {

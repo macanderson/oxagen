@@ -89,6 +89,28 @@ export type PublishedRecordRow = typeof schema.contextRecords.$inferSelect & {
   checksum: string | null;
 };
 
+/**
+ * What one record has actually done, rolled up over the context-use appends
+ * the runs wrote (spec §9 kinds `context_use` and `context_use_feedback`).
+ *
+ * Both counts are DISTINCT RUNS, not appends: a run that renders the same
+ * record into eight turns used it once, and counting the turns would let a
+ * chatty run outvote eight quiet ones. The run comes out of the append's
+ * `source_refs`, where a frame ref is `frame:<run>/<seq>`.
+ *
+ * The whole thing is nullable, and the null is the point: a workspace whose
+ * runs have never written a context-use append has no rollup, which is a
+ * different fact from a record nothing used. Reporting the first as `0` would
+ * tell a reader that the rule they are looking at was ignored, when the truth
+ * is that nothing is counting.
+ */
+export interface RecordEffect {
+  /** Runs that rendered this record into their bundle. */
+  rendered: number;
+  /** Runs that reported back on it — §9's `context_use_feedback`. */
+  cited: number;
+}
+
 interface PublishedRecordVersion {
   publicId: string;
   version: number;
@@ -197,6 +219,15 @@ export interface SteeringStore {
     versions: PublishedRecordVersion[];
     publishedBy: { proposalPublicId: string; prUrl: string | null } | null;
   } | null>;
+  /**
+   * The effect counters for one lineage, or null when this workspace has no
+   * context-use rollup at all. See `RecordEffect` for why the absence is a
+   * case of its own rather than a row of zeros.
+   */
+  recordEffect(
+    scope: SteeringScope,
+    lineageId: string,
+  ): Promise<RecordEffect | null>;
   /** The active records in the registry, for the conflict check. */
   listActiveRecords(scope: SteeringScope): Promise<PublishedRecordRow[]>;
   /** The promotions ledger length for the workspace: its steering version. */
@@ -602,6 +633,48 @@ export const postgresSteeringStore: SteeringStore = {
           ? { proposalPublicId: publisher.publicId, prUrl: publisher.prUrl }
           : null,
       };
+    });
+  },
+
+  async recordEffect(scope, lineageId) {
+    return withTenantDb(async (tx) => {
+      // One statement, two questions, so they cannot disagree: does this
+      // workspace record context use at all, and what did this lineage do.
+      // Asked as two round trips, a run appending between them could report
+      // "no rollup" for a workspace that has one.
+      //
+      // The run comes out of `source_refs`, where §9 spells a frame ref
+      // `frame:<run>/<seq>`. Refs that are not frame refs — a record id, an
+      // evidence digest — match nothing and drop out, which is why the run is
+      // extracted rather than the array counted.
+      const result = await tx.execute(sql`
+        select
+          count(*) filter (
+            where ${schema.contextAppends.kind} in ('context_use', 'context_use_feedback')
+          ) as scope_total,
+          count(distinct ref.run) filter (
+            where ${schema.contextAppends.kind} = 'context_use'
+              and ${schema.contextAppends.lineageId} = ${lineageId}
+          ) as rendered,
+          count(distinct ref.run) filter (
+            where ${schema.contextAppends.kind} = 'context_use_feedback'
+              and ${schema.contextAppends.lineageId} = ${lineageId}
+          ) as cited
+        from ${schema.contextAppends}
+        left join lateral (
+          select substring(source_ref from 'frame:([^/]+)/') as run
+          from unnest(${schema.contextAppends.sourceRefs}) as source_ref
+        ) as ref on true
+        where ${schema.contextAppends.orgId} = ${scope.orgId}
+          and ${schema.contextAppends.workspaceId} = ${scope.workspaceId}
+      `);
+      const [row] = [...result] as {
+        scope_total: string | number;
+        rendered: string | number;
+        cited: string | number;
+      }[];
+      if (!row || Number(row.scope_total) === 0) return null;
+      return { rendered: Number(row.rendered), cited: Number(row.cited) };
     });
   },
 

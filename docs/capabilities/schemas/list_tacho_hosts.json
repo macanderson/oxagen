@@ -220,7 +220,8 @@
             "createdAt"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 200
       },
       "nextCursor": {
         "anyOf": [

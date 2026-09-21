@@ -417,7 +417,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     }
     if (id !== undefined && !isInternalSession(id) && id.length <= 256) {
       const known = deps.registry.get(id);
-      if (known !== undefined && !known.sealed) return { record: known, how };
+      if (known !== undefined && !known.sealed && !known.pendingTerminal)
+        return { record: known, how };
       // Seen here before any hook named it: open it as ambient, the way a
       // session first seen through OTel is opened, and let the hook adopt it.
       const { record } = deps.registry.ensure(id, { harness, ambient: true });

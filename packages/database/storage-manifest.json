@@ -975,7 +975,8 @@
       "name": "get_export_status",
       "reads": [],
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -2751,6 +2752,15 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "revise_context_record",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "revoke_agent_role",
       "reads": [],
@@ -3631,7 +3641,7 @@
       "writes": []
     }
   ],
-  "contentHash": "f144ee1e8c8e9ba83969fe97ab742a3198857a0121142030f36c8d12fbd92582",
+  "contentHash": "67bb114c77e56c8980f74db592a6f5cb1c1f6f198aba89de9a5920416a54d69d",
   "domains": [
     {
       "name": "agent",
