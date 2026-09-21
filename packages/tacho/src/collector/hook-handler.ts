@@ -385,10 +385,9 @@ async function routeHook(
   if (inferredCwd && record.cwd === undefined && input.cwd !== undefined) {
     record.cwd = input.cwd;
   }
-  const locatedRaw = inferredCwd ? { ...input, cwd: record.cwd } : raw;
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
-  const payload = invocationToolUseId(locatedRaw, input, record);
+  const payload = invocationToolUseId(raw, input, record);
   const view = deps.policy();
   const events: TachoEvent[] = [];
   const replayAttrs: Record<string, string> =
@@ -397,6 +396,9 @@ async function routeHook(
       : {};
   const withReplay = (draft: HookDraft): HookDraft => ({
     ...draft,
+    ...(inferredCwd && record.cwd !== undefined
+      ? { context: { ...draft.context, cwd: record.cwd } }
+      : {}),
     attrs: { ...draft.attrs, ...replayAttrs },
   });
 
@@ -551,7 +553,7 @@ async function routeHook(
         ...record.recorder.ingestHook(payload, env, at, (draft) =>
           draft.kind === "tool_requested"
             ? {
-                ...draft,
+                ...withReplay(draft),
                 kind: denied ? "token_denied" : "tool_requested",
                 body: { ...draft.body, ...facts },
                 attrs: { ...draft.attrs, ...attrs },
