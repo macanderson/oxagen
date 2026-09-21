@@ -1,6 +1,7 @@
 // The skills port: one kernel read of list_skills on the Skills page's failure
 // row, mapped into the view model, with a refusal passed through and an
 // unmappable record reported once.
+import { skillConfigGet } from "@oxagen/oxagen/contracts/skill.config.get";
 import { skillList } from "@oxagen/oxagen/contracts/skill.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -142,7 +143,7 @@ describe("skills.configuration", () => {
       }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: expect.objectContaining({ name: "get_skill_config" }),
+      contract: skillConfigGet,
       input: {},
       page: "skills",
     });
