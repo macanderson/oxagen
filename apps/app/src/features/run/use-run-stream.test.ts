@@ -66,6 +66,14 @@ class FakeEventSource {
     this.listeners.get("done")?.(new MessageEvent("done", { data }));
   }
 
+  serverError(payload: unknown) {
+    this.serverErrorRaw(JSON.stringify(payload));
+  }
+
+  serverErrorRaw(data: string) {
+    this.listeners.get("error")?.(new MessageEvent("error", { data }));
+  }
+
   /** The connection dropped. `forGood` is the case the person should be told about. */
   fail(forGood: boolean) {
     this.readyState = forGood
@@ -213,6 +221,32 @@ describe("useRunStream", () => {
       latest().fail(true);
     });
     expect(result.current).toBe("lost");
+  });
+
+  it.each(["forbidden", "stream_unavailable", "invalid_input"])(
+    "stops retrying after a typed server error %s",
+    (code) => {
+      const { result, onFrames } = follow();
+      act(() => {
+        latest().open();
+        latest().serverError({ code });
+      });
+      expect(result.current).toBe("lost");
+      expect(latest().closed).toBe(true);
+      expect(opened).toHaveLength(1);
+      expect(onFrames).toHaveBeenCalledTimes(code === "invalid_input" ? 1 : 0);
+    },
+  );
+
+  it("stops on a malformed server error without claiming the run sealed", () => {
+    const { result } = follow();
+    act(() => {
+      latest().open();
+      latest().serverErrorRaw("not json");
+    });
+    expect(result.current).toBe("lost");
+    expect(latest().closed).toBe(true);
+    expect(opened).toHaveLength(1);
   });
 
   it("closes the stream and drops a pending callback when the view goes away", () => {

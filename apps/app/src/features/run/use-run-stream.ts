@@ -115,6 +115,28 @@ export function useRunStream({
         }
         open(cursor);
       });
+      es.addEventListener("error", (event: Event) => {
+        if (stopped || !(event instanceof MessageEvent)) return;
+        // A named server error is terminal. Native transport errors carry no
+        // payload and retain EventSource's retry behavior below.
+        let code: string | null = null;
+        try {
+          const payload: unknown = JSON.parse(String(event.data));
+          if (
+            payload !== null &&
+            typeof payload === "object" &&
+            "code" in payload &&
+            typeof payload.code === "string"
+          ) {
+            code = payload.code;
+          }
+        } catch {
+          // A malformed server error is still a terminal stream failure.
+        }
+        es.close();
+        setState("lost");
+        if (code === "invalid_input") latest.current();
+      });
       es.onerror = () => {
         // EventSource reconnects on its own unless the connection is closed
         // for good; only that second case is a loss the person should see.

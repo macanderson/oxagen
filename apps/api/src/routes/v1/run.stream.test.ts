@@ -17,13 +17,14 @@ import type { Hono as HonoType } from "hono";
 const mocks = vi.hoisted(() => ({
   capabilityContext: vi.fn(),
   invoke: vi.fn(),
+  logError: vi.fn(),
 }));
 
 vi.mock("../../lib/context", () => ({
   capabilityContext: mocks.capabilityContext,
 }));
 vi.mock("../../middleware/logger", () => ({
-  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+  logger: { warn: vi.fn(), error: mocks.logError, info: vi.fn() },
 }));
 vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/oxagen/kernel")>();
@@ -129,6 +130,7 @@ describe("GET /runs/:run_id/stream", () => {
     // frame resumes from exactly that frame.
     expect(ids(text)).toEqual(["cur_1", "cur_2", "cur_3"]);
     expect(text).toContain('"reason":"sealed"');
+    expect(text).toContain('"cursor":"cur_3"');
     expect(mocks.invoke).toHaveBeenCalledTimes(2);
   });
 
@@ -212,6 +214,68 @@ describe("GET /runs/:run_id/stream", () => {
     expect(text).toContain('"code":"invalid_input"');
     expect(text).toContain("invalid_cursor");
     expect(text).toContain('"cursor":"cur_1"');
+  });
+
+  it("keeps an active stream open past its initial idle deadline", async () => {
+    const clock = vi.spyOn(Date, "now");
+    let now = 0;
+    clock.mockImplementation(() => now);
+    mocks.invoke
+      .mockResolvedValueOnce(page(["1"], "cur_1"))
+      .mockImplementationOnce(async () => {
+        now = 240_000;
+        return page(["2"], "cur_2");
+      })
+      .mockImplementationOnce(async () => {
+        now = 480_000;
+        return page(["3"], "cur_3");
+      })
+      .mockResolvedValueOnce(page([], null, "sealed"));
+    try {
+      const { text } = await open();
+      expect(text).toContain('"reason":"sealed"');
+      expect(text).not.toContain('"reason":"idle"');
+      expect(mocks.invoke).toHaveBeenCalledTimes(4);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("closes after a full idle interval without losing the last emitted cursor", async () => {
+    const clock = vi.spyOn(Date, "now");
+    let now = 0;
+    clock.mockImplementation(() => now);
+    mocks.invoke
+      .mockResolvedValueOnce(page(["1"], null))
+      .mockImplementationOnce(async () => {
+        now = 300_000;
+        return page([], null);
+      });
+    try {
+      const { text } = await open();
+      expect(text).toContain('"reason":"idle","cursor":"cur_1"');
+      expect(mocks.invoke.mock.calls[1]?.[1]).toMatchObject({
+        framesAfter: "cur_1",
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("logs unexpected failures and keeps their details out of the event", async () => {
+    const error = new Error("private database connection details");
+    mocks.invoke
+      .mockResolvedValueOnce(page(["1"], null))
+      .mockRejectedValueOnce(error);
+    const { text } = await open();
+    expect(text).toContain('"message":"Run stream unavailable"');
+    expect(text).toContain('"code":"stream_unavailable"');
+    expect(text).toContain('"cursor":"cur_1"');
+    expect(text).not.toContain(error.message);
+    expect(mocks.logError).toHaveBeenCalledWith(
+      { err: error, runId: RUN_ID, requestId: CTX.requestId },
+      "run stream failed",
+    );
   });
 
   it("refuses a run id the contract does not accept (negative)", async () => {
