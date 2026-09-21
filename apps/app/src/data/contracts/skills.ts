@@ -9,6 +9,7 @@
 // distinct count behind the name past that cap — never rejected or re-split
 // from a delimited string (ADR-104, #3103).
 import { z } from "zod";
+import { PublicId } from "./common";
 
 const Count = z.number().int().nonnegative();
 const Instant = z.iso.datetime();
@@ -37,3 +38,60 @@ export const SkillInventory = z.object({
   nextCursor: z.string().nullable(),
 });
 export type SkillInventory = z.infer<typeof SkillInventory>;
+
+const SkillVersion = z.object({
+  id: PublicId,
+  version: z.string(),
+  commitSha: z.string(),
+  pullRequestNumber: z.number().int().positive().nullable(),
+  digest: z.string(),
+  publishedAt: Instant,
+});
+export const SkillConfiguration = z.object({
+  config: z.object({
+    enabled: z.boolean(),
+    search: z.object({ budget: Count, cutoff: z.number(), limit: Count }),
+  }),
+  draftText: z.string(),
+  current: SkillVersion.nullable(),
+  versions: z.array(SkillVersion),
+});
+export type SkillConfiguration = z.infer<typeof SkillConfiguration>;
+
+const SkillCandidate = z.object({
+  /**
+   * The skill's own slug in the repository catalogue (`code-review`), not an
+   * Oxagen public id: Oxagen neither mints it nor can validate it, so it is a
+   * ref (INV-11).
+   */
+  skillRef: z.string().min(1),
+  version: z.string(),
+  digest: z.string(),
+  source: z.string(),
+  description: z.string(),
+  tokenCost: Count,
+});
+export const SkillSearchPreview = z.object({
+  version: z.string(),
+  repositoryCommitSha: z.string(),
+  tokenCost: Count,
+  results: z.array(SkillCandidate.extend({ score: z.number() })),
+  /**
+   * A withheld skill is named and explained, never described: the contract
+   * returns its slug and the reason alone, so that previewing a search cannot
+   * disclose the version, digest or description of a skill this workspace is
+   * not approved to load. Extending `SkillCandidate` here declared five fields
+   * the handler never sends, which the page then rendered as `undefined`.
+   */
+  withheld: z.array(
+    z.object({
+      skillRef: SkillCandidate.shape.skillRef,
+      reason: z.enum(["out_of_scope", "unapproved_digest"]),
+    }),
+  ),
+});
+export type SkillSearchPreview = z.infer<typeof SkillSearchPreview>;
+export type SkillConfigChange = {
+  pullRequest: { number: number; url: string } | null;
+  published: z.infer<typeof SkillVersion> | null;
+};

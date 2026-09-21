@@ -110,6 +110,10 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "GITHUB_EVENT_PATH",
   "GITHUB_OUTPUT",
   "GITHUB_STEP_SUMMARY",
+  // Read by check-main-preflight.mjs's runtime mode to tell a push to main
+  // apart from every other trigger, before it ever calls the GitHub API.
+  "GITHUB_EVENT_NAME",
+  "GITHUB_REF",
   // AWS SDK / CLI convention, read by boto3 and the aws CLI themselves
   "AWS_REGION",
   // Set by nightly.yml on the step that files the failure ticket, so the marker

@@ -1372,6 +1372,16 @@
       "writes": []
     },
     {
+      "domain": "skill",
+      "name": "get_skill_config",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "spend",
       "name": "get_spend",
       "reads": [],
@@ -2376,6 +2386,16 @@
       "surfaces": [
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "skill",
+      "name": "preview_skill_search",
+      "reads": [],
+      "surfaces": [
+        "api",
         "mcp"
       ],
       "writes": []
@@ -3454,6 +3474,16 @@
       "writes": []
     },
     {
+      "domain": "skill",
+      "name": "update_skill_config",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "user",
       "name": "update_user_budget",
       "reads": [],
@@ -3599,7 +3629,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7e1c487e25d49c488723f9c2ca2b5fa533a91a6b693434e08b318a552d27e555",
+  "contentHash": "a9192bbfaee2d82bb89003fb06fd6cd01f0ac1b2e8d4c8d75b04c27ee7af6d6c",
   "domains": [
     {
       "name": "agent",
@@ -3942,6 +3972,16 @@
       ]
     },
     {
+      "name": "skills",
+      "stores": [
+        "postgres"
+      ],
+      "tables": [
+        "postgres:skills.config_versions",
+        "postgres:skills.resolutions"
+      ]
+    },
+    {
       "name": "tacho",
       "stores": [
         "postgres"
@@ -4031,13 +4071,14 @@
         "ratelimit",
         "schema_registry",
         "security",
+        "skills",
         "tacho",
         "tools",
         "workspace"
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 137
+      "tableCount": 139
     },
     {
       "domains": [
@@ -18541,6 +18582,239 @@
       "id": "postgres:security.security_events",
       "name": "security_events",
       "rls": "workspace_nullable",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "version_label",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repository_binding_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "commit_sha",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pull_request_number",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "enabled",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "config_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "sources",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "search",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "unbound_repo",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "reflection",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "published_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "skills",
+      "id": "postgres:skills.config_versions",
+      "name": "config_versions",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:skills.config_versions",
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:skills.config_versions",
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "config_version_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:skills.config_versions",
+          "type": "uuid"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "attempt_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "skill_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "skill_version",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "skill_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "decision",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "withheld_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "loaded",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "token_cost",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "resolved_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "skills",
+      "id": "postgres:skills.resolutions",
+      "name": "resolutions",
+      "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
     },

@@ -15,6 +15,12 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import messages from "../../../messages/skills.json";
 
+vi.mock("./actions", () => ({
+  previewSkillSearch: vi.fn(),
+  proposeSkillConfig: vi.fn(),
+  importSkillConfig: vi.fn(),
+  publishSkillConfig: vi.fn(),
+}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 vi.mock("next/navigation", () => ({
@@ -69,6 +75,7 @@ function inventory(over: Partial<SkillInventory> = {}): SkillInventory {
 }
 
 const read = vi.fn<DataSource["skills"]["inventory"]>();
+const config = vi.fn<DataSource["skills"]["configuration"]>();
 const source: DataSource = {
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context: vi.fn(), preferences: vi.fn() },
@@ -113,7 +120,7 @@ const source: DataSource = {
     apiKeys: vi.fn(),
     modelCredential: vi.fn(),
   },
-  skills: { inventory: read },
+  skills: { inventory: read, configuration: config },
   mandates: { list: vi.fn(), get: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
   steering: {
@@ -323,4 +330,20 @@ describe("Skills › loading", () => {
     expect(skeleton).toHaveAttribute("data-state", "loading");
     expect(skeleton.textContent).toBe("");
   });
+});
+
+it("reads configuration only on Search and Versions, with refusal in the selected view", async () => {
+  config.mockResolvedValue(readError("config_unavailable", 503));
+  read.mockClear();
+  withIntl(await Skills({ ctx, source, cursor: null, view: "search" }));
+  expect(config).toHaveBeenCalledWith(ctx);
+  expect(read).not.toHaveBeenCalled();
+  expect(screen.getByRole("link", { name: "Preview search" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  expect(screen.getByRole("link", { name: "Try again" })).toHaveAttribute(
+    "href",
+    "/acme/core-platform/steering?tab=skills&view=search",
+  );
 });

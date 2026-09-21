@@ -2357,7 +2357,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "layers": {
         "schema": true,
@@ -5233,6 +5234,42 @@
       }
     },
     {
+      "name": "get_skill_config",
+      "file": "skill.config.get.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "update_skill_config",
+      "file": "skill.config.update.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "list_skills",
       "file": "skill.list.ts",
       "domain": "skill",
@@ -5262,6 +5299,24 @@
         "schema": true,
         "api": true,
         "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "preview_skill_search",
+      "file": "skill.search.preview.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
         "docs": true,
         "app": true
       }
