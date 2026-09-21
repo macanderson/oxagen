@@ -210,7 +210,8 @@ const TranscriptBlock = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("tool_result"),
-    forId: z.string(),
+    /** The model's own tool-call id this result answers — not an Oxagen PublicId. */
+    forRef: z.string(),
     ok: z.boolean(),
     summary: z.string(),
   }),

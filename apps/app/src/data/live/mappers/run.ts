@@ -216,7 +216,7 @@ function toTranscriptBody(
               case "tool_result":
                 return {
                   kind: "tool_result" as const,
-                  forId: block.forId,
+                  forRef: block.forId,
                   ok: block.ok,
                   summary: block.summary,
                 };

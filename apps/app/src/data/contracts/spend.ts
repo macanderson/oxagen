@@ -37,7 +37,7 @@ export type SpendFigure = z.infer<typeof SpendFigure>;
 
 /** Who an operator row names: the person, never the id as a label. */
 const OperatorFacts = z.object({
-  id: z.string().min(1),
+  id: PublicId,
   name: z.string().min(1).nullable(),
   email: z.string().min(1).nullable(),
   avatarUrl: z.string().min(1).nullable(),
