@@ -6,9 +6,23 @@ import { userPreferencesRead } from "@oxagen/oxagen/contracts/user.preferences.r
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { kernelRead, captureError } = vi.hoisted(() => ({
+const { kernelRead, captureError, endRequest } = vi.hoisted(() => ({
   kernelRead: vi.fn(),
   captureError: vi.fn(),
+  endRequest: new Set<() => void>(),
+}));
+// Cache primitive argument tuples for one simulated server render.
+vi.mock("react", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react")>()),
+  cache: <A extends unknown[], R>(fn: (...args: A) => R) => {
+    const values = new Map<string, R>();
+    endRequest.add(() => values.clear());
+    return (...args: A): R => {
+      const key = JSON.stringify(args);
+      if (!values.has(key)) values.set(key, fn(...args));
+      return values.get(key) as R;
+    };
+  },
 }));
 vi.mock("@/server/kernel", () => ({ kernelRead }));
 vi.mock("@oxagen/telemetry", () => ({ captureError }));
@@ -60,6 +74,7 @@ const workspacesRead = readOk({
 });
 
 beforeEach(() => {
+  for (const reset of endRequest) reset();
   kernelRead.mockReset();
   captureError.mockReset();
 });
@@ -160,5 +175,32 @@ describe("shell.preferences", () => {
         context: "shell.preferences time_zone_unsupported",
       }),
     );
+  });
+  it("reports once when the shell and viewer clock read in the same render", async () => {
+    kernelRead.mockResolvedValue(preferencesRead("Mars/Olympus_Mons"));
+    const results = await Promise.all([
+      shell.preferences(ctx),
+      shell.preferences(ctx),
+    ]);
+    expect(results).toEqual([
+      readOk({ timeZone: "America/Los_Angeles" }),
+      readOk({ timeZone: "America/Los_Angeles" }),
+    ]);
+    expect(kernelRead).toHaveBeenCalledTimes(2);
+    expect(captureError).toHaveBeenCalledOnce();
+    for (const reset of endRequest) reset();
+    await shell.preferences(ctx);
+    expect(captureError).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not suppress another viewer's unsupported zone in the same render", async () => {
+    kernelRead.mockResolvedValue(preferencesRead("Mars/Olympus_Mons"));
+    const other = unsafeMint(OrgCtx, {
+      ...ctx,
+      userId: "7c9e6679-7425-40de-944b-e07fc1f90ae8",
+    });
+    await shell.preferences(ctx);
+    await shell.preferences(other);
+    expect(captureError).toHaveBeenCalledTimes(2);
   });
 });
