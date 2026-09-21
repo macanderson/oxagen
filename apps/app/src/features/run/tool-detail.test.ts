@@ -45,9 +45,11 @@ describe("parseBody", () => {
 
 describe("splitBody", () => {
   it("reads the `{input, output}` shape a tool_call writes", () => {
-    expect(
-      splitBody({ input: { command: "ls" }, output: "a\nb" }),
-    ).toEqual({ input: { command: "ls" }, output: "a\nb", name: null });
+    expect(splitBody({ input: { command: "ls" }, output: "a\nb" })).toEqual({
+      input: { command: "ls" },
+      output: "a\nb",
+      name: null,
+    });
   });
 
   it("reads the `{tool_use}` shape a content block writes", () => {
@@ -135,7 +137,10 @@ describe("toolDetail", () => {
 
   describe("shell", () => {
     it("heads the line with the command and opens its pane whole", () => {
-      const detail = toolDetail("Bash", body({ input: { command: "git status" } }));
+      const detail = toolDetail(
+        "Bash",
+        body({ input: { command: "git status" } }),
+      );
       expect(detail?.headline).toBe("git status");
       expect(detail?.multiline).toBe(false);
       // A one-line command has nothing folded, so the surface draws no
@@ -172,7 +177,10 @@ describe("toolDetail", () => {
     it("joins stdout and stderr in the order they are read", () => {
       const detail = toolDetail(
         "Bash",
-        body({ input: { command: "ls" }, output: { stdout: "out", stderr: "err" } }),
+        body({
+          input: { command: "ls" },
+          output: { stdout: "out", stderr: "err" },
+        }),
       );
       expect(pane(detail, "output")).toMatchObject({ text: "out\nerr" });
     });
@@ -191,7 +199,9 @@ describe("toolDetail", () => {
     it("heads the line with the file and says which lines were read", () => {
       const detail = toolDetail(
         "Read",
-        body({ input: { file_path: "/a/b/c/kernel.ts", offset: 10, limit: 20 } }),
+        body({
+          input: { file_path: "/a/b/c/kernel.ts", offset: 10, limit: 20 },
+        }),
       );
       expect(detail?.headline).toBe("…/c/kernel.ts");
       expect(detail?.detail).toBe("lines 11–30");
@@ -249,7 +259,10 @@ describe("toolDetail", () => {
 
   describe("create", () => {
     it("shows the file's first lines and counts them", () => {
-      const content = Array.from({ length: 50 }, (_, i) => `line ${i}`).join("\n");
+      const content = Array.from(
+        { length: 50 },
+        (_, i) => `line ${String(i)}`,
+      ).join("\n");
       const detail = toolDetail(
         "Write",
         body({ input: { file_path: "notes.json", content } }),
@@ -267,14 +280,19 @@ describe("toolDetail", () => {
     it("heads the line with the pattern and says where it looked", () => {
       const detail = toolDetail(
         "Grep",
-        body({ input: { pattern: "registerCapability", path: "/a/b/packages" } }),
+        body({
+          input: { pattern: "registerCapability", path: "/a/b/packages" },
+        }),
       );
       expect(detail?.headline).toBe("registerCapability");
       expect(detail?.detail).toBe("in …/b/packages");
     });
 
     it("reads a Glob's pattern too", () => {
-      const detail = toolDetail("Glob", body({ input: { pattern: "**/*.ts" } }));
+      const detail = toolDetail(
+        "Glob",
+        body({ input: { pattern: "**/*.ts" } }),
+      );
       expect(detail?.headline).toBe("**/*.ts");
       expect(detail?.detail).toBeNull();
     });
@@ -317,7 +335,9 @@ describe("toolDetail", () => {
     it("heads the line with the URL and keeps the prompt as a note", () => {
       const detail = toolDetail(
         "WebFetch",
-        body({ input: { url: "https://example.com", prompt: "What changed?" } }),
+        body({
+          input: { url: "https://example.com", prompt: "What changed?" },
+        }),
       );
       expect(detail?.headline).toBe("https://example.com");
       expect(pane(detail, "asked")).toMatchObject({
@@ -380,9 +400,9 @@ describe("toolDetail", () => {
     });
 
     it("draws no pane for an input that carried nothing", () => {
-      expect(panes(toolDetail("SomethingNew", body({ input: {} })))).toHaveLength(
-        0,
-      );
+      expect(
+        panes(toolDetail("SomethingNew", body({ input: {} }))),
+      ).toHaveLength(0);
       expect(panes(toolDetail("SomethingNew", null))).toHaveLength(0);
     });
   });

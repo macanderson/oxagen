@@ -43,13 +43,23 @@ function fakeGit(
   };
 }
 
+// `rev-parse HEAD` below fixes the session's baseline the moment its git
+// facts are first read, and every reconciliation after that diffs against
+// this sha rather than against a `HEAD` the session's own commits keep
+// moving (see `readWorkingTreeChanges`'s `ref = baseline ?? "HEAD"`).
+const BASELINE_SHA = "a".repeat(40);
+
 const REPO_ANSWERS: Record<string, string> = {
-  "rev-parse HEAD": `${"a".repeat(40)}\n`,
+  "rev-parse HEAD": `${BASELINE_SHA}\n`,
   "rev-parse --abbrev-ref HEAD": "main\n",
   "status --porcelain=v1 -z": " M src/a.ts\x00?? src/new.ts\x00",
   "status --porcelain": " M src/a.ts\n",
   "remote get-url origin": "git@github.com:acme/repo.git\n",
-  "diff --numstat HEAD": "4\t1\tsrc/a.ts\x00",
+  // The tracked half of a reconciliation: `diff --name-status -z` against
+  // the fixed baseline.
+  "diff --name-status -z": "M\x00src/a.ts\x00",
+  // The line counts for that same diff, against the same baseline.
+  [`diff --numstat ${BASELINE_SHA}`]: "4\t1\tsrc/a.ts\x00",
   "rev-parse --show-toplevel": `${CWD}\n`,
   // The untracked probe: `--no-index` exits 1 to say the inputs differ.
   "--no-index": "27\t0\t\x00/dev/null\x00/repo/src/new.ts\x00",
@@ -434,6 +444,17 @@ describe("the daemon's git seam", () => {
         () => ({
           "status --porcelain=v1 -z": "?? src/new.ts\x00",
           "rev-parse --show-toplevel": "/repo\n",
+          // Proof of "unborn", not just "failed": HEAD still resolves
+          // symbolically to the branch the repository will have once it
+          // commits, and that branch's ref has never been written. Neither
+          // `rev-parse --verify HEAD` nor `show-ref` gets an answer here, so
+          // both fall through to the harness's unmatched-command default
+          // (exit 1), which is what a real unborn repository also answers.
+          "symbolic-ref -q HEAD": "refs/heads/main\n",
+          // The empty-tree diff the unborn path falls back to once it has
+          // that proof. No tracked file exists yet, so it reports nothing;
+          // the untracked create below still comes from `status`.
+          "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904": "",
         }),
         [],
       ),

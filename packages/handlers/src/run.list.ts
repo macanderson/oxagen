@@ -69,6 +69,7 @@ import {
   asc,
   desc,
   eq,
+  getTableName,
   inArray,
   isNull,
   lt,
@@ -510,8 +511,15 @@ const tachoColumns = {
     summary: sessions.summary,
     summaryGeneratedAt: sessions.summaryGeneratedAt,
     summaryModel: sessions.summaryModel,
+    // `to_jsonb` takes a row, addressed by the FROM-clause's own
+    // correlation name for this table, which is just its bare name and
+    // never schema-qualified even though every column reference above is.
+    // Interpolating `${sessions}` renders `"tacho"."sessions"`, which
+    // Postgres reads as two identifiers and rejects with "missing
+    // FROM-clause entry for table \"tacho\"" (the join list has no such
+    // alias). `sql.identifier` prints the one name postgres accepts here.
     // JSON lookup remains safe before the additive column migration.
-    machineSnapshot: sql<unknown>`to_jsonb(${sessions})->'machine_snapshot'`,
+    machineSnapshot: sql<unknown>`to_jsonb(${sql.identifier(getTableName(sessions))})->'machine_snapshot'`,
     modelInitial: sessions.modelInitial,
     modelFinal: sessions.modelFinal,
   },

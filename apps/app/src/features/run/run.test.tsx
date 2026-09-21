@@ -489,10 +489,16 @@ describe("transcript", () => {
     expect(turns[1]).toHaveTextContent("done");
     expect(turns[1]).toHaveTextContent("4 steps");
     expect(turns[1]).toHaveTextContent("seq 2 to 8");
-    expect(turns[1]).toContainElement(screen.getByTestId("transcript-you"));
-    expect(screen.getByTestId("transcript-you")).toHaveTextContent(
-      "Cut the 2026.9.2 release candidate.",
-    );
+    // The prompt sits above the turn's disclosure, not inside it, so it is
+    // the first thing on the transcript at every zoom level.
+    const you = screen.getByTestId("transcript-you");
+    const turn1 = turns[1];
+    if (turn1 === undefined) throw new Error("turns[1] is missing");
+    expect(turn1).not.toContainElement(you);
+    expect(
+      you.compareDocumentPosition(turn1) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(you).toHaveTextContent("Cut the 2026.9.2 release candidate.");
     expect(turns[1]).toContainElement(screen.getByTestId("transcript-agent"));
     expect(screen.getByTestId("transcript-agent")).toHaveTextContent(
       "Both failures predate the release scope.",

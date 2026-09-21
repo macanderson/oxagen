@@ -54,8 +54,7 @@ function paint(line: string, language: CodeLanguage): ReactNode[] {
   });
 }
 
-const gutter =
-  "select-none pr-3 text-right tabular-nums text-code-comment/70";
+const gutter = "select-none pr-3 text-right tabular-nums text-code-comment/70";
 
 /** The control that unfolds a pane, and says how much is still folded. */
 function More({
@@ -86,7 +85,7 @@ function More({
       >
         ▶
       </span>
-      {open ? label : `${label} (${hidden} more)`}
+      {open ? label : `${label} (${String(hidden)} more)`}
     </button>
   );
 }
@@ -125,6 +124,10 @@ export function CodePanel({
   const folded = !open && lines.length > budget;
   const shown = folded ? lines.slice(0, budget) : lines;
   const width = String(startLine + lines.length - 1).length;
+  // Numbered ahead of the render map so the row key comes from the line's
+  // own number, a stable identity for this pane, rather than from the
+  // render pass's array position.
+  const numbered = shown.map((line, i) => ({ line, lineNo: startLine + i }));
 
   return (
     <div className="overflow-hidden rounded-md border border-border bg-code-bg">
@@ -136,13 +139,13 @@ export function CodePanel({
       <div id={id} className={`${codeText} overflow-x-auto p-2.5`}>
         <table className="w-full border-collapse">
           <tbody>
-            {shown.map((line, index) => (
-              <tr key={startLine + index}>
+            {numbered.map(({ line, lineNo }) => (
+              <tr key={lineNo}>
                 <td
                   className={`${gutter} w-px align-top`}
-                  style={{ minWidth: `${width}ch` }}
+                  style={{ minWidth: `${String(width)}ch` }}
                 >
-                  {startLine + index}
+                  {lineNo}
                 </td>
                 <td className="whitespace-pre-wrap break-words align-top text-foreground">
                   {line === "" ? " " : paint(line, language)}
@@ -203,7 +206,7 @@ export function DiffPanel({
   language?: CodeLanguage;
   label: string;
 }) {
-  const stat = `+${diff.added} −${diff.removed}`;
+  const stat = `+${String(diff.added)} −${String(diff.removed)}`;
   return (
     <div
       data-testid="diff-panel"
@@ -217,15 +220,21 @@ export function DiffPanel({
         </span>
       </div>
       <div className={`${codeText} overflow-x-auto`}>
-        {diff.hunks.map((hunk, index) => (
+        {diff.hunks.map((hunk) => (
           <table
-            key={`${hunk.beforeStart}-${hunk.afterStart}-${index}`}
+            // A hunk's start lines are strictly increasing across the diff,
+            // so this pair is already a stable, unique key without the
+            // render pass's array position.
+            key={`${String(hunk.beforeStart)}-${String(hunk.afterStart)}`}
             className="w-full border-collapse border-t border-border first:border-t-0"
           >
             <tbody>
-              {hunk.lines.map((line, row) => (
+              {hunk.lines.map((line) => (
                 <tr
-                  key={`${line.op}-${line.before ?? "n"}-${line.after ?? "n"}-${row}`}
+                  // Line numbers only repeat across a change (a "del" and an
+                  // "add" can share neither side), so op plus both sides is
+                  // already unique within a hunk without the row index.
+                  key={`${line.op}-${String(line.before ?? "n")}-${String(line.after ?? "n")}`}
                   className={OP_ROW[line.op]}
                 >
                   <td className={`${gutter} w-px pl-2.5 align-top`}>
