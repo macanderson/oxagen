@@ -30,7 +30,7 @@ describe("skill search preview", () => {
         tokenCost: 40,
         results: [
           {
-            id: "review",
+            skillRef: "review",
             version: "1.0.0",
             digest: "sha256:a",
             source: "workspace",
@@ -41,7 +41,7 @@ describe("skill search preview", () => {
         ],
         withheld: [
           {
-            id: "secret",
+            skillRef: "secret",
             reason: "unapproved_digest",
           },
         ],
@@ -100,7 +100,9 @@ describe("skill search preview", () => {
           "No approved description matched within the score and token limits.",
         ),
       ).toBeTruthy();
-      await waitFor(() => expect(previewSkillSearch).toHaveBeenCalledTimes(2));
+      await waitFor(() => {
+        expect(previewSkillSearch).toHaveBeenCalledTimes(2);
+      });
     },
   );
 });

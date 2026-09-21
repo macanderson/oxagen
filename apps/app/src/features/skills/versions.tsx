@@ -116,7 +116,9 @@ export function SkillVersions({
                 type="button"
                 className={buttonSecondary}
                 disabled={!canEdit || pending}
-                onClick={() => write(() => importSkillConfig(at.org, at.ws))}
+                onClick={() => {
+                  write(() => importSkillConfig(at.org, at.ws));
+                }}
               >
                 {t("import")}
               </button>
@@ -136,7 +138,9 @@ export function SkillVersions({
               value={text}
               readOnly={!canEdit}
               disabled={pending}
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => {
+                setText(event.target.value);
+              }}
               aria-describedby="skill-config-draft-hint"
             />
             <p
@@ -174,7 +178,9 @@ export function SkillVersions({
               pattern="[1-9][0-9]*"
               value={pr}
               disabled={!canEdit || pending}
-              onChange={(event) => setPr(event.target.value)}
+              onChange={(event) => {
+                setPr(event.target.value);
+              }}
             />
             <button
               type="submit"
