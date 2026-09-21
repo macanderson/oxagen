@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // Server Components render here by awaiting them into elements first; the client
 // islands inside render under the intl provider.
+import { createFormatter } from "next-intl";
 import { cleanup, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,8 +13,15 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (ns: string) => Promise.resolve(translator(ns)),
-  getFormatter: () =>
-    Promise.resolve({ dateTime: (d: Date) => d.toISOString().slice(0, 10) }),
+  getRequestConfig: <T,>(factory: T) => factory,
+  getFormatter: async () => {
+    const { default: factory } = await import("@/i18n/request");
+    const config = await factory({ requestLocale: Promise.resolve(undefined) });
+    return createFormatter({
+      locale: config.locale,
+      timeZone: config.timeZone ?? "UTC",
+    });
+  },
 }));
 vi.mock("./invite-actions", () => ({
   acceptInvitation: vi.fn(),
@@ -90,7 +98,7 @@ describe("InvitationBody", () => {
       <InvitationBody invitation={invitation} decision={{ kind: "accept" }} />,
     );
     expect(screen.getByTestId("invite-card")).toHaveTextContent(
-      "You were invited on 2026-09-11",
+      "You were invited on Sep 11, 2026",
     );
     expect(screen.getByText("compliance")).toBeInTheDocument();
     expect(screen.getByText("Does not expire")).toBeInTheDocument();
@@ -102,6 +110,26 @@ describe("InvitationBody", () => {
       "/login?next=%2Finvite%2Finvi_1",
     );
   });
+
+  it.each(["accept", "sign-in"] as const)(
+    "formats invitation dates in Pacific outside the organization shell: %s",
+    async (kind) => {
+      await renderServer(
+        <InvitationBody
+          invitation={{
+            ...invitation,
+            invitedAt: "2026-09-11T01:00:00.000Z",
+            expiresAt: "2026-09-12T01:00:00.000Z",
+          }}
+          decision={{ kind }}
+        />,
+      );
+      const card = screen.getByTestId("invite-card");
+      expect(card).toHaveTextContent("You were invited on Sep 10, 2026");
+      expect(card).toHaveTextContent("Sep 11, 2026");
+      expect(card).not.toHaveTextContent("Sep 12, 2026");
+    },
+  );
 
   it("sign in · offers log in and sign up carrying the invitation", async () => {
     await renderServer(
@@ -117,7 +145,7 @@ describe("InvitationBody", () => {
     expect(
       screen.getByRole("link", { name: "Create an account" }),
     ).toHaveAttribute("href", "/signup?next=%2Finvite%2Finvi_1");
-    expect(screen.getByText("2026-09-18")).toBeInTheDocument();
+    expect(screen.getByText("Sep 18, 2026")).toBeInTheDocument();
   });
 
   it("wrong account and closed", async () => {
