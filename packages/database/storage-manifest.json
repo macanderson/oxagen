@@ -1334,6 +1334,15 @@
     },
     {
       "domain": "run",
+      "name": "get_run_outputs",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
       "name": "get_run_proof",
       "reads": [],
       "surfaces": [
@@ -3549,7 +3558,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d03ec821ad94e54ec5743b463a2967c625b056a04f938a4b9303ed788d5f560a",
+  "contentHash": "ec7971516b195d7ab635636e10e838e4c69f38b16aec471ebc7a851725a67343",
   "domains": [
     {
       "name": "agent",
