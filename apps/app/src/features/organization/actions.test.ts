@@ -39,6 +39,8 @@ const {
   editWorkspace,
   removeOrgMember,
   sendInvitation,
+  resendInvitation,
+  revokeInvitation,
   setRolePermissions,
 } = await import("./actions");
 
@@ -762,6 +764,56 @@ describe("a person the organization refuses", () => {
   ])("%s runs nothing (negative)", async (_name, run) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(run()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe.each([
+  ["resend_member_invite", resendInvitation, "pending"],
+  ["revoke_member_invite", revokeInvitation, "revoked"],
+] as const)("%s invitation action", (name, action, status) => {
+  const invitationPublicId = "invi_4n5p6q7r8s9t0v1w2x3y4z";
+  it("uses the organization viewer and validates the kernel result", async () => {
+    const value = {
+      invitationPublicId,
+      status,
+      expiresAt: null,
+      ...(name === "resend_member_invite"
+        ? { delivery: "accepted" as const }
+        : {}),
+    };
+    invoke.mockResolvedValue(value);
+    expect(await action("acme", invitationPublicId)).toEqual({
+      ok: true,
+      value,
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme");
+    expect(invoke).toHaveBeenCalledWith(
+      name,
+      { invitationPublicId },
+      expect.objectContaining(TENANT),
+    );
+  });
+  it("refuses malformed identity before invoking", async () => {
+    expect(await action("acme", "other")).toMatchObject({
+      ok: false,
+      reason: "invalid",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+  it("preserves handler refusal for a retryable row", async () => {
+    invoke.mockRejectedValue(refusal("conflict", "invitation_not_pending"));
+    expect(await action("acme", invitationPublicId)).toMatchObject({
+      ok: false,
+      reason: "conflict",
+      code: "invitation_not_pending",
+    });
+  });
+  it("runs nothing when the organization viewer is refused", async () => {
+    requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
+    await expect(action("acme", invitationPublicId)).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(invoke).not.toHaveBeenCalled();
   });
 });

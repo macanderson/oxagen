@@ -1112,6 +1112,24 @@
         }
       ]
     },
+    "resend_member_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "People pending invitations: resend",
+      "testid": "invitation-controls",
+      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "assigned-issue-batch; CI pending"
+    },
+    "revoke_member_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "People pending invitations: revoke",
+      "testid": "invitation-controls",
+      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "assigned-issue-batch; CI pending"
+    },
     "get_skill_config": {
       "route": "/[org]/[ws]/steering?tab=skills",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
