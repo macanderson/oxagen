@@ -1,0 +1,1 @@
+brand: every vendored asset matches house kit 2.3.0
