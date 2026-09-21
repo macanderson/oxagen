@@ -21,10 +21,7 @@
 //  3. **Pure.** No React, no formatting, no i18n. It is tested without a
 //     render, and the view decides how much of what it returns to show.
 
-import {
-  type CodeLanguage,
-  languageForPath,
-} from "@/shared/code-highlight";
+import { type CodeLanguage, languageForPath } from "@/shared/code-highlight";
 import { buildDiff, type LineDiff } from "@/shared/line-diff";
 
 /**
@@ -58,6 +55,8 @@ export type ToolGroup =
  * A key rather than a heading, because this module is pure and the app is
  * translated: a literal here would be one English word the catalogue never
  * sees, in a file no translator opens.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export type PaneLabel =
   | "command"
@@ -70,6 +69,10 @@ export type PaneLabel =
   | "plan"
   | "input";
 
+/** One pane of a tool reading.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export type ToolPane =
   | {
       kind: "code";
@@ -126,7 +129,11 @@ function firstStr(source: Json | null, ...keys: string[]): string | null {
   return null;
 }
 
-/** The body text as JSON, or null when it is not JSON at all. */
+/**
+ * The body text as JSON, or null when it is not JSON at all.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function parseBody(text: string | null): unknown {
   if (text === null) return null;
   const trimmed = text.trim();
@@ -149,6 +156,8 @@ export function parseBody(text: string | null): unknown {
  * its own; a content-block producer writes `{tool_use: {name, input}}`. A
  * body that matches none of these is treated as the input itself, which is
  * what the bare-input shape already is.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function splitBody(parsed: unknown): {
   input: Json | null;
@@ -231,7 +240,11 @@ const GROUPS: Readonly<Record<string, ToolGroup>> = {
   notebookread: "notebook",
 };
 
-/** The family a tool name belongs to; `mcp__server__tool` is always `mcp`. */
+/**
+ * The family a tool name belongs to; `mcp__server__tool` is always `mcp`.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function groupOf(name: string): ToolGroup {
   if (name.startsWith("mcp__")) return "mcp";
   return GROUPS[name.toLowerCase()] ?? "tool";
@@ -245,7 +258,11 @@ function mcpParts(name: string): { server: string; tool: string } | null {
   return { server, tool: rest.join("__") };
 }
 
-/** A path as the reader knows it: the last two segments, never the whole tree. */
+/**
+ * A path as the reader knows it: the last two segments, never the whole tree.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function shortPath(path: string): string {
   const parts = path.split("/").filter((part) => part !== "");
   if (parts.length <= 2) return path;
@@ -254,9 +271,18 @@ export function shortPath(path: string): string {
 
 // ── Per-tool readings ───────────────────────────────────────────────────────
 
-/** How many lines of a created file or a fetched body open expanded. */
+/**
+ * How many lines of a created file or a fetched body open expanded.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const CREATE_PREVIEW = 20;
-/** How many lines of a read file, a command's output or an unknown input open expanded. */
+/**
+ * How many lines of a read file, a command's output or an unknown input open
+ * expanded.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const OUTPUT_PREVIEW = 5;
 
 function firstLine(text: string): { head: string; multiline: boolean } {
@@ -437,9 +463,7 @@ function webDetail(name: string, input: Json | null): ToolDetail {
     detail: null,
     multiline: false,
     panes:
-      prompt === null
-        ? []
-        : [{ kind: "note", label: "asked", text: prompt }],
+      prompt === null ? [] : [{ kind: "note", label: "asked", text: prompt }],
   };
 }
 
@@ -486,7 +510,11 @@ function planDetail(name: string, input: Json | null): ToolDetail {
     name,
     group: "plan",
     headline:
-      count === null ? plan === null ? null : firstLine(plan).head : `${String(count)} items`,
+      count === null
+        ? plan === null
+          ? null
+          : firstLine(plan).head
+        : `${String(count)} items`,
     detail: null,
     multiline: false,
     panes: plan === null ? [] : [{ kind: "note", label: "plan", text: plan }],
@@ -547,7 +575,10 @@ function genericDetail(
  * kept. `name` is the tool the frame identified; the body may name it again,
  * and the body wins only when the frame named nothing.
  */
-export function toolDetail(name: string | null, body: string | null): ToolDetail | null {
+export function toolDetail(
+  name: string | null,
+  body: string | null,
+): ToolDetail | null {
   const parsed = parseBody(body);
   const { input, output, name: bodyName } = splitBody(parsed);
   const tool = name ?? bodyName;

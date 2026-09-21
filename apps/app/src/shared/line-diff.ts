@@ -44,7 +44,11 @@ export function diffStat(base: string, draft: string): DiffStat {
   return { added: b.length - common, removed: a.length - common };
 }
 
-/** What happened to one line. */
+/**
+ * What happened to one line.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export type DiffOp = "add" | "del" | "ctx";
 
 export type DiffLine = {
@@ -56,6 +60,11 @@ export type DiffLine = {
   after: number | null;
 };
 
+/**
+ * One run of changed lines with its context either side.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export type DiffHunk = {
   /** The first line the hunk covers, 1-based, in each text. */
   beforeStart: number;
@@ -77,7 +86,11 @@ export type LineDiff = {
 
 /** Above this many cells the table is not built. 4 MB of booleans is the ceiling. */
 const MAX_CELLS = 2_000_000;
-/** Unchanged lines kept either side of a change, as `diff -U3` keeps them. */
+/**
+ * Unchanged lines kept either side of a change, as `diff -U3` keeps them.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const DIFF_CONTEXT = 3;
 
 function lines(text: string): string[] {
@@ -107,7 +120,11 @@ function lcsTable(a: readonly string[], b: readonly string[]): Uint32Array {
   return table;
 }
 
-/** Every line of both texts, in order, each marked with what happened to it. */
+/**
+ * Every line of both texts, in order, each marked with what happened to it.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function diffLines(before: string, after: string): DiffLine[] {
   const a = lines(before);
   const b = lines(after);
