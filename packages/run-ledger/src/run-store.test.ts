@@ -1442,6 +1442,17 @@ describe("createAttempt", () => {
     );
   });
 
+  it("cannot create a fresh attempt to bypass cancellation", async () => {
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_RUN, rows: lockedRunRows({ cancel_requested: true }) },
+    ]);
+    useTx(tx);
+    await expect(createPostgresRunStore().createAttempt(input)).rejects.toThrow(
+      /was cancelled/,
+    );
+    expect(ranSql(executed, INSERT_ATTEMPT)).toBe(false);
+  });
+
   it("refuses to exceed the run's pinned max_attempts", async () => {
     const { tx } = makeRoutingTx([
       { match: LOCK_RUN, rows: lockedRunRows({ attempt_count: 3 }) },
@@ -1480,6 +1491,52 @@ describe("createAttempt", () => {
 // ── appendAttemptBatch ───────────────────────────────────────────────────────
 
 describe("appendAttemptBatch", () => {
+  it("refuses a cancelled run before authorization or evidence writes", async () => {
+    const { tx, executed } = makeRoutingTx([
+      {
+        match: LOCK_ATTEMPT,
+        rows: [makeAttemptRow({ cancel_requested: true })],
+      },
+    ]);
+    useTx(tx);
+    const authorizeAppend = vi.fn();
+    await expect(
+      createPostgresRunStore({ authorizeAppend }).appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
+        events: [toolEvent(1)],
+      }),
+    ).rejects.toMatchObject({
+      code: "run_attempt_not_writable",
+      reason: "cancelled",
+    });
+    expect(authorizeAppend).not.toHaveBeenCalled();
+    expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
+    const locked = executed.find((q) => LOCK_ATTEMPT.test(q.sql));
+    expect(locked?.sql).toContain("SELECT r.id, r.cancel_requested");
+    expect(locked?.sql).toContain("lk.cancel_requested");
+  });
+
+  it("authorizes inside the locked append transaction and refuses before event writes", async () => {
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+    ]);
+    useTx(tx);
+    const denied = new Error("revoked while waiting for the run lock");
+    const authorizeAppend = vi.fn(async (actualTx, attempt) => {
+      expect(actualTx).toBe(tx);
+      expect(attempt.attempt_id).toBe(UUID_ATTEMPT);
+      expect(ranSql(executed, LOCK_ATTEMPT)).toBe(true);
+      throw denied;
+    });
+    await expect(
+      createPostgresRunStore({ authorizeAppend }).appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
+        events: [toolEvent(1)],
+      }),
+    ).rejects.toBe(denied);
+    expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
+    expect(ranSql(executed, ATTEMPT_STATE)).toBe(false);
+  });
   it("appends a contiguous batch and folds the stream digest", async () => {
     const prepared = [1, 2].map((seq) =>
       prepareAttemptEvent(toolEvent(seq, `call_${seq}`)),

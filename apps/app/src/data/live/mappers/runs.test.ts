@@ -112,6 +112,7 @@ describe("toRunPage", () => {
           replayGrade: "fork",
           verdict: null,
           enforcementTier: "gateway",
+          ingressRevoked: false,
           completenessGaps: [],
           canSummarize: true,
           startedAt: "2026-09-15T08:00:00.000Z",
@@ -153,6 +154,17 @@ describe("toRunPage", () => {
     });
     expect(page.nextCursor).toBeNull();
     expect(RunPage.safeParse(page).success).toBe(true);
+  });
+
+  it("keeps ledger ingress revocation separate from recorded process status", () => {
+    const page = toRunPage({
+      runs: [{ ...ledgerRun, status: "live", ingressRevoked: true }],
+      nextCursor: null,
+    });
+    expect(RunPage.parse(page).runs[0]).toMatchObject({
+      status: "live",
+      ingressRevoked: true,
+    });
   });
 
   it("maps an empty page to an empty page", () => {

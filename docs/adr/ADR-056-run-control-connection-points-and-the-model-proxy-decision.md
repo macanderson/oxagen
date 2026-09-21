@@ -228,3 +228,27 @@ ledger run with no connection point is unchanged.
 build. When it lands, `interrupt` stops degrading to `next_step` for a run on
 the `gateway` tier, and the irreversible-tool guard this ADR deferred to the
 proxy has a home.
+
+## Implementation 2026-09-20: ledger ingress cancellation
+
+The ledger boundary now accepts credentials scoped to an existing attempt.
+`issue_run_token` requires an operator role and refuses ended or cancelled
+runs. `ingest_run_frames` derives identity from the credential and refreshes
+its fifteen-minute expiry inside the append transaction. It keeps the same
+secret so a lost response remains retryable. Only its hash is stored.
+
+Direct Cancel now fences subsequent appends and new attempts, revokes the
+run's credentials, and writes an applied command receipt under the same run
+lock. The applied outcome means evidence ingress was revoked. It makes no
+claim that an external process stopped. The Run page says this before and
+after confirmation. Other ledger controls remain refused. Since cancellation
+applies immediately and all other ledger controls remain refused, this
+revision has no queued ledger commands to return from ingress. The operator
+can read the applied receipt through `list_commands`.
+
+Dedicated Postgres planes remain unsupported for credential issuance. The
+authentication resolver reads credentials from the shared plane, so issuance
+refuses before minting a secret on a dedicated plane. Adding authenticated
+plane discovery remains part of #2953. The run read exposes `ingressRevoked`
+separately from process status. Repeat cancellation returns the existing
+applied receipt, and the Run page disables the cancelled ingress control.

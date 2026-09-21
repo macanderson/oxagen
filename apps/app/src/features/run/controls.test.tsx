@@ -231,6 +231,75 @@ describe("run controls", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
+  it("shows the durable ingress fence and disables repeat cancellation", () => {
+    render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId="arun_record1"
+          status="live"
+          source="ledger"
+          enforcementTier="observe"
+          ingressRevoked
+          orgRole="owner"
+          wsRole="owner"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("run-cancel")).toBeDisabled();
+    expect(screen.getByTestId("ledger-ingress-revoked")).toHaveTextContent(
+      "external process may still be running",
+    );
+  });
+
+  it("cancels ledger ingress without claiming that the external process stopped", async () => {
+    haltRun.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_cancel"] },
+    });
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId="arun_record1"
+          status="live"
+          source="ledger"
+          enforcementTier="observe"
+          orgRole="owner"
+          wsRole="owner"
+        />
+      </IntlProvider>,
+    );
+    for (const command of ["pause", "resume", "steer"])
+      expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
+    expect(screen.getByTestId("run-cancel")).toBeEnabled();
+    await user.click(screen.getByTestId("run-cancel"));
+    expect(screen.getByTestId("run-cancel-dialog")).toHaveTextContent(
+      "does not stop the external process",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Cancel evidence ingress" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("queued-command")).toHaveTextContent(
+        "tcm_cancel",
+      ),
+    );
+    expect(screen.getByTestId("run-cancel-dialog")).toHaveTextContent(
+      "external process may still be running",
+    );
+    expect(haltRun).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_record1",
+      "cancel",
+      "",
+    );
+  });
+
   it("disables every control, with the reason, for a viewer dispatch_command would refuse (negative)", async () => {
     const user = userEvent.setup();
     render(

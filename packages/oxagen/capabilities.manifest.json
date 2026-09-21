@@ -53,7 +53,8 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1163,7 +1164,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -4478,6 +4480,17 @@
       }
     },
     {
+      "name": "ingest_run_frames",
+      "file": "run.frames.ingest.ts",
+      "domain": "unknown",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {}
+    },
+    {
       "name": "get_run",
       "file": "run.get.ts",
       "domain": "run",
@@ -4560,6 +4573,17 @@
         "docs": true,
         "app": true
       }
+    },
+    {
+      "name": "issue_run_token",
+      "file": "run.token.issue.ts",
+      "domain": "unknown",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {}
     },
     {
       "name": "get_run_transcript",

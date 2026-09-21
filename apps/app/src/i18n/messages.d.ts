@@ -3360,6 +3360,12 @@ type Messages = {
         };
         ceiling: string;
       };
+      ledgerCancel: {
+        body: string;
+        confirm: string;
+        applied: string;
+      };
+      ledgerRevoked: string;
     };
     record: {
       reread: string;

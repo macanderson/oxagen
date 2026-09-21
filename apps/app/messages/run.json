@@ -194,7 +194,7 @@
       "steerHelp": "Oxagen records this, quotes it, and hands it to the model as content. It is never executed.",
       "noRecipient": "No live run took this command.",
       "reread": "Re-read the run",
-      "ledgerReason": "This run's evidence comes from an external engine. Oxagen holds no run token it can revoke, so there is nothing here to pause, steer or cancel.",
+      "ledgerReason": "Pause, resume, and steer need a producer connection. Cancel revokes this run’s evidence credentials and refuses further appends.",
       "roleReason": "Sending a command needs an organization Owner or Admin role, or a workspace Owner or Member role.",
       "pause": {
         "open": "Pause",
@@ -268,7 +268,13 @@
           "help": "The agent finishes the whole turn, then reads your text before it starts the next one."
         },
         "ceiling": "This is a ceiling. The run's connection point carries the strongest mode it can at or below it, and the command records both what you asked for and what it carried."
-      }
+      },
+      "ledgerCancel": {
+        "body": "Cancel revokes this run’s evidence credentials and refuses further appends. It does not stop the external process or prove that its work has stopped.",
+        "confirm": "Cancel evidence ingress",
+        "applied": "Further appends are refused and the run’s evidence credentials are revoked. The external process may still be running."
+      },
+      "ledgerRevoked": "Evidence ingress is revoked. This run cannot append more frames or receive a fresh run credential. Its external process may still be running."
     },
     "record": {
       "reread": "Re-read the run",

@@ -61,6 +61,7 @@ export function toRunRow(
     replayGrade: run.replayGrade,
     verdict: run.verdict,
     enforcementTier: run.enforcementTier,
+    ingressRevoked: run.ingressRevoked ?? false,
     completenessGaps: run.completenessGaps,
     canSummarize: run.canSummarize,
     startedAt: run.startedAt,

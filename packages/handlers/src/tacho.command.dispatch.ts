@@ -12,10 +12,10 @@
 // or `gateway` tier. An `observe`-tier session has no adapter in the path, so
 // a command addressed to it directly is refused (§7.3 "refused, not queued"),
 // and a broadcast records it as `failed` with the reason so the delivery
-// report is complete (§7.6). A ledger run has no connection point at all — no
-// producer in this tree appends to `@oxagen/run-ledger`, and no run token
-// exists to revoke — so it is refused with `no_connection_point`; a broadcast
-// enumerates recipients over the connection point and does not reach it.
+// report is complete (§7.6). A direct ledger cancel fences further appends and
+// revokes its run credentials in the command transaction. Other ledger controls
+// remain refused with `no_connection_point` until a producer carries them.
+// Broadcasts enumerate wrapped sessions.
 //
 // A delivery mode is resolved per recipient at dispatch, at or below the
 // requested one: the hook adapter cannot stop an in-flight call, so
@@ -39,8 +39,13 @@ import {
 import type { TachoDeliveryMode } from "@oxagen/tacho";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
-import { createPostgresRunStore } from "@oxagen/run-ledger";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { revokeRunTokens } from "./lib/run-token";
+import {
+  cancelRunInTransaction,
+  lockRunForControl,
+  createPostgresRunStore,
+} from "@oxagen/run-ledger";
+import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { logger } from "./logger";
 import { ledgerIdentityQuery, type RunScope, runScope } from "./run.list";
 
@@ -143,6 +148,14 @@ export interface CommandStore {
   ): Promise<RecipientSession[]>;
   /** Whether an `arun_…` id names a ledger run in the scope. */
   ledgerRunExists(scope: RunScope, publicId: string): Promise<boolean>;
+  cancelLedgerRun(args: {
+    scope: RunScope;
+    publicId: string;
+    userId: string | null;
+    now: Date;
+    expiresAt: Date;
+    reason: string | null;
+  }): Promise<string>;
   insert(row: CommandRowInput): Promise<{ publicId: string }>;
   /** Cancel earlier `queued` rows of the same command on the run; returns how many. */
   supersede(args: {
@@ -230,6 +243,22 @@ export function createDispatchCommandHandler(
       carriesPrompt && input.payload ? input.payload.requestedMode : null;
 
     const commandIds = await deps.withStore(async (store) => {
+      if (
+        input.target.kind === "run" &&
+        input.target.id.startsWith("arun_") &&
+        input.command === "cancel"
+      ) {
+        return [
+          await store.cancelLedgerRun({
+            scope,
+            publicId: input.target.id,
+            userId: actingUserId,
+            now,
+            expiresAt,
+            reason: input.reason ?? null,
+          }),
+        ];
+      }
       const sessions = await resolveRecipients(store, scope, input.target);
       const ids: string[] = [];
       for (const session of sessions) {
@@ -301,7 +330,7 @@ const recipientColumns = {
   enforcementTier: sessions.enforcementTier,
 };
 
-function postgresCommandStore(tx: Tx): CommandStore {
+export function postgresCommandStore(tx: Tx): CommandStore {
   const ledger = createPostgresRunStore();
   return {
     session: async (scope, publicId) => {
@@ -333,6 +362,62 @@ function postgresCommandStore(tx: Tx): CommandStore {
           ),
         )
         .orderBy(sessions.startedAt),
+    cancelLedgerRun: async ({
+      scope,
+      publicId,
+      userId,
+      now,
+      expiresAt,
+      reason,
+    }) => {
+      const run = await lockRunForControl(tx, scope, publicId);
+      if (!run) throw notFound("run_not_found");
+      if (!["pending", "running"].includes(run.status))
+        throw refused("run_sealed", "The run has ended");
+      if (run.cancelled) {
+        const [existing] = await tx
+          .select({ publicId: commands.publicId })
+          .from(commands)
+          .where(
+            and(
+              eq(commands.orgId, scope.orgId),
+              eq(commands.workspaceId, scope.workspaceId),
+              eq(commands.targetId, publicId),
+              eq(commands.command, "cancel"),
+              eq(commands.outcome, "applied"),
+              eq(commands.outcomeDetail, "ledger_ingress_revoked"),
+            ),
+          )
+          .orderBy(desc(commands.issuedAt))
+          .limit(1);
+        if (existing) return existing.publicId;
+      }
+      await cancelRunInTransaction(tx, run.id, now);
+      await revokeRunTokens(tx, scope, run.id, now);
+      const [receipt] = await tx
+        .insert(commands)
+        .values({
+          ...scope,
+          hostId: null,
+          sessionId: null,
+          targetKind: "run",
+          targetId: publicId,
+          command: "cancel",
+          payload: { address: publicId },
+          reason,
+          issuedByUserId: userId,
+          issuedAt: now,
+          expiresAt,
+          outcome: "applied",
+          outcomeDetail: "ledger_ingress_revoked",
+          appliedAt: now,
+          createdById: userId,
+          updatedById: userId,
+        })
+        .returning({ publicId: commands.publicId });
+      if (!receipt) throw new Error("Run cancellation receipt was not written");
+      return receipt.publicId;
+    },
     ledgerRunExists: async (scope, publicId) => {
       const summary = await ledger.getRunByPublicId(publicId);
       if (!summary) return false;

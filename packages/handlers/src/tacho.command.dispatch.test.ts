@@ -160,6 +160,10 @@ class MemoryStore implements CommandStore {
         (agentKey === null || s.agentKey === agentKey),
     );
   }
+  async cancelLedgerRun({ publicId }: { publicId: string }) {
+    if (!this.ledgerRuns.includes(publicId)) throw new Error("run_not_found");
+    return "tcm_ledger_cancel";
+  }
   async ledgerRunExists(_scope: unknown, publicId: string) {
     return this.ledgerRuns.includes(publicId);
   }
@@ -457,12 +461,33 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
     expect(store.rows).toEqual([]);
   });
 
-  it("a ledger run, which has no connection point", async () => {
+  it("cancels a ledger run through its transactional cancellation seam", async () => {
+    const ledger = "arun_cancel1";
+    const store = new MemoryStore([], [ledger]);
+    const cancel = vi.spyOn(store, "cancelLedgerRun");
+    await expect(
+      handlerOver(store)(
+        parse({ target: { kind: "run", id: ledger }, command: "cancel" }),
+        OPERATOR,
+      ),
+    ).resolves.toEqual({ commandIds: ["tcm_ledger_cancel"] });
+    expect(cancel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: { orgId: ORG, workspaceId: WORKSPACE },
+        publicId: ledger,
+        userId: OPERATOR.userId,
+        now: NOW,
+      }),
+    );
+    expect(store.rows).toHaveLength(0);
+  });
+
+  it("a ledger pause, which has no producer connection", async () => {
     const ledger = "arun_5f0c2e9a1b7d4c3e8f6a02";
     const store = new MemoryStore([], [ledger]);
     await expect(
       handlerOver(store)(
-        parse({ target: { kind: "run", id: ledger }, command: "cancel" }),
+        parse({ target: { kind: "run", id: ledger }, command: "pause" }),
         OPERATOR,
       ),
     ).rejects.toSatisfy(conflict("no_connection_point"));

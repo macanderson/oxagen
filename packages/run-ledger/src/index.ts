@@ -9,6 +9,7 @@
  *
  * This package is the ONLY writer of the `agent.agent_runs*` tables.
  */
+export { lockRunForControl, cancelRunInTransaction } from "./run-control";
 export { type PlatformSurface } from "./surface";
 
 // Reassembly (spec §14): a recorded model stream folded ONCE, where the frame

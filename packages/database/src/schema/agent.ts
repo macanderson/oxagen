@@ -491,10 +491,8 @@ export const agentRuns = agentSchema.table(
     spec: jsonb("spec").notNull(),
     result: jsonb("result"),
     error: text("error"),
-    // Set by the cancel path. Cooperative, not enforcement: the worker that
-    // used to observe it left with ADR-043, so this is now a governance
-    // signal an external engine's drain may honour, and the record that
-    // cancellation was requested either way.
+    // Cancel fences ledger appends and new attempts under the run lock.
+    // It does not stop the external process (ADR-056).
     cancelRequested: boolean("cancel_requested").notNull().default(false),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
     completedAt: timestamp("completed_at", {

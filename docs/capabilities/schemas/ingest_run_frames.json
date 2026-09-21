@@ -1,0 +1,138 @@
+{
+  "name": "ingest_run_frames",
+  "domain": "run",
+  "description": "Append evidence to the attempt bound to a run credential and refresh its expiry.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "events": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "attemptSeq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "eventType": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "observedAt": {
+              "type": "string"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "encryptedPayloadRef": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "payloadDigest": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "body": {
+              "type": "object",
+              "properties": {
+                "contentType": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "base64": {
+                  "type": "string",
+                  "maxLength": 1398104
+                }
+              },
+              "required": [
+                "contentType",
+                "base64"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "attemptSeq",
+            "eventType",
+            "observedAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "events"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "expiresAt": {
+        "type": "string"
+      },
+      "lastAttemptSeq": {
+        "type": "integer"
+      },
+      "lastRunSeq": {
+        "type": "string"
+      },
+      "events": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "attemptSeq": {
+              "type": "integer"
+            },
+            "runSeq": {
+              "type": "string"
+            },
+            "eventId": {
+              "type": "string"
+            },
+            "eventDigest": {
+              "type": "string"
+            },
+            "idempotent": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "attemptSeq",
+            "runSeq",
+            "eventId",
+            "eventDigest",
+            "idempotent"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "expiresAt",
+      "lastAttemptSeq",
+      "lastRunSeq",
+      "events"
+    ],
+    "additionalProperties": false
+  }
+}

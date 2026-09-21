@@ -305,6 +305,8 @@ import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
 import { findingFixRecordRoute } from "./routes/v1/finding.fix.record";
 import { findingDismissRoute } from "./routes/v1/finding.dismiss";
 import { runCostGetRoute } from "./routes/v1/run.cost";
+import { runTokenIssueRoute } from "./routes/v1/run.token.issue";
+import { runFramesIngestRoute } from "./routes/v1/run.frames.ingest";
 import { runProofGetRoute } from "./routes/v1/run.proof.get";
 import { evidenceDisclosureGrainSetRoute } from "./routes/v1/evidence.disclosure_grain.set";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
@@ -453,6 +455,27 @@ app.use(
   }),
 );
 
+app.use(
+  "/v1/run-ingest/*",
+  distributedRateLimiter({
+    keyPrefix: "ledger-preauth-ip",
+    max: 6000,
+    bucketKey: trustedClientIpBucketKey,
+    methods: "all",
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
+app.use(
+  "/v1/run-ingest/*",
+  distributedRateLimiter({
+    keyPrefix: "ledger-preauth-credential",
+    max: 120,
+    bucketKey: authorizationFingerprintBucketKey,
+    methods: "all",
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
+
 // /v1 user-level routes (org + workspace CRUD) require auth but no
 // org scope: a freshly-authenticated user can create their first
 // org without one existing.
@@ -507,6 +530,19 @@ app.route("/v1/telemetry/stella", stellaTelemetryScoped);
 // The post-auth ceilings (TACHO_INGEST_PER_MIN, TACHO_HOST_PER_MIN) are
 // declared above the pre-auth mounts, which derive their credential ceiling
 // from them.
+const ledgerIngress = new Hono<AppEnv>();
+ledgerIngress.use("*", authMiddleware);
+ledgerIngress.use(
+  "*",
+  distributedRateLimiter({
+    keyPrefix: "ledger-ingest",
+    max: 120,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
+ledgerIngress.route("/", runFramesIngestRoute);
+app.route("/v1/run-ingest", ledgerIngress);
+
 const tachoScoped = new Hono<AppEnv>();
 tachoScoped.use("*", authMiddleware);
 tachoScoped.use(
@@ -640,6 +676,7 @@ orgScoped.route("/runs/cost", runCostGetRoute);
 // Proof (ADR-064): a run's witness record and the workspace's disclosure grain.
 // Both handlers refuse an API-key caller; the session auth above is the path.
 orgScoped.route("/runs/proof", runProofGetRoute);
+orgScoped.route("/runs/token", runTokenIssueRoute);
 orgScoped.route("/evidence/disclosure-grain", evidenceDisclosureGrainSetRoute);
 orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
 orgScoped.route("/cost/price-entries/set", costPriceEntrySetRoute);

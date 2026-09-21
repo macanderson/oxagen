@@ -291,6 +291,35 @@ describe("a key that is no longer there", () => {
   });
 });
 
+describe("a ledger run credential", () => {
+  it("may ingest evidence but cannot issue credentials or control another run", async () => {
+    keyWithScope({ purpose: "ledger_run_v1" });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_run",
+        userId: null,
+        capabilityName: "ingest_run_frames",
+      }),
+    ).toBeUndefined();
+    for (const capabilityName of [
+      "issue_run_token",
+      "dispatch_command",
+      "get_run_proof",
+      "set_model_credential",
+    ]) {
+      expect(
+        await machineKeyDenial({
+          orgId: ORG,
+          apiKeyId: "aky_run",
+          userId: null,
+          capabilityName,
+        }),
+      ).toContain(capabilityName);
+    }
+  });
+});
+
 describe("the Tacho host key", () => {
   it("names the control client's three capabilities as their contracts register them", () => {
     // A capability rename (ADR-025) left this list naming

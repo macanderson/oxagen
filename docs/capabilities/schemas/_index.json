@@ -1,5 +1,5 @@
 {
-  "generatedCount": 334,
+  "generatedCount": 336,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1671,6 +1671,16 @@
       "consumes": []
     },
     {
+      "name": "ingest_run_frames",
+      "domain": "run",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "ingest_stella_operational_telemetry",
       "domain": "telemetry",
       "surfaces": [
@@ -1722,6 +1732,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "issue_run_token",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

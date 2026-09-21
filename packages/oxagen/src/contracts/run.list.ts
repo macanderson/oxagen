@@ -137,6 +137,8 @@ export const runItemSchema = z
   .object({
     id: runPublicIdSchema,
     source: runSourceSchema,
+    /** A ledger append fence, independent of the external process status. */
+    ingressRevoked: z.boolean().optional(),
     /** `org_ns.ws_ns.slug` (ADR-024); null when the ledger row names no agent. */
     agentKey: z.string().nullable(),
     /** The initiating principal's public id; null when none was recorded. */
