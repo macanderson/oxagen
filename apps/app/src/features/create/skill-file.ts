@@ -1,4 +1,6 @@
-import { skillSourceName } from "@/shared/source-identity";
+import { readSkillFrontmatter } from "@oxagen/oxagen/skill-frontmatter";
+import { GRANTING_FRONTMATTER_KEYS } from "@oxagen/oxagen/contracts/skill.propose";
+import { skillSourceName } from "@/shared/skill-source-identity";
 
 // The skill wizard's file logic (roadmap creation-spec §4; mockup
 // `wzSkillSlug`, `wzSkillBody`, `wzWords`): the directory name a description
@@ -8,7 +10,7 @@ import { skillSourceName } from "@/shared/source-identity";
 //
 // The authoritative checks are propose_skill's (packages/oxagen/src/contracts/
 // skill.propose.ts), run by its handler before anything reaches GitHub. This
-// module reads the same frontmatter the same way so the review step can show
+// module shares the YAML reader so the review step can show
 // what the checks will see, and it never decides on their behalf.
 
 /** Words a name never takes from a description (mockup `WZ_STOP`). */
@@ -81,22 +83,22 @@ export function slugFromFileName(file: string): string {
 
 type Frontmatter = Readonly<Record<string, string>>;
 
-/**
- * The `key: value` lines between a `---` first line and the next `---`, or
- * null when the file does not open with a fence or never closes one. The
- * reading propose_skill's `readSkillFrontmatter` makes.
- */
+/** Decode frontmatter using the same isolated YAML module as the proposal handler. */
 export function frontmatterOf(text: string): Frontmatter | null {
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
-  if (lines[0] !== "---") return null;
-  const close = lines.indexOf("---", 1);
-  if (close < 0) return null;
-  const fields: Record<string, string> = {};
-  for (const line of lines.slice(1, close)) {
-    const m = /^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$/.exec(line);
-    if (m?.[1] !== undefined) fields[m[1]] = (m[2] ?? "").trim();
-  }
-  return fields;
+  return readSkillFrontmatter(text)?.fields ?? null;
+}
+
+/** The structural checks preview can decide before reading the repository version. */
+export function validSkillPreview(text: string): boolean {
+  const fields = frontmatterOf(text);
+  return (
+    fields !== null &&
+    skillSourceName(text) !== null &&
+    typeof fields.version === "string" &&
+    isSemver(fields.version) &&
+    Boolean(fields.scope) &&
+    !GRANTING_FRONTMATTER_KEYS.some((key) => key in fields)
+  );
 }
 
 /** A plain `major.minor.patch`, the only version the version check accepts. */

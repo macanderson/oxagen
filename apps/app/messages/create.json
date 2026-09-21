@@ -147,7 +147,8 @@
         "tokens": "about {tokens, number} tokens to load",
         "revert": "Revert",
         "cost": "Every token in this file is paid for on every turn it is loaded into, by every agent that loads it. The estimate is four characters a token. The model’s tokenizer has the real count.",
-        "invalidName": "Set the frontmatter name to a lowercase name with hyphens, up to 48 characters."
+        "invalidName": "Set the frontmatter name to a lowercase name with hyphens, up to 48 characters.",
+        "invalidFrontmatter": "Fix the skill frontmatter. Name, semantic version, and scope are required. Duplicate keys, aliases, merge keys, and permission grants are not supported."
       },
       "pr": {
         "title": "Open the pull request",
@@ -216,6 +217,7 @@
         "invalid": "The {field} value is not one propose_skill accepts. Nothing was written.",
         "pendingApproval": "Opening this pull request waits for approval: access request {request}."
       }
-    }
+    },
+    "loading": "Loading creation form"
   }
 }

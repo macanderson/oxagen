@@ -14,7 +14,8 @@
     "row": {
       "sessions": "{count} of {total, plural, one {# session} other {# sessions}}",
       "lastSeen": "Last seen {date}",
-      "harnesses": "Harnesses"
+      "harnesses": "Harnesses",
+      "moreHarnesses": "+{count, number} more"
     },
     "empty": {
       "title": "No skill reported in this window",

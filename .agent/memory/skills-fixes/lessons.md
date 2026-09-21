@@ -1,0 +1,1 @@
+- [2026-09-20] Check the consumer's static import graph when isolating a parser. A lazily used function inside an eagerly imported wizard still loads its dependencies into the host bundle. (source: reflections/2026-09-20-skill-preview-inventory.md)

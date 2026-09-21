@@ -39,12 +39,13 @@ describe("clampStep", () => {
 });
 
 describe("the wizard registry", () => {
-  it("carries a wizard for every kind the chooser and ⌘K offer", () => {
-    for (const kind of CREATE_KINDS) expect(WIZARDS[kind]?.kind).toBe(kind);
+  it("carries a wizard for every kind the chooser and ⌘K offer", async () => {
+    for (const kind of CREATE_KINDS)
+      expect((await WIZARDS[kind]?.())?.kind).toBe(kind);
   });
 
-  it("carries the skill wizard, and ends every one of its paths on a pull request", () => {
-    const skill = WIZARDS.skill;
+  it("carries the skill wizard, and ends every one of its paths on a pull request", async () => {
+    const skill = await WIZARDS.skill?.();
     expect(skill?.need).toBe("skills.admin");
     for (const path of ["describe", "upload", "registry", null]) {
       const draft = { ...skill?.init(), path };
@@ -52,8 +53,8 @@ describe("the wizard registry", () => {
     }
   });
 
-  it("carries the agent wizard: five steps, ending on a pull request", () => {
-    const agent = WIZARDS.agent;
+  it("carries the agent wizard: five steps, ending on a pull request", async () => {
+    const agent = await WIZARDS.agent?.();
     expect(agent?.need).toBe("agent.write");
     expect(agent?.steps(agent.init())).toEqual([
       "describe",
@@ -64,8 +65,8 @@ describe("the wizard registry", () => {
     ]);
   });
 
-  it("carries the context-record wizard: five steps, ending on a pull request", () => {
-    const record = WIZARDS.record;
+  it("carries the context-record wizard: five steps, ending on a pull request", async () => {
+    const record = await WIZARDS.record?.();
     expect(record?.need).toBe("steering.write");
     expect(record?.steps({ ...record.init() })).toEqual([
       "describe",

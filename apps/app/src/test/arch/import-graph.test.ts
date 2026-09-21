@@ -191,6 +191,11 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/ui/command-failure.ts", expect: null },
     { at: "src/ui/probe.ts", expect: "platform" },
   ],
+  "oxagen-skill-frontmatter.ts": [
+    { at: "src/features/create/skill-file.ts", expect: null },
+    { at: "src/shared/skill-source-identity.ts", expect: null },
+    { at: "src/features/create/agent-wizard.tsx", expect: "platform" },
+  ],
   // INV-03: one probe per @oxagen/oxagen subpath.
   "oxagen-barrel.ts": [
     { at: "src/data/live/runs.ts", expect: "platform" },

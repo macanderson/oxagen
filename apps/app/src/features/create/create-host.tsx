@@ -16,7 +16,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useRef, useState } from "react";
 import {
   CREATE_EVENT,
   CREATE_KINDS,
@@ -213,6 +213,35 @@ function Wizard({
   );
 }
 
+function LoadedWizard({
+  load,
+  ...props
+}: Omit<Parameters<typeof Wizard>[0], "wizard"> & {
+  load: () => Promise<AnyWizardKind>;
+}) {
+  return <Wizard {...props} wizard={use(load())} />;
+}
+
+function WizardLoading({
+  onOpenChange,
+}: {
+  onOpenChange: (open: boolean) => void;
+}) {
+  const t = useTranslations("create");
+  return (
+    <SheetDialog
+      open
+      onOpenChange={onOpenChange}
+      title={t("loading")}
+      testId="create-loading"
+    >
+      <p role="status" aria-busy="true">
+        {t("loading")}
+      </p>
+    </SheetDialog>
+  );
+}
+
 type Opening = {
   kind: CreateKind | null;
   session: number;
@@ -291,13 +320,15 @@ export function CreateHost({
   if (open.kind === null || wizard === undefined)
     return <Chooser ctx={ctx} onChoose={show} onOpenChange={close} />;
   return (
-    <Wizard
-      key={open.session}
-      kind={open.kind}
-      wizard={wizard}
-      {...(open.prefill === undefined ? {} : { prefill: open.prefill })}
-      ctx={ctx}
-      onOpenChange={close}
-    />
+    <Suspense fallback={<WizardLoading onOpenChange={close} />}>
+      <LoadedWizard
+        key={open.session}
+        kind={open.kind}
+        load={wizard}
+        {...(open.prefill === undefined ? {} : { prefill: open.prefill })}
+        ctx={ctx}
+        onOpenChange={close}
+      />
+    </Suspense>
   );
 }

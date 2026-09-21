@@ -3,6 +3,7 @@ import {
   draftSkill,
   estimateTokens,
   frontmatterOf,
+  validSkillPreview,
   isSemver,
   skillNameOf,
   slugFromDescription,
@@ -121,5 +122,29 @@ describe("draftSkill", () => {
     });
     expect(body).toContain("\nWhat this procedure is for.\n");
     expect(body).toContain("2. What this procedure is for.");
+  });
+});
+
+describe("YAML preview parity", () => {
+  const wrap = (fields: string) => `---\n${fields}\n---\n# Body`;
+  it("decodes quoted names and versions before deriving the submitted name", () => {
+    const text = wrap(
+      'name: "release-notes"\nversion: "1.2.3"\nscope: workspace:core',
+    );
+    expect(frontmatterOf(text)?.version).toBe("1.2.3");
+    expect(skillNameOf(text, "wrong-filename")).toBe("release-notes");
+    expect(validSkillPreview(text)).toBe(true);
+  });
+  it.each([
+    "name: release-notes\nname: duplicate\nversion: 1.0.0\nscope: workspace:core",
+    "name: &name release-notes\nversion: *name\nscope: workspace:core",
+    "name: release-notes\nversion: 1.0.0\nscope: workspace:core\n<<: {tools: all}",
+    "name: null\nversion: 1.0.0\nscope: workspace:core",
+    "name: release-notes\nversion: null\nscope: workspace:core",
+    "name: release-notes\nversion: 1.0.0\nscope: null",
+    'name: release-notes\nversion: 1.0.0\nscope: workspace:core\n"allowed-tools": [shell]',
+    'name: release-notes\nversion: 1.0.0\nscope: workspace:core\n"permi\\u0073sions": {all: true}',
+  ])("refuses unsupported frontmatter %s", (fields) => {
+    expect(validSkillPreview(wrap(fields))).toBe(false);
   });
 });

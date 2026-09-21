@@ -69,3 +69,5 @@ Org Owner or Admin, checked by the handler (INV-29) for the signed-in user. An A
 | `conflict` | A check failed (`skill_check_<name>`: `skill_check_frontmatter`, `skill_check_version`, `skill_check_digest`, `skill_check_grants`, `skill_check_secrets` or `skill_check_load_cost`), or the merged skill has no version to compare against (`skill_merged_unversioned`), or GitHub refused a write (`github_refused`). |
 
 An existing proposal branch is reused only when it has an open pull request into the configured production branch. Otherwise the handler refuses with `proposal_branch_exists`; preserve or remove that branch explicitly before retrying. It never deletes the branch automatically.
+
+The upload preview and submission share a YAML frontmatter reader. Quoted names and semantic versions decode to the same values in both. Duplicate keys, aliases, merge keys, null required values, and permission-grant keys fail validation before submission. YAML loads through a skill-only module, outside the eager kernel and contract registry.

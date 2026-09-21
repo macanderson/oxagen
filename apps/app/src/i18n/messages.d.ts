@@ -1310,6 +1310,7 @@ type Messages = {
         revert: string;
         cost: string;
         invalidName: string;
+        invalidFrontmatter: string;
       };
       pr: {
         title: string;
@@ -1379,6 +1380,7 @@ type Messages = {
         pendingApproval: string;
       };
     };
+    loading: string;
   };
   createAgent: {
     draftIt: string;
@@ -3769,6 +3771,7 @@ type Messages = {
       sessions: string;
       lastSeen: string;
       harnesses: string;
+      moreHarnesses: string;
     };
     empty: {
       title: string;
