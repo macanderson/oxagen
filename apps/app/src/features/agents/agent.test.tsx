@@ -110,7 +110,7 @@ describe("Agent header and tabs", () => {
       within(header)
         .getAllByRole("button")
         .map((b) => b.textContent),
-    ).toEqual(["Rotate credential", "Suspend", "Deregister"]);
+    ).toEqual(["Clone", "Rotate credential", "Suspend", "Deregister"]);
     // The Toolbelt tab is the one way to the belt; the header carries no second link to it.
     expect(within(header).queryByRole("link")).toBeNull();
   });
@@ -184,7 +184,7 @@ describe("Agent header and tabs", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
-  it("offers Resume for a suspended agent and no write at all for a retired one", async () => {
+  it("offers Resume for a suspended agent and Clone alone for a retired one", async () => {
     await renderAgent({
       get: readOk(agentDetail({ identity: { status: "suspended" } })),
     });
@@ -192,15 +192,20 @@ describe("Agent header and tabs", () => {
       within(region("Agent identity"))
         .getAllByRole("button")
         .map((b) => b.textContent),
-    ).toEqual(["Rotate credential", "Resume", "Deregister"]);
+    ).toEqual(["Clone", "Rotate credential", "Resume", "Deregister"]);
     cleanup();
 
     await renderAgent({
       get: readOk(agentDetail({ identity: { status: "retired" } })),
     });
-    expect(within(region("Agent identity")).queryAllByRole("button")).toEqual(
-      [],
-    );
+    // Clone reads the retired configuration and writes a new draft under a new
+    // identity; it changes nothing about the retired record (ADR-136). Every
+    // control that would write to the retired agent itself stays gone.
+    expect(
+      within(region("Agent identity"))
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Clone"]);
   });
 
   it("opens Identity for an unknown tab (negative)", async () => {

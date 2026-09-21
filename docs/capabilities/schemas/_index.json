@@ -1,5 +1,5 @@
 {
-  "generatedCount": 344,
+  "generatedCount": 346,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -963,6 +963,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_clone_draft",
+      "domain": "configuration",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -2674,6 +2685,17 @@
       "domain": "agent",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "propose_configuration_clone",
+      "domain": "configuration",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

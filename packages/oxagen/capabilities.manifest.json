@@ -1764,6 +1764,42 @@
       }
     },
     {
+      "name": "get_clone_draft",
+      "file": "configuration.clone.get.ts",
+      "domain": "configuration",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "propose_configuration_clone",
+      "file": "configuration.clone.propose.ts",
+      "domain": "configuration",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "create_connection",
       "file": "connection.create.ts",
       "domain": "connection",

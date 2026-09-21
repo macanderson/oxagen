@@ -1,5 +1,5 @@
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordPromote } from "@oxagen/oxagen/contracts/context.record.promote";
 import {
   ambientPlaneKey,
@@ -18,31 +18,22 @@ const STATUS_BY_ACTION = {
   supersede: "superseded",
 } as const;
 
-/**
- * Append one lifecycle action to a context record's hash-chained promotions
- * ledger and apply it to the record row — the platform mirror of appending a
- * line to Stella's .stella/rules/promotions.jsonl. The chain digest commits
- * to the predecessor: chain_digest = sha256(prev_chain_digest + canonical
- * row), so a rewritten or reordered ledger fails re-verification.
- *
- * A promote also refreshes the record row's classification from the version
- * it pins, so the bundle's steering text says what the pinned version says.
- */
+/** Append the action and close or reopen validity under one record lock. */
 export const contextRecordPromoteHandler: CapabilityHandler<
   typeof contextRecordPromote
 > = async (input, ctx) => {
+  const actingUserId = await resolveActingUserId(ctx);
   await assertOrgRole(
-    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { ...ctx, userId: actingUserId },
     { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] },
   );
-
-  // Resolve the record by publicId or slug (same dual resolution as
-  // skill.version.list).
-  const [record] = await withTenantDb((tx) =>
-    tx
+  const result = await withTenantDb(async (tx) => {
+    const [record] = await tx
       .select({
         id: schema.contextRecords.id,
         publicId: schema.contextRecords.publicId,
+        status: schema.contextRecords.status,
+        validUntil: schema.contextRecords.validUntil,
       })
       .from(schema.contextRecords)
       .where(
@@ -51,79 +42,91 @@ export const contextRecordPromoteHandler: CapabilityHandler<
             eq(schema.contextRecords.publicId, input.record_id),
             eq(schema.contextRecords.slug, input.record_id),
           ),
+          eq(schema.contextRecords.orgId, ctx.orgId),
           eq(schema.contextRecords.workspaceId, ctx.workspaceId),
           isNull(schema.contextRecords.deletedAt),
         ),
       )
-      .limit(1),
-  );
-  if (!record) {
-    throw new Error(
-      `[context.record.promote] Record "${input.record_id}" not found in this workspace.`,
-    );
-  }
+      .for("update")
+      .limit(1);
+    if (!record)
+      throw new HandlerError({
+        code: "not_found",
+        reason: "context_record_missing",
+        message: `[context.record.promote] Record "${input.record_id}" not found in this workspace.`,
+      });
 
-  // promote pins a version; the other actions may name one for the ledger.
-  let versionUuid: string | null = null;
-  if (input.version_id) {
-    // Existence and ownership only. The classification is NOT read here: it is
-    // read in the same transaction that writes it, further down, because this
-    // one commits long before that one opens.
-    const [version] = await withTenantDb((tx) =>
-      tx
+    let versionUuid: string | null = null;
+    if (input.version_id) {
+      const [version] = await tx
         .select({ id: schema.contextRecordVersions.id })
         .from(schema.contextRecordVersions)
         .where(
           and(
-            eq(schema.contextRecordVersions.publicId, input.version_id!),
+            eq(schema.contextRecordVersions.publicId, input.version_id),
             eq(schema.contextRecordVersions.recordId, record.id),
+            eq(schema.contextRecordVersions.orgId, ctx.orgId),
+            eq(schema.contextRecordVersions.workspaceId, ctx.workspaceId),
           ),
         )
-        .limit(1),
-    );
-    if (!version) {
-      throw new Error(
-        `[context.record.promote] Version "${input.version_id}" does not belong to record "${input.record_id}".`,
-      );
+        .limit(1);
+      if (!version)
+        throw new HandlerError({
+          code: "not_found",
+          reason: "context_version_missing",
+          message: `[context.record.promote] Version "${input.version_id}" does not belong to record "${input.record_id}".`,
+        });
+      versionUuid = version.id;
+    } else if (input.action === "promote") {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "context_version_required",
+        message:
+          "[context.record.promote] `version_id` is required for a promote.",
+      });
     }
-    versionUuid = version.id;
-  } else if (input.action === "promote") {
-    throw new Error(
-      "[context.record.promote] `version_id` is required for a promote.",
-    );
-  }
-
-  // The chain head: highest seq wins. The (record_id, seq) unique index turns
-  // a racing double-append into a constraint violation instead of a fork.
-  const [head] = await withTenantDb((tx) =>
-    tx
+    const [head] = await tx
       .select({
         seq: schema.contextPromotions.seq,
         chainDigest: schema.contextPromotions.chainDigest,
+        action: schema.contextPromotions.action,
       })
       .from(schema.contextPromotions)
       .where(eq(schema.contextPromotions.recordId, record.id))
       .orderBy(desc(schema.contextPromotions.seq))
-      .limit(1),
-  );
-
-  const seq = (head?.seq ?? 0) + 1;
-  const prevChainDigest = head?.chainDigest ?? null;
-  const approverUserId = ctx.userId ?? null;
-  const chainDigest = sha256Hex(
-    (prevChainDigest ?? "") +
-      canonicalJson({
+      .limit(1);
+    const status = STATUS_BY_ACTION[input.action];
+    if (
+      input.action !== "promote" &&
+      record.status === status &&
+      head?.action === input.action
+    ) {
+      return {
+        recordId: record.publicId,
         action: input.action,
-        approver_user_id: approverUserId,
-        policy_version: input.policy_version,
-        record_id: record.id,
-        seq,
-        version_id: versionUuid,
-      }),
-  );
-
-  const status = STATUS_BY_ACTION[input.action];
-  await withTenantDb(async (tx) => {
+        seq: head.seq,
+        chainDigest: head.chainDigest,
+        status,
+        validUntil: record.validUntil?.toISOString() ?? null,
+      };
+    }
+    const now = new Date();
+    const validUntil =
+      input.action === "promote" ? null : (record.validUntil ?? now);
+    const seq = (head?.seq ?? 0) + 1;
+    const prevChainDigest = head?.chainDigest ?? null;
+    const approverUserId = actingUserId ?? null;
+    const chainDigest = sha256Hex(
+      (prevChainDigest ?? "") +
+        canonicalJson({
+          action: input.action,
+          approver_user_id: approverUserId,
+          policy_version: input.policy_version,
+          record_id: record.id,
+          seq,
+          version_id: versionUuid,
+        }),
+    );
     // The pinned version's classification, copied onto the record row so the
     // row -- and the steering text compiled from it, and the listing and the
     // classification filters that read it -- describes the version in service
@@ -199,42 +202,42 @@ export const contextRecordPromoteHandler: CapabilityHandler<
       policyVersion: input.policy_version,
       prevChainDigest,
       chainDigest,
-      createdById: ctx.userId ?? undefined,
+      createdById: actingUserId ?? undefined,
     });
     await tx
       .update(schema.contextRecords)
       .set({
         status,
+        validUntil,
         ...(input.action === "promote"
           ? {
               activeVersionId: versionUuid,
-              activatedByUserId: ctx.userId ?? undefined,
-              activatedAt: sql`now()`,
+              activatedByUserId: actingUserId ?? undefined,
+              activatedAt: now,
               ...classification,
             }
           : {}),
-        updatedById: ctx.userId ?? undefined,
-        updatedAt: sql`now()`,
+        updatedById: actingUserId ?? undefined,
+        updatedAt: now,
       })
       .where(eq(schema.contextRecords.id, record.id));
+    return {
+      recordId: record.publicId,
+      action: input.action,
+      seq,
+      chainDigest,
+      status,
+      validUntil: validUntil?.toISOString() ?? null,
+    };
   });
-
   logger.info(
     {
       record_id: input.record_id,
-      publicId: record.publicId,
       action: input.action,
-      seq,
+      seq: result.seq,
       workspaceId: ctx.workspaceId,
     },
-    "context.record.promote: appended ledger entry",
+    "context.record.promote: lifecycle recorded",
   );
-
-  return {
-    recordId: record.publicId,
-    action: input.action,
-    seq,
-    chainDigest,
-    status,
-  };
+  return result;
 };

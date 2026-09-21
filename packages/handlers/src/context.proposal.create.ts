@@ -23,6 +23,7 @@ export function createProposeRecordHandler(
     );
     const row = await createProposal(deps.store, ctx, {
       lineageId: input.record.lineageId,
+      title: input.record.title,
       kind: input.record.kind,
       force: input.record.force,
       constraintEffect: input.record.constraintEffect ?? null,

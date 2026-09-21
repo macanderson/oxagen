@@ -12,6 +12,7 @@ import type { ProposalRow, SteeringStore } from "./context.steering.store";
 
 interface CreateProposalInput {
   lineageId: string;
+  title?: string;
   kind: RecordKind;
   force: RecordForce;
   constraintEffect: ConstraintEffect | null;
@@ -43,6 +44,7 @@ export function createProposal(
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     lineageId: input.lineageId,
+    title: input.title ?? null,
     kind: input.kind,
     force: input.force,
     constraintEffect: input.constraintEffect,

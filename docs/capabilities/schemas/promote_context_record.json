@@ -60,6 +60,16 @@
         "type": "string",
         "description": "Public record ID (ctr_…)"
       },
+      "validUntil": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "action": {
         "type": "string",
         "enum": [
@@ -84,6 +94,7 @@
     },
     "required": [
       "recordId",
+      "validUntil",
       "action",
       "seq",
       "chainDigest",

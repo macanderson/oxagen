@@ -139,6 +139,7 @@ export const proposedRecordSchema = z
     lineageId: lineageId.describe(
       "The lineage this proposal is about; the file stem under .oxagen/rules/",
     ),
+    title: z.string().min(1).max(200).optional(),
     kind: recordKindSchema,
     force: recordForceSchema,
     /** Required on a constraint, refused on every other kind. */

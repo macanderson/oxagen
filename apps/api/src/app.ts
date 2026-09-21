@@ -1,3 +1,5 @@
+import { configurationCloneGetRoute } from "./routes/v1/configuration.clone.get";
+import { configurationCloneProposeRoute } from "./routes/v1/configuration.clone.propose";
 import { revokeMemberInviteRoute } from "./routes/v1/org.member_invite.revoke";
 import { resendMemberInviteRoute } from "./routes/v1/org.member_invite.resend";
 import { Hono } from "hono";
@@ -674,6 +676,11 @@ orgScoped.route("/spend/waste", spendWasteListRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // The skills a workspace's harness sessions reported at start (#3098): a
 // noBillingGate read of tacho.sessions.
+orgScoped.route("/configurations/clone", configurationCloneGetRoute);
+orgScoped.route(
+  "/configurations/clone/propose",
+  configurationCloneProposeRoute,
+);
 orgScoped.route("/skills/config", skillConfigGetRoute);
 orgScoped.route("/skills/config/update", skillConfigUpdateRoute);
 orgScoped.route("/skills/search/preview", skillSearchPreviewRoute);

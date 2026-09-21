@@ -33,6 +33,11 @@
             "maxLength": 200,
             "description": "The lineage this proposal is about; the file stem under .oxagen/rules/"
           },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
           "kind": {
             "type": "string",
             "enum": [

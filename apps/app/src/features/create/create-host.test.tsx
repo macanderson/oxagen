@@ -14,15 +14,19 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CREATE_EVENT, openCreate } from "@/shared/create";
+import { CREATE_EVENT, openClone, openCreate } from "@/shared/create";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 
-const { readMainRepository, proposeSkill } = vi.hoisted(() => ({
-  readMainRepository: vi.fn(),
-  proposeSkill: vi.fn(),
-}));
+const { readMainRepository, proposeSkill, readCloneDraft, proposeClone } =
+  vi.hoisted(() => ({
+    readMainRepository: vi.fn(),
+    proposeSkill: vi.fn(),
+    readCloneDraft: vi.fn(),
+    proposeClone: vi.fn(),
+  }));
 vi.mock("./actions", () => ({ readMainRepository, proposeSkill }));
+vi.mock("./clone-actions", () => ({ readCloneDraft, proposeClone }));
 
 // Await real module transformation before asserting UI behavior.
 const { WIZARDS } = await import("./kinds");
@@ -49,6 +53,8 @@ function open(kind: Parameters<typeof openCreate>[0] = null) {
 beforeEach(() => {
   readMainRepository.mockReset();
   proposeSkill.mockReset();
+  readCloneDraft.mockReset();
+  proposeClone.mockReset();
   readMainRepository.mockResolvedValue({
     ok: true,
     value: { fullName: "acme/platform", defaultRef: "main" },
@@ -64,6 +70,29 @@ afterEach(async () => {
 });
 
 describe("CreateHost", () => {
+  it("routes a clone entry point to the manual editor with its original source", async () => {
+    readCloneDraft.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "authz_denied",
+    });
+    mount();
+    act(() => {
+      openClone("agent", "agt_original");
+    });
+    await screen.findByTestId("configuration-clone", {}, { timeout: 5000 });
+    await waitFor(() => {
+      expect(readCloneDraft).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        "agent",
+        "agt_original",
+      );
+    });
+    expect(screen.queryByTestId("create-chooser")).toBeNull();
+    expect(proposeClone).not.toHaveBeenCalled();
+  });
+
   it("renders nothing until an entry point opens it", () => {
     mount();
     expect(screen.queryByRole("dialog")).toBeNull();

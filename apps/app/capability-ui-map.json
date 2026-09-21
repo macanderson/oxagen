@@ -1137,6 +1137,24 @@
         }
       ]
     },
+    "get_clone_draft": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Clone on a published record opens the manual editor in the workspace creation host.",
+      "testid": "configuration-clone",
+      "proof": "apps/app/src/features/create/clone-editor.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "skills-lifecycle-ci-witness"
+    },
+    "propose_configuration_clone": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Clone on a published record opens the manual editor in the workspace creation host.",
+      "testid": "configuration-clone",
+      "proof": "apps/app/src/features/create/clone-editor.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "skills-lifecycle-ci-witness"
+    },
     "resend_member_invite": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",

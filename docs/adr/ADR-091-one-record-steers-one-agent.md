@@ -83,6 +83,36 @@ yet reach an agent. Fixes to existing ceremony are not ceremony.
 
 The freeze lifts when the proof is recorded on #2592.
 
+#### Amendment 2026-09-21: one exempted proposal column
+
+The freeze is narrowed, not lifted. The proof is still outstanding, #2592 is
+still open, and everything §6 names still waits on it.
+
+What is exempted: `context_proposals.title`, an optional nullable column added
+by PR #3645. The test §6 means to apply is the sentence that gives its reason —
+"every one of them would add process to a record that did not yet reach an
+agent" — not the word "fields" read on its own. This column adds no process.
+Nothing gates on it, no check reads it, it opens no state, it adds no review
+step and no ledger action, and a proposal with a null title behaves exactly as
+every proposal does today. It labels a proposal that already exists.
+
+Read in code at the merge commit: a merge copies it into the record's
+classification (`context.steering.store.ts`, `title: proposal.title ??
+proposal.statement`) and the Steering views display it. It stops there.
+`compileSteering`'s `describe` renders the statement, the kind and the lineage
+slug (`lib/tacho-steering.ts`), so a title never reaches `context.system` and
+never reaches an agent. The Context PR is titled from the lineage slug, not
+from this column, so it does not move a review either.
+
+So §6's list is read by its purpose: a proposal field that adds process is
+frozen, and a proposal field that only names an existing proposal is not. A
+field anything decides on is ceremony and stays frozen.
+
+This is an owner's override, made by Mac on 2026-09-21 with the proof still
+outstanding, and recorded here and on #2592 rather than taken quietly. It
+exempts one column. The next change that touches governance ceremony gets the
+freeze as written, and the freeze still lifts only on the #2592 proof.
+
 ## Consequences
 
 - A workspace with no steering records gets the bundle it had before,

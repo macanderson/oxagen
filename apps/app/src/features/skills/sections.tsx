@@ -10,6 +10,7 @@ import type { SkillInventory } from "@/data/contracts/skills";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { linkText, mono, panel } from "@/ui/control-styles";
+import { CloneButton } from "@/ui/clone-button";
 import { SafeLink } from "@/ui/navigation";
 import { useFormatter } from "@/ui/formatter";
 
@@ -118,6 +119,7 @@ export function SkillsInventory({
               <p className={`${mono} break-all font-medium text-foreground`}>
                 {skill.name}
               </p>
+              <CloneButton kind="skill" sourceRef={skill.name} />
               <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                 <span data-sessions={skill.sessions}>
                   {t("row.sessions", {

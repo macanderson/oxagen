@@ -40,8 +40,8 @@ interface SteeringScope {
 
 export type ProposalRow = Omit<
   typeof schema.contextProposals.$inferSelect,
-  "checks"
-> & { checks: CheckResult[] };
+  "checks" | "title"
+> & { checks: CheckResult[]; title?: string | null };
 
 type ProposalInsert = Pick<
   ProposalRow,
@@ -60,7 +60,7 @@ type ProposalInsert = Pick<
   | "supportingRecordIds"
   | "evidenceLinks"
   | "createdById"
->;
+> & { title?: string | null };
 
 /** The columns a handler may change after insert. */
 type ProposalPatch = Partial<
@@ -174,7 +174,10 @@ interface PublishMergeResult {
 }
 
 export interface SteeringStore {
-  insertProposal(values: ProposalInsert): Promise<ProposalRow>;
+  insertProposal(
+    values: ProposalInsert,
+    options?: { createOnly: boolean },
+  ): Promise<ProposalRow>;
   findProposal(
     scope: SteeringScope,
     publicId: string,
@@ -351,8 +354,42 @@ const recordColumns = {
 };
 
 export const postgresSteeringStore: SteeringStore = {
-  async insertProposal(values) {
+  async insertProposal(values, options) {
     return withTenantDb(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`${values.workspaceId}:${values.lineageId.toLowerCase()}`}, 0))`,
+      );
+      if (options?.createOnly) {
+        const [record] = await tx
+          .select({ id: schema.contextRecords.id })
+          .from(schema.contextRecords)
+          .where(
+            and(
+              eq(schema.contextRecords.orgId, values.orgId),
+              eq(schema.contextRecords.workspaceId, values.workspaceId),
+              eq(schema.contextRecords.slug, values.lineageId),
+            ),
+          )
+          .limit(1);
+        const [proposal] = await tx
+          .select({ id: schema.contextProposals.id })
+          .from(schema.contextProposals)
+          .where(
+            and(
+              eq(schema.contextProposals.orgId, values.orgId),
+              eq(schema.contextProposals.workspaceId, values.workspaceId),
+              eq(schema.contextProposals.lineageId, values.lineageId),
+            ),
+          )
+          .limit(1);
+        if (record || proposal)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "clone_name_taken",
+            message:
+              "This lineage already belongs to a record or proposal. Refresh the clone draft.",
+          });
+      }
       const [row] = await tx
         .insert(schema.contextProposals)
         .values(values)
@@ -907,7 +944,7 @@ export const postgresSteeringStore: SteeringStore = {
         .limit(1);
 
       const classification = {
-        title: proposal.statement,
+        title: proposal.title ?? proposal.statement,
         status: "active" as const,
         kind: proposal.kind,
         force: proposal.force,

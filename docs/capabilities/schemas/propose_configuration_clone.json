@@ -1,0 +1,159 @@
+{
+  "name": "propose_configuration_clone",
+  "domain": "configuration",
+  "description": "Validate a clone draft and open a create-only proposal under its new identity. Refuses changed source content or a name held by another record or proposal. Retiring the original is separate.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "configuration"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "skill",
+          "record"
+        ]
+      },
+      "sourceId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "sourceDigest": {
+        "type": "string"
+      },
+      "slug": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "source": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 65536
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "content": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "required": [
+            "path",
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 16
+      },
+      "harness": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "stella",
+              "claude-code",
+              "codex",
+              "cursor",
+              "claude-agent-sdk",
+              "custom"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "kind",
+      "sourceId",
+      "sourceDigest",
+      "slug",
+      "name",
+      "source",
+      "files",
+      "harness"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "slug": {
+        "type": "string"
+      },
+      "proposalId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pullRequest": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "slug",
+      "proposalId",
+      "pullRequest"
+    ],
+    "additionalProperties": false
+  }
+}

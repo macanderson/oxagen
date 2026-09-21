@@ -153,8 +153,14 @@ it("keeps the merged-PR input after an unmerged refusal and never refreshes", as
   expect(screen.getByLabelText("Proposed TOML")).toHaveValue(
     configuration.draftText,
   );
-  expect(
-    screen.getByRole("button", { name: "Publish merged configuration" }),
-  ).toBeEnabled();
+  // The refusal is set inside the transition, so the alert can paint while
+  // `pending` is still true and the submit button still disabled; `pending`
+  // clears on a later commit. Awaiting the alert alone raced that commit and
+  // failed under CI load.
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Publish merged configuration" }),
+    ).toBeEnabled(),
+  );
   expect(refresh).not.toHaveBeenCalled();
 });

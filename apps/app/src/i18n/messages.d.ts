@@ -1382,6 +1382,27 @@ type Messages = {
         pendingApproval: string;
       };
     };
+    clone: {
+      open: string;
+      title: string;
+      lead: string;
+      loading: string;
+      name: string;
+      slug: string;
+      source: string;
+      companions: string;
+      submit: string;
+      pending: string;
+      done: string;
+      viewPr: string;
+      viewProposal: string;
+      denied: string;
+      unavailable: string;
+      collision: string;
+      changed: string;
+      refused: string;
+      retry: string;
+    };
     loading: string;
     loadFailed: {
       title: string;
