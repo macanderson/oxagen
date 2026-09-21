@@ -70,3 +70,20 @@ describe("workspace GitHub credentials", () => {
     expect(connection.params).toContain("ws-1");
   });
 });
+
+it("uses the approved connection id and refuses a shared fallback when it has no credential", async () => {
+  vi.stubEnv("GITHUB_PERSONAL_ACCESS_TOKEN", "unrelated-shared-token");
+  mocks.rows.push([]);
+  await expect(
+    resolveGitHubToken({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      connectionId: "approved-connection",
+    }),
+  ).rejects.toThrow("approved repository connection");
+  const query = new PgDialect().sqlToQuery(mocks.queries[0] as SQL);
+  expect(query.sql).toContain('"source_connections"."id" =');
+  expect(query.params).toContain("approved-connection");
+  expect(query.params).toContain("org-1");
+  expect(query.params).toContain("ws-1");
+});
