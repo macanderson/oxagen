@@ -600,6 +600,78 @@ describe("the loopback model proxy", () => {
     expect(ttft.api_duration_ms).toBeGreaterThanOrEqual(ttft.ttft_ms + 200);
   });
 
+  it("stores the second call of a session without the messages the first already holds", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-prefix");
+    const headers = [
+      "X-Api-Key",
+      FAKE_KEY,
+      "X-Claude-Code-Session-Id",
+      "sess-prefix",
+    ];
+    const system = [
+      {
+        type: "text",
+        text: `You are careful. ${"Read before you write. ".repeat(40)}`,
+      },
+    ];
+    const first = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      system,
+      messages: [{ role: "user", content: PROMPT }],
+    });
+    await call(port, { path: "/anthropic/v1/messages", headers, body: first });
+    await until(() => frames(uuid).length === 1);
+    const second = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      system,
+      messages: [
+        { role: "user", content: PROMPT },
+        { role: "assistant", content: COMPLETION },
+        { role: "user", content: "and then?" },
+      ],
+    });
+    await call(port, { path: "/anthropic/v1/messages", headers, body: second });
+    await until(() => frames(uuid).length === 2);
+
+    const [one, two] = frames(uuid);
+    const [body] = handle.wal.bodiesFor([two!]);
+    const exchange = JSON.parse(
+      Buffer.from(body!.bytes_base64, "base64").toString("utf8"),
+    ) as { request: string };
+    const stored = JSON.parse(exchange.request) as Record<string, unknown>;
+    // Only what is new since the first call, and a pointer to it.
+    expect(stored["messages"]).toEqual([
+      { role: "assistant", content: COMPLETION },
+      { role: "user", content: "and then?" },
+    ]);
+    expect(stored).not.toHaveProperty("system");
+    expect(stored["$oxagen_prior"]).toEqual({
+      unchanged_from: sha(first),
+      messages: 1,
+      fields: ["system"],
+    });
+    expect(two!.attrs["oxagen.request_prior_messages"]).toBe("1");
+    expect(two!.attrs["oxagen.request_prior_digest"]).toBe(sha(first));
+    expect(two!.attrs["oxagen.request_full_digest"]).toBe(sha(second));
+    expect(Number(two!.attrs["oxagen.request_stored_bytes"])).toBeLessThan(
+      Number(two!.attrs["oxagen.request_full_bytes"]),
+    );
+    // The first call is stored whole, and its full digest is what the second
+    // call points at (negative: nothing to fold against).
+    expect(one!.attrs["oxagen.request_prior_messages"]).toBeUndefined();
+    expect(one!.attrs["oxagen.request_full_digest"]).toBe(sha(first));
+    // The chain still names the stored bytes.
+    expect(two!.content?.digest).toBe(
+      sha(Buffer.from(body!.bytes_base64, "base64")),
+    );
+  });
+
   it("records the decoded request and the buffered stream as one frame body", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const { handle, port, session, frames } = await boot(fake.url, {
