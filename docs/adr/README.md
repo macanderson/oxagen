@@ -148,4 +148,5 @@ first. Move a row into its epic when one fits.
 
 - [ADR-130: Spend and operator feedback lead the app](ADR-130-spend-and-operator-feedback-ui.md)
 
+- [ADR-132](./ADR-132-the-mockup-css-is-the-design-of-record.md): The roadmap mockup's CSS is the app's design of record, rule by rule. Each recipe in `apps/app/src/ui` and `globals.css` names the `engine.css` rule it draws; gold is identity in both themes, headers are flat, every page carries a scope eyebrow; INV-32 holds the recipes to the rules. Extends ADR-130.
 - [ADR-131](./ADR-131-one-openrouter-key-per-organisation.md): Oxagen mints one OpenRouter key per organisation, named `oxagen/<slug>/<creator-email>` at creation and never rewritten, with a daily spend ceiling (default $25). A minted key changes which key spends, never who is billed, so `ModelFundingSource` splits into `fundedBy` and `modelKey` and `selectModelForOrg` resolves both in one call. Extends ADR-053.

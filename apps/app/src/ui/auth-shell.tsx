@@ -30,7 +30,7 @@ export function AuthShell({
     <div className="relative isolate flex min-h-dvh flex-col items-center bg-background px-4 pb-14 sm:px-5">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(760px_420px_at_50%_-6%,color-mix(in_oklch,var(--primary)_14%,transparent),transparent_70%)]"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(760px_420px_at_50%_-6%,color-mix(in_oklch,var(--foreground)_14%,transparent),transparent_70%)]"
       />
       <header className="flex w-full max-w-5xl items-center gap-3 pt-6">
         <Brandmark />

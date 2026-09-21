@@ -120,3 +120,32 @@ describe("invitationEmailTemplate", () => {
     });
   });
 });
+
+describe("invitation note", () => {
+  it("includes the note in both email formats and preserves line breaks", () => {
+    const message = "Please join the project.\nStart with the spend report.";
+    const { text, html } = invitationEmailTemplate({ ...BASE_INPUT, message });
+    expect(text).toContain(`Note from Jane Smith:\n${message}`);
+    expect(html).toContain("Note from Jane Smith:");
+    expect(html).toContain(
+      "Please join the project.<br>Start with the spend report.",
+    );
+  });
+
+  it("escapes note markup in HTML while leaving plaintext readable", () => {
+    const message = '<img src=x onerror="alert(1)"> & welcome';
+    const { text, html } = invitationEmailTemplate({ ...BASE_INPUT, message });
+    expect(text).toContain(message);
+    expect(html).toContain(
+      "&lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; welcome",
+    );
+    expect(html).not.toContain("<img");
+  });
+
+  it.each([undefined, "", " \n\t "])("omits an empty note: %s", (message) => {
+    const email = invitationEmailTemplate({ ...BASE_INPUT, message });
+    expect(email).toEqual(invitationEmailTemplate(BASE_INPUT));
+    expect(email.text).not.toContain("Note from");
+    expect(email.html).not.toContain("Note from");
+  });
+});
