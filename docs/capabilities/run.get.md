@@ -59,3 +59,9 @@ Every invoke runs the IAM check and the audit and security emissions once, befor
 **Resuming.** `EventSource` sends the last `id` back as `Last-Event-ID`; a client that is not `EventSource` passes `?after=<cursor>`. A read that starts at either repeats nothing and skips nothing, so a dropped connection costs a round trip and no frames.
 
 **Cost.** Each read long-polls inside the handler for up to 20 s (`waitMs`), so an idle stream costs one invoke per 20 s rather than one per client tick. `noBillingGate: true` keeps every one of them off the meter.
+
+The live stream renews its idle deadline when it emits frames. Its terminal
+event carries the last emitted frame cursor, including on the final page.
+Unexpected failures are logged on the server and return `stream_unavailable`
+with a generic message. A named server error stops the browser subscription;
+a transport disconnect retains EventSource retry behavior.

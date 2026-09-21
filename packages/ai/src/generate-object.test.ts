@@ -53,6 +53,13 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     ...real,
     providerCostUsdMicros: mocks.providerCostUsdMicros,
     chargeUsageCredits: mocks.chargeUsageCredits,
+    admitUsage: vi.fn(async () => "00000000-0000-4000-8000-000000000099"),
+    finalizeUsage: vi.fn(
+      async ({ row, charge }: { row: unknown; charge?: unknown }) => {
+        await mocks.insertTokenUsage([row]);
+        if (charge) await mocks.chargeUsageCredits(charge);
+      },
+    ),
     recordSpend: mocks.recordSpend,
   };
 });
@@ -382,46 +389,46 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     expect(chargeSucceeded).toBe(true);
   });
 
-  it("swallows a ClickHouse insertTokenUsage error and still returns the object", async () => {
+  it("propagates durable persistence failure", async () => {
     mocks.insertTokenUsage.mockRejectedValueOnce(new Error("CH down"));
 
-    const { object } = await generateObjectFor({
-      fundedBy: "platform" as const,
-      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
-      schema: SCHEMA,
-      prompt: "resilient?",
-      telemetry: TELEMETRY,
-    });
-
-    expect(object.answer).toBe("Paris");
+    await expect(
+      generateObjectFor({
+        fundedBy: "platform" as const,
+        chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+        schema: SCHEMA,
+        prompt: "resilient?",
+        telemetry: TELEMETRY,
+      }),
+    ).rejects.toThrow("CH down");
   });
 
-  it("swallows a hashPrompt error and still returns the object", async () => {
+  it("propagates hashPrompt failure", async () => {
     mocks.hashPrompt.mockRejectedValueOnce(new Error("hash failure"));
 
-    const { object } = await generateObjectFor({
-      fundedBy: "platform" as const,
-      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
-      schema: SCHEMA,
-      prompt: "resilient?",
-      telemetry: TELEMETRY,
-    });
-
-    expect(object.answer).toBe("Paris");
+    await expect(
+      generateObjectFor({
+        fundedBy: "platform" as const,
+        chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+        schema: SCHEMA,
+        prompt: "resilient?",
+        telemetry: TELEMETRY,
+      }),
+    ).rejects.toThrow("hash failure");
   });
 
-  it("swallows a credit-charge error and still returns the object", async () => {
+  it("propagates credit-charge failure", async () => {
     mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
 
-    const { object } = await generateObjectFor({
-      fundedBy: "platform" as const,
-      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
-      schema: SCHEMA,
-      prompt: "resilient?",
-      telemetry: TELEMETRY,
-    });
-
-    expect(object.answer).toBe("Paris");
+    await expect(
+      generateObjectFor({
+        fundedBy: "platform" as const,
+        chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+        schema: SCHEMA,
+        prompt: "resilient?",
+        telemetry: TELEMETRY,
+      }),
+    ).rejects.toThrow("billing down");
   });
 
   it("respects a caller-supplied temperature override", async () => {

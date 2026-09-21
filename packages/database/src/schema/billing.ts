@@ -1166,3 +1166,35 @@ export const gauReversals = billingSchema.table(
     ),
   }),
 );
+
+/** Delivery and settlement state for one provider operation. Not an analytics store. */
+export const usageOutbox = billingSchema.table(
+  "usage_outbox",
+  {
+    id: uuid("id").primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    workspaceId: uuid("workspace_id").notNull(),
+    usageComplete: boolean("usage_complete").notNull().default(false),
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
+    charge: jsonb("charge").$type<Record<string, unknown>>(),
+    admittedAt: timestamp("admitted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    incompleteIdx: index("usage_outbox_incomplete_idx")
+      .on(t.admittedAt)
+      .where(sql`${t.usageComplete} = false`),
+    pendingIdx: index("usage_outbox_pending_idx")
+      .on(t.nextAttemptAt)
+      .where(sql`${t.deliveredAt} IS NULL AND ${t.payload} IS NOT NULL`),
+  }),
+);

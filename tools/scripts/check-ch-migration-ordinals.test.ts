@@ -39,6 +39,11 @@ import {
 /** What is actually on disk right now. */
 const REAL: string[] = sqlFilesIn(MIGRATIONS_DIR);
 
+function nextMigration(files: string[], stem: string): string {
+  const tip = Math.max(0, ...files.map((file) => Number(ordinalOf(file) ?? 0)));
+  return `${String(tip + 1).padStart(4, "0")}_${stem}.sql`;
+}
+
 describe("the real migrations directory", () => {
   it("is the directory this guard claims to describe", () => {
     // If this ever reads 0, every other assertion below passes vacuously.
@@ -140,7 +145,7 @@ describe("a new duplicate", () => {
 
   it("is NOT reported when it takes the next free ordinal", () => {
     const offending = offendingDuplicates(
-      [...REAL, "0029_brand_new.sql"].sort(),
+      [...REAL, nextMigration(REAL, "brand_new")].sort(),
     ).filter((g) => g.unexempt.length > 0);
     expect(offending).toEqual([]);
   });
@@ -272,7 +277,7 @@ describe("exemptions that stop matching the tree", () => {
     // carrying an exemption for a file nobody can find.
     const renamed = REAL.filter(
       (f) => f !== "0020_eval_item_results.sql",
-    ).concat("0029_eval_item_results.sql");
+    ).concat(nextMigration(REAL, "eval_item_results"));
     expect(staleExemptions(renamed)).toEqual(["0020_eval_item_results.sql"]);
   });
 
@@ -383,9 +388,9 @@ describe("an ordinal at or below the pre-ledger baseline cutover", () => {
   });
 
   it("accepts the next free ordinal on the real tree", () => {
-    expect(baselineBackfills([...REAL, "0029_brand_new.sql"].sort())).toEqual(
-      [],
-    );
+    expect(
+      baselineBackfills([...REAL, nextMigration(REAL, "brand_new")].sort()),
+    ).toEqual([]);
     expect(baselineBackfills([...REAL, "0031_much_later.sql"].sort())).toEqual(
       [],
     );
@@ -465,14 +470,18 @@ describe("a shipped migration filename is frozen", () => {
   // unapplied and replays it — and 0021 is the DROP+RECREATE of
   // schema_conformance_events, so the replay destroys retained data.
 
-  it("is the whole directory, not only the baselined half", () => {
+  it("preserves the shipped snapshot, including post-baseline filenames", () => {
     // The ledger keys on filename for EVERY migration, not just the ones the
     // pre-ledger baseline sweeps. Freezing only the files at or below the
     // cutover would leave 0027 renameable with the same consequence.
-    expect([...SHIPPED_MIGRATIONS].sort()).toEqual(REAL);
+    for (const shipped of SHIPPED_MIGRATIONS) expect(REAL).toContain(shipped);
     expect(
       SHIPPED_MIGRATIONS.filter((f) => f > PRE_LEDGER_BASELINE_CUTOVER),
-    ).toEqual(["0027_tacho_events.sql", "0028_tacho_observed_changes.sql"]);
+    ).toEqual([
+      "0027_tacho_events.sql",
+      "0028_tacho_observed_changes.sql",
+      "0029_durable_token_usage.sql",
+    ]);
   });
 
   it("covers every grandfathered name", () => {
@@ -581,10 +590,9 @@ describe("a shipped migration filename is frozen", () => {
   });
 
   it("accepts a brand-new migration above the tip, with no constant edited", () => {
-    // The mirror. The roster is a snapshot of what has shipped and does not
-    // grow: an ordinary migration PR adds the next ordinal and declares it in the
-    // roster, which is the one line it touches here.
-    const withNew = [...REAL, "0029_brand_new.sql"].sort();
+    // The shipped roster stays fixed. A later migration adds a file only;
+    // the guard checks its ordinal without adding it to the historical roster.
+    const withNew = [...REAL, nextMigration(REAL, "brand_new")].sort();
     expect(shippedRenames(withNew)).toEqual([]);
     expect(baselineBackfills(withNew)).toEqual([]);
     expect(malformed(withNew)).toEqual([]);
@@ -594,6 +602,21 @@ describe("a shipped migration filename is frozen", () => {
     ).toEqual([]);
   });
 
+  it("keeps the hypothetical migration above successive directory tips", () => {
+    let files = [...REAL];
+    for (let step = 0; step < 3; step += 1) {
+      const next = nextMigration(files, "brand_new");
+      expect(files).not.toContain(next);
+      files = [...files, next].sort();
+      expect(shippedRenames(files)).toEqual([]);
+      expect(baselineBackfills(files)).toEqual([]);
+      expect(sortOrderConflicts(files)).toEqual([]);
+      expect(
+        offendingDuplicates(files).filter((group) => group.unexempt.length > 0),
+      ).toEqual([]);
+    }
+  });
+
   it("does not freeze what has not shipped: a new file may be renamed freely", () => {
     // The residual, asserted rather than left to be discovered. A migration
     // added after this roster was taken is absent from it, so renaming it is
@@ -601,8 +624,8 @@ describe("a shipped migration filename is frozen", () => {
     // Closing that needs the roster to grow with every migration, which is the
     // friction the "touches no constant" property buys. Written down in the
     // guard and in the PR body; not silently absent.
-    const added = [...REAL, "0029_first_name.sql"].sort();
-    const thenRenamed = [...REAL, "0029_second_name.sql"].sort();
+    const added = [...REAL, nextMigration(REAL, "first_name")].sort();
+    const thenRenamed = [...REAL, nextMigration(REAL, "second_name")].sort();
     expect(shippedRenames(added)).toEqual([]);
     expect(shippedRenames(thenRenamed)).toEqual([]);
   });
