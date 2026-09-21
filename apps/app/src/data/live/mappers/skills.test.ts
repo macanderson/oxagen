@@ -4,7 +4,7 @@
 // refuse can make a test pass.
 import { skillList } from "@oxagen/oxagen/contracts/skill.list";
 import { describe, expect, it } from "vitest";
-import { SkillInventory, SkillSearchPreview } from "@/data/contracts/skills";
+import { SkillInventory } from "@/data/contracts/skills";
 import { toSkillInventory } from "./skills";
 
 const window = {
