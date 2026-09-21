@@ -51,7 +51,8 @@ export function createPriceEntryListHandler(
       at: at.toISOString(),
       entries: entries.map((e) => ({
         id: e.id,
-        ...(input.includeScheduled === true &&
+        ...(ctx.surface === "app" &&
+        input.includeScheduled === true &&
         e.orgId === ctx.orgId &&
         e.source === "negotiated" &&
         e.effectiveFrom > at

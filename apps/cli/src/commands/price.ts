@@ -137,8 +137,18 @@ function entryRow(row: PriceEntryRow): string[] {
 
 function renderEntries(rows: PriceEntryRow[], writer: CommandWriter): void {
   printTable(
-    ["PROVIDER", "MODEL", "CLASS", "REGION", "PER 1M", "SOURCE", "FROM", "TO"],
-    rows.map(entryRow),
+    [
+      "ID",
+      "PROVIDER",
+      "MODEL",
+      "CLASS",
+      "REGION",
+      "PER 1M",
+      "SOURCE",
+      "FROM",
+      "TO",
+    ],
+    rows.map((row) => [row.id, ...entryRow(row)]),
     writer,
   );
 }
@@ -332,6 +342,12 @@ export async function priceRemove(
   const fallback = result.fallbackPriced
     ? "A fallback price covers this model and class."
     : "No list or override price covers this model and class: it is UNPRICED until one is set.";
+  if (opts.scheduledEntryId !== undefined) {
+    writer.write(
+      `Scheduled rate ${opts.scheduledEntryId} is absent. Active and later rates remain unchanged.`,
+    );
+    return;
+  }
   if (result.closed === null) {
     writer.write(
       `No open negotiated rate for ${opts.model} ${opts.tokenClass}; nothing to end. ${fallback}`,

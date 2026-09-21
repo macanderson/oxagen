@@ -50,3 +50,5 @@ RLS on `cost.price_entries` is the `tenant_isolation` policy, which for this tab
 ## Scheduled rates
 
 The Pricing tab opts into scheduled rows and groups them by their future start time. Each group renders up to 100 rows per page. Remove sends an authenticated opaque cancellation token for the selected row to `remove_price_entry`, which cancels only that future row and restores the preceding rate until the next scheduled row, if any.
+
+The app receives an opaque cancellation token for scheduled rows. API, MCP, and CLI callers use the entry ID and do not need the app token secret. The CLI table includes that ID.

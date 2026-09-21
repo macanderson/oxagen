@@ -269,6 +269,7 @@ describe("price list", () => {
         ...(includeScheduled ? { includeScheduled: true } : {}),
       });
       expect(c.output()).toContain("claude-sonnet-5");
+      expect(c.output()).toContain("pe_1");
     },
   );
   it("refuses an invalid instant before reading", async () => {
@@ -277,4 +278,24 @@ describe("price list", () => {
     expect(apiPostOrThrow).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(2);
   });
+});
+
+it("reports a scheduled row absent after cancellation or retry", async () => {
+  apiPostOrThrow.mockResolvedValue({
+    at: "2026-09-20T00:00:00Z",
+    closed: null,
+    fallbackPriced: false,
+  });
+  const c = captureWriter();
+  await priceRemove(
+    {
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      tokenClass: "output",
+      scheduledEntryId: "scheduled-1",
+    },
+    c.writer,
+  );
+  expect(c.output()).toContain("Scheduled rate scheduled-1 is absent");
+  expect(c.output()).not.toContain("nothing to end");
 });

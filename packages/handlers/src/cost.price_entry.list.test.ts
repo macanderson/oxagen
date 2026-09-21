@@ -88,7 +88,10 @@ describe("list_price_entries", () => {
         effectiveFrom: new Date("2026-12-01T00:00:00Z"),
       }),
     ]);
-    const out = await h.handler({ includeScheduled: true }, ctx());
+    const out = await h.handler(
+      { includeScheduled: true },
+      { ...ctx(), surface: "app" },
+    );
     expect(h.listPriceEntries).toHaveBeenCalledWith({
       at: NOW,
       orgId: SCOPE.orgId,
@@ -153,4 +156,21 @@ describe("list_price_entries", () => {
     ]);
     expect(() => costPriceEntryList.output.parse(out)).not.toThrow();
   });
+});
+
+it("MCP can read scheduled IDs without the app cancellation secret", async () => {
+  vi.stubEnv("BETTER_AUTH_SECRET", "");
+  const h = harness([
+    entry({
+      orgId: SCOPE.orgId,
+      source: "negotiated",
+      effectiveFrom: new Date("2026-12-01T00:00:00Z"),
+    }),
+  ]);
+  const out = await h.handler(
+    { includeScheduled: true },
+    { ...ctx(), surface: "mcp" },
+  );
+  expect(out.entries[0]?.id).toBeDefined();
+  expect(out.entries[0]).not.toHaveProperty("cancellationToken");
 });
