@@ -1,17 +1,27 @@
-// A proposal's place in the Context PR state machine as a dot and a word, so
-// the state survives greyscale; the value is carried as `data-status`.
+// A proposal's place in the Context PR state machine as a dot and a word in
+// the mockup's state pill, so the state survives greyscale; the value is
+// carried as `data-status`. Open states take the approval hue (a person or a
+// check still stands in the way), a merge the allowed hue, a failed check the
+// failed hue, and a closed proposal is quiet.
 import { useTranslations } from "next-intl";
 import type { ProposalStatus } from "@/data/contracts/steering";
+import { Badge, type BadgeTone } from "@/ui/badge";
+
+const TONE: Record<ProposalStatus, BadgeTone> = {
+  proposed: "approval",
+  pr_open: "approval",
+  checks_running: "approval",
+  checks_passed: "proven",
+  checks_failed: "failed",
+  merged: "allowed",
+  rejected: "denied",
+};
 
 export function StatusBadge({ status }: { status: ProposalStatus }) {
   const t = useTranslations("steering.status");
   return (
-    <span
-      data-status={status}
-      className="inline-flex items-center gap-1.5 rounded-sm border border-border px-1.5 py-0.5 text-xs text-foreground"
-    >
-      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+    <Badge tone={TONE[status]} data-status={status}>
       {t(status)}
-    </span>
+    </Badge>
   );
 }

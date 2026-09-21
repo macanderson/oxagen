@@ -1,5 +1,6 @@
-// A run's state as a dot and a word, so it survives greyscale; the hue sits on
-// the dot only, and the word stays on the ink.
+// A run's state as a dot and a word in the mockup's state pill (`statusBadge`
+// in engine.js draws `.b.b-<state>`), through the shared `Badge` recipe and
+// never around it (ADR-132). The hue never reaches the gold.
 //
 // The word is the run's outcome once the run has ended, and `live` while it is
 // open. `status` alone could not say it: it folds every ended run into
@@ -8,16 +9,20 @@
 // gate that asks whether the run is open.
 import { useTranslations } from "next-intl";
 import type { RunOutcome, RunStatus } from "@/data/contracts/runs";
+import { Badge, type BadgeTone } from "./badge";
 
-const DOT: Record<RunOutcome, string> = {
-  running: "bg-info",
-  completed: "bg-success",
-  failed: "bg-destructive",
-  cancelled: "bg-warning",
-  crashed: "bg-destructive",
+// The three readings `status` already had are unchanged: an open run is
+// `allowed`, a run that finished is quiet, a cancelled run is `denied`. Only
+// the two `status` could not express are new.
+const TONE: Record<RunOutcome, BadgeTone> = {
+  running: "allowed",
+  completed: "quiet",
+  failed: "failed",
+  cancelled: "denied",
+  crashed: "critical",
   // Not a failure and not a success: the record does not say which. It reads
-  // in the same ink as every other unrecorded value.
-  unknown: "bg-muted-foreground",
+  // in the same quiet pill as every other unrecorded value.
+  unknown: "quiet",
 };
 
 export function StatusBadge({
@@ -30,16 +35,12 @@ export function StatusBadge({
   const t = useTranslations("ui.runStatus");
   const word = status === "live" ? "live" : outcome;
   return (
-    <span
+    <Badge
+      tone={status === "live" ? TONE.running : TONE[outcome]}
       data-status={status}
       data-outcome={outcome}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
     >
-      <span
-        aria-hidden="true"
-        className={`size-2 rounded-full ${status === "live" ? DOT.running : DOT[outcome]}`}
-      />
       {t(word)}
-    </span>
+    </Badge>
   );
 }

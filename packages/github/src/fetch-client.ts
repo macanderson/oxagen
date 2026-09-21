@@ -282,9 +282,6 @@ const INSTALLATION_REPOS_PER_PAGE = 100;
 const MAX_PAGES = 5;
 const DEFAULT_SLEEP_MS = 1500;
 
-const defaultSleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 /**
  * Percent-encode one URL path segment (an owner, a repo name, a PR number).
  * Every caller-supplied value that lands between two slashes goes through this:
@@ -323,8 +320,42 @@ function filePath(path: string): string {
  */
 export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
   const baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
-  const sleep = opts.sleep ?? defaultSleep;
   const sleepMs = opts.sleepMs ?? DEFAULT_SLEEP_MS;
+
+  // Caller cancellation also owns the time between requests. An injected sleep
+  // may keep running, but it cannot keep this operation pending or start a retry.
+  function sleep(ms: number): Promise<void> {
+    const signal = opts.signal;
+    signal?.throwIfAborted();
+    return new Promise((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let settled = false;
+      function finish(error?: unknown, failed = false) {
+        if (settled) return;
+        settled = true;
+        if (timer !== undefined) clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        if (failed) reject(error);
+        else resolve();
+      }
+      function onAbort() {
+        finish(signal?.reason, true);
+      }
+      signal?.addEventListener("abort", onAbort, { once: true });
+      try {
+        if (opts.sleep) {
+          opts.sleep(ms).then(
+            () => finish(),
+            (error: unknown) => finish(error, true),
+          );
+        } else {
+          timer = setTimeout(() => finish(), ms);
+        }
+      } catch (error) {
+        finish(error, true);
+      }
+    });
+  }
 
   const commonHeaders: Record<string, string> = {
     Authorization: `Bearer ${opts.token}`,
@@ -508,7 +539,19 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
           htmlUrl: data.html_url,
           defaultBranch: data.default_branch,
         };
-      } catch {
+      } catch (error) {
+        // Availability polling must not restart the request's retry budget or
+        // turn a cancelled/timed-out operation into a successful fork result.
+        // Cancellation is asked first so an abort that raced a stale 404 is
+        // reported as the cancellation it is.
+        opts.signal?.throwIfAborted();
+        // Only a 404 means "the fork is not reachable yet". A 401, a
+        // non-rate-limit 403, a 5xx or a transport fault says nothing about
+        // whether the fork exists, and swallowing it here would retry until
+        // the budget ran out and then return the creation response as a
+        // success — the same silent wrong answer this poll exists to avoid.
+        // `putFile` above draws the line in the same place.
+        if (!isNotFound(error)) throw error;
         // Fork not reachable yet — wait and retry
         if (attempt < maxAttempts - 1) {
           await sleep(sleepMs);

@@ -6,7 +6,7 @@
 // pins against: a run that finished, a run that failed, a run an operator
 // cancelled, a run whose harness died, and a run whose harness stopped
 // reporting all showed the same word.
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { RunOutcome, RunStatus } from "@/data/contracts/runs";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -15,12 +15,16 @@ import { StatusBadge } from "./status-badge";
 
 afterEach(cleanup);
 
-const draw = (status: RunStatus, outcome: RunOutcome) =>
-  render(
+const draw = (status: RunStatus, outcome: RunOutcome): HTMLElement => {
+  const { container } = render(
     <IntlProvider>
       <StatusBadge status={status} outcome={outcome} />
     </IntlProvider>,
-  ).container.firstElementChild as HTMLElement;
+  );
+  const badge = container.querySelector<HTMLElement>("span[data-status]");
+  if (!badge) throw new Error("the badge did not render");
+  return badge;
+};
 
 describe("StatusBadge", () => {
   it("names each terminal state, not one word for all five", () => {
@@ -58,11 +62,15 @@ describe("StatusBadge", () => {
     expect(badge).toHaveAttribute("data-outcome", "cancelled");
   });
 
-  it("keeps the hue on the dot and the word on the ink, so it survives greyscale", async () => {
-    const badge = draw("sealed", "failed");
-    const dot = badge.querySelector("span[aria-hidden='true']");
-    expect(dot).toHaveClass("bg-destructive");
-    expect(badge.className).not.toMatch(/text-(destructive|success|warning)/);
-    await expectNoAxe(badge);
+  it("draws the shared state pill, and gives a failure its own hue", async () => {
+    // ADR-132: the badge is the mockup's `.b` recipe, so the hue sits on the
+    // ink, the border and the dot together. Greyscale is carried by the word,
+    // which is why the word had to stop being `sealed` for all five.
+    const failed = draw("sealed", "failed");
+    const completed = draw("sealed", "completed");
+    expect(failed.querySelector("span[aria-hidden='true']")).toBeTruthy();
+    expect(failed.className).not.toBe(completed.className);
+    expect(failed.className).toMatch(/error/);
+    await expectNoAxe(failed);
   });
 });

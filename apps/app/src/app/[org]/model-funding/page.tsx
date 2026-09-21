@@ -24,7 +24,10 @@ export default async function ModelFundingPage({
       id="main"
       className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader title={t("modelFunding")} />
+      <PageHeader
+        eyebrow={t("organizationEyebrow", { organization: ctx.orgName })}
+        title={t("modelFunding")}
+      />
       <ModelFunding ctx={ctx} source={dataSource()} />
     </main>
   );

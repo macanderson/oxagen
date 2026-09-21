@@ -19,7 +19,10 @@ export default async function RolesPage({ params }: PageProps<"/[org]/roles">) {
       id="main"
       className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader title={t("roles")} />
+      <PageHeader
+        eyebrow={t("organizationEyebrow", { organization: ctx.orgName })}
+        title={t("roles")}
+      />
       <Roles ctx={ctx} source={dataSource()} />
     </main>
   );

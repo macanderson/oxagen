@@ -6,6 +6,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 const mocks = vi.hoisted(() => ({
   insertReturning: vi.fn(),
   findFirst: vi.fn(),
+  sendEmail: vi.fn().mockResolvedValue(undefined),
   /** The organization roles the caller holds; the gate admits Owner or Admin. */
   callerOrgRoles: ["Owner"] as string[],
 }));
@@ -41,6 +42,13 @@ vi.mock("@oxagen/iam/org-role", () => ({
   },
 }));
 
+vi.mock("@oxagen/notifications", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/notifications")>();
+  return { ...real, sendEmail: mocks.sendEmail };
+});
+
+vi.mock("@oxagen/database/security", () => ({ emitSecurityEvent: vi.fn() }));
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   // The org-wide seam is mocked as the SAME function as the tenant
@@ -59,10 +67,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         }),
         query: {
           invitations: { findFirst: mocks.findFirst },
+          organizations: { findFirst: () => ({ name: "Acme" }) },
+          users: { findFirst: () => ({ displayName: "Jane" }) },
         },
       }),
   };
-  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+  return {
+    ...dbMock,
+    withOrgDb: dbMock.withTenantDb,
+    withSystemDb: dbMock.withTenantDb,
+  };
 });
 
 import { workspaceInviteSendHandler } from "./workspace.invite.send";
@@ -189,4 +203,34 @@ describe("workspaceInviteSendHandler (@oxagen/handlers)", () => {
     expect(resultTime).toBeGreaterThan(before + 6 * 864e5);
     expect(resultTime).toBeLessThan(before + 8 * 864e5);
   });
+});
+
+describe("invitation note delivery", () => {
+  it.each([false, true])(
+    "sends the note with an existing invite: %s",
+    async (existing) => {
+      mocks.callerOrgRoles = ["Owner"];
+      mocks.sendEmail.mockClear();
+      mocks.insertReturning.mockResolvedValueOnce(
+        existing ? [] : [DEFAULT_ROW],
+      );
+      if (existing) mocks.findFirst.mockResolvedValueOnce(DEFAULT_ROW);
+      const message = "Join the cost review.\nBring your questions.";
+      await workspaceInviteSendHandler(
+        { email: "note@example.com", role: "member", message },
+        CTX,
+      );
+      await vi.waitFor(() => {
+        expect(mocks.sendEmail).toHaveBeenCalledWith(
+          expect.objectContaining({
+            to: "note@example.com",
+            text: expect.stringContaining(message),
+            html: expect.stringContaining(
+              "Join the cost review.<br>Bring your questions.",
+            ),
+          }),
+        );
+      });
+    },
+  );
 });

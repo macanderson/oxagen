@@ -111,7 +111,7 @@ vi.mock("@/server/viewer", () => ({
 }));
 vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
 vi.mock("@/features/billing", () => ({ Billing, BillingActions }));
-vi.mock("@/features/fleet", () => ({ Fleet }));
+vi.mock("@/features/fleet", () => ({ Fleet, FleetRegister: () => null }));
 vi.mock("@/features/run", () => ({ Run }));
 vi.mock("@/features/agents", () => ({
   Agents,

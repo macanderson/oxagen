@@ -4,6 +4,7 @@
 // rollup of a section below it — the bucket in Meters, the terms in the price
 // list, the open rows of Invoices — never a number typed twice. One of the
 // files money renders in (INV-25): the rate per 1,000 GAU and the open total.
+import { statNote, statTerm, statTile, statValue } from "@/ui/control-styles";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
@@ -34,14 +35,12 @@ function Tile({
   return (
     <div
       data-tile={name}
-      className={`min-w-0 rounded-xl border border-border bg-data-surface text-card-foreground flex flex-col gap-1 p-4`}
+      className={statTile}
       {...data}
     >
-      <dt className="text-xs text-muted-foreground">{term}</dt>
-      <dd className="text-xl font-semibold tabular-nums text-foreground">
-        {children}
-      </dd>
-      <dd className="text-xs text-muted-foreground">{note}</dd>
+      <dt className={statTerm}>{term}</dt>
+      <dd className={statValue}>{children}</dd>
+      <dd className={statNote}>{note}</dd>
     </div>
   );
 }

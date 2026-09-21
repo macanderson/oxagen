@@ -8,7 +8,14 @@ import type { Workspace, WorkspaceList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx } from "@/server/viewer";
-import { mono } from "@/ui/control-styles";
+import { Badge } from "@/ui/badge";
+import {
+  mono,
+  panel,
+  panelBody,
+  panelHeader,
+  panelTitle,
+} from "@/ui/control-styles";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, Table } from "@/ui/table";
 import {
@@ -34,24 +41,19 @@ export async function Workspaces({
   );
 }
 
-const sectionTitle = "text-base font-semibold text-foreground";
-const lead = "text-sm text-muted-foreground";
+const lead = `${panelBody} text-sm text-muted-foreground`;
 
 /** The workspace's state as a dot and a word, so it survives greyscale. */
 function Status({ workspace }: { workspace: Workspace }) {
   const t = useTranslations("organization.workspaces.status");
   const archived = workspace.archivedAt !== null;
   return (
-    <span
+    <Badge
+      tone={archived ? "quiet" : "allowed"}
       data-status={archived ? "archived" : "live"}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
     >
-      <span
-        aria-hidden="true"
-        className={`size-2 rounded-full ${archived ? "bg-muted-foreground" : "bg-success"}`}
-      />
       {archived ? t("archived") : t("live")}
-    </span>
+    </Badge>
   );
 }
 
@@ -74,17 +76,14 @@ function WorkspacesView({
     ...(canEdit ? [{ label: t("columns.actions") }] : []),
   ];
   return (
-    <section aria-labelledby="org-workspaces" className="flex flex-col gap-3">
-      <h2 id="org-workspaces" className={sectionTitle}>
-        {t("title")}
-      </h2>
-      {canEdit ? (
-        <div className="flex flex-wrap gap-2">
-          <CreateWorkspace org={org} />
-        </div>
-      ) : (
-        <p className={lead}>{tActions("readOnly")}</p>
-      )}
+    <section aria-labelledby="org-workspaces" className={panel}>
+      <div className={panelHeader}>
+        <h2 id="org-workspaces" className={panelTitle}>
+          {t("title")}
+        </h2>
+        {canEdit ? <CreateWorkspace org={org} /> : null}
+      </div>
+      {canEdit ? null : <p className={lead}>{tActions("readOnly")}</p>}
       {!read.ok ? (
         <ReadFailure read={read} section={t("title")} />
       ) : read.value.workspaces.length === 0 ? (

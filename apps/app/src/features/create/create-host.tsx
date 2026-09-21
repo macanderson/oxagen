@@ -24,7 +24,7 @@ import {
   type CreatePrefill,
   createRequestOf,
 } from "@/shared/create";
-import { buttonGold, buttonSecondary, mono } from "@/ui/control-styles";
+import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { readMainRepository } from "./actions";
 import { useDraft } from "./draft";
@@ -184,7 +184,7 @@ function Wizard({
             <button
               type="button"
               data-testid="wizard-primary"
-              className={buttonGold}
+              className={buttonPrimary}
               disabled={!primary.enabled || pending}
               aria-busy={pending}
               onClick={() => {
