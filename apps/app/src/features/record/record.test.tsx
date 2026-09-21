@@ -172,6 +172,49 @@ describe("Record › the record", () => {
       "retired",
     );
   });
+
+  // A record no Context PR classified states no statement, no force, and no
+  // path. The page still has to draw it: it names the file the record would
+  // live at, falls back to the title for the headline, and leaves out the
+  // force chip rather than printing an empty one.
+  it("draws a record that states no statement, force, or path", async () => {
+    await renderRecord({
+      record: readOk(
+        recordDetail({
+          record: {
+            ...publishedRecord({ statement: null, force: null, path: null }),
+            status: "active",
+          },
+        }),
+      ),
+    });
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Read CHANGELOG.md once per run",
+      }),
+    ).toBeInTheDocument();
+    expect(document.querySelector('[data-term="force"]')).toBeNull();
+    // The path the editor names is derived from the lineage, not left blank.
+    expect(document.body.textContent).toContain(
+      `.oxagen/rules/${LINEAGE}.toml`,
+    );
+  });
+
+  // The proposals read is what tells the page a change is already open. When
+  // it does not answer, the page offers the write rather than withholding it
+  // on a pull request it cannot prove exists.
+  it("still offers the write when the proposals read did not answer", async () => {
+    await renderRecord({
+      proposals: readError("steering_unavailable", 503),
+    });
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Do not re-read CHANGELOG.md after the first read in a run.",
+      }),
+    ).toBeInTheDocument();
+  });
 });
 
 // DoD 2: every kind draws a panel of its own. A kind that fell through to a
