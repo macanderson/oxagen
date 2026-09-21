@@ -62,7 +62,7 @@ describe("loadPriceOverrides", () => {
         outputPer1M: 12,
         cachedInputPer1M: 0.24,
         cacheWrite5mPer1M: 3,
-        cacheWrite1hPer1M: 4.800000000000001,
+        cacheWrite1hPer1M: 4.8,
         reasoningPer1M: 12,
         source: "operator_override",
       },
@@ -232,9 +232,13 @@ describe("parsePriceOverrides defaults", () => {
     expect(stated.reasoningPer1M).toBe(20);
   });
 
-  it("derives the one-hour write from the five-minute one, and honours a stated one", () => {
+  it("uses Anthropic one-hour policy and honors an explicitly stated rate", () => {
     const derived = parsePriceOverrides({
-      "m-1": { inputPer1M: 3, outputPer1M: 15, cacheWrite5mPer1M: 3.75 },
+      "anthropic/m-1": {
+        inputPer1M: 3,
+        outputPer1M: 15,
+        cacheWrite5mPer1M: 3.75,
+      },
     })[0]!;
     expect(derived.cacheWrite1hPer1M).toBeCloseTo(6, 10);
     const stated = parsePriceOverrides({
@@ -246,6 +250,13 @@ describe("parsePriceOverrides defaults", () => {
       },
     })[0]!;
     expect(stated.cacheWrite1hPer1M).toBe(5.5);
+  });
+
+  it("does not infer an unknown provider's one-hour policy from its write premium", () => {
+    const price = parsePriceOverrides({
+      "other/m-1": { inputPer1M: 3, outputPer1M: 15, cacheWrite5mPer1M: 3.75 },
+    })[0]!;
+    expect(price.cacheWrite1hPer1M).toBeNull();
   });
 
   it("leaves a cache class the operator omitted unpriced rather than free", () => {

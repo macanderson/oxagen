@@ -11,7 +11,7 @@ SELECT
   quantileExactInclusive(0.99)(toFloat64(duration_ms))     AS p99_ms,
   sum(input_tokens)                                        AS input_tokens,
   sum(output_tokens)                                       AS output_tokens
-FROM token_usage
+FROM metered_token_usage
 WHERE created_at >= now() - INTERVAL 7 DAY
 GROUP BY provider, model, surface
 ORDER BY calls DESC;
