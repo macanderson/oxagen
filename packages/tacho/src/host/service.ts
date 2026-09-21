@@ -291,17 +291,25 @@ function systemdManager(options: ServiceManagerOptions): ServiceManager {
         (active.status === 3 &&
           ["inactive", "failed"].includes(active.stdout.trim())) ||
         (active.status === 4 && active.stdout.trim() === "unknown");
-      if (!stopped || (disabled.status !== 0 && active.status !== 4)) {
+      if (!stopped || (disabled.status !== 0 && existsSync(unitPath))) {
         throw new Error(
           `systemctl could not remove tachod.service: ${disabled.stderr.trim() || active.stderr.trim() || active.stdout.trim() || "service state is unknown"}`,
         );
       }
-      if (existsSync(unitPath)) unlinkSync(unitPath);
-      const reload = options.exec("systemctl", ["--user", "daemon-reload"]);
-      if (reload.status !== 0)
-        throw new Error(
-          `systemctl daemon-reload failed: ${reload.stderr.trim()}`,
-        );
+      const unit = existsSync(unitPath)
+        ? readFileSync(unitPath, "utf8")
+        : undefined;
+      if (unit !== undefined) unlinkSync(unitPath);
+      try {
+        const reload = options.exec("systemctl", ["--user", "daemon-reload"]);
+        if (reload.status !== 0)
+          throw new Error(
+            `systemctl daemon-reload failed: ${reload.stderr.trim()}`,
+          );
+      } catch (error) {
+        if (unit !== undefined) writeSensitiveFileAtomic(unitPath, unit, 0o644);
+        throw error;
+      }
     },
     status: () => {
       const installed = existsSync(unitPath);
@@ -458,7 +466,16 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
         "LIST",
       ]);
       const installed = result.status === 0;
-      const pid = livePid();
+      let pid: number | undefined;
+      try {
+        pid = livePid();
+      } catch (error) {
+        return {
+          installed,
+          running: false,
+          detail: error instanceof Error ? error.message : String(error),
+        };
+      }
       return {
         installed,
         running: pid !== undefined,

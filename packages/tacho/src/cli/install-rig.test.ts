@@ -43,6 +43,7 @@ import {
   USER_CLAUDE_SETTINGS,
 } from "./install-rig";
 import { status } from "./status";
+import { serviceManagerFor } from "../host/service";
 import { unenroll } from "./unenroll";
 
 const ALL: TachoHarness[] = [
@@ -450,6 +451,93 @@ describe("install rig: failure injection", () => {
     expect(rig.requests).toEqual([]);
     expect(rig.serviceLoaded()).toBe(false);
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("uninstalls Codex despite an unrelated malformed Claude settings file", async () => {
+    const rig = buildRig(seedHome());
+    expect((await enroll({ harnesses: ["codex"] }, rig.deps)).ok).toBe(true);
+    writeFileSync(rig.deps.paths.claudeSettings, '{ "hooks": ');
+    const result = await unenroll({ purge: true }, rig.deps);
+    expect(result.revoked).toBe(true);
+    expect(rig.serviceLoaded()).toBe(false);
+    expect(existsSync(rig.deps.paths.deviceKey)).toBe(false);
+    expect(readFileSync(rig.deps.paths.codexHooks, "utf8")).not.toContain(
+      TEST_ENROLLMENT,
+    );
+    expect(
+      readFileSync(join(rig.deps.home, ".codex", "config.toml"), "utf8"),
+    ).not.toContain(String(RIG_GATEWAY_PORT));
+  });
+
+  it.each(["missing", "malformed"])(
+    "sweeps every model URL when host metadata is %s",
+    async (state) => {
+      const rig = buildRig(seedHome());
+      expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+      if (state === "missing") rmSync(rig.deps.paths.hostFile);
+      else writeFileSync(rig.deps.paths.hostFile, "{broken");
+      writeFileSync(rig.deps.paths.claudeSettings, '{ "hooks": ');
+      const result = await unenroll({ purge: true }, rig.deps);
+      expect(result.ok).toBe(false);
+      expect(rig.serviceLoaded()).toBe(true);
+      expect(existsSync(rig.deps.paths.deviceKey)).toBe(true);
+      expect(result.warnings.join("\n")).toContain("gateway remains installed");
+    },
+  );
+
+  it("keeps credentials through a systemd reload failure and removes them on retry", async () => {
+    const rig = buildRig(seedHome({ platform: "linux" }));
+    expect((await enroll({ harnesses: ["codex"] }, rig.deps)).ok).toBe(true);
+    const key = readFileSync(rig.deps.paths.deviceKey);
+    let failReload = true;
+    const manager = serviceManagerFor({
+      platform: "linux",
+      home: rig.deps.home,
+      exec: (_command, args) => {
+        if (args.includes("is-active"))
+          return { status: 3, stdout: "inactive", stderr: "" };
+        if (args.includes("daemon-reload") && failReload)
+          return { status: 1, stdout: "", stderr: "no bus" };
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+    const deps = { ...rig.deps, serviceManager: manager };
+    expect((await unenroll({ purge: true }, deps)).revoked).toBe(false);
+    expect(readFileSync(deps.paths.deviceKey)).toEqual(key);
+    expect(existsSync(deps.paths.hostFile)).toBe(true);
+    expect(existsSync(manager.unitPath)).toBe(true);
+    failReload = false;
+    expect((await unenroll({ purge: true }, deps)).ok).toBe(true);
+    expect(existsSync(deps.paths.deviceKey)).toBe(false);
+    expect(existsSync(deps.paths.hostFile)).toBe(false);
+    expect((await unenroll({ purge: true }, deps)).ok).toBe(true);
+  });
+
+  it("returns the CLI and Desktop JSON status when Windows cannot inspect the process", async () => {
+    const rig = buildRig(seedHome());
+    expect((await enroll({ harnesses: ["codex"] }, rig.deps)).ok).toBe(true);
+    writeFileSync(rig.deps.paths.pid, "42");
+    const serviceManager = serviceManagerFor({
+      platform: "win32",
+      home: rig.deps.home,
+      pidPath: rig.deps.paths.pid,
+      exec: (command) =>
+        command === "tasklist"
+          ? { status: 1, stdout: "", stderr: "access denied" }
+          : { status: 0, stdout: "", stderr: "" },
+    });
+    const report = await status(
+      { json: true },
+      { ...rig.deps, serviceManager },
+    );
+    expect(report.enrolled).toBe(true);
+    expect(report.service?.detail).toContain("Cannot inspect daemon pid 42");
+    expect(JSON.parse(JSON.stringify(report)).service.detail).toContain(
+      "access denied",
+    );
+    expect(() => serviceManager.uninstall()).toThrow(
+      "Cannot inspect daemon pid 42",
+    );
   });
 
   it("preserves the gateway until broken settings can be restored on retry", async () => {

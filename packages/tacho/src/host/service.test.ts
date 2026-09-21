@@ -178,6 +178,75 @@ describe("service managers", () => {
     expect(() => failingEnable.install(SPEC)).toThrow(/enable failed: denied/);
   });
 
+  it("retains an existing unit when disable fails even if runtime state is unknown", () => {
+    const home = mkdtempSync(join(tmpdir(), "tacho-svc-"));
+    const manager = serviceManagerFor({
+      platform: "linux",
+      home,
+      exec: fakeExec({
+        "systemctl --user disable": {
+          status: 1,
+          stdout: "",
+          stderr: "permission denied",
+        },
+        "systemctl --user is-active": {
+          status: 4,
+          stdout: "unknown",
+          stderr: "",
+        },
+      }).exec,
+    });
+    manager.install(SPEC);
+    const unit = readFileSync(manager.unitPath, "utf8");
+    expect(() => manager.uninstall()).toThrow("permission denied");
+    expect(readFileSync(manager.unitPath, "utf8")).toBe(unit);
+  });
+
+  it("restores the unit after a failed reload and permits a successful retry", () => {
+    const home = mkdtempSync(join(tmpdir(), "tacho-svc-"));
+    let failReload = false;
+    const manager = serviceManagerFor({
+      platform: "linux",
+      home,
+      exec: (_command, args) => {
+        if (args.includes("is-active"))
+          return { status: 3, stdout: "inactive", stderr: "" };
+        if (args.includes("daemon-reload") && failReload)
+          return { status: 1, stdout: "", stderr: "no bus" };
+        if (args.includes("disable") && !existsSync(manager.unitPath))
+          return { status: 1, stdout: "", stderr: "not found" };
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+    manager.install(SPEC);
+    const unit = readFileSync(manager.unitPath, "utf8");
+    failReload = true;
+    expect(() => manager.uninstall()).toThrow("daemon-reload failed");
+    expect(readFileSync(manager.unitPath, "utf8")).toBe(unit);
+    failReload = false;
+    manager.uninstall();
+    expect(existsSync(manager.unitPath)).toBe(false);
+    expect(() => manager.uninstall()).not.toThrow();
+  });
+
+  it("reports Windows process inspection failures but keeps uninstall strict", () => {
+    const home = mkdtempSync(join(tmpdir(), "tacho-svc-"));
+    writeFileSync(join(home, "tachod.pid"), "42");
+    const manager = serviceManagerFor({
+      platform: "win32",
+      home,
+      exec: fakeExec({
+        tasklist: { status: 1, stdout: "", stderr: "access denied" },
+      }).exec,
+    });
+    expect(manager.status()).toEqual({
+      installed: true,
+      running: false,
+      detail: "Cannot inspect daemon pid 42: access denied",
+    });
+    expect(() => manager.uninstall()).toThrow("Cannot inspect daemon pid 42");
+  });
+
   it("refuses to install on an unsupported platform", () => {
     const manager = serviceManagerFor({
       platform: "freebsd",

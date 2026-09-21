@@ -576,6 +576,17 @@ export class Wal {
    * for `tacho export` and incident review.
    */
   compact(now: number, retainMs: number): string[] {
+    // Only the daemon compacts. Rewrites and this scan are synchronous under
+    // its single-writer ownership, so no live rewrite can overlap the scan.
+    // Readers (status and export) construct a Wal too and must not clean here.
+    // An unlink failure propagates, preserving the source and retrying later.
+    const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+    const abandonedRewrite = new RegExp(
+      `^${uuid}\\.bodies\\.jsonl\\.${uuid}\\.tmp$`,
+    );
+    for (const name of readdirSync(this.dir)) {
+      if (abandonedRewrite.test(name)) unlinkSync(join(this.dir, name));
+    }
     const removed: string[] = [];
     for (const session of this.sessions()) {
       const sealedAt = this.cursor.sealed[session];
