@@ -234,3 +234,57 @@
     padding: 16px 16px 88px;
   }
 }
+
+/*
+ * Motion under the shell, on the kit's tokens (`--motion-*`, `--ease-*`) so
+ * every surface settles at the same pace. Restrained on purpose: a page's
+ * sections rise a few pixels into place, a disclosure's body fades in, and
+ * anything a pointer can rest on changes colour over the micro duration
+ * rather than snapping. Transform and opacity only, so nothing here causes
+ * layout. The kit's prefers-reduced-motion switch turns all of it off.
+ */
+@keyframes ox-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-shell-page] main#main > * {
+  animation: ox-rise var(--motion-entry) var(--ease-entry) both;
+}
+[data-shell-page] main#main > :nth-child(2) {
+  animation-delay: 40ms;
+}
+[data-shell-page] main#main > :nth-child(3) {
+  animation-delay: 80ms;
+}
+[data-shell-page] main#main > :nth-child(4) {
+  animation-delay: 120ms;
+}
+[data-shell-page] main#main > :nth-child(n + 5) {
+  animation-delay: 160ms;
+}
+
+/* A disclosure's body arrives rather than appears. */
+[data-shell-page] details[open] > :not(summary) {
+  animation: fade-in var(--motion-base) var(--ease-entry) both;
+}
+
+/* Rest states change over the micro duration: rows, links, buttons, tabs. */
+[data-shell-page] :is(a, button, summary, [role="tab"], tbody tr) {
+  transition:
+    color var(--motion-micro) var(--ease-hover),
+    background-color var(--motion-micro) var(--ease-hover),
+    border-color var(--motion-micro) var(--ease-hover),
+    opacity var(--motion-micro) var(--ease-hover);
+}
+
+/* The stat tiles and panels settle their border on hover, no lift. */
+[data-shell-page] .app-panel {
+  transition: border-color var(--motion-base) var(--ease-hover);
+}

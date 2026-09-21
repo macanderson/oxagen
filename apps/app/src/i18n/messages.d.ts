@@ -1742,6 +1742,7 @@ type Messages = {
     };
   };
   fleet: {
+    loading: string;
     actions: {
       register: string;
     };
