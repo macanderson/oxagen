@@ -4,7 +4,13 @@
 // typefaces, three tones as live swatches, a preview at every size the shell
 // draws, and a save that writes the spec string through update_profile and
 // returns to the Account dialog. Nothing here is an emoji or a free colour.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  within,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   afterEach,
@@ -19,6 +25,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { AVATAR_ICONS } from "@/ui/avatar-spec";
 import { shellData } from "./shell.builders";
+import { accountOperations } from "./account-operations";
 import type { ShellData } from "./shell-data";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
@@ -85,6 +92,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  accountOperations.resetForTests();
   refresh.mockReset();
   updateProfile.mockReset();
   updateProfile.mockResolvedValue({
@@ -253,6 +261,43 @@ describe("Photo", () => {
 });
 
 describe("Save", () => {
+  it("keeps an in-flight save across reopen without closing the new editor", async () => {
+    let finish: ((result: unknown) => void) | undefined;
+    updateProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openEditor();
+    await user.click(screen.getByTestId("avatar-save"));
+    await user.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByTestId("avatar-dialog")).toBeNull(),
+    );
+    await user.click(screen.getByRole("button", { name: "open avatar" }));
+    await screen.findByTestId("avatar-dialog");
+    await user.click(screen.getByTestId("avatar-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(1);
+    finish?.({
+      ok: true,
+      value: { displayName: "Marcus Bell", avatarUrl: "avatar:v1:{}" },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("avatar-save")).not.toBeDisabled(),
+    );
+    expect(screen.getByTestId("avatar-dialog")).toBeTruthy();
+    await user.click(screen.getByTestId("avatar-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(2);
+    finish?.({
+      ok: true,
+      value: { displayName: "Marcus Bell", avatarUrl: "avatar:v1:{}" },
+    });
+    await waitFor(() =>
+      expect(screen.queryByTestId("avatar-dialog")).toBeNull(),
+    );
+  });
+
   it("writes the spec string alone, refreshes the shell and returns to Account", async () => {
     const { user, dialog } = await openEditor();
     await user.click(within(dialog).getByTestId("avatar-kind-icon"));

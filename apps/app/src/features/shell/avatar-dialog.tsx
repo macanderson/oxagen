@@ -13,7 +13,7 @@
 // tab, carrying the display name as it stands, because the contract writes
 // name and avatar as one record.
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useId, useState } from "react";
+import { type SyntheticEvent, useEffect, useId, useRef, useState } from "react";
 import { Avatar, AVATAR_GLYPHS } from "@/ui/avatar";
 import {
   AVATAR_FONTS,
@@ -33,6 +33,7 @@ import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { updateProfile } from "./account-actions";
+import { useAccountOperation } from "./account-operations";
 import { fieldLabel, hint } from "./account-styles";
 import { initials as initialsOf } from "./format";
 import type { ShellData } from "./shell-data";
@@ -149,7 +150,15 @@ function AvatarEditor({ data }: { data: ShellData }) {
     draftFrom(viewer.avatarUrl, initialsOf(shown)),
   );
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [pending, setPending] = useState(false);
+  const operation = useAccountOperation(viewer.id, "avatar");
+  const { pending } = operation;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   function edit(patch: Partial<Draft>) {
     setOutcome(null);
@@ -167,22 +176,22 @@ function AvatarEditor({ data }: { data: ShellData }) {
       setOutcome("noLetters");
       return;
     }
+    if (!operation.begin()) return;
     setOutcome(null);
-    setPending(true);
     try {
       const result = await updateProfile(org.slug, {
         avatarUrl: stored(draft),
       });
       if (result.ok) {
         navigate.refresh();
-        setAvatarOpen(false);
+        if (mounted.current) setAvatarOpen(false);
       } else if (result.reason === "invalid") setOutcome("invalid");
       else if (result.reason === "denied") setOutcome("denied");
       else setOutcome("failed");
     } catch {
       setOutcome("failed");
     } finally {
-      setPending(false);
+      operation.end();
     }
   }
 

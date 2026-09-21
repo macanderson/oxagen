@@ -29,6 +29,7 @@ import { IntlProvider } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
 import { recoveryCodeVault } from "./recovery-code-vault";
 import { shellData } from "./shell.builders";
+import { accountOperations } from "./account-operations";
 import type { ShellData } from "./shell-data";
 import {
   type AccountTab,
@@ -157,6 +158,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  accountOperations.resetForTests();
   // The vault outlives a render, as it outlives a page's transitions.
   recoveryCodeVault.resetForTests();
   refresh.mockReset();
@@ -304,6 +306,35 @@ describe("the tabs", () => {
 });
 
 describe("Profile", () => {
+  it("keeps one profile save across a tab switch", async () => {
+    let finish: ((result: unknown) => void) | undefined;
+    updateProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openDialog("profile");
+    await user.click(screen.getByTestId("account-save"));
+    await user.click(screen.getByRole("tab", { name: "Preferences" }));
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    await user.click(screen.getByTestId("account-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(1);
+    finish?.({
+      ok: true,
+      value: { displayName: "Marcus Bell", avatarUrl: null },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("account-save")).not.toBeDisabled(),
+    );
+    await user.click(screen.getByTestId("account-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(2);
+    finish?.({
+      ok: true,
+      value: { displayName: "Marcus Bell", avatarUrl: null },
+    });
+  });
+
   it("saves a new display name through update_profile, and sends nothing else", async () => {
     const { user } = await openDialog(
       "profile",
@@ -475,6 +506,37 @@ describe("Profile", () => {
 });
 
 describe("Preferences", () => {
+  it("keeps one preferences save across a tab switch", async () => {
+    let finish: ((result: unknown) => void) | undefined;
+    savePreferences.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openDialog("preferences");
+    await screen.findByTestId("account-timezone");
+    await user.click(screen.getByTestId("account-preferences-save"));
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    await user.click(screen.getByRole("tab", { name: "Preferences" }));
+    await screen.findByTestId("account-timezone");
+    await user.click(screen.getByTestId("account-preferences-save"));
+    expect(savePreferences).toHaveBeenCalledTimes(1);
+    finish?.({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "system" },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("account-preferences-save")).not.toBeDisabled(),
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    expect(savePreferences).toHaveBeenCalledTimes(2);
+    finish?.({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "system" },
+    });
+  });
+
   it("reads the stored preferences on open and writes the three fields on save", async () => {
     const { user } = await openDialog("preferences");
     expect(readPreferences).toHaveBeenCalledWith("acme");
@@ -1158,6 +1220,21 @@ describe("Security", () => {
 });
 
 describe("Privacy", () => {
+  it("keeps the queued export when Privacy unmounts and refuses another request", async () => {
+    const { user } = await openDialog("privacy");
+    await user.click(screen.getByTestId("account-export-user"));
+    await screen.findByTestId("account-export-queued");
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    await user.click(screen.getByRole("tab", { name: "Privacy" }));
+    await screen.findByTestId("account-export-queued");
+    await user.click(screen.getByTestId("account-export-org"));
+    expect(requestExport).toHaveBeenCalledTimes(1);
+    expect(readExportStatus).toHaveBeenCalledWith(
+      "acme",
+      "7a000000-0000-4000-8000-0000000000e1",
+    );
+  });
+
   it("queues an export of the person's own data and names the export", async () => {
     const { user } = await openDialog("privacy");
     await user.click(screen.getByTestId("account-export-user"));

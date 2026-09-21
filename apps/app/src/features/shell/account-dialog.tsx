@@ -61,6 +61,7 @@ import {
 } from "./account-styles";
 import { initials } from "./format";
 import { recoveryCodeVault, useRecoveryCodeVault } from "./recovery-code-vault";
+import { useAccountOperation, useAccountExport } from "./account-operations";
 import {
   liveListSessions,
   liveRegenerateBackupCodes,
@@ -319,7 +320,8 @@ function ProfileTab({ data }: { data: ShellData }) {
   const emailId = useId();
   const [displayName, setDisplayName] = useState(viewer.name ?? "");
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [pending, setPending] = useState(false);
+  const operation = useAccountOperation(data.viewer.id, "profile");
+  const { pending } = operation;
 
   /**
    * Counts edits, so a save that lands late can tell whether the field it is
@@ -342,10 +344,9 @@ function ProfileTab({ data }: { data: ShellData }) {
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
+    if (!operation.begin()) return;
     const sentAt = editsRef.current;
     setOutcome(null);
-    setPending(true);
     try {
       // The name alone. `viewer.avatarUrl` is what the server rendered with,
       // so sending it back would revert an avatar saved since (in the
@@ -375,7 +376,7 @@ function ProfileTab({ data }: { data: ShellData }) {
     } catch {
       setOutcome("failed");
     } finally {
-      setPending(false);
+      operation.end();
     }
   }
 
@@ -560,7 +561,8 @@ function PreferencesTab({ data }: { data: ShellData }) {
   const themeId = useId();
   const [state, setState] = useState<PrefsState>({ kind: "loading" });
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [pending, setPending] = useState(false);
+  const operation = useAccountOperation(data.viewer.id, "preferences");
+  const { pending } = operation;
   /** Edit counter, for the same reason as the Profile tab's: see `onSubmit`. */
   const editsRef = useRef(0);
 
@@ -617,10 +619,9 @@ function PreferencesTab({ data }: { data: ShellData }) {
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending || state.kind !== "ready") return;
+    if (state.kind !== "ready" || !operation.begin()) return;
     const sentAt = editsRef.current;
     setOutcome(null);
-    setPending(true);
     try {
       const result = await savePreferences(data.org.slug, state.draft);
       if (result.ok) {
@@ -650,7 +651,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
     } catch {
       setOutcome("failed");
     } finally {
-      setPending(false);
+      operation.end();
     }
   }
 
@@ -1241,15 +1242,6 @@ function SecurityTab({
 
 /* ============================== Privacy ============================== */
 
-type ExportState =
-  | { kind: "idle" }
-  | { kind: "pending"; scope: "user" | "org" }
-  | { kind: "queued"; scope: "user" | "org"; exportId: string }
-  | { kind: "ready"; scope: "user" | "org"; exportId: string }
-  | { kind: "expired"; scope: "user" | "org"; exportId: string }
-  | { kind: "denied"; scope: "user" | "org" }
-  | { kind: "failed"; scope: "user" | "org" };
-
 /**
  * How often the queued state asks after the bundle. `export_data` answers the
  * moment it queues and the bundle is written later by an Inngest function, so
@@ -1262,11 +1254,13 @@ const EXPORT_POLL_MS = 3_000;
 
 function PrivacyTab({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account.privacy");
-  const [state, setState] = useState<ExportState>({ kind: "idle" });
+  const { state, setState, begin } = useAccountExport(
+    data.viewer.id,
+    data.org.slug,
+  );
 
   async function ask(scope: "user" | "org") {
-    if (state.kind === "pending") return;
-    setState({ kind: "pending", scope });
+    if (!begin(scope)) return;
     try {
       const result = await requestExport(data.org.slug, scope);
       if (result.ok)
@@ -1337,7 +1331,7 @@ function PrivacyTab({ data }: { data: ShellData }) {
       live = false;
       clearInterval(timer);
     };
-  }, [queuedId, queuedScope, orgSlug]);
+  }, [queuedId, queuedScope, orgSlug, setState]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -1352,7 +1346,9 @@ function PrivacyTab({ data }: { data: ShellData }) {
           <button
             type="button"
             data-testid="account-export-user"
-            aria-disabled={state.kind === "pending" || undefined}
+            aria-disabled={
+              state.kind === "pending" || state.kind === "queued" || undefined
+            }
             className={buttonPrimary}
             onClick={() => void ask("user")}
           >
@@ -1363,7 +1359,9 @@ function PrivacyTab({ data }: { data: ShellData }) {
           <button
             type="button"
             data-testid="account-export-org"
-            aria-disabled={state.kind === "pending" || undefined}
+            aria-disabled={
+              state.kind === "pending" || state.kind === "queued" || undefined
+            }
             className={buttonSmall}
             onClick={() => void ask("org")}
           >
