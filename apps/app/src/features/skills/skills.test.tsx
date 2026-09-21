@@ -75,6 +75,7 @@ function inventory(over: Partial<SkillInventory> = {}): SkillInventory {
 }
 
 const read = vi.fn<DataSource["skills"]["inventory"]>();
+const config = vi.fn<DataSource["skills"]["configuration"]>();
 const source: DataSource = {
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context: vi.fn(), preferences: vi.fn() },
@@ -119,7 +120,7 @@ const source: DataSource = {
     apiKeys: vi.fn(),
     modelCredential: vi.fn(),
   },
-  skills: { inventory: read, configuration: vi.fn() },
+  skills: { inventory: read, configuration: config },
   mandates: { list: vi.fn(), get: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
   steering: {
@@ -332,12 +333,10 @@ describe("Skills › loading", () => {
 });
 
 it("reads configuration only on Search and Versions, with refusal in the selected view", async () => {
-  vi.mocked(source.skills.configuration).mockResolvedValue(
-    readError("config_unavailable", 503),
-  );
+  config.mockResolvedValue(readError("config_unavailable", 503));
   read.mockClear();
   withIntl(await Skills({ ctx, source, cursor: null, view: "search" }));
-  expect(source.skills.configuration).toHaveBeenCalledWith(ctx);
+  expect(config).toHaveBeenCalledWith(ctx);
   expect(read).not.toHaveBeenCalled();
   expect(screen.getByRole("link", { name: "Preview search" })).toHaveAttribute(
     "aria-current",
