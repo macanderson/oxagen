@@ -87,7 +87,7 @@ export async function sumTokenUsage(args: {
         sum(cache_write_tokens) AS cache_write_tokens,
         sum(cost_usd_micros) AS cost_micros,
         count()            AS row_count
-      FROM token_usage
+      FROM metered_token_usage
       WHERE org_id = {orgId:UUID}
         AND created_at >= {periodStart:DateTime64(3)}
         AND created_at <  {periodEnd:DateTime64(3)}
@@ -382,7 +382,7 @@ export async function sumTokenUsageByExecutionStep(args: {
         any(provider)        AS provider,
         any(principal_id)    AS principal_id,
         any(principal_kind)  AS principal_kind
-      FROM token_usage
+      FROM metered_token_usage
       WHERE org_id = {orgId:UUID}
         AND execution_step_id IN {ids:Array(UUID)}
       GROUP BY execution_step_id
@@ -487,11 +487,10 @@ export const insertEvents = (rows: readonly EventRow[]) => {
     })),
   );
 };
-export const insertTokenUsage = (rows: readonly TokenUsageRow[]) => {
+export const stampTokenUsage = (rows: readonly TokenUsageRow[]) => {
   const { trace_id, span_id } = currentTraceIds();
   const attribution = currentPrincipalStamp();
-  return insertRows(
-    "token_usage",
+  return (
     // Coalesce the "no execution step" sentinel (null/undefined) to the nil UUID
     // so the non-nullable UUID key column always receives a parseable value.
     // Also stamp trace_id/span_id from the active OTEL context for log↔trace
@@ -511,9 +510,16 @@ export const insertTokenUsage = (rows: readonly TokenUsageRow[]) => {
       principal_kind: r.principal_kind ?? attribution.principal_kind,
       user_id: r.user_id ?? attribution.user_id,
       capability_name: r.capability_name ?? attribution.capability_name,
-    })),
+    }))
   );
 };
+
+export const insertTokenUsage = (rows: readonly TokenUsageRow[]) =>
+  insertRows("token_usage", stampTokenUsage(rows));
+
+/** The delivery UUID stays stable across uncertain insert acknowledgments. */
+export const insertDurableTokenUsage = (id: string, row: TokenUsageRow) =>
+  insertRows("durable_token_usage", [{ ...row, usage_event_id: id }]);
 
 // Agent runtime (docs/specs/agent-runtime/spec.md §9). One row per tool invocation. Analytics
 // mirror of execution.tool_calls; durable record stays in Postgres.
