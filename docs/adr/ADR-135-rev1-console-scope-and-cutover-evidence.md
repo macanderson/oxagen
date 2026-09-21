@@ -16,7 +16,7 @@ The 2026-09-14 scope review and subsequent decisions allowed unbuilt pages to di
 
 The end-to-end suite contains exactly `login`, `pay`, and `page-load`. Component and action tests prove the other flows. The page-load test covers the route oracle on a production build; each route addition updates that oracle. Architecture probes enforce the boundary and the absence of fixture code.
 
-The kernel boots IAM in the app, and handlers enforce their declared role restrictions with `assertOrgRole`, including on tiers whose kernel IAM allows access. Read paths use `kernelRead`; writes use `kernelWrite`; the allowlisted tenancy lookups remain read-only.
+The kernel boots IAM in the app, and handlers must enforce their declared role restrictions with `assertOrgRole`, including on tiers whose kernel IAM allows access. Read paths use `kernelRead`; writes use `kernelWrite`; the allowlisted tenancy lookups remain read-only.
 
 The rebuilt app is `apps/app`, and parity tooling points there. `apps/app_deprecated` stays unbuilt and undeployed, but linted and typechecked, as required by `docs/specs/mission-control/plan.md` §5. It contains retained, deregistered features. Deleting it requires an ADR that names those features. The old WL-53 deletion request does not override this retention decision.
 
