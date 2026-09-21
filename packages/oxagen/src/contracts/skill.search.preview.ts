@@ -33,7 +33,8 @@ export const skillSearchPreview = registerCapability({
         skillCandidateSchema.extend({ score: z.number().min(0).max(1) }),
       ),
       withheld: z.array(
-        skillCandidateSchema.extend({
+        z.object({
+          id: skillCandidateSchema.shape.id,
           reason: z.enum(["out_of_scope", "unapproved_digest"]),
         }),
       ),

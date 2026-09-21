@@ -102,6 +102,51 @@ describe("skill configuration publication", () => {
     );
     expect(result.digest).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
+  it("accepts an unrelated production commit only when its configuration bytes still match", async () => {
+    const { service, github, store } = setup();
+    const current = "b".repeat(40);
+    github.getBranch.mockResolvedValue({ name: "release", sha: current });
+    await service.publish(scope, 12);
+    expect(
+      github.getFileContent.mock.calls.map(([input]) => input.ref),
+    ).toEqual([sha, current]);
+    expect(store.publish).toHaveBeenCalledOnce();
+  });
+  it.each(["enabled = false", null])(
+    "refuses a superseded or removed configuration: %s",
+    async (currentFile) => {
+      const { service, github, store } = setup();
+      github.getBranch.mockResolvedValue({
+        name: "release",
+        sha: "b".repeat(40),
+      });
+      github.getFileContent
+        .mockResolvedValueOnce("enabled = true")
+        .mockResolvedValueOnce(currentFile);
+      await expect(service.publish(scope, 12)).rejects.toMatchObject({
+        reason: "skill_config_superseded",
+      });
+      expect(store.publish).not.toHaveBeenCalled();
+    },
+  );
+  it("refuses publication after the approved branch was deleted", async () => {
+    const { service, github, store } = setup();
+    github.getBranch.mockResolvedValue(null);
+    await expect(service.publish(scope, 12)).rejects.toMatchObject({
+      reason: "skill_production_branch_missing",
+    });
+    expect(store.publish).not.toHaveBeenCalled();
+  });
+  it("refuses a production branch change during publication", async () => {
+    const { service, github, store } = setup();
+    github.getBranch
+      .mockResolvedValueOnce({ name: "release", sha })
+      .mockResolvedValueOnce({ name: "release", sha: "b".repeat(40) });
+    await expect(service.publish(scope, 12)).rejects.toMatchObject({
+      reason: "skill_config_superseded",
+    });
+    expect(store.publish).not.toHaveBeenCalled();
+  });
   it.each([
     {
       merged: false,

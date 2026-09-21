@@ -79,13 +79,14 @@ describe("preview_skill_search", () => {
       makeCTX(),
     );
     expect(catalog).toHaveBeenCalledWith(repo, currentSha, "workspace");
-    expect(skillSearchPreview.output.parse(result)).toMatchObject({
+    expect(result).toEqual({
       version: "skl_v1",
       repositoryCommitSha: currentSha,
       results: [],
       tokenCost: 0,
       withheld: [{ id: "review", reason: "unapproved_digest" }],
     });
+    expect(skillSearchPreview.output.parse(result)).toEqual(result);
     expect(gate.assertOrgRole).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "owner" }),
       { org: ["Owner", "Admin", "Member"], workspace: ["Owner", "Member"] },

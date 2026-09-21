@@ -102,26 +102,6 @@
               "type": "string",
               "maxLength": 48
             },
-            "version": {
-              "type": "string"
-            },
-            "digest": {
-              "type": "string"
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 48
-            },
-            "description": {
-              "type": "string",
-              "maxLength": 8000
-            },
-            "tokenCost": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 1000000
-            },
             "reason": {
               "type": "string",
               "enum": [
@@ -132,11 +112,6 @@
           },
           "required": [
             "id",
-            "version",
-            "digest",
-            "source",
-            "description",
-            "tokenCost",
             "reason"
           ],
           "additionalProperties": false
