@@ -122,7 +122,7 @@ function RunsPageView({
               ) : null}
             </td>
             <td className={cell}>
-              <StatusBadge status={run.status} />
+              <StatusBadge status={run.status} outcome={run.outcome} />
             </td>
             <td className={`${numericCell} whitespace-nowrap`}>
               {run.cost === null ? (
