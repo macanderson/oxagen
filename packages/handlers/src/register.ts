@@ -1188,6 +1188,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./run.cost")).runCostHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_run_outputs",
+    async () =>
+      (await import("./run.outputs.get"))
+        .runOutputsGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "create_run_token",
     async () =>
       (await import("./run.token.issue"))

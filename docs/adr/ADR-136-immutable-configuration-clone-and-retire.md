@@ -1,4 +1,4 @@
-# ADR-133: Clone and retire immutable configuration identities
+# ADR-136: Clone and retire immutable configuration identities
 
 Status: Accepted
 Date: 2026-09-20
@@ -23,6 +23,8 @@ Source content is read in the current workspace and recorded by digest. Submissi
 Agent and skill creation use exclusive proposal branches. A clone cannot attach itself to another draft's open PR or replace a merged source file. Steering proposal creation serializes its lineage check and insert. An occupied lineage remains occupied by historical records and proposals.
 
 Retirement remains a separate explicit action. `retire_agent` revokes the agent's access and closes its `valid_until` while retaining the key, principal, and historical spend references. `promote_context_record` retains its lifecycle ledger and closes `valid_until` for retire and supersede. Repeating retirement preserves the first end date and does not append another retirement. Promoting a steering version starts a new interval, while the ledger retains earlier intervals.
+
+A retired configuration stays cloneable. Clone reads the source and writes a new record under a new identity, so it is not a write to the retired one: the retired record keeps its closed `valid_until`, its ledger and its historical attribution either way. Retirement ends what an identity may do, not what may be learned from it, and a configuration worth retiring is often the one worth forking. The agent header therefore keeps Clone for a retired agent and drops every other control, and `agent.test.tsx` holds that list.
 
 Skills have immutable configuration snapshots rather than a mutable registry identity. Retiring an approved skill proposes removal of its digest pin. Publication of the merged configuration ends its eligibility for new configuration snapshots. A previously pinned run retains its original snapshot, and historical resolution rows keep their references. The source file can remain in the repository for historical review.
 

@@ -12,4 +12,4 @@ The default suffix is `-cloned`, then `-cloned-1`, and so on. Creation checks hi
 
 The app's Clone button opens a manual editor through the workspace creation host. Edit the name, source identifier, and configuration, then submit the proposal. Publication still follows the existing proposal flow. Retiring the original remains a separate action.
 
-See [ADR-133](../adr/ADR-133-immutable-configuration-clone-and-retire.md).
+See [ADR-136](../adr/ADR-136-immutable-configuration-clone-and-retire.md).

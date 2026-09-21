@@ -26,6 +26,8 @@ import {
   runDetail,
   runFrame,
   runFrameBody,
+  runOutputNode,
+  runOutputs,
   runRow,
   mockupTranscript,
   runSource,
@@ -121,6 +123,8 @@ async function renderRun(
     kinds?: string;
     frames?: string;
     body?: string;
+    reads?: string;
+    spine?: string;
     viewer?: typeof ctx;
   } = {},
 ) {
@@ -134,6 +138,8 @@ async function renderRun(
     kinds: view.kinds ?? null,
     frames: view.frames ?? null,
     body: view.body ?? null,
+    reads: view.reads ?? null,
+    spine: view.spine ?? null,
     now: NOW,
   });
   const { container } = render(<IntlProvider>{element}</IntlProvider>);
@@ -412,6 +418,28 @@ describe("controls", () => {
     });
     expect(screen.getByTestId("run-export")).not.toBeDisabled();
     expect(screen.queryByTestId("export-no-role")).toBeNull();
+  });
+});
+
+describe("the outputs spine", () => {
+  it("is the page's spine: read with the page, drawn above the tabs, on every tab", async () => {
+    const { container, calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        outputs: ok(runOutputs([runOutputNode({ name: "src/cut.ts" })])),
+      },
+      // Not the Transcript tab: the spine is not one tab's section, so opening
+      // the Frames tab must not take it away.
+      { tab: "frames" },
+    );
+    expect(calls.outputs).toEqual([[ctx, "tse_7k2m9q"]]);
+    const spine = screen.getByTestId("run-outputs");
+    expect(spine).toHaveTextContent("src/cut.ts");
+    const tabs = screen.getByRole("navigation", { name: "Run sections" });
+    // `DOCUMENT_POSITION_FOLLOWING` is 4: the tabs come after the spine.
+    expect(spine.compareDocumentPosition(tabs) & 4).toBe(4);
+    await expectNoAxe(container);
   });
 });
 

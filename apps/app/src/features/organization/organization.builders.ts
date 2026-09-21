@@ -124,6 +124,7 @@ export function orgSource(reads: OrgReads): {
       cost: refuse,
       transcript: refuse,
       chain: refuse,
+      outputs: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {

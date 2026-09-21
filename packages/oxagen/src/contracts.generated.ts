@@ -270,6 +270,7 @@ import "./contracts/run.frame_body.get";
 import "./contracts/run.frames.ingest";
 import "./contracts/run.get";
 import "./contracts/run.list";
+import "./contracts/run.outputs.get";
 import "./contracts/run.proof.get";
 import "./contracts/run.recent.list";
 import "./contracts/run.summarize";

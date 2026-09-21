@@ -283,6 +283,7 @@ export function agentsSource(reads: AgentReads) {
       cost: refuse,
       transcript: refuse,
       chain: refuse,
+      outputs: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {

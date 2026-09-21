@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, type SyntheticEvent } from "react";
 import { useTranslations } from "next-intl";
-import type { ConfigurationCloneDraft } from "@oxagen/oxagen/configuration-clone";
+import type { ConfigurationCloneDraft } from "./clone-actions";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import {
   buttonPrimary,
