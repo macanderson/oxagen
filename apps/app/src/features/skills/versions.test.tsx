@@ -119,9 +119,9 @@ describe("skill configuration versions", () => {
     await user.click(
       screen.getByRole("button", { name: "Import repository configuration" }),
     );
-    await waitFor(() =>
-      expect(importSkillConfig).toHaveBeenCalledWith("acme", "core"),
-    );
+    await waitFor(() => {
+      expect(importSkillConfig).toHaveBeenCalledWith("acme", "core");
+    });
     view.unmount();
     mount(false);
     expect(screen.getByLabelText("Proposed TOML")).toHaveAttribute("readonly");
