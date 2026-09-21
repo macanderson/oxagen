@@ -534,6 +534,12 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
           "GET",
           `/repos/${seg(forkOwner)}/${seg(forkRepoName)}`,
         );
+        // An abort that lands while the response body is still being read
+        // never reaches the catch below, so a cancelled operation would
+        // answer with a fork the caller already stopped waiting for. The
+        // catch re-throws this same reason, so either path reports the
+        // cancellation identically.
+        opts.signal?.throwIfAborted();
         return {
           fullName: data.full_name,
           htmlUrl: data.html_url,
