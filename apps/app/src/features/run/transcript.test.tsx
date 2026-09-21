@@ -846,3 +846,58 @@ describe("live access changes", () => {
     );
   });
 });
+
+// Run-relative time. A transcript reads in the run's own clock: the rail
+// counts from the run's first frame and the frame head names the elapsed
+// time. The wall clock was drawn here as minute-of-hour and second-of-minute
+// with no hour, so a run that crossed an hour boundary appeared to run
+// backwards, and no reading told anyone where in the run they were. The
+// absolute instant is not dropped — it stays on the rail's `dateTime`.
+describe("run-relative time", () => {
+  const START = "2026-09-20T08:07:09.000Z";
+  const LATER = "2026-09-20T08:19:43.000Z";
+
+  function twoFrames() {
+    return readOk(
+      runTranscript({
+        entries: [
+          transcriptEntry({
+            seq: "1",
+            endSeq: "1",
+            at: START,
+            elapsedMs: 0,
+          }),
+          transcriptEntry({
+            seq: "2",
+            endSeq: "2",
+            at: LATER,
+            elapsedMs: 754_000,
+          }),
+        ],
+      }),
+    );
+  }
+
+  it("counts the step rail from the run's start and keeps the instant in dateTime", () => {
+    renderSection({ read: twoFrames(), zoom: "everything" });
+    const rails = screen
+      .getAllByTestId("transcript-step")
+      .map((step) => step.querySelector("time"));
+    expect(rails.map((time) => time?.textContent)).toEqual(["0:00", "12:34"]);
+    expect(rails.map((time) => time?.getAttribute("dateTime"))).toEqual([
+      START,
+      LATER,
+    ]);
+  });
+
+  it("names the frame head's time as elapsed, not as a wall-clock reading", () => {
+    renderSection({ read: twoFrames(), zoom: "everything" });
+    const heads = screen
+      .getAllByTestId("transcript-frame")
+      .map((frame) => frame.textContent);
+    expect(heads[0]).toContain("+0 ms");
+    expect(heads[1]).toContain("+12:34");
+    // The hour the run happened to start in is not a reading of the run.
+    for (const head of heads) expect(head).not.toContain("08:");
+  });
+});
