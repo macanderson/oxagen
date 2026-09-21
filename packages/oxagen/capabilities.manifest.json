@@ -2357,7 +2357,8 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "layers": {
         "schema": true,

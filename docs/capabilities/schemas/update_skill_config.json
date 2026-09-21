@@ -149,6 +149,7 @@
                             ],
                             "additionalProperties": false
                           },
+                          "maxItems": 1000,
                           "default": []
                         }
                       },
@@ -158,6 +159,7 @@
                       ],
                       "additionalProperties": false
                     },
+                    "maxItems": 1,
                     "default": []
                   },
                   "search": {
