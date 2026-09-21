@@ -1743,6 +1743,7 @@ type Messages = {
     };
   };
   fleet: {
+    loading: string;
     actions: {
       register: string;
     };
@@ -3159,6 +3160,7 @@ type Messages = {
       agent: string;
       stepCount: string;
       frameCount: string;
+      repeats: string;
       seqSpan: string;
       ms: string;
       live: string;
