@@ -28,6 +28,7 @@ type Messages = {
     agentSource: string;
     mandate: string;
     tools: string;
+    record: string;
     steering: string;
     repositories: string;
     spend: string;
@@ -2721,6 +2722,200 @@ type Messages = {
       };
     };
   };
+  record: {
+    loading: string;
+    header: {
+      breadcrumbs: string;
+      steering: string;
+      record: string;
+      published: string;
+      archived: string;
+      pendingBranch: string;
+      inForce: string;
+      inForceUnclassified: string;
+    };
+    editor: {
+      modified: string;
+      unchanged: string;
+      stat: string;
+      discard: string;
+      propose: string;
+      readOnly: string;
+      pending: string;
+      caret: string;
+      counts: string;
+      tokenCost: string;
+    };
+    propose: {
+      title: string;
+      diff: string;
+      diffLabel: string;
+      rationale: string;
+      rationaleHint: string;
+      checksLabel: string;
+      checksLead: string;
+      submit: string;
+      pending: string;
+      done: string;
+      doneNoPr: string;
+      notInForce: string;
+      reload: string;
+      status: {
+        proposed: string;
+        pr_open: string;
+        checks_running: string;
+        checks_passed: string;
+        checks_failed: string;
+        merged: string;
+        rejected: string;
+      };
+    };
+    lineage: {
+      title: string;
+      lineageTerm: string;
+      pathTerm: string;
+      pathUnknown: string;
+      backingTerm: string;
+      backing: {
+        file: string;
+        registry: string;
+      };
+      commitTerm: string;
+      commitUnknown: string;
+      authorTerm: string;
+      author: string;
+      committedTerm: string;
+      summaryTerm: string;
+      versionTerm: string;
+      effectTerm: string;
+      effect: string;
+      effectUnknown: string;
+      schemaTerm: string;
+    };
+    related: {
+      title: string;
+      unclassified: string;
+      only: string;
+      open: string;
+    };
+    meters: {
+      label: string;
+      notRecorded: string;
+      rendered: string;
+      cited: string;
+      uncounted: string;
+    };
+    kindPanel: {
+      never: string;
+      unclassified: {
+        title: string;
+        body: string;
+      };
+      rule: {
+        title: string;
+        lead: string;
+        placementTerm: string;
+        placement: {
+          prefix: string;
+          relevance: string;
+        };
+        placementUnknown: string;
+        shareTerm: string;
+        shareNotRecorded: string;
+        departure: string;
+        never: string;
+      };
+      constraint: {
+        title: string;
+        boundary: string;
+        effect: {
+          require: string;
+          forbid: string;
+        };
+        effectUnknown: string;
+        dispatch: string;
+        grant: string;
+        conflict: string;
+        departure: string;
+        never: string;
+      };
+      procedure: {
+        title: string;
+        lead: string;
+        noSteps: string;
+        never: string;
+      };
+      fact: {
+        title: string;
+        lead: string;
+        falsifiesTerm: string;
+        falsifies: string;
+        validFromTerm: string;
+        validFromUnknown: string;
+        readTerm: string;
+        read: string;
+        readNotRecorded: string;
+        never: string;
+      };
+      memory: {
+        title: string;
+        lead: string;
+        whenTerm: string;
+        whenUnknown: string;
+        selectionTerm: string;
+        selection: string;
+        decayTerm: string;
+        decay: string;
+        recalledTerm: string;
+        recalled: string;
+        recalledNotRecorded: string;
+        never: string;
+      };
+      preference: {
+        title: string;
+        lead: string;
+        notFollowed: string;
+        departure: string;
+        never: string;
+      };
+    };
+    failure: {
+      orgRoleRequired: string;
+      noPrincipal: string;
+      recordNotFound: string;
+      recordUnclassified: string;
+      constraintEffectUnknown: string;
+      lineagePrOpen: string;
+      repositoryMissing: string;
+      governanceUnreadable: string;
+      githubRefused: string;
+      refused: string;
+      invalid: string;
+      pendingApproval: string;
+      unavailable: string;
+      sectionDenied: string;
+      sectionPending: string;
+      sectionError: string;
+      denied: {
+        title: string;
+        body: string;
+        needed: string;
+        decidedBy: string;
+        back: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        body: string;
+        retry: string;
+        code: string;
+        readAt: string;
+      };
+    };
+  };
   repositories: {
     mainRepository: {
       heading: string;
@@ -4376,6 +4571,7 @@ type Messages = {
       emptyTitle: string;
       empty: string;
       emptyKind: string;
+      open: string;
       authority: string;
       facts: {
         version: string;

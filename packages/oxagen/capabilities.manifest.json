@@ -2117,6 +2117,22 @@
       }
     },
     {
+      "name": "revise_context_record",
+      "file": "context.record.revise.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "append_record",
       "file": "context.records.append.ts",
       "domain": "context",
@@ -2149,7 +2165,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {

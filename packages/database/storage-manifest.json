@@ -2749,6 +2749,15 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "revise_context_record",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "revoke_agent_role",
       "reads": [],
@@ -3629,7 +3638,7 @@
       "writes": []
     }
   ],
-  "contentHash": "a9192bbfaee2d82bb89003fb06fd6cd01f0ac1b2e8d4c8d75b04c27ee7af6d6c",
+  "contentHash": "1e65f8def833dc9ea599ca23e050fe168647704b50d19f48ea8f8fc5cefaf620",
   "domains": [
     {
       "name": "agent",

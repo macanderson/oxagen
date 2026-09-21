@@ -242,6 +242,7 @@ import { killSwitchList } from "./kill_switch.list";
 import { contextRecordPublish } from "./context.record.publish";
 import { contextRecordList } from "./context.record.list";
 import { contextRecordPromote } from "./context.record.promote";
+import { contextRecordRevise } from "./context.record.revise";
 import { contextRecordsList } from "./context.records.list";
 import { contextRecordsGet } from "./context.records.get";
 import { contextRecordsAppend } from "./context.records.append";
@@ -772,6 +773,7 @@ export {
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
+  contextRecordRevise,
   contextRecordsList,
   contextRecordsGet,
   contextSteeringFreshness,
@@ -1125,6 +1127,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextRecordPublish,
   contextRecordList,
   contextRecordPromote,
+  contextRecordRevise,
   contextRecordsList,
   contextRecordsGet,
   contextSteeringFreshness,

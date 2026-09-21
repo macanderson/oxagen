@@ -17,7 +17,7 @@ import {
   proposal,
   type SteeringReads,
   steeringSource,
-} from "./steering.builders";
+} from "@/test/steering-views";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -98,6 +98,7 @@ describe("tabs", () => {
     const calls = await renderSteering();
     expect(calls).toEqual({
       records: [[ctx, { kind: null, offset: 0 }]],
+      record: [],
       proposals: [],
       contextPr: [],
       freshness: [],
@@ -123,6 +124,7 @@ describe("tabs", () => {
   it("opens Settings from the URL and reads only its workspace controls", async () => {
     const calls = await renderSteering({ tab: "settings" });
     expect(calls).toEqual({
+      record: [],
       records: [],
       proposals: [],
       contextPr: [],
@@ -354,6 +356,7 @@ describe("Proposals", () => {
   it("reads one page of proposals and nothing else, and prints each with its state, tally, source, rationale and support", async () => {
     const calls = await renderSteering({ tab: "proposals" });
     expect(calls).toEqual({
+      record: [],
       records: [],
       proposals: [[ctx, { offset: 0 }]],
       contextPr: [],
