@@ -1,7 +1,7 @@
 "use client";
 // The client side of the theme: read the stored choice, apply it to <html>,
 // persist it, and follow the OS while the choice is "system".
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyTheme,
   readThemeCookie,
@@ -28,13 +28,21 @@ function swapWithoutTransitions(swap: () => unknown): void {
   });
 }
 
-export function useTheme(): { theme: Theme; setTheme: (theme: Theme) => void } {
+export function useTheme(): {
+  theme: Theme;
+  setTheme: (theme: Theme, expectedRevision?: number) => void;
+  themeRevision: () => number;
+  previewTheme: (theme: Theme | null) => void;
+} {
   // The pre-paint script already applied the cookie; this reads the same value.
-  const [theme, setThemeState] = useState<Theme>(() =>
+  const [committedTheme, setThemeState] = useState<Theme>(() =>
     typeof document === "undefined"
       ? "system"
       : readThemeCookie(document.cookie),
   );
+
+  const [preview, previewTheme] = useState<Theme | null>(null);
+  const theme = preview ?? committedTheme;
 
   useEffect(() => {
     const mql = window.matchMedia(DARK_QUERY);
@@ -53,7 +61,12 @@ export function useTheme(): { theme: Theme; setTheme: (theme: Theme) => void } {
     };
   }, [theme]);
 
-  const setTheme = useCallback((next: Theme) => {
+  const revision = useRef(0);
+  const themeRevision = useCallback(() => revision.current, []);
+  const setTheme = useCallback((next: Theme, expectedRevision?: number) => {
+    if (expectedRevision !== undefined && revision.current !== expectedRevision)
+      return;
+    revision.current += 1;
     document.cookie = themeCookieString(
       next,
       document.URL.startsWith("https:"),
@@ -61,5 +74,5 @@ export function useTheme(): { theme: Theme; setTheme: (theme: Theme) => void } {
     setThemeState(next);
   }, []);
 
-  return { theme, setTheme };
+  return { theme, setTheme, previewTheme, themeRevision };
 }

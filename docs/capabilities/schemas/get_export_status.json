@@ -4,7 +4,8 @@
   "description": "Read the status of one of the calling user's own data exports. Answers a storage key rather than a URL: once ready, fetch the archive from GET /v1/{org}/{workspace}/privacy/export/{exportId}/download.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "mcp"
   ],
   "sensitivity": "low",
   "agent": null,

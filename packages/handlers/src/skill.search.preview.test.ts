@@ -161,7 +161,7 @@ describe("repository skill catalog", () => {
       "---\nname: review\nversion: 1.0.0\nscope: workspace\ndescription: Review code\n---\nBody",
     );
     expect(
-      (await readSkillCatalog(repo, currentSha, "workspace"))[0]!.digest,
+      (await readSkillCatalog(repo, "c".repeat(40), "workspace"))[0]!.digest,
     ).toBe(firstDigest);
   });
   it("fails closed on an invalid or oversized catalog", async () => {
@@ -172,6 +172,7 @@ describe("repository skill catalog", () => {
       getTree,
       getFileContent: vi.fn().mockResolvedValue("missing frontmatter"),
     });
+    repo.bindingId = "invalid-catalog";
     await expect(
       readSkillCatalog(repo, currentSha, "workspace"),
     ).rejects.toMatchObject({ reason: "skill_catalog_invalid" });
@@ -185,4 +186,57 @@ describe("repository skill catalog", () => {
       readSkillCatalog(repo, currentSha, "workspace"),
     ).rejects.toMatchObject({ reason: "skill_catalog_too_large" });
   });
+});
+
+it("coalesces and reuses a 1000-file immutable catalog, and separates binding and commit changes", async () => {
+  const paths = Array.from(
+    { length: 1000 },
+    (_, index) => `.oxagen/skills/skill-${index}/SKILL.md`,
+  );
+  const github = {
+    getTree: vi.fn().mockResolvedValue(paths),
+    getFileContent: vi.fn(
+      async ({ path }: { path: string }) =>
+        `---\nname: ${path.split("/")[2]}\nversion: 1.0.0\nscope: workspace\n---\nBody`,
+    ),
+  };
+  const repo = { ...repository(github), bindingId: "large-catalog" };
+  const [first, concurrent] = await Promise.all([
+    readSkillCatalog(repo, currentSha, "workspace"),
+    readSkillCatalog(repo, currentSha, "workspace"),
+  ]);
+  expect(first).toHaveLength(1000);
+  expect(concurrent).toEqual(first);
+  expect(github.getTree).toHaveBeenCalledOnce();
+  expect(github.getFileContent).toHaveBeenCalledTimes(1000);
+  first[0]!.description = "Mutated caller result";
+  expect(
+    (await readSkillCatalog(repo, currentSha, "workspace"))[0]!.description,
+  ).toBe("");
+  expect(github.getFileContent).toHaveBeenCalledTimes(1000);
+  await readSkillCatalog(repo, "d".repeat(40), "workspace");
+  await readSkillCatalog(
+    { ...repo, bindingId: "other-tenant-binding" },
+    currentSha,
+    "workspace",
+  );
+  expect(github.getTree).toHaveBeenCalledTimes(3);
+  expect(github.getFileContent).toHaveBeenCalledTimes(3000);
+});
+
+it("bounds cached catalogs and separates source labels", async () => {
+  const getTree = vi.fn().mockResolvedValue([]);
+  const repo = { ...repository({ getTree }), bindingId: "cache-retention" };
+  const commits = Array.from({ length: 9 }, (_, index) =>
+    String(index).repeat(40),
+  );
+  for (const commit of commits)
+    await readSkillCatalog(repo, commit, "workspace");
+  expect(getTree).toHaveBeenCalledTimes(9);
+  await readSkillCatalog(repo, commits[0]!, "workspace");
+  expect(getTree).toHaveBeenCalledTimes(10);
+  await readSkillCatalog(repo, commits[8]!, "workspace");
+  expect(getTree).toHaveBeenCalledTimes(10);
+  await readSkillCatalog(repo, commits[8]!, "another-source");
+  expect(getTree).toHaveBeenCalledTimes(11);
 });

@@ -4,7 +4,13 @@
 // typefaces, three tones as live swatches, a preview at every size the shell
 // draws, and a save that writes the spec string through update_profile and
 // returns to the Account dialog. Nothing here is an emoji or a free colour.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  within,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   afterEach,
@@ -19,6 +25,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { AVATAR_ICONS } from "@/ui/avatar-spec";
 import { shellData } from "./shell.builders";
+import { accountOperations } from "./account-operations";
 import type { ShellData } from "./shell-data";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
@@ -85,6 +92,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  accountOperations.resetForTests();
   refresh.mockReset();
   updateProfile.mockReset();
   updateProfile.mockResolvedValue({
@@ -253,6 +261,43 @@ describe("Photo", () => {
 });
 
 describe("Save", () => {
+  it("keeps an in-flight save across reopen without closing the new editor", async () => {
+    let finish: ((result: unknown) => void) | undefined;
+    updateProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openEditor();
+    await user.click(screen.getByTestId("avatar-save"));
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByTestId("avatar-dialog")).toBeNull();
+    });
+    await user.click(screen.getByRole("button", { name: "open avatar" }));
+    await screen.findByTestId("avatar-dialog");
+    await user.click(screen.getByTestId("avatar-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(1);
+    finish?.({
+      ok: true,
+      value: { displayName: "Marcus Bell", avatarUrl: "avatar:v1:{}" },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("avatar-save")).not.toBeDisabled(),
+    );
+    expect(screen.getByTestId("avatar-dialog")).toBeTruthy();
+    await user.click(screen.getByTestId("avatar-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(2);
+    finish?.({
+      ok: true,
+      value: { displayName: "Marcus Bell", avatarUrl: "avatar:v1:{}" },
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("avatar-dialog")).toBeNull();
+    });
+  });
+
   it("writes the spec string alone, refreshes the shell and returns to Account", async () => {
     const { user, dialog } = await openEditor();
     await user.click(within(dialog).getByTestId("avatar-kind-icon"));
@@ -314,3 +359,102 @@ describe("Save", () => {
     await expectNoAxe(dialog);
   });
 });
+
+describe("removing an avatar", () => {
+  it("clears a saved avatar even when the replacement draft is invalid", async () => {
+    const { user } = await openEditor({
+      avatarUrl: "https://example.com/avatar.png",
+    });
+    await user.clear(screen.getByTestId("avatar-url"));
+    await user.click(screen.getByTestId("avatar-remove"));
+    expect(updateProfile).toHaveBeenCalledWith(shellData().org.slug, {
+      avatarUrl: "",
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("which")).toHaveTextContent("account");
+    });
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("serializes removal with other avatar saves", async () => {
+    let finish: ((value: unknown) => void) | undefined;
+    updateProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openEditor({
+      avatarUrl: "https://example.com/avatar.png",
+    });
+    await user.click(screen.getByTestId("avatar-remove"));
+    expect(screen.getByTestId("avatar-remove")).toBeDisabled();
+    await user.click(screen.getByTestId("avatar-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(1);
+    finish?.({ ok: false, reason: "denied" });
+    await waitFor(() => {
+      expect(screen.getByTestId("avatar-remove")).toBeEnabled();
+    });
+  });
+
+  it("keeps a refused removal available for retry", async () => {
+    updateProfile.mockResolvedValue({ ok: false, reason: "denied" });
+    const { user } = await openEditor({
+      avatarUrl: "https://example.com/avatar.png",
+    });
+    await user.click(screen.getByTestId("avatar-remove"));
+    expect(await screen.findByTestId("avatar-denied")).toBeVisible();
+    expect(screen.getByTestId("avatar-remove")).toBeEnabled();
+    expect(screen.getByTestId("which")).toHaveTextContent("avatar");
+  });
+
+  it("has no remove control when the account already uses default initials", async () => {
+    await openEditor({ avatarUrl: null });
+    expect(screen.queryByTestId("avatar-remove")).not.toBeInTheDocument();
+  });
+});
+
+it.each([false, true])(
+  "reconciles a reopened avatar editor after the pending save, newer edit=%s",
+  async (newerEdit) => {
+    let finish: ((result: unknown) => void) | undefined;
+    updateProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openEditor();
+    await user.click(screen.getByTestId("avatar-kind-photo"));
+    await user.type(
+      screen.getByTestId("avatar-url"),
+      "https://cdn.example/saved.png",
+    );
+    await user.click(screen.getByTestId("avatar-save"));
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "open avatar" }));
+    if (newerEdit) {
+      await user.clear(screen.getByTestId("avatar-letters"));
+      await user.type(screen.getByTestId("avatar-letters"), "NEW");
+    }
+    finish?.({
+      ok: true,
+      value: {
+        displayName: "Marcus Bell",
+        avatarUrl: "https://cdn.example/saved.png",
+      },
+    });
+    await waitFor(() => {
+      expect(accountOperations.isPending(shellData().viewer.id, "avatar")).toBe(
+        false,
+      );
+    });
+    if (newerEdit)
+      expect(screen.getByTestId("avatar-letters")).toHaveValue("NEW");
+    else
+      expect(await screen.findByTestId("avatar-url")).toHaveValue(
+        "https://cdn.example/saved.png",
+      );
+    expect(screen.getByTestId("which")).toHaveTextContent("avatar");
+  },
+);
