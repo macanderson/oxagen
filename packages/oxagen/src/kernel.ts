@@ -1591,7 +1591,7 @@ async function _invokeCoreInner(
       );
     }
     // Missing handlers, missing scope, and budget refusals are denials.
-    // Malformed scope is an upstream input error and keeps its own audit code.
+    // Malformed scope and unavailable decision rules keep their error codes.
     const isCapErr = err instanceof CapabilityError;
     // Match stable codes without importing the originating error classes.
     const duckCode =
@@ -1606,11 +1606,12 @@ async function _invokeCoreInner(
     // decision the handler made, so it joins the audit chain as a deny;
     // "not_found" and "conflict" stay errors but carry their code so the
     // trace names the cause.
-    const malformedScope =
+    const authorityCode =
       err instanceof Error &&
       "code" in err &&
-      err.code === "invalid_tenant_scope"
-        ? ("invalid_tenant_scope" as const)
+      (err.code === "invalid_tenant_scope" ||
+        err.code === "decision_rules_unavailable")
+        ? err.code
         : null;
     const handlerCode = isHandlerError(err) ? err.code : null;
     const isDeny =
@@ -1619,7 +1620,7 @@ async function _invokeCoreInner(
       handlerCode === "forbidden";
     const failureCode = isCapErr
       ? err.code
-      : (duckCode ?? malformedScope ?? handlerCode);
+      : (duckCode ?? authorityCode ?? handlerCode);
     emitSecurityEvent({
       capability: canonical,
       outcome: isDeny ? "deny" : "error",
