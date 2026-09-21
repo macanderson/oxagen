@@ -651,6 +651,7 @@ type Messages = {
       ip: string;
       request: string;
       userAgent: string;
+      detail: string;
       notRecorded: string;
     };
     outcomes: {
