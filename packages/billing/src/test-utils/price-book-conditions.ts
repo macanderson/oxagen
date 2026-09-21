@@ -8,12 +8,15 @@
 
 export type PriceCond =
   | { op: "eq"; col: unknown; val: unknown }
+  | { op: "gt" | "lte"; col: unknown; val: Date }
   | { op: "inArray"; col: unknown; vals: unknown[] }
   | { op: "isNull"; col: unknown }
   | { op: "and"; conds: PriceCond[] }
   | { op: "or"; conds: PriceCond[] };
 
 export const priceConditionMocks = {
+  gt: (col: unknown, val: Date): PriceCond => ({ op: "gt", col, val }),
+  lte: (col: unknown, val: Date): PriceCond => ({ op: "lte", col, val }),
   eq: (col: unknown, val: unknown): PriceCond => ({ op: "eq", col, val }),
   inArray: (col: unknown, vals: readonly unknown[]): PriceCond => ({
     op: "inArray",

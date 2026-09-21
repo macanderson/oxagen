@@ -29,7 +29,7 @@ vi.mock("../lib/api.js", async () => {
 });
 
 import { captureWriter } from "../lib/capture-writer";
-import { priceRemove, priceSet, type PriceEntryRow } from "./price";
+import { priceList, priceRemove, priceSet, type PriceEntryRow } from "./price";
 
 function row(over: Partial<PriceEntryRow> = {}): PriceEntryRow {
   return {
@@ -173,7 +173,8 @@ describe("price remove", () => {
       region: "eu-west-1",
       at: "2026-11-01T00:00:00.000Z",
     });
-    expect(c.output()).toContain("returns to the list price from 2026-11-01");
+    expect(c.output()).toContain("rate ended from 2026-11-01");
+    expect(c.output()).toContain("A fallback price covers");
   });
 
   // The class had no list or override price to fall back to: the "returns
@@ -220,15 +221,25 @@ describe("price remove", () => {
     );
   });
 
-  it("says when there was nothing open to end", async () => {
-    apiPostOrThrow.mockResolvedValue({
-      at: "2026-11-01T00:00:00.000Z",
-      closed: null,
-    });
-    const c = captureWriter();
-    await priceRemove(good, c.writer);
-    expect(c.output()).toContain("nothing to end");
-  });
+  it.each([true, false])(
+    "reports the actual fallback on a no-op removal: %s",
+    async (fallbackPriced) => {
+      apiPostOrThrow.mockResolvedValue({
+        at: "2026-11-01T00:00:00.000Z",
+        closed: null,
+        fallbackPriced,
+      });
+      const c = captureWriter();
+      await priceRemove(good, c.writer);
+      expect(c.output()).toContain("nothing to end");
+      expect(c.output()).toContain(
+        fallbackPriced ? "A fallback price covers" : "UNPRICED",
+      );
+      expect(c.output()).not.toContain(
+        fallbackPriced ? "UNPRICED" : "A fallback price covers",
+      );
+    },
+  );
 
   it.each([
     [{ model: "m", tokenClass: "output" }, "--provider and --model"],
@@ -320,4 +331,50 @@ it("shows an additional class's superseded row when the primary class is new", a
   );
   expect(c.output()).toContain("$20");
   expect(c.output()).toContain("Previous output rate closed at 2026-10-01");
+});
+
+describe("price list", () => {
+  it.each([undefined, true])(
+    "opts into scheduled rows only when requested: %s",
+    async (includeScheduled) => {
+      apiPostOrThrow.mockResolvedValue({
+        at: "2026-09-20T00:00:00Z",
+        entries: [row()],
+      });
+      const c = captureWriter();
+      await priceList({ includeScheduled }, c.writer);
+      expect(apiPostOrThrow).toHaveBeenCalledWith("cost/price-entries", {
+        at: undefined,
+        ...(includeScheduled ? { includeScheduled: true } : {}),
+      });
+      expect(c.output()).toContain("claude-sonnet-5");
+      expect(c.output()).toContain("pe_1");
+    },
+  );
+  it("refuses an invalid instant before reading", async () => {
+    const c = captureWriter();
+    await priceList({ at: "not-an-instant" }, c.writer);
+    expect(apiPostOrThrow).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(2);
+  });
+});
+
+it("reports a scheduled row absent after cancellation or retry", async () => {
+  apiPostOrThrow.mockResolvedValue({
+    at: "2026-09-20T00:00:00Z",
+    closed: null,
+    fallbackPriced: false,
+  });
+  const c = captureWriter();
+  await priceRemove(
+    {
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      tokenClass: "output",
+      scheduledEntryId: "scheduled-1",
+    },
+    c.writer,
+  );
+  expect(c.output()).toContain("Scheduled rate scheduled-1 is absent");
+  expect(c.output()).not.toContain("nothing to end");
 });

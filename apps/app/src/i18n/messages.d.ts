@@ -651,6 +651,7 @@ type Messages = {
       ip: string;
       request: string;
       userAgent: string;
+      detail: string;
       notRecorded: string;
     };
     outcomes: {
@@ -1742,6 +1743,7 @@ type Messages = {
     };
   };
   fleet: {
+    loading: string;
     actions: {
       register: string;
     };
@@ -3158,6 +3160,7 @@ type Messages = {
       agent: string;
       stepCount: string;
       frameCount: string;
+      repeats: string;
       seqSpan: string;
       ms: string;
       live: string;
@@ -4053,6 +4056,11 @@ type Messages = {
         until: string;
         anyRegion: string;
         platformPriced: string;
+        scheduled: string;
+        pagination: string;
+        previous: string;
+        next: string;
+        page: string;
       };
       dialog: {
         open: string;
@@ -4100,6 +4108,8 @@ type Messages = {
         confirmUnpriced: string;
         confirmUnpricedSubmit: string;
         confirmUnpricedCancel: string;
+        cancelScheduled: string;
+        cancelScheduledSubmit: string;
       };
       failure: {
         orgRoleRequired: string;
