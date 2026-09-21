@@ -14,6 +14,8 @@ import {
 const gate = vi.hoisted(() => ({
   assertOrgRole: vi.fn(),
   resolveActingUserId: vi.fn(),
+  resolveActorOrgRole: vi.fn(),
+  resolveActorWorkspaceRole: vi.fn(),
 }));
 vi.mock("@oxagen/iam/org-role", () => gate);
 const body = (name: string) =>

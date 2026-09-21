@@ -433,7 +433,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where(eq(schema.agents.publicId, registered.agentId)),
       );
       expect(validity?.validUntil?.toISOString()).toBe(out.retiredAt);
-      expect(validity?.principalId).toBe(registered.principalId);
+      // agents.principal_id holds the principal row's uuid; the handler
+      // returns its public id, so resolve one to the other before comparing.
+      const [principal] = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.principals.id })
+          .from(schema.principals)
+          .where(eq(schema.principals.publicId, registered.principalId)),
+      );
+      expect(validity?.principalId).toBe(principal?.id);
       expect(out).toMatchObject({
         agentId: registered.agentId,
         status: "retired",

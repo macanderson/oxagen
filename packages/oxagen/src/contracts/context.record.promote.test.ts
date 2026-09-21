@@ -63,6 +63,7 @@ describe("context.record.promote capability", () => {
       seq: 1,
       chainDigest: "a".repeat(64),
       status: "active",
+      validUntil: null,
     });
     expect(parsed.seq).toBe(1);
   });

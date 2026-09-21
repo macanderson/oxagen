@@ -79,7 +79,7 @@ it.skipIf(!process.env.DATABASE_URL)(
           .values({
             orgId,
             workspaceId: crypto.randomUUID(),
-            slug: "cross-workspace-clone",
+            slug: "cross-ws-clone",
             name: "Other workspace",
             agentType: "custom",
             harness: "claude-code",
