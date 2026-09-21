@@ -1084,7 +1084,12 @@ async function initializeDaemon(
     for (const session of registry.list()) {
       const head = session.recorder.chainCursor;
       const headSeq = head.seq - 1;
-      if (headSeq <= session.lastCheckpointSeq || session.sealed) continue;
+      if (
+        headSeq <= session.lastCheckpointSeq ||
+        session.sealed ||
+        session.pendingTerminal
+      )
+        continue;
       const message = `${session.recorder.sessionUuid}:${headSeq}:${head.prevHash}`;
       const event = session.recorder.sealCollectorEvent("checkpoint", {
         checkpoint_id: ulid(now()),
@@ -1224,6 +1229,11 @@ async function initializeDaemon(
         continue;
       }
       pendingSessionEnds.set(uuid, envelope);
+      // A restart must reopen the same window `recordHookOutcome` guards
+      // in-process: this session has a terminal computed (or about to be
+      // recomputed) that has not reached the WAL, so it must keep refusing
+      // new frames until the retry lands, not just once the retry runs.
+      session.pendingTerminal = true;
     }
   } catch (error) {
     log(
@@ -1474,7 +1484,8 @@ async function initializeDaemon(
     if (
       hookName === "SessionEnd" &&
       endingSession?.cwd !== undefined &&
-      !endingSession.sealed
+      !endingSession.sealed &&
+      !endingSession.pendingTerminal
     ) {
       const inferredCursorCwd =
         envelope.harness === "cursor" &&
@@ -1566,8 +1577,16 @@ async function initializeDaemon(
         throw error;
       }
       // A sealed registry flag means its terminal event is durable. The
-      // journal preserves the exact event bytes and recorder cursor until then.
-      if (outcome.record !== undefined) outcome.record.sealed = false;
+      // journal preserves the exact event bytes and recorder cursor until
+      // then, so `sealed` reports `false` for this window. That must not
+      // reopen the record to new writers: `pendingTerminal` keeps it closed
+      // to `checkpoint`, the model proxy, and a re-entrant SessionEnd while
+      // `sealed` alone would let a concurrent write land a sequence after
+      // the terminal's and fork the chain the retry then rebuilds against.
+      if (outcome.record !== undefined) {
+        outcome.record.sealed = false;
+        outcome.record.pendingTerminal = true;
+      }
       flushPendingTerminal(pending.terminal);
     } else record(outcome.events, outcome.bodies);
     return outcome.response;
@@ -1600,8 +1619,16 @@ async function initializeDaemon(
       saved !== undefined &&
       current.recorder.chainCursor.seq === saved.recorder.cursor.seq &&
       current.recorder.chainCursor.prevHash === saved.recorder.cursor.prevHash
-    )
+    ) {
       current.sealed = true;
+      current.pendingTerminal = false;
+    }
+    // A mismatch means something else moved this chain while the terminal
+    // waited (or a restart rebuilt it from a state.json older than this
+    // envelope); `restore` rebuilds fresh `SessionRecord`s from `terminal.state`
+    // alone, which carries no `pendingTerminal`, so the restored record comes
+    // back closed (`sealed: true`, `pendingTerminal` unset) with nothing left
+    // to clear.
     else registry.restore(terminal.state);
     stateDirty = true;
   }

@@ -537,6 +537,68 @@ describe("the daemon's git seam", () => {
     },
   );
 
+  it("refuses a checkpoint for a session whose terminal is stuck behind a WAL failure", async () => {
+    // `sealed` reports `false` for the whole pending window (its terminal
+    // is not durable yet), but that must not reopen the chain to a
+    // checkpoint sealed in between: a checkpoint frame ahead of the stuck
+    // terminal would fork the chain the next retry rebuilds against.
+    const exec = fakeGit(() => REPO_ANSWERS, []);
+    const handle = await boot(exec, () => 1000);
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("SessionEnd"));
+    const append = handle.wal.append.bind(handle.wal);
+    let expected: TachoEvent | undefined;
+    let failuresLeft = 2;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        const terminal = events.find(
+          (event) =>
+            event.kind === "agent_stop" && event.session_id === SESSION,
+        );
+        if (terminal !== undefined && failuresLeft > 0) {
+          failuresLeft -= 1;
+          expected = terminal;
+          throw Object.assign(new Error("event disk full"), {
+            code: "ENOSPC",
+          });
+        }
+        append(events, bodies);
+      });
+    await handle.tick();
+    const uuid = handle.registry.get(SESSION)!.recorder.sessionUuid;
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    expect(handle.registry.get(SESSION)?.pendingTerminal).toBe(true);
+    const cursorWhilePending =
+      handle.registry.get(SESSION)!.recorder.chainCursor.seq;
+    // This tick's own checkpoint (SessionEnd had not yet reached the git
+    // lane) is legitimate; the count from here on is what must not move.
+    const checkpointsWhilePending = handle.wal
+      .read(uuid)
+      .filter((event) => event.kind === "checkpoint").length;
+    // checkpointMs: 0 makes every tick checkpoint-eligible. Before this fix,
+    // `session.sealed === false` here read as "still live" and this tick
+    // would seal a checkpoint frame ahead of the stuck terminal event.
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    expect(handle.registry.get(SESSION)?.pendingTerminal).toBe(true);
+    expect(
+      handle.wal.read(uuid).filter((event) => event.kind === "checkpoint"),
+    ).toHaveLength(checkpointsWhilePending);
+    expect(handle.registry.get(SESSION)!.recorder.chainCursor.seq).toBe(
+      cursorWhilePending,
+    );
+    // The retry succeeds now, and the chain a checkpoint would have forked
+    // still holds exactly the one terminal event, in its original position.
+    await handle.tick();
+    expect(
+      handle.wal.read(uuid).filter((event) => event.kind === "agent_stop"),
+    ).toEqual([expected]);
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+    expect(handle.registry.get(SESSION)?.pendingTerminal).toBe(false);
+    fault.mockRestore();
+  });
+
   it("does not duplicate a terminal event when only the WAL cursor write failed", async () => {
     const handle = await boot(
       fakeGit(() => REPO_ANSWERS, []),
