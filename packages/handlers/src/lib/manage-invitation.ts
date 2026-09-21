@@ -54,6 +54,7 @@ export async function manageInvitation<V extends "resend" | "revoke">(
   let deliveryStatus: "accepted" | "failed" = "accepted";
   if (verb === "resend") {
     try {
+      // tenancy: filtered by userId after authenticated Owner or Admin membership and an org-bound invitation update.
       const inviter = await withSystemDb((tx) =>
         tx.query.users.findFirst({
           where: eq(schema.users.id, userId),
