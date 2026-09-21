@@ -79,7 +79,9 @@
             "influence"
           ],
           "additionalProperties": false
-        }
+        },
+        "minItems": 1,
+        "maxItems": 100
       }
     },
     "required": [

@@ -347,7 +347,8 @@
             "appliedActionId"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 50
       }
     },
     "required": [

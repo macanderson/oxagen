@@ -420,7 +420,8 @@
             "summary"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 100
       },
       "nextCursor": {
         "anyOf": [

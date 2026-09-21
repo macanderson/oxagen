@@ -136,10 +136,7 @@ export function CodePanel({
         <table className="w-full border-collapse">
           <tbody>
             {shown.map((line, index) => (
-              // Source lines repeat (blank lines, duplicate statements), so
-              // the line number is the only candidate key and it is derived
-              // from the row index.
-              // eslint-disable-next-line @eslint-react/no-array-index-key -- line number is the natural key and always derives from the row index
+              // eslint-disable-next-line @eslint-react/no-array-index-key -- the key is the source line number, which is unique and stable; these rows are never reordered, filtered, or inserted into
               <tr key={startLine + index}>
                 <td
                   className={`${gutter} w-px align-top`}
@@ -220,15 +217,15 @@ export function DiffPanel({
         </span>
       </div>
       <div className={`${codeText} overflow-x-auto`}>
-        {diff.hunks.map((hunk, index) => (
+        {diff.hunks.map((hunk) => (
           <table
-            key={`${String(hunk.beforeStart)}-${String(hunk.afterStart)}-${String(index)}`}
+            key={`${String(hunk.beforeStart)}-${String(hunk.afterStart)}`}
             className="w-full border-collapse border-t border-border first:border-t-0"
           >
             <tbody>
-              {hunk.lines.map((line, row) => (
+              {hunk.lines.map((line) => (
                 <tr
-                  key={`${line.op}-${String(line.before ?? "n")}-${String(line.after ?? "n")}-${String(row)}`}
+                  key={`${line.op}-${String(line.before ?? "n")}-${String(line.after ?? "n")}`}
                   className={OP_ROW[line.op]}
                 >
                   <td className={`${gutter} w-px pl-2.5 align-top`}>

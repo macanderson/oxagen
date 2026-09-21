@@ -50,7 +50,9 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256
-              }
+              },
+              "minItems": 1,
+              "maxItems": 64
             },
             "enabled": {
               "type": "boolean",
@@ -73,7 +75,8 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 256
-                }
+                },
+                "minItems": 1
               },
               "x-server-validated": true,
               "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload.",
@@ -110,7 +113,9 @@
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 7
-                      }
+                      },
+                      "minItems": 1,
+                      "maxItems": 7
                     },
                     "start": {
                       "type": "string"
@@ -186,7 +191,8 @@
               "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "maxItems": 64
             },
             "hits30d": {
               "type": "integer",
@@ -207,7 +213,8 @@
             "skipped30d"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 256
       },
       "windowDays": {
         "type": "integer",

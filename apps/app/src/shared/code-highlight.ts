@@ -41,7 +41,8 @@ export type CodeLanguage = "shell" | "json" | "text";
 const SHELL_COMMENT = /#[^\n]*/y;
 const SHELL_SINGLE = /'(?:[^'\\]|\\[\s\S])*'?/y;
 const SHELL_DOUBLE = /"(?:[^"\\]|\\[\s\S])*"?/y;
-const SHELL_VARIABLE = /\$(?:\{[^}\n]*\}?|[A-Za-z_][A-Za-z0-9_]*|[0-9?@*#$!-])/y;
+const SHELL_VARIABLE =
+  /\$(?:\{[^}\n]*\}?|[A-Za-z_][A-Za-z0-9_]*|[0-9?@*#$!-])/y;
 const SHELL_FLAG = /--?[A-Za-z0-9][A-Za-z0-9_-]*/y;
 /** Not sticky: it tests a word already read, not the source at a cursor. */
 const SHELL_NUMBER = /^\d+(?:\.\d+)?$/;
@@ -93,6 +94,8 @@ function read(src: string, at: number, re: RegExp): string | null {
  * accent and everything after it is an argument. "Command position" resets
  * after a pipe, a `&&`, a `;` and a newline, so every command in a chain is
  * found, not just the first.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function tokenizeShell(source: string): CodeToken[] {
   const tokens: CodeToken[] = [];
@@ -170,7 +173,11 @@ const JSON_LITERAL = /(?:true|false|null)\b/y;
 const JSON_SPACE = /[ \t\r\n]+/y;
 const JSON_PUNCT = /[{}[\],:]/y;
 
-/** JSON as coloured tokens. A string before a `:` is a key, not a value. */
+/**
+ * JSON as coloured tokens. A string before a `:` is a key, not a value.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function tokenizeJson(source: string): CodeToken[] {
   const tokens: CodeToken[] = [];
   let pos = 0;

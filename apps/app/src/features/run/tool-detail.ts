@@ -55,6 +55,8 @@ export type ToolGroup =
  * A key rather than a heading, because this module is pure and the app is
  * translated: a literal here would be one English word the catalogue never
  * sees, in a file no translator opens.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export type PaneLabel =
   | "command"
@@ -67,6 +69,10 @@ export type PaneLabel =
   | "plan"
   | "input";
 
+/** One pane of a tool reading.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export type ToolPane =
   | {
       kind: "code";
@@ -123,7 +129,11 @@ function firstStr(source: Json | null, ...keys: string[]): string | null {
   return null;
 }
 
-/** The body text as JSON, or null when it is not JSON at all. */
+/**
+ * The body text as JSON, or null when it is not JSON at all.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function parseBody(text: string | null): unknown {
   if (text === null) return null;
   const trimmed = text.trim();
@@ -132,7 +142,8 @@ export function parseBody(text: string | null): unknown {
   // failed parse on every frame of a long run is not free.
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
   try {
-    return JSON.parse(trimmed);
+    const parsed: unknown = JSON.parse(trimmed);
+    return parsed;
   } catch {
     return null;
   }
@@ -145,6 +156,8 @@ export function parseBody(text: string | null): unknown {
  * its own; a content-block producer writes `{tool_use: {name, input}}`. A
  * body that matches none of these is treated as the input itself, which is
  * what the bare-input shape already is.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function splitBody(parsed: unknown): {
   input: Json | null;
@@ -227,7 +240,11 @@ const GROUPS: Readonly<Record<string, ToolGroup>> = {
   notebookread: "notebook",
 };
 
-/** The family a tool name belongs to; `mcp__server__tool` is always `mcp`. */
+/**
+ * The family a tool name belongs to; `mcp__server__tool` is always `mcp`.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function groupOf(name: string): ToolGroup {
   if (name.startsWith("mcp__")) return "mcp";
   return GROUPS[name.toLowerCase()] ?? "tool";
@@ -241,7 +258,11 @@ function mcpParts(name: string): { server: string; tool: string } | null {
   return { server, tool: rest.join("__") };
 }
 
-/** A path as the reader knows it: the last two segments, never the whole tree. */
+/**
+ * A path as the reader knows it: the last two segments, never the whole tree.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function shortPath(path: string): string {
   const parts = path.split("/").filter((part) => part !== "");
   if (parts.length <= 2) return path;
@@ -250,9 +271,18 @@ export function shortPath(path: string): string {
 
 // ── Per-tool readings ───────────────────────────────────────────────────────
 
-/** How many lines of a created file or a fetched body open expanded. */
+/**
+ * How many lines of a created file or a fetched body open expanded.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const CREATE_PREVIEW = 20;
-/** How many lines of a read file, a command's output or an unknown input open expanded. */
+/**
+ * How many lines of a read file, a command's output or an unknown input open
+ * expanded.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export const OUTPUT_PREVIEW = 5;
 
 function firstLine(text: string): { head: string; multiline: boolean } {
