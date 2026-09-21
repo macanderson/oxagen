@@ -1,1 +1,2 @@
 - [2026-09-20] Project a cancellation fence from the locked CTE after contention, and reject machine-key issuance before resolving its creator. (source: reflections/2026-09-20-ledger-ingress.md, agent: evidence-fixes)
+- [2026-09-20] A deployed alarm without a confirmed subscriber cannot demonstrate delivered incident notification. Verify AWS filter semantics separately from local alarm arithmetic. (source: reflections/2026-09-20-tacho-alert.md, agent: evidence-fixes)
