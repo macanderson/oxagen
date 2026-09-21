@@ -9,6 +9,7 @@ const item = {
   operatorKind: null,
   operatorName: null,
   status: "sealed",
+  outcome: "completed",
   turns: 2,
   steps: 7,
   frames: 207,
@@ -191,9 +192,9 @@ describe("list_runs verdict (ADR-064)", () => {
 describe("the row a caller decides from (#3285)", () => {
   it("names the tier the run was observed at, from a closed set (negative)", () => {
     for (const enforcementTier of ["gateway", "harness", "observe"]) {
-      expect(runItemSchema.safeParse({ ...item, enforcementTier }).success).toBe(
-        true,
-      );
+      expect(
+        runItemSchema.safeParse({ ...item, enforcementTier }).success,
+      ).toBe(true);
     }
     expect(
       runItemSchema.safeParse({ ...item, enforcementTier: "proxy" }).success,
@@ -238,5 +239,41 @@ describe("canSummarizeRun", () => {
     expect(
       canSummarizeRun({ status: "halted", completenessGaps: ["tool_bodies"] }),
     ).toBe(true);
+  });
+});
+
+// The outcome, beside the status. `status` has three words and the stores
+// record five and five, so a row that carried only the status could not say
+// whether a sealed run finished or failed.
+describe("run outcome", () => {
+  it("carries every word either store records", () => {
+    for (const outcome of [
+      "running",
+      "completed",
+      "failed",
+      "cancelled",
+      "crashed",
+      "unknown",
+    ]) {
+      expect(runItemSchema.safeParse({ ...item, outcome }).success).toBe(true);
+    }
+  });
+
+  it("refuses a word neither store records (negative)", () => {
+    for (const outcome of ["sealed", "aborted", "pending", "abandoned"]) {
+      expect(runItemSchema.safeParse({ ...item, outcome }).success).toBe(false);
+    }
+  });
+
+  it("requires one: a row with no outcome is a row that cannot say how the run ended (negative)", () => {
+    const { outcome: _dropped, ...without } = item;
+    expect(runItemSchema.safeParse(without).success).toBe(false);
+  });
+
+  it("separates a run that finished from one that failed, which the status cannot", () => {
+    const completed = runItemSchema.parse({ ...item, outcome: "completed" });
+    const failed = runItemSchema.parse({ ...item, outcome: "failed" });
+    expect(completed.status).toBe(failed.status);
+    expect(completed.outcome).not.toBe(failed.outcome);
   });
 });
