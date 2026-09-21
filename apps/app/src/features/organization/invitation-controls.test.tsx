@@ -53,7 +53,9 @@ describe("invitation controls", () => {
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(mocks.refresh).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Resend" }));
-    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+    await waitFor(() => {
+      expect(mocks.refresh).toHaveBeenCalledOnce();
+    });
     expect(mocks.resend).toHaveBeenCalledWith("acme", "invi_abc");
     expect(screen.getByRole("status")).toHaveTextContent("email sent");
   });

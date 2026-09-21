@@ -23,13 +23,13 @@ export function InvitationControls({
   const t = useTranslations("organization.invitations");
   const describeFailure = useActionFailure();
   const navigate = useNavigate();
-  const busy = useRef(false);
+  const busyRef = useRef(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<ActionFailure | null>(null);
   const [outcome, setOutcome] = useState<"resent" | "revoked" | null>(null);
   async function act(verb: "resend" | "revoke") {
-    if (!allowed || busy.current || outcome === "revoked") return;
-    busy.current = true;
+    if (!allowed || busyRef.current || outcome === "revoked") return;
+    busyRef.current = true;
     setPending(true);
     setFailure(null);
     setOutcome(null);
@@ -44,7 +44,7 @@ export function InvitationControls({
     } catch {
       setFailure(UNANSWERED);
     } finally {
-      busy.current = false;
+      busyRef.current = false;
       setPending(false);
     }
   }
