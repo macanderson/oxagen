@@ -3158,6 +3158,7 @@ type Messages = {
       agent: string;
       stepCount: string;
       frameCount: string;
+      repeats: string;
       seqSpan: string;
       ms: string;
       live: string;
