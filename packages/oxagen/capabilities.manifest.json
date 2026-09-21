@@ -1947,6 +1947,25 @@
       }
     },
     {
+      "name": "set_governance_mode",
+      "file": "context.governance_mode.set.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_context_pr",
       "file": "context.pr.get.ts",
       "domain": "context",

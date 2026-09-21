@@ -2,29 +2,18 @@
 // `open_init_pr` puts them on a branch (MC spec §10.2). Pure functions, so the
 // wizard, its tests and the CLI's `oxagen repo init` draft the same text.
 
-export type GovernanceMode = "solo" | "team" | "regulated";
-
-export const GOVERNANCE_MODES: readonly GovernanceMode[] = [
-  "solo",
-  "team",
-  "regulated",
-];
-
-/**
- * `.oxagen/rules/governance.toml` for a mode. The same lines the CLI drafts
- * (apps/cli/src/commands/repo.ts `draftGovernanceToml`): `open_init_pr`
- * refuses a file whose declared mode differs from the one chosen, so the
- * draft states it once and plainly.
- */
-export function draftGovernanceToml(mode: GovernanceMode): string {
-  return [
-    "# Read on the production branch when a pull request is opened and again",
-    "# when it is merged. A missing file means team.",
-    `mode = "${mode}"`,
-    `separation_of_duties = ${mode === "regulated" ? "true" : "false"}`,
-    "",
-  ].join("\n");
-}
+// `governance.toml` itself is NOT drafted here. The wizard drafts it, the CLI
+// drafts it, and `set_governance_mode` commits it, and all three have to agree
+// with the one parser of it — so the text lives with the mode schema in
+// @oxagen/oxagen/contracts/context.steering.shared and is re-exported here for
+// the callers on this page. (apps/cli keeps its own copy on purpose: it does
+// not depend on @oxagen/oxagen, and pulling the contract registry into the CLI
+// bundle for one string builder is the worse trade.)
+export {
+  draftGovernanceToml,
+  GOVERNANCE_MODES,
+  type GovernanceMode,
+} from "@oxagen/oxagen/contracts/context.steering.shared";
 
 /** True for a character TOML forbids unescaped in a basic string: U+0000 to U+001F, and U+007F. */
 function isControl(char: string): boolean {
