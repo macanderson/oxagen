@@ -317,9 +317,7 @@ export async function priceRemove(
       err instanceof Error &&
       err.message.includes(CLOSE_WOULD_UNPRICE)
     )
-      writer.write(
-        "  Re-run with --confirm-unpriced to end the rate anyway.",
-      );
+      writer.write("  Re-run with --confirm-unpriced to end the rate anyway.");
     return;
   }
 
@@ -327,16 +325,17 @@ export async function priceRemove(
     out.data(result);
     return;
   }
+  const fallback = result.fallbackPriced
+    ? "A fallback price covers this model and class."
+    : "No list or override price covers this model and class: it is UNPRICED until one is set.";
   if (result.closed === null) {
     writer.write(
-      `No open negotiated rate for ${opts.model} ${opts.tokenClass}; nothing to end. It was already priced at the list rate.`,
+      `No open negotiated rate for ${opts.model} ${opts.tokenClass}; nothing to end. ${fallback}`,
     );
     return;
   }
   writer.write(
-    result.fallbackPriced
-      ? `✓ ${result.closed.model} ${result.closed.tokenClass} returns to the list price from ${result.at}.`
-      : `✓ ${result.closed.model} ${result.closed.tokenClass} rate ended from ${result.at}. No list or override price covers this model and class: it is now UNPRICED until one is set.`,
+    `✓ ${result.closed.model} ${result.closed.tokenClass} rate ended from ${result.at}. ${fallback}`,
   );
   writer.write("");
   renderEntries([result.closed], writer);

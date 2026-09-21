@@ -173,7 +173,8 @@ describe("price remove", () => {
       region: "eu-west-1",
       at: "2026-11-01T00:00:00.000Z",
     });
-    expect(c.output()).toContain("returns to the list price from 2026-11-01");
+    expect(c.output()).toContain("rate ended from 2026-11-01");
+    expect(c.output()).toContain("A fallback price covers");
   });
 
   // The class had no list or override price to fall back to: the "returns
@@ -220,15 +221,25 @@ describe("price remove", () => {
     );
   });
 
-  it("says when there was nothing open to end", async () => {
-    apiPostOrThrow.mockResolvedValue({
-      at: "2026-11-01T00:00:00.000Z",
-      closed: null,
-    });
-    const c = captureWriter();
-    await priceRemove(good, c.writer);
-    expect(c.output()).toContain("nothing to end");
-  });
+  it.each([true, false])(
+    "reports the actual fallback on a no-op removal: %s",
+    async (fallbackPriced) => {
+      apiPostOrThrow.mockResolvedValue({
+        at: "2026-11-01T00:00:00.000Z",
+        closed: null,
+        fallbackPriced,
+      });
+      const c = captureWriter();
+      await priceRemove(good, c.writer);
+      expect(c.output()).toContain("nothing to end");
+      expect(c.output()).toContain(
+        fallbackPriced ? "A fallback price covers" : "UNPRICED",
+      );
+      expect(c.output()).not.toContain(
+        fallbackPriced ? "UNPRICED" : "A fallback price covers",
+      );
+    },
+  );
 
   it.each([
     [{ model: "m", tokenClass: "output" }, "--provider and --model"],
