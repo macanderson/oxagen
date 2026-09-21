@@ -2397,6 +2397,11 @@ type Messages = {
       working: string;
       resent: string;
       revoked: string;
+      deliveryFailed: string;
+      confirmTitle: string;
+      confirmBody: string;
+      confirmRevoke: string;
+      keepInvitation: string;
     };
     invite: {
       open: string;

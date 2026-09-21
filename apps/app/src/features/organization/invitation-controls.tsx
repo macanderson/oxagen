@@ -24,9 +24,12 @@ export function InvitationControls({
   const describeFailure = useActionFailure();
   const navigate = useNavigate();
   const busyRef = useRef(false);
+  const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<ActionFailure | null>(null);
-  const [outcome, setOutcome] = useState<"resent" | "revoked" | null>(null);
+  const [outcome, setOutcome] = useState<
+    "resent" | "revoked" | "deliveryFailed" | null
+  >(null);
   async function act(verb: "resend" | "revoke") {
     if (!allowed || busyRef.current || outcome === "revoked") return;
     busyRef.current = true;
@@ -38,7 +41,14 @@ export function InvitationControls({
         ? resendInvitation
         : revokeInvitation)(org, invitationId);
       if (result.ok) {
-        setOutcome(verb === "resend" ? "resent" : "revoked");
+        setOutcome(
+          verb === "resend"
+            ? "delivery" in result.value && result.value.delivery === "failed"
+              ? "deliveryFailed"
+              : "resent"
+            : "revoked",
+        );
+        setConfirming(false);
         navigate.refresh();
       } else setFailure(result);
     } catch {
@@ -63,11 +73,38 @@ export function InvitationControls({
           type="button"
           className={buttonSecondary}
           disabled={!allowed || pending || outcome === "revoked"}
-          onClick={() => void act("revoke")}
+          onClick={() => setConfirming(true)}
         >
           {t("revoke")}
         </button>
       </div>
+      {confirming ? (
+        <div
+          role="group"
+          aria-label={t("confirmTitle")}
+          className="flex flex-col gap-2"
+        >
+          <p>{t("confirmBody")}</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={buttonSecondary}
+              disabled={pending}
+              onClick={() => void act("revoke")}
+            >
+              {t("confirmRevoke")}
+            </button>
+            <button
+              type="button"
+              className={buttonSecondary}
+              disabled={pending}
+              onClick={() => setConfirming(false)}
+            >
+              {t("keepInvitation")}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {failure ? <FormAlert>{describeFailure(failure)}</FormAlert> : null}
       <p role="status">{pending ? t("working") : outcome ? t(outcome) : ""}</p>
     </div>

@@ -326,6 +326,7 @@ export async function resendInvitation(
     invitationPublicId: string;
     status: "pending";
     expiresAt: string | null;
+    delivery: "accepted" | "failed";
   }>
 > {
   const ctx = await requireViewer(org);

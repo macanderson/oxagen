@@ -14,6 +14,7 @@ export async function manageInvitation<V extends "resend" | "revoke">(
   invitationPublicId: string;
   status: V extends "resend" ? "pending" : "revoked";
   expiresAt: string | null;
+  delivery?: "accepted" | "failed";
 }> {
   const now = new Date();
   const row = await withTenantDb(async (tx) => {
@@ -50,20 +51,21 @@ export async function manageInvitation<V extends "resend" | "revoke">(
       );
     return { ...found, status, expiresAt };
   });
+  let deliveryStatus: "accepted" | "failed" = "accepted";
   if (verb === "resend") {
-    const inviter = await withSystemDb((tx) =>
-      tx.query.users.findFirst({
-        where: eq(schema.users.id, userId),
-        columns: { displayName: true },
-      }),
-    );
-    const org = await withTenantDb((tx) =>
-      tx.query.organizations.findFirst({
-        where: eq(schema.organizations.id, ctx.orgId),
-        columns: { name: true },
-      }),
-    );
     try {
+      const inviter = await withSystemDb((tx) =>
+        tx.query.users.findFirst({
+          where: eq(schema.users.id, userId),
+          columns: { displayName: true },
+        }),
+      );
+      const org = await withTenantDb((tx) =>
+        tx.query.organizations.findFirst({
+          where: eq(schema.organizations.id, ctx.orgId),
+          columns: { name: true },
+        }),
+      );
       const delivery = await sendEmail({
         to: row.email,
         ...invitationEmailTemplate({
@@ -86,15 +88,13 @@ export async function manageInvitation<V extends "resend" | "revoke">(
         { err: error, orgId: ctx.orgId, invitationId: row.publicId },
         "Invitation email delivery failed",
       );
-      throw new Error(
-        "The invitation is still pending, but its email could not be sent. Try again.",
-        { cause: error },
-      );
+      deliveryStatus = "failed";
     }
   }
   return {
     invitationPublicId: row.publicId,
     status: row.status as V extends "resend" ? "pending" : "revoked",
     expiresAt: row.expiresAt?.toISOString() ?? null,
+    ...(verb === "resend" ? { delivery: deliveryStatus } : {}),
   };
 }

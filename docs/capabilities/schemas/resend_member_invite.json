@@ -47,12 +47,20 @@
             "type": "null"
           }
         ]
+      },
+      "delivery": {
+        "type": "string",
+        "enum": [
+          "accepted",
+          "failed"
+        ]
       }
     },
     "required": [
       "invitationPublicId",
       "status",
-      "expiresAt"
+      "expiresAt",
+      "delivery"
     ],
     "additionalProperties": false
   }

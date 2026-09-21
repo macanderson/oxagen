@@ -22,6 +22,7 @@ export const resendMemberInvite = registerCapability({
       invitationPublicId: z.string(),
       status: z.literal("pending"),
       expiresAt: z.string().datetime().nullable(),
+      delivery: z.enum(["accepted", "failed"]),
     })
     .strict(),
 });

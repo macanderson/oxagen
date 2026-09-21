@@ -131,7 +131,12 @@
       "revoke": "Revoke",
       "working": "Saving invitation",
       "resent": "Invitation email sent. It expires in seven days.",
-      "revoked": "Invitation revoked."
+      "revoked": "Invitation revoked.",
+      "deliveryFailed": "The invitation now expires in seven days, but its email could not be sent. Resend to try again.",
+      "confirmTitle": "Revoke invitation",
+      "confirmBody": "This invitation will stop working. You can send a new invitation later.",
+      "confirmRevoke": "Confirm revoke",
+      "keepInvitation": "Keep invitation"
     },
     "invite": {
       "open": "Invite",

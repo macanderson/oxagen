@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   set: vi.fn(),
   updateWhere: vi.fn(),
+  inviter: vi.fn(),
   actor: vi.fn(),
   role: vi.fn(),
   send: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock("@oxagen/database", async (original) => ({
     }),
   withSystemDb: async (fn: (tx: unknown) => unknown) =>
     fn({
-      query: { users: { findFirst: async () => ({ displayName: "Owner" }) } },
+      query: { users: { findFirst: mocks.inviter } },
     }),
 }));
 vi.mock("@oxagen/iam/org-role", () => ({
@@ -56,6 +57,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.template.mockReturnValue({ subject: "Invitation", html: "body" });
   mocks.actor.mockResolvedValue("user");
+  mocks.inviter.mockResolvedValue({ displayName: "Owner" });
   mocks.select.mockReturnValue({ from: () => ({ where: mocks.where }) });
   mocks.where.mockReturnValue({ for: mocks.lock });
   mocks.lock.mockResolvedValue([row]);
@@ -90,6 +92,7 @@ describe("invitation management", () => {
     expect(result).toMatchObject({
       invitationPublicId: input.invitationPublicId,
       status: "pending",
+      delivery: "accepted",
     });
     expect(Date.parse(result.expiresAt ?? "")).toBeGreaterThan(
       Date.now() + 6 * 86_400_000,
@@ -141,11 +144,31 @@ describe("invitation management", () => {
       rejected: [row.email],
       id: "mail",
     });
-    await expect(resend(input, ctx)).rejects.toThrow("email could not be sent");
+    expect(await resend(input, ctx)).toMatchObject({
+      status: "pending",
+      delivery: "failed",
+      expiresAt: expect.any(String),
+    });
+  });
+  it("reports renewed expiry when an email lookup fails after the write", async () => {
+    mocks.inviter.mockRejectedValueOnce(new Error("lookup unavailable"));
+    const result = await resend(input, ctx);
+    expect(result).toMatchObject({ status: "pending", delivery: "failed" });
+    expect(Date.parse(result.expiresAt ?? "")).toBeGreaterThan(
+      Date.now() + 6 * 86_400_000,
+    );
+    expect(mocks.set).toHaveBeenCalledWith(
+      expect.objectContaining({ expiresAt: new Date(result.expiresAt!) }),
+    );
+    expect(mocks.send).not.toHaveBeenCalled();
   });
   it("can retry a transport failure against the same pending invitation", async () => {
     mocks.send.mockRejectedValueOnce(new Error("offline"));
-    await expect(resend(input, ctx)).rejects.toThrow("email could not be sent");
+    expect(await resend(input, ctx)).toMatchObject({
+      status: "pending",
+      delivery: "failed",
+      expiresAt: expect.any(String),
+    });
     expect(await resend(input, ctx)).toMatchObject({
       invitationPublicId: input.invitationPublicId,
     });

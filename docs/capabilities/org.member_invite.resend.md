@@ -5,11 +5,11 @@
 **Scope:** organization
 **Surfaces:** api, mcp
 
-Renews the same pending invitation for seven days and waits for the mail transport to accept its recipient. A failed send leaves the invitation pending and returns an error; retry uses the same invitation.
+Renews the same pending invitation for seven days and waits for the mail transport to accept its recipient. A failed send leaves the renewed invitation pending and returns `delivery: "failed"` with its new expiry. Retry uses the same invitation. `delivery: "accepted"` means the mail transport accepted the recipient.
 
 Only an authenticated organization Owner or Admin may call this capability, including on the free tier. The handler checks that role before reading the invitation. The lookup requires the calling organization, public invitation ID, then locks the row before changing a pending invitation. It cannot change an invitation in another organization.
 
-Input: `invitationPublicId` (`invi_…`). Output: the same public ID, `status`, and `expiresAt`.
+Input: `invitationPublicId` (`invi_…`). Output: the same public ID, `status`, `expiresAt`, and `delivery`.
 
 Refusals: `forbidden/no_principal`, `forbidden/org_role_required`, `not_found/invitation_not_found`, and `conflict/invitation_closed`. A closed invitation cannot be reopened.
 

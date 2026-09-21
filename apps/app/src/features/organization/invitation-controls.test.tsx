@@ -20,7 +20,7 @@ import { InvitationControls } from "./invitation-controls";
 afterEach(cleanup);
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.resend.mockResolvedValue({ ok: true, value: {} });
+  mocks.resend.mockResolvedValue({ ok: true, value: { delivery: "accepted" } });
   mocks.revoke.mockResolvedValue({ ok: true, value: {} });
 });
 function show(allowed = true) {
@@ -70,6 +70,8 @@ describe("invitation controls", () => {
     const user = userEvent.setup();
     const { container } = show();
     await user.click(screen.getByRole("button", { name: "Revoke" }));
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Confirm revoke" }));
     expect(screen.getByRole("button", { name: "Resend" })).toBeDisabled();
     await expectNoAxe(container);
     finish?.({ ok: true, value: {} });
@@ -84,8 +86,33 @@ describe("invitation controls", () => {
     const user = userEvent.setup();
     const { container } = show();
     await user.click(screen.getByRole("button", { name: "Revoke" }));
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Confirm revoke" }));
     await screen.findByRole("alert");
     expect(screen.getByRole("button", { name: "Revoke" })).toBeEnabled();
     await expectNoAxe(container);
   });
+});
+
+it("reports renewed expiry when mail delivery fails and keeps resend available", async () => {
+  mocks.resend.mockResolvedValueOnce({
+    ok: true,
+    value: { delivery: "failed" },
+  });
+  const user = userEvent.setup();
+  show();
+  await user.click(screen.getByRole("button", { name: "Resend" }));
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "now expires in seven days, but its email could not be sent",
+  );
+  expect(mocks.refresh).toHaveBeenCalledOnce();
+  expect(screen.getByRole("button", { name: "Resend" })).toBeEnabled();
+});
+it("allows cancelling invitation revocation without a write", async () => {
+  const user = userEvent.setup();
+  show();
+  await user.click(screen.getByRole("button", { name: "Revoke" }));
+  await user.click(screen.getByRole("button", { name: "Keep invitation" }));
+  expect(mocks.revoke).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "Confirm revoke" })).toBeNull();
 });

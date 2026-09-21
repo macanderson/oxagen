@@ -9,7 +9,7 @@ export const metadata: ToolMetadata = {
   description: revokeMemberInvite.description,
   annotations: {
     readOnlyHint: false,
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
   },
 };

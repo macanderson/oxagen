@@ -11,5 +11,11 @@ export const handler: CapabilityHandler<typeof resendMemberInvite> = async (
   if (!userId)
     throw new HandlerError({ code: "forbidden", reason: "no_principal" });
   await assertOrgRole({ ...ctx, userId }, { org: ["Owner", "Admin"] });
-  return manageInvitation("resend", input.invitationPublicId, ctx, userId);
+  const result = await manageInvitation(
+    "resend",
+    input.invitationPublicId,
+    ctx,
+    userId,
+  );
+  return { ...result, delivery: result.delivery ?? "failed" };
 };
