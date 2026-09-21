@@ -1,6 +1,8 @@
 #!/usr/bin/env tsx
 /**
  * Backfill Claude Code session telemetry into internal.claude_sessions.
+ * Omit the retired email field. Existing stores supply its empty-string default
+ * until the forward erasure migration removes it (#3072, ADR-084).
  *
  * Scans (project dir derived from this repo's absolute path):
  *   ~/.claude/projects/<project-slug>/*.jsonl       → parent sessions
@@ -201,7 +203,6 @@ export interface ClaudeSessionRow {
   message_id: string;
   request_id: string;
   parent_uuid: string;
-  user_email: string;
   model: string;
   version: string;
   entrypoint: string;
@@ -234,7 +235,6 @@ export interface ClaudeSessionRow {
 // ── File parsing ──────────────────────────────────────────────────────────────
 
 const NULL_UUID = "00000000-0000-0000-0000-000000000000";
-const USER_EMAIL = process.env["USER_EMAIL"] ?? "mac@macanderson.com";
 
 function extractText(content: string | ContentBlock[]): string {
   if (typeof content === "string") return content.slice(0, 1000);
@@ -336,7 +336,6 @@ async function parseFile(
       message_id: msg.id ?? "",
       request_id: entry.requestId ?? "",
       parent_uuid: entry.parentUuid ?? NULL_UUID,
-      user_email: USER_EMAIL,
       model: msg.model,
       version: entry.version ?? "",
       entrypoint: entry.entrypoint ?? "cli",
@@ -482,7 +481,10 @@ export interface ParseAllSummary {
  */
 export async function parseAllFiles(
   files: readonly FileRef[],
-  parse: (path: string, isSubagent: boolean) => Promise<ClaudeSessionRow[]>,
+  parse: (
+    path: string,
+    isSubagent: boolean,
+  ) => Promise<ClaudeSessionRow[]> = parseFile,
   write: (line: string) => void = (line) => process.stdout.write(line),
 ): Promise<ParseAllSummary> {
   const allRows: ClaudeSessionRow[] = [];
@@ -533,12 +535,7 @@ async function main(): Promise<void> {
     `Found ${files.length} JSONL files (top-level + subagents)\n\n`,
   );
 
-  const {
-    rows: allRows,
-    ok,
-    fail,
-    failures,
-  } = await parseAllFiles(files, parseFile);
+  const { rows: allRows, ok, fail, failures } = await parseAllFiles(files);
 
   if (failures.length > 0) {
     process.stdout.write("\nFailed files:\n");
