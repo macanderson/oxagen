@@ -83,6 +83,8 @@
           ],
           "additionalProperties": false
         },
+        "minItems": 1,
+        "maxItems": 200,
         "description": "The confirmed draft memories to persist (max 200 per call)"
       }
     },

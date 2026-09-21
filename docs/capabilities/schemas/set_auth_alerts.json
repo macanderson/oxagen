@@ -37,7 +37,8 @@
             "Compliance",
             "Billing"
           ]
-        }
+        },
+        "minItems": 1
       }
     },
     "required": [

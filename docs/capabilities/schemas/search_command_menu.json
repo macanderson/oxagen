@@ -111,7 +111,8 @@
             "href"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 8
       }
     },
     "required": [

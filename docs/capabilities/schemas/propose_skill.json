@@ -62,6 +62,7 @@
           ],
           "additionalProperties": false
         },
+        "maxItems": 16,
         "default": []
       },
       "rationale": {

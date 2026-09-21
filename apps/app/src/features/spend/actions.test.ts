@@ -34,6 +34,7 @@ const {
   exportStatementAction,
   recordFindingFixAction,
   setBudgetAction,
+  setPriceEntryAction,
 } = await import("./actions");
 
 const at = { org: "acme", ws: "core-platform" };
@@ -286,5 +287,35 @@ describe("dismissFindingAction", () => {
       { findingId: "fnd_01k5rtgh" },
       expect.objectContaining({ workspaceId: ctx.workspaceId }),
     );
+  });
+});
+
+describe("atomic price card action", () => {
+  const rate = {
+    provider: "anthropic",
+    model: "claude-sonnet-5",
+    modelAliases: "",
+    region: "",
+    tokenClass: "input_uncached",
+    usdPerMillion: "3",
+    effectiveFrom: "2026-10-01T00:00:00.000Z",
+  };
+  it("sends all validated classes through one kernel write", async () => {
+    invoke.mockResolvedValue({});
+    await setPriceEntryAction(at, rate, [
+      { ...rate, tokenClass: "output", usdPerMillion: "15" },
+    ]);
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke.mock.calls[0]?.[0]).toBe("set_price_entry");
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      additionalRates: [{ tokenClass: "output", usdPerMillion: 15 }],
+    });
+  });
+  it("refuses an invalid later class before writing the first", async () => {
+    const result = await setPriceEntryAction(at, rate, [
+      { ...rate, tokenClass: "output", usdPerMillion: "bad" },
+    ]);
+    expect(result.ok).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
   });
 });
