@@ -249,7 +249,7 @@ describe("toolDetail", () => {
 
   describe("create", () => {
     it("shows the file's first lines and counts them", () => {
-      const content = Array.from({ length: 50 }, (_, i) => `line ${i}`).join("\n");
+      const content = Array.from({ length: 50 }, (_, i) => `line ${String(i)}`).join("\n");
       const detail = toolDetail(
         "Write",
         body({ input: { file_path: "notes.json", content } }),
