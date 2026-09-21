@@ -33,6 +33,7 @@ const EXPECTED_PG_SCHEMAS = [
   "ratelimit",
   "schema_registry",
   "security",
+  "skills",
   "tacho",
   "tools",
   "workspace",
