@@ -28,6 +28,7 @@ import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
 
+import { accountOperations } from "./account-operations";
 import { recoveryCodeVault } from "./recovery-code-vault";
 import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
@@ -121,6 +122,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  accountOperations.resetForTests();
   recoveryCodeVault.resetForTests();
   nav.pathname = "/acme/core-platform";
   nav.query = "";
