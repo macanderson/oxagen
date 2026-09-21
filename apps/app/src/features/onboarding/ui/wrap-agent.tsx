@@ -1,8 +1,8 @@
 "use client";
 // Step 2 of Register an agent: wrap it. A hook-based harness enrols the machine
 // it runs on with a single-use token, which is shown once and consumed the
-// first time it is presented; every other harness is wrapped in the agent's own
-// process with the credential registration issued.
+// first time it is presented. Harnesses without an adapter show an unavailable
+// state and cannot advance through an installation this app cannot provide.
 //
 // Continuing moves the gate's step when this workspace is the gate's, so the
 // record follows the operator rather than a timer.
@@ -99,26 +99,16 @@ function HostPath({
   );
 }
 
-function SdkPath({ agentKey }: { agentKey: string | null }) {
+function UnavailablePath() {
   const t = useTranslations("onboarding.register.wrap");
   return (
     <section
-      data-testid="wrap-sdk"
+      data-testid="wrap-unavailable"
       className={`${panel} flex flex-col gap-3 p-4`}
     >
-      <h3 className="text-sm font-semibold">{t("sdk.title")}</h3>
+      <h3 className="text-sm font-semibold">{t("unavailable.title")}</h3>
       <p className="max-w-prose text-sm text-muted-foreground">
-        {t("sdk.body")}
-      </p>
-      <p className="text-sm text-muted-foreground">{t("sdk.install")}</p>
-      <code className={`${mono} block break-all rounded-md bg-muted px-2 py-1`}>
-        {`npm i @oxagen/sdk`}
-      </code>
-      <code className={`${mono} block break-all rounded-md bg-muted px-2 py-1`}>
-        {`oxagen.agent.wrap({ key: "${agentKey ?? ""}", token: process.env.OXAGEN_AGENT_TOKEN })`}
-      </code>
-      <p className="max-w-prose text-xs text-muted-foreground">
-        {t("sdk.credential")}
+        {t("unavailable.body")}
       </p>
     </section>
   );
@@ -128,7 +118,6 @@ export function WrapAgent({
   org,
   ws,
   agentId,
-  agentKey,
   harness,
   gated,
   back,
@@ -137,7 +126,6 @@ export function WrapAgent({
   org: string;
   ws: string;
   agentId: string;
-  agentKey: string | null;
   harness: Harness;
   /** True when this workspace carries the organization's open gate. */
   gated: boolean;
@@ -176,7 +164,7 @@ export function WrapAgent({
       {wrapPathOf(harness) === "host" ? (
         <HostPath org={org} ws={ws} agentId={agentId} />
       ) : (
-        <SdkPath agentKey={agentKey} />
+        <UnavailablePath />
       )}
       {failure === null ? null : (
         <FormAlert testId="advance-failure">{failure}</FormAlert>
@@ -185,14 +173,16 @@ export function WrapAgent({
         <SafeLink to={back} className={buttonSecondary}>
           {t("back")}
         </SafeLink>
-        <form onSubmit={(e) => void advance(e)}>
-          <SubmitButton
-            pending={pending}
-            label={t("continue")}
-            pendingLabel={t("advancing")}
-            fullWidth={false}
-          />
-        </form>
+        {wrapPathOf(harness) === "host" ? (
+          <form onSubmit={(e) => void advance(e)}>
+            <SubmitButton
+              pending={pending}
+              label={t("continue")}
+              pendingLabel={t("advancing")}
+              fullWidth={false}
+            />
+          </form>
+        ) : null}
       </div>
     </div>
   );

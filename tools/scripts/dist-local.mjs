@@ -107,9 +107,13 @@ function sha256(path) {
 
 // ── preflight ────────────────────────────────────────────────────────────────
 
+// Written, not printed with `-p`: `-p` runs the value through util.inspect,
+// which colours it whenever FORCE_COLOR is set, and "\x1b[33mtrue\x1b[39m"
+// is not "true". A shell that forces colour then failed this check on a node
+// that builds single executables perfectly well.
 const seaCapable = capture("node", [
-  "-p",
-  "process.config.variables.single_executable_application",
+  "-e",
+  "process.stdout.write(String(process.config.variables.single_executable_application))",
 ]);
 if (seaCapable !== "true") {
   console.error(

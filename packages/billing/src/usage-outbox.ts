@@ -25,7 +25,7 @@ export async function admitUsage(
 ): Promise<string> {
   assertUsageScope(orgId, workspaceId);
   const id = randomUUID();
-  // Billing state stays on the shared plane, including dedicated-plane tenants.
+  // tenancy: orgId and workspaceId match the verified active scope before shared-plane admission.
   await withSystemDb((tx) =>
     tx.insert(schema.usageOutbox).values({ id, orgId, workspaceId }),
   );
@@ -68,7 +68,7 @@ export async function finalizeUsage(args: {
     eq(schema.usageOutbox.orgId, args.row.org_id),
     eq(schema.usageOutbox.workspaceId, args.row.workspace_id),
   );
-  // Scope was verified above. Shared-plane lookups carry both tenant keys.
+  // tenancy: filtered by orgId and workspaceId after verified active tenant scope.
   await withSystemDb(async (tx) => {
     const [entry] = await tx
       .select()
@@ -86,6 +86,7 @@ export async function finalizeUsage(args: {
       })
       .where(predicate);
   });
+  // tenancy: filtered by orgId and workspaceId after verified active tenant scope.
   await withSystemDb(async (tx) => {
     const [entry] = await tx
       .select()
@@ -109,7 +110,7 @@ export async function deliverUsageOutbox(
 }> {
   let delivered = 0;
   let failed = 0;
-  // System access is required for the platform's cross-tenant delivery queue.
+  // tenancy: scheduled cross-tenant delivery reads bounded pending shared-plane admissions.
   const pending = await withSystemDb((tx) =>
     tx
       .select({ id: schema.usageOutbox.id })
@@ -126,6 +127,7 @@ export async function deliverUsageOutbox(
   );
   for (const { id } of pending) {
     try {
+      // tenancy: scheduled cross-tenant settlement locks the selected admission before mutation.
       await withSystemDb(async (tx) => {
         const [entry] = await tx
           .select()
@@ -155,6 +157,7 @@ export async function deliverUsageOutbox(
       failed++;
       // A failed debit or uncertain ClickHouse acknowledgment leaves the body.
       // No finite retry count discards usage. Each record has its own backoff.
+      // tenancy: scheduled cross-tenant retry updates only the selected undelivered admission.
       await withSystemDb((tx) =>
         tx
           .update(schema.usageOutbox)
@@ -175,6 +178,7 @@ export async function deliverUsageOutbox(
       );
     }
   }
+  // tenancy: scheduled cross-tenant reconciliation counts incomplete shared-plane admissions globally.
   const [unknown] = await withSystemDb((tx) =>
     tx
       .select({ count: sql<number>`count(*)::integer` })

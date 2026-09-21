@@ -69,8 +69,10 @@ import {
   type StepDigest,
   type StepNode,
   stepDigest,
+  toolExchange,
   type TranscriptStep,
   type TranscriptTurn,
+  visibleFrames,
 } from "./transcript-model";
 import { useRunStream } from "./use-run-stream";
 
@@ -163,11 +165,19 @@ function FrameHalf({
   body,
   label,
   seq,
+  text,
   org,
   ws,
   runId,
-}: { body: TranscriptBody; label: string; seq: string } & Place) {
+}: {
+  body: TranscriptBody;
+  label: string;
+  seq: string;
+  /** The text to draw in place of the body's own, when the body was read apart. */
+  text?: string;
+} & Place) {
   const t = useTranslations("run.transcript");
+  const shown = text ?? body.text;
   return (
     <div
       data-testid="transcript-half"
@@ -177,13 +187,13 @@ function FrameHalf({
       <span className="text-[10.5px] font-medium text-muted-foreground">
         {label}
       </span>
-      {body.text === null ? (
+      {shown === null ? (
         <p className="m-0 text-xs text-muted-foreground">
           {t(body.fidelity === "digest_only" ? "digestOnly" : "noBody")}
         </p>
       ) : (
         <pre className="m-0 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-card p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground">
-          {body.text}
+          {shown}
         </pre>
       )}
       {body.truncated ? (
@@ -232,6 +242,13 @@ function FrameDetail({
   // bodies. The bodies themselves are read by name.
   const headline = response ?? request;
   const neither = request === null && response === null;
+  // A wrapped session's tool receipt is one body holding the input and the
+  // output. Drawn as one "Returned" block it read as a JSON blob with the
+  // call's arguments buried inside; read apart, each half gets its own label.
+  const exchange =
+    frame.kind === "tool_call" && request === null && response?.text
+      ? toolExchange(response.text)
+      : null;
   return (
     <div
       data-testid="transcript-frame"
@@ -269,6 +286,23 @@ function FrameDetail({
           >
             {t("noHalves")}
           </p>
+        ) : exchange !== null && response !== null ? (
+          <>
+            <FrameHalf
+              body={response}
+              label={t("calledWith")}
+              seq={response.seq}
+              text={exchange.input}
+              {...place}
+            />
+            <FrameHalf
+              body={response}
+              label={t("response")}
+              seq={response.seq}
+              text={exchange.output}
+              {...place}
+            />
+          </>
         ) : (
           <>
             {request === null ? null : (
@@ -377,7 +411,15 @@ function StepRow({
                   {t("ms", { ms: formatCount(digest.durationMs, locale) })}
                 </Chip>
               )}
-              {step.frames.length > 1 ? (
+              {digest.repeats !== null ? (
+                <Chip>
+                  <span data-testid="step-repeats">
+                    {t("repeats", {
+                      count: formatCount(digest.repeats, locale),
+                    })}
+                  </span>
+                </Chip>
+              ) : step.frames.length > 1 ? (
                 <Chip>{t("frameCount", { count: step.frames.length })}</Chip>
               ) : null}
               {digest.cost === null ? null : (
@@ -392,7 +434,7 @@ function StepRow({
       {open ? (
         <div className="pr-3 pb-2.5">
           <div className="ml-0 overflow-hidden rounded-md border border-border bg-background md:ml-[76px]">
-            {step.frames.map((frame) => (
+            {visibleFrames(step).map((frame) => (
               <FrameDetail key={frame.seq} frame={frame} {...place} />
             ))}
           </div>

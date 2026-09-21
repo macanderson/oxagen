@@ -62,7 +62,10 @@ export type AuditEventsExportDeps = {
 
 type Column = (typeof AUDIT_EXPORT_COLUMNS)[number];
 
-function rowValues(orgId: string, e: AuditEvent): Record<Column, string> {
+function rowValues(
+  orgId: string,
+  e: AuditEvent,
+): Record<Column, string | AuditEvent["detail"]> {
   return {
     id: e.id,
     occurred_at: e.occurredAt,
@@ -75,6 +78,7 @@ function rowValues(orgId: string, e: AuditEvent): Record<Column, string> {
     ip: e.ip ?? "",
     user_agent: e.userAgent ?? "",
     request_id: e.requestId ?? "",
+    detail: e.detail ?? null,
   };
 }
 
@@ -107,7 +111,16 @@ export function serializeAuditExport(
     return rows.map((r) => `${JSON.stringify(r)}\n`).join("");
   }
   const lines = rows.map((r) =>
-    AUDIT_EXPORT_COLUMNS.map((c) => csvField(r[c])).join(","),
+    AUDIT_EXPORT_COLUMNS.map((c) => {
+      const value = r[c];
+      return csvField(
+        typeof value === "string"
+          ? value
+          : value == null
+            ? ""
+            : JSON.stringify(value),
+      );
+    }).join(","),
   );
   return `${[AUDIT_EXPORT_COLUMNS.join(","), ...lines].join("\r\n")}\r\n`;
 }

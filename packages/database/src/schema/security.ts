@@ -34,7 +34,7 @@ import {
 import { sql } from "drizzle-orm";
 import {
   SECURITY_EVENT_TYPES,
-  type ApprovalRuleInvalidationDetail,
+  type SecurityEventDetail,
   generateEventTypeCheckClause,
   generateOutcomeCheckClause,
 } from "@oxagen/compliance";
@@ -97,7 +97,7 @@ export const securityEvents = securitySchema.table(
     ip: text("ip"),
     userAgent: text("user_agent"),
     requestId: text("request_id"),
-    detail: jsonb("detail").$type<ApprovalRuleInvalidationDetail>(),
+    detail: jsonb("detail").$type<SecurityEventDetail>(),
   },
   (t) => ({
     // Composite PK: required by Postgres RANGE partitioning — partition key

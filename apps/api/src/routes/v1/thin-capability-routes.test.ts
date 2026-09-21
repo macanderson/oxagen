@@ -1523,7 +1523,7 @@ const ROUTES: ThinRoute[] = [
     route: costPriceEntryListRoute as unknown as Hono<never>,
     method: "POST",
     capability: costPriceEntryList.name,
-    body: { at: "2026-09-14T00:00:00.000Z" },
+    body: { at: "2026-09-14T00:00:00.000Z", includeScheduled: true },
     invalidBody: { at: "yesterday" },
     jsonGuard: true,
     status: 200,

@@ -70,12 +70,36 @@ describe("toAuditPage", () => {
           ip: "203.0.113.7",
           userAgent: "oxagen-cli/1.4.0",
           request: "req_01K5ABCDE",
+          detail: null,
         },
       ],
       hasMore: true,
       offset: 0,
       limit: 50,
     });
+  });
+
+  it("retains invalidation facts through the contract and view-model parse", () => {
+    const detail = {
+      ruleId: "rule_123",
+      reason: "tool_version_changed",
+      before: { tool: "v1" },
+      after: { tool: "v2" },
+    };
+    const view = AuditPage.parse(
+      toAuditPage(
+        page({
+          events: [
+            { ...denied, eventType: "approval_rule.invalidated", detail },
+          ],
+          total: 1,
+          hasMore: false,
+          limit: 50,
+          offset: 0,
+        }),
+      ),
+    );
+    expect(view.events[0]?.detail).toEqual(detail);
   });
 
   it("carries no database id onto the page (INV-11)", () => {
@@ -113,6 +137,7 @@ describe("toAuditPage", () => {
       ip: null,
       userAgent: null,
       request: null,
+      detail: null,
     });
     expect(view.offset).toBe(50);
   });

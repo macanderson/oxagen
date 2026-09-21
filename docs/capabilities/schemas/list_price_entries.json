@@ -5,7 +5,8 @@
   "mode": "sync",
   "surfaces": [
     "api",
-    "mcp"
+    "mcp",
+    "cli"
   ],
   "sensitivity": "low",
   "agent": null,
@@ -21,6 +22,9 @@
     "properties": {
       "at": {
         "type": "string"
+      },
+      "includeScheduled": {
+        "type": "boolean"
       }
     },
     "additionalProperties": false
@@ -40,6 +44,9 @@
             "id": {
               "type": "string",
               "format": "uuid"
+            },
+            "cancellationToken": {
+              "type": "string"
             },
             "orgId": {
               "anyOf": [

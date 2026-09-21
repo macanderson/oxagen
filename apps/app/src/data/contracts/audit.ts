@@ -67,6 +67,7 @@ const AuditEvent = z.object({
   ip: z.string().nullable(),
   userAgent: z.string().nullable(),
   request: z.string().nullable(),
+  detail: z.record(z.string(), z.unknown()).nullish(),
 });
 export type AuditEvent = z.infer<typeof AuditEvent>;
 
