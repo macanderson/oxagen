@@ -145,7 +145,7 @@ describe("InvitationBody", () => {
     expect(
       screen.getByRole("link", { name: "Create an account" }),
     ).toHaveAttribute("href", "/signup?next=%2Finvite%2Finvi_1");
-    expect(screen.getByText("2026-09-18")).toBeInTheDocument();
+    expect(screen.getByText("Sep 18, 2026")).toBeInTheDocument();
   });
 
   it("wrong account and closed", async () => {
