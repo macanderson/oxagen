@@ -1,4 +1,4 @@
-# issue_run_token
+# create_run_token
 
 **Surfaces:** api
 

@@ -232,7 +232,7 @@ proxy has a home.
 ## Implementation 2026-09-20: ledger ingress cancellation
 
 The ledger boundary now accepts credentials scoped to an existing attempt.
-`issue_run_token` requires an operator role and refuses ended or cancelled
+`create_run_token` requires an operator role and refuses ended or cancelled
 runs. `ingest_run_frames` derives identity from the credential and refreshes
 its fifteen-minute expiry inside the append transaction. It keeps the same
 secret so a lost response remains retryable. Only its hash is stored.

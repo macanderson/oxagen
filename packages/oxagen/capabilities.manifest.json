@@ -4579,7 +4579,7 @@
       }
     },
     {
-      "name": "issue_run_token",
+      "name": "create_run_token",
       "file": "run.token.issue.ts",
       "domain": "run",
       "mode": "sync",

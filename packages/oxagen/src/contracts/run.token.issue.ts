@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const runTokenIssue = registerCapability({
-  name: "issue_run_token",
+  name: "create_run_token",
   domain: "run",
   description:
     "Issue a fifteen-minute evidence credential for one existing run attempt.",

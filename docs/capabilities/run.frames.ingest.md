@@ -3,7 +3,7 @@
 **Surfaces:** api
 
 `POST /v1/run-ingest` accepts evidence from a credential issued by
-`issue_run_token`. The bearer credential supplies the tenant and attempt.
+`create_run_token`. The bearer credential supplies the tenant and attempt.
 The request cannot supply an organization, workspace, run, or attempt id.
 
 The strict input contains 1 to 200 `events`. Each carries `attemptSeq`,

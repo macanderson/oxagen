@@ -303,7 +303,7 @@ describe("a ledger run credential", () => {
       }),
     ).toBeUndefined();
     for (const capabilityName of [
-      "issue_run_token",
+      "create_run_token",
       "dispatch_command",
       "get_run_proof",
       "set_model_credential",
