@@ -137,7 +137,7 @@ export const RunMachine = z.object({
       platform: z.string().nullable(),
       osVersion: z.string().nullable(),
       arch: z.string().nullable(),
-      recordedAt: z.string().datetime(),
+      recordedAt: z.iso.datetime(),
       eventHash: z.string(),
     })
     .optional(),
