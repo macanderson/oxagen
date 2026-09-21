@@ -921,11 +921,11 @@
     "set_price_entry": {
       "route": "/[org]/[ws]/spend?tab=pricing",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
-      "entry": "Spend › Pricing › “Set a negotiated rate” — the rate-card dialog, one set_price_entry call per token class (features/spend/price-dialog.tsx, features/spend/actions.ts)",
+      "entry": "Spend › Pricing › Set a negotiated rate: one set_price_entry call per atomic model card (features/spend/price-dialog.tsx, features/spend/actions.ts)",
       "testid": "spend-price-open",
-      "proof": "apps/app/src/features/spend/price-actions.test.ts",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session-cost-price-book-autoseed"
+      "proof": "apps/app/src/features/spend/price-dialog.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "kernel-fixes-atomic-price-card"
     },
     "set_role_grants": {
       "route": "/[org]/roles",

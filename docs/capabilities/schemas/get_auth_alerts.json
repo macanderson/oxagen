@@ -45,6 +45,7 @@
             "Billing"
           ]
         },
+        "minItems": 1,
         "description": "Org roles that receive MCP auth alerts"
       },
       "isDefault": {

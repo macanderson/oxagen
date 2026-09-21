@@ -290,3 +290,34 @@ describe("atomic price card", () => {
     },
   );
 });
+
+it("shows an additional class's superseded row when the primary class is new", async () => {
+  apiPostOrThrow.mockResolvedValue({
+    entry: row(),
+    closed: null,
+    additionalEntries: [
+      {
+        entry: row({ tokenClass: "output", microsPerMillion: "15000000" }),
+        closed: row({
+          id: "old-output",
+          tokenClass: "output",
+          microsPerMillion: "20000000",
+          effectiveTo: "2026-10-01T00:00:00.000Z",
+        }),
+      },
+    ],
+  });
+  const c = captureWriter();
+  await priceSet(
+    {
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      tokenClass: "input_uncached",
+      usdPerMillion: "3",
+      additionalRate: ["output=15"],
+    },
+    c.writer,
+  );
+  expect(c.output()).toContain("$20");
+  expect(c.output()).toContain("Previous output rate closed at 2026-10-01");
+});

@@ -252,18 +252,21 @@ export async function priceSet(
     `✓ negotiated ${result.entry.model} ${result.entry.tokenClass} at ${formatPerMillion(result.entry)} per 1M, effective ${result.entry.effectiveFrom}.`,
   );
   writer.write("");
+  const closed = [
+    result.closed,
+    ...(result.additionalEntries ?? []).map((write) => write.closed),
+  ].filter((entry): entry is PriceEntryRow => entry !== null);
   renderEntries(
     [
       result.entry,
       ...(result.additionalEntries ?? []).map((write) => write.entry),
-      ...(result.closed ? [result.closed] : []),
+      ...closed,
     ],
     writer,
   );
-  if (result.closed) {
-    writer.write("");
+  for (const entry of closed) {
     writer.write(
-      `  The previous rate is closed at ${result.closed.effectiveTo}, not overwritten: a run priced before then keeps the entry it used.`,
+      `  Previous ${entry.tokenClass} rate closed at ${entry.effectiveTo}. Earlier runs keep that rate.`,
     );
   }
 }

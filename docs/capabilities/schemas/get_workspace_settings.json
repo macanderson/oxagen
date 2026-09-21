@@ -68,7 +68,8 @@
               "Compliance",
               "Billing"
             ]
-          }
+          },
+          "minItems": 1
         }
       },
       "steering": {
