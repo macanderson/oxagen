@@ -54,7 +54,9 @@
             "model"
           ],
           "additionalProperties": false
-        }
+        },
+        "minItems": 1,
+        "maxItems": 64
       },
       "validityDays": {
         "type": "integer",

@@ -290,7 +290,8 @@
                 "counterfactual"
               ],
               "additionalProperties": false
-            }
+            },
+            "maxItems": 10
           }
         },
         "required": [

@@ -1019,11 +1019,11 @@ export async function enrollLocked(
     const cursorFacts = deps.cursor();
     if (cursorFacts.path === undefined)
       warnings.push(
-        "Cursor's `agent` CLI is not on PATH. The hooks still govern the Cursor editor, which reads the same file; no primary source documents where the GUI installs, so this machine cannot be probed for it",
+        "Cursor's `cursor-agent` alias is not on PATH. The hooks still govern the Cursor editor, which reads the same file; no primary source documents where the GUI installs, so this machine cannot be probed for it",
       );
     else
       deps.out(
-        `      agent ${cursorFacts.version ?? "?"} at ${cursorFacts.path}`,
+        `      cursor-agent ${cursorFacts.version ?? "?"} at ${cursorFacts.path}`,
       );
   }
   if (harnesses.includes("stella")) {
