@@ -105,7 +105,7 @@ describe("skill configuration versions", () => {
       configuration.draftText,
     );
     expect(
-      screen.getByRole("button", { name: "Open configuration PR" }),
+      await screen.findByRole("button", { name: "Open configuration PR" }),
     ).toBeEnabled();
     expect(refresh).not.toHaveBeenCalled();
   });
