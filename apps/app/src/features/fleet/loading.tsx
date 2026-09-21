@@ -5,8 +5,10 @@
 // place. The same reasoning as the Run page's `RunLoading`.
 //
 // Next replaces page.tsx's whole return value with this default export while
-// the route segment suspends, `<main id="main">` and the page header
-// included, so this reproduces both.
+// the route segment suspends, the page header included, so this reproduces
+// it. The landmark carries no `id`: while the page streams in, React holds
+// the resolved page hidden beside this fallback, and two `main#main` in one
+// document is what the page-load check refused.
 import { useTranslations } from "next-intl";
 import { panel, statStrip, statTile } from "@/ui/control-styles";
 import { PageHeader } from "@/ui/page-header";
@@ -22,7 +24,7 @@ export function FleetLoading() {
   const t = useTranslations();
   return (
     <main
-      id="main"
+      aria-busy="true"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
       <PageHeader title={t("pages.fleet")} />

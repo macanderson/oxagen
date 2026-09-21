@@ -231,16 +231,15 @@ export function toolExchange(
 function readable(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    const streams = value as Record<string, unknown>;
-    const out = streams["stdout"];
-    const err = streams["stderr"];
+    const out = "stdout" in value ? value.stdout : undefined;
+    const err = "stderr" in value ? value.stderr : undefined;
     const parts = [
       typeof out === "string" && out.length > 0 ? out : null,
       typeof err === "string" && err.length > 0 ? err : null,
     ].filter((part): part is string => part !== null);
     if (parts.length > 0) return parts.join("\n");
   }
-  return JSON.stringify(value, null, 2) ?? String(value);
+  return JSON.stringify(value, null, 2);
 }
 
 function stepsOf(
