@@ -186,7 +186,7 @@ export async function readModelCallFrames(args: {
           cache_write_tokens   AS cache_write_5m,
           output_tokens        AS output,
           cost_usd_micros      AS cost_micros
-        FROM token_usage
+        FROM metered_token_usage
         WHERE org_id = {orgId:UUID}
           AND execution_step_id = {runId:UUID}
         ORDER BY created_at
@@ -646,7 +646,7 @@ export async function readObservedModels(args: {
           )                                   AS tokens,
           min(toDateTime64(created_at, 3, 'UTC')) AS first_seen,
           max(toDateTime64(created_at, 3, 'UTC')) AS last_seen
-        FROM token_usage
+        FROM metered_token_usage
         WHERE org_id = {orgId:UUID}
           AND created_at >= {since:DateTime64(3)}
           ${until.replace("{col}", "created_at")}
@@ -727,7 +727,7 @@ export async function readObservedModels(args: {
           toInt64(coalesce(output_tokens, 0))                          AS output,
           toInt64(0)                                                   AS reasoning,
           toDateTime64(created_at, 3, 'UTC')                           AS ts
-        FROM token_usage
+        FROM metered_token_usage
         WHERE org_id = {orgId:UUID}
           AND created_at >= {since:DateTime64(3)}
           ${until.replace("{col}", "created_at")}

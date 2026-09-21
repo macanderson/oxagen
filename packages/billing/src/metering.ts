@@ -1,6 +1,11 @@
+import type { Tx } from "@oxagen/database";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
-import { consumeCredits, effectiveBalance } from "./credits";
+import {
+  consumeCredits,
+  effectiveBalance,
+  type ConsumeCreditsArgs,
+} from "./credits";
 import { CREDIT_REASONS, type CreditReason } from "./constants";
 import { getOrgBillingSettings } from "./billing-settings";
 import {
@@ -338,23 +343,26 @@ export interface ChargeUsageResult {
  */
 export const ASSISTANT_TOKEN_MARKUP = 1;
 
-async function chargeCostUsd(params: {
-  orgId: string;
-  model: string;
-  costUsd: number;
-  referenceId?: string;
-  markup?: number;
-  /** True when the rate came from the fallback because no card row matched. */
-  rateCardMiss?: boolean;
-  /**
-   * Ledger reason. Required, not defaulted: the old default was
-   * `consume_token_overage`, which ADR-052 retired and ADR-053 says must not be
-   * repurposed — and the assistant spend cap sums `consume_assistant_tokens`
-   * alone, so a defaulted debit was invisible to the cap meant to bound it.
-   */
-  reason: CreditReason;
-  logFields?: Record<string, unknown>;
-}): Promise<ChargeUsageResult> {
+async function chargeCostUsd(
+  params: {
+    orgId: string;
+    model: string;
+    costUsd: number;
+    referenceId?: string;
+    markup?: number;
+    /** True when the rate came from the fallback because no card row matched. */
+    rateCardMiss?: boolean;
+    /**
+     * Ledger reason. Required, not defaulted: the old default was
+     * `consume_token_overage`, which ADR-052 retired and ADR-053 says must not be
+     * repurposed — and the assistant spend cap sums `consume_assistant_tokens`
+     * alone, so a defaulted debit was invisible to the cap meant to bound it.
+     */
+    reason: CreditReason;
+    logFields?: Record<string, unknown>;
+  },
+  transaction?: Tx,
+): Promise<ChargeUsageResult> {
   const start = Date.now();
   const costUsdMicros = Math.round(params.costUsd * 1_000_000);
   const rateCardMiss = params.rateCardMiss ?? false;
@@ -422,14 +430,16 @@ async function chargeCostUsd(params: {
     };
   }
 
-  const { chargedCents, shortfallCents, carryMicroCents } =
-    await consumeCredits({
-      orgId: params.orgId,
-      requestedMicroCents: microCredits,
-      reason: params.reason,
-      referenceType: "token_usage",
-      referenceId: params.referenceId,
-    });
+  const consume = transaction
+    ? (args: ConsumeCreditsArgs) => consumeCredits(args, transaction)
+    : consumeCredits;
+  const { chargedCents, shortfallCents, carryMicroCents } = await consume({
+    orgId: params.orgId,
+    requestedMicroCents: microCredits,
+    reason: params.reason,
+    referenceType: "token_usage",
+    referenceId: params.referenceId,
+  });
   // What this call actually owed in whole credits, after the carry: the debit
   // plus anything the balance could not cover.
   const creditsMetered = chargedCents + shortfallCents;
@@ -462,6 +472,8 @@ async function chargeCostUsd(params: {
 }
 
 export interface ChargeUsageArgs extends TokenUsageInput {
+  /** Frozen provider cost for a durable settlement retry. */
+  costUsd?: number;
   orgId: string;
   /** Correlation id — the execution step / message id that drove the call. */
   referenceId?: string;
@@ -475,26 +487,43 @@ export interface ChargeUsageArgs extends TokenUsageInput {
   reason: CreditReason;
 }
 
+/** Freeze pricing before queuing a debit so retries cannot pick up new terms. */
+export function snapshotUsageCharge(args: ChargeUsageArgs): ChargeUsageArgs {
+  return {
+    ...args,
+    costUsd: args.costUsd ?? providerCostUsd(args, args.rateCard),
+    markup:
+      args.markup ??
+      (args.reason === CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS
+        ? ASSISTANT_TOKEN_MARKUP
+        : resolveMeterMarkup()),
+  };
+}
+
 /** Charge an org for one metered TEXT (token) call. */
 export async function chargeUsageCredits(
   args: ChargeUsageArgs,
+  transaction?: Tx,
 ): Promise<ChargeUsageResult> {
-  return chargeCostUsd({
-    orgId: args.orgId,
-    model: args.model,
-    costUsd: providerCostUsd(args, args.rateCard),
-    referenceId: args.referenceId,
-    markup: args.markup,
-    reason: args.reason,
-    rateCardMiss:
-      resolveRateEntry(args.model, args.rateCard).matchedKey === null,
-    logFields: {
-      inputTokens: args.inputTokens,
-      outputTokens: args.outputTokens,
-      cachedTokens: args.cachedTokens ?? 0,
-      cacheWriteTokens: args.cacheWriteTokens ?? 0,
+  return chargeCostUsd(
+    {
+      orgId: args.orgId,
+      model: args.model,
+      costUsd: args.costUsd ?? providerCostUsd(args, args.rateCard),
+      referenceId: args.referenceId,
+      markup: args.markup,
+      reason: args.reason,
+      rateCardMiss:
+        resolveRateEntry(args.model, args.rateCard).matchedKey === null,
+      logFields: {
+        inputTokens: args.inputTokens,
+        outputTokens: args.outputTokens,
+        cachedTokens: args.cachedTokens ?? 0,
+        cacheWriteTokens: args.cacheWriteTokens ?? 0,
+      },
     },
-  });
+    transaction,
+  );
 }
 
 /**

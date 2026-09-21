@@ -25,6 +25,7 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     operatorKind: "human",
     operatorName: "Marcus Bell",
     status: "live",
+    outcome: "running",
     turns: 34,
     steps: 271,
     frames: 1204,

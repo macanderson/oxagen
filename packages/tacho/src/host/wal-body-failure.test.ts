@@ -144,6 +144,7 @@ describe("WAL body failure isolation", () => {
         commands: [],
       },
     });
+    let now = 0;
     const shipper = new Shipper({
       wal,
       client: { ingest } as unknown as ControlClient,
@@ -156,10 +157,16 @@ describe("WAL body failure isolation", () => {
         proven: true,
       }),
       log: () => {},
-      now: () => 0,
+      now: () => now,
     });
     fault.bodyReadFailure = true;
-    await expect(shipper.drain()).rejects.toMatchObject({ code: "EIO" });
+    await expect(shipper.drain()).resolves.toMatchObject({
+      shipped: 0,
+      quarantined: 0,
+    });
+    expect(shipper.lastError).toBe("body read interrupted");
+    expect(shipper.ready()).toBe(false);
+    await shipper.drain();
     expect(fault.bodyReads).toBe(2);
     expect(ingest).not.toHaveBeenCalled();
     expect(markShipped).not.toHaveBeenCalled();
@@ -170,6 +177,7 @@ describe("WAL body failure isolation", () => {
       code: "EIO",
     });
     fault.bodyReadFailure = false;
+    now = 2_000;
     await expect(shipper.drain()).resolves.toMatchObject({
       shipped: session.length,
       quarantined: 1,

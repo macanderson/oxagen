@@ -33,6 +33,7 @@ mocks.writeCache.mockResolvedValue(undefined);
 
 vi.mock("ai", () => ({ generateObject: mocks.generateObject }));
 vi.mock("@oxagen/telemetry", () => ({
+  stampTokenUsage: (rows: unknown[]) => rows,
   hashPrompt: mocks.hashPrompt,
   insertTokenUsage: mocks.insertTokenUsage,
   providerFromModelId: mocks.providerFromModelId,
@@ -40,6 +41,13 @@ vi.mock("@oxagen/telemetry", () => ({
 vi.mock("@oxagen/billing", () => ({
   providerCostUsdMicros: mocks.providerCostUsdMicros,
   chargeUsageCredits: mocks.chargeUsageCredits,
+  admitUsage: vi.fn(async () => "00000000-0000-4000-8000-000000000099"),
+  finalizeUsage: vi.fn(
+    async ({ row, charge }: { row: unknown; charge?: unknown }) => {
+      await mocks.insertTokenUsage([row]);
+      if (charge) await mocks.chargeUsageCredits(charge);
+    },
+  ),
   recordSpend: mocks.recordSpend,
   // The module under test names a reason constant; the factory must carry it.
   CREDIT_REASONS: { CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens" },
