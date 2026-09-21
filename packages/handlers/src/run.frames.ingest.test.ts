@@ -5,7 +5,16 @@ import type { RunStoreOptions } from "@oxagen/run-ledger";
 import { runFramesIngest } from "@oxagen/oxagen/contracts/run.frames.ingest";
 import { makeCTX } from "./test-utils/fixtures";
 
-const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn(), store: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  withTenantDb: vi.fn(),
+  store: vi.fn(),
+  role: vi.fn(),
+  actor: vi.fn(),
+}));
+vi.mock("@oxagen/iam/org-role", () => ({
+  assertOrgRole: mocks.role,
+  resolveActingUserId: mocks.actor,
+}));
 vi.mock("@oxagen/database", async (original) => ({
   ...(await original<typeof import("@oxagen/database")>()),
   withTenantDb: mocks.withTenantDb,
@@ -80,6 +89,8 @@ const tx = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.role.mockResolvedValue(undefined);
+  mocks.actor.mockResolvedValue("issuer");
   predicates = [];
   locks = [];
   writes = [];
@@ -105,6 +116,14 @@ beforeEach(() => {
 });
 
 describe("run credential ingress", () => {
+  it("refuses ingress when the credential issuer no longer has a permitted role", async () => {
+    mocks.role.mockRejectedValueOnce(new Error("org_role_required"));
+    await expect(runFramesIngestHandler(input, ctx)).rejects.toThrow(
+      "org_role_required",
+    );
+    expect(mocks.store).not.toHaveBeenCalled();
+    expect(writes).toEqual([]);
+  });
   it("derives the attempt from the credential and refreshes under a locked recheck", async () => {
     const before = Date.now();
     const result = await runFramesIngestHandler(input, ctx);

@@ -4482,13 +4482,17 @@
     {
       "name": "ingest_run_frames",
       "file": "run.frames.ingest.ts",
-      "domain": "unknown",
+      "domain": "run",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
-      "layers": {}
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": false,
+        "docs": true
+      }
     },
     {
       "name": "get_run",
@@ -4577,13 +4581,17 @@
     {
       "name": "issue_run_token",
       "file": "run.token.issue.ts",
-      "domain": "unknown",
+      "domain": "run",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
-      "layers": {}
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": false,
+        "docs": true
+      }
     },
     {
       "name": "get_run_transcript",

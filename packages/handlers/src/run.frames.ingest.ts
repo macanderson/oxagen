@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { runFramesIngest } from "@oxagen/oxagen/contracts/run.frames.ingest";
@@ -15,6 +16,10 @@ export const runFramesIngestHandler: CapabilityHandler<
   const scope = runScope(ctx);
   const token = await withTenantDb((tx) =>
     readRunToken(tx, scope, apiKeyId, new Date()),
+  );
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
   );
   let expiresAt: Date | undefined;
   const store = createPostgresRunStore({
