@@ -74,7 +74,7 @@ function prBody(args: {
       : `Replaces \`${args.name}\` ${args.replaces} with ${args.version}.`,
     "",
     args.origin === "describe"
-      ? "Drafted in the Oxagen skill wizard from a description, and edited by the person who opened this pull request."
+      ? "Drafted in the Oxagen skill wizard from a description, and submitted after review in the editor."
       : "Read out of an uploaded bundle in the Oxagen skill wizard.",
     "",
     `- Submitted digest: \`${args.digest}\`. The checks cover these submitted bytes. Later pushes require a new review.`,
@@ -87,7 +87,7 @@ function prBody(args: {
   if (args.rationale?.trim()) {
     lines.push(
       "",
-      "What the author asked for:",
+      "Submission rationale:",
       "",
       `> ${args.rationale.trim().replace(/\n/g, "\n> ")}`,
     );

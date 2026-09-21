@@ -113,12 +113,12 @@ function prBody(args: {
   const lines = [
     `Adds the agent \`${args.slug}\`, written for ${args.harness}.`,
     "",
-    "Drafted in the Oxagen agent wizard from a description, and edited by the person who opened this pull request.",
+    "Drafted in the Oxagen agent wizard from a description, and submitted after review in the editor.",
     "",
     args.agentKey === null
       ? "- After merge, register this agent under the same slug to create its identity and credential."
       : `- After merge, register \`${args.agentKey}\` under the same slug to create its identity and credential.`,
-    `- Definition digest at open: \`${args.digest}\`.`,
+    `- Submitted digest: \`${args.digest}\`.`,
     "- `tools` is a request, not a grant. What the agent can reach is that list intersected with the roles it holds and with the grants of the person it acts for.",
     ...(SUBAGENT_FILE_HARNESSES.includes(args.harness)
       ? [
@@ -132,7 +132,7 @@ function prBody(args: {
   if (args.rationale?.trim()) {
     lines.push(
       "",
-      "What the author asked for:",
+      "Submission rationale:",
       "",
       `> ${args.rationale.trim().replace(/\n/g, "\n> ")}`,
     );
