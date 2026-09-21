@@ -500,6 +500,8 @@ describe("tachod", () => {
     ).toBe(200);
 
     await handle.tick();
+    // The final Git read seals after shipping. Its terminal frames ship next tick.
+    await handle.tick();
     expect(plane.ingested.length).toBeGreaterThan(20);
     const bySession = new Map<string, TachoEvent[]>();
     for (const event of plane.ingested)

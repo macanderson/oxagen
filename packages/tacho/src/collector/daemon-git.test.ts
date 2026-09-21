@@ -370,6 +370,9 @@ describe("the daemon's git seam", () => {
       .filter((session) => session.harnessSessionId === SESSION);
     expect(sessions).toHaveLength(2);
     expect(
+      new Set(sessions.map((session) => session.recorder.sessionUuid)).size,
+    ).toBe(2);
+    expect(
       sessions.find((session) => session.harness === "codex")?.sealed,
     ).toBe(true);
     expect(
