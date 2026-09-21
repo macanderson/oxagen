@@ -26,7 +26,14 @@ describe.each([
 ] as const)("%s MCP adapter", (name, tool, metadata, status) => {
   const args = { invitationPublicId: "invi_test" };
   it("dispatches through the authenticated kernel context", async () => {
-    const output = { ...args, status, expiresAt: null };
+    const output = {
+      ...args,
+      status,
+      expiresAt: null,
+      ...(name === "resend_member_invite"
+        ? { delivery: "accepted" as const }
+        : {}),
+    };
     mocks.invoke.mockResolvedValue(output);
     expect(await tool(args)).toEqual(output);
     expect(metadata.name).toBe(name);

@@ -659,7 +659,14 @@ describe.each([
 ] as const)("%s invitation action", (name, action, status) => {
   const invitationPublicId = "invi_4n5p6q7r8s9t0v1w2x3y4z";
   it("uses the organization viewer and validates the kernel result", async () => {
-    const value = { invitationPublicId, status, expiresAt: null };
+    const value = {
+      invitationPublicId,
+      status,
+      expiresAt: null,
+      ...(name === "resend_member_invite"
+        ? { delivery: "accepted" as const }
+        : {}),
+    };
     invoke.mockResolvedValue(value);
     expect(await action("acme", invitationPublicId)).toEqual({
       ok: true,
