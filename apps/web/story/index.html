@@ -213,6 +213,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
 .compare { display: grid; gap: 34px; }
 .compare h3 { font-family: var(--font-display); font-size: 19px; font-weight: 600; margin: 0 0 4px; color: var(--fg); }
 .compare h3 + p { margin: 0 0 14px; color: var(--muted); font-size: 14.5px; max-width: 78ch; }
+.compare p.muted { margin: 12px 0 0; }
 .srcs { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--dim); max-width: 84ch; }
 .srcs a { color: var(--muted); }
 .srcs a:hover { color: var(--accent-text); }
@@ -328,7 +329,8 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
           </div>
         </div>
         <p class="muted">That is 235,700 source lines added a week and 92,300 removed, leaving 2,376,660 net. Counting every file he touched, including generated output, the totals are 19,036,241 added and 16,999,466 removed. The largest single file change added 2,000 lines or more only 27 times across 19,223 distinct files, so the totals come from steady churn rather than from a handful of dumps.</p>
-        <p class="muted"><strong>This row has no baseline, and that is the finding.</strong> Nothing credible publishes lines of code added per developer per day. The figures in circulation are one developer measuring their own repository, or one project's whole effort divided by the lines it shipped, which charges design and testing hours to code. The large modern code datasets measure what share of new code gets rewritten, not how many lines a person writes. So the two numbers above stand alone. They show scale. They do not show rank.</p>
+        <p class="muted"><strong>There is a baseline here, and it is not an added-only one.</strong> No credible source publishes lines added per developer separately from lines removed. The same Google study does publish change size: the median change modifies 24 lines. A median developer landing 3 changes a week therefore touches about 72 lines a week. That figure multiplies two medians, so read it as an order of magnitude and not as a statistic. The real mean sits above it, because a tenth of Google's changes modify one single line and the distribution runs long to the right. He changed about 328,000 source lines a week. The ratio runs into the thousands, and no exact multiple is worth quoting, because the two figures count different things.</p>
+<p class="muted">One line in that study's method matters more than its numbers. Google filtered out changes made by automated processes before counting anything. The baseline is what people wrote by hand. The number above it is what a fleet of agents wrote.</p>
 
       </div>
 
@@ -337,7 +339,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
       <div>
         <h3>Sources</h3>
         <ul class="srcs">
-          <li>Caitlin Sadowski, Emma Söderberg, Luke Church, Michal Sipko, and Alberto Bacchelli, &ldquo;Modern Code Review: A Case Study at Google,&rdquo; ICSE Software Engineering in Practice, 2018. About 9 million reviewed changes, January 2014 to July 2016. The median developer authors about 3 changes a week and 80 percent author fewer than 7. <a href="https://sback.it/publications/icse2018seip.pdf" rel="nofollow">sback.it/publications/icse2018seip.pdf</a></li>
+          <li>Caitlin Sadowski, Emma Söderberg, Luke Church, Michal Sipko, and Alberto Bacchelli, &ldquo;Modern Code Review: A Case Study at Google,&rdquo; ICSE Software Engineering in Practice, 2018. About 9 million reviewed changes by more than 25,000 authors and reviewers, January 2014 to July 2016, with changes made by automated processes filtered out. The median developer authors about 3 changes a week, 80 percent author fewer than 7, and the median change modifies 24 lines. <a href="https://sback.it/publications/icse2018seip.pdf" rel="nofollow">sback.it/publications/icse2018seip.pdf</a></li>
           <li>DX, &ldquo;Engineering Benchmarks,&rdquo; the diffs-per-engineer measure, defined as pull requests merged each week per engineer. Technology companies under 100 engineers: 3.8 at the median, 5.53 at the 90th percentile. DX does not disclose the sample size. <a href="https://getdx.com/research/benchmarks/" rel="nofollow">getdx.com/research/benchmarks</a></li>
           <li>His own numbers come from the git history of 13 local clones, counting the default branch only and deduplicating by commit hash. A rebased branch repeats its commits under a different hash, so counting every branch would have inflated the total by nearly half.</li>
         </ul>
