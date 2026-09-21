@@ -50,6 +50,7 @@ export function toSpendReport(
       ...toFigure(row),
       key: row.key,
       provider: row.provider,
+      operator: row.operator,
     })),
   };
 }

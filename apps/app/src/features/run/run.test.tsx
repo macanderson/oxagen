@@ -14,6 +14,7 @@ import {
   screen,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -204,7 +205,12 @@ describe("header", () => {
     });
     const facts = within(screen.getByTestId("run-facts"));
     expect(facts.getByText("Marcus Bell")).toBeTruthy();
-    expect(facts.getByText("prn_marcusbell")).toBeTruthy();
+    // The id is a key, not a label: it is in the hover card, never in the fact.
+    expect(facts.queryByText("prn_marcusbell")).toBeNull();
+    await userEvent.hover(facts.getByTestId("operator"));
+    expect(facts.getByTestId("operator-card")).toHaveTextContent(
+      "prn_marcusbell",
+    );
     expect(facts.getByText("claude-sonnet-5")).toBeTruthy();
     expect(facts.getByText("anthropic \u00b7 sonnet")).toBeTruthy();
     expect(facts.getByText("mac-studio.local")).toBeTruthy();

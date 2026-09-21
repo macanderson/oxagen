@@ -28,6 +28,17 @@
       },
       "lineage": "Lineage"
     },
+    "operator": {
+      "unnamed": "Unnamed operator",
+      "unknown": "Operator",
+      "kind": {
+        "agent": "Agent",
+        "service": "Service"
+      },
+      "role": "Role",
+      "noRole": "No role in this scope",
+      "id": "Id"
+    },
     "runStatus": {
       "live": "live",
       "running": "running",
