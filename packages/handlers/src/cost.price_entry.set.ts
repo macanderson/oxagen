@@ -19,6 +19,7 @@ import {
 } from "@oxagen/oxagen/contracts/cost.price_entry.set";
 import {
   setNegotiatedPriceEntry,
+  setNegotiatedPriceCard,
   usdPerMillionToMicros,
   type NegotiatedPriceWrite,
   type SetNegotiatedPriceEntryArgs,
@@ -31,6 +32,7 @@ import { logger } from "./logger";
 import { toPriceEntryDto } from "./lib/price-entry-dto";
 
 export type PriceEntrySetDeps = {
+  setNegotiatedPriceCard?: typeof setNegotiatedPriceCard;
   setNegotiatedPriceEntry: (
     args: SetNegotiatedPriceEntryArgs,
   ) => Promise<NegotiatedPriceWrite>;
@@ -116,7 +118,7 @@ export function createPriceEntrySetHandler(
 
     // The customer states the contracted price the way the contract reads it
     // — USD per one million units — and the store records integer micro-USD.
-    const written = await deps.setNegotiatedPriceEntry({
+    const args: SetNegotiatedPriceEntryArgs = {
       orgId: ctx.orgId,
       provider: input.provider,
       model: input.model,
@@ -133,7 +135,28 @@ export function createPriceEntrySetHandler(
       modelAliases: input.modelAliases,
       microsPerMillion: usdPerMillionToMicros(input.usdPerMillion),
       effectiveFrom,
-    });
+    };
+    const rates = [
+      { tokenClass: input.tokenClass, microsPerMillion: args.microsPerMillion },
+      ...(input.additionalRates ?? []).map((rate) => ({
+        tokenClass: rate.tokenClass,
+        microsPerMillion: usdPerMillionToMicros(rate.usdPerMillion),
+      })),
+    ];
+    if (new Set(rates.map((rate) => rate.tokenClass)).size !== rates.length) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "duplicate_price_class",
+      });
+    }
+    const writes = input.additionalRates
+      ? await (deps.setNegotiatedPriceCard ?? setNegotiatedPriceCard)({
+          ...args,
+          rates,
+        })
+      : [await deps.setNegotiatedPriceEntry(args)];
+    const [written, ...additional] = writes;
+    if (!written) throw new Error("Price card returned no entries");
 
     // ── Audit (SOC 2 CC6.3) ───────────────────────────────────────────────
     // Fire-and-forget, like every other kernel-path emit: an audit row that
@@ -165,6 +188,12 @@ export function createPriceEntrySetHandler(
             ? null
             : written.closed.microsPerMillion.toString(),
         microsPerMillion: written.entry.microsPerMillion.toString(),
+        additionalRates: additional.map((write) => ({
+          tokenClass: write.entry.tokenClass,
+          microsPerMillion: write.entry.microsPerMillion.toString(),
+          previousMicrosPerMillion:
+            write.closed?.microsPerMillion.toString() ?? null,
+        })),
         effectiveFrom: written.entry.effectiveFrom.toISOString(),
         surface: ctx.surface,
       },
@@ -172,6 +201,15 @@ export function createPriceEntrySetHandler(
     );
 
     return {
+      ...(input.additionalRates
+        ? {
+            additionalEntries: additional.map((write) => ({
+              entry: toPriceEntryDto(write.entry),
+              closed:
+                write.closed === null ? null : toPriceEntryDto(write.closed),
+            })),
+          }
+        : {}),
       entry: toPriceEntryDto(written.entry),
       closed: written.closed === null ? null : toPriceEntryDto(written.closed),
     };

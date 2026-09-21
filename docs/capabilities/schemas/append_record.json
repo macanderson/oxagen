@@ -69,6 +69,7 @@
           "minLength": 1,
           "maxLength": 512
         },
+        "maxItems": 100,
         "default": []
       },
       "evidenceLinks": {
@@ -78,6 +79,7 @@
           "minLength": 1,
           "maxLength": 512
         },
+        "maxItems": 100,
         "default": []
       },
       "proposal": {
