@@ -462,3 +462,7 @@ Out of scope for v1. The upstream documentation at `developers.openai.com/codex/
 1. Whether the host agent record should be one per host (this spec) or one per host × repository, which would give per-repo `agentKey`s at the cost of registry sprawl. Recommendation: one per host; the session carries `cwd` and the repository binding, and lineage projects per repo.
 2. Whether `Stop` should ever block (Claude Code allows a hook to return `decision: block` to keep the agent working). Deferred; it is the "duty cycle" half of the tachograph metaphor and belongs with trust scoring.
 3. Where the `/approvals` queue lands in navigation (review Phase 3). This spec depends on it existing; it does not decide its placement.
+
+When the cached retention mandate is unproven, an event with a retained body waits with its session suffix. This preserves the dense chain and keeps the body in the same ingest request as its event. Other sessions continue to drain, even if the held session fills a batch. The hold ends 24 hours after the event timestamp, which survives a daemon restart. An invalid or future timestamp releases immediately. Release sends the event body-missing and logs the reason and count. A proven narrowing still drops the body and ships the event.
+
+SessionEnd persists its pending envelope and registry state before acknowledging the hook. The Git lane records the final worktree observation before sealing the session. An unavailable Git read produces no observation, and still completes the seal. A restart resumes the pending final read.

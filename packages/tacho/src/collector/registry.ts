@@ -533,11 +533,15 @@ export class SessionRegistry {
    * that only ever showed up through OTel or a transcript: the harness
    * never told us it ended.
    */
-  sweep(isAlive: (pid: number) => boolean, idleMs: number): TachoEvent[] {
+  sweep(
+    isAlive: (pid: number) => boolean,
+    idleMs: number,
+    deferSeal: (session: SessionRecord) => boolean = () => false,
+  ): TachoEvent[] {
     const out: TachoEvent[] = [];
     const now = this.options.now();
     for (const record of this.sessions.values()) {
-      if (record.sealed) continue;
+      if (record.sealed || deferSeal(record)) continue;
       const gone = record.pid !== undefined ? !isAlive(record.pid) : false;
       const idle = now - Date.parse(record.lastSeenAt) > idleMs;
       if (!gone && !(record.pid === undefined && idle)) continue;

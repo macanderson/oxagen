@@ -1,0 +1,1 @@
+- [2026-09-20] A contiguous WAL cursor and dense ingest chain require deferring a held event’s session suffix. Sparse acknowledgements would mark the chain permanently unverified. (source: reflections/2026-09-20-pending-evidence.md, agent: evidence-fixes)

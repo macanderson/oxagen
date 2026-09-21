@@ -379,10 +379,14 @@ export class Wal {
   }
 
   /** Up to `limit` unshipped events, grouped by session in seq order. */
-  unshipped(limit: number): TachoEvent[] {
+  unshipped(
+    limit: number,
+    excludedSessions: ReadonlySet<string> = new Set(),
+  ): TachoEvent[] {
     const out: TachoEvent[] = [];
     for (const session of this.sessions()) {
-      if (!this.hasUnshipped(session)) continue;
+      if (excludedSessions.has(session) || !this.hasUnshipped(session))
+        continue;
       const through = this.shippedThrough(session);
       for (const event of this.read(session)) {
         if (event.seq <= through) continue;

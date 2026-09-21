@@ -24,7 +24,7 @@ import { scratchPaths, TEST_ENROLLMENT } from "../host/test-support";
 import { Wal } from "../host/wal";
 import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
-import { minimalSession } from "../test-helpers";
+import { minimalSession, sealAll, unsealed } from "../test-helpers";
 import {
   TACHO_MAX_BATCH,
   base64Size,
@@ -44,7 +44,7 @@ import {
 import { applyCommands } from "./inbox";
 import { SessionRegistry } from "./registry";
 import { createRequestHandler } from "./server";
-import { Shipper } from "./spool";
+import { Shipper, MAX_BODY_AUTHORITY_WAIT_MS } from "./spool";
 
 const CONTEXT: ClaudeCodeContext = {
   agent: {
@@ -1363,6 +1363,114 @@ describe("shipper", () => {
     expect(bodyFileText(paths.wal, prompt.session_uuid)).toContain(
       Buffer.from("the secret prompt").toString("base64"),
     );
+  });
+
+  it("holds the session suffix, drains another session, then sends the retained body when authority returns", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = sealAll([
+      unsealed("agent_start", { session_start_source: "startup" }),
+      ...Array.from({ length: TACHO_MAX_BATCH + 5 }, () =>
+        unsealed("turn_start", { prompt_length: 8 }),
+      ),
+    ]);
+    const prompt = events[1]!;
+    const other = sealAll([
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup" },
+        { session_uuid: "ffffffff-ffff-4fff-8fff-ffffffffffff" },
+      ),
+    ]);
+    wal.append(events, [bodyFor(prompt, "retained")]);
+    wal.append(other);
+    let proven = false;
+    const sent: TachoEvent[][] = [];
+    const bodies: TachoBody[] = [];
+    const log: string[] = [];
+    const shipper = new Shipper({
+      wal,
+      client: {
+        ingest: async (
+          batch: TachoEvent[],
+          _health: unknown,
+          body: TachoBody[],
+        ) => {
+          sent.push(batch);
+          bodies.push(...body);
+          return okResponse(batch);
+        },
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      retentionInForce: () => ({
+        mandate: proven
+          ? { mode: "content_exact", classes: ["model_call", "tool_call"] }
+          : { mode: "digest_only", classes: [] },
+        proven,
+      }),
+      now: () => Date.parse(prompt.ts) + 1_000,
+      log: (line) => log.push(line),
+    });
+    await shipper.drain();
+    expect(wal.shippedThrough(prompt.session_uuid)).toBe(0);
+    expect(
+      wal.unshipped(TACHO_MAX_BATCH + 10).map((event) => event.seq),
+    ).toEqual(events.slice(1).map((event) => event.seq));
+    expect(
+      sent
+        .flat()
+        .some((event) => event.session_uuid === other[0]!.session_uuid),
+    ).toBe(true);
+    expect(bodies).toHaveLength(0);
+    expect(log.some((line) => line.includes("held"))).toBe(true);
+    proven = true;
+    await shipper.drain();
+    expect(wal.stats().unshipped).toBe(0);
+    expect(bodies.map((body) => body.event_id_idem)).toEqual([
+      prompt.event_id_idem,
+    ]);
+  });
+
+  it("releases expired withheld events after a restart without transmitting their bodies", async () => {
+    const paths = scratchPaths();
+    const initial = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1]!;
+    initial.append(events, [bodyFor(prompt, "retained")]);
+    const wal = new Wal(paths.wal);
+    const bodies: TachoBody[] = [];
+    const log: string[] = [];
+    const shipper = new Shipper({
+      wal,
+      client: {
+        ingest: async (
+          batch: TachoEvent[],
+          _health: unknown,
+          body: TachoBody[],
+        ) => {
+          bodies.push(...body);
+          return okResponse(batch);
+        },
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      retentionInForce: () => ({
+        mandate: { mode: "digest_only", classes: [] },
+        proven: false,
+      }),
+      now: () => Date.parse(prompt.ts) + MAX_BODY_AUTHORITY_WAIT_MS,
+      log: (line) => log.push(line),
+    });
+    await shipper.drain();
+    expect(wal.stats().unshipped).toBe(0);
+    expect(bodies).toHaveLength(0);
+    expect(wal.bodiesFor([prompt])).toHaveLength(1);
+    expect(
+      log.some((line) => line.includes("releasing 1 event(s) body-missing")),
+    ).toBe(true);
   });
 
   it("still ships a queued body the mandate does cover", async () => {

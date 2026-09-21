@@ -531,3 +531,13 @@ describe("Wal", () => {
     expect(existsSync(bodyPath)).toBe(false);
   });
 });
+
+it("skips held sessions without changing their cursor or body access", () => {
+  const paths = scratchPaths();
+  const wal = new Wal(paths.wal);
+  const events = minimalSession();
+  wal.append(events);
+  expect(wal.unshipped(100, new Set([events[0]!.session_uuid]))).toEqual([]);
+  expect(wal.shippedThrough(events[0]!.session_uuid)).toBe(-1);
+  expect(wal.unshipped(100)).toEqual(events);
+});
