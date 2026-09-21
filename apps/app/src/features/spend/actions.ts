@@ -118,20 +118,11 @@ export async function exportStatementAction(
     : result;
 }
 
-/**
- * State this organization's negotiated rate for ONE model and token class.
- *
- * One class per call, because that is what the capability takes and why: the
- * store holds one effective-dated row per (provider, model, class, region), so
- * a four-class rate card is four statements and a failure after the second
- * would otherwise leave the organization priced at a blend nobody agreed to.
- * The sequence, and the record of which classes it wrote before it stopped,
- * belongs to the caller — here the price dialog, which shows both lists rather
- * than reporting a partial write as a success.
- */
+/** State this model's negotiated card in one kernel call and transaction. */
 export async function setPriceEntryAction(
   at: SpendAt,
   values: PriceEntryFormValues,
+  additionalValues: PriceEntryFormValues[] = [],
 ): Promise<ActionResult<null>> {
   const ctx = await requireViewer(at.org, at.ws);
   const parsed = PriceEntryForm.safeParse(values);
@@ -144,7 +135,31 @@ export async function setPriceEntryAction(
       field: issue?.path.map(String).join(".") ?? "",
     };
   }
-  const result = await kernelWrite(ctx, costPriceEntrySet, parsed.data);
+  const additionalRates = [];
+  for (const values of additionalValues) {
+    const next = PriceEntryForm.safeParse(values);
+    if (
+      !next.success ||
+      next.data.provider !== parsed.data.provider ||
+      next.data.model !== parsed.data.model ||
+      next.data.effectiveFrom !== parsed.data.effectiveFrom
+    ) {
+      return {
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "rates",
+      };
+    }
+    additionalRates.push({
+      tokenClass: next.data.tokenClass,
+      usdPerMillion: next.data.usdPerMillion,
+    });
+  }
+  const result = await kernelWrite(ctx, costPriceEntrySet, {
+    ...parsed.data,
+    ...(additionalRates.length > 0 ? { additionalRates } : {}),
+  });
   return result.ok ? { ok: true, value: null } : result;
 }
 

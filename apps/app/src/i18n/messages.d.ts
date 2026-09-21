@@ -2418,6 +2418,17 @@ type Messages = {
       expires: string;
       never: string;
       empty: string;
+      actions: string;
+      resend: string;
+      revoke: string;
+      working: string;
+      resent: string;
+      revoked: string;
+      deliveryFailed: string;
+      confirmTitle: string;
+      confirmBody: string;
+      confirmRevoke: string;
+      keepInvitation: string;
     };
     invite: {
       open: string;
@@ -3234,8 +3245,22 @@ type Messages = {
       request: string;
       response: string;
       decision: string;
+      decisionOn: string;
       calledWith: string;
       noHalves: string;
+      showAll: string;
+      loadedSkill: string;
+      pane: {
+        command: string;
+        output: string;
+        diff: string;
+        contents: string;
+        asked: string;
+        arguments: string;
+        brief: string;
+        plan: string;
+        input: string;
+      };
     };
     frames: {
       title: string;

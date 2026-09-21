@@ -75,6 +75,7 @@
         "items": {
           "type": "string"
         },
+        "maxItems": 16,
         "default": []
       },
       "measures": {

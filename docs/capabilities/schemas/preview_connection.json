@@ -70,6 +70,7 @@
                 "type": "object",
                 "additionalProperties": {}
               },
+              "maxItems": 3,
               "description": "Up to 3 sample records for display"
             }
           },

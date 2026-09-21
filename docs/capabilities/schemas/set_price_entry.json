@@ -1,7 +1,7 @@
 {
   "name": "set_price_entry",
   "domain": "cost",
-  "description": "Set this organization's negotiated rate for one model and token class, in USD per one million units, effective from an instant. The negotiated row wins over the provider list price from then on; the row it supersedes is closed, never overwritten, so a run priced earlier keeps the entry it was priced with. Owner / Admin / Billing only.",
+  "description": "Set this organization's negotiated rate for one model and token class, in USD per one million units, effective from an instant. Optional additionalRates commit other classes of the same model in one transaction. The negotiated row wins over the provider list price from then on; the row it supersedes is closed, never overwritten, so a run priced earlier keeps the entry it was priced with. Owner / Admin / Billing only.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -64,12 +64,49 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256
-        }
+        },
+        "maxItems": 32
       },
       "usdPerMillion": {
         "type": "number",
         "minimum": 0,
         "maximum": 1000000
+      },
+      "additionalRates": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "tokenClass": {
+              "type": "string",
+              "enum": [
+                "input_uncached",
+                "cache_read",
+                "cache_write_5m",
+                "cache_write_1h",
+                "output",
+                "reasoning",
+                "server_tool_request",
+                "embedding_input",
+                "rerank",
+                "image",
+                "video_second"
+              ]
+            },
+            "usdPerMillion": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000
+            }
+          },
+          "required": [
+            "tokenClass",
+            "usdPerMillion"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 10
       },
       "effectiveFrom": {
         "type": "string"
@@ -199,6 +236,252 @@
           "source"
         ],
         "additionalProperties": false
+      },
+      "additionalEntries": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "entry": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "cancellationToken": {
+                  "type": "string"
+                },
+                "orgId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "modelAliases": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "region": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "tokenClass": {
+                  "type": "string",
+                  "enum": [
+                    "input_uncached",
+                    "cache_read",
+                    "cache_write_5m",
+                    "cache_write_1h",
+                    "output",
+                    "reasoning",
+                    "server_tool_request",
+                    "embedding_input",
+                    "rerank",
+                    "image",
+                    "video_second"
+                  ]
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "token",
+                    "request",
+                    "image",
+                    "second"
+                  ]
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "microsPerMillion": {
+                  "type": "string"
+                },
+                "effectiveFrom": {
+                  "type": "string"
+                },
+                "effectiveTo": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "list",
+                    "negotiated",
+                    "override"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "orgId",
+                "provider",
+                "model",
+                "modelAliases",
+                "region",
+                "tokenClass",
+                "unit",
+                "currency",
+                "microsPerMillion",
+                "effectiveFrom",
+                "effectiveTo",
+                "source"
+              ],
+              "additionalProperties": false
+            },
+            "closed": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "cancellationToken": {
+                      "type": "string"
+                    },
+                    "orgId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "modelAliases": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "region": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tokenClass": {
+                      "type": "string",
+                      "enum": [
+                        "input_uncached",
+                        "cache_read",
+                        "cache_write_5m",
+                        "cache_write_1h",
+                        "output",
+                        "reasoning",
+                        "server_tool_request",
+                        "embedding_input",
+                        "rerank",
+                        "image",
+                        "video_second"
+                      ]
+                    },
+                    "unit": {
+                      "type": "string",
+                      "enum": [
+                        "token",
+                        "request",
+                        "image",
+                        "second"
+                      ]
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "microsPerMillion": {
+                      "type": "string"
+                    },
+                    "effectiveFrom": {
+                      "type": "string"
+                    },
+                    "effectiveTo": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "list",
+                        "negotiated",
+                        "override"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "orgId",
+                    "provider",
+                    "model",
+                    "modelAliases",
+                    "region",
+                    "tokenClass",
+                    "unit",
+                    "currency",
+                    "microsPerMillion",
+                    "effectiveFrom",
+                    "effectiveTo",
+                    "source"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "entry",
+            "closed"
+          ],
+          "additionalProperties": false
+        }
       },
       "closed": {
         "anyOf": [
