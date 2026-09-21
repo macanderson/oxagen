@@ -43,6 +43,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       from: () => ({
         where: () => ({
           limit: () => pop(),
+          for: () => ({ limit: () => pop() }),
           orderBy: () => ({ limit: () => pop() }),
         }),
       }),
@@ -86,7 +87,12 @@ const CTX: CapabilityContext = {
   messageId: null,
 };
 
-const RECORD = { id: "record-uuid", publicId: "ctr_1" };
+const RECORD = {
+  id: "record-uuid",
+  publicId: "ctr_1",
+  status: "active",
+  validUntil: null,
+};
 
 function queueSelects(...results: unknown[]): void {
   for (const r of results) {
@@ -128,7 +134,17 @@ beforeEach(() => {
 
 describe("context.record.promote handler", () => {
   it("starts the chain at seq 1 with a null prev digest", async () => {
-    queueSelects([RECORD], [{ id: "version-uuid" }], []); // no chain head yet
+    queueSelects(
+      [
+        {
+          ...RECORD,
+          status: "retired",
+          validUntil: new Date("2026-09-20T00:00:00Z"),
+        },
+      ],
+      [{ id: "version-uuid" }],
+      [],
+    ); // No chain head in this legacy fixture.
 
     const out = await contextRecordPromoteHandler(
       {
@@ -152,6 +168,7 @@ describe("context.record.promote handler", () => {
       seq: 1,
       chainDigest: digest,
       status: "active",
+      validUntil: null,
     });
     expect(mocks.insertedValues[0]).toMatchObject({
       recordId: RECORD.id,
@@ -164,6 +181,7 @@ describe("context.record.promote handler", () => {
     expect(mocks.updateSets[0]).toMatchObject({
       status: "active",
       activeVersionId: "version-uuid",
+      validUntil: null,
     });
     // A legacy version carries no classification, so the row keeps its own.
     expect(mocks.updateSets[0]).not.toHaveProperty("kind");
@@ -351,6 +369,7 @@ describe("context.record.promote handler", () => {
       seq: 5,
       chainDigest: digest,
       status: "retired",
+      validUntil: expect.any(String),
     });
     expect(mocks.insertedValues[0]).toMatchObject({
       seq: 5,
@@ -407,4 +426,41 @@ describe("context.record.promote handler", () => {
       ),
     ).rejects.toThrow(/not found/);
   });
+});
+
+it("keeps the first retirement date and chain head on repeat", async () => {
+  const validUntil = new Date("2026-09-20T12:00:00.000Z");
+  queueSelects(
+    [{ ...RECORD, status: "retired", validUntil }],
+    [{ seq: 3, chainDigest: "last", action: "retire" }],
+  );
+  const out = await contextRecordPromoteHandler(
+    { record_id: "ctr_1", action: "retire", policy_version: "v1" },
+    CTX,
+  );
+  expect(out).toEqual({
+    recordId: "ctr_1",
+    action: "retire",
+    seq: 3,
+    chainDigest: "last",
+    status: "retired",
+    validUntil: validUntil.toISOString(),
+  });
+  expect(mocks.insertedValues).toEqual([]);
+  expect(mocks.updateSets).toEqual([]);
+});
+
+it("closes validity without changing the historical version or identity", async () => {
+  queueSelects([RECORD], []);
+  const out = await contextRecordPromoteHandler(
+    { record_id: "ctr_1", action: "retire", policy_version: "v1" },
+    CTX,
+  );
+  expect(mocks.updateSets[0]).toMatchObject({
+    status: "retired",
+    validUntil: new Date(out.validUntil ?? ""),
+  });
+  expect(mocks.updateSets[0]).not.toHaveProperty("activeVersionId");
+  expect(mocks.updateSets[0]).not.toHaveProperty("slug");
+  expect(mocks.updateSets[0]).not.toHaveProperty("deletedAt");
 });

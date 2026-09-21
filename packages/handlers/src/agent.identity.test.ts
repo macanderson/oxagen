@@ -423,6 +423,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
         agentRetireHandler({ agentId: "release-bot", reason: "done" }, ctx()),
       );
       firstRetire = out;
+      const [validity] = await withSystemDb((tx) =>
+        tx
+          .select({
+            validUntil: schema.agents.validUntil,
+            principalId: schema.agents.principalId,
+          })
+          .from(schema.agents)
+          .where(eq(schema.agents.publicId, registered.agentId)),
+      );
+      expect(validity?.validUntil?.toISOString()).toBe(out.retiredAt);
+      expect(validity?.principalId).toBe(registered.principalId);
       expect(out).toMatchObject({
         agentId: registered.agentId,
         status: "retired",

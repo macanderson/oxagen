@@ -32,6 +32,4 @@ would disconnect existing records before that pull request was merged.
 ## Consequences
 
 Draft source and filenames agree in the header, review, and submission. A skill
-keeps the standard `SKILL.md` basename. Registered identity renaming needs a
-separate migration design covering key aliases, enrolled hosts, historical
-records, collision protection, and publication timing.
+keeps the standard `SKILL.md` basename. ADR-133 supersedes the proposed registered-identity rename migration. Registered configuration slugs stay immutable. Clone and retire provide the supported workflow.

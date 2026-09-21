@@ -5,7 +5,7 @@
 // Postgres with Atlas before `turbo run build test:unit` and carries
 // DATABASE_URL in turbo's globalEnv; a local run without one is skipped, not
 // red. Every row it writes is removed in afterAll.
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { asc, eq, inArray, sql } from "drizzle-orm";
@@ -108,6 +108,79 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     );
 
   const propose = (over: Partial<ProposalRow> = {}) => proposeIn(scope, over);
+
+  it("serializes clone lineage creation and keeps rejected proposals occupied", async () => {
+    const seed = await propose({ lineageId: `${lineage}.clone-source` });
+    const { id: _id, publicId: _publicId, ...values } = seed;
+    const cloneValues = {
+      ...values,
+      lineageId: `${lineage}.cloned`,
+      title: "Cloned record",
+    };
+    const results = await Promise.allSettled(
+      Array.from({ length: 4 }, () =>
+        inScope(() => store.insertProposal(cloneValues, { createOnly: true })),
+      ),
+    );
+    const created = results.filter((result) => result.status === "fulfilled");
+    expect(created).toHaveLength(1);
+    for (const result of results)
+      if (result.status === "rejected")
+        expect(result.reason).toMatchObject({ reason: "clone_name_taken" });
+    await withSystemDb((tx) =>
+      tx
+        .update(schema.contextProposals)
+        .set({ status: "rejected" })
+        .where(eq(schema.contextProposals.lineageId, cloneValues.lineageId)),
+    );
+    await expect(
+      inScope(() => store.insertProposal(cloneValues, { createOnly: true })),
+    ).rejects.toMatchObject({ reason: "clone_name_taken" });
+    expect(seed.lineageId).toBe(`${lineage}.clone-source`);
+  });
+
+  it("makes ordinary proposals acquire the same lineage lock as clones", async () => {
+    const seed = await propose({ lineageId: `${lineage}.mixed-source` });
+    const { id: _id, publicId: _publicId, ...values } = seed;
+    const mixed = { ...values, lineageId: `${lineage}.mixed-clone` };
+    const lockKey = `${workspaceId}:${mixed.lineageId}`;
+    let ordinary: Promise<ProposalRow> | undefined;
+    try {
+      await withSystemDb(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+        );
+        ordinary = inScope(() => store.insertProposal(mixed));
+        await Promise.race([
+          vi.waitFor(
+            async () => {
+              const rows = await tx.execute(
+                sql`select count(*)::int as waiting from pg_locks where locktype='advisory' and not granted and classid=((hashtextextended(${lockKey},0) >> 32) & 4294967295)::oid and objid=(hashtextextended(${lockKey},0) & 4294967295)::oid`,
+              );
+              expect(rows[0]?.waiting).toBe(1);
+            },
+            { timeout: 5000 },
+          ),
+          ordinary.then(() => {
+            throw new Error("Ordinary proposal skipped the lineage lock");
+          }),
+        ]);
+      });
+    } finally {
+      await ordinary;
+    }
+    await expect(
+      inScope(() => store.insertProposal(mixed, { createOnly: true })),
+    ).rejects.toMatchObject({ reason: "clone_name_taken" });
+    const rows = await inScope(() =>
+      store.listProposals(
+        scope,
+        { lineageId: mixed.lineageId },
+        { limit: 10, offset: 0 },
+      ),
+    );
+    expect(rows.total).toBe(1);
+  });
 
   // `publishMerge` takes ROW EXCLUSIVE on the version table before probing for
   // the classification columns, so the migration's ACCESS EXCLUSIVE cannot

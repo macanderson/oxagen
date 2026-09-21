@@ -18,6 +18,7 @@ import type { AgentDetail } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { CloneButton } from "@/ui/clone-button";
 import { AgentCard } from "@/ui/agent-card";
 import { panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
@@ -78,6 +79,7 @@ function Header({
         )}
       </div>
       <div className="flex flex-wrap items-start gap-2">
+        <CloneButton kind="agent" sourceRef={identity.id} />
         {identity.status === "retired" ? null : (
           <AgentActions
             org={org}

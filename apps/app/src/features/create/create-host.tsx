@@ -16,7 +16,14 @@ import {
   Wrench,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   CREATE_EVENT,
   CREATE_KINDS,
@@ -36,6 +43,10 @@ import {
   clampStep,
   type RepoState,
 } from "./wizard";
+
+const CloneEditor = lazy(() =>
+  import("./clone-editor").then((module) => ({ default: module.CloneEditor })),
+);
 
 const KIND_ICONS: Record<CreateKind, LucideIcon> = {
   agent: Fingerprint,
@@ -216,6 +227,7 @@ function Wizard({
 type Opening = {
   kind: CreateKind | null;
   session: number;
+  cloneSourceRef?: string;
   prefill?: CreatePrefill;
 };
 
@@ -228,6 +240,7 @@ export function CreateHost({
   ws: string;
   wsName: string;
 }) {
+  const cloneText = useTranslations("create.clone");
   // `session` numbers each opening, so a wizard opened again starts from a
   // fresh draft rather than the one a person closed.
   const [open, setOpen] = useState<Opening | null>(null);
@@ -258,11 +271,16 @@ export function CreateHost({
   }, [org, ws]);
 
   const show = useCallback(
-    (kind: CreateKind | null, prefill?: CreatePrefill) => {
+    (
+      kind: CreateKind | null,
+      prefill?: CreatePrefill,
+      cloneSourceRef?: string,
+    ) => {
       sessionsRef.current += 1;
       setOpen({
         kind,
         session: sessionsRef.current,
+        ...(cloneSourceRef === undefined ? {} : { cloneSourceRef }),
         ...(prefill === undefined ? {} : { prefill }),
       });
     },
@@ -273,7 +291,7 @@ export function CreateHost({
     const onCreate = (event: Event) => {
       const request = createRequestOf(event);
       if (request === null) return;
-      show(request.kind, request.prefill);
+      show(request.kind, request.prefill, request.cloneSourceRef);
       void readRepo();
     };
     window.addEventListener(CREATE_EVENT, onCreate);
@@ -287,6 +305,24 @@ export function CreateHost({
   const close = (next: boolean) => {
     if (!next) setOpen(null);
   };
+  if (
+    open.cloneSourceRef &&
+    (open.kind === "agent" || open.kind === "skill" || open.kind === "record")
+  )
+    return (
+      <Suspense fallback={<p role="status">{cloneText("loading")}</p>}>
+        <CloneEditor
+          key={open.session}
+          org={org}
+          ws={ws}
+          kind={open.kind}
+          sourceRef={open.cloneSourceRef}
+          onClose={() => {
+            setOpen(null);
+          }}
+        />
+      </Suspense>
+    );
   const wizard = open.kind === null ? undefined : WIZARDS[open.kind];
   if (open.kind === null || wizard === undefined)
     return <Chooser ctx={ctx} onChoose={show} onOpenChange={close} />;

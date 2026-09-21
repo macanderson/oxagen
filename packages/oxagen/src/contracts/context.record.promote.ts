@@ -44,6 +44,7 @@ export const contextRecordPromote = registerCapability({
   output: z
     .object({
       recordId: z.string().describe("Public record ID (ctr_…)"),
+      validUntil: z.string().datetime().nullable(),
       action: z.enum(["promote", "retire", "supersede"]),
       seq: z
         .number()

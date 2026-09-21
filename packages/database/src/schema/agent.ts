@@ -44,6 +44,8 @@ export const agents = agentSchema.table(
     // deploymentStatus is the deploy on/off toggle, distinct from the
     // draft/active/archived authoring lifecycle in `status`.
     deploymentStatus: text("deployment_status").notNull().default("inactive"),
+    // Retirement closes configuration validity without changing identity or history.
+    validUntil: timestamp("valid_until", { withTimezone: true, mode: "date" }),
     // Nullable avatar. Either an https:// URL or the platform designed-avatar
     // spec string "avatar:v1:<json>" ({emoji,bg,mode}); capped at 512 chars at
     // the contract layer. Same column name as users/organizations for
@@ -1369,6 +1371,7 @@ export const contextRecords = agentSchema.table(
     title: text("title").notNull(),
     // promote → active, retire → retired, supersede → superseded.
     status: text("status").notNull().default("active"),
+    validUntil: timestamp("valid_until", { withTimezone: true, mode: "date" }),
     activeVersionId: uuid("active_version_id").references(
       (): AnyPgColumn => contextRecordVersions.id,
     ),
@@ -1578,6 +1581,7 @@ export const contextProposals = agentSchema.table(
     force: text("force").notNull(),
     constraintEffect: text("constraint_effect"),
     sharingScope: text("sharing_scope").notNull(),
+    title: text("title"),
     statement: text("statement").notNull(),
     rationale: text("rationale").notNull(),
     // Who raised it, as a label the page prints: `user:<uuid>`,

@@ -92,3 +92,32 @@ describe("context description prefill", () => {
     ).toBeNull();
   });
 });
+
+describe("clone requests", () => {
+  it.each(["agent", "skill", "record"])(
+    "routes the %s source to the editor",
+    (kind) => {
+      expect(
+        createRequestOf(
+          new CustomEvent(CREATE_EVENT, {
+            detail: { kind, cloneSourceRef: "existing" },
+          }),
+        ),
+      ).toEqual({ kind, cloneSourceRef: "existing" });
+    },
+  );
+  it.each([
+    { kind: "tool", cloneSourceRef: "existing" },
+    { kind: "agent", cloneSourceRef: "" },
+    { kind: "skill", cloneSourceRef: "x".repeat(201) },
+    {
+      kind: "record",
+      cloneSourceRef: "existing",
+      prefill: { description: "Mixed intent" },
+    },
+  ])("refuses invalid clone request %j", (detail) => {
+    expect(
+      createRequestOf(new CustomEvent(CREATE_EVENT, { detail })),
+    ).toBeNull();
+  });
+});

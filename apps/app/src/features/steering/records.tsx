@@ -10,6 +10,7 @@ import {
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { CloneButton } from "@/ui/clone-button";
 import { RecordCard } from "@/ui/record-card";
 import { ReadFailure } from "./read-failure";
 import { Fact, Facts, Pager, Section, useDate } from "./section";
@@ -96,6 +97,7 @@ export function Records({
                 lineage={record.lineage}
                 statement={record.statement ?? record.title}
               >
+                <CloneButton kind="record" sourceRef={record.lineage} />
                 <Facts>
                   {record.version === null ? null : (
                     <Fact name="version" term={t("facts.version")}>

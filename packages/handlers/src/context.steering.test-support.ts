@@ -337,7 +337,7 @@ export class MemoryStore implements SteeringStore {
         r.workspaceId === scope.workspaceId && r.slug === proposal.lineageId,
     );
     const classification = {
-      title: proposal.statement,
+      title: proposal.title ?? proposal.statement,
       status: "active",
       kind: proposal.kind,
       force: proposal.force,
@@ -363,6 +363,7 @@ export class MemoryStore implements SteeringStore {
       workspaceId: scope.workspaceId,
       slug: proposal.lineageId,
       activeVersionId: null,
+      validUntil: null,
       version: null,
       checksum: null,
       ...classification,

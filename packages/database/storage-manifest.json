@@ -875,6 +875,16 @@
       "writes": []
     },
     {
+      "domain": "configuration",
+      "name": "get_clone_draft",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "connection",
       "name": "get_connection",
       "reads": [],
@@ -2411,6 +2421,16 @@
       "writes": []
     },
     {
+      "domain": "configuration",
+      "name": "propose_configuration_clone",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "propose_record",
       "reads": [],
@@ -3579,7 +3599,7 @@
       "writes": []
     }
   ],
-  "contentHash": "fe394035337d7856566fd6ccf169a095c8a4305e388fad54afab2fed893b7369",
+  "contentHash": "26325fa7c6737e8c3a4b135584df17d0e846629b588e761eda9df021c4783e39",
   "domains": [
     {
       "name": "agent",
@@ -7465,6 +7485,12 @@
           "type": "text"
         },
         {
+          "name": "valid_until",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "avatar_url",
           "nullable": true,
           "primaryKey": false,
@@ -7991,6 +8017,12 @@
           "type": "text"
         },
         {
+          "name": "title",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "statement",
           "nullable": false,
           "primaryKey": false,
@@ -8363,6 +8395,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "valid_until",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "active_version_id",

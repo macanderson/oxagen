@@ -603,3 +603,6 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_skill_config](skill.config.get.md) | [skill.config.get.ts](../../packages/oxagen/src/contracts/skill.config.get.ts) | api, mcp |
 | [update_skill_config](skill.config.update.md) | [skill.config.update.ts](../../packages/oxagen/src/contracts/skill.config.update.ts) | api, mcp |
 | [preview_skill_search](skill.search.preview.md) | [skill.search.preview.ts](../../packages/oxagen/src/contracts/skill.search.preview.ts) | api, mcp |
+
+- [get_clone_draft](configuration.clone.get.md)
+- [propose_configuration_clone](configuration.clone.propose.md)

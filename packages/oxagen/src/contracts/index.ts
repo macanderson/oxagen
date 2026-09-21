@@ -1,3 +1,5 @@
+import { configurationCloneGet } from "./configuration.clone.get";
+import { configurationClonePropose } from "./configuration.clone.propose";
 // contracts/index.ts — canonical per-package contracts array.
 //
 // Every capability registered via registerCapability() in this package is re-exported here.
@@ -662,6 +664,8 @@ export {
   spendGet,
   spendDrill,
   spendWasteList,
+  configurationCloneGet,
+  configurationClonePropose,
   skillConfigGet,
   skillConfigUpdate,
   skillSearchPreview,
@@ -1011,6 +1015,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendGet,
   spendDrill,
   spendWasteList,
+  configurationCloneGet,
+  configurationClonePropose,
   skillConfigGet,
   skillConfigUpdate,
   skillSearchPreview,

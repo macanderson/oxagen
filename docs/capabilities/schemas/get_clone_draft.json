@@ -1,0 +1,129 @@
+{
+  "name": "get_clone_draft",
+  "domain": "configuration",
+  "description": "Read a configuration into an editable clone draft with a new suggested name and slug. Copies no identity-bound access and changes nothing.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "skill",
+          "record"
+        ]
+      },
+      "sourceId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "required": [
+      "kind",
+      "sourceId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "skill",
+          "record"
+        ]
+      },
+      "sourceId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "sourceDigest": {
+        "type": "string"
+      },
+      "slug": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "source": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 65536
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "content": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "required": [
+            "path",
+            "content"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "harness": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "stella",
+              "claude-code",
+              "codex",
+              "cursor",
+              "claude-agent-sdk",
+              "custom"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "kind",
+      "sourceId",
+      "sourceDigest",
+      "slug",
+      "name",
+      "source",
+      "files",
+      "harness"
+    ],
+    "additionalProperties": false
+  }
+}

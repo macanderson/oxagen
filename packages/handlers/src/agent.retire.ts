@@ -56,6 +56,7 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
       .select({
         status: schema.agents.status,
         updatedAt: schema.agents.updatedAt,
+        validUntil: schema.agents.validUntil,
       })
       .from(schema.agents)
       .where(eq(schema.agents.id, agent.id))
@@ -72,7 +73,7 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
         credentials: 0,
         hosts: 0,
         mandates: 0,
-        retiredAt: locked?.updatedAt ?? agent.updatedAt,
+        retiredAt: locked?.validUntil ?? locked?.updatedAt ?? agent.updatedAt,
       };
     }
 
@@ -81,6 +82,7 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
       .set({
         status: "archived",
         deploymentStatus: "inactive",
+        validUntil: now,
         updatedAt: now,
         updatedById: userId,
       })

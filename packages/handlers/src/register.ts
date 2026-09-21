@@ -1192,6 +1192,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_clone_draft",
+    async () =>
+      (await import("./configuration.clone.get"))
+        .configurationCloneGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "propose_configuration_clone",
+    async () =>
+      (await import("./configuration.clone.propose"))
+        .configurationCloneProposeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_skill_config",
     async () =>
       (await import("./skill.config.get"))

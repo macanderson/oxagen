@@ -1764,6 +1764,28 @@
       }
     },
     {
+      "name": "get_clone_draft",
+      "file": "configuration.clone.get.ts",
+      "domain": "unknown",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {}
+    },
+    {
+      "name": "propose_configuration_clone",
+      "file": "configuration.clone.propose.ts",
+      "domain": "unknown",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {}
+    },
+    {
       "name": "create_connection",
       "file": "connection.create.ts",
       "domain": "connection",
