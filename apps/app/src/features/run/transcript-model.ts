@@ -580,6 +580,73 @@ export function stepTool(step: TranscriptStep): ToolDetail | null {
   return toolDetail(known, body);
 }
 
+/**
+ * What a model step did, read from the reply's blocks.
+ *
+ * A model call reads as the thing it did, not as the model that did it: a
+ * reply that called Bash reads "Bash" with the command's first line, exactly
+ * as the tool step for the same call would, through the same reader. A reply
+ * with words and no call reads as a reply, with its first line. The model's
+ * name moves to a chip. Null where no frame of the step kept its blocks, so
+ * the view falls back to the digest.
+ */
+export function stepModel(step: TranscriptStep): ToolDetail | null {
+  if (step.kind !== "model") return null;
+  const blocks = step.frames
+    .flatMap((frame) => [frame.response, frame.request])
+    .find(
+      (half) => half?.blocks !== undefined && half.blocks.length > 0,
+    )?.blocks;
+  if (blocks === undefined) return null;
+  const uses = blocks.filter((block) => block.kind === "tool_use");
+  if (uses.length > 0) {
+    const details = uses.flatMap((use) => {
+      const read = toolDetail(use.name, JSON.stringify({ input: use.input }));
+      return read === null ? [] : [read];
+    });
+    const first = details[0];
+    if (first !== undefined) {
+      return {
+        ...first,
+        detail: uses.length > 1 ? `+${String(uses.length - 1)}` : first.detail,
+        panes: details.flatMap((detail) => detail.panes),
+      };
+    }
+  }
+  const text = blocks
+    .filter((block) => block.kind === "text")
+    .map((block) => block.text)
+    .join("\n\n")
+    .trim();
+  if (text === "") return null;
+  const cut = text.indexOf("\n");
+  return {
+    name: "reply",
+    group: "tool",
+    headline: cut === -1 ? text : text.slice(0, cut),
+    detail: null,
+    multiline: cut !== -1,
+    panes: [{ kind: "note", label: "reply", text }],
+  };
+}
+
+/**
+ * The steps of a turn worth a row. A step with nothing to read on any frame
+ * and no decision is bookkeeping (a hook registering, a queue tick) or a
+ * digest-only duplicate of a call another source sealed with its body; the
+ * Frames tab still has every one of them.
+ */
+export function visibleSteps(turn: TranscriptTurn): TranscriptStep[] {
+  return turn.steps.filter((step) =>
+    step.frames.some(
+      (frame) =>
+        hasContent(frame) ||
+        frame.decision !== null ||
+        TOOL_GATE.has(frame.type),
+    ),
+  );
+}
+
 /** Whether either half of the entry carries text to read. */
 function hasContent(entry: TranscriptEntry): boolean {
   return [entry.request, entry.response].some(

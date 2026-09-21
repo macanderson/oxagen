@@ -140,6 +140,7 @@
     },
     "groups": {
       "operator": {
+        "unnamed": "Unnamed operator",
         "title": "By operator",
         "key": "Operator",
         "empty": "No run in this period names an operator."

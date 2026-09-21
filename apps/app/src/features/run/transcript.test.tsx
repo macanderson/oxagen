@@ -798,7 +798,10 @@ describe("a step carrying both halves", () => {
     expect(outgoing).toHaveAttribute("data-half", "Sent");
   });
 
-  it("says neither half was recorded rather than drawing an empty body (negative)", () => {
+  it("draws no row for a step with nothing to read, and says so inside a step that has (negative)", () => {
+    // A frame with neither half and no decision is bookkeeping or a
+    // digest-only duplicate: it gets no row of its own. Inside a step that
+    // does have a body, the same frame still says what it lacks.
     renderSection({
       read: readOk(
         runTranscript({
@@ -807,7 +810,8 @@ describe("a step carrying both halves", () => {
       ),
       zoom: "everything",
     });
-    expect(screen.getByTestId("entry-no-halves")).toBeInTheDocument();
+    expect(screen.queryByTestId("transcript-step")).toBeNull();
+    expect(screen.queryByTestId("entry-no-halves")).toBeNull();
     expect(screen.queryByTestId("transcript-half")).toBeNull();
   });
 });

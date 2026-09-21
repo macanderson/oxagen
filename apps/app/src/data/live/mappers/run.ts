@@ -201,6 +201,31 @@ function toTranscriptBody(
     fidelity: half.fidelity,
     text: half.text ?? message ?? null,
     truncated: half.truncated || shortened,
+    ...(blocks === undefined
+      ? {}
+      : {
+          blocks: blocks.map((block) => {
+            switch (block.kind) {
+              case "text":
+              case "thinking":
+                return { kind: block.kind, text: block.text };
+              case "tool_use":
+                return {
+                  kind: "tool_use" as const,
+                  name: block.name,
+                  input: block.input,
+                  callKey: block.callKey,
+                };
+              case "tool_result":
+                return {
+                  kind: "tool_result" as const,
+                  forRef: block.forId,
+                  ok: block.ok,
+                  summary: block.summary,
+                };
+            }
+          }),
+        }),
   };
 }
 

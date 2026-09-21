@@ -394,6 +394,10 @@ export type {
   SpendGroupKind,
   TokenCounts,
 } from "./spend.shared";
+// Who an operator is, shared by the rows that name one (get_spend). Not a
+// capability, so exported here to satisfy the file-coverage guard.
+export { operatorFactsSchema } from "./operator.shared";
+export type { OperatorFacts } from "./operator.shared";
 // Steering vocabulary (ADR-061) shared by the context.* contracts. Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export {

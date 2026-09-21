@@ -4,6 +4,7 @@
 // answer. Every money figure carries its basis or prints "not recorded"; axe
 // checks the state each test ends in (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Cost } from "@/data/contracts/money";
@@ -20,7 +21,10 @@ import type {
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
-import messages from "../../../messages/spend.json";
+import spendMessages from "../../../messages/spend.json";
+import uiMessages from "../../../messages/ui.json";
+
+const messages = { ...spendMessages, ...uiMessages };
 
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -86,6 +90,7 @@ const row = (key: string, over: Partial<SpendReport["rows"][number]> = {}) => ({
   ...figure(),
   key,
   provider: null,
+  operator: null,
   ...over,
 });
 
@@ -200,7 +205,16 @@ describe("Spend › By operator", () => {
   it("prints the month's total with its basis, omits outcome scores, and opens each operator's drill", async () => {
     byGroup.mockResolvedValue(
       report([
-        row("prn_marcusbell", { cost: cost("9000000", "mixed") }),
+        row("prn_marcusbell", {
+          cost: cost("9000000", "mixed"),
+          operator: {
+            id: "prn_marcusbell",
+            name: "Marcus Bell",
+            email: "marcus@acme.test",
+            avatarUrl: null,
+            role: "Member",
+          },
+        }),
         row("prn_ada", { cost: null, productiveRatio: null }),
       ]),
     );
@@ -227,12 +241,20 @@ describe("Spend › By operator", () => {
       "data-basis",
       "mixed",
     );
+    // The row reads the person's name, and the drill keeps the key in its
+    // href; the id itself is only in the hover card.
     expect(
-      within(marcus).getByRole("link", { name: "prn_marcusbell" }),
+      within(marcus).getByRole("link", { name: "Marcus Bell" }),
     ).toHaveAttribute(
       "href",
       "/acme/core-platform/spend?tab=operator&drill=prn_marcusbell",
     );
+    expect(within(marcus).queryByText("prn_marcusbell")).toBeNull();
+    await userEvent.hover(within(marcus).getByTestId("operator"));
+    const card = within(marcus).getByTestId("operator-card");
+    expect(card).toHaveTextContent("marcus@acme.test");
+    expect(card).toHaveTextContent("Member");
+    expect(card).toHaveTextContent("prn_marcusbell");
     expect(within(marcus).getByText("1,240")).toBeInTheDocument();
   });
 

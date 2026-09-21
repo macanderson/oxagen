@@ -68,6 +68,7 @@ describe("toSpendReport", () => {
           ...figure,
           key: "claude-sonnet-5",
           provider: "anthropic",
+          operator: null,
           tokens,
         },
         {
@@ -76,6 +77,7 @@ describe("toSpendReport", () => {
           accepted: null,
           key: "unpriced-model",
           provider: null,
+          operator: null,
           tokens,
         },
       ],
@@ -100,11 +102,18 @@ describe("toFleetSpend", () => {
       groupBy: "model",
       total: figure,
       rows: [
-        { ...figure, key: "claude-sonnet-5", provider: "anthropic", tokens },
+        {
+          ...figure,
+          key: "claude-sonnet-5",
+          provider: "anthropic",
+          operator: null,
+          tokens,
+        },
         {
           ...figure,
           key: "claude-haiku-5",
           provider: "anthropic",
+          operator: null,
           tokens: { ...tokens, input_uncached: 800, cache_read: 1200 },
         },
       ],

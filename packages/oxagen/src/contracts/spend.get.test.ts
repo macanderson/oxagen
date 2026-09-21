@@ -82,6 +82,7 @@ describe("get_spend contract", () => {
       ...figure,
       key: "acme.core.cc",
       provider: null,
+      operator: null,
       tokens: {
         input_uncached: 1,
         cache_read: 0,

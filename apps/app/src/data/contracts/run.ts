@@ -198,6 +198,26 @@ export const TRANSCRIPT_ENTRY_DEFAULT = 200;
  * `request` is what went out, `response` is what came back — so one tool step
  * shows the input it was called with and the result it returned, in one entry.
  */
+/** One block of a model reply: a passage, a thought, a tool the model called, or a result it read. */
+const TranscriptBlock = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("text"), text: z.string() }),
+  z.object({ kind: z.literal("thinking"), text: z.string() }),
+  z.object({
+    kind: z.literal("tool_use"),
+    name: z.string().min(1),
+    input: z.unknown(),
+    callKey: z.string().nullable(),
+  }),
+  z.object({
+    kind: z.literal("tool_result"),
+    /** The model's own tool-call id this result answers — not an Oxagen PublicId. */
+    forRef: z.string(),
+    ok: z.boolean(),
+    summary: z.string(),
+  }),
+]);
+type TranscriptBlock = z.infer<typeof TranscriptBlock>;
+
 export const TranscriptBody = z.object({
   seq: z.string().regex(/^\d+$/),
   type: z.string(),
@@ -217,6 +237,11 @@ export const TranscriptBody = z.object({
   text: z.string().nullable(),
   /** True when the text was cut at the contract's ceiling. */
   truncated: z.boolean(),
+  /**
+   * A model reply as the blocks it was: what the model said and the tools it
+   * called, when the recorder kept the stream. Absent on every other body.
+   */
+  blocks: z.array(TranscriptBlock).optional(),
 });
 export type TranscriptBody = z.infer<typeof TranscriptBody>;
 

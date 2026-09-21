@@ -15,6 +15,7 @@ import { GeneratedSummary } from "@/ui/generated-summary";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { StatusBadge } from "@/ui/status-badge";
+import { OperatorName } from "@/ui/operator";
 import { NoValue } from "./parts";
 import { RecordActions } from "./record-actions";
 import { RunControls } from "./run-controls";
@@ -126,13 +127,32 @@ function operatorFact(
   run: RunRow,
   kindLabel: (kind: NonNullable<RunRow["operatorKind"]>) => string,
 ): { value: React.ReactNode; detail?: React.ReactNode } {
-  const detail =
-    run.operatorId === null ? undefined : (
-      <span className={`${mono} break-all`}>{run.operatorId}</span>
-    );
-  if (run.operatorName !== null) return { value: run.operatorName, detail };
-  if (run.operatorKind === null) return { value: <NoValue />, detail };
-  return { value: kindLabel(run.operatorKind), detail };
+  // The id is never the label and never a line under it: it lives in the
+  // operator's hover card, copyable, with the rest of who they are.
+  if (run.operatorId === null && run.operatorName === null) {
+    return {
+      value:
+        run.operatorKind === null ? <NoValue /> : kindLabel(run.operatorKind),
+    };
+  }
+  return {
+    value: (
+      <OperatorName
+        operator={{
+          id: run.operatorId,
+          name: run.operatorName,
+          kind: run.operatorKind,
+        }}
+      >
+        {run.operatorName ??
+          (run.operatorKind === null ? (
+            <NoValue />
+          ) : (
+            kindLabel(run.operatorKind)
+          ))}
+      </OperatorName>
+    ),
+  };
 }
 
 /**

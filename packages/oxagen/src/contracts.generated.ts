@@ -189,6 +189,7 @@ import "./contracts/onboarding.first_frame.get";
 import "./contracts/onboarding.state.get";
 import "./contracts/ontology.neighbors";
 import "./contracts/ontology.query";
+import "./contracts/operator.shared";
 import "./contracts/org.create";
 import "./contracts/org.data_plane.get";
 import "./contracts/org.data_plane.set";

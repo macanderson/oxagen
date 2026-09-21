@@ -74,11 +74,13 @@ import {
   type StepDigest,
   type StepNode,
   stepDigest,
+  stepModel,
   stepTool,
   toolExchange,
   type TranscriptStep,
   type TranscriptTurn,
   visibleFrames,
+  visibleSteps,
 } from "./transcript-model";
 import { useRunStream } from "./use-run-stream";
 
@@ -445,7 +447,7 @@ function StepRow({
   const isFuture = step.from > pos;
   // Held across renders because it parses the recorded body, where the digest
   // beside it is cheap enough to recompute.
-  const detail = useMemo(() => stepTool(step), [step]);
+  const detail = useMemo(() => stepTool(step) ?? stepModel(step), [step]);
   // The tool's own name beats the label's first word wherever the body was
   // kept. A skill load is the one exception: it is the step that changes what
   // the agent CAN do rather than recording what it did, so the line says so
@@ -453,7 +455,9 @@ function StepRow({
   const name =
     detail?.group === "skill"
       ? t("loadedSkill")
-      : (detail?.name ?? digest.name);
+      : detail?.name === "reply"
+        ? t("reply")
+        : (detail?.name ?? digest.name);
   // The headline read out of the body says what the call acted on — a
   // command, a path, a pattern — where `digest.arg` had only the frame's
   // label, which for a tool is the tool's name a second time.
@@ -511,6 +515,11 @@ function StepRow({
               </span>
             )}
             <span className="ml-auto flex flex-wrap gap-1.5">
+              {step.kind === "model" && detail !== null ? (
+                <Chip>
+                  <span data-testid="step-model">{digest.name}</span>
+                </Chip>
+              ) : null}
               {digest.outcome === null ? null : (
                 <Chip tone={digest.node === "deny" ? "warn" : undefined}>
                   {digest.outcome}
@@ -668,7 +677,9 @@ function TurnBlock({
               </span>
             )}
             <span className="ml-auto flex flex-wrap gap-1.5">
-              <Chip>{t("stepCount", { count: turn.steps.length })}</Chip>
+              <Chip>
+                {t("stepCount", { count: visibleSteps(turn).length })}
+              </Chip>
               <Chip>{t("seqSpan", { from: first.seq, to: last.seq })}</Chip>
               <Chip>{formatClock(seconds, locale)}</Chip>
               {cost === null ? null : (
@@ -679,7 +690,7 @@ function TurnBlock({
             </span>
           </div>
         </summary>
-        {turn.steps.map((step) => (
+        {visibleSteps(turn).map((step) => (
           <StepRow
             key={step.id}
             step={step}

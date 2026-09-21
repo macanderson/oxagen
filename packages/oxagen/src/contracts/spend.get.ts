@@ -10,6 +10,7 @@
  * writes one. A console read is never a governed action (`noBillingGate`).
  */
 import { z } from "zod";
+import { operatorFactsSchema } from "./operator.shared";
 import { registerCapability } from "../registry";
 import {
   dayRangeSchema,
@@ -25,6 +26,8 @@ export const spendRowSchema = spendFigureSchema
     /** The model's provider on `model` rows; null elsewhere. */
     provider: z.string().nullable(),
     tokens: tokenCountsSchema,
+    /** Who the key names on `operator` rows; null elsewhere, and for a principal nobody can name. */
+    operator: operatorFactsSchema.nullable(),
   })
   .strict();
 

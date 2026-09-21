@@ -3395,6 +3395,7 @@ type Messages = {
       stepCount: string;
       frameCount: string;
       repeats: string;
+      reply: string;
       seqSpan: string;
       ms: string;
       live: string;
@@ -3458,6 +3459,7 @@ type Messages = {
         brief: string;
         plan: string;
         input: string;
+        reply: string;
       };
     };
     frames: {
@@ -4310,6 +4312,7 @@ type Messages = {
     };
     groups: {
       operator: {
+        unnamed: string;
         title: string;
         key: string;
         empty: string;
@@ -5449,6 +5452,17 @@ type Messages = {
         workspace: string;
       };
       lineage: string;
+    };
+    operator: {
+      unnamed: string;
+      unknown: string;
+      kind: {
+        agent: string;
+        service: string;
+      };
+      role: string;
+      noRole: string;
+      id: string;
     };
     runStatus: {
       live: string;

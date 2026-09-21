@@ -14,6 +14,11 @@ import {
 import type { TokenCounts } from "@oxagen/oxagen/contracts/spend.shared";
 import type { DailyTotalsRecord, RunTotalsRecord } from "@oxagen/billing";
 import {
+  noOperatorFacts,
+  readOperatorFacts,
+  type ReadOperatorFacts,
+} from "./lib/operator-facts";
+import {
   addTokens,
   readDailyTotals,
   readRunTotals,
@@ -29,6 +34,8 @@ export type SpendGetDeps = {
     scope: SpendScope,
     q: { from: string; to: string },
   ) => Promise<RunTotalsRecord[]>;
+  /** Who each operator key names; a harness that has no store leaves it out. */
+  readOperatorFacts?: ReadOperatorFacts;
 };
 
 /** Sum a level's day rows into one row per key. */
@@ -53,6 +60,7 @@ export function groupRows(rows: readonly DailyTotalsRecord[]): SpendRow[] {
       key,
       provider: g.provider,
       tokens: g.tokens,
+      operator: null,
       ...sumFigures(g.days),
     }))
     .sort(compareRows);
@@ -77,11 +85,24 @@ export function createSpendGetHandler(
       deps.readDailyTotals(scope, { from, to, groupKind: input.groupBy }),
       deps.readRunTotals(scope, { from, to }),
     ]);
+    const grouped = groupRows(rows);
+    // An operator row's key is a principal id, which is a key and not a
+    // label. The person it names rides beside it, so the page prints a name.
+    const facts =
+      input.groupBy === "operator"
+        ? await (deps.readOperatorFacts ?? noOperatorFacts)(
+            scope,
+            grouped.map((row) => row.key),
+          )
+        : new Map<string, never>();
     return {
       period: { from, to },
       groupBy: input.groupBy,
       total: sumFigures(runs.map(runFigure)),
-      rows: groupRows(rows),
+      rows: grouped.map((row) => ({
+        ...row,
+        operator: facts.get(row.key) ?? null,
+      })),
     };
   };
 }
@@ -90,4 +111,5 @@ export const spendGetHandler = createSpendGetHandler({
   readDailyTotals,
   readRunTotals: (scope, q) =>
     readRunTotals(scope, { ...q, filter: { kind: "all" } }),
+  readOperatorFacts,
 });

@@ -14,6 +14,7 @@ import {
   screen,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -210,7 +211,12 @@ describe("header", () => {
     });
     const facts = within(screen.getByTestId("run-facts"));
     expect(facts.getByText("Marcus Bell")).toBeTruthy();
-    expect(facts.getByText("prn_marcusbell")).toBeTruthy();
+    // The id is a key, not a label: it is in the hover card, never in the fact.
+    expect(facts.queryByText("prn_marcusbell")).toBeNull();
+    await userEvent.hover(facts.getByTestId("operator"));
+    expect(facts.getByTestId("operator-card")).toHaveTextContent(
+      "prn_marcusbell",
+    );
     expect(facts.getByText("claude-sonnet-5")).toBeTruthy();
     expect(facts.getByText("anthropic \u00b7 sonnet")).toBeTruthy();
     expect(facts.getByText("mac-studio.local")).toBeTruthy();
@@ -533,17 +539,10 @@ describe("transcript", () => {
     const nodes = screen
       .getAllByTestId("transcript-step")
       .map((step) => step.getAttribute("data-node"));
-    expect(nodes).toEqual([
-      "control",
-      "tool",
-      "control",
-      "model",
-      "tool",
-      "control",
-      "control",
-      "model",
-      "deny",
-    ]);
+    // A step with nothing to read (a context assembly with no body, a model
+    // call the recorder kept only a digest of) draws no row; the Frames tab
+    // still has it. What is left is what the run did.
+    expect(nodes).toEqual(["control", "model", "tool", "control", "deny"]);
     await expectNoAxe(container);
   });
 
@@ -593,9 +592,12 @@ describe("transcript", () => {
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript", zoom: "everything" },
     );
-    expect(screen.getAllByTestId("transcript-frame")).toHaveLength(13);
+    // Nine frames across the steps that have something to read; the frames
+    // of the steps with nothing to read are the Frames tab's.
+    expect(screen.getAllByTestId("transcript-frame")).toHaveLength(9);
     expect(screen.getByText('{"open":34}')).toBeTruthy();
-    expect(screen.getByText(/kept a digest and no body/)).toBeTruthy();
+    // The digest-only model call has no row, so nothing says it has no body.
+    expect(screen.queryByText(/kept a digest and no body/)).toBeNull();
     expect(
       screen.getByRole("link", { name: "Frame 7 on the Frames tab" }),
     ).toHaveAttribute(

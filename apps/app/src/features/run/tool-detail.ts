@@ -67,7 +67,8 @@ export type PaneLabel =
   | "arguments"
   | "brief"
   | "plan"
-  | "input";
+  | "input"
+  | "reply";
 
 /** One pane of a tool reading.
  *
