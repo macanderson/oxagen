@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  eventResolver,
   orphans,
   sendersIn,
   triggersIn,
@@ -87,5 +88,95 @@ describe("orphans", () => {
     expect(orphans(triggers, new Set())).not.toContainEqual(
       expect.objectContaining({ event: "inngest/function.failed" }),
     );
+  });
+});
+
+describe("constant event names", () => {
+  const files = new Map([
+    [
+      "/events.ts",
+      'export const PRICE_BOOK_BACKDATED_EVENT = "cost/price-book.backdated" as const;',
+    ],
+    [
+      "/barrel.ts",
+      'export { PRICE_BOOK_BACKDATED_EVENT as BACKDATED } from "./events";',
+    ],
+  ]);
+  const resolver = () =>
+    eventResolver(
+      (file) => {
+        const source = files.get(file);
+        if (!source) throw new Error(`Missing fixture ${file}`);
+        return source;
+      },
+      (name) => `${name.slice(1)}.ts`,
+    );
+  const trigger = `import { BACKDATED as EVENT } from "./barrel";
+    createFunction({}, {event: EVENT}, async () => {});`;
+
+  it("finds an orphan when a shared-constant event has no sender", () => {
+    const found = triggersIn(trigger, "/consumer.ts", resolver());
+    expect(found.map((row) => row.event)).toEqual([
+      "cost/price-book.backdated",
+    ]);
+    expect(orphans(found, new Set())).toEqual(found);
+    const sender = `import { PRICE_BOOK_BACKDATED_EVENT as EVENT } from "./events";
+      const ALIAS = EVENT; client.send({name: ALIAS});`;
+    expect(
+      orphans(found, new Set(sendersIn(sender, "/sender.ts", resolver()))),
+    ).toEqual([]);
+  });
+
+  it("rejects unresolved, mutable, and shadowed trigger constants", () => {
+    for (const source of [
+      "createFunction({}, {event: UNKNOWN}, handler);",
+      'let EVENT = "mutable"; createFunction({}, {event: EVENT}, handler);',
+      'const EVENT = "outer"; function register(EVENT: string) { createFunction({}, {event: EVENT}, handler); }',
+      'const EVENT = "outer"; function register({EVENT}: {EVENT: string}) { createFunction({}, {event: EVENT}, handler); }',
+      'const EVENT = "outer"; try {} catch (EVENT) { createFunction({}, {event: EVENT}, handler); }',
+      'const EVENT = "outer"; { const EVENT = dynamic(); createFunction({}, {event: EVENT}, handler); }',
+      "const FIRST = SECOND; const SECOND = FIRST; createFunction({}, {event: FIRST}, handler);",
+    ])
+      expect(() => triggersIn(source, "/consumer.ts", resolver())).toThrow(
+        "cannot resolve",
+      );
+  });
+
+  it("reads constant waits and ignores comments and type declarations", () => {
+    expect(
+      triggersIn(
+        'const EVENT = "ready"; step.waitForEvent("wait", {event: EVENT});',
+        "/wait.ts",
+      ).map((row) => row.event),
+    ).toEqual(["ready"]);
+    expect(
+      triggersIn(
+        '// createFunction({}, {event: "fiction"}, handler);',
+        "/comment.ts",
+      ),
+    ).toEqual([]);
+    expect(
+      sendersIn('type Named = {name: "fiction"}; client.send(payload);'),
+    ).toEqual([]);
+  });
+
+  it("rejects a dynamic registration object instead of losing its trigger", () => {
+    for (const trigger of [
+      "dynamicTrigger",
+      "{...dynamicTrigger}",
+      "[dynamicTrigger]",
+      "[...dynamicTriggers]",
+      "{event}",
+    ]) {
+      expect(() =>
+        triggersIn(`createFunction({}, ${trigger}, handler);`, "/dynamic.ts"),
+      ).toThrow("cannot resolve");
+    }
+    expect(
+      triggersIn(
+        'const event = "ready"; createFunction({}, [{event}], handler);',
+        "/shorthand.ts",
+      ).map((row) => row.event),
+    ).toEqual(["ready"]);
   });
 });

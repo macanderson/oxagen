@@ -25,11 +25,12 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { argv, exit, stdout } from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import ts from "typescript";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
-/** Where triggers are declared. */
-const TRIGGER_ROOT = join(ROOT, "packages/inngest-functions/src");
+/** Concrete registrations live here. The parent directory contains runtime forwarders. */
+const TRIGGER_ROOT = join(ROOT, "packages/inngest-functions/src/functions");
 
 /** Where a sender may live. */
 const SENDER_ROOTS = ["apps", "packages", "tools"].map((d) => join(ROOT, d));
@@ -85,35 +86,290 @@ export function sourceFiles(dir: string, results: string[] = []): string[] {
   return results;
 }
 
-/**
- * Event names this file subscribes to: the `{ event: "…" }` trigger literal
- * `createFunction` takes, and the same shape `step.waitForEvent` parks on —
- * a waited-for event needs a sender for exactly the same reason.
- */
-export function triggersIn(source: string, relPath: string): Trigger[] {
-  const found: Trigger[] = [];
-  const lines = source.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    for (const m of lines[i]!.matchAll(/\bevent:\s*"([^"]+)"/g)) {
-      found.push({ event: m[1]!, location: `${relPath}:${i + 1}` });
+type ResolveEvent = (
+  node: ts.Expression,
+  source: ts.SourceFile,
+) => string | undefined;
+
+/** Resolve literal constants through named imports and re-exports without executing source. */
+export function eventResolver(
+  load: (file: string) => string = (file) => readFileSync(file, "utf8"),
+  resolveImport: (name: string, file: string) => string | undefined = (
+    name,
+    file,
+  ) =>
+    ts.resolveModuleName(
+      name,
+      file,
+      {
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        allowImportingTsExtensions: true,
+      },
+      ts.sys,
+    ).resolvedModule?.resolvedFileName,
+): ResolveEvent {
+  const parsed = new Map<string, ts.SourceFile>();
+  function sourceAt(file: string): ts.SourceFile {
+    let source = parsed.get(file);
+    if (!source) {
+      source = ts.createSourceFile(
+        file,
+        load(file),
+        ts.ScriptTarget.Latest,
+        true,
+      );
+      parsed.set(file, source);
     }
+    return source;
   }
+  function exported(
+    file: string,
+    name: string,
+    seen: Set<string>,
+  ): string | undefined {
+    const source = sourceAt(file);
+    for (const statement of source.statements) {
+      if (
+        ts.isVariableStatement(statement) &&
+        statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+      ) {
+        const declaration = statement.declarationList.declarations.find(
+          (d) => ts.isIdentifier(d.name) && d.name.text === name,
+        );
+        if (
+          declaration?.initializer &&
+          statement.declarationList.flags & ts.NodeFlags.Const
+        )
+          return value(declaration.initializer, source, seen);
+      }
+      if (!ts.isExportDeclaration(statement)) continue;
+      const target =
+        statement.moduleSpecifier &&
+        ts.isStringLiteral(statement.moduleSpecifier)
+          ? resolveImport(statement.moduleSpecifier.text, file)
+          : undefined;
+      if (statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+        const binding = statement.exportClause.elements.find(
+          (e) => e.name.text === name,
+        );
+        if (binding) {
+          const original = binding.propertyName?.text ?? binding.name.text;
+          return target
+            ? named(original, sourceAt(target), seen, true)
+            : named(original, source, seen);
+        }
+      } else if (!statement.exportClause && target) {
+        const result = named(name, sourceAt(target), seen, true);
+        if (result !== undefined) return result;
+      }
+    }
+    return undefined;
+  }
+  function named(
+    name: string,
+    source: ts.SourceFile,
+    seen: Set<string>,
+    onlyExported = false,
+  ): string | undefined {
+    const key = `${source.fileName}:${name}:${onlyExported}`;
+    if (seen.has(key)) return undefined;
+    const next = new Set(seen).add(key);
+    if (onlyExported) return exported(source.fileName, name, next);
+    for (const statement of source.statements) {
+      if (
+        ts.isVariableStatement(statement) &&
+        statement.declarationList.flags & ts.NodeFlags.Const
+      ) {
+        const declaration = statement.declarationList.declarations.find(
+          (d) => ts.isIdentifier(d.name) && d.name.text === name,
+        );
+        if (declaration?.initializer)
+          return value(declaration.initializer, source, next);
+      }
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier)
+      )
+        continue;
+      const imports = statement.importClause?.namedBindings;
+      if (!imports || !ts.isNamedImports(imports)) continue;
+      const binding = imports.elements.find((e) => e.name.text === name);
+      const target =
+        binding &&
+        resolveImport(statement.moduleSpecifier.text, source.fileName);
+      if (binding && target)
+        return named(
+          binding.propertyName?.text ?? binding.name.text,
+          sourceAt(target),
+          next,
+          true,
+        );
+    }
+    return undefined;
+  }
+  function value(
+    node: ts.Expression,
+    source: ts.SourceFile,
+    seen: Set<string>,
+  ): string | undefined {
+    if (ts.isStringLiteralLike(node)) return node.text;
+    if (
+      ts.isAsExpression(node) ||
+      ts.isParenthesizedExpression(node) ||
+      ts.isSatisfiesExpression(node)
+    )
+      return value(node.expression, source, seen);
+    if (ts.isIdentifier(node)) {
+      // A local binding must not borrow an identically named module constant.
+      for (
+        let parent = node.parent;
+        parent && parent !== source;
+        parent = parent.parent
+      ) {
+        const binds = (name: ts.BindingName): boolean =>
+          ts.isIdentifier(name)
+            ? name.text === node.text
+            : name.elements.some(
+                (element) =>
+                  !ts.isOmittedExpression(element) && binds(element.name),
+              );
+        if (
+          ts.isFunctionLike(parent) &&
+          parent.parameters.some((p) => binds(p.name))
+        )
+          return undefined;
+        if (
+          ts.isCatchClause(parent) &&
+          parent.variableDeclaration &&
+          binds(parent.variableDeclaration.name)
+        )
+          return undefined;
+        if (
+          ts.isBlock(parent) &&
+          parent.statements.some(
+            (statement) =>
+              ts.isVariableStatement(statement) &&
+              statement.declarationList.declarations.some((d) => binds(d.name)),
+          )
+        )
+          return undefined;
+      }
+      return named(node.text, source, seen);
+    }
+    return undefined;
+  }
+  return (node, source) => value(node, source, new Set());
+}
+
+function callName(call: ts.CallExpression): string | undefined {
+  return ts.isIdentifier(call.expression)
+    ? call.expression.text
+    : ts.isPropertyAccessExpression(call.expression)
+      ? call.expression.name.text
+      : undefined;
+}
+
+/** Read actual registration and wait calls, ignoring comments and forwarding object shapes. */
+export function triggersIn(
+  source: string,
+  relPath: string,
+  resolveEvent = eventResolver(),
+): Trigger[] {
+  const parsed = ts.createSourceFile(
+    relPath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const found: Trigger[] = [];
+  function visit(node: ts.Node): void {
+    if (
+      ts.isCallExpression(node) &&
+      ((ts.isIdentifier(node.expression) &&
+        node.expression.text === "createFunction") ||
+        callName(node) === "waitForEvent")
+    ) {
+      const trigger = node.arguments[1];
+      if (trigger) {
+        if (
+          !ts.isObjectLiteralExpression(trigger) &&
+          !ts.isArrayLiteralExpression(trigger)
+        )
+          throw new Error(
+            `${relPath}: cannot resolve the event trigger expression`,
+          );
+        const inspect = (part: ts.Node): void => {
+          if (ts.isArrayLiteralExpression(part)) {
+            for (const element of part.elements) inspect(element);
+            return;
+          }
+          if (!ts.isObjectLiteralExpression(part))
+            throw new Error(
+              `${relPath}: cannot resolve the event trigger expression`,
+            );
+          for (const property of part.properties) {
+            if (ts.isSpreadAssignment(property))
+              throw new Error(
+                `${relPath}: cannot resolve a spread event trigger`,
+              );
+            if (property.name?.getText(parsed).replace(/["']/g, "") !== "event")
+              continue;
+            const line =
+              parsed.getLineAndCharacterOfPosition(property.getStart(parsed))
+                .line + 1;
+            const expression = ts.isPropertyAssignment(property)
+              ? property.initializer
+              : ts.isShorthandPropertyAssignment(property)
+                ? property.name
+                : undefined;
+            const event = expression && resolveEvent(expression, parsed);
+            if (event === undefined)
+              throw new Error(
+                `${relPath}:${line}: cannot resolve the event trigger name`,
+              );
+            found.push({ event, location: `${relPath}:${line}` });
+          }
+        };
+        inspect(trigger);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(parsed);
   return found;
 }
 
-/**
- * Event names this file sends.
- *
- * The name literal and the call that ships it are matched per file rather than
- * per line: senders build the payload object first and send it several lines
- * later (`apps/api/src/routes/v1/github-webhook.ts` builds an array and sends
- * it at the end), and a batch send names no event at the call site at all.
- * Requiring the file to carry a send call is what keeps a bare `name: "…"`
- * type annotation from reading as a sender.
- */
-export function sendersIn(source: string): string[] {
-  if (!/\.send\(|\bsendEvent\(/.test(source)) return [];
-  return [...source.matchAll(/\bname:\s*"([^"]+)"/g)].map((m) => m[1]!);
+/** A sender file must contain a send call; names may be built earlier in that file. */
+export function sendersIn(
+  source: string,
+  file = "sender.ts",
+  resolveEvent = eventResolver(),
+): string[] {
+  const parsed = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const names: string[] = [];
+  let sends = false;
+  function visit(node: ts.Node): void {
+    if (
+      ts.isCallExpression(node) &&
+      ["send", "sendEvent"].includes(callName(node) ?? "")
+    )
+      sends = true;
+    if (
+      ts.isPropertyAssignment(node) &&
+      node.name.getText(parsed).replace(/["']/g, "") === "name"
+    ) {
+      const name = resolveEvent(node.initializer, parsed);
+      if (name !== undefined) names.push(name);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(parsed);
+  return sends ? names : [];
 }
 
 /** Triggers whose event nothing sends. */
@@ -128,9 +384,15 @@ export function orphans(
 
 function main(): void {
   const triggers: Trigger[] = [];
+  const resolveEvent = eventResolver();
   for (const file of sourceFiles(TRIGGER_ROOT)) {
     triggers.push(
-      ...triggersIn(readFileSync(file, "utf8"), relative(ROOT, file)),
+      ...triggersIn(readFileSync(file, "utf8"), file, resolveEvent).map(
+        (trigger) => ({
+          ...trigger,
+          location: relative(ROOT, trigger.location),
+        }),
+      ),
     );
   }
 
@@ -140,9 +402,8 @@ function main(): void {
   // shape it reads, not the repository its functions.
   if (triggers.length === 0) {
     stdout.write(
-      'check:inngest-senders — no `{ event: "…" }` trigger could be parsed out of ' +
-        `${relative(ROOT, TRIGGER_ROOT)}. The parser reads that literal; restore ` +
-        "it or update triggersIn(). Refusing to report a pass it cannot prove.\n",
+      `check:inngest-senders: no concrete event trigger found in ${relative(ROOT, TRIGGER_ROOT)}. ` +
+        "Restore the registrations or update the parser before relying on this check.\n",
     );
     exit(1);
   }
@@ -150,7 +411,12 @@ function main(): void {
   const sent = new Set<string>();
   for (const root of SENDER_ROOTS) {
     for (const file of sourceFiles(root)) {
-      for (const name of sendersIn(readFileSync(file, "utf8"))) sent.add(name);
+      for (const name of sendersIn(
+        readFileSync(file, "utf8"),
+        file,
+        resolveEvent,
+      ))
+        sent.add(name);
     }
   }
 
