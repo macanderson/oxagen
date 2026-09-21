@@ -2411,6 +2411,17 @@ type Messages = {
       expires: string;
       never: string;
       empty: string;
+      actions: string;
+      resend: string;
+      revoke: string;
+      working: string;
+      resent: string;
+      revoked: string;
+      deliveryFailed: string;
+      confirmTitle: string;
+      confirmBody: string;
+      confirmRevoke: string;
+      keepInvitation: string;
     };
     invite: {
       open: string;
