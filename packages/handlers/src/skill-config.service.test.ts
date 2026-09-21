@@ -19,6 +19,9 @@ function setup() {
       mergedAt: "2026-09-20T10:00:00.000Z",
       baseRef: "release",
     }),
+    listPullRequestFiles: vi
+      .fn()
+      .mockResolvedValue([{ path: ".oxagen/skills.toml", status: "modified" }]),
     createBranch: vi.fn().mockResolvedValue({}),
     putFile: vi.fn().mockResolvedValue({}),
     openPullRequest: vi.fn().mockResolvedValue({
@@ -54,6 +57,22 @@ function setup() {
   };
 }
 describe("skill configuration publication", () => {
+  it.each([
+    { files: [] },
+    { files: [{ path: "README.md", status: "modified" }] },
+    { files: [{ path: ".oxagen/skills.toml", status: "removed" }] },
+  ])(
+    "refuses unrelated or deleted configuration PR files %j",
+    async ({ files }) => {
+      const { service, github, store } = setup();
+      github.listPullRequestFiles.mockResolvedValue(files);
+      await expect(service.publish(scope, 12)).rejects.toMatchObject({
+        reason: "skill_config_pr_unrelated",
+      });
+      expect(github.getFileContent).not.toHaveBeenCalled();
+      expect(store.publish).not.toHaveBeenCalled();
+    },
+  );
   it("proposes only valid configuration against the binding's approved branch", async () => {
     const { service, github, repository, store } = setup();
     await expect(

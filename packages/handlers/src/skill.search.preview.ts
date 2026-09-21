@@ -38,7 +38,7 @@ export function rankSkillDescriptions(
       : 0;
   });
 }
-export async function readSkillCatalog(
+async function loadSkillCatalog(
   repository: SkillRepository,
   commitSha: string,
   source: string,
@@ -86,6 +86,35 @@ export async function readSkillCatalog(
     );
   }
   return rows;
+}
+// Immutable commits need one catalog read per process. Bound the retained metadata
+// and coalesce concurrent requests; failed reads are never cached.
+const catalogCache = new Map<string, Promise<SkillCandidate[]>>();
+const MAX_CACHED_CATALOGS = 8;
+export async function readSkillCatalog(
+  repository: SkillRepository,
+  commitSha: string,
+  source: string,
+): Promise<SkillCandidate[]> {
+  const key = JSON.stringify([
+    repository.bindingId,
+    repository.owner,
+    repository.repo,
+    commitSha,
+    source,
+  ]);
+  let promise = catalogCache.get(key);
+  if (!promise) {
+    while (catalogCache.size >= MAX_CACHED_CATALOGS)
+      catalogCache.delete(catalogCache.keys().next().value!);
+    promise = loadSkillCatalog(repository, commitSha, source);
+    catalogCache.set(key, promise);
+    const pending = promise;
+    void pending.catch(() => {
+      if (catalogCache.get(key) === pending) catalogCache.delete(key);
+    });
+  }
+  return (await promise).map((row) => ({ ...row }));
 }
 export function createSkillSearchPreviewHandler(deps: {
   store: SkillConfigStore;
