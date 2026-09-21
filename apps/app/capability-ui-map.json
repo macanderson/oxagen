@@ -1145,6 +1145,30 @@
       "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "assigned-issue-batch; CI pending"
+    },
+    "get_skill_config": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering Skills Versions reads the published configuration and history",
+      "proof": "apps/app/src/features/skills/versions.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "skills-console-ci"
+    },
+    "update_skill_config": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering Skills Versions opens a configuration PR, imports repository settings, or publishes a verified merged PR",
+      "proof": "apps/app/src/features/skills/versions.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "skills-console-ci"
+    },
+    "preview_skill_search": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering Skills Search previews descriptions and withheld reasons at a selected immutable version",
+      "proof": "apps/app/src/features/skills/search.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "skills-console-ci"
     }
   }
 }
