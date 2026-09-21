@@ -859,7 +859,7 @@ describe("run-relative time", () => {
     renderSection({ read: twoFrames(), zoom: "everything" });
     const heads = screen
       .getAllByTestId("transcript-frame")
-      .map((frame) => frame.textContent ?? "");
+      .map((frame) => frame.textContent);
     expect(heads[0]).toContain("+0 ms");
     expect(heads[1]).toContain("+12:34");
     // The hour the run happened to start in is not a reading of the run.

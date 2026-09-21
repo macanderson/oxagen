@@ -6,7 +6,7 @@
 // pins against: a run that finished, a run that failed, a run an operator
 // cancelled, a run whose harness died, and a run whose harness stopped
 // reporting all showed the same word.
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { RunOutcome, RunStatus } from "@/data/contracts/runs";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -15,12 +15,16 @@ import { StatusBadge } from "./status-badge";
 
 afterEach(cleanup);
 
-const draw = (status: RunStatus, outcome: RunOutcome) =>
-  render(
+const draw = (status: RunStatus, outcome: RunOutcome) => {
+  const { container } = render(
     <IntlProvider>
       <StatusBadge status={status} outcome={outcome} />
     </IntlProvider>,
-  ).container.firstElementChild as HTMLElement;
+  );
+  const badge = container.querySelector<HTMLElement>("[data-status]");
+  if (badge === null) throw new Error("StatusBadge rendered no badge");
+  return badge;
+};
 
 describe("StatusBadge", () => {
   it("names each terminal state, not one word for all five", () => {
