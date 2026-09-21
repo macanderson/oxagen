@@ -3395,6 +3395,7 @@ type Messages = {
       stepCount: string;
       frameCount: string;
       repeats: string;
+      reply: string;
       seqSpan: string;
       ms: string;
       live: string;
@@ -3458,6 +3459,7 @@ type Messages = {
         brief: string;
         plan: string;
         input: string;
+        reply: string;
       };
     };
     frames: {
