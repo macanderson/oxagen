@@ -3549,7 +3549,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d03ec821ad94e54ec5743b463a2967c625b056a04f938a4b9303ed788d5f560a",
+  "contentHash": "9417eed02efda4de154fa7feb4349b59718de84e0cc142d7355de563f0b78f51",
   "domains": [
     {
       "name": "agent",
@@ -3649,7 +3649,8 @@
         "postgres:billing.spend_counters",
         "postgres:billing.stripe_event_processing",
         "postgres:billing.stripe_events",
-        "postgres:billing.subscriptions"
+        "postgres:billing.subscriptions",
+        "postgres:billing.usage_outbox"
       ]
     },
     {
@@ -3986,7 +3987,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 136
+      "tableCount": 137
     },
     {
       "domains": [
@@ -11194,6 +11195,83 @@
       "id": "postgres:billing.subscriptions",
       "name": "subscriptions",
       "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "usage_complete",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "payload",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "charge",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "admitted_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "finalized_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "delivered_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "attempts",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "next_attempt_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "billing",
+      "id": "postgres:billing.usage_outbox",
+      "name": "usage_outbox",
+      "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
     },
