@@ -231,6 +231,135 @@ describe("run controls", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
+  it("shows the durable ingress fence and disables repeat cancellation", () => {
+    render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId="arun_record1"
+          status="live"
+          source="ledger"
+          enforcementTier="observe"
+          ingressRevoked
+          orgRole="owner"
+          wsRole="owner"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("run-cancel")).toBeDisabled();
+    expect(screen.getByTestId("ledger-ingress-revoked")).toHaveTextContent(
+      "external process may still be running",
+    );
+  });
+
+  it.each([false, true])(
+    "controls ledger ingress honestly, paused=%s",
+    async (paused) => {
+      haltRun.mockResolvedValue({
+        ok: true,
+        value: { commandIds: ["tcm_ingress"] },
+      });
+      const user = userEvent.setup();
+      render(
+        <IntlProvider>
+          <RunControls
+            org="acme"
+            ws="core-platform"
+            runId="arun_record1"
+            status="live"
+            source="ledger"
+            enforcementTier="observe"
+            ingressPaused={paused}
+            orgRole="owner"
+            wsRole="owner"
+          />
+        </IntlProvider>,
+      );
+      const command = paused ? "resume" : "pause";
+      expect(
+        screen.queryByTestId(`run-${paused ? "pause" : "resume"}`),
+      ).toBeNull();
+      expect(screen.getByTestId("run-steer")).toBeDisabled();
+      if (paused)
+        expect(screen.getByTestId("ledger-control-limit")).toHaveTextContent(
+          "Evidence ingress is paused",
+        );
+      await user.click(screen.getByTestId(`run-${command}`));
+      expect(screen.getByRole("dialog")).not.toHaveTextContent(
+        "The agent carries on",
+      );
+      expect(screen.getByRole("dialog")).not.toHaveTextContent(
+        "The model reads this on resume",
+      );
+      await user.click(
+        screen.getByRole("button", {
+          name: paused ? "Resume evidence ingress" : "Pause evidence ingress",
+        }),
+      );
+      await waitFor(() => {
+        expect(haltRun).toHaveBeenCalledWith(
+          "acme",
+          "core-platform",
+          "arun_record1",
+          command,
+          "",
+        );
+      });
+      expect(await screen.findByTestId("queued-command")).toHaveTextContent(
+        "tcm_ingress",
+      );
+    },
+  );
+
+  it("cancels ledger ingress without claiming that the external process stopped", async () => {
+    haltRun.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_cancel"] },
+    });
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId="arun_record1"
+          status="live"
+          source="ledger"
+          enforcementTier="observe"
+          orgRole="owner"
+          wsRole="owner"
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("run-pause")).toBeEnabled();
+    expect(screen.queryByTestId("run-resume")).toBeNull();
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
+    expect(screen.getByTestId("run-cancel")).toBeEnabled();
+    await user.click(screen.getByTestId("run-cancel"));
+    expect(screen.getByTestId("run-cancel-dialog")).toHaveTextContent(
+      "does not stop the external process",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Cancel evidence ingress" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("queued-command")).toHaveTextContent(
+        "tcm_cancel",
+      ),
+    );
+    expect(screen.getByTestId("run-cancel-dialog")).toHaveTextContent(
+      "external process may still be running",
+    );
+    expect(haltRun).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_record1",
+      "cancel",
+      "",
+    );
+  });
+
   it("disables every control, with the reason, for a viewer dispatch_command would refuse (negative)", async () => {
     const user = userEvent.setup();
     render(

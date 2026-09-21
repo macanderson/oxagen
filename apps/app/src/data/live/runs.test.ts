@@ -122,6 +122,8 @@ describe("runs.list", () => {
             replayGrade: null,
             verdict: null,
             enforcementTier: "observe",
+            ingressPaused: false,
+            ingressRevoked: false,
             completenessGaps: ["digest_only"],
             canSummarize: false,
             startedAt: "2026-09-15T08:55:00.000Z",

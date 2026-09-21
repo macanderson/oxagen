@@ -498,19 +498,22 @@ describe("api.key.create handler — protected Stella telemetry scope", () => {
     ).resolves.toBeDefined();
   });
 
-  it("rejects attempts to mint the reserved CLI session purpose", async () => {
-    await expect(
-      apiKeyCreateHandler(
-        {
-          name: "Unauthorized CLI session",
-          scope: { purpose: "cli_session_v1" },
-        },
-        TEST_CTX,
-      ),
-    ).rejects.toMatchObject({ code: "authz_denied" });
-    expect(mocks.withTenantDb).not.toHaveBeenCalled();
-    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
-  });
+  it.each(["cli_session_v1", "ledger_run_v1"])(
+    "rejects attempts to mint reserved purpose %s",
+    async (purpose) => {
+      await expect(
+        apiKeyCreateHandler(
+          {
+            name: "Unauthorized CLI session",
+            scope: { purpose },
+          },
+          TEST_CTX,
+        ),
+      ).rejects.toMatchObject({ code: "authz_denied" });
+      expect(mocks.withTenantDb).not.toHaveBeenCalled();
+      expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+    },
+  );
 
   it("continues to allow unrelated arbitrary scope", async () => {
     const result = await apiKeyCreateHandler(

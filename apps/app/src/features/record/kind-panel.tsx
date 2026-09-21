@@ -41,15 +41,14 @@ import { formatCount } from "@/ui/money-format";
  * (success, warning, destructive) and none is the brand gold, so a reader
  * never mistakes what a record IS for how it is DOING.
  */
-const KIND_FACE: Record<RecordKind, { icon: LucideIcon; hue: string }> =
-  {
-    rule: { icon: Scale, hue: "text-kind-rule" },
-    constraint: { icon: ShieldBan, hue: "text-kind-constraint" },
-    procedure: { icon: ListOrdered, hue: "text-kind-procedure" },
-    fact: { icon: SquareCheckBig, hue: "text-kind-fact" },
-    memory: { icon: Bookmark, hue: "text-kind-memory" },
-    preference: { icon: Heart, hue: "text-kind-preference" },
-  };
+const KIND_FACE: Record<RecordKind, { icon: LucideIcon; hue: string }> = {
+  rule: { icon: Scale, hue: "text-kind-rule" },
+  constraint: { icon: ShieldBan, hue: "text-kind-constraint" },
+  procedure: { icon: ListOrdered, hue: "text-kind-procedure" },
+  fact: { icon: SquareCheckBig, hue: "text-kind-fact" },
+  memory: { icon: Bookmark, hue: "text-kind-memory" },
+  preference: { icon: Heart, hue: "text-kind-preference" },
+};
 
 /** The tinted tile the header and this panel both draw the kind glyph in. */
 export function KindGlyph({

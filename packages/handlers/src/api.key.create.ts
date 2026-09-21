@@ -27,6 +27,7 @@ import {
   requestsReservedTachoGatewayPurpose,
   requestsReservedTachoPurpose,
 } from "./lib/tacho-enrollment";
+import { requestsReservedLedgerRunPurpose } from "@oxagen/oxagen/ledger-run-token";
 import { requestsReservedCliSessionPurpose } from "@oxagen/oxagen/cli-session";
 import { requestsReservedAgentCredentialPurpose } from "@oxagen/oxagen/agent-credential";
 import { logger } from "./logger";
@@ -97,10 +98,13 @@ export const apiKeyCreateHandler: CapabilityHandler<
     );
   }
 
-  if (requestsReservedCliSessionPurpose(input.scope)) {
+  if (
+    requestsReservedCliSessionPurpose(input.scope) ||
+    requestsReservedLedgerRunPurpose(input.scope)
+  ) {
     logger.warn(
       { orgId: ctx.orgId },
-      "api.key.create: rejected — reserved CLI session purpose",
+      "api.key.create: reserved session or run credential purpose",
     );
     throw new CapabilityError(
       "create_api_key",
