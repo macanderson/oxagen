@@ -139,6 +139,7 @@ export function createSkillSearchPreviewHandler(deps: {
       version: snapshot.version,
       repositoryCommitSha: head.sha,
       ...result,
+      withheld: result.withheld.map(({ id, reason }) => ({ id, reason })),
     };
   };
 }
