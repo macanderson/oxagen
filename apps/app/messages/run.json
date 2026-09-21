@@ -67,6 +67,7 @@
       "agent": "AGENT",
       "stepCount": "{count, plural, one {# step} other {# steps}}",
       "frameCount": "{count, plural, one {# frame} other {# frames}}",
+      "repeats": "×{count}",
       "seqSpan": "seq {from} to {to}",
       "ms": "{ms} ms",
       "live": "live",

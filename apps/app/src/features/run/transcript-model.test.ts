@@ -12,6 +12,8 @@ import {
   openAtZoom,
   playDelay,
   stepDigest,
+  toolExchange,
+  visibleFrames,
 } from "./transcript-model";
 
 const { entries } = mockupTranscript();
@@ -442,7 +444,12 @@ describe("effect frames fold into the call they belong to", () => {
     const steps = buildTranscript([
       tool({ seq: "1", callKey: "toolu_a" }),
       effect({ seq: "2", callKey: "toolu_a" }),
-      effect({ seq: "3", type: "file_io", label: "file_io", callKey: "toolu_a" }),
+      effect({
+        seq: "3",
+        type: "file_io",
+        label: "file_io",
+        callKey: "toolu_a",
+      }),
     ])[0]?.steps;
     expect(steps).toHaveLength(1);
     expect(steps?.[0]?.frames).toHaveLength(3);
@@ -517,5 +524,194 @@ describe("stepDigest on a gate frame", () => {
   it("reads an approval the same way", () => {
     expect(gate("allow Write", "approval_decision").name).toBe("allow");
     expect(gate("allow Write", "approval_decision").arg).toBe("Write");
+  });
+});
+
+describe("repeated bookkeeping frames", () => {
+  const bare = (seq: number, type = "oxagen:hook_health") =>
+    transcriptEntry({
+      seq: String(seq),
+      endSeq: String(seq),
+      kind: "frame",
+      type,
+      label: type,
+      request: null,
+      response: null,
+      decision: null,
+      frames: 1,
+      turn: 1,
+      cost: null,
+      cumulativeCost: null,
+      kinds: [],
+    });
+
+  it("folds a run of the same frame with nothing on it into one step with a count", () => {
+    // Claude Code registers its hooks one frame at a time at a session's
+    // start; thirty identical rows before the prompt is what the page drew.
+    const frames = [
+      bare(0, "agent_start"),
+      bare(1),
+      bare(2),
+      bare(3),
+      bare(4, "oxagen:mcp_connection"),
+      bare(5, "oxagen:mcp_connection"),
+      transcriptEntry({ seq: "6", endSeq: "6", turn: 1 }),
+      bare(7),
+    ];
+    const [turn] = buildTranscript(frames);
+    expect(turn?.steps.map((s) => [s.id, s.kind, s.from, s.to])).toEqual([
+      ["s0", "event", 0, 0],
+      ["s1", "event", 1, 3],
+      ["s4", "event", 4, 5],
+      ["s6", "model", 6, 6],
+      ["s7", "event", 7, 7],
+    ]);
+    const folded = turn?.steps[1];
+    if (folded === undefined) throw new Error("expected the folded step");
+    expect(stepDigest(folded).repeats).toBe(3);
+    expect(stepDigest(folded).name).toBe("oxagen:hook_health");
+    // A single frame and a step of another kind carry no count (negative).
+    expect(stepDigest(turn?.steps[0] ?? folded).repeats).toBeNull();
+    expect(stepDigest(turn?.steps[3] ?? folded).repeats).toBeNull();
+  });
+
+  it("does not fold a frame that carries a half or a decision (negative)", () => {
+    const frames = [
+      bare(0),
+      transcriptEntry({
+        seq: "1",
+        endSeq: "1",
+        kind: "frame",
+        type: "oxagen:hook_health",
+        label: "oxagen:hook_health",
+        request: null,
+        response: transcriptBody({ seq: "1", type: "oxagen:hook_health" }),
+        decision: null,
+        turn: 1,
+      }),
+      bare(2),
+    ];
+    const [turn] = buildTranscript(frames);
+    expect(turn?.steps.map((s) => [s.id, s.from, s.to])).toEqual([
+      ["s0", 0, 0],
+      ["s1", 1, 1],
+      ["s2", 2, 2],
+    ]);
+  });
+});
+
+describe("toolExchange", () => {
+  it("reads a wrapped tool receipt apart into its input and its output", () => {
+    const body = JSON.stringify({
+      input: { command: "ls", description: "List" },
+      output: { stdout: "a\nb\n", stderr: "", interrupted: false },
+    });
+    expect(toolExchange(body)).toEqual({
+      input: '{\n  "command": "ls",\n  "description": "List"\n}',
+      output: "a\nb\n",
+    });
+  });
+
+  it("keeps a non-stream output as JSON and a string as itself", () => {
+    expect(
+      toolExchange(JSON.stringify({ input: "x", output: { file: { n: 1 } } })),
+    ).toEqual({ input: "x", output: '{\n  "file": {\n    "n": 1\n  }\n}' });
+  });
+
+  it("is null for a body that is not the receipt shape (negative)", () => {
+    expect(toolExchange("not json")).toBeNull();
+    expect(toolExchange('{"path":"README.md"}')).toBeNull();
+    expect(toolExchange("[1,2]")).toBeNull();
+  });
+});
+
+describe("a tool call sealed by three sources", () => {
+  const call = "toolu_01dupe";
+  const digestOnly = (seq: number) =>
+    transcriptEntry({
+      seq: String(seq),
+      endSeq: String(seq),
+      kind: "tool_call",
+      type: "tool_call",
+      label: "Read ok",
+      callKey: call,
+      kinds: ["tools"],
+      request: null,
+      response: transcriptBody({
+        seq: String(seq),
+        type: "tool_call",
+        fidelity: "digest_only",
+        bytesRef: null,
+        text: null,
+      }),
+      turn: 1,
+      cost: null,
+      cumulativeCost: null,
+    });
+  const frames = [
+    transcriptEntry({
+      seq: "0",
+      endSeq: "0",
+      kind: "tool_call",
+      type: "tool_requested",
+      label: "Read",
+      callKey: call,
+      kinds: ["tools"],
+      request: transcriptBody({ seq: "0", type: "tool_requested", text: "{}" }),
+      response: null,
+      turn: 1,
+      cost: null,
+      cumulativeCost: null,
+    }),
+    transcriptEntry({
+      seq: "1",
+      endSeq: "1",
+      kind: "tool_call",
+      type: "tool_call",
+      label: "Read ok",
+      callKey: call,
+      kinds: ["tools"],
+      request: null,
+      response: transcriptBody({
+        seq: "1",
+        type: "tool_call",
+        text: '{"input":{},"output":"x"}',
+      }),
+      turn: 1,
+      cost: null,
+      cumulativeCost: null,
+    }),
+    transcriptEntry({ seq: "2", endSeq: "2", turn: 1 }),
+    digestOnly(3),
+    digestOnly(4),
+  ];
+
+  it("folds the hook, OTel and transcript copies into one step on the call id", () => {
+    const [turn] = buildTranscript(frames);
+    expect(turn?.steps.map((s) => [s.id, s.kind, s.frames.length])).toEqual([
+      ["s0", "tool", 4],
+      ["s2", "model", 1],
+    ]);
+  });
+
+  it("draws only the copy that carries the body", () => {
+    const [turn] = buildTranscript(frames);
+    const step = turn?.steps[0];
+    if (step === undefined) throw new Error("expected the tool step");
+    expect(visibleFrames(step).map((f) => f.seq)).toEqual(["0", "1"]);
+    // Every copy digest-only: nothing to prefer, so every copy stays (negative).
+    const bare = buildTranscript([digestOnly(0), digestOnly(1)])[0]?.steps[0];
+    if (bare === undefined) throw new Error("expected the bare step");
+    expect(visibleFrames(bare).map((f) => f.seq)).toEqual(["0", "1"]);
+  });
+
+  it("does not fold a call with no call id, or a different one (negative)", () => {
+    const other = { ...digestOnly(3), callKey: "toolu_other" };
+    const none = { ...digestOnly(4), callKey: null };
+    const [requested, called] = frames;
+    if (requested === undefined || called === undefined)
+      throw new Error("expected the request and the call");
+    const [turn] = buildTranscript([requested, called, other, none]);
+    expect(turn?.steps.map((s) => s.id)).toEqual(["s0", "s3", "s4"]);
   });
 });
