@@ -212,7 +212,7 @@ describe("Set a negotiated rate", () => {
       "Nothing was written. The price book is unchanged.",
     );
     expect(screen.getByTestId("spend-price-not-written")).toHaveTextContent(
-      "Not written: Input, Output and Reasoning.",
+      "Not written: Input, Output, and Reasoning. Those classes are still priced as they were.",
     );
     expect(screen.getByTestId("spend-price-failure")).toHaveTextContent(
       "An organization owner, admin or billing member sets a negotiated rate.",
