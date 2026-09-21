@@ -165,6 +165,14 @@ function sidecarFor(file: string): string {
   return join(dirname(file), `.${basename(file)}.oxagen-model-base-url.json`);
 }
 
+/** The receipt survives a reassign that drops this harness from host.json. */
+export function modelBaseUrlBackupPath(
+  harness: ModelBaseUrlHarness,
+  home: string,
+): string {
+  return sidecarFor(fileFor(harness, home));
+}
+
 function sha256(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
 }

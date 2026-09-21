@@ -45,6 +45,7 @@ import {
 import { status } from "./status";
 import { serviceManagerFor } from "../host/service";
 import { unenroll } from "./unenroll";
+import { reassign } from "./reassign";
 
 const ALL: TachoHarness[] = [
   "claude-code",
@@ -468,6 +469,41 @@ describe("install rig: failure injection", () => {
       readFileSync(join(rig.deps.home, ".codex", "config.toml"), "utf8"),
     ).not.toContain(String(RIG_GATEWAY_PORT));
   });
+
+  it.each(["claude-code", "codex"] as const)(
+    "restores a dropped %s receipt after reassign",
+    async (dropped) => {
+      const rig = buildRig(seedHome());
+      expect(
+        (await enroll({ harnesses: ["claude-code", "codex"] }, rig.deps)).ok,
+      ).toBe(true);
+      const retained = dropped === "codex" ? "claude-code" : "codex";
+      expect((await reassign({ harnesses: [retained] }, rig.deps)).ok).toBe(
+        true,
+      );
+      expect(readHostFile(rig.deps.paths.hostFile)?.harnesses).toEqual([
+        retained,
+      ]);
+      const config =
+        dropped === "codex"
+          ? join(rig.deps.home, ".codex", "config.toml")
+          : rig.deps.paths.claudeSettings;
+      const routed = readFileSync(config, "utf8");
+      expect(routed).toContain(String(RIG_GATEWAY_PORT));
+      if (dropped === "claude-code") {
+        writeFileSync(config, "{broken");
+        expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(false);
+        expect(rig.serviceLoaded()).toBe(true);
+        expect(existsSync(rig.deps.paths.deviceKey)).toBe(true);
+        writeFileSync(config, routed);
+      }
+      expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+      expect(readFileSync(config, "utf8")).not.toContain(
+        String(RIG_GATEWAY_PORT),
+      );
+      expect(rig.serviceLoaded()).toBe(false);
+    },
+  );
 
   it.each(["missing", "malformed"])(
     "sweeps every model URL when host metadata is %s",

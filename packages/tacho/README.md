@@ -307,7 +307,8 @@ scan removes abandoned UUID-suffixed body rewrite files. Read-only status and
 export commands leave those files alone so they cannot interrupt a live rewrite.
 A cleanup failure preserves the original evidence and surfaces the filesystem error.
 
-Unenroll restores model URLs for the harnesses listed in valid host metadata.
+Unenroll restores model URLs for the harnesses listed in valid host metadata
+and any harness with a model URL receipt left by an earlier enrollment.
 Missing or malformed metadata triggers a sweep of every supported model URL.
 A failed restore for an enrolled harness keeps the gateway and credentials for
 retry. Systemd removal retains the unit on disable failure and restores it on

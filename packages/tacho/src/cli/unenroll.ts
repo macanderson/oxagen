@@ -12,6 +12,7 @@
  */
 import {
   existsSync,
+  lstatSync,
   readdirSync,
   rmdirSync,
   rmSync,
@@ -31,7 +32,10 @@ import {
   readHostFileLenient,
   writeHostFile,
 } from "../host/host-file";
-import type { ModelBaseUrlHarness } from "../host/model-base-url";
+import {
+  modelBaseUrlBackupPath,
+  type ModelBaseUrlHarness,
+} from "../host/model-base-url";
 import { stripTachoSettings } from "../host/settings-writer";
 import { stripStellaHooks } from "../host/stella-writer";
 import { toProtocolTimestamp } from "../timestamp";
@@ -152,8 +156,9 @@ export const MODEL_BASE_URL_HARNESSES: ModelBaseUrlHarness[] = [
 ];
 
 /**
- * Restore enrolled harnesses when host metadata is valid. With missing or
- * invalid metadata, sweep every supported harness so a lost host.json cannot
+ * Restore enrolled harnesses and any harness with a model URL receipt, which
+ * can survive a reassign. With missing or invalid metadata, sweep every
+ * supported harness so a lost host.json cannot
  * leave an agent pointing at a stopped gateway.
  */
 export async function restoreModelBaseUrlsFor(
@@ -164,8 +169,15 @@ export async function restoreModelBaseUrlsFor(
   const failed: string[] = [];
   if (deps.modelBaseUrls === undefined) return { restored, failed };
   for (const harness of MODEL_BASE_URL_HARNESSES) {
-    if (host !== undefined && !host.harnesses.includes(harness)) continue;
     try {
+      if (host !== undefined && !host.harnesses.includes(harness)) {
+        try {
+          lstatSync(modelBaseUrlBackupPath(harness, deps.home));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+          throw error;
+        }
+      }
       const state = await deps.modelBaseUrls.restore({
         home: deps.home,
         // Restore recognises the proxy's URL on any port; the port only
