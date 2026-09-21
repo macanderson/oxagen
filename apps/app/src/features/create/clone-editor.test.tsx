@@ -276,7 +276,12 @@ describe("configuration clone editor", () => {
     // A dismissal during the write is ignored, and a second submit is refused
     // by the guard rather than by the disabled button alone.
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    fireEvent.submit(source.closest("form") as HTMLFormElement);
+    const form = source.closest("form");
+    if (!form) {
+      throw new Error("Expected the source field to be inside a form");
+    }
+
+    fireEvent.submit(form);
     expect(closeDuringWrite).not.toHaveBeenCalled();
     expect(actions.proposeClone).toHaveBeenCalledTimes(1);
     finish({
