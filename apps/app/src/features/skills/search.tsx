@@ -124,11 +124,11 @@ export function SkillSearch({
               <ul aria-label={t("matches")} className="divide-y divide-border">
                 {result.results.map((skill) => (
                   <li
-                    key={`${skill.source}/${skill.id}@${skill.version}`}
+                    key={`${skill.source}/${skill.skillRef}@${skill.version}`}
                     className="flex flex-col gap-1 py-3"
                   >
                     <p className={mono}>
-                      {skill.id}@{skill.version}
+                      {skill.skillRef}@{skill.version}
                     </p>
                     <p className="text-sm">{skill.description}</p>
                     <p className="text-xs text-muted-foreground">
@@ -150,11 +150,11 @@ export function SkillSearch({
             <ul aria-label={t("heldList")} className="divide-y divide-border">
               {result.withheld.map((skill) => (
                 <li
-                  key={`${skill.source}/${skill.id}@${skill.version}`}
+                  key={`${skill.source}/${skill.skillRef}@${skill.version}`}
                   className="flex flex-wrap gap-2 py-2 text-sm"
                 >
                   <code>
-                    {skill.id}@{skill.version}
+                    {skill.skillRef}@{skill.version}
                   </code>
                   <span>{t(skill.reason)}</span>
                 </li>

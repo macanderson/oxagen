@@ -2,10 +2,12 @@
 
 import { skillConfigUpdate } from "@oxagen/oxagen/contracts/skill.config.update";
 import { skillSearchPreview } from "@oxagen/oxagen/contracts/skill.search.preview";
-import type {
-  SkillConfigChange,
-  SkillSearchPreview,
+import {
+  SkillSearchPreview as SkillSearchPreviewSchema,
+  type SkillConfigChange,
+  type SkillSearchPreview,
 } from "@/data/contracts/skills";
+import { toSkillSearchPreview } from "@/data/live/mappers/skills";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -17,13 +19,19 @@ export async function previewSkillSearch(
   query: string,
 ): Promise<ActionResult<SkillSearchPreview>> {
   const ctx = await requireViewer(org, ws);
-  return readToActionResult(
-    await kernelRead(ctx, {
-      contract: skillSearchPreview,
-      input: { version, query },
-      page: "skills",
-    }),
+  const read = await kernelRead(ctx, {
+    contract: skillSearchPreview,
+    input: { version, query },
+    page: "skills",
+  });
+  if (!read.ok) return readToActionResult(read);
+  const parsed = SkillSearchPreviewSchema.safeParse(
+    toSkillSearchPreview(read.value),
   );
+  if (!parsed.success) {
+    return { ok: false, reason: "unavailable", code: "record_unmappable" };
+  }
+  return { ok: true, value: parsed.data };
 }
 
 export async function proposeSkillConfig(
