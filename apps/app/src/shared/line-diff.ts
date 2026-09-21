@@ -45,7 +45,7 @@ export function diffStat(base: string, draft: string): DiffStat {
 }
 
 /** What happened to one line. */
-export type DiffOp = "add" | "del" | "ctx";
+type DiffOp = "add" | "del" | "ctx";
 
 export type DiffLine = {
   op: DiffOp;
@@ -56,7 +56,7 @@ export type DiffLine = {
   after: number | null;
 };
 
-export type DiffHunk = {
+type DiffHunk = {
   /** The first line the hunk covers, 1-based, in each text. */
   beforeStart: number;
   afterStart: number;
@@ -78,7 +78,7 @@ export type LineDiff = {
 /** Above this many cells the table is not built. 4 MB of booleans is the ceiling. */
 const MAX_CELLS = 2_000_000;
 /** Unchanged lines kept either side of a change, as `diff -U3` keeps them. */
-export const DIFF_CONTEXT = 3;
+const DIFF_CONTEXT = 3;
 
 function lines(text: string): string[] {
   if (text === "") return [];
@@ -108,7 +108,7 @@ function lcsTable(a: readonly string[], b: readonly string[]): Uint32Array {
 }
 
 /** Every line of both texts, in order, each marked with what happened to it. */
-export function diffLines(before: string, after: string): DiffLine[] {
+function diffLines(before: string, after: string): DiffLine[] {
   const a = lines(before);
   const b = lines(after);
   const out: DiffLine[] = [];
@@ -215,3 +215,16 @@ export function buildDiff(before: string, after: string): LineDiff {
     wholesale,
   };
 }
+
+/**
+ * `knip --production --strict` (INV-16, `apps/app/ARCHITECTURE.md` §4) reads
+ * a test-only export as dead code, since production traversal never opens a
+ * test file. `diffLines` and `DIFF_CONTEXT` are exercised directly by
+ * `line-diff.test.ts`, so they hang off `buildDiff`, which production
+ * already imports, rather than carry their own export (see the matching
+ * comment on `toolDetail` in `../features/run/tool-detail.ts`). A direct
+ * property, not `Object.assign` (INV-02 bans it everywhere but the viewer
+ * seam): the compiler widens `buildDiff`'s own type to include it without a
+ * cast.
+ */
+buildDiff.testing = { diffLines, DIFF_CONTEXT };

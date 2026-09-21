@@ -1,28 +1,32 @@
 import { describe, expect, it } from "vitest";
-import {
+import { type ToolDetail, toolDetail } from "./tool-detail";
+
+// The pure helpers below are not part of the module's production surface
+// (nothing outside this file and `toolDetail` itself imports them), so they
+// hang off `toolDetail.testing` rather than their own export; see the
+// comment on that assignment in `tool-detail.ts`.
+const {
   CREATE_PREVIEW,
-  groupOf,
   OUTPUT_PREVIEW,
+  groupOf,
   parseBody,
   shortPath,
   splitBody,
-  type ToolPane,
-  toolDetail,
-} from "./tool-detail";
+} = toolDetail.testing;
 
 /** The body as the recorder writes it: JSON, on one line. */
 function body(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function panes(detail: { panes: ToolPane[] } | null): ToolPane[] {
+function panes(detail: ToolDetail | null): ToolDetail["panes"] {
   return detail?.panes ?? [];
 }
 
 function pane(
-  detail: { panes: ToolPane[] } | null,
+  detail: ToolDetail | null,
   label: string,
-): ToolPane | undefined {
+): ToolDetail["panes"][number] | undefined {
   return panes(detail).find((each) => each.label === label);
 }
 

@@ -56,7 +56,7 @@ export type ToolGroup =
  * translated: a literal here would be one English word the catalogue never
  * sees, in a file no translator opens.
  */
-export type PaneLabel =
+type PaneLabel =
   | "command"
   | "output"
   | "diff"
@@ -67,7 +67,7 @@ export type PaneLabel =
   | "plan"
   | "input";
 
-export type ToolPane =
+type ToolPane =
   | {
       kind: "code";
       /** What the pane holds, for the heading above it. */
@@ -124,7 +124,7 @@ function firstStr(source: Json | null, ...keys: string[]): string | null {
 }
 
 /** The body text as JSON, or null when it is not JSON at all. */
-export function parseBody(text: string | null): unknown {
+function parseBody(text: string | null): unknown {
   if (text === null) return null;
   const trimmed = text.trim();
   if (trimmed === "") return null;
@@ -146,7 +146,7 @@ export function parseBody(text: string | null): unknown {
  * body that matches none of these is treated as the input itself, which is
  * what the bare-input shape already is.
  */
-export function splitBody(parsed: unknown): {
+function splitBody(parsed: unknown): {
   input: Json | null;
   output: unknown;
   name: string | null;
@@ -228,7 +228,7 @@ const GROUPS: Readonly<Record<string, ToolGroup>> = {
 };
 
 /** The family a tool name belongs to; `mcp__server__tool` is always `mcp`. */
-export function groupOf(name: string): ToolGroup {
+function groupOf(name: string): ToolGroup {
   if (name.startsWith("mcp__")) return "mcp";
   return GROUPS[name.toLowerCase()] ?? "tool";
 }
@@ -242,7 +242,7 @@ function mcpParts(name: string): { server: string; tool: string } | null {
 }
 
 /** A path as the reader knows it: the last two segments, never the whole tree. */
-export function shortPath(path: string): string {
+function shortPath(path: string): string {
   const parts = path.split("/").filter((part) => part !== "");
   if (parts.length <= 2) return path;
   return `…/${parts.slice(-2).join("/")}`;
@@ -251,9 +251,9 @@ export function shortPath(path: string): string {
 // ── Per-tool readings ───────────────────────────────────────────────────────
 
 /** How many lines of a created file or a fetched body open expanded. */
-export const CREATE_PREVIEW = 20;
+const CREATE_PREVIEW = 20;
 /** How many lines of a read file, a command's output or an unknown input open expanded. */
-export const OUTPUT_PREVIEW = 5;
+const OUTPUT_PREVIEW = 5;
 
 function firstLine(text: string): { head: string; multiline: boolean } {
   const index = text.indexOf("\n");
@@ -580,3 +580,24 @@ export function toolDetail(
       return genericDetail(tool, input, output);
   }
 }
+
+/**
+ * `knip --production --strict` (INV-16, `apps/app/ARCHITECTURE.md` §4) reads
+ * a test-only export as dead code: production traversal starts at pages and
+ * layouts and never opens a test file, so an export nothing else imports
+ * reads as unused even though `tool-detail.test.ts` exercises it directly.
+ * Hanging the pure helpers this file tests in isolation off `toolDetail`,
+ * which production already imports, needs no listing in the shrink-only
+ * `knip-baseline.json` (`recovery-code-vault.ts` carries the same pattern
+ * for the same reason). A direct property, not `Object.assign` (INV-02
+ * bans it everywhere but the viewer seam): the compiler widens `toolDetail`'s
+ * own type to include it without a cast.
+ */
+toolDetail.testing = {
+  parseBody,
+  splitBody,
+  groupOf,
+  shortPath,
+  CREATE_PREVIEW,
+  OUTPUT_PREVIEW,
+};
