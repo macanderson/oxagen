@@ -30,7 +30,7 @@ describe("skill search preview", () => {
         tokenCost: 40,
         results: [
           {
-            id: "review",
+            skillRef: "review",
             version: "1.0.0",
             digest: "sha256:a",
             source: "workspace",
@@ -41,7 +41,7 @@ describe("skill search preview", () => {
         ],
         withheld: [
           {
-            id: "secret",
+            skillRef: "secret",
             version: "2.0.0",
             digest: "sha256:b",
             source: "workspace",

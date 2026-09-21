@@ -82,13 +82,31 @@ describe("skill console actions", () => {
     invoke.mockResolvedValue({
       version: "skl_v3",
       repositoryCommitSha: "a".repeat(40),
-      results: [],
+      results: [
+        {
+          id: "code-review",
+          version: "1.2.0",
+          digest: `sha256:${"b".repeat(64)}`,
+          source: "workspace",
+          description: "Review a diff",
+          tokenCost: 40,
+          score: 0.9,
+        },
+      ],
       withheld: [],
-      tokenCost: 0,
+      tokenCost: 40,
     });
+    // The candidate's catalogue slug reaches the page as `skillRef`: the view
+    // model refuses to name a value Oxagen never minted `id` (INV-11).
     expect(
       await previewSkillSearch("acme", "core-platform", "skl_v3", "review"),
-    ).toMatchObject({ ok: true, value: { version: "skl_v3" } });
+    ).toMatchObject({
+      ok: true,
+      value: {
+        version: "skl_v3",
+        results: [{ skillRef: "code-review", version: "1.2.0" }],
+      },
+    });
     expect(invoke).toHaveBeenCalledWith(
       "preview_skill_search",
       { version: "skl_v3", query: "review" },

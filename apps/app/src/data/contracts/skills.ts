@@ -9,6 +9,7 @@
 // distinct count behind the name past that cap — never rejected or re-split
 // from a delimited string (ADR-104, #3103).
 import { z } from "zod";
+import { PublicId } from "./common";
 
 const Count = z.number().int().nonnegative();
 const Instant = z.iso.datetime();
@@ -39,7 +40,7 @@ export const SkillInventory = z.object({
 export type SkillInventory = z.infer<typeof SkillInventory>;
 
 const SkillVersion = z.object({
-  id: z.string(),
+  id: PublicId,
   version: z.string(),
   commitSha: z.string(),
   pullRequestNumber: z.number().int().positive().nullable(),
@@ -58,7 +59,12 @@ export const SkillConfiguration = z.object({
 export type SkillConfiguration = z.infer<typeof SkillConfiguration>;
 
 const SkillCandidate = z.object({
-  id: z.string(),
+  /**
+   * The skill's own slug in the repository catalogue (`code-review`), not an
+   * Oxagen public id: Oxagen neither mints it nor can validate it, so it is a
+   * ref (INV-11).
+   */
+  skillRef: z.string().min(1),
   version: z.string(),
   digest: z.string(),
   source: z.string(),
