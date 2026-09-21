@@ -601,3 +601,6 @@ after the registered name separately when their contract uses a dotted stem.
 | [update_model_settings](workspace.model_settings.write.md) | [workspace.model_settings.write.ts](../../packages/oxagen/src/contracts/workspace.model_settings.write.ts) | api, mcp, agent |
 | [update_prompt_settings](prompt.settings.write.md) | [prompt.settings.write.ts](../../packages/oxagen/src/contracts/prompt.settings.write.ts) | api, mcp, agent |
 | [update_workspace_settings](workspace.settings.write.md) | [workspace.settings.write.ts](../../packages/oxagen/src/contracts/workspace.settings.write.ts) | api, mcp, agent |
+| [get_skill_config](skill.config.get.md) | [skill.config.get.ts](../../packages/oxagen/src/contracts/skill.config.get.ts) | api, mcp |
+| [update_skill_config](skill.config.update.md) | [skill.config.update.ts](../../packages/oxagen/src/contracts/skill.config.update.ts) | api, mcp |
+| [preview_skill_search](skill.search.preview.md) | [skill.search.preview.ts](../../packages/oxagen/src/contracts/skill.search.preview.ts) | api, mcp |

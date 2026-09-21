@@ -49,6 +49,7 @@ export const PG_DOMAINS: readonly string[] = [
   "ratelimit",
   "schema_registry",
   "security",
+  "skills",
   // Hosts, sessions, and control state for agents Oxagen does not run.
   "tacho",
   // Mandates and their ledger (ADR-059).
