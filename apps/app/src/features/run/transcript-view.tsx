@@ -52,9 +52,8 @@ import {
 import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
-import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
-import { formatClock, formatCount } from "@/ui/money-format";
+import { formatClock, formatCount, formatDuration } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
@@ -212,7 +211,7 @@ function FrameDetail({
   runId,
 }: { frame: TranscriptEntry } & Place) {
   const t = useTranslations("run.transcript");
-  const format = useFormatter();
+  const locale = useLocale();
   const place = { org, ws, runId };
   // The halves are read by name, never positionally. At `everything` a frame
   // carries one of them; at a folded zoom a tool step carries its input in
@@ -245,7 +244,11 @@ function FrameDetail({
         <span className="ml-auto font-mono text-[10.5px] text-muted-foreground">
           {t("frameHead", {
             seq: frame.seq,
-            time: format.dateTime(new Date(frame.at), { timeStyle: "medium" }),
+            // Run-relative, not wall-clock: a frame's place in the run is
+            // what a reader is locating, and it is the reading the transport
+            // below counts in. The absolute instant stays on the step rail's
+            // `dateTime`, so nothing the record holds is dropped.
+            time: formatDuration(frame.elapsedMs, locale),
             fidelity: t(`fidelity.${headline?.fidelity ?? "digest_only"}`),
           })}
         </span>
@@ -315,7 +318,6 @@ function StepRow({
   place: Place;
 }) {
   const t = useTranslations("run.transcript");
-  const format = useFormatter();
   const locale = useLocale();
   const { first } = step;
   const isNow = pos >= step.from && pos <= step.to;
@@ -339,10 +341,7 @@ function StepRow({
             dateTime={first.at}
             className="pr-2 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground"
           >
-            {format.dateTime(new Date(first.at), {
-              minute: "2-digit",
-              second: "2-digit",
-            })}
+            {formatClock(first.elapsedMs / 1000, locale)}
           </time>
           <span className="relative text-center before:absolute before:-top-3 before:-bottom-3 before:left-1/2 before:w-px before:bg-border">
             <span

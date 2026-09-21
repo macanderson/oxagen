@@ -15,6 +15,10 @@ import {
   tachoPageQuery,
   tachoSessionQuery,
   ledgerIdentityQuery,
+  ledgerRunOutcome,
+  ledgerRunStatus,
+  tachoRunOutcome,
+  tachoRunStatus,
 } from "./run.list";
 import {
   ctx,
@@ -1011,3 +1015,36 @@ describe("a run row names who ran it, on what, with which model", () => {
 function out(page: { runs: readonly unknown[] }): unknown {
   return page.runs[0];
 }
+
+// The outcome each store recorded, carried rather than folded. A row's status
+// says a run ended; only its outcome says how.
+describe("run outcome", () => {
+  it("carries the ledger's own word", () => {
+    expect(ledgerRunOutcome("pending")).toBe("running");
+    expect(ledgerRunOutcome("running")).toBe("running");
+    expect(ledgerRunOutcome("completed")).toBe("completed");
+    expect(ledgerRunOutcome("failed")).toBe("failed");
+    expect(ledgerRunOutcome("cancelled")).toBe("cancelled");
+  });
+
+  it("keeps a failed ledger run apart from a completed one, which the status does not", () => {
+    expect(ledgerRunStatus("failed")).toBe(ledgerRunStatus("completed"));
+    expect(ledgerRunOutcome("failed")).not.toBe(ledgerRunOutcome("completed"));
+  });
+
+  it("reads a session's aborted as cancelled and leaves unknown unknown", () => {
+    expect(tachoRunOutcome("running")).toBe("running");
+    expect(tachoRunOutcome("completed")).toBe("completed");
+    expect(tachoRunOutcome("aborted")).toBe("cancelled");
+    expect(tachoRunOutcome("crashed")).toBe("crashed");
+    expect(tachoRunOutcome("unknown")).toBe("unknown");
+  });
+
+  it("fails on a word outside either CHECK rather than guessing (negative)", () => {
+    expect(() => ledgerRunOutcome("abandoned")).toThrow(RangeError);
+    expect(() => tachoRunOutcome("abandoned")).toThrow(RangeError);
+    // The status read guessed `sealed` here, which said the record was
+    // complete when the row said nothing of the kind.
+    expect(() => tachoRunStatus("abandoned")).toThrow(RangeError);
+  });
+});

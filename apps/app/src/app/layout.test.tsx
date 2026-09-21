@@ -15,6 +15,11 @@ const { generateMetadata } = await import("./layout");
 const ENV = { ...process.env };
 beforeEach(() => {
   delete process.env.NEXT_PUBLIC_APP_URL;
+  // `NODE_ENV` decides the fallback origin, so a shell that exports
+  // `development` (every `next dev` terminal) would otherwise flip the
+  // production cases to localhost. Pin it; the one development case
+  // stubs over this.
+  vi.stubEnv("NODE_ENV", "test");
 });
 afterEach(() => {
   process.env = { ...ENV };
