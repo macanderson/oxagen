@@ -1,19 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
+import { requireScope, runInTenantScope } from "@oxagen/tenancy";
 const mocks = vi.hoisted(() => ({
-  insertTokenUsage: vi.fn(),
-  recordSpend: vi.fn(),
+  admit: vi.fn(),
+  finalize: vi.fn(),
+  stamp: vi.fn(),
 }));
-
-vi.mock("@oxagen/telemetry", () => ({
-  insertTokenUsage: mocks.insertTokenUsage,
+vi.mock("@oxagen/billing", () => ({
+  admitUsage: mocks.admit,
+  finalizeUsage: mocks.finalize,
 }));
-vi.mock("@oxagen/billing", () => ({ recordSpend: mocks.recordSpend }));
-
-import { recordTokenUsage } from "./record-token-usage";
-
+vi.mock("@oxagen/telemetry", () => ({ stampTokenUsage: mocks.stamp }));
+import { admitTokenUsage, recordTokenUsage } from "./record-token-usage";
 const row = {
-  execution_step_id: "00000000-0000-4000-8000-00000000aaaa",
+  execution_step_id: null,
   org_id: "00000000-0000-4000-8000-000000000001",
   workspace_id: "00000000-0000-4000-8000-000000000002",
   model: "claude-sonnet-5",
@@ -21,40 +20,65 @@ const row = {
   input_tokens: 100,
   output_tokens: 20,
   cached_tokens: 0,
-  cache_write_tokens: 0,
   cost_usd_micros: 330,
   duration_ms: 12,
   surface: "api" as const,
-  prompt_hash: "aabbccdd",
+  prompt_hash: "aabb",
   created_at: "2026-09-14T10:00:00.000Z",
 };
-
-describe("recordTokenUsage", () => {
-  beforeEach(() => {
-    mocks.insertTokenUsage.mockReset().mockResolvedValue(undefined);
-    mocks.recordSpend.mockReset().mockResolvedValue(undefined);
+beforeEach(() => {
+  mocks.admit.mockReset().mockResolvedValue("call-id");
+  mocks.finalize.mockReset().mockResolvedValue(undefined);
+  mocks.stamp
+    .mockReset()
+    .mockImplementation((rows) =>
+      rows.map((r: object) => ({ ...r, trace_id: "captured-trace" })),
+    );
+});
+describe("durable usage boundary", () => {
+  it("admits with explicit tenant scope before a provider can run", async () => {
+    mocks.admit.mockImplementation(async () => {
+      expect(requireScope()).toMatchObject({
+        orgId: row.org_id,
+        workspaceId: row.workspace_id,
+      });
+      return "call-id";
+    });
+    await expect(admitTokenUsage(row.org_id, row.workspace_id)).resolves.toBe(
+      "call-id",
+    );
   });
-
-  it("writes the frame and adds its micros to the org, workspace and day", async () => {
-    await recordTokenUsage([row]);
-    expect(mocks.insertTokenUsage).toHaveBeenCalledWith([row]);
-    expect(mocks.recordSpend).toHaveBeenCalledWith({
-      orgId: row.org_id,
-      workspaceId: row.workspace_id,
-      at: new Date(row.created_at),
-      micros: 330n,
+  it("propagates admission refusal", async () => {
+    mocks.admit.mockRejectedValue(new Error("database unavailable"));
+    await expect(admitTokenUsage(row.org_id, row.workspace_id)).rejects.toThrow(
+      "database unavailable",
+    );
+  });
+  it("captures attribution before queuing and preserves scope", async () => {
+    mocks.finalize.mockImplementation(async () => {
+      expect(requireScope().principalId).toBe(
+        "00000000-0000-4000-8000-000000000003",
+      );
+    });
+    await runInTenantScope(
+      {
+        orgId: row.org_id,
+        workspaceId: row.workspace_id,
+        principalId: "00000000-0000-4000-8000-000000000003",
+      },
+      () => recordTokenUsage("call-id", row, undefined, false),
+    );
+    expect(mocks.finalize).toHaveBeenCalledWith({
+      id: "call-id",
+      row: { ...row, trace_id: "captured-trace" },
+      charge: undefined,
+      complete: false,
     });
   });
-
-  it("moves the counter when the frame store is down", async () => {
-    mocks.insertTokenUsage.mockRejectedValueOnce(new Error("CH down"));
-    await expect(recordTokenUsage([row])).resolves.toBeUndefined();
-    expect(mocks.recordSpend).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the frame when the counter write fails", async () => {
-    mocks.recordSpend.mockRejectedValueOnce(new Error("PG down"));
-    await expect(recordTokenUsage([row])).resolves.toBeUndefined();
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+  it("does not hide settlement failure", async () => {
+    mocks.finalize.mockRejectedValue(new Error("settlement failed"));
+    await expect(recordTokenUsage("call-id", row)).rejects.toThrow(
+      "settlement failed",
+    );
   });
 });

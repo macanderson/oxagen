@@ -70,6 +70,13 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     ...real,
     providerCostUsdMicros: mocks.providerCostUsdMicros,
     chargeUsageCredits: mocks.chargeUsageCredits,
+    admitUsage: vi.fn(async () => "00000000-0000-4000-8000-000000000099"),
+    finalizeUsage: vi.fn(
+      async ({ row, charge }: { row: unknown; charge?: unknown }) => {
+        await mocks.insertTokenUsage([row]);
+        if (charge) await mocks.chargeUsageCredits(charge);
+      },
+    ),
     recordSpend: mocks.recordSpend,
   };
 });
@@ -154,18 +161,18 @@ describe("embedText (@oxagen/ai)", () => {
     expect(row.output_tokens).toBe(0);
   });
 
-  it("swallows telemetry errors and still returns the embedding", async () => {
+  it("propagates telemetry persistence failure", async () => {
     mocks.insertTokenUsage.mockRejectedValueOnce(new Error("clickhouse down"));
-    const v = await embedText("resilient", {
-      telemetry: {
-        orgId: "00000000-0000-4000-8000-000000000003",
-        workspaceId: "00000000-0000-4000-8000-000000000004",
-        surface: "api",
-        executionStepId: "req_xyz",
-      },
-    });
-    // Embedding must succeed even when ClickHouse is unreachable.
-    expect(v).toHaveLength(1536);
+    await expect(
+      embedText("resilient", {
+        telemetry: {
+          orgId: "00000000-0000-4000-8000-000000000003",
+          workspaceId: "00000000-0000-4000-8000-000000000004",
+          surface: "api",
+          executionStepId: "req_xyz",
+        },
+      }),
+    ).rejects.toThrow("clickhouse down");
   });
 
   it("debits credits via chargeUsageCredits exactly once with the correct fields", async () => {
@@ -233,11 +240,11 @@ describe("embedText (@oxagen/ai)", () => {
     expect(chargeSucceeded).toBe(true);
   });
 
-  it("swallows credit-charge errors and still returns the embedding", async () => {
+  it("propagates credit-charge persistence failure", async () => {
     mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
-    const v = await embedText("resilient", { telemetry: BASE_TELEMETRY });
-    // Embedding must succeed even when billing is unreachable.
-    expect(v).toHaveLength(1536);
+    await expect(
+      embedText("resilient", { telemetry: BASE_TELEMETRY }),
+    ).rejects.toThrow("billing down");
   });
 
   // Regression: ingestion embeds (embedEntity / dedup resolve / repo-file embed)
@@ -248,7 +255,7 @@ describe("embedText (@oxagen/ai)", () => {
   // non-UUID string — otherwise the CH row drops and the credit charge throws &
   // is swallowed (unbilled embeddings). Fails on the pre-fix code (executionStepId
   // was typed `string`, callers sent `embed:<nodeId>`).
-  it("passes null execution_step_id through to token_usage when there is no step", async () => {
+  it("stores the nil UUID for an absent execution step", async () => {
     await embedText("ingestion embed", {
       telemetry: {
         orgId: "00000000-0000-4000-8000-000000000001",
@@ -260,9 +267,9 @@ describe("embedText (@oxagen/ai)", () => {
     const rows = (
       mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]]
     )[0];
-    expect(rows[0]!.execution_step_id).toBeNull();
-    // It must never be a synthesized correlation string.
-    expect(typeof rows[0]!.execution_step_id).not.toBe("string");
+    expect(rows[0]!.execution_step_id).toBe(
+      "00000000-0000-0000-0000-000000000000",
+    );
   });
 
   it("charges credits with referenceId undefined (not a non-UUID string) when there is no step", async () => {

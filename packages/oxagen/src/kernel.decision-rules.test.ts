@@ -12,6 +12,9 @@ import {
   clearDecisionRulesGate,
   clearHandlersForTests,
   clearSecurityEventEmitter,
+  clearKernelTraceSink,
+  setKernelTraceSink,
+  setSecurityEventEmitter,
   invoke,
   registerHandler,
   setDecisionRulesGate,
@@ -47,6 +50,7 @@ afterEach(() => {
   clearHandlersForTests();
   clearRegistryForTests();
   clearSecurityEventEmitter();
+  clearKernelTraceSink();
   vi.restoreAllMocks();
 });
 
@@ -78,6 +82,43 @@ describe("kernel decision-rules gate", () => {
       }),
     ).rejects.toMatchObject({ code: "decision_rules_unavailable" });
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("records unavailable rule authority in both events during fresh admission", async () => {
+    registerRefund();
+    const handler = vi.fn(async () => ({ ok: true }));
+    registerHandler("test.refund", async () => handler);
+    const security = vi.fn();
+    const trace = vi.fn();
+    setSecurityEventEmitter(security);
+    setKernelTraceSink(trace);
+    const failure = Object.assign(
+      new Error("Current decision rules are unavailable"),
+      {
+        code: "decision_rules_unavailable",
+      },
+    );
+    setDecisionRulesGate(async () => {
+      throw failure;
+    });
+    await expect(
+      invoke("test.refund", { amount_usd: 10 }, ctx, {
+        requireFreshRules: true,
+      }),
+    ).rejects.toBe(failure);
+    expect(handler).not.toHaveBeenCalled();
+    expect(security).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "error",
+        errorCode: "decision_rules_unavailable",
+      }),
+    );
+    expect(trace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "error",
+        errorCode: "decision_rules_unavailable",
+      }),
+    );
   });
 
   it("refuses BEFORE the handler runs, with the gate's own error", async () => {

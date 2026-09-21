@@ -9,6 +9,7 @@ import {
   statSync,
   writeFileSync,
   writeSync,
+  unlinkSync,
 } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -26,10 +27,75 @@ vi.mock("node:fs", async (importOriginal) => {
     writeSync: vi.fn(actual.writeSync),
     fsyncSync: vi.fn(actual.fsyncSync),
     renameSync: vi.fn(actual.renameSync),
+    unlinkSync: vi.fn(actual.unlinkSync),
   };
 });
 
 describe("Wal", () => {
+  it("collects abandoned rewrites only during the writer's compaction scan", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const session = minimalSession();
+    const uuid = session[0]!.session_uuid;
+    wal.append(session);
+    wal.markShipped(uuid, -1);
+    const bodyPath = join(paths.wal, `${uuid}.bodies.jsonl`);
+    writeFileSync(bodyPath, "retained body\n");
+    const partial = `${bodyPath}.00000000-0000-4000-8000-000000000001.tmp`;
+    const complete = `${bodyPath}.00000000-0000-4000-8000-000000000002.tmp`;
+    const unrelated = `${bodyPath}.not-a-rewrite.tmp`;
+    for (const path of [partial, complete, unrelated])
+      writeFileSync(path, "copy");
+    const preserved = [
+      bodyPath,
+      join(paths.wal, `${uuid}.ndjson`),
+      join(paths.wal, "cursor.json"),
+      unrelated,
+    ];
+    const before = preserved.map((path) => readFileSync(path, "utf8"));
+    const restarted = new Wal(paths.wal);
+    expect(existsSync(partial)).toBe(true);
+    expect(restarted.compact(Date.now(), 86_400_000)).toEqual([]);
+    expect(existsSync(partial)).toBe(false);
+    expect(existsSync(complete)).toBe(false);
+    restarted.compact(Date.now(), 86_400_000);
+    expect(preserved.map((path) => readFileSync(path, "utf8"))).toEqual(before);
+  });
+
+  it("retains evidence and retries when abandoned rewrite cleanup fails", () => {
+    const paths = scratchPaths();
+    const failures = vi.fn();
+    const wal = new Wal(paths.wal, failures);
+    const session = minimalSession();
+    wal.append(session);
+    const tmp = join(
+      paths.wal,
+      `${session[0]!.session_uuid}.bodies.jsonl.00000000-0000-4000-8000-000000000001.tmp`,
+    );
+    writeFileSync(tmp, "partial copy");
+    const expiredId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const expired = session.map((event) => ({
+      ...event,
+      session_uuid: expiredId,
+    }));
+    wal.append(expired);
+    wal.markShipped(expiredId, expired.at(-1)!.seq);
+    vi.mocked(unlinkSync).mockImplementationOnce(() => {
+      throw Object.assign(new Error("cleanup denied"), { code: "EACCES" });
+    });
+    expect(wal.compact(Date.now() + 1000, 0)).toContain(expiredId);
+    expect(existsSync(join(paths.wal, `${expiredId}.ndjson`))).toBe(false);
+    expect(failures).toHaveBeenCalledWith({
+      session_uuid: session[0]!.session_uuid,
+      operation: "cleanup",
+      code: "EACCES",
+    });
+    expect(existsSync(tmp)).toBe(true);
+    expect(wal.unshipped(100)).toEqual(session);
+    wal.compact(Date.now(), 0);
+    expect(existsSync(tmp)).toBe(false);
+  });
+
   it("reads and rewrites bodies without converting the whole file to a string", async () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
