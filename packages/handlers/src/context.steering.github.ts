@@ -111,6 +111,10 @@ export interface SteeringGitHub {
     repo: SteeringRepository,
     args: { title: string; head: string; base: string; body: string },
   ): Promise<{ number: number; htmlUrl: string }>;
+  updatePullRequest(
+    repo: SteeringRepository,
+    args: { number: number; title: string; body: string },
+  ): Promise<{ number: number; htmlUrl: string }>;
   /** The open PR from the branch `head` into `base`, with its body, or null. */
   findOpenPullRequest(
     repo: SteeringRepository,
@@ -587,6 +591,17 @@ export function createSteeringGitHub(
     async openPullRequest(repo, args) {
       try {
         return await clientFor(repo).openPullRequest({
+          owner: repo.owner,
+          repo: repo.repo,
+          ...args,
+        });
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async updatePullRequest(repo, args) {
+      try {
+        return await clientFor(repo).updatePullRequest({
           owner: repo.owner,
           repo: repo.repo,
           ...args,

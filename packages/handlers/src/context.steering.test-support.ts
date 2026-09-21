@@ -721,6 +721,16 @@ export class FakeGitHub implements SteeringGitHub {
     });
     return { number: this.prNumber, htmlUrl: pullUrl(this.prNumber) };
   }
+  async updatePullRequest(
+    _repo: SteeringRepository,
+    args: { number: number; title: string; body: string },
+  ) {
+    const pr = this.pulls.find((p) => p.number === args.number);
+    if (!pr) return this.refused("Pull request not found");
+    pr.title = args.title;
+    pr.body = args.body;
+    return { number: pr.number, htmlUrl: pullUrl(pr.number) };
+  }
   async findOpenPullRequest(
     _repo: SteeringRepository,
     args: { head: string; base: string },

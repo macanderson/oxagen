@@ -61,6 +61,14 @@
       "at": {
         "type": "string"
       },
+      "scheduledEntryId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "cancellationToken": {
+        "type": "string",
+        "maxLength": 4096
+      },
       "confirmUnpriced": {
         "type": "boolean"
       }
@@ -87,6 +95,9 @@
               "id": {
                 "type": "string",
                 "format": "uuid"
+              },
+              "cancellationToken": {
+                "type": "string"
               },
               "orgId": {
                 "anyOf": [

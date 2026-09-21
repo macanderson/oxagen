@@ -92,6 +92,17 @@
               "type": "string",
               "description": "The security event's id"
             },
+            "detail": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "source": {
               "type": "string",
               "enum": [

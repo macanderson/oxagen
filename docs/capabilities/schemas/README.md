@@ -53,4 +53,4 @@ per capability with its input + output JSON Schema, chain metadata
 - **tool** (5): import_tools, list_tool_declarations, list_tool_versions, publish_tool_declaration, set_tool_classification
 - **tools** (2): load_tools, search_tools
 - **user** (7): get_user_budget, get_user_preferences, get_workspace_user_preferences, set_preferences, update_profile, update_user_budget, update_workspace_user_preferences
-- **workspace** (12): archive_workspace, create_workspace, get_budget_policy, get_model_settings, get_prompt_settings, get_workspace_settings, list_workspaces, send_workspace_invite, update_budget_policy, update_model_settings, update_prompt_settings, update_workspace_settings
+- **workspace** (13): archive_workspace, create_workspace, get_budget_policy, get_model_settings, get_prompt_settings, get_workspace_settings, list_workspaces, send_workspace_invite, set_governance_mode, update_budget_policy, update_model_settings, update_prompt_settings, update_workspace_settings

@@ -254,6 +254,38 @@ export function elapsedMs(startedAt: number, at: Date): number {
   return Math.max(0, Math.round(at.getTime() - startedAt));
 }
 
+/**
+ * A turn boundary's own body, read as the half it is. The fold keeps a turn
+ * boundary out of both slots because it is not a step (`foldTranscript`'s
+ * `open()`), and that is right for pairing calls. It also meant the prompt a
+ * turn opened with, which the recorder kept in full on `turn_start`, reached
+ * no half and so no page: every run read as if nobody had typed anything.
+ *
+ * The prompt is what went out, so it is the `request`; a `turn_end` reply is
+ * what came back, so it is the `response`. A step half the fold already
+ * placed is never displaced, and a boundary with no retained body adds
+ * nothing.
+ */
+const BOUNDARY_HALF: Readonly<Record<string, "request" | "response">> = {
+  turn_start: "request",
+  turn_end: "response",
+};
+
+export function boundaryHalves(fold: TranscriptFold): {
+  request: RunFrame | null;
+  response: RunFrame | null;
+} {
+  const { opening } = fold;
+  const slot = BOUNDARY_HALF[opening.type];
+  if (slot === undefined || opening.body.bodyRef === null) {
+    return { request: fold.request, response: fold.response };
+  }
+  return {
+    request: fold.request ?? (slot === "request" ? opening : null),
+    response: fold.response ?? (slot === "response" ? opening : null),
+  };
+}
+
 /** The chips an entry answers to: the union over the frames it folds. */
 function entryKinds(fold: TranscriptFold): TranscriptKind[] {
   const kinds = new Set<TranscriptKind>();
@@ -334,14 +366,13 @@ export function createRunTranscriptGetHandler(
       });
       return entry === null ? null : Number(entry.microsPerMillion);
     };
-    const halves = await mapConcurrent(
-      page,
-      BODY_CONCURRENCY,
-      async (fold) => ({
-        request: await half(deps.bodies, scope, fold.request, textMax, outputRate),
-        response: await half(deps.bodies, scope, fold.response, textMax, outputRate),
-      }),
-    );
+    const halves = await mapConcurrent(page, BODY_CONCURRENCY, async (fold) => {
+      const { request, response } = boundaryHalves(fold);
+      return {
+        request: await half(deps.bodies, scope, request, textMax, outputRate),
+        response: await half(deps.bodies, scope, response, textMax, outputRate),
+      };
+    });
 
     const entries: TranscriptEntry[] = page.map((fold, i) => {
       const { opening } = fold;

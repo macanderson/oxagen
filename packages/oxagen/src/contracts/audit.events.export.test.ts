@@ -76,9 +76,10 @@ describe("export_audit_events contract", () => {
     ).toBe(false);
   });
 
-  it("names the eleven export columns and a 50,000-event bound", () => {
-    expect(AUDIT_EXPORT_COLUMNS).toHaveLength(11);
+  it("names the twelve export columns and a 50,000-event bound", () => {
+    expect(AUDIT_EXPORT_COLUMNS).toHaveLength(12);
     expect(AUDIT_EXPORT_COLUMNS[0]).toBe("id");
+    expect(AUDIT_EXPORT_COLUMNS.at(-1)).toBe("detail");
     expect(AUDIT_EXPORT_MAX_ROWS).toBe(50_000);
   });
 });

@@ -3,14 +3,19 @@ import { HARNESSES, wrapPathOf } from "./agent-form";
 
 describe("wrapPathOf", () => {
   it("enrols a host for every harness Tacho hooks", () => {
-    for (const harness of ["claude-code", "codex", "cursor"] as const) {
+    for (const harness of [
+      "claude-code",
+      "codex",
+      "cursor",
+      "stella",
+    ] as const) {
       expect(wrapPathOf(harness), harness).toBe("host");
     }
   });
 
-  it("wraps the rest in the agent's own process", () => {
-    for (const harness of ["stella", "claude-agent-sdk", "custom"] as const) {
-      expect(wrapPathOf(harness), harness).toBe("sdk");
+  it("marks harnesses without an adapter unavailable", () => {
+    for (const harness of ["claude-agent-sdk", "custom"] as const) {
+      expect(wrapPathOf(harness), harness).toBe("unavailable");
     }
   });
 
@@ -18,4 +23,8 @@ describe("wrapPathOf", () => {
     expect(HARNESSES).toContain("codex");
     expect(HARNESSES).toContain("cursor");
   });
+});
+
+it("offers only the four harnesses with installed host adapters", () => {
+  expect(HARNESSES).toEqual(["claude-code", "codex", "cursor", "stella"]);
 });

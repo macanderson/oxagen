@@ -11,7 +11,11 @@
 // Compliance or Viewer member could otherwise read them on any free, build or
 // scale organization despite the contract naming only Owner, Admin, Billing
 // and Member.
-import { ORG_ONLY_WORKSPACE_ID, type CapabilityHandler } from "@oxagen/oxagen";
+import {
+  ORG_ONLY_WORKSPACE_ID,
+  HandlerError,
+  type CapabilityHandler,
+} from "@oxagen/oxagen";
 import {
   costUnpricedModelList,
   UNPRICED_MODEL_WINDOW_DAYS,
@@ -47,6 +51,13 @@ export function createUnpricedModelListHandler(
       input.since === undefined
         ? new Date(at.getTime() - UNPRICED_MODEL_WINDOW_DAYS * DAY_MS)
         : new Date(input.since);
+    if (since > at)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "unpriced_model_window_reversed",
+        message:
+          "The observation start is after its end. Choose since at or before at.",
+      });
     // An org-only mount carries the nil workspace sentinel (ADR-068), which
     // is a real workspace_id in the frame stores: filtering on it would answer
     // "no unpriced models" for every organization whose frames name a real

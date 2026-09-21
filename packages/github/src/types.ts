@@ -227,6 +227,15 @@ export interface GitHubClient {
     draft?: boolean;
   }): Promise<{ number: number; htmlUrl: string }>;
 
+  /** Refresh submission metadata without changing the pull request identity or branches. */
+  updatePullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+    title: string;
+    body: string;
+  }): Promise<{ number: number; htmlUrl: string }>;
+
   /**
    * List pull requests, narrowed by head branch and state. `head` is
    * `owner:branch`, the filter GitHub applies to `GET /pulls`. The one

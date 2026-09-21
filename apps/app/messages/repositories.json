@@ -297,7 +297,7 @@
       },
       "mode": {
         "heading": "Governance mode",
-        "about": "Written to .oxagen/rules/governance.toml, the one file nothing else in Oxagen writes. It is read on the production branch when a pull request opens and again when it merges.",
+        "about": "Written to .oxagen/rules/governance.toml. It is read on the production branch when a pull request opens and again when it merges. Organization › Workspaces › Edit workspace changes it later.",
         "solo": "Any workspace member merges, the author included.",
         "team": "An org Owner or Admin, or a workspace Owner, other than the author merges.",
         "regulated": "An org Owner or Admin other than the author merges, recorded as the accountable approver."
