@@ -1,3 +1,14 @@
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { assertSurfaceMark, brandPath } from "./sync-brand-assets.mjs";
 
@@ -61,5 +72,38 @@ describe("surface mark selection", () => {
     expect(() =>
       assertSurfaceMark("apps/app/public/favicon/favicon.svg"),
     ).not.toThrow();
+  });
+});
+
+describe("surface checks without a kit", () => {
+  it("ignores Finder metadata but still refuses an unselected mark", () => {
+    const root = mkdtempSync(join(tmpdir(), "oxagen-brand-check-"));
+    try {
+      const script = join(root, "tools/scripts/sync-brand-assets.mjs");
+      mkdirSync(dirname(script), { recursive: true });
+      copyFileSync(
+        fileURLToPath(new URL("./sync-brand-assets.mjs", import.meta.url)),
+        script,
+      );
+      const surface = join(root, "apps/app/public/brand");
+      mkdirSync(surface, { recursive: true });
+      writeFileSync(join(surface, ".DS_Store"), "finder metadata");
+      const run = () =>
+        spawnSync(
+          process.execPath,
+          [script, "--check", "--brand", join(root, "missing-kit")],
+          { encoding: "utf8" },
+        );
+      const valid = run();
+      expect(valid.status).toBe(0);
+      expect(valid.stdout).toContain("brand: SKIPPED");
+      writeFileSync(join(surface, "oxagen-lockup.svg"), "<svg/>");
+      const invalid = run();
+      expect(invalid.status).not.toBe(0);
+      expect(invalid.stderr).toContain("not selected");
+      expect(invalid.stdout).not.toContain("brand: SKIPPED");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

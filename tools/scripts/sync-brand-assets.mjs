@@ -617,6 +617,16 @@ export const STELLA: BrandGeometry = ${JSON.stringify(data.stella, null, 2)};
  * diff of the PR that does it.
  */
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  for (const surface of Object.keys(SURFACE_MARKS)) {
+    try {
+      for (const file of readdirSync(join(REPO, surface))) {
+        if (file.startsWith(".")) continue;
+        assertSurfaceMark(`${surface}/${file}`);
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
   try {
     readFileSync(join(BRAND, "tokens/house-tokens.json"));
   } catch {
@@ -632,15 +642,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(2);
   }
 
-  for (const surface of Object.keys(SURFACE_MARKS)) {
-    try {
-      for (const file of readdirSync(join(REPO, surface))) {
-        assertSurfaceMark(`${surface}/${file}`);
-      }
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-    }
-  }
   skill();
   fonts();
   tokens();
