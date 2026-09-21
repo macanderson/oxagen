@@ -8,11 +8,16 @@
  * files, 3 errors" gave the operator nothing to act on short of re-running
  * under a debugger to rediscover which three and why.
  */
+import { randomUUID } from "node:crypto";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
-import { parseAllFiles, type FileRef } from "./backfill-claude-telemetry.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  parseAllFiles,
+  insertRows,
+  type FileRef,
+} from "./backfill-claude-telemetry.js";
 import type { ClaudeSessionRow } from "./backfill-claude-telemetry.js";
 
 describe("parseAllFiles (#2556)", () => {
@@ -139,3 +144,137 @@ describe("legacy backfill address retirement", () => {
     }
   });
 });
+
+describe("legacy replacement keys", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+  const old = {
+    session_id: "22222222-2222-4222-8222-222222222222",
+    entry_uuid: "11111111-1111-4111-8111-111111111111",
+    timestamp: "2026-09-20T00:00:00.000Z",
+    tokens_in: 10,
+  } as ClaudeSessionRow;
+  const next = { ...old, entry_uuid: "33333333-3333-4333-8333-333333333333" };
+  function env() {
+    vi.stubEnv("PRODUCTION_ANALYTICS_URL", "https://analytics.example.test");
+    vi.stubEnv("PRODUCTION_ANALYTICS_USER", "test");
+    vi.stubEnv("PRODUCTION_ANALYTICS_PASSWORD", "test");
+  }
+  it("skips identities stored under the retired key and inserts only new identities", async () => {
+    env();
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            session_id: old.session_id,
+            entry_uuid: old.entry_uuid,
+            timestamp_ms: String(Date.parse(old.timestamp)),
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(new Response(""));
+    expect(await insertRows([old, next, next], request)).toBe(1);
+    expect(request).toHaveBeenCalledTimes(2);
+    const query = String(request.mock.calls[0]?.[1]?.body);
+    expect(query).toContain("(session_id, timestamp, entry_uuid) IN");
+    expect(query).not.toContain("user_email");
+    const body = String(request.mock.calls[1]?.[1]?.body);
+    expect(body).toContain(next.entry_uuid);
+    expect(body).not.toContain(old.entry_uuid);
+    expect(body).not.toContain("user_email");
+    request.mockReset().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          session_id: next.session_id,
+          entry_uuid: next.entry_uuid,
+          timestamp_ms: Date.parse(next.timestamp),
+        }),
+      ),
+    );
+    expect(await insertRows([next], request)).toBe(0);
+    expect(request).toHaveBeenCalledOnce();
+  });
+  it("refuses a malformed identity response before insertion", async () => {
+    env();
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ session_id: old.session_id })),
+      );
+    await expect(insertRows([next], request)).rejects.toThrow(
+      "Invalid ClickHouse identity response",
+    );
+    expect(request).toHaveBeenCalledOnce();
+  });
+  it("refuses insertion when it cannot read the existing identities", async () => {
+    env();
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("unavailable", { status: 503 }));
+    await expect(insertRows([next], request)).rejects.toThrow(
+      "identity lookup 503",
+    );
+    expect(request).toHaveBeenCalledOnce();
+  });
+});
+
+it.skipIf(!process.env["CLICKHOUSE_URL"])(
+  "does not duplicate a legacy replacement key in ClickHouse",
+  async () => {
+    const url = process.env["CLICKHOUSE_URL"]!;
+    const user = process.env["CLICKHOUSE_USERNAME"] ?? "default";
+    const pass = process.env["CLICKHOUSE_PASSWORD"] ?? "";
+    const session = randomUUID();
+    const oldId = randomUUID();
+    const nextId = randomUUID();
+    const database = process.env["CLICKHOUSE_DATABASE"] ?? "default";
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(database))
+      throw new Error("Invalid test database");
+    const table = `${database}.backfill_${session.replaceAll("-", "")}`;
+    const request: typeof fetch = (input, init) =>
+      fetch(input, {
+        ...init,
+        body: String(init?.body ?? "").replaceAll(
+          "internal.claude_sessions",
+          table,
+        ),
+      });
+    const timestamp = "2026-09-20T00:00:00.000Z";
+    const query = async (body: string) => {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Basic ${btoa(`${user}:${pass}`)}` },
+        body,
+      });
+      if (!response.ok) throw new Error(await response.text());
+      return response.text();
+    };
+    vi.stubEnv("PRODUCTION_ANALYTICS_URL", url);
+    vi.stubEnv("PRODUCTION_ANALYTICS_USER", user);
+    vi.stubEnv("PRODUCTION_ANALYTICS_PASSWORD", pass);
+    const old = {
+      session_id: session,
+      entry_uuid: oldId,
+      timestamp,
+      tokens_in: 10,
+    } as ClaudeSessionRow;
+    const next = { ...old, entry_uuid: nextId };
+    try {
+      await query(`CREATE TABLE ${table} AS ${database}.claude_sessions`);
+      await query(
+        `INSERT INTO ${table} FORMAT JSONEachRow\n${JSON.stringify({ ...old, user_email: "legacy@example.test" })}`,
+      );
+      expect(await insertRows([old, next], request)).toBe(1);
+      expect(await insertRows([old, next], request)).toBe(0);
+      const count = await query(
+        `SELECT count(), sum(tokens_in) FROM ${table} FINAL WHERE session_id = '${session}' FORMAT TabSeparated`,
+      );
+      expect(count.trim()).toBe("2\t20");
+    } finally {
+      vi.unstubAllEnvs();
+      await query(`DROP TABLE IF EXISTS ${table}`);
+    }
+  },
+);
