@@ -81,6 +81,13 @@ export function useRunStream({
       }, COALESCE_MS);
     }
 
+    function flushSignal(force = false) {
+      const pending = timer !== null;
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      if (!stopped && (pending || force)) latest.current();
+    }
+
     function open(after: string | null) {
       if (stopped) return;
       const target =
@@ -111,7 +118,7 @@ export function useRunStream({
         }
         // Whatever the reason, the tail is read once more: the last frames
         // arrived in the same batch as the terminator.
-        latest.current();
+        flushSignal(true);
         if (reason === "sealed") {
           setState("sealed");
           return;
@@ -138,14 +145,10 @@ export function useRunStream({
         }
         terminalError = true;
         es.close();
-        if (timer !== null) {
-          clearTimeout(timer);
-          timer = null;
-        }
+        flushSignal(code === "invalid_input");
         setState(
           code === "authz_denied" || code === "forbidden" ? "denied" : "lost",
         );
-        if (code === "invalid_input") latest.current();
       });
       es.onerror = () => {
         // EventSource reconnects on its own unless the connection is closed

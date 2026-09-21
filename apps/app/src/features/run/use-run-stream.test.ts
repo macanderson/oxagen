@@ -253,7 +253,24 @@ describe("useRunStream", () => {
       act(() => {
         vi.advanceTimersByTime(1000);
       });
-      expect(onFrames).not.toHaveBeenCalled();
+      expect(onFrames).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(["stream_unavailable", "invalid_input", "unknown"])(
+    "flushes delivered frames once before %s terminates",
+    (code) => {
+      const { onFrames } = follow();
+      act(() => {
+        latest().open();
+        latest().frame();
+        latest().serverError({ code });
+      });
+      expect(onFrames).toHaveBeenCalledOnce();
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onFrames).toHaveBeenCalledOnce();
     },
   );
 
