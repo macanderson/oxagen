@@ -31,8 +31,6 @@
     "runStatus": {
       "live": "live",
       "running": "running",
-      "sealed": "sealed",
-      "halted": "halted",
       "completed": "completed",
       "failed": "failed",
       "cancelled": "cancelled",

@@ -5068,8 +5068,6 @@ type Messages = {
     runStatus: {
       live: string;
       running: string;
-      sealed: string;
-      halted: string;
       completed: string;
       failed: string;
       cancelled: string;
