@@ -13,7 +13,7 @@
 // tab, carrying the display name as it stands, because the contract writes
 // name and avatar as one record.
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useId, useState } from "react";
+import { type SyntheticEvent, useEffect, useId, useRef, useState } from "react";
 import { Avatar, AVATAR_GLYPHS } from "@/ui/avatar";
 import {
   AVATAR_FONTS,
@@ -33,7 +33,12 @@ import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { updateProfile } from "./account-actions";
-import { fieldLabel, hint } from "./account-styles";
+import {
+  accountOperations,
+  useAccountAvatar,
+  useAccountOperation,
+} from "./account-operations";
+import { buttonSmall, fieldLabel, hint } from "./account-styles";
 import { initials as initialsOf } from "./format";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
@@ -145,13 +150,36 @@ function AvatarEditor({ data }: { data: ShellData }) {
   const lettersId = useId();
   const urlId = useId();
   const shown = viewer.name ?? viewer.email;
+  const settledAvatar = useAccountAvatar(viewer.id);
+  const currentAvatar =
+    settledAvatar &&
+    (viewer.avatarUrl === settledAvatar.previous ||
+      viewer.avatarUrl === settledAvatar.value)
+      ? settledAvatar.value
+      : viewer.avatarUrl;
+  const editsRef = useRef(0);
   const [draft, setDraft] = useState<Draft>(() =>
-    draftFrom(viewer.avatarUrl, initialsOf(shown)),
+    draftFrom(currentAvatar, initialsOf(shown)),
   );
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [pending, setPending] = useState(false);
+  const operation = useAccountOperation(viewer.id, "avatar");
+  const { pending } = operation;
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (editsRef.current === 0) {
+      setDraft(draftFrom(currentAvatar, initialsOf(shown)));
+    }
+  }, [currentAvatar, shown]);
 
   function edit(patch: Partial<Draft>) {
+    editsRef.current += 1;
     setOutcome(null);
     setDraft((d) => ({ ...d, ...patch }));
   }
@@ -167,22 +195,33 @@ function AvatarEditor({ data }: { data: ShellData }) {
       setOutcome("noLetters");
       return;
     }
+    await saveAvatar(stored(draft));
+  }
+
+  async function saveAvatar(avatarUrl: string) {
+    if (!operation.begin()) return;
     setOutcome(null);
-    setPending(true);
+    const sentAt = editsRef.current;
     try {
       const result = await updateProfile(org.slug, {
-        avatarUrl: stored(draft),
+        avatarUrl,
       });
       if (result.ok) {
+        accountOperations.setAvatar(
+          viewer.id,
+          result.value.avatarUrl ?? "",
+          viewer.avatarUrl,
+        );
         navigate.refresh();
-        setAvatarOpen(false);
+        if (mountedRef.current && editsRef.current === sentAt)
+          setAvatarOpen(false);
       } else if (result.reason === "invalid") setOutcome("invalid");
       else if (result.reason === "denied") setOutcome("denied");
       else setOutcome("failed");
     } catch {
       setOutcome("failed");
     } finally {
-      setPending(false);
+      operation.end();
     }
   }
 
@@ -381,6 +420,21 @@ function AvatarEditor({ data }: { data: ShellData }) {
           code: (chunks) => <span className="font-mono">{chunks}</span>,
         })}
       </p>
+
+      {viewer.avatarUrl ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            className={buttonSmall}
+            disabled={pending}
+            data-testid="avatar-remove"
+            onClick={() => void saveAvatar("")}
+          >
+            {t("remove")}
+          </button>
+          <p className={hint}>{t("removeHint")}</p>
+        </div>
+      ) : null}
 
       {outcome !== null ? (
         <div className="mt-4">

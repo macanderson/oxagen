@@ -3909,6 +3909,7 @@ type Messages = {
         now: string;
         revoke: string;
         revoking: string;
+        revokeFailed: string;
         revoked: string;
         sessionsHint: string;
         codesBlockedByOther: string;
@@ -3963,6 +3964,8 @@ type Messages = {
       title: string;
       cancel: string;
       save: string;
+      remove: string;
+      removeHint: string;
       saving: string;
       kind: string;
       kinds: {

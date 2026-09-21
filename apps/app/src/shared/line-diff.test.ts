@@ -102,7 +102,10 @@ describe("buildDiff", () => {
   });
 
   it("falls back to a wholesale replacement rather than build a huge table", () => {
-    const big = Array.from({ length: 2000 }, (_, i) => `line ${String(i)}`).join("\n");
+    const big = Array.from(
+      { length: 2000 },
+      (_, i) => `line ${String(i)}`,
+    ).join("\n");
     const diff = buildDiff(big, `${big}\nmore`);
     expect(diff.wholesale).toBe(true);
     expect(diff.removed).toBe(2000);
