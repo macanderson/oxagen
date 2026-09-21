@@ -43,7 +43,7 @@ Any other key is refused.
 | `algorithm` | `"HMAC-SHA256"` | |
 | `rowCount` | integer | events in the file |
 
-Columns, in order: `id, occurred_at, event_type, outcome, actor_user_id, org_id, workspace_id, capability, ip, user_agent, request_id`. A field the event does not record is empty. CSV is RFC 4180 with CRLF line ends and a header line; NDJSON is one object per line with every column as a key.
+Columns, in order: `id, occurred_at, event_type, outcome, actor_user_id, org_id, workspace_id, capability, ip, user_agent, request_id, detail`. Scalar fields the event does not record are empty. `detail` carries stored event evidence as a JSON object in NDJSON and a JSON-encoded field in CSV. Events without detail carry `null` in NDJSON and an empty CSV field. Approval-rule invalidations include the rule, tool, reason, and before/after facts. The signature covers these facts as part of the body. CSV is RFC 4180 with CRLF line ends and a header line; NDJSON is one object per line with every column as a key.
 
 ## Signature
 
@@ -66,7 +66,7 @@ Content-Type: application/json
 ```json
 {
   "format": "csv",
-  "body": "id,occurred_at,event_type,outcome,actor_user_id,org_id,workspace_id,capability,ip,user_agent,request_id\r\n…",
+  "body": "id,occurred_at,event_type,outcome,actor_user_id,org_id,workspace_id,capability,ip,user_agent,request_id,detail\r\n…",
   "signature": "5f0c…",
   "algorithm": "HMAC-SHA256",
   "rowCount": 12

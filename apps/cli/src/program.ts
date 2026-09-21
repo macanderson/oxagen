@@ -315,6 +315,21 @@ export function buildProgram(): Command {
       "The organization's negotiated rates in the price book — what runs are billed at",
     );
   priceCmd
+    .command("list")
+    .description(
+      "Read current prices and optionally scheduled negotiated rates",
+    )
+    .option("--at <instant>", "RFC 3339 read instant; omit for now")
+    .option(
+      "--include-scheduled",
+      "Include this organization's future negotiated rates",
+    )
+    .option("--json", "Output JSON")
+    .action(async (opts) => {
+      const { priceList } = await import("./commands/price.js");
+      await priceList(opts as Parameters<typeof priceList>[0]);
+    });
+  priceCmd
     .command("set")
     .description(
       "Set a negotiated rate for one model and token class — Owner/Admin/Billing only",
@@ -364,6 +379,10 @@ export function buildProgram(): Command {
       "Confirm ending this rate even if no list or override price covers the class, which would otherwise refuse and leave it UNPRICED",
     )
     .option("--json", "Output JSON")
+    .option(
+      "--scheduled-entry-id <id>",
+      "Cancel only this scheduled rate and retain the preceding and later rates",
+    )
     .action(async (opts: Record<string, unknown>) => {
       const { priceRemove } = await import("./commands/price.js");
       await priceRemove(opts as Parameters<typeof priceRemove>[0]);

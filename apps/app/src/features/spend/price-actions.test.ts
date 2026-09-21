@@ -220,6 +220,27 @@ describe("removePriceEntryAction", () => {
     tokenClass: "output",
   };
 
+  it("preserves the selected scheduled entry through the form and kernel write", async () => {
+    invoke.mockResolvedValue({
+      at: "2026-09-15T00:00:00Z",
+      closed: null,
+      fallbackPriced: true,
+    });
+    const result = await removePriceEntryAction(at, {
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      region: "",
+      tokenClass: "output",
+      cancellationToken: entry.id,
+    });
+    expect(result.ok).toBe(true);
+    expect(invoke).toHaveBeenCalledWith(
+      costPriceEntryRemove.name,
+      expect.objectContaining({ cancellationToken: entry.id }),
+      expect.anything(),
+    );
+  });
+
   it("refuses a class the book does not price, ending nothing (negative)", async () => {
     expect(
       await removePriceEntryAction(at, { ...key, tokenClass: "thinking" }),

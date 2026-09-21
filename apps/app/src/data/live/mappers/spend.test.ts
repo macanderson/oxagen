@@ -410,7 +410,7 @@ describe("toPriceBook", () => {
     source: "list",
   };
 
-  it("reads the micros as money in the row's own currency and drops the row id", () => {
+  it("reads the micros as money and drops the database row id", () => {
     const out = costPriceEntryList.output.parse({
       at: "2026-09-15T12:00:00.000Z",
       entries: [listRow],
