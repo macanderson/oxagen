@@ -21,10 +21,7 @@
 //  3. **Pure.** No React, no formatting, no i18n. It is tested without a
 //     render, and the view decides how much of what it returns to show.
 
-import {
-  type CodeLanguage,
-  languageForPath,
-} from "@/shared/code-highlight";
+import { type CodeLanguage, languageForPath } from "@/shared/code-highlight";
 import { buildDiff, type LineDiff } from "@/shared/line-diff";
 
 /**
@@ -135,7 +132,7 @@ export function parseBody(text: string | null): unknown {
   // failed parse on every frame of a long run is not free.
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
   try {
-    return JSON.parse(trimmed) as unknown;
+    return JSON.parse(trimmed);
   } catch {
     return null;
   }
@@ -324,9 +321,9 @@ function readDetail(name: string, input: Json | null): ToolDetail {
   const limit = input?.["limit"];
   const range =
     typeof offset === "number" || typeof limit === "number"
-      ? `lines ${typeof offset === "number" ? offset + 1 : 1}${
+      ? `lines ${String(typeof offset === "number" ? offset + 1 : 1)}${
           typeof limit === "number"
-            ? `–${(typeof offset === "number" ? offset : 0) + limit}`
+            ? `–${String((typeof offset === "number" ? offset : 0) + limit)}`
             : "+"
         }`
       : null;
@@ -382,7 +379,7 @@ function editDetail(name: string, input: Json | null): ToolDetail {
     name,
     group: groupOf(name),
     headline: shortPath(path),
-    detail: panes.length === 0 ? null : `+${total} −${cut}`,
+    detail: panes.length === 0 ? null : `+${String(total)} −${String(cut)}`,
     multiline: false,
     panes,
   };
@@ -407,7 +404,7 @@ function createDetail(name: string, input: Json | null): ToolDetail {
     name,
     group: groupOf(name),
     headline: path === null ? null : shortPath(path),
-    detail: lineCount === null ? null : `${lineCount} lines`,
+    detail: lineCount === null ? null : `${String(lineCount)} lines`,
     multiline: false,
     panes,
   };
@@ -436,9 +433,7 @@ function webDetail(name: string, input: Json | null): ToolDetail {
     detail: null,
     multiline: false,
     panes:
-      prompt === null
-        ? []
-        : [{ kind: "note", label: "asked", text: prompt } as ToolPane],
+      prompt === null ? [] : [{ kind: "note", label: "asked", text: prompt }],
   };
 }
 
@@ -485,7 +480,11 @@ function planDetail(name: string, input: Json | null): ToolDetail {
     name,
     group: "plan",
     headline:
-      count === null ? plan === null ? null : firstLine(plan).head : `${count} items`,
+      count === null
+        ? plan === null
+          ? null
+          : firstLine(plan).head
+        : `${String(count)} items`,
     detail: null,
     multiline: false,
     panes: plan === null ? [] : [{ kind: "note", label: "plan", text: plan }],
@@ -546,7 +545,10 @@ function genericDetail(
  * kept. `name` is the tool the frame identified; the body may name it again,
  * and the body wins only when the frame named nothing.
  */
-export function toolDetail(name: string | null, body: string | null): ToolDetail | null {
+export function toolDetail(
+  name: string | null,
+  body: string | null,
+): ToolDetail | null {
   const parsed = parseBody(body);
   const { input, output, name: bodyName } = splitBody(parsed);
   const tool = name ?? bodyName;
