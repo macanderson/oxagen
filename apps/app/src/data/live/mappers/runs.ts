@@ -27,6 +27,7 @@ export function toRunRow(
     operatorKind: run.operatorKind,
     operatorName: run.operatorName,
     status: run.status,
+    outcome: run.outcome,
     turns: run.turns,
     steps: run.steps,
     frames: run.frames,
