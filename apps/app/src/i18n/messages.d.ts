@@ -651,6 +651,7 @@ type Messages = {
       ip: string;
       request: string;
       userAgent: string;
+      detail: string;
       notRecorded: string;
     };
     outcomes: {
@@ -3200,6 +3201,7 @@ type Messages = {
       loadedMore: string;
       badCursor: string;
       pageFailed: string;
+      followDenied: string;
       followLost: string;
       followSealed: string;
       request: string;
@@ -4095,6 +4097,11 @@ type Messages = {
         until: string;
         anyRegion: string;
         platformPriced: string;
+        scheduled: string;
+        pagination: string;
+        previous: string;
+        next: string;
+        page: string;
       };
       dialog: {
         open: string;
@@ -4142,6 +4149,8 @@ type Messages = {
         confirmUnpriced: string;
         confirmUnpricedSubmit: string;
         confirmUnpricedCancel: string;
+        cancelScheduled: string;
+        cancelScheduledSubmit: string;
       };
       failure: {
         orgRoleRequired: string;

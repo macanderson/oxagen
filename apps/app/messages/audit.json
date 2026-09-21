@@ -15,6 +15,7 @@
       "ip": "IP address",
       "request": "Request",
       "userAgent": "User agent",
+      "detail": "Recorded facts",
       "notRecorded": "not recorded"
     },
     "outcomes": {

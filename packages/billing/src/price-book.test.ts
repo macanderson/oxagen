@@ -27,6 +27,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import {
   closeNegotiatedPriceEntry,
+  listPriceEntries,
   BOUNDARY_MARGIN_MS,
   COLD_BOOK_EFFECTIVE_FROM,
   nextPriceBookBoundary,
@@ -426,6 +427,132 @@ describe("the negotiated write path", () => {
       tokenClass: "input_uncached",
       at,
     });
+
+  it("cancels one future correction, restores its predecessor, and retains the later correction", async () => {
+    const t3 = new Date("2026-11-01T00:00:00Z");
+    const first = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 100n,
+      effectiveFrom: T1,
+    });
+    const middle = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 200n,
+      effectiveFrom: T2,
+    });
+    const last = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 300n,
+      effectiveFrom: t3,
+    });
+    const now = new Date("2026-09-15T00:00:00Z");
+    const result = await closeNegotiatedPriceEntry({
+      ...SET,
+      now,
+      scheduledEntryId: middle.entry.id,
+    });
+    expect(result.closed).toBeNull();
+    expect(result.cancelled.map((row) => row.id)).toEqual([middle.entry.id]);
+    expect(
+      book().find((row) => row.id === first.entry.id)?.effectiveTo,
+    ).toEqual(t3);
+    expect(book().find((row) => row.id === last.entry.id)).toEqual(last.entry);
+    expect(priceAt(T2)?.microsPerMillion).toBe(100n);
+    expect(priceAt(t3)?.microsPerMillion).toBe(300n);
+    expect(
+      (
+        await closeNegotiatedPriceEntry({
+          ...SET,
+          now,
+          scheduledEntryId: middle.entry.id,
+        })
+      ).cancelled,
+    ).toEqual([]);
+    await expect(
+      closeNegotiatedPriceEntry({
+        ...SET,
+        now,
+        scheduledEntryId: first.entry.id,
+      }),
+    ).rejects.toMatchObject({ reason: "price_entry_already_started" });
+  });
+
+  it("does not cancel an ID belonging to another organization or model key", async () => {
+    const future = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 200n,
+      effectiveFrom: T2,
+    });
+    for (const over of [
+      { orgId: "00000000-0000-4000-8000-000000000002" },
+      { model: "other-model" },
+    ]) {
+      expect(
+        (
+          await closeNegotiatedPriceEntry({
+            ...SET,
+            ...over,
+            scheduledEntryId: future.entry.id,
+          })
+        ).cancelled,
+      ).toEqual([]);
+      expect(book().some((row) => row.id === future.entry.id)).toBe(true);
+    }
+  });
+
+  it("refuses cancellation when restoring the predecessor would overlap another identity", async () => {
+    const first = await setNegotiatedPriceEntry({
+      ...SET,
+      modelAliases: ["alias-model"],
+      microsPerMillion: 100n,
+      effectiveFrom: T1,
+    });
+    const future = await setNegotiatedPriceEntry({
+      ...SET,
+      modelAliases: [],
+      microsPerMillion: 200n,
+      effectiveFrom: T2,
+    });
+    fake.rows.push(
+      priceRow({
+        orgId: ORG,
+        source: "negotiated",
+        model: "alias-model",
+        effectiveFrom: T2,
+      }),
+    );
+    await expect(
+      closeNegotiatedPriceEntry({ ...SET, scheduledEntryId: future.entry.id }),
+    ).rejects.toMatchObject({ reason: "price_entry_alias_conflict" });
+    expect(
+      book().find((row) => row.id === first.entry.id)?.effectiveTo,
+    ).toEqual(T2);
+    expect(book().some((row) => row.id === future.entry.id)).toBe(true);
+  });
+
+  it("includes only this organization's future negotiated rows when requested", async () => {
+    const future = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 200n,
+      effectiveFrom: T2,
+    });
+    fake.rows.push(
+      priceRow({ effectiveFrom: T2, source: "list", orgId: null }),
+    );
+    fake.rows.push(
+      priceRow({
+        effectiveFrom: T2,
+        source: "negotiated",
+        orgId: "00000000-0000-4000-8000-000000000002",
+      }),
+    );
+    expect(await listPriceEntries({ orgId: ORG, at: T1 })).toEqual([]);
+    expect(
+      (
+        await listPriceEntries({ orgId: ORG, at: T1, includeScheduled: true })
+      ).map((row) => row.id),
+    ).toEqual([future.entry.id]);
+  });
 
   it("writes a negotiated row that wins over the list row for the same model and class", async () => {
     fake.rows.push(priceRow({ microsPerMillion: 3_000_000n }));

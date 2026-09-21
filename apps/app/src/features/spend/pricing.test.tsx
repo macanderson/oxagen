@@ -307,6 +307,64 @@ describe("Pricing › Models the book cannot price", () => {
 });
 
 describe("Pricing › The price book", () => {
+  it("groups scheduled rates and cancels the selected entry", async () => {
+    const id = "9f1b7a2c-0000-4000-8000-000000000001";
+    priceBook.mockResolvedValue(
+      book([
+        entry(),
+        entry({
+          cancellationToken: id,
+          model: "future-model",
+          negotiated: true,
+          source: "negotiated",
+          effectiveFrom: "2026-12-01T00:00:00.000Z",
+        }),
+      ]),
+    );
+    unpricedModels.mockResolvedValue(unpriced([]));
+    removePriceEntryAction.mockResolvedValue({
+      ok: true,
+      value: { fallbackPriced: true },
+    });
+    await renderPricing();
+    const group = screen.getByRole("region", {
+      name: "Scheduled negotiated rates",
+    });
+    expect(group).toHaveTextContent("future-model");
+    const user = userEvent.setup();
+    await user.click(within(group).getByTestId("spend-remove-rate-open"));
+    const dialog = await screen.findByTestId("spend-remove-rate-dialog");
+    await user.click(
+      within(dialog).getByRole("button", {
+        name: "Cancel scheduled rate",
+      }),
+    );
+    expect(removePriceEntryAction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ cancellationToken: id }),
+    );
+  });
+
+  it("renders at most 100 catalog rows and permits reading the next page", async () => {
+    priceBook.mockResolvedValue(
+      book(
+        Array.from({ length: 101 }, (_, index) =>
+          entry({ model: `model-${String(index).padStart(3, "0")}` }),
+        ),
+      ),
+    );
+    unpricedModels.mockResolvedValue(unpriced([]));
+    await renderPricing();
+    expect(
+      panelOf("spend-price-book").querySelectorAll("tbody tr"),
+    ).toHaveLength(100);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Next" }));
+    expect(
+      panelOf("spend-price-book").querySelectorAll("tbody tr"),
+    ).toHaveLength(1);
+    expect(panelOf("spend-price-book")).toHaveTextContent("model-100");
+  });
+
   it("tells this organization's negotiated rows from the platform's list prices", async () => {
     priceBook.mockResolvedValue(
       book([
