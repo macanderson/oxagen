@@ -22,6 +22,7 @@
       "!pnpm-lock.yaml",
       "!**/storage-manifest.json",
       "!packages/oxagen/capabilities.manifest.json",
+      "!docs/capabilities/schemas/**",
       "!packages/run-evidence/fixtures/**",
       "!packages/bench/src/__fixtures__/sample-run/task-six-errored__pqr678/verifier/report.json",
       "!.claude/workflows/**"

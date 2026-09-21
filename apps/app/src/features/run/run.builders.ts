@@ -8,6 +8,8 @@ import type {
   RunDetail,
   RunFrame,
   RunFrameBody,
+  RunOutputNode,
+  RunOutputs,
   RunTranscript,
   TranscriptBody,
   TranscriptEntry,
@@ -462,8 +464,55 @@ export function runCost(overrides: Partial<RunCost> = {}): RunCost {
   };
 }
 
+/** One node of the spine; the default is a file the run wrote. */
+export function runOutputNode(
+  overrides: Partial<RunOutputNode> = {},
+): RunOutputNode {
+  return {
+    seq: "118",
+    kind: "file",
+    name: "src/release/cut.ts",
+    nameIsLocator: false,
+    where: "typescript",
+    state: "written",
+    note: "2 writes",
+    stat: { added: 41, removed: 6 },
+    observedAt: at(-300),
+    digestBefore: null,
+    digestAfter: null,
+    ...overrides,
+  };
+}
+
+/** A spine, tallied from the nodes it is given, so a test cannot state a count the nodes deny. */
+export function runOutputs(
+  nodes: readonly RunOutputNode[] = [],
+  overrides: Partial<Omit<RunOutputs, "nodes" | "tally">> = {},
+): RunOutputs {
+  const of = (kind: RunOutputNode["kind"]) =>
+    nodes.filter((node) => node.kind === kind).length;
+  return {
+    source: "wrapped",
+    nodes: [...nodes],
+    tally: {
+      artifacts:
+        of("file") + of("media") + of("change") + of("commit") + of("pr"),
+      reads: of("read"),
+      gates: of("gate"),
+    },
+    complete: true,
+    ...overrides,
+  };
+}
+
 type RunReads = {
   detail: Read<RunDetail>;
+  /**
+   * The spine above the tabs, read with the page and not with a tab. A test
+   * that says nothing about it gets a run that produced nothing, so a test
+   * about the header or a tab is not also a test about the spine.
+   */
+  outputs?: Read<RunOutputs>;
   /** Only read when the Cost tab is open; refused when absent. */
   cost?: Read<RunCost>;
   /** Only read when the Frames tab has a frame body open; refused when absent. */
@@ -502,6 +551,7 @@ export function runSource(reads: RunReads) {
     resolvedApprovals: unknown[][];
     chain: unknown[][];
     mandates: unknown[][];
+    outputs: unknown[][];
   } = {
     get: [],
     frameBody: [],
@@ -511,6 +561,7 @@ export function runSource(reads: RunReads) {
     resolvedApprovals: [],
     chain: [],
     mandates: [],
+    outputs: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -543,6 +594,7 @@ export function runSource(reads: RunReads) {
         );
       },
       chain: answer("chain", reads.chain),
+      outputs: answer("outputs", reads.outputs ?? readOk(runOutputs())),
     },
     approvals: {
       pending: answer("approvals", reads.approvals),

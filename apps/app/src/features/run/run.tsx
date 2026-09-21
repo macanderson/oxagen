@@ -15,6 +15,7 @@ import { ReadFailure } from "@/ui/read-failure";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
 import { RunHeader } from "./header";
+import { OutputsSpine } from "./outputs";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import { kindsParam, TranscriptSection } from "./transcript";
 
@@ -123,6 +124,8 @@ export async function Run({
   kinds,
   frames,
   body,
+  reads,
+  spine,
   now,
 }: {
   ctx: WsCtx;
@@ -139,6 +142,10 @@ export async function Run({
   frames: string | null;
   /** `?body=`, the seq of the frame whose body is open; anything but a seq opens none. */
   body: string | null;
+  /** `?reads=hide` folds the spine's read marks away. */
+  reads: string | null;
+  /** `?spine=`, the spine groups a person opened, comma-separated. */
+  spine: string | null;
   /**
    * Pins the instant the approvals strip counts down from. Only a test passes
    * it; the page leaves it out and `readApprovals` reads the clock beside the
@@ -161,6 +168,10 @@ export async function Run({
   }
   const detail = read.value;
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug, runId: detail.run.id };
+  // Read with the page and not with a tab, because the spine is what the page
+  // is for. Started here and awaited after the section, so the two reads
+  // overlap rather than queue: the spine costs the page no extra round trip.
+  const outputs = source.runs.outputs(ctx, detail.run.id);
   let section: ReactNode;
   switch (selected) {
     case "transcript":
@@ -244,6 +255,12 @@ export async function Run({
         wsRole={ctx.wsRole}
         org={place.org}
         ws={place.ws}
+      />
+      <OutputsSpine
+        read={await outputs}
+        reads={reads}
+        spine={spine}
+        {...place}
       />
       <Tabs selected={selected} zoom={zoomed} kinds={chips} {...place} />
       {section}

@@ -305,6 +305,7 @@ import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
 import { findingFixRecordRoute } from "./routes/v1/finding.fix.record";
 import { findingDismissRoute } from "./routes/v1/finding.dismiss";
 import { runCostGetRoute } from "./routes/v1/run.cost";
+import { runOutputsGetRoute } from "./routes/v1/run.outputs.get";
 import { runProofGetRoute } from "./routes/v1/run.proof.get";
 import { evidenceDisclosureGrainSetRoute } from "./routes/v1/evidence.disclosure_grain.set";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
@@ -637,6 +638,7 @@ orgScoped.route("/spend/findings/evidence", findingEvidenceGetRoute);
 orgScoped.route("/spend/findings/fix", findingFixRecordRoute);
 orgScoped.route("/spend/findings/dismiss", findingDismissRoute);
 orgScoped.route("/runs/cost", runCostGetRoute);
+orgScoped.route("/runs/outputs", runOutputsGetRoute);
 // Proof (ADR-064): a run's witness record and the workspace's disclosure grain.
 // Both handlers refuse an API-key caller; the session auth above is the path.
 orgScoped.route("/runs/proof", runProofGetRoute);

@@ -19,6 +19,7 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import {
   runTranscriptGet,
   TRANSCRIPT_ENTRY_DEFAULT,
@@ -30,6 +31,7 @@ import {
   RunCost,
   RunDetail,
   RunFrameBody,
+  RunOutputs,
   RunTranscript,
 } from "@/data/contracts/run";
 import { RunPage } from "@/data/contracts/runs";
@@ -41,6 +43,7 @@ import {
   toRunCost,
   toRunDetail,
   toRunFrameBody,
+  toRunOutputs,
   toRunTranscript,
 } from "./mappers/run";
 import { toRunPage } from "./mappers/runs";
@@ -141,6 +144,20 @@ export const runs: DataSource["runs"] = {
       RunTranscript,
       toRunTranscript(read.value),
       "runs.transcript",
+    );
+  },
+  async outputs(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runOutputsGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      RunOutputs,
+      toRunOutputs(read.value),
+      "runs.outputs",
     );
   },
   async chain(ctx, runId) {

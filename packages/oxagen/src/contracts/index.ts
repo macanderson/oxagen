@@ -88,6 +88,7 @@ import { repositoryInstallationCandidates } from "./repository.installation.cand
 import { repositoryInstallationAttach } from "./repository.installation.attach";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
+import { runOutputsGet } from "./run.outputs.get";
 import { runProofGet } from "./run.proof.get";
 import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
@@ -654,6 +655,7 @@ export {
   userPreferencesSet,
   userProfileUpdate,
   runCostGet,
+  runOutputsGet,
   runProofGet,
   evidenceDisclosureGrainSet,
   spendGet,
@@ -1000,6 +1002,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   userPreferencesSet,
   userProfileUpdate,
   runCostGet,
+  runOutputsGet,
   runProofGet,
   evidenceDisclosureGrainSet,
   spendGet,

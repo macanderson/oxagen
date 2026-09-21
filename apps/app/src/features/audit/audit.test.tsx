@@ -82,6 +82,7 @@ const source: DataSource = {
     cost: refuse,
     transcript: refuse,
     chain: refuse,
+    outputs: refuse,
   },
   approvals: { pending: refuse, resolved: refuse },
   agents: {

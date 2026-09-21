@@ -53,7 +53,8 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1163,7 +1164,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -4511,6 +4513,22 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "get_run_outputs",
+      "file": "run.outputs.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": true,
+        "docs": true
       }
     },
     {

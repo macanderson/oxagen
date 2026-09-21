@@ -184,6 +184,7 @@ export function toolsSource(reads: ToolsReads) {
       cost: refuse,
       transcript: refuse,
       chain: refuse,
+      outputs: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {

@@ -43,6 +43,7 @@ import type {
   RunCost,
   RunDetail,
   RunFrameBody,
+  RunOutputs,
   RunTranscript,
   TranscriptKind,
   TranscriptZoom,
@@ -173,6 +174,12 @@ export interface DataSource {
       q?: { kinds?: TranscriptKind[]; after?: string | null },
     ): Promise<Read<RunTranscript>>;
     chain(ctx: WsCtx, runId: string): Promise<Read<RunChain>>;
+    /**
+     * `get_run_outputs`, the spine: what the run produced, in the order it
+     * produced it. Read with the page, not with a tab, because it is the page
+     * — caller features/run/run.tsx.
+     */
+    outputs(ctx: WsCtx, runId: string): Promise<Read<RunOutputs>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {

@@ -382,3 +382,71 @@ export const RunChain = z.object({
   complete: z.boolean(),
 });
 export type RunChain = z.infer<typeof RunChain>;
+
+// ---- Outputs ---------------------------------------------------------------
+
+/**
+ * What a run produced, from `get_run_outputs`: the Run page's spine.
+ *
+ * One node per thing the run produced, in the order the frames produced it. A
+ * read is a node too, so the spine can draw its hairline tick and the tally
+ * can count it apart; it is never an artifact.
+ */
+const RunOutputKind = z.enum([
+  "file",
+  "media",
+  "change",
+  "commit",
+  "pr",
+  "gate",
+  "would",
+  "read",
+]);
+export type RunOutputKind = z.infer<typeof RunOutputKind>;
+
+const RunOutputState = z.enum([
+  "created",
+  "written",
+  "deleted",
+  "renamed",
+  "pushed",
+  "open",
+  "read",
+  "awaiting",
+  "blocked",
+  "withheld",
+]);
+export type RunOutputState = z.infer<typeof RunOutputState>;
+
+export const RunOutputNode = z.object({
+  /** The frame that produced it, for the `fr N` chip; null on a gate, which the record gives no frame. */
+  seq: z.string().regex(/^\d+$/).nullable(),
+  kind: RunOutputKind,
+  /** The mono name: a path, a commit sha, `#482`, a capability, or a path locator. */
+  name: z.string().min(1),
+  /**
+   * True when `name` is an opaque locator rather than a path. The ledger
+   * records a change without its path, and the spine says so rather than
+   * printing `rpl_…` where a filename belongs.
+   */
+  nameIsLocator: z.boolean(),
+  /** Where it landed; null renders as nothing, never as a blank guess. */
+  where: z.string().nullable(),
+  state: RunOutputState,
+  note: z.string().nullable(),
+  stat: z.object({ added: Count, removed: Count }).nullable(),
+  observedAt: z.iso.datetime({ offset: true }).nullable(),
+  digestBefore: z.string().nullable(),
+  digestAfter: z.string().nullable(),
+});
+export type RunOutputNode = z.infer<typeof RunOutputNode>;
+
+export const RunOutputs = z.object({
+  /** Which store recorded the run: the node shapes differ by store. */
+  source: z.enum(["wrapped", "ledger"]),
+  nodes: z.array(RunOutputNode),
+  tally: z.object({ artifacts: Count, reads: Count, gates: Count }),
+  /** False when the read stopped at its cap, so the spine is a prefix. */
+  complete: z.boolean(),
+});
+export type RunOutputs = z.infer<typeof RunOutputs>;
