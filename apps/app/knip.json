@@ -24,5 +24,5 @@
     "src/features/run/replay-actions.tsx": ["files"],
     "src/ui/replay-grade.tsx": ["files"]
   },
-  "tags": ["-deregistered"]
+  "tags": ["-deregistered", "-internal"]
 }

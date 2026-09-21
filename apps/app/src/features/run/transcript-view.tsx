@@ -380,7 +380,7 @@ function ToolPanes({ detail }: { detail: ToolDetail }) {
   return (
     <div data-testid="tool-panes" className="flex flex-col gap-2 pb-2.5">
       {detail.panes.map((pane, index) => {
-        const key = `${pane.kind}-${pane.label}-${index}`;
+        const key = `${pane.kind}-${pane.label}-${String(index)}`;
         if (pane.kind === "diff") {
           return (
             <DiffPanel
