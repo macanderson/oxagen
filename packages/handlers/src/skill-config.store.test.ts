@@ -174,6 +174,89 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
       });
     });
+    it.each(["configuration", "resolution"])(
+      "widens only same-org reads, never %s inserts",
+      async (target) => {
+        const foreignOrgId = crypto.randomUUID();
+        const config = parseSkillConfig("enabled = false");
+        await expect(
+          withSystemDb(async (tx) => {
+            const seeded = await tx
+              .insert(schema.skillConfigVersions)
+              .values(
+                [
+                  scope,
+                  { ...scope, workspaceId: otherWorkspaceId },
+                  { orgId: foreignOrgId, workspaceId: crypto.randomUUID() },
+                ].map((tenant) => ({
+                  ...tenant,
+                  versionLabel: "rls-witness",
+                  repositoryBindingId,
+                  commitSha: "e".repeat(40),
+                  enabled: false,
+                  configDigest: config.digest,
+                  sources: config.config.sources,
+                  search: config.config.search,
+                  unboundRepo: config.config.unbound_repo,
+                  reflection: config.config.reflection,
+                  publishedAt: new Date(),
+                })),
+              )
+              .returning();
+            const resolution = (row: (typeof seeded)[number]) => ({
+              orgId: row.orgId,
+              workspaceId: row.workspaceId,
+              configVersionId: row.id,
+              runId: "rls-witness",
+              attemptId: "attempt",
+              skillId: "review",
+              skillVersion: "1.0.0",
+              skillDigest: config.digest,
+              source: "workspace",
+              decision: "allowed" as const,
+              loaded: false,
+              tokenCost: 0,
+            });
+            await tx
+              .insert(schema.skillResolutions)
+              .values(seeded.map(resolution));
+            await tx.execute(sql`set local role oxagen_app`);
+            await tx.execute(
+              sql`select set_config('app.rls_bypass', 'off', true), set_config('app.org_wide', 'on', true), set_config('app.current_org_id', ${scope.orgId}, true), set_config('app.current_workspace_id', ${scope.workspaceId}, true)`,
+            );
+            const configs = await tx
+              .select()
+              .from(schema.skillConfigVersions)
+              .where(
+                eq(schema.skillConfigVersions.versionLabel, "rls-witness"),
+              );
+            const resolutions = await tx
+              .select()
+              .from(schema.skillResolutions)
+              .where(eq(schema.skillResolutions.runId, "rls-witness"));
+            for (const rows of [configs, resolutions]) {
+              expect(rows).toHaveLength(2);
+              expect(new Set(rows.map((row) => row.workspaceId))).toEqual(
+                new Set([scope.workspaceId, otherWorkspaceId]),
+              );
+              expect(rows.every((row) => row.orgId === scope.orgId)).toBe(true);
+            }
+            if (target === "resolution")
+              await tx
+                .insert(schema.skillResolutions)
+                .values(resolution(seeded[1]!));
+            else
+              await tx.insert(schema.skillConfigVersions).values({
+                ...seeded[1]!,
+                id: crypto.randomUUID(),
+                publicId: `skv_${crypto.randomUUID()}`,
+                versionLabel: "refused",
+                commitSha: "f".repeat(40),
+              });
+          }),
+        ).rejects.toMatchObject({ cause: { code: "42501" } });
+      },
+    );
     it("enforces the append-only grants and RLS on the real tables", async () => {
       const rows = await withSystemDb(async (tx) =>
         tx.execute(sql`

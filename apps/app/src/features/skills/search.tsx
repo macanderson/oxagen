@@ -150,12 +150,10 @@ export function SkillSearch({
             <ul aria-label={t("heldList")} className="divide-y divide-border">
               {result.withheld.map((skill) => (
                 <li
-                  key={`${skill.source}/${skill.id}@${skill.version}`}
+                  key={skill.id}
                   className="flex flex-wrap gap-2 py-2 text-sm"
                 >
-                  <code>
-                    {skill.id}@{skill.version}
-                  </code>
+                  <code>{skill.id}</code>
                   <span>{t(skill.reason)}</span>
                 </li>
               ))}

@@ -99,6 +99,47 @@ export function createSkillConfigService(deps: SkillConfigServiceDeps) {
         path: PATH,
         ref: commitSha,
       });
+      if (pullRequestNumber !== undefined) {
+        const current = await github.getBranch({
+          owner,
+          repo,
+          branch: repository.productionBranch,
+        });
+        if (!current)
+          throw new HandlerError({
+            code: "not_found",
+            reason: "skill_production_branch_missing",
+            message: "The approved production branch no longer exists",
+          });
+        const currentFile =
+          current.sha === commitSha
+            ? file
+            : await github.getFileContent({
+                owner,
+                repo,
+                path: PATH,
+                ref: current.sha,
+              });
+        if (currentFile !== file)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "skill_config_superseded",
+            message:
+              "The production configuration has changed since this pull request merged. Publish its current pull request.",
+          });
+        const confirmed = await github.getBranch({
+          owner,
+          repo,
+          branch: repository.productionBranch,
+        });
+        if (confirmed?.sha !== current.sha)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "skill_config_superseded",
+            message:
+              "The production branch changed during publication. Retry against its current configuration.",
+          });
+      }
       const parsed = parseSkillConfig(file);
       return deps.store.publish(scope, {
         repositoryBindingId: repository.bindingId,

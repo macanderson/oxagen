@@ -71,7 +71,8 @@ export const SkillSearchPreview = z.object({
   tokenCost: Count,
   results: z.array(SkillCandidate.extend({ score: z.number() })),
   withheld: z.array(
-    SkillCandidate.extend({
+    z.object({
+      id: z.string(),
       reason: z.enum(["out_of_scope", "unapproved_digest"]),
     }),
   ),

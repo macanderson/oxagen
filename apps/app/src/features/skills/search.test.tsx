@@ -42,11 +42,6 @@ describe("skill search preview", () => {
         withheld: [
           {
             id: "secret",
-            version: "2.0.0",
-            digest: "sha256:b",
-            source: "workspace",
-            description: "",
-            tokenCost: 90,
             reason: "unapproved_digest",
           },
         ],
@@ -57,7 +52,7 @@ describe("skill search preview", () => {
     await user.type(screen.getByLabelText("Search query"), "review changes");
     await user.click(screen.getByRole("button", { name: "Preview search" }));
     expect(await screen.findByText("review@1.0.0")).toBeTruthy();
-    expect(screen.getByText("secret@2.0.0")).toBeTruthy();
+    expect(screen.getByText("secret")).toBeTruthy();
     expect(
       screen.getByText("Content differs from the approved digest"),
     ).toBeTruthy();
