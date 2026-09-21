@@ -127,7 +127,14 @@ beforeAll(async () => {
     );
     neo4jUp = false;
   }
-});
+  // 60s, not vitest's 10s default: ensureDedupSchema() awaits
+  // `db.awaitIndexes(30000)`, so the hook's own budget has to exceed the wait
+  // it performs. Under the default the hook was killed mid-wait whenever the
+  // vector index was not already ONLINE — and a killed hook never reaches the
+  // catch above, so the suite failed hard instead of degrading to the skip
+  // this hook is written to take. That turned a contended CI Neo4j into a red
+  // check on pull requests touching no part of this package.
+}, 60_000);
 
 afterAll(async () => {
   if (neo4jUp) {

@@ -139,14 +139,32 @@ function bool(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
+/**
+ * The most an attribute value may run to: the envelope's own bound
+ * (`attrs: z.record(str.max(4096))`). A leftover field longer than this is
+ * cut here rather than carried whole, because the envelope refuses the
+ * whole event over one oversized attribute. Claude Code sends the compaction
+ * summary as a payload field, and a summary past the bound made the daemon
+ * refuse the hook's event: the event was dropped, its seq was spent, and the
+ * control plane reported the chain as broken.
+ */
+const ATTR_MAX = 4096;
+const ATTR_CUT = "…";
+
+function attrValue(value: unknown): string {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.length > ATTR_MAX
+    ? `${text.slice(0, ATTR_MAX - ATTR_CUT.length)}${ATTR_CUT}`
+    : text;
+}
+
 function leftovers(input: HookInput): Record<string, string> {
   const attrs: Record<string, string> = {};
   for (const [key, value] of Object.entries(input)) {
     if (PROMOTED.has(key) || value === undefined) {
       continue;
     }
-    attrs[`hook.${key}`] =
-      typeof value === "string" ? value : JSON.stringify(value);
+    attrs[`hook.${key}`] = attrValue(value);
   }
   return attrs;
 }

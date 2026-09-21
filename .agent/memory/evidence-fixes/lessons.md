@@ -1,0 +1,2 @@
+- [2026-09-20] Test audit evidence through registered query/export handlers and retain explicit org-fence assertions. (source: reflections/2026-09-20-audit-detail.md, agent: evidence-fixes)
+- [2026-09-20] A deployed alarm without a confirmed subscriber cannot demonstrate delivered incident notification. Verify AWS filter semantics separately from local alarm arithmetic. (source: reflections/2026-09-20-tacho-alert.md, agent: evidence-fixes)

@@ -122,6 +122,7 @@ export type PriceEntryFormValues = {
 
 /** The values one `remove_price_entry` call is built from. */
 export type RemovePriceEntryFormValues = {
+  cancellationToken?: string;
   provider: string;
   model: string;
   region: string;
@@ -270,6 +271,7 @@ export const PriceEntryForm = z
 /** Ending one negotiated row: the key alone, since the instant is the call's. */
 export const RemovePriceEntryForm = z
   .object({
+    cancellationToken: z.string().max(4096).optional(),
     provider: z.string(),
     model: z.string(),
     region: z.string(),
@@ -290,6 +292,9 @@ export const RemovePriceEntryForm = z
     if (!tokenClass.success)
       return issue(ctx, "tokenClass", "tokenClassInvalid");
     return {
+      ...(form.cancellationToken === undefined
+        ? {}
+        : { cancellationToken: form.cancellationToken }),
       provider,
       model,
       tokenClass: tokenClass.data,

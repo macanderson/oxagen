@@ -1644,6 +1644,31 @@ Each milestone has an acceptance test that a customer could run.
 | **M5 Audit** (weeks 16–20) | The archiver, compaction, holds, erasure, and reconciliation against a real provider invoice. | The provider invoice matches above 99.9% by frame. Erasure leaves a verifiable chain. |
 | **M6 Prove** (weeks 18–24) | The witness runner. The witness author, with the test-flip and build oracles first. The airlock at `L0`. Tamper exclusion, proof stamping, and proven spend in the Spend page. | A witness the agent never saw proves a PR opened by a wrapped agent. The agent's frames contain only pass or fail. A PR that edits the test harness is recorded as tampered. The proof verifies offline. |
 
+### Console implementation issue map
+
+The following issues own the retained console work. A page appearing in production does not imply every acceptance item in its issue is complete. `apps/app/ARCHITECTURE.md` §9 records the scope decisions; ADR-135 consolidates the foundation decisions.
+
+| Page or shared flow | Implementation issue |
+|---|---|
+| Foundation, viewer/kernel seams, route oracle and cutover | #2949 |
+| Fleet and approvals | #2950 |
+| Run record and replay | #2952; remaining transcript work #3370 |
+| Run controls and delivery | #2953 |
+| Run proof and witnesses | #2955 |
+| Agent identities and definitions | #2956 |
+| Mandates | #2957 |
+| Tools, connections, kill switches and approval rules | #2958 |
+| Steering records, proposals and Context PRs | #2961 |
+| Skills inventory, configuration and resolution | #3098 |
+| Spend attribution | #2962 |
+| Spend findings | #2963 |
+| Organization people, roles, workspaces, invitations and keys | #2964 |
+| Billing and GAU buckets | #1554 |
+| Onboarding and agent registration | #2967 |
+| Shell, assistant and notifications | #2968 |
+| Account dialog | #3333 |
+| Audit events and export | #3097 |
+
 ### 17.1 Three phases
 
 The milestones above are the build order. The phases below are the business order. Each phase has a trigger that ends it, and the phases match the positioning deck.
@@ -2430,6 +2455,18 @@ does not price the work, and is not evidence about a person.
 
 The ten schemas are `auth`, `org`, `wrk`, `iam`, `tools`, `control`, `cost`, `billing`, `audit`, `skills`. Thirty-eight tables in the wedge, forty in full. Every tenant table uses one of the two policy classes in §5.2.
 
+### Recorded table names used by the console
+
+Appendix A uses the names below. Where implementation retained an older schema name, the mapping names both. Drizzle definitions are the schema authority; rollups remain derived indexes.
+
+| Table | Source and owning issue |
+|---|---|
+| `cost.price_entries`, `cost.run_totals`, `cost.daily_totals` | `packages/database/src/schema/cost.ts`; #2962 |
+| `billing.spend_budgets` | `packages/database/src/schema/billing.ts`; #2962 |
+| `cost.findings` | `packages/database/src/schema/cost.ts`; #2963 |
+| `tools.tool_servers`, `tools.tool_versions` | Implemented as `mcp.mcp_servers` in `schema/mcp.ts` and `agent.tool_versions` in `schema/agent.ts`, under `packages/database/src`; #2958 |
+| `control.approvals` | Implemented as `agent.approval_requests` in `packages/database/src/schema/agent.ts`; #2950 |
+
 ## Appendix B. Neo4j model (per organization database)
 
 > **Status of this appendix (2026-09-18).** §4.2 is the storage rule. The run record and the record registry are Postgres, and the graph holds lineage, evidence and entity links. The `:Record` label and its edges below are the Phase 3 projection of §17.2 (one direction registry to graph, verified by hash) and do not exist on `main`. The `:Run` and `:Frame` labels below predate the maintainer decision of 2026-09-14 that keeps the run record in Postgres. The canonical copy of this specification carries that decision, and this appendix has not been reconciled with it yet.
@@ -2739,6 +2776,18 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 > | `set_auto_topup` | (new) | Owner or Admin: `enabled`, `blocks` (1…100) for the prepaid auto top-up |
 > | `set_org_billing_terms` | (new; headless, platform operator only) | `approved_for_invoice_billing`, `invoice_gau_max`; closes the accrual with an interim invoice when invoice billing is turned off; reachable only through the kernel's platform-operator binding (`pnpm billing:terms`) |
 > | `list_invoices` | (new) | cursor-paged invoices from the webhook mirror with a kind per row (subscription, block purchase, auto top-up, interim, period close), amounts, status and the Stripe-hosted link |
+
+**Retained capability coverage**
+
+These names appeared in the original capability plan. The table records their lane and current scope. Only registered contracts expose a callable surface; a planned name is not an alias.
+
+| Capability | Lane and app scope |
+|---|---|
+| `rotate_kek` | Planned Audit operation; #3097 restores the events viewer and export, not this unregistered capability |
+| `resolve_entity`, `upgrade_embedding_index` | Planned Ontology operations; #2960 is closed as not planned for the app. Neither name is registered |
+| `fork_run`, `bisect_runs` | Run recorder/replay #2952; preserve each capability's declared surface |
+| `run_assurance_suite` | Planned Tools assurance operation; #2959 is cut from the app and this name is unregistered |
+| `list_api_keys` | Organization #2964; API keys page |
 
 **Audit and compliance (7)**
 

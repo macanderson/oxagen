@@ -477,7 +477,11 @@ describe("a shipped migration filename is frozen", () => {
     for (const shipped of SHIPPED_MIGRATIONS) expect(REAL).toContain(shipped);
     expect(
       SHIPPED_MIGRATIONS.filter((f) => f > PRE_LEDGER_BASELINE_CUTOVER),
-    ).toEqual(["0027_tacho_events.sql", "0028_tacho_observed_changes.sql"]);
+    ).toEqual([
+      "0027_tacho_events.sql",
+      "0028_tacho_observed_changes.sql",
+      "0029_durable_token_usage.sql",
+    ]);
   });
 
   it("covers every grandfathered name", () => {

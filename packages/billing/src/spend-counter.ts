@@ -21,7 +21,7 @@
  * ceiling sums every workspace's rows, which a workspace-scoped session
  * could not see.
  */
-import { schema, withSystemDb } from "@oxagen/database";
+import { schema, withSystemDb, type Tx } from "@oxagen/database";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
@@ -36,16 +36,19 @@ function utcDay(at: Date): string {
  * non-positive amount writes nothing. One INSERT … ON CONFLICT DO UPDATE on
  * the scope-day key, so concurrent recorders add rather than overwrite.
  */
-export async function recordSpend(args: {
-  orgId: string;
-  /** Null for a frame outside a workspace. */
-  workspaceId: string | null;
-  at: Date;
-  micros: bigint;
-}): Promise<void> {
+export async function recordSpend(
+  args: {
+    orgId: string;
+    /** Null for a frame outside a workspace. */
+    workspaceId: string | null;
+    at: Date;
+    micros: bigint;
+  },
+  transaction?: Tx,
+): Promise<void> {
   if (args.micros <= 0n) return;
   const workspaceId = args.workspaceId === NIL_UUID ? null : args.workspaceId;
-  await withSystemDb((tx) =>
+  const run = (tx: Tx) =>
     tx.execute(sql`
       INSERT INTO ${schema.spendCounters} (org_id, workspace_id, day, spent_micros)
       VALUES (${args.orgId}::uuid, ${workspaceId}::uuid, ${utcDay(args.at)}::date, ${args.micros.toString()}::bigint)
@@ -53,8 +56,12 @@ export async function recordSpend(args: {
       DO UPDATE SET
         spent_micros = ${schema.spendCounters}.spent_micros + EXCLUDED.spent_micros,
         updated_at = now()
-    `),
-  );
+    `);
+  if (transaction) await run(transaction);
+  else {
+    // tenancy: global billing counters use the authenticated ingestion caller's orgId and workspaceId.
+    await withSystemDb(run);
+  }
 }
 
 /**

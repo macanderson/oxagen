@@ -210,6 +210,30 @@ describe("ingestion.pipeline Inngest function", () => {
       );
     });
 
+    it("reports unresolved legacy identities with the separate canonical record", async () => {
+      mocks.resolveEntity.mockResolvedValue({
+        principalNodeId: "canonical-node",
+        action: "created_principal",
+        confidence: 1,
+        identityReconciliation: {
+          reason: "ambiguous_legacy_identity",
+          candidateNodeIds: ["legacy-one", "legacy-two"],
+        },
+      });
+      await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: "org-123",
+          workspaceId: "ws-xyz",
+          connectionId: "conn-abc",
+          principalNodeId: "canonical-node",
+          reason: "ambiguous_legacy_identity",
+          candidateNodeIds: ["legacy-one", "legacy-two"],
+        }),
+        expect.stringContaining("legacy identity needs reconciliation"),
+      );
+    });
+
     it("tracks the legacy URL through chained property mappings", async () => {
       mocks.getConnector.mockReturnValue({
         normalizeRecord: () => ({

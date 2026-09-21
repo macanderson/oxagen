@@ -23,9 +23,8 @@
 //      target, who flipped it on and why, and who cleared it and why.
 //
 // Scope: a class, operator, workspace or organisation switch is written
-// org-wide (workspace_id NULL); the rest are the caller's workspace's. A
-// workspace switch is org-wide because the row is written under the caller's
-// tenant scope and iam.emergency_denies is `workspace_nullable`
+// org-wide through withOrgDb (workspace_id NULL); the rest use withTenantDb. A
+// workspace switch is org-wide because iam.emergency_denies is `workspace_nullable`
 // (tenant-policy.manifest.ts): a row for another workspace would fail the
 // policy's WITH CHECK. The digest over `{ kind: "workspace", id }` is what
 // narrows the switch to that workspace's calls, on every reader.

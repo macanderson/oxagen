@@ -23,6 +23,7 @@ const guardStub = (ref: string) =>
  */
 const repo = (over: Record<string, unknown> = {}) => ({
   checkSource: stub(PIN_A),
+  checkBlob: "check-blob",
   recheckSha: "bbb",
   closeGuardSource: guardStub(PIN_C),
   closeGuardBlob: "ca5c8e49",
@@ -67,10 +68,27 @@ describe("divergence", () => {
     // Exactly #2551: the label existed everywhere and the pinned check ignored
     // it in four repos.
     const problems = divergence(
-      world({ arenabench: repo({ checkSource: stub(PIN_B) }) }),
+      world({
+        arenabench: repo({
+          checkSource: stub(PIN_B),
+          checkBlob: "changed-check",
+        }),
+      }),
     );
-    expect(problems.join(" ")).toContain("pins disagree");
+    expect(problems.join(" ")).toContain("resolve to different files");
     expect(problems.join(" ")).toContain("arenabench");
+  });
+
+  it("accepts different pins that resolve to the same check file", () => {
+    expect(
+      divergence(world({ arenabench: repo({ checkSource: stub(PIN_B) }) })),
+    ).toEqual([]);
+  });
+
+  it("refuses a check pin whose workflow cannot be resolved", () => {
+    expect(
+      divergence(world({ arenabench: repo({ checkBlob: null }) })).join(" "),
+    ).toContain("dod-check.yml pins a commit that no longer resolves");
   });
 
   it("fails a moving ref", () => {

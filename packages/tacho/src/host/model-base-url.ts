@@ -165,6 +165,14 @@ function sidecarFor(file: string): string {
   return join(dirname(file), `.${basename(file)}.oxagen-model-base-url.json`);
 }
 
+/** The receipt survives a reassign that drops this harness from host.json. */
+export function modelBaseUrlBackupPath(
+  harness: ModelBaseUrlHarness,
+  home: string,
+): string {
+  return sidecarFor(fileFor(harness, home));
+}
+
 function sha256(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
 }
@@ -457,6 +465,23 @@ function currentValue(
   if (harness === "claude-code") return claudeValue(parseSettings(text, file));
   const lines = splitLines(text);
   return tomlValueAt(lines, findTomlKey(lines));
+}
+
+/** A dropped harness with no receipt can still point at the removed gateway. */
+export function hasOrphanedModelBaseUrl(
+  harness: ModelBaseUrlHarness,
+  home: string,
+): boolean {
+  const file = fileFor(harness, home);
+  const text = readTextIfExists(file);
+  try {
+    return isModelProxyBaseUrl(harness, currentValue(harness, file, text));
+  } catch (error) {
+    // Unrelated malformed files were never ours to repair. A visible proxy
+    // URL makes the malformed document part of cleanup and keeps it blocked.
+    if (text?.includes("http://127.0.0.1:")) throw error;
+    return false;
+  }
 }
 
 function describe(
