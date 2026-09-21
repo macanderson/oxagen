@@ -17,7 +17,7 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useMemo, useState } from "react";
 import { diffStat } from "@/shared/line-diff";
-import { buttonGold, buttonSecondary, mono, panel } from "@/ui/control-styles";
+import { buttonPrimary, buttonSecondary, mono, panel } from "@/ui/control-styles";
 import { CodeEditor } from "@/ui/code-editor";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SafeLink } from "@/ui/navigation";
@@ -290,7 +290,7 @@ export function StatementEditor({
           <button
             type="button"
             data-testid="record-propose-open"
-            className={buttonGold}
+            className={buttonPrimary}
             disabled={!dirty || !canWrite || pendingBranch !== null}
             onClick={() => {
               setProposing(true);
