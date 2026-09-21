@@ -98,6 +98,7 @@ async function renderRoles(
     skills: { inventory: vi.fn() },
     steering: {
       records: vi.fn(),
+      record: vi.fn(),
       proposals: vi.fn(),
       contextPr: vi.fn(),
       freshness: vi.fn(),

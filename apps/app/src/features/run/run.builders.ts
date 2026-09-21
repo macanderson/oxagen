@@ -580,6 +580,7 @@ export function runSource(reads: RunReads) {
     skills: { inventory: refuse },
     steering: {
       records: refuse,
+      record: refuse,
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,

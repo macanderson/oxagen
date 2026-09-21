@@ -197,6 +197,7 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [revise_context_record](context.record.revise.md) | [context.record.revise.ts](../../packages/oxagen/src/contracts/context.record.revise.ts) | api |
 | [append_record](context.records.append.md) | [context.records.append.ts](../../packages/oxagen/src/contracts/context.records.append.ts) | api, mcp, agent |
 | [dismiss_proposal](context.proposal.dismiss.md) | [context.proposal.dismiss.ts](../../packages/oxagen/src/contracts/context.proposal.dismiss.ts) | api |
 | [get_context_pr](context.pr.get.md) | [context.pr.get.ts](../../packages/oxagen/src/contracts/context.pr.get.ts) | api, mcp |

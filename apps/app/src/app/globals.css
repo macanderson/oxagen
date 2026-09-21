@@ -20,6 +20,16 @@
   --color-banner: var(--banner-bg);
   --color-app-canvas: var(--ink);
   --color-data-surface: var(--data-surface);
+  /* The six record kinds (features/record): kind is an icon and a hue, and the
+   * hues are their own family. None of them is a state hue and none is the
+   * gold, so a reader never mistakes what a record IS for how it is doing. The
+   * values are already set per theme below as --k-*. */
+  --color-kind-rule: var(--k-rule);
+  --color-kind-constraint: var(--k-constraint);
+  --color-kind-procedure: var(--k-procedure);
+  --color-kind-fact: var(--k-fact);
+  --color-kind-memory: var(--k-memory);
+  --color-kind-preference: var(--k-preference);
   /* Code surfaces (ui/code-editor.tsx): the ground and the syntax colours. */
   --color-code-bg: var(--code-bg);
   --color-code-comment: var(--code-comment);

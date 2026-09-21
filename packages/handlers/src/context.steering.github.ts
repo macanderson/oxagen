@@ -10,7 +10,11 @@
 // local-only PAT).
 import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
-import { createGitHubClient, type GitHubClient } from "@oxagen/github";
+import {
+  createGitHubClient,
+  type GitHubClient,
+  type GitHubPathCommit,
+} from "@oxagen/github";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { resolveGitHubToken } from "./lib/github-token";
@@ -73,6 +77,20 @@ export interface SteeringGitHub {
     path: string,
     ref: string,
   ): Promise<string | null>;
+  /**
+   * The commit that last touched `path` on `ref`, or null when nothing on that
+   * ref has ever touched it.
+   *
+   * This is a published record's provenance. A record is in force because its
+   * commit merged into the production branch, so who published it and when are
+   * facts about that commit — read back from git every time, never copied into
+   * a column that a later edit can leave stale.
+   */
+  lastCommitForPath(
+    repo: SteeringRepository,
+    path: string,
+    ref: string,
+  ): Promise<GitHubPathCommit | null>;
   /** Create the branch from `fromBranch`; an existing branch is reused. */
   ensureBranch(
     repo: SteeringRepository,
@@ -490,6 +508,16 @@ export function createSteeringGitHub(
         path,
         ref,
       });
+    },
+    async lastCommitForPath(repo, path, ref) {
+      const [commit] = await clientFor(repo).listPathCommits({
+        owner: repo.owner,
+        repo: repo.repo,
+        path,
+        ref,
+        limit: 1,
+      });
+      return commit ?? null;
     },
     async ensureBranch(repo, branch, fromBranch, options) {
       try {

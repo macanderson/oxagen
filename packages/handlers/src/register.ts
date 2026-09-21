@@ -732,6 +732,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .openContextPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "revise_context_record",
+    async () =>
+      (await import("./context.record.revise"))
+        .reviseRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_context_pr",
     async () =>
       (await import("./context.pr.get"))

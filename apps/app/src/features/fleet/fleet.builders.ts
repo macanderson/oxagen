@@ -177,6 +177,7 @@ export function fleetSource(reads: FleetReads) {
     skills: { inventory: refuse },
     steering: {
       records: refuse,
+      record: refuse,
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,

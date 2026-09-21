@@ -59,6 +59,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
     audit: { events: refuse, exportEvents: refuse },
     steering: {
       records: refuse,
+      record: refuse,
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,

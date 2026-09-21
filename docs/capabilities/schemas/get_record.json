@@ -49,7 +49,14 @@
             "type": "object",
             "properties": {
               "id": {
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "lineageId": {
                 "type": "string"
@@ -181,7 +188,14 @@
                 ]
               },
               "updatedAt": {
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -202,6 +216,80 @@
               "updatedAt"
             ],
             "additionalProperties": false
+          },
+          "backing": {
+            "type": "string",
+            "enum": [
+              "file",
+              "registry"
+            ]
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "commit": {
+                    "type": "string"
+                  },
+                  "authorName": {
+                    "type": "string"
+                  },
+                  "authorLogin": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "committedAt": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "commit",
+                  "authorName",
+                  "authorLogin",
+                  "committedAt",
+                  "summary"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effect": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "rendered": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cited": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "rendered",
+                  "cited"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "versions": {
             "type": "array",
@@ -266,6 +354,9 @@
         "required": [
           "source",
           "record",
+          "backing",
+          "provenance",
+          "effect",
           "versions",
           "proposalId",
           "prUrl"

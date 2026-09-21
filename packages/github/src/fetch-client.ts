@@ -9,6 +9,7 @@ import type {
   GitHubCommitStatus,
   GitHubPrComment,
   GitHubPrComments,
+  GitHubPathCommit,
   GitHubPrFile,
   GitHubPullRequest,
   GitHubRepoInfo,
@@ -149,6 +150,15 @@ interface GHBranchCommit {
 
 interface GHBranch {
   commit: GHBranchCommit;
+}
+
+interface GHCommitListItem {
+  sha: string;
+  commit: {
+    message?: string;
+    author?: { name?: string; date?: string } | null;
+  };
+  author?: { login?: string } | null;
 }
 
 interface GHTreeItem {
@@ -641,6 +651,41 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
   }
 
   /**
+   * The commits that touched one path, newest first. GitHub answers 404 for a
+   * repository with no commits at all, which is an empty history rather than a
+   * failure, so that case returns `[]` like any other path nothing has touched.
+   */
+  async function listPathCommits(args: {
+    owner: string;
+    repo: string;
+    path: string;
+    ref?: string;
+    limit?: number;
+  }): Promise<GitHubPathCommit[]> {
+    const query = new URLSearchParams({
+      path: args.path,
+      per_page: String(Math.min(Math.max(args.limit ?? 1, 1), 100)),
+    });
+    if (args.ref) query.set("sha", args.ref);
+    try {
+      const data = await request<GHCommitListItem[]>(
+        "GET",
+        `/repos/${seg(args.owner)}/${seg(args.repo)}/commits?${query.toString()}`,
+      );
+      return data.map((item) => ({
+        sha: item.sha,
+        authorName: item.commit.author?.name ?? "",
+        authorLogin: item.author?.login ?? null,
+        committedAt: item.commit.author?.date ?? "",
+        summary: (item.commit.message ?? "").split("\n", 1)[0] ?? "",
+      }));
+    } catch (err) {
+      if (isNotFound(err)) return [];
+      throw err;
+    }
+  }
+
+  /**
    * One branch's head commit, or null when GitHub answers 404: the branch
    * does not exist. Unlike `listBranches`, which stops at 300, this answers
    * for any branch by name.
@@ -1032,6 +1077,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     openPullRequest,
     listPullRequests,
     getFileContent,
+    listPathCommits,
     getTree,
     getBranch,
     getPullRequest,

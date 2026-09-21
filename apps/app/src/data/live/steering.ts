@@ -5,6 +5,7 @@
 import "server-only";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
+import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
 import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { captureError } from "@oxagen/telemetry";
@@ -12,6 +13,7 @@ import type { z } from "zod";
 import {
   ContextPr,
   ProposalPage,
+  RecordDetail,
   RecordPage,
   STEERING_PAGE,
   SteeringFreshness,
@@ -22,6 +24,7 @@ import { kernelRead } from "@/server/kernel";
 import {
   toContextPr,
   toProposalPage,
+  toRecordDetail,
   toRecordPage,
   toSteeringFreshness,
 } from "./mappers/steering";
@@ -60,10 +63,33 @@ export const steering: DataSource["steering"] = {
       ? parsed(RecordPage, toRecordPage(read.value), ctx.orgId, "records")
       : read;
   },
+  async record(ctx, lineage) {
+    const read = await kernelRead(ctx, {
+      contract: contextRecordsGet,
+      input: { recordId: lineage },
+      page: "steering",
+    });
+    if (!read.ok) return read;
+    // The route names a lineage, so the answer is the published record on it.
+    // An append carries a lineage too, but it is read by its own `cta_` id on
+    // the run that wrote it, and it is not in force: answering this route with
+    // one would show an unpublished sentence as a governed rule.
+    if (read.value.source !== "published") return readError("not_found", 404);
+    return parsed(
+      RecordDetail,
+      toRecordDetail(read.value),
+      ctx.orgId,
+      "record",
+    );
+  },
   async proposals(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: contextProposalList,
-      input: { limit: STEERING_PAGE, offset: q.offset },
+      input: {
+        limit: STEERING_PAGE,
+        offset: q.offset,
+        ...(q.lineage === undefined ? {} : { lineageId: q.lineage }),
+      },
       page: "steering",
     });
     return read.ok

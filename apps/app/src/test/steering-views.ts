@@ -1,14 +1,21 @@
-// Typed Steering values for the Steering component tests (ARCHITECTURE.md §5):
-// a published record, a proposal, a Context PR in each state of its machine,
-// the freshness panel's read,
-// and a DataSource that answers the three Steering reads with what a test
-// hands it. Importable from tests only.
+// Typed steering values for the component tests of the two pages that read the
+// steering port (ARCHITECTURE.md §5): a published record, one record's page, a
+// proposal, a Context PR in each state of its machine, the freshness panel's
+// read, and a DataSource that answers every steering read with what a test
+// hands it.
+//
+// It lives here rather than in `features/steering` because the Steering page
+// and one record's page both read this port, and no feature may reach into
+// another's folder. `steeringSource` is the one stub of the seam: a second
+// stub in the second feature would be a second place for it to fall behind
+// `DataSource`. Test support only: src/test is never in a production bundle.
 import type { DataSource } from "@/data/ports";
 import type {
   ContextPr,
   Proposal,
   ProposalPage,
   ProposalStatus,
+  RecordDetail,
   RecordPage,
   SteeringFreshness,
 } from "@/data/contracts/steering";
@@ -39,6 +46,40 @@ export function publishedRecord(
     commit: "4d5e6f7a8b9c",
     path: RECORD_PATH,
     publishedAt: "2026-09-12T09:16:40.000Z",
+    ...overrides,
+  };
+}
+
+/**
+ * One record's page (#3395): the file is the backing, its history carries the
+ * provenance, and the rollup carries the effect. A test that wants the
+ * not-recorded states passes `{ provenance: null, effect: null }`.
+ */
+export function recordDetail(
+  overrides: Partial<RecordDetail> = {},
+): RecordDetail {
+  return {
+    record: { ...publishedRecord(), status: "active" },
+    backing: "file",
+    provenance: {
+      commit: "4d5e6f7a8b9c1d2e3f4a5b6c7d8e9f0a1b2c3d4e",
+      authorName: "Dana Reyes",
+      authorLogin: "dreyes",
+      committedAt: "2026-09-12T09:16:40.000Z",
+      summary: `context: publish ${LINEAGE}`,
+    },
+    effect: { rendered: 214, cited: 37 },
+    versions: [
+      {
+        id: "crv_9m2x4q7r",
+        version: 3,
+        checksum: "b7f1c2d3e4a5",
+        isLatest: true,
+        publishedAt: "2026-09-12T09:16:40.000Z",
+      },
+    ],
+    proposalId: PROPOSAL_ID,
+    prUrl: PR_URL,
     ...overrides,
   };
 }
@@ -159,6 +200,7 @@ export function contextPr(
 
 export type SteeringReads = {
   records: Read<RecordPage>;
+  record: Read<RecordDetail>;
   proposals: Read<ProposalPage>;
   contextPr: Read<ContextPr>;
   freshness: Read<SteeringFreshness>;
@@ -183,6 +225,7 @@ export function steeringFreshness(
 export function steeringSource(overrides: Partial<SteeringReads> = {}) {
   const reads: SteeringReads = {
     records: readOk({ records: [publishedRecord()], total: 1 }),
+    record: readOk(recordDetail()),
     proposals: readOk({ proposals: [proposal()], total: 1 }),
     contextPr: readOk(contextPr("checks_passed")),
     freshness: readOk(steeringFreshness()),
@@ -190,6 +233,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
   };
   const calls: Record<keyof SteeringReads, unknown[][]> = {
     records: [],
+    record: [],
     proposals: [],
     contextPr: [],
     freshness: [],
@@ -246,6 +290,10 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       records: (...args) => {
         calls.records.push(args);
         return Promise.resolve(reads.records);
+      },
+      record: (...args) => {
+        calls.record.push(args);
+        return Promise.resolve(reads.record);
       },
       proposals: (...args) => {
         calls.proposals.push(args);

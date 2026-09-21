@@ -148,6 +148,7 @@ export function onboardingSource(reads: Reads): {
     skills: { inventory: refuse("skills.inventory") },
     steering: {
       records: refuse("steering.records"),
+      record: refuse("steering.record"),
       proposals: refuse("steering.proposals"),
       contextPr: refuse("steering.contextPr"),
       freshness: refuse("steering.freshness"),

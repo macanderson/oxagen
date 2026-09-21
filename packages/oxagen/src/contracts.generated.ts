@@ -122,6 +122,7 @@ import "./contracts/context.proposal.list";
 import "./contracts/context.record.list";
 import "./contracts/context.record.promote";
 import "./contracts/context.record.publish";
+import "./contracts/context.record.revise";
 import "./contracts/context.records.append";
 import "./contracts/context.records.get";
 import "./contracts/context.records.list";
