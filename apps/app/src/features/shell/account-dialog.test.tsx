@@ -1599,6 +1599,7 @@ it("keeps a menu theme chosen after the pending preferences panel closes", async
   await user.selectOptions(await screen.findByTestId("account-theme"), "dark");
   await user.click(screen.getByTestId("account-preferences-save"));
   await user.click(screen.getByRole("tab", { name: "Profile" }));
+  await user.click(screen.getByRole("button", { name: "Close" }));
   await user.click(
     screen.getByRole("button", { name: "choose light from menu" }),
   );
