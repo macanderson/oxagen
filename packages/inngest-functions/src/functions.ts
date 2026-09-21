@@ -1,4 +1,5 @@
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
+import { billingUsageDelivery } from "./functions/billing.usage-delivery";
 import { billingGauClose } from "./functions/billing.gau-close";
 import { costRunRollup } from "./functions/cost.run-rollup";
 import { costDailyRollup } from "./functions/cost.daily-rollup";
@@ -51,6 +52,7 @@ import { runSummarize } from "./functions/run.summarize";
 export const functions: any[] = [
   billingDunningSweep,
   billingGauClose,
+  billingUsageDelivery,
   costRunRollup,
   costDailyRollup,
   costPriceBookSync,
