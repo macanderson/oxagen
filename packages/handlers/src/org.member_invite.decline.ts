@@ -11,7 +11,9 @@ export const orgMemberInviteDeclineHandler: CapabilityHandler<
   const userId = await resolveActingUserId(ctx);
   if (!userId)
     throw new HandlerError({ code: "forbidden", reason: "no_principal" });
-  // An invitee may not belong to the inviting organization yet.
+  // tenancy: looks up the invitation by public id before the invitee has any
+  // orgId membership in the inviting organization; the role check below
+  // verifies membership once the invitation's org is known.
   const invitation = await withSystemDb((tx) =>
     tx.query.invitations.findFirst({
       where: and(eq(schema.invitations.publicId, input.invitationPublicId)),
@@ -29,6 +31,9 @@ export const orgMemberInviteDeclineHandler: CapabilityHandler<
       code: "not_found",
       reason: "invitation_not_found",
     });
+  // tenancy: resolves the acting user's email by userId, independent of any
+  // orgId, to compare against the invitation's recipient before that user's
+  // membership in the invitation's organization is confirmed.
   const user = await withSystemDb((tx) =>
     tx.query.users.findFirst({
       where: eq(schema.users.id, userId),
@@ -42,6 +47,9 @@ export const orgMemberInviteDeclineHandler: CapabilityHandler<
   }
   if (invitation.status !== "pending")
     throw new HandlerError({ code: "conflict", reason: "invitation_closed" });
+  // tenancy: the update is scoped by orgId and the pending status inline,
+  // so this system call cannot cross tenant boundaries even without a
+  // caller-scoped org context.
   const [changed] = await withSystemDb((tx) =>
     tx
       .update(schema.invitations)

@@ -120,10 +120,13 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
   }
 
   // ── Transaction: accept + create membership + provision IAM ──────────────────
-  // All writes go to the invitation's org via withSystemDb (cross-org write;
-  // the invitee's ctx.orgId may differ from invitation.orgId).
   const joinedAt = new Date();
 
+  // tenancy: all writes below go to invitation.orgId, not ctx.orgId
+  // (cross-org write); the accepted-status update is a verified
+  // compare-and-swap and the new org_users membership row is scoped to
+  // that orgId, so this system call cannot admit a caller into a
+  // different organization.
   const result = await withSystemDb(async (tx) => {
     // (a) Mark invitation accepted, as a compare-and-swap.
     // The pending/expiry checks above ran in an EARLIER transaction, so by the
