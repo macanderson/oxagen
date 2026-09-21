@@ -194,7 +194,7 @@ is unambiguous.
 
 ## CI Config
 
-`.github/workflows/pipeline.yml` jobs: `atlas-validate`; `checks` (lint + typecheck, then `check:manifest` / `check:contracts` / `env:check` / `db:lint-migrations` / `check:db-migrate-script`, `check:audit-coverage`, `check:ui-parity --strict`, and `check:manifest:tickets`, which still files Linear tickets for parity gaps — a no-op today because the key is revoked; #2980 moves it and the nightly's `e2e:failure-ticket` to GitHub issues); `test` (migrate Postgres/ClickHouse/Neo4j, seed, build, unit tests, coverage thresholds); `e2e`; `rls-integration`; `rds-compatibility`; then `deploy-web` and `deploy-node` on `main`. `pnpm gate` mirrors the checks and test jobs. Other workflows: `vision-gate.yml` LLM-judges the PR diff against `docs/VISION.md` (advisory); `dod-check.yml` / `dod-close-guard.yml` / `dod-recheck.yml` enforce SCR-003; `triage-guard.yml` strips creator-applied priorities (SCR-005); `scr-corpus-check.yml` keeps `docs/scr/` identical across repos; `nightly.yml`, `release.yml`, `linear-release.yml` (release notes to Linear, unrelated to issue tracking), `infra*.yml`, `store-migrate.yml`, `where-is-production.yml` are operational. CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
+`.github/workflows/pipeline.yml` jobs: `preflight` (runs on every trigger, and on a push to `main` skips the rest of this run when a later push already superseded it, so a merge burst cannot queue full runs without bound — `check-main-preflight.mjs`); `atlas-validate`; `checks` (lint + typecheck, then `check:manifest` / `check:contracts` / `env:check` / `db:lint-migrations` / `check:db-migrate-script`, `check:audit-coverage`, `check:ui-parity --strict`, and `check:manifest:tickets`, which still files Linear tickets for parity gaps — a no-op today because the key is revoked; #2980 moves it and the nightly's `e2e:failure-ticket` to GitHub issues); `test` (migrate Postgres/ClickHouse/Neo4j, seed, build, unit tests, coverage thresholds); `e2e`; `rls-integration`; `rds-compatibility`; then `deploy-web` and `deploy-node` on `main`. `pnpm gate` mirrors the checks and test jobs. Other workflows: `vision-gate.yml` LLM-judges the PR diff against `docs/VISION.md` (advisory); `dod-check.yml` / `dod-close-guard.yml` / `dod-recheck.yml` enforce SCR-003; `triage-guard.yml` strips creator-applied priorities (SCR-005); `scr-corpus-check.yml` keeps `docs/scr/` identical across repos; `nightly.yml`, `release.yml`, `linear-release.yml` (release notes to Linear, unrelated to issue tracking), `infra*.yml`, `store-migrate.yml`, `where-is-production.yml` are operational. CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
 
 Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its dry run reports pending migrations. With `--apply`, it applies Atlas migrations and then runs the bundled `seedPlatform()` entry and seed assets in a Node container on the app node. A failed seed fails the operation; rerunning is idempotent. The RDS compatibility job verifies the same artifact against a fresh database without superuser privileges.
 
@@ -322,7 +322,11 @@ macanderson org repos.
   (inner loop):** Never compile or run the full test suite while developing.
   Build and test only the crates/packages/modules touched by the change
   (plus direct dependents on interface changes). The full suite is CI's job.
-  Here: `pnpm --filter <package> test` / `turbo run test:unit --filter <package>`, never bare `pnpm test` or `turbo run test:unit`.
+  Here: `pnpm --filter <package> test:unit <file>.test.ts`, never bare `pnpm test`
+  or `turbo run test:unit`. **Not `... test`**: no workspace package defines a
+  `test` script, so `pnpm --filter <package> test` exits 0 having run nothing at
+  all. Only the repo root defines one, and it is `turbo run test:unit`, the full
+  suite this rule exists to keep out of the inner loop.
 - **[SCR-002](docs/scr/SCR-002-durability-first-architecture.md) —
   Architecture decisions:** Do not ask. Choose the most durable option — the
   one that can't be questioned in 10 years as the right move. Cheap-and-easy

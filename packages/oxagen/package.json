@@ -28,7 +28,8 @@
     "./mandates/schemas": "./src/mandates/schemas.ts",
     "./approval-rules/schemas": "./src/approval-rules/schemas.ts",
     "./mandates/schemas.sample": "./src/mandates/schemas.sample.ts",
-    "./client-ip": "./src/client-ip.ts"
+    "./client-ip": "./src/client-ip.ts",
+    "./skills": "./src/skills.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

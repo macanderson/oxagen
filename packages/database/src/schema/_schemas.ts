@@ -58,3 +58,4 @@ export const toolsSchema = pgSchema("tools");
 // cms — public marketing surface for oxagen.sh (website lead capture + gated
 // ebook). Not tenant-scoped; bypass-only RLS. See schema/cms.ts and ADR-102.
 export const cmsSchema = pgSchema("cms");
+export const skillsSchema = pgSchema("skills");

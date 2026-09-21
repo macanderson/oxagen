@@ -1,3 +1,4 @@
+import { skillConfigVersions } from "./schema/skills";
 import { and, eq, relations } from "drizzle-orm";
 import {
   schemaRegistries,
@@ -778,6 +779,16 @@ export const authorizationDecisionsRelations = relations(
     snapshot: one(authorizationSnapshots, {
       fields: [authorizationDecisions.authorizationSnapshotId],
       references: [authorizationSnapshots.id],
+    }),
+  }),
+);
+
+export const skillConfigVersionsRelations = relations(
+  skillConfigVersions,
+  ({ one }) => ({
+    repositoryBinding: one(repositoryBindings, {
+      fields: [skillConfigVersions.repositoryBindingId],
+      references: [repositoryBindings.id],
     }),
   }),
 );
