@@ -44,6 +44,11 @@
   --fg: #FFFFFF; --body: #E4E4E7; --muted: #A1A1AA; --dim: #71717A;
   --gold: #D4AF37; --accent-text: #D4AF37; --on-gold: #09090B;
   --joy: #14A8A1; --heat: #D2663F;
+  /* The four areas of work. Chosen by search, not taste: every pair clears
+     OKLab dE 14 under protanopia, deuteranopia and tritanopia, and dE 23 in
+     normal vision, on both grounds. They also clear gold, which stays
+     identity and never encodes an area. */
+  --area-build: #0097FB; --area-prove: #1E8500; --area-ship: #6E3ABA; --area-sell: #E459A6;
   --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
   --font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Monaspace Neon", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -74,8 +79,15 @@ h2 { font-size: clamp(28px, 4vw, 40px); line-height: 1.2; font-weight: 700; lett
 h3 { font-size: 22px; line-height: 1.3; font-weight: 500; }
 h4 { font-family: var(--font); font-size: 17px; font-weight: 600; color: var(--fg); margin: 0; }
 p { margin: 0; max-width: 66ch; }
-.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); font-weight: 500; }
-.eyebrow.first { color: var(--accent-text); }
+/* Gold is the editorial accent: it marks where the page speaks, and the
+   figures it wants read. It never encodes a value and never fills a surface,
+   so no chart or hive cell uses it. Exactly one gold button, in the hive. */
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent-text); font-weight: 500; }
+.eyebrow::before { content: ""; display: inline-block; width: 14px; height: 1px; background: var(--accent-text); vertical-align: middle; margin-right: 9px; opacity: .8; }
+.eyebrow.first::before { display: none; }
+/* A figure inside a sentence. Gold, tabular, never a link. */
+.hl { color: var(--accent-text); font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 500; font-size: .94em; }
+.hl.w { font-family: var(--font); font-size: 1em; }
 .lead { font-size: 20px; color: var(--body); max-width: 60ch; }
 .muted { color: var(--muted); }
 a { color: var(--fg); }
@@ -96,7 +108,9 @@ section.hero { border-top: 0; padding-block: 64px 40px; }
 .stat .label { font-size: 13px; color: var(--muted); }
 .stat .value { font-family: var(--mono); font-size: clamp(26px, 3.4vw, 34px); color: var(--fg); line-height: 1.15; font-variant-numeric: tabular-nums; }
 .stat .sub { font-size: 13px; color: var(--muted); line-height: 1.45; }
-.note { border-left: 2px solid var(--rule); padding: 4px 0 4px 16px; color: var(--muted); font-size: 15px; max-width: 72ch; }
+.note { border-left: 2px solid var(--accent-text); padding: 4px 0 4px 16px; color: var(--muted); font-size: 15px; max-width: 72ch; }
+.note a { color: var(--accent-text); }
+.pull { border-left: 2px solid var(--accent-text); padding: 2px 0 2px 18px; margin: 4px 0; font-family: var(--font-display); font-size: clamp(19px, 2.1vw, 23px); line-height: 1.4; color: var(--fg); max-width: 40ch; font-weight: 500; text-wrap: balance; }
 
 /* The hive */
 .hive-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 28px; }
@@ -118,6 +132,15 @@ button.gold:hover { background: #F1CE65; }
 .legend .ramp { display: inline-flex; gap: 2px; vertical-align: middle; margin-inline: 6px; }
 .legend .ramp i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; vertical-align: middle; margin-right: 6px; }
+.dot.swatch { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--border); }
+/* What the colours mean. A labelled key, so area is never carried by colour
+   alone, which is also the relief the deep violet's contrast asks for. */
+.areakey { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 20px; margin-top: 14px; }
+.areakey .a { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 0 10px; align-items: start; }
+.areakey .sw { width: 12px; height: 12px; border-radius: 3px; margin-top: 5px; }
+.areakey b { font-weight: 600; color: var(--fg); font-size: 14px; }
+.areakey em { display: block; font-style: normal; color: var(--dim); font-size: 12.5px; line-height: 1.5; }
+.areakey .n { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .chip { font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--rule); background: transparent; color: var(--body); }
 .chip[aria-pressed="true"] { background: var(--fg); color: var(--ink); border-color: var(--fg); }
@@ -241,7 +264,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
 <header class="top">
   <div class="wrap">
     <a href="/" aria-label="Oxagen home"><svg class="logo" xmlns="http://www.w3.org/2000/svg"  viewBox="0 0 604.125 115.625" role="img" aria-label="oxagen"><g transform="translate(21.575,22.616) scale(3.437130)"><g data-mark="hive"><path d="M0.000 -6.080L5.800 -3.040L5.800 3.040L0.000 6.080L-5.800 3.040L-5.800 -3.040Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M13.080 -6.080L18.880 -3.040L18.880 3.040L13.080 6.080L7.280 3.040L7.280 -3.040Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M6.540 4.160L12.340 7.200L12.340 13.280L6.540 16.320L0.740 13.280L0.740 7.200Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M19.620 3.660L25.897 6.950L25.897 13.530L19.620 16.820L13.343 13.530L13.343 6.950Z" fill="#D4AF37"/><path d="M0.000 13.900L6.277 17.190L6.277 23.770L0.000 27.060L-6.277 23.770L-6.277 17.190Z" fill="#D4AF37" opacity="0.55"/><path d="M13.080 14.400L18.880 17.440L18.880 23.520L13.080 26.560L7.280 23.520L7.280 17.440Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/></g></g><g transform="translate(150.257,11.190)"><path class="letters" d="M33.9083 68.758Q24.1657 68.758 16.4786 64.7737Q8.79142 60.7894 4.39571 53.2965Q0 45.8035 0 35.3862V33.3718Q0 22.9544 4.39571 15.4615Q8.79142 7.96854 16.4786 3.98427Q24.1657 0 33.9083 0Q43.6509 0 51.3381 3.98427Q59.0252 7.96854 63.4209 15.4615Q67.8166 22.9544 67.8166 33.3718V35.3862Q67.8166 45.8035 63.4209 53.2965Q59.0252 60.7894 51.3381 64.7737Q43.6509 68.758 33.9083 68.758ZM33.9083 55.3486Q42.1895 55.3486 47.4689 50.0198Q52.7484 44.691 52.7484 35.0142V33.7437Q52.7484 24.067 47.5233 18.7382Q42.2981 13.4094 33.9083 13.4094Q25.6502 13.4094 20.3592 18.7382Q15.0683 24.067 15.0683 33.7437V35.0142Q15.0683 44.691 20.3592 50.0198Q25.6502 55.3486 33.9083 55.3486Z M176.569 68.758Q169.637 68.758 164.119 66.3453Q158.601 63.9327 155.387 59.2935Q152.173 54.6542 152.173 48.0088Q152.173 41.3403 155.387 36.8558Q158.601 32.3712 164.27 30.1017Q169.94 27.8323 177.174 27.8323H196.047V23.8925Q196.047 18.7316 192.874 15.5274Q189.701 12.3232 182.99 12.3232Q176.411 12.3232 173.049 15.3842Q169.686 18.4452 168.627 23.3593L154.691 18.7315Q156.27 13.6133 159.748 9.39702Q163.225 5.18071 169.049 2.59035Q174.874 0 183.208 0Q195.972 0 203.326 6.42816Q210.681 12.8563 210.681 24.9392V50.4707Q210.681 54.4204 214.368 54.4204H219.795V66.9148H209.197Q204.464 66.9148 201.442 64.5334Q198.42 62.1521 198.42 58.1563V57.8864H196.126Q195.392 59.6967 193.399 62.2985Q191.406 64.9004 187.388 66.8292Q183.369 68.758 176.569 68.758ZM179.05 56.4348Q186.581 56.4348 191.314 52.1592Q196.047 47.8837 196.047 40.6031V39.2405H178.175Q173.175 39.2405 170.208 41.3881Q167.241 43.5358 167.241 47.5513Q167.241 51.5668 170.34 54.0008Q173.439 56.4348 179.05 56.4348Z M227.767 34.6423V32.6279Q227.767 22.3817 231.86 15.0863Q235.953 7.79081 242.768 3.8954Q249.582 0 257.706 0Q266.935 0 271.762 3.33256Q276.589 6.66512 278.81 10.4107H281.042V1.8432H295.801V79.33Q295.801 85.6989 292.104 89.4725Q288.408 93.2462 282.079 93.2462H238.369V80.0541H277.023Q280.779 80.0541 280.779 76.1043V57.2775H278.547Q277.161 59.5683 274.665 61.8904Q272.168 64.2125 268.057 65.7414Q263.946 67.2702 257.706 67.2702Q249.582 67.2702 242.756 63.3748Q235.93 59.4794 231.848 52.1724Q227.767 44.8655 227.767 34.6423ZM261.938 54.0781Q270.151 54.0781 275.573 48.8612Q280.996 43.6443 280.996 34.2704V32.9999Q280.996 23.4943 275.627 18.3432Q270.259 13.1921 261.938 13.1921Q253.749 13.1921 248.315 18.3432Q242.881 23.4943 242.881 32.9999V34.2704Q242.881 43.6443 248.315 48.8612Q253.749 54.0781 261.938 54.0781Z M344.764 68.758Q334.998 68.758 327.583 64.6108Q320.167 60.4636 316.031 52.9048Q311.896 45.346 311.896 35.1689V33.589Q311.896 23.3889 315.977 15.8416Q320.059 8.2944 327.397 4.1472Q334.735 0 344.385 0Q353.881 0 360.956 4.1867Q368.031 8.37341 371.981 15.8515Q375.931 23.3297 375.931 33.2895V38.6974H327.181Q327.468 46.3334 332.587 50.9496Q337.707 55.5658 345.198 55.5658Q352.522 55.5658 356.101 52.3534Q359.681 49.141 361.553 45.0629L373.985 51.4813Q372.119 55.0656 368.63 59.1042Q365.141 63.1428 359.394 65.9504Q353.648 68.758 344.764 68.758ZM327.313 27.2892H360.622Q360.095 20.7986 355.7 16.9954Q351.304 13.1921 344.277 13.1921Q337.055 13.1921 332.691 16.9954Q328.327 20.7986 327.313 27.2892Z M391.548 66.9148V1.8432H406.353V10.9769H408.585Q410.303 7.25429 414.832 3.99908Q419.361 0.743866 428.435 0.743866Q435.956 0.743866 441.695 4.12911Q447.434 7.51435 450.651 13.5903Q453.868 19.6663 453.868 27.9442V66.9148H438.8V29.1226Q438.8 21.1969 434.891 17.3492Q430.983 13.5015 423.9 13.5015Q415.872 13.5015 411.244 18.8237Q406.617 24.146 406.617 33.9445V66.9148Z" fill="currentColor"/><path class="accent" d="M73.9979 66.9148 98.2261 34.0696 74.3764 1.8432H91.9626L107.9 24.3499H110.131L126.068 1.8432H143.654L119.805 34.0696L144.033 66.9148H126.206L110.131 44.0065H107.9L91.8244 66.9148Z" fill="#D4AF37"/></g></svg></a>
-    <span class="tag">a founder's story · 26 feb to 20 sep 2026</span>
+    <span class="tag">26 feb to 20 sep 2026</span>
   </div>
 </header>
 
@@ -249,15 +272,15 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
 <section class="hero">
   <div class="wrap stack">
     <span class="eyebrow first">A founder's story</span>
-    <h1>Oxagen was built in seven months, by one person directing agents.</h1>
-    <p class="lead">Mac Anderson built an agent, a benchmark, a protocol, a verifier, a fleet, and a memory plane before he built Oxagen. He wrote little of it by hand. He directed coding agents, and along the way he learned what running a workforce of them actually costs you. Oxagen is the answer to that. This page reads the seven months back from the record: his GitHub history, his git history, and the 8,133 prompts he typed to Claude Code.</p>
+    <h1>Oxagen was built in seven months by one person learning to run a fleet of agents.</h1>
+    <p class="lead">Mac Anderson built an agent, a benchmark, a protocol, a verifier, a fleet, and a memory plane before he built Oxagen. He wrote little of it by hand. He ran coding agents, six at a time, and spent most of a summer finding out what a workforce of them actually costs you to manage. Oxagen is the answer to that, and it was built by running the fleet through Oxagen. This page reads the seven months back from the record: his GitHub history, his git history, and the <span class="hl">8,133</span> prompts he typed to Claude Code.</p>
     <div class="stats">
       <div class="stat"><span class="label">GitHub contributions</span><span class="value" id="s-contrib">21,861</span><span class="sub">26 Feb to 20 Sep 2026. Commits, pull requests, issues, and reviews, as GitHub counts them.</span></div>
       <div class="stat"><span class="label">Commits that landed</span><span class="value">6,341</span><span class="sub">On the default branch of 13 repositories, 28 May to 20 Sep. 54.7 a day.</span></div>
       <div class="stat"><span class="label">Pull requests merged</span><span class="value">4,427</span><span class="sub">Same window. 38.2 a day, peaking at 72.6 in the week of 20 Aug.</span></div>
       <div class="stat"><span class="label">Prompts to Claude Code</span><span class="value">8,133</span><span class="sub">29 Jun to 20 Sep 2026, across 1,769 conversations.</span></div>
     </div>
-    <p class="note">The GitHub totals start on 26 February 2026, the first day of real activity on the account this year. Before that, GitHub shows 38 contributions in all of 2025. The commit and pull request totals start on 28 May 2026, the first commit in any local clone. The prompt log starts on 29 June 2026, when he set up a new laptop, so the earlier laptop's conversations are missing.</p>
+    <p class="note">The GitHub totals start on 26 February 2026, the first day of real activity on the account this year. Before that, GitHub shows 38 contributions in all of 2025. The commit and pull request totals start on 28 May 2026, the first commit in any local clone. The prompt count is the smallest number on this page and the least complete: it covers 81 days on one laptop. <a href="#caveat">What the prompt log covers.</a></p>
   </div>
 </section>
 
@@ -265,7 +288,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
   <div class="wrap stack">
     <span class="eyebrow">How this compares</span>
     <h2>Against the numbers the industry publishes</h2>
-    <p>Four months is a short window, so every figure below is stated per week and nothing is annualized. The window is 28 May to 20 September 2026: 116 calendar days, 16.6 weeks, about 83 working days. He committed on 114 of the 116 days. The published baselines are medians and percentiles, because no credible source publishes a mean. These distributions have a long right tail, so a mean would describe nobody.</p>
+    <p>Four months is a short window, so every figure below is stated per week and nothing is annualized. The window is 28 May to 20 September 2026: 116 calendar days, 16.6 weeks, about 83 working days. He committed on <span class="hl">114</span> of the 116 days. The published baselines are medians and percentiles, because no credible source publishes a mean. These distributions have a long right tail, so a mean would describe nobody.</p>
 
     <div class="compare">
       <div>
@@ -351,9 +374,11 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
 
 <section id="hive">
   <div class="wrap stack">
-    <span class="eyebrow">Every day, one cell</span>
+    <span class="eyebrow">One day, one cell</span>
     <h2>The hive</h2>
-    <p>Each hexagon is one day, Monday at the top, one column per week. The brighter the cell, the more GitHub contributions that day. A teal dot marks a day with happy words in his prompts, and a rust dot marks a day with swearing. Select a day to read it, or play the seven months as a time-lapse.</p>
+    <p>Each hexagon is one day, Monday at the top, one column per week. Colour is what he was working on: whichever area led that day&rsquo;s prompts paints the cell. Brightness is volume, so a pale cell is a quiet day and a burning one is a day he did not stop.</p>
+    <p>The colour is the finding. Of the 81 days the prompt log covers, <span class="hl">50</span> were led by shipping work: gates, pipelines, deploys, and the machines that run them. <span class="hl">19</span> went to building the agent, <span class="hl">7</span> to proving it, <span class="hl">5</span> to selling it. That ratio is the part nobody warns you about. Running a fleet of agents is mostly building the road they drive on, and he spent most of a summer paving.</p>
+    <p class="note">The grey cells are the first four months, before the prompt log existed. They still carry his commits, so the shape of the work is there even where the colour is not. <a href="#caveat">What the log does and does not cover.</a></p>
     <div class="hive-grid">
       <div class="hive-box">
         <svg class="hive-svg" id="hiveSvg" role="grid" aria-label="Daily activity calendar, 23 February to 20 September 2026"></svg>
@@ -362,15 +387,25 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
           <label for="scrub" class="muted" style="font-size:13px">Day</label>
           <input type="range" id="scrub" min="0" max="209" value="0" aria-label="Scrub through days">
         </div>
+        <div class="areakey" id="areaKey" role="group" aria-label="What the colours mean"></div>
         <div class="legend">
           <span>Contributions <span class="ramp" id="rampKey"></span> 0 to 1,144</span>
-          <span><span class="dot" style="background:var(--joy)"></span>happy words</span>
-          <span><span class="dot" style="background:var(--heat)"></span>swearing</span>
+          <span><span class="dot swatch" style="background:color-mix(in oklab, var(--dim) 48%, var(--panel))"></span>no prompt log yet</span>
         </div>
         <div class="chips" id="chapterChips" role="group" aria-label="Highlight a chapter"></div>
       </div>
       <aside class="reader" id="reader" aria-live="polite"></aside>
     </div>
+  </div>
+</section>
+
+<section id="caveat">
+  <div class="wrap stack">
+    <span class="eyebrow">A limit worth stating</span>
+    <h2>What the prompt log covers</h2>
+    <p>The <span class="hl">8,133</span> prompts come from one machine, a laptop set up on 29 June 2026. They cover <span class="hl">81</span> days of the seven months on this page, and they are not the whole of his Claude activity. He worked on other machines before that laptop and alongside it, and those conversations are not in this file. Nothing reconstructs them.</p>
+    <p>So read the prompt figures as a sample, not a census. Every count drawn from them, the topics, the colours on the hive, the hours, the happy words and the swearing, describes those 81 days and no others. It is a floor. The real total is higher by an amount nobody can state, so this page does not guess at it.</p>
+    <p>The GitHub and git numbers are different in kind. Those come from the account and from 13 local clones, they cover the full window, and they are complete for what they count.</p>
   </div>
 </section>
 
@@ -449,6 +484,70 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
     <h2>Nearly everything in the agent stack</h2>
     <p>Each tile is something he designed and shipped in these seven months. Select one to jump the hive to the day it started.</p>
     <div class="workbench" id="workbench"></div>
+  </div>
+</section>
+
+<section id="fleet">
+  <div class="wrap stack">
+    <span class="eyebrow">The part that had to be learned</span>
+    <h2>Learning to run a fleet</h2>
+    <p>One agent is a tool. You give it a task, you watch it work, you read the diff. Six at once is a different job, and it is the job this page is about. Nothing in seven months was harder to learn, and none of it was about prompting.</p>
+    <p class="pull">The agent was not the hard part. Running six of them was.</p>
+    <p>It started the obvious way: one agent, one branch, him watching. That works and it does not scale, because the watching is the bottleneck. So he widened it. The configuration he ended on runs <span class="hl">6</span> agents in parallel, each in its own git worktree, with background agents on, so work continues while he is reading something else.</p>
+    <p>Widening it broke things he had not thought to worry about. Two agents editing the same branch. A branch that merged cleanly into main and was still incompatible with what had landed beside it, which cost him three separate repairs to a red main before he understood that a clean merge proves nothing about behaviour. Agents that finished, reported success, and left the work uncommitted. A fleet does not fail the way one agent fails. It fails at the seams between them.</p>
+    <div class="two">
+      <div class="card">
+        <h3>What the seams needed</h3>
+        <ul>
+          <li>An isolated worktree per agent, so two of them cannot touch the same files.</li>
+          <li>A written definition of done, because an agent will otherwise decide for itself what finished means.</li>
+          <li>Checks that run without him. <span class="hl">21</span> of them, so review is not the bottleneck six times over.</li>
+          <li>A trial merge before the real one, because clean and compatible are different questions.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What he still could not answer</h3>
+        <ul>
+          <li>What did each agent actually do, in order, with what it read.</li>
+          <li>What did that cost, and which piece of work was it spent on.</li>
+          <li>Who allowed the thing it just did, and under what rule.</li>
+          <li>Which of the six is stuck right now, and on what.</li>
+        </ul>
+      </div>
+    </div>
+    <p>The first list he could build himself. The second list is not a tooling gap, it is a management gap, and it got worse with every agent he added. That is the gap Oxagen was built to close.</p>
+  </div>
+</section>
+
+<section id="quality">
+  <div class="wrap stack">
+    <span class="eyebrow">Whether the code holds</span>
+    <h2>The code the fleet wrote</h2>
+    <p>The fair question about code an agent wrote is whether it survives contact with anything. Volume is not the answer to that, so here is what is actually in the repository, counted from tracked files on 21 September 2026.</p>
+    <div class="stats">
+      <div class="stat"><span class="label">Test files</span><span class="value">2,258</span><span class="sub">Unit, integration, and end to end, across the monorepo.</span></div>
+      <div class="stat"><span class="label">Architecture tests</span><span class="value">272</span><span class="sub">They fail the build on a structural violation, not a behavioural one. Layering, imports, boundaries.</span></div>
+      <div class="stat"><span class="label">Checks in CI</span><span class="value">21</span><span class="sub">Separate gates, including one that reads this page's prose and fails on an em dash.</span></div>
+      <div class="stat"><span class="label">Decision records</span><span class="value">136</span><span class="sub">Architecture decision records, plus 5 schema change records. Each one says what was decided and why.</span></div>
+    </div>
+    <p>The architecture tests are the ones that matter most with a fleet. A human reviewer notices when a file imports across a boundary it should not. Six agents working in parallel do not, and will each do it in a different place on the same afternoon. A test that fails the build is the only reviewer that scales.</p>
+    <h3>The audit</h3>
+    <p>In September he had the operator console audited against its own specification, by a reader told to be adversarial and to assume the work was incomplete. It returned <span class="hl">14</span> findings, two of them release gates. Its summary judgement was this:</p>
+    <p class="pull">The app has substantial working foundations, but it does not yet close the core operator workflows.</p>
+    <p>That is published, with every finding, its acceptance criteria, and the repository it was run against. It is a separate repository from the code, so the findings cannot quietly be edited to match what shipped.</p>
+    <p class="note">An audit that finds nothing is evidence of nothing. This one is offered as evidence of the practice, not as a clean bill of health, and the two release gates it named are still the standard the work is being held to.</p>
+  </div>
+</section>
+
+<section id="dogfood">
+  <div class="wrap stack">
+    <span class="eyebrow">How this was made</span>
+    <h2>Built with the thing it sells</h2>
+    <p>This is the claim most likely to be read as a marketing line, so here is the mechanism instead.</p>
+    <p>Every model call made from this repository goes to <span class="hl">127.0.0.1:51781</span>, which is Oxagen's own gateway running on his laptop. The agent's base URL points at it, so there is no path around it. Oxagen sees each call, meters it, and keeps the record. The runs that built Oxagen were governed and priced by Oxagen.</p>
+    <p>Tool calls take the same shape. A hook sits in front of them and can refuse one before it runs. There is a hook in this repository that denies an agent a full test build, because a fleet of six will otherwise each start one. That is the product's central idea, the agent asks and a rule answers, running against the agents writing the product.</p>
+    <p>That includes this page. The prompts that produced the words you are reading went through the same gateway, and the prompt log this page is built from is the record it kept.</p>
+    <p class="note">Scope, stated plainly: this is the local gateway and the record it keeps, which is what a single operator runs. It is the same code path as the hosted control plane, not a separate demonstration build, but one laptop is not a deployment and this page does not claim it is.</p>
   </div>
 </section>
 
@@ -541,12 +640,52 @@ for (let i = 0; i < 210; i++) {
 }
 const MAXC = Math.max(...CAL.map(d => d.c));
 const intensity = c => c <= 0 ? 0 : Math.log1p(c) / Math.log1p(MAXC);
-const fillFor = c => c <= 0 ? 'transparent' : `color-mix(in oklab, var(--fg) ${Math.round(10 + intensity(c) * 82)}%, var(--panel))`;
 const chapterOf = d => CHAPTERS.find(c => d >= c.from && d <= c.to);
 const LOG_START = '2026-06-29';
 
+// The four areas, in the order the year ran. Each topic in the prompt log
+// belongs to exactly one. A day is painted by the area that led its prompts,
+// which is `tp[0]`: the topics are sorted per day, not by their overall rank.
+const AREAS = [
+  { k: 'build', label: 'Building the agent', v: 'var(--area-build)',
+    gloss: 'The thing itself. The loop, what it remembers, which model answers, what tools it can reach.',
+    topics: ['TUI & deck', 'Context & memory', 'Models & providers', 'Plugins, tools & MCP'] },
+  { k: 'prove', label: 'Proving it works', v: 'var(--area-prove)',
+    gloss: 'Making it say true things about itself. Witnesses, benchmarks, audits.',
+    topics: ['Verification & witness', 'Benchmarks', 'Audit & quality'] },
+  { k: 'ship', label: 'Shipping it', v: 'var(--area-ship)',
+    gloss: 'Getting it out. Gates, pipelines, deploys, and the machines that run them.',
+    topics: ['CI, PRs & gates', 'Infra & deploy', 'Machine setup'] },
+  { k: 'sell', label: 'Selling it', v: 'var(--area-sell)',
+    gloss: 'Saying what it is. Words, marks, video, and the raise.',
+    topics: ['Brand & design', 'Video & content', 'Business & fundraising'] },
+];
+const AREA_OF = {};
+AREAS.forEach(a => a.topics.forEach(t => { AREA_OF[t] = a; }));
+const areaOfDay = d => (d.tp && d.tp.length ? AREA_OF[d.tp[0]] : null) || null;
+
+// Volume stays readable inside a hue: log-scaled, mixed toward the panel.
+// Days with no prompt log get a neutral and a lower ceiling, so the four
+// uncoloured months recede behind the coloured ones rather than dominating
+// the graphic whose whole point is the colour.
+const fillFor = (c, area) => {
+  if (c <= 0) return 'transparent';
+  if (!area) return `color-mix(in oklab, var(--dim) ${Math.round(16 + intensity(c) * 60)}%, var(--panel))`;
+  return `color-mix(in oklab, ${area.v} ${Math.round(14 + intensity(c) * 78)}%, var(--panel))`;
+};
+
 // Ramp key
-{ const k = $('#rampKey'); [1, 10, 60, 300, 1144].forEach(c => { const i = document.createElement('i'); i.style.background = fillFor(c); k.appendChild(i); }); }
+{ const k = $('#rampKey'); [1, 10, 60, 300, 1144].forEach(c => { const i = document.createElement('i'); i.style.background = fillFor(c, null); k.appendChild(i); }); }
+
+// What the colours mean
+{
+  const led = {};
+  CAL.forEach(d => { const a = areaOfDay(d); if (a) led[a.k] = (led[a.k] || 0) + 1; });
+  $('#areaKey').innerHTML = AREAS.map(a => `<div class="a">
+    <span class="sw" style="background:${a.v}"></span>
+    <span><b>${a.label}</b> <span class="n">${led[a.k] || 0} days</span><em>${a.gloss}</em></span>
+  </div>`).join('');
+}
 
 // Hive
 const R = 11, W = 1.5 * R, H = Math.sqrt(3) * R;
@@ -562,13 +701,12 @@ CAL.forEach((d, i) => {
   const cx = PADX + R + col * W, cy = PADY + R * 0.9 + row * H + (col % 2 ? H / 2 : 0);
   const t = parse(d.d);
   if (row === 0 && t.getUTCMonth() !== lastMonth && t.getUTCDate() <= 7) { lastMonth = t.getUTCMonth(); const tx = el('text', { x: cx - R * 0.6, y: 12 }, svg); tx.textContent = MONTHS[lastMonth]; }
-  const g = el('g', { class: 'cell', role: 'gridcell', 'data-i': i, tabindex: i === 0 ? 0 : -1, 'aria-label': `${nice(d.d)}: ${d.c} contributions` }, svg);
-  el('path', { d: hex(cx, cy, R * 0.94), fill: fillFor(d.c) }, g);
-  if (d.x > 0) el('circle', { cx: cx + R * 0.34, cy: cy + R * 0.3, r: Math.min(2 + d.x * 0.35, 5), fill: 'var(--heat)', stroke: 'var(--panel)', 'stroke-width': 1 }, g);
-  if (d.j >= 2) el('circle', { cx: cx - R * 0.34, cy: cy - R * 0.3, r: Math.min(1.8 + d.j * 0.35, 4.2), fill: 'var(--joy)', stroke: 'var(--panel)', 'stroke-width': 1 }, g);
+  const area = areaOfDay(d);
+  const g = el('g', { class: 'cell', role: 'gridcell', 'data-i': i, tabindex: i === 0 ? 0 : -1, 'aria-label': `${nice(d.d)}: ${d.c} contributions${area ? ', mostly ' + area.label.toLowerCase() : ''}` }, svg);
+  el('path', { d: hex(cx, cy, R * 0.94), fill: fillFor(d.c, area) }, g);
   if (MILESTONES[d.d]) el('circle', { cx: cx, cy: cy + R * 0.55, r: 1.3, fill: 'var(--muted)' }, g);
   g.addEventListener('click', () => { stop(); select(i, true); });
-  g.addEventListener('mouseenter', e => showTip(e, `<b>${nice(d.d)}</b><br>${fmt(d.c)} contributions${d.d >= LOG_START ? `<br>${d.p} prompts` : ''}${MILESTONES[d.d] ? '<br>' + MILESTONES[d.d] : ''}`));
+  g.addEventListener('mouseenter', e => showTip(e, `<b>${nice(d.d)}</b><br>${fmt(d.c)} contributions${d.d >= LOG_START ? `<br>${d.p} prompts` : ''}${area ? `<br>Mostly ${area.label.toLowerCase()}: ${d.tp[0]}` : ''}${MILESTONES[d.d] ? '<br>' + MILESTONES[d.d] : ''}`));
   g.addEventListener('mousemove', moveTip); g.addEventListener('mouseleave', hideTip);
   cells.push(g);
 });
@@ -588,7 +726,7 @@ function renderReader(i) {
   const inLog = d.d >= LOG_START;
   $('#reader').innerHTML = `<div class="rcol">
     <div><div class="date">${DOW[(t.getUTCDay() + 6) % 7]}, ${nice(d.d)}</div><div class="chap">${ch ? ch.title : 'Before the story'}</div></div>
-    <div><div class="big">${fmt(d.c)}</div><div class="running">GitHub contributions that day · ${fmt(before)} since 23 Feb</div></div>
+    <div><div class="big">${fmt(d.c)}</div><div class="running">GitHub contributions that day. ${fmt(before)} since 23 Feb.</div></div>
     <div class="kv">
       <span class="k">Oxagen commits</span>${bar(d.ox, MAXCM)}<span class="v">${d.ox}</span>
       <span class="k">Stella commits</span>${bar(d.st, MAXCM)}<span class="v">${d.st}</span>
@@ -598,7 +736,10 @@ function renderReader(i) {
       <span class="k">Swear words</span>${bar(d.x, 34, 'heat')}<span class="v">${d.x}</span>` : ''}
     </div></div><div class="rcol">
     ${MILESTONES[d.d] ? `<div class="milestone">${MILESTONES[d.d]}</div>` : `<div class="milestone empty">${inLog ? 'No milestone recorded for this day.' : 'The prompt log starts on 29 June, so days before it show commits only.'}</div>`}
-    ${d.tp.length ? `<div><div class="chap" style="margin-bottom:6px">Prompt topics</div><div class="tags">${d.tp.map(x => `<span>${x}</span>`).join('')}</div></div>` : ''}
+    ${d.tp.length ? `<div><div class="chap" style="margin-bottom:6px">Prompt topics</div><div class="tags">${d.tp.map((x, n) => {
+      const a = AREA_OF[x];
+      return `<span${n === 0 && a ? ` style="border-color:${a.v};color:var(--fg)"` : ''}>${x}</span>`;
+    }).join('')}</div>${(() => { const a = areaOfDay(d); return a ? `<div class="chap" style="margin-top:6px"><span class="dot" style="background:${a.v}"></span>Mostly ${a.label.toLowerCase()}</div>` : ''; })()}</div>` : ''}
     ${d.sc.length ? `<div><div class="chap" style="margin-bottom:6px">Busiest commit scopes</div><div class="tags">${d.sc.map(x => `<span>${x}</span>`).join('')}</div></div>` : ''}</div>`;
 }
 function select(i, focus = false, keyFocus = false) {
@@ -675,7 +816,7 @@ function hideTip() { tip.hidden = true; }
     const t = parse(d.d);
     if (t.getUTCDate() === 1 || k === 0) { const tx = el('text', { x: x, y: h - B + 16 }, s); tx.textContent = `${t.getUTCDate()} ${MONTHS[t.getUTCMonth()]}`; }
     const hit = el('rect', { x, y: T, width: bw, height: h - T - B, fill: 'transparent', style: 'cursor:pointer' }, s);
-    hit.addEventListener('mouseenter', e => showTip(e, `<b>${nice(d.d)}</b><br>${d.j} happy words · ${d.x} swear words<br>${d.p} prompts${MILESTONES[d.d] ? '<br>' + MILESTONES[d.d] : ''}`));
+    hit.addEventListener('mouseenter', e => showTip(e, `<b>${nice(d.d)}</b><br>${d.j} happy words<br>${d.x} swear words<br>${d.p} prompts${MILESTONES[d.d] ? '<br>' + MILESTONES[d.d] : ''}`));
     hit.addEventListener('mousemove', moveTip); hit.addEventListener('mouseleave', hideTip);
     hit.addEventListener('click', () => jumpTo(d.d));
   });
@@ -707,7 +848,7 @@ function hideTip() { tip.hidden = true; }
     if (h.x) el('circle', { cx: c + Math.cos(a) * (len + 12), cy: c + Math.sin(a) * (len + 12), r: 2.5 + Math.sqrt(h.x) * 1.3, fill: 'var(--heat)' }, s);
     if (h.h % 3 === 0) { const t = el('text', { x: c + Math.cos(a) * (r0 - 14), y: c + Math.sin(a) * (r0 - 14) + 3, 'text-anchor': 'middle' }, s); t.textContent = String(h.h).padStart(2, '0'); }
     const hit = el('line', { x1: x0, y1: y0, x2: c + Math.cos(a) * (r1 + 20), y2: c + Math.sin(a) * (r1 + 20), stroke: 'transparent', 'stroke-width': 18 }, s);
-    hit.addEventListener('mouseenter', e => showTip(e, `<b>${String(h.h).padStart(2, '0')}:00</b><br>${fmt(h.p)} prompts · ${h.x} swear words`));
+    hit.addEventListener('mouseenter', e => showTip(e, `<b>${String(h.h).padStart(2, '0')}:00</b><br>${fmt(h.p)} prompts<br>${h.x} swear words`));
     hit.addEventListener('mousemove', moveTip); hit.addEventListener('mouseleave', hideTip);
   });
 }
