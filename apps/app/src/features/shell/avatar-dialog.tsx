@@ -152,11 +152,11 @@ function AvatarEditor({ data }: { data: ShellData }) {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const operation = useAccountOperation(viewer.id, "avatar");
   const { pending } = operation;
-  const mounted = useRef(true);
+  const mountedRef = useRef(true);
   useEffect(() => {
-    mounted.current = true;
+    mountedRef.current = true;
     return () => {
-      mounted.current = false;
+      mountedRef.current = false;
     };
   }, []);
 
@@ -188,7 +188,7 @@ function AvatarEditor({ data }: { data: ShellData }) {
       });
       if (result.ok) {
         navigate.refresh();
-        if (mounted.current) setAvatarOpen(false);
+        if (mountedRef.current) setAvatarOpen(false);
       } else if (result.reason === "invalid") setOutcome("invalid");
       else if (result.reason === "denied") setOutcome("denied");
       else setOutcome("failed");

@@ -272,9 +272,9 @@ describe("Save", () => {
     const { user } = await openEditor();
     await user.click(screen.getByTestId("avatar-save"));
     await user.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(screen.queryByTestId("avatar-dialog")).toBeNull(),
-    );
+    await waitFor(() => {
+      expect(screen.queryByTestId("avatar-dialog")).toBeNull();
+    });
     await user.click(screen.getByRole("button", { name: "open avatar" }));
     await screen.findByTestId("avatar-dialog");
     await user.click(screen.getByTestId("avatar-save"));
@@ -293,9 +293,9 @@ describe("Save", () => {
       ok: true,
       value: { displayName: "Marcus Bell", avatarUrl: "avatar:v1:{}" },
     });
-    await waitFor(() =>
-      expect(screen.queryByTestId("avatar-dialog")).toBeNull(),
-    );
+    await waitFor(() => {
+      expect(screen.queryByTestId("avatar-dialog")).toBeNull();
+    });
   });
 
   it("writes the spec string alone, refreshes the shell and returns to Account", async () => {

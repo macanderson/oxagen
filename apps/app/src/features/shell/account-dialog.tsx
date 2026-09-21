@@ -352,8 +352,9 @@ function ProfileTab({
     profileDraft?.userId === viewer.id
       ? profileDraft.value
       : (viewer.name ?? "");
-  const setDisplayName = (value: string) =>
+  const setDisplayName = (value: string) => {
     setProfileDraft({ userId: viewer.id, value });
+  };
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const operation = useAccountOperation(data.viewer.id, "profile");
   const { pending } = operation;
@@ -628,11 +629,11 @@ function PreferencesTab({ data }: { data: ShellData }) {
     };
   }, [data.org.slug, setTheme, previewTheme]);
 
-  const mounted = useRef(true);
+  const mountedRef = useRef(true);
   useEffect(() => {
-    mounted.current = true;
+    mountedRef.current = true;
     return () => {
-      mounted.current = false;
+      mountedRef.current = false;
     };
   }, []);
 
@@ -656,7 +657,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
       const result = await savePreferences(data.org.slug, state.draft);
       if (result.ok) {
         setTheme(result.value.theme);
-        if (mounted.current && editsRef.current === sentAt) previewTheme(null);
+        if (mountedRef.current && editsRef.current === sentAt) previewTheme(null);
         // Only if the form is still the one that was sent, and for the same
         // reason as the Profile tab: a selection made while the save was in
         // flight is a decision the person has taken, and replacing it with the
@@ -676,13 +677,13 @@ function PreferencesTab({ data }: { data: ShellData }) {
         // so the dialog stays open.
         if (result.value.timezone !== data.viewer.timeZone) navigate.refresh();
       } else {
-        if (mounted.current) previewTheme(null);
+        if (mountedRef.current) previewTheme(null);
         if (result.reason === "invalid") setOutcome("invalid");
         else if (result.reason === "denied") setOutcome("denied");
         else setOutcome("failed");
       }
     } catch {
-      if (mounted.current) previewTheme(null);
+      if (mountedRef.current) previewTheme(null);
       setOutcome("failed");
     } finally {
       operation.end();

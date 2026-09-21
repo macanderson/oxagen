@@ -77,7 +77,9 @@ export function useAccountOperation(
   return {
     pending: isPending,
     begin: () => accountOperations.begin(userId, operation),
-    end: () => accountOperations.end(userId, operation),
+    end: () => {
+      accountOperations.end(userId, operation);
+    },
   };
 }
 
@@ -93,8 +95,9 @@ export function useAccountExport(userId: string, orgSlug: string) {
     [userId, orgSlug],
   );
   const setState = useCallback(
-    (next: AccountExportState) =>
-      accountOperations.setExport(userId, orgSlug, next),
+    (next: AccountExportState) => {
+      accountOperations.setExport(userId, orgSlug, next);
+    },
     [userId, orgSlug],
   );
   return { state, begin, setState };

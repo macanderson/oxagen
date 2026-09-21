@@ -455,7 +455,9 @@ describe("Profile", () => {
         await user.click(screen.getByRole("button", { name: "Cancel" }));
       } else {
         await user.click(screen.getByTestId("avatar-save"));
-        await waitFor(() => expect(updateProfile).toHaveBeenCalledOnce());
+        await waitFor(() => {
+          expect(updateProfile).toHaveBeenCalledOnce();
+        });
         expect(updateProfile.mock.calls[0]?.[1]).not.toHaveProperty(
           "displayName",
         );

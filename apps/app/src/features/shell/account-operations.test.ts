@@ -7,7 +7,9 @@ import {
   useAccountOperation,
 } from "./account-operations";
 
-beforeEach(() => accountOperations.resetForTests());
+beforeEach(() => {
+  accountOperations.resetForTests();
+});
 
 describe("account operation lifetime", () => {
   it.each(["profile", "preferences", "avatar"] as const)(
