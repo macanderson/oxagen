@@ -32,6 +32,34 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 describe("Wal", () => {
+  it("recovers an exact journaled terminal after an event write left a torn tail", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    const terminal = events[events.length - 1]!;
+    const wal = new Wal(paths.wal);
+    wal.append(events.slice(0, -1));
+    appendFileSync(
+      join(paths.wal, `${terminal.session_uuid}.ndjson`),
+      JSON.stringify(terminal).slice(0, 80),
+    );
+    const restarted = new Wal(paths.wal);
+    restarted.appendRecovered([terminal]);
+    expect(restarted.read(terminal.session_uuid)).toEqual(events);
+    restarted.appendRecovered([terminal]);
+    expect(restarted.read(terminal.session_uuid)).toEqual(events);
+  });
+
+  it("refuses conflicting recovery evidence at an already durable sequence", () => {
+    const paths = scratchPaths();
+    const events = minimalSession();
+    const terminal = events[events.length - 1]!;
+    const wal = new Wal(paths.wal);
+    wal.append(events);
+    expect(() =>
+      wal.appendRecovered([{ ...terminal, hash: `sha256:${"f".repeat(64)}` }]),
+    ).toThrow(/WAL recovery conflict/);
+    expect(wal.read(terminal.session_uuid)).toEqual(events);
+  });
   it("collects abandoned rewrites only during the writer's compaction scan", () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
@@ -596,4 +624,14 @@ describe("Wal", () => {
     ]);
     expect(existsSync(bodyPath)).toBe(false);
   });
+});
+
+it("skips held sessions without changing their cursor or body access", () => {
+  const paths = scratchPaths();
+  const wal = new Wal(paths.wal);
+  const events = minimalSession();
+  wal.append(events);
+  expect(wal.unshipped(100, new Set([events[0]!.session_uuid]))).toEqual([]);
+  expect(wal.shippedThrough(events[0]!.session_uuid)).toBe(-1);
+  expect(wal.unshipped(100)).toEqual(events);
 });
