@@ -39,7 +39,8 @@
             "agent",
             "approval"
           ]
-        }
+        },
+        "minItems": 1
       }
     },
     "additionalProperties": false
@@ -88,7 +89,8 @@
             "contextLine"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 8
       }
     },
     "required": [

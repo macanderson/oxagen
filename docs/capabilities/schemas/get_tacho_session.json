@@ -648,7 +648,8 @@
             "title"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 500
       },
       "models": {
         "type": "array",
@@ -713,7 +714,8 @@
             "costMicros"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 64
       },
       "files": {
         "type": "array",
@@ -752,7 +754,8 @@
             "lastSeq"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 1000
       },
       "commands": {
         "type": "array",
@@ -837,7 +840,8 @@
             "policyRule"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 1000
       },
       "incidents": {
         "type": "array",
@@ -879,7 +883,8 @@
             "resolvedAt"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 500
       },
       "checkpointCount": {
         "type": "integer"

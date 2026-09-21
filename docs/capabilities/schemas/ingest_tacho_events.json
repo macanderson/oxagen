@@ -439,6 +439,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -614,7 +615,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 2048
                     },
                     "mcp_servers": {},
                     "agents_available": {
@@ -622,21 +624,24 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 1024
                     },
                     "skills_available": {
                       "type": "array",
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 1024
                     },
                     "slash_commands": {
                       "type": "array",
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 1024
                     },
                     "plugins": {},
                     "plugin_errors": {},
@@ -646,7 +651,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "settings_sources": {},
                     "hooks_registered": {},
@@ -657,14 +663,16 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "fallback_models": {
                       "type": "array",
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "effort_level_setting": {
                       "type": "string",
@@ -1147,6 +1155,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -1545,7 +1554,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 32
                     }
                   },
                   "additionalProperties": false
@@ -1977,6 +1987,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -2613,6 +2624,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -3157,6 +3169,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -3233,7 +3246,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "tool_language": {
                       "type": "string",
@@ -3865,6 +3879,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -3941,7 +3956,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "tool_language": {
                       "type": "string",
@@ -4477,6 +4493,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -4553,7 +4570,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "tool_language": {
                       "type": "string",
@@ -5089,6 +5107,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -5165,7 +5184,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "tool_language": {
                       "type": "string",
@@ -5701,6 +5721,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -5777,7 +5798,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "tool_language": {
                       "type": "string",
@@ -6313,6 +6335,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -6561,7 +6584,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "mcp_server_name": {
                       "type": "string",
@@ -7001,6 +7025,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -7077,7 +7102,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "tool_language": {
                       "type": "string",
@@ -7709,6 +7735,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -7785,7 +7812,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "tool_language": {
                       "type": "string",
@@ -8417,6 +8445,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -8493,7 +8522,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "tool_language": {
                       "type": "string",
@@ -9125,6 +9155,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -9671,6 +9702,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -9747,7 +9779,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "tool_language": {
                       "type": "string",
@@ -10379,6 +10412,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -10455,7 +10489,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "tool_language": {
                       "type": "string",
@@ -11087,6 +11122,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -11585,6 +11621,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -12092,6 +12129,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -12340,7 +12378,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "prompt_digest": {
                       "type": "string"
@@ -13013,6 +13052,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -13534,6 +13574,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -14055,6 +14096,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -14453,7 +14495,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     }
                   },
                   "additionalProperties": false
@@ -14885,6 +14928,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -15549,6 +15593,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -16142,6 +16187,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -16735,6 +16781,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -17344,6 +17391,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -17519,7 +17567,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 2048
                     },
                     "mcp_servers": {},
                     "agents_available": {
@@ -17527,21 +17576,24 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 1024
                     },
                     "skills_available": {
                       "type": "array",
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 1024
                     },
                     "slash_commands": {
                       "type": "array",
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 1024
                     },
                     "plugins": {},
                     "plugin_errors": {},
@@ -17551,7 +17603,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "settings_sources": {},
                     "hooks_registered": {},
@@ -17562,14 +17615,16 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "fallback_models": {
                       "type": "array",
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "effort_level_setting": {
                       "type": "string",
@@ -18040,6 +18095,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -18378,7 +18434,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     }
                   },
                   "additionalProperties": false
@@ -18810,6 +18867,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -19410,6 +19468,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -20010,6 +20069,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -20610,6 +20670,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -21210,6 +21271,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -21810,6 +21872,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -21871,7 +21934,8 @@
                           "lines_removed"
                         ],
                         "additionalProperties": false
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "observed_changes_total": {
                       "type": "integer",
@@ -22311,6 +22375,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -22911,6 +22976,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -23309,7 +23375,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     }
                   },
                   "additionalProperties": false
@@ -23741,6 +23808,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -24341,6 +24409,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -25031,6 +25100,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -25624,6 +25694,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -26217,6 +26288,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -26465,7 +26537,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "mcp_server_name": {
                       "type": "string",
@@ -26905,6 +26978,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -27153,7 +27227,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "mcp_server_name": {
                       "type": "string",
@@ -27593,6 +27668,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -27689,7 +27765,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 2048
                     },
                     "mcp_servers": {},
                     "agents_available": {
@@ -27697,21 +27774,24 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 1024
                     },
                     "skills_available": {
                       "type": "array",
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 1024
                     },
                     "slash_commands": {
                       "type": "array",
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 1024
                     },
                     "plugins": {},
                     "plugin_errors": {},
@@ -27721,7 +27801,8 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 256
                     },
                     "settings_sources": {},
                     "hooks_registered": {},
@@ -27732,14 +27813,16 @@
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "fallback_models": {
                       "type": "array",
                       "items": {
                         "type": "string",
                         "maxLength": 512
-                      }
+                      },
+                      "maxItems": 64
                     },
                     "effort_level_setting": {
                       "type": "string",
@@ -28210,6 +28293,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -28874,6 +28958,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -29395,6 +29480,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -30012,6 +30098,7 @@
                         ],
                         "additionalProperties": false
                       },
+                      "maxItems": 256,
                       "default": []
                     }
                   },
@@ -30056,6 +30143,8 @@
             }
           ]
         },
+        "minItems": 1,
+        "maxItems": 200,
         "x-server-validated": true,
         "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
       },
@@ -30083,7 +30172,8 @@
             "bytes_base64"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 200
       },
       "daemon": {
         "type": "object",
@@ -30118,7 +30208,8 @@
             "items": {
               "type": "string",
               "maxLength": 64
-            }
+            },
+            "maxItems": 32
           }
         },
         "additionalProperties": false
@@ -30144,7 +30235,9 @@
         "type": "array",
         "items": {
           "type": "string"
-        }
+        },
+        "minItems": 1,
+        "maxItems": 200
       },
       "chain_breaks": {
         "type": "array",
@@ -30170,7 +30263,8 @@
             "reason"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 200
       },
       "body_rejections": {
         "type": "array",
@@ -30197,7 +30291,8 @@
             "reason"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 200
       },
       "control": {
         "type": "object",
@@ -30349,7 +30444,8 @@
                 "expires_at"
               ],
               "additionalProperties": false
-            }
+            },
+            "maxItems": 100
           }
         },
         "required": [

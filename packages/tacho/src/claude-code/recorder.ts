@@ -701,7 +701,9 @@ export class SessionRecorder {
     at?: string,
     rewrite?: (draft: HookDraft) => HookDraft,
   ): TachoEvent[] {
-    const drafts = normalizeHook(raw, env, { sessionUuid: this.sessionUuid });
+    const drafts = normalizeHook(raw, env, {
+      sessionUuid: this.sessionUuid,
+    }).map((draft) => (rewrite ? rewrite(draft) : draft));
     const first = drafts[0];
     const ts = at ?? this.now();
     if (first?.subagent && !this.options.parent) {
@@ -772,7 +774,7 @@ export class SessionRecorder {
     }
     const out: TachoEvent[] = [];
     for (const draft of drafts) {
-      out.push(this.sealHookDraft(rewrite ? rewrite(draft) : draft, env, ts));
+      out.push(this.sealHookDraft(draft, env, ts));
     }
     return out;
   }

@@ -6,7 +6,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { digestBytes } from "../digest";
+import { digestBytes, digestJcs, type JsonValue } from "../digest";
+import { translateCursorPayload } from "../claude-code/cursor-adapter";
 import { verifyChain } from "../chain";
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { hookInputSchema } from "../claude-code/hooks";
@@ -881,5 +882,86 @@ describe("handleHookEvent over the recorded session", () => {
       deps,
     );
     expect(end.bodies).toEqual([]);
+  });
+});
+
+describe("Cursor session working directories", () => {
+  it("keeps the explicit active root across later inferred hooks", async () => {
+    const { deps } = harness();
+    const send = async (
+      hook_event_name: string,
+      extra: Record<string, unknown> = {},
+    ) => {
+      const payload = translateCursorPayload({
+        conversation_id: "multi-root",
+        hook_event_name,
+        workspace_roots: ["/repo/first", "/repo/second"],
+        ...extra,
+      });
+      const outcome = await handleHookEvent(
+        payload,
+        {},
+        deps,
+        undefined,
+        "cursor",
+      );
+      const sourceEvents = outcome.events.filter(
+        (event) => event.raw_source_digest !== undefined,
+      );
+      expect(sourceEvents.length).toBeGreaterThan(0);
+      for (const event of sourceEvents) {
+        expect(event.raw_source_digest).toBe(digestJcs(payload as JsonValue));
+        expect(event.context?.cwd).toBe(outcome.record?.cwd);
+      }
+      return outcome;
+    };
+    expect((await send("sessionStart")).record?.cwd).toBe("/repo/first");
+    expect(
+      (
+        await send("preToolUse", {
+          cwd: "/repo/second",
+          tool_name: "Read",
+          tool_input: { path: "a.ts" },
+          tool_use_id: "one",
+        })
+      ).record?.cwd,
+    ).toBe("/repo/second");
+    expect(
+      (
+        await send("postToolUse", {
+          tool_name: "Read",
+          tool_use_id: "one",
+          tool_output: "body",
+        })
+      ).record?.cwd,
+    ).toBe("/repo/second");
+    expect(
+      (
+        await send("preToolUse", {
+          tool_name: "Read",
+          tool_input: { path: "inferred.ts" },
+          tool_use_id: "inferred",
+        })
+      ).record?.cwd,
+    ).toBe("/repo/second");
+    expect(
+      (
+        await send("subagentStart", {
+          agent_id: "child",
+          agent_type: "Explore",
+        })
+      ).record?.cwd,
+    ).toBe("/repo/second");
+    expect((await send("stop")).record?.cwd).toBe("/repo/second");
+    expect(
+      (
+        await send("preToolUse", {
+          cwd: "/repo/first",
+          tool_name: "Read",
+          tool_input: { path: "b.ts" },
+          tool_use_id: "two",
+        })
+      ).record?.cwd,
+    ).toBe("/repo/first");
   });
 });

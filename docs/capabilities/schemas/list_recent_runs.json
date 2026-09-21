@@ -69,7 +69,8 @@
             "startedAt"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 10
       }
     },
     "required": [
