@@ -314,3 +314,5 @@ A failed restore for an enrolled harness keeps the gateway and credentials for
 retry. Systemd removal retains the unit on disable failure and restores it on
 reload failure. Windows process inspection errors appear in status detail while
 uninstall still requires confirmation that the daemon has stopped.
+
+Windows process-inspection failures report an unknown running state and retain the error in CLI and Desktop status. A failed orphan rewrite cleanup is reported independently, so compaction can still remove unrelated expired evidence.

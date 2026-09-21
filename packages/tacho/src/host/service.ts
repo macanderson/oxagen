@@ -51,7 +51,7 @@ export interface ServiceSpec {
 
 export interface ServiceStatus {
   installed: boolean;
-  running: boolean;
+  running: boolean | null;
   detail?: string;
 }
 
@@ -472,7 +472,7 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
       } catch (error) {
         return {
           installed,
-          running: false,
+          running: null,
           detail: error instanceof Error ? error.message : String(error),
         };
       }

@@ -567,7 +567,16 @@ describe("install rig: failure injection", () => {
       { ...rig.deps, serviceManager },
     );
     expect(report.enrolled).toBe(true);
+    expect(report.service?.running).toBeNull();
     expect(report.service?.detail).toContain("Cannot inspect daemon pid 42");
+    const lines: string[] = [];
+    await status(
+      {},
+      { ...rig.deps, serviceManager, out: (line) => lines.push(line) },
+    );
+    expect(lines.join("\n")).toContain(
+      "state unknown: Cannot inspect daemon pid 42",
+    );
     expect(JSON.parse(JSON.stringify(report)).service.detail).toContain(
       "access denied",
     );

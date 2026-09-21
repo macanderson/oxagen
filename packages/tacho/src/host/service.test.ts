@@ -241,7 +241,7 @@ describe("service managers", () => {
     });
     expect(manager.status()).toEqual({
       installed: true,
-      running: false,
+      running: null,
       detail: "Cannot inspect daemon pid 42: access denied",
     });
     expect(() => manager.uninstall()).toThrow("Cannot inspect daemon pid 42");

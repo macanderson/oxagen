@@ -64,7 +64,8 @@ describe("Wal", () => {
 
   it("retains evidence and retries when abandoned rewrite cleanup fails", () => {
     const paths = scratchPaths();
-    const wal = new Wal(paths.wal);
+    const failures = vi.fn();
+    const wal = new Wal(paths.wal, failures);
     const session = minimalSession();
     wal.append(session);
     const tmp = join(
@@ -72,10 +73,23 @@ describe("Wal", () => {
       `${session[0]!.session_uuid}.bodies.jsonl.00000000-0000-4000-8000-000000000001.tmp`,
     );
     writeFileSync(tmp, "partial copy");
+    const expiredId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const expired = session.map((event) => ({
+      ...event,
+      session_uuid: expiredId,
+    }));
+    wal.append(expired);
+    wal.markShipped(expiredId, expired.at(-1)!.seq);
     vi.mocked(unlinkSync).mockImplementationOnce(() => {
       throw Object.assign(new Error("cleanup denied"), { code: "EACCES" });
     });
-    expect(() => wal.compact(Date.now(), 0)).toThrow("cleanup denied");
+    expect(wal.compact(Date.now() + 1000, 0)).toContain(expiredId);
+    expect(existsSync(join(paths.wal, `${expiredId}.ndjson`))).toBe(false);
+    expect(failures).toHaveBeenCalledWith({
+      session_uuid: session[0]!.session_uuid,
+      operation: "cleanup",
+      code: "EACCES",
+    });
     expect(existsSync(tmp)).toBe(true);
     expect(wal.unshipped(100)).toEqual(session);
     wal.compact(Date.now(), 0);
