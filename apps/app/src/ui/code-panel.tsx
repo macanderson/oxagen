@@ -136,10 +136,7 @@ export function CodePanel({
         <table className="w-full border-collapse">
           <tbody>
             {shown.map((line, index) => (
-              // Source lines are a fixed, ordered, non-reorderable list that
-              // can repeat content (e.g. two blank lines); the line number is
-              // the only stable identity a line has.
-              // eslint-disable-next-line @eslint-react/no-array-index-key
+              // eslint-disable-next-line @eslint-react/no-array-index-key -- the key is the source line number, which is unique and stable; these rows are never reordered, filtered, or inserted into
               <tr key={startLine + index}>
                 <td
                   className={`${gutter} w-px align-top`}

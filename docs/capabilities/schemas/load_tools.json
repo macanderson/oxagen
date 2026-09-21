@@ -30,7 +30,9 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128
-        }
+        },
+        "minItems": 1,
+        "maxItems": 8
       }
     },
     "required": [
@@ -82,13 +84,15 @@
             "readOnly"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 8
       },
       "unknown": {
         "type": "array",
         "items": {
           "type": "string"
-        }
+        },
+        "maxItems": 8
       }
     },
     "required": [
