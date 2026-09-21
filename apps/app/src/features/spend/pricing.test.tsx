@@ -101,6 +101,7 @@ const source: DataSource = {
   skills: { inventory: vi.fn(), configuration: vi.fn() },
   steering: {
     records: vi.fn(),
+    record: vi.fn(),
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),

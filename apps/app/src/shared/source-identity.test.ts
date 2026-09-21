@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  agentSourceSlug,
-  renameAgentSource,
-  renameSkillSource,
-  skillSourceName,
-} from "./source-identity";
+import { agentSourceSlug, renameAgentSource } from "./source-identity";
+import { renameSkillSource, skillSourceName } from "./skill-source-identity";
 
 describe("agent source identity", () => {
   it("reads the parsed root slug rather than prompt text or nested assignments", () => {
@@ -78,12 +74,10 @@ describe("skill source identity", () => {
     );
   });
 
-  it("uses the last name field just as the proposal reader does", () => {
+  it("refuses duplicate name fields just as the proposal reader does", () => {
     const source = "---\nname: first\nname: last\n---\nname: body";
-    expect(skillSourceName(source)).toBe("last");
-    expect(renameSkillSource(source, "new")).toBe(
-      "---\nname: first\nname: new\n---\nname: body",
-    );
+    expect(skillSourceName(source)).toBeNull();
+    expect(renameSkillSource(source, "new")).toBeNull();
   });
 
   it.each(["name: old", "---\nname: old", " ---\nname: old\n---"])(
@@ -94,7 +88,7 @@ describe("skill source identity", () => {
     },
   );
 
-  it.each(["", '"quoted"', "bad--name", "a".repeat(49)])(
+  it.each(["", "bad--name", "a".repeat(49)])(
     "rejects invalid skill name %j",
     (name) => {
       expect(skillSourceName(`---\nname: ${name}\n---`)).toBeNull();

@@ -1,5 +1,5 @@
 {
-  "generatedCount": 340,
+  "generatedCount": 341,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2993,6 +2993,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "revise_context_record",
+      "domain": "context",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

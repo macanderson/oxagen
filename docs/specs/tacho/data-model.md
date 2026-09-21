@@ -361,3 +361,5 @@ The live 2.1.263 binary and the reference disagree on four hook members. The ada
 | `hook_source_kind` for session end | `SessionEnd.reason` | `end_reason` |
 | `hook_source_kind` for session start | `SessionStart.source` | `trigger` |
 | `stop_failure_error_type` | `StopFailure.error` | `error_type` |
+
+When the cached retention mandate is unproven, an event with a retained body waits with its session suffix. This preserves the dense chain and keeps the body in the same ingest request as its event. Other sessions continue to drain, even if the held session fills a batch. The hold ends 24 hours after the event timestamp, which survives a daemon restart. An invalid or future timestamp releases immediately. Release sends the event body-missing and logs the reason and count. A proven narrowing still drops the body and ships the event.

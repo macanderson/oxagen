@@ -8,6 +8,13 @@
  * (the hook that injects it acknowledges `applied` then), `expired` for a
  * command already past its deadline at receipt, or `failed` with the
  * reason.
+ *
+ * `cancel` and `kill` acknowledge what their signal did, not that the
+ * command was processed. A refused signal, or a session record carrying no
+ * pid, acknowledges `failed`: the process is still running, and the
+ * `oxagen:kill_attempted` event beside the acknowledgement records the same
+ * outcome. Reporting `applied` there puts a claim on the wire that the chain
+ * contradicts. See `docs/specs/local-supervisor/spec.md` §3.1.
  */
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
@@ -74,16 +81,18 @@ function applied(
   );
 }
 
+type KillOutcome = "sent" | "failed" | "no_pid";
+
 function killAttempt(
   record: SessionRecord,
   command: DeliveredCommand,
   signal: "SIGTERM" | "SIGKILL",
   deps: InboxDeps,
-): TachoEvent {
-  let outcome: string;
+): { event: TachoEvent; outcome: KillOutcome } {
+  let outcome: KillOutcome;
   if (record.pid === undefined) outcome = "no_pid";
   else outcome = deps.kill(record.pid, signal) ? "sent" : "failed";
-  return record.recorder.sealCollectorEvent(
+  const event = record.recorder.sealCollectorEvent(
     "oxagen:kill_attempted",
     { kill_signal: signal, kill_outcome: outcome },
     {
@@ -95,6 +104,7 @@ function killAttempt(
       },
     },
   );
+  return { event, outcome };
 }
 
 async function applyToSession(
@@ -116,17 +126,26 @@ async function applyToSession(
       record.control.paused = null;
       events.push(applied(record.recorder, command, "session_resumed"));
       return { events, status: "applied" };
-    case "cancel": {
-      record.control.cancelled = reasonOf(command);
-      events.push(applied(record.recorder, command, "session_cancelled"));
-      events.push(killAttempt(record, command, "SIGTERM", deps));
-      return { events, status: "applied" };
-    }
+    case "cancel":
     case "kill": {
+      const signal = command.command === "kill" ? "SIGKILL" : "SIGTERM";
+      const reasonCode =
+        command.command === "kill" ? "session_killed" : "session_cancelled";
       record.control.cancelled = reasonOf(command);
-      events.push(applied(record.recorder, command, "session_killed"));
-      events.push(killAttempt(record, command, "SIGKILL", deps));
-      return { events, status: "applied" };
+      events.push(applied(record.recorder, command, reasonCode));
+      const attempt = killAttempt(record, command, signal, deps);
+      events.push(attempt.event);
+      // The signal is the mechanism, so the acknowledgement reports what the
+      // signal did. A refused signal or a record with no pid leaves the
+      // process running, and `applied` would be a claim the chain contradicts:
+      // the `oxagen:kill_attempted` event beside it says `failed` or `no_pid`.
+      // The control plane may reissue the command; both paths are idempotent.
+      if (attempt.outcome === "sent") return { events, status: "applied" };
+      return {
+        events,
+        status: "failed",
+        detail: `${signal} was not delivered (${attempt.outcome})`,
+      };
     }
     case "message":
     case "steer": {
@@ -233,11 +252,20 @@ export async function applyCommands(
       case "steer": {
         let last: TachoEvent | undefined;
         let status: CommandAcknowledgement["status"] = "applied";
+        // One host-level acknowledgement covers every live session, so it
+        // reports the weakest outcome any of them reached. A fan-out that
+        // failed on one session is not `applied` for the host.
+        const details: string[] = [];
         for (const record of deps.registry.live()) {
           const result = await applyToSession(record, command, deps);
           events.push(...result.events);
           last = result.events[result.events.length - 1] ?? last;
-          if (result.status === "received") status = "received";
+          if (result.status === "received" && status === "applied")
+            status = "received";
+          if (result.status === "failed") {
+            status = "failed";
+            if (result.detail !== undefined) details.push(result.detail);
+          }
         }
         const hostEvent = applied(
           deps.hostRecorder(),
@@ -249,6 +277,7 @@ export async function applyCommands(
           command_id: command.id,
           status,
           applied_at_seq: (last ?? hostEvent).seq,
+          ...(details.length > 0 ? { detail: details.join("; ") } : {}),
         });
         break;
       }

@@ -191,6 +191,7 @@ import { killSwitchSetRoute } from "./routes/v1/kill_switch.set";
 import { killSwitchListRoute } from "./routes/v1/kill_switch.list";
 import { contextRecordPublishRoute } from "./routes/v1/context.record.publish";
 import { contextRecordListRoute } from "./routes/v1/context.record.list";
+import { contextRecordReviseRoute } from "./routes/v1/context.record.revise";
 import { contextRecordPromoteRoute } from "./routes/v1/context.record.promote";
 import { contextRecordsListRoute } from "./routes/v1/context.records.list";
 import { contextRecordsGetRoute } from "./routes/v1/context.records.get";
@@ -925,6 +926,7 @@ orgScoped.route("/kill-switches/list", killSwitchListRoute);
 orgScoped.route("/context/record/publish", contextRecordPublishRoute);
 orgScoped.route("/context/record/list", contextRecordListRoute);
 orgScoped.route("/context/record/promote", contextRecordPromoteRoute);
+orgScoped.route("/context/record/revise", contextRecordReviseRoute);
 // Steering (ADR-061): published records, proposals, the Context PR.
 orgScoped.route("/context/records", contextRecordsListRoute);
 orgScoped.route("/context/records/get", contextRecordsGetRoute);
