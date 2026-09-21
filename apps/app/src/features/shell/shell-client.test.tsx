@@ -545,6 +545,16 @@ describe("user menu", () => {
     await user.type(screen.getByTestId("account-codes-password"), "hunter2");
     await user.click(screen.getByTestId("account-codes-confirm"));
     await user.keyboard("{Escape}");
+    expect(screen.getByTestId("account-codes-confirm")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    expect(
+      screen.queryByRole("button", { name: "User menu for Marcus Bell" }),
+    ).toBeNull();
+    // A new organization layout mounts a fresh shell in the same browser realm.
+    cleanup();
+    renderShell(shellData());
 
     await user.click(
       screen.getByRole("button", { name: "User menu for Marcus Bell" }),
