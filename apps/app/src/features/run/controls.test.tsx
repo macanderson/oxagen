@@ -297,15 +297,15 @@ describe("run controls", () => {
           name: paused ? "Resume evidence ingress" : "Pause evidence ingress",
         }),
       );
-      await waitFor(() =>
+      await waitFor(() => {
         expect(haltRun).toHaveBeenCalledWith(
           "acme",
           "core-platform",
           "arun_record1",
           command,
           "",
-        ),
-      );
+        );
+      });
       expect(await screen.findByTestId("queued-command")).toHaveTextContent(
         "tcm_ingress",
       );

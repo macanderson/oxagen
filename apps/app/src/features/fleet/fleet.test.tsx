@@ -357,8 +357,9 @@ describe("runs table", () => {
       "1,204",
       "Sep 15, 2026, 8:00 AM",
       // A live ledger run carries the recorded reason in place of controls:
-      // Oxagen holds no run token it could revoke (WL-61).
-      "View onlyThis run's evidence comes from an external engine. Oxagen holds no run token it can revoke, so there is nothing here to pause, steer or cancel.",
+      // pause and resume govern evidence ingress, cancel revokes the run
+      // credentials, and steering needs a producer connection.
+      "View onlyPause refuses the next evidence batch. Resume reopens evidence ingress. Cancel revokes the run credentials. These controls do not stop the external process; steering needs a producer connection.",
     ]);
     // The run cell leads with what the run was, keeps the id under it, and
     // labels the model's sentence so it cannot read as the record.
