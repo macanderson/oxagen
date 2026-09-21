@@ -131,7 +131,7 @@
         "advancing": "Saving…",
         "unavailable": {
           "title": "Wrapping is not available for this harness",
-          "body": "This agent identity is registered, but its harness has no supported wrapping adapter here. Choose Claude Code, Codex, Cursor or Stella to enrol a host and record its first run."
+          "body": "This agent identity is registered, but its harness has no supported wrapping adapter here. Choose Claude Code, Codex, Cursor, or Stella to enrol a host and record its first run."
         }
       },
       "run": {

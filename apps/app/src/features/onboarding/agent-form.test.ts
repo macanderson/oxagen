@@ -24,3 +24,7 @@ describe("wrapPathOf", () => {
     expect(HARNESSES).toContain("cursor");
   });
 });
+
+it("offers only the four harnesses with installed host adapters", () => {
+  expect(HARNESSES).toEqual(["claude-code", "codex", "cursor", "stella"]);
+});

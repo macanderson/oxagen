@@ -8,17 +8,16 @@ import { z } from "zod";
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-/** The harness values `register_agent` admits, in the order the form offers them. */
-export const HARNESSES = agentHarnessSchema.options;
-export type Harness = (typeof HARNESSES)[number];
+export type Harness = z.infer<typeof agentHarnessSchema>;
 
-/** The harnesses whose hooks Tacho writes on an enrolled host. */
-const HOST_WRAPPED: ReadonlySet<Harness> = new Set([
+/** The form offers only harnesses with a working enrollment path. */
+export const HARNESSES = [
   "claude-code",
   "codex",
   "cursor",
   "stella",
-]);
+] as const satisfies readonly Harness[];
+const HOST_WRAPPED: ReadonlySet<Harness> = new Set(HARNESSES);
 
 /** Only harnesses with an installed host adapter have a wrapping path. */
 export function wrapPathOf(harness: Harness): "host" | "unavailable" {
