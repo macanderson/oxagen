@@ -23,7 +23,8 @@ export { PRICE_BOOK_BACKDATED_EVENT };
 /**
  * Runs re-rolled per invocation, carried-forward retries included. Each run
  * is one step and each workspace-day it touched is one more, so a page costs
- * at most twice this plus two, under Inngest's 1,000 steps per function run.
+ * at most three times this plus two, including one findings event per workspace,
+ * under Inngest's 1,000 steps per function run.
  * The retries count against the page for exactly that reason: however many
  * runs a bad invocation carries, the next one still rebuilds at most this
  * many.
@@ -105,7 +106,8 @@ function readRetries(data: unknown): RetryRun[] {
  * runs kept the rest blank.
  *
  * Each invocation reads one page after the event's cursor, rebuilds those
- * runs and the workspace-days they started on, and sends itself the next
+ * runs and the workspace-days they started on, requests findings once for each
+ * affected workspace, and sends itself the next
  * cursor when the page was full. The cursor matters: a run whose model no
  * source prices is still incomplete after its rebuild, so reading the head
  * of the list again would return the same page.
@@ -194,6 +196,16 @@ export const [costPriceBookReprice] = createFunction(
       await step.run(`daily-${target.workspaceId}-${target.day}`, () =>
         rebuildDailyTotals(target),
       );
+    }
+
+    const workspaces = new Map<string, WorkspaceDay>();
+    for (const target of days.values())
+      workspaces.set(`${target.orgId}:${target.workspaceId}`, target);
+    for (const target of workspaces.values()) {
+      await step.sendEvent(`findings-${target.orgId}-${target.workspaceId}`, {
+        name: "cost/findings.requested",
+        data: { orgId: target.orgId, workspaceId: target.workspaceId },
+      });
     }
 
     const last = page.at(-1);

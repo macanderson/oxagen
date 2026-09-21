@@ -1947,6 +1947,25 @@
       }
     },
     {
+      "name": "set_governance_mode",
+      "file": "context.governance_mode.set.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_context_pr",
       "file": "context.pr.get.ts",
       "domain": "context",
@@ -3366,6 +3385,42 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "resend_member_invite",
+      "file": "org.member_invite.resend.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "revoke_member_invite",
+      "file": "org.member_invite.revoke.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
         "docs": true,
         "app": true
       }

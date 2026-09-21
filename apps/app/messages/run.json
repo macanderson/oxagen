@@ -67,6 +67,7 @@
       "agent": "AGENT",
       "stepCount": "{count, plural, one {# step} other {# steps}}",
       "frameCount": "{count, plural, one {# frame} other {# frames}}",
+      "repeats": "×{count}",
       "seqSpan": "seq {from} to {to}",
       "ms": "{ms} ms",
       "live": "live",
@@ -115,8 +116,22 @@
       "request": "Sent",
       "response": "Returned",
       "decision": "Decision: {decision}, at frame {seq}",
+      "decisionOn": "Decision: {decision} on {subject}, at frame {seq}",
       "calledWith": "Called with",
-      "noHalves": "Neither half of this exchange was recorded. Its envelope is on the Frames tab."
+      "noHalves": "Neither half of this exchange was recorded. Its envelope is on the Frames tab.",
+      "showAll": "Show all",
+      "loadedSkill": "Loaded skill",
+      "pane": {
+        "command": "Command",
+        "output": "Output",
+        "diff": "Change",
+        "contents": "Contents",
+        "asked": "Asked",
+        "arguments": "Arguments",
+        "brief": "Brief",
+        "plan": "Plan",
+        "input": "Input"
+      }
     },
     "frames": {
       "title": "Frames",

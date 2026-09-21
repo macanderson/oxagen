@@ -81,25 +81,18 @@ export const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 export const MODELS_DEV_URL = "https://models.dev/api.json";
 
 /**
- * Anthropic's one-hour cache writes bill at 2x base input against the
- * 5-minute tier's 1.25x. No catalog publishes the 1h rate as its own field,
- * so it is derived from the write premium the 5m rate already shows: a model
- * whose 5m write carries a premium gets the 1h rate at the same multiple of
- * base input that the provider charges (2.0/1.25 = 1.6x the 5m rate). A model
- * with no write premium (OpenAI's automatic caching, where a write bills at
- * fresh input rate) has no 1h tier either, and keeps the write rate it has.
+ * Only Anthropic publishes the one-hour multiplier used here: 2x base input.
+ * https://platform.claude.com/docs/en/build-with-claude/prompt-caching#pricing
+ * Other providers remain unpriced for this class unless a source states it.
+ * A five-minute premium alone is not evidence of a one-hour pricing policy.
  */
-const ONE_HOUR_OVER_FIVE_MINUTE = 2 / 1.25;
-
-/** Derive the 1h cache-write rate from a model's input and 5m write rates. */
 export function deriveCacheWrite1h(
+  provider: string,
   inputPer1M: number,
   cacheWrite5mPer1M: number | null,
 ): number | null {
-  if (cacheWrite5mPer1M === null) return null;
-  // No premium over fresh input means the provider has no write tier to scale.
-  if (cacheWrite5mPer1M <= inputPer1M) return cacheWrite5mPer1M;
-  return cacheWrite5mPer1M * ONE_HOUR_OVER_FIVE_MINUTE;
+  if (provider !== "anthropic" || cacheWrite5mPer1M === null) return null;
+  return inputPer1M * 2;
 }
 
 // ── The in-code card as a source ──────────────────────────────────────────────
@@ -196,6 +189,7 @@ function rateToPublished(
     cachedInputPer1M: rate.cachedInputPer1M,
     cacheWrite5mPer1M: rate.cacheWritePer1M,
     cacheWrite1hPer1M: deriveCacheWrite1h(
+      rate.provider,
       rate.inputPer1M,
       rate.cacheWritePer1M,
     ),
@@ -291,7 +285,11 @@ export function parseOpenRouterCatalog(body: unknown): PublishedModelPrice[] {
       outputPer1M: output,
       cachedInputPer1M: perTokenToPerMillion(row.pricing.input_cache_read),
       cacheWrite5mPer1M: cacheWrite5m,
-      cacheWrite1hPer1M: deriveCacheWrite1h(input, cacheWrite5m),
+      cacheWrite1hPer1M: deriveCacheWrite1h(
+        vendorOf(row.id),
+        input,
+        cacheWrite5m,
+      ),
       reasoningPer1M:
         perTokenToPerMillion(row.pricing.internal_reasoning) ?? output,
       source: "openrouter",
@@ -356,7 +354,7 @@ export function parseModelsDevCatalog(body: unknown): PublishedModelPrice[] {
         outputPer1M: output,
         cachedInputPer1M: finiteOrNull(model.cost?.cache_read),
         cacheWrite5mPer1M: cacheWrite5m,
-        cacheWrite1hPer1M: deriveCacheWrite1h(input, cacheWrite5m),
+        cacheWrite1hPer1M: deriveCacheWrite1h(vendor, input, cacheWrite5m),
         reasoningPer1M: finiteOrNull(model.cost?.reasoning) ?? output,
         source: "models_dev",
       });

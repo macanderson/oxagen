@@ -1,5 +1,5 @@
 {
-  "generatedCount": 335,
+  "generatedCount": 338,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2895,6 +2895,17 @@
       "consumes": []
     },
     {
+      "name": "resend_member_invite",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "resolve_approval",
       "domain": "agent",
       "surfaces": [
@@ -3005,6 +3016,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "revoke_member_invite",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -3251,6 +3273,18 @@
       "domain": "evidence",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_governance_mode",
+      "domain": "workspace",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

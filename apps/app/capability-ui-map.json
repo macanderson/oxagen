@@ -902,6 +902,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "set_governance_mode": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] — Organization › Workspaces › Edit workspace, the Steering governance field, which invokes set_governance_mode beside update_workspace_settings (features/organization/workspace-actions.tsx, features/organization/actions.ts)",
+      "proof": "apps/app/src/features/organization/workspace-governance.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "session-1818a309-workspace-governance-mode"
+    },
     "set_kill_switch": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
@@ -1112,6 +1120,24 @@
           "verifiedBy": "session-018UrgFq-mc1-review"
         }
       ]
+    },
+    "resend_member_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "People pending invitations: resend",
+      "testid": "invitation-controls",
+      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "assigned-issue-batch; CI pending"
+    },
+    "revoke_member_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "People pending invitations: revoke",
+      "testid": "invitation-controls",
+      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "assigned-issue-batch; CI pending"
     }
   }
 }
