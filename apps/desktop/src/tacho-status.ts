@@ -62,7 +62,12 @@ export interface TachoStatus {
   stellaHooks?: TachoHookPresence;
   /** Present once the host connects Claude Desktop. */
   claudeDesktop?: TachoMcpPresence;
-  service?: { kind: string; installed: boolean; running: boolean };
+  service?: {
+    kind: string;
+    installed: boolean;
+    running: boolean | null;
+    detail?: string;
+  };
   wal?: { sessions: number; unshipped: number };
   /** Present once the daemon reports a well-formed gateway block. */
   gateway?: TachoGateway;
@@ -90,7 +95,8 @@ function cursorPresence(value: unknown): TachoHookPresence | undefined {
     .filter((entry): entry is TachoHookPresence => entry !== undefined);
   if (entries.length === 0) return undefined;
   const missing = new Set<string>();
-  for (const entry of entries) for (const event of entry.missing) missing.add(event);
+  for (const entry of entries)
+    for (const event of entry.missing) missing.add(event);
   for (const entry of value) {
     if (!isRecord(entry)) continue;
     const failOpen = entry["failOpenEnforcement"];
@@ -214,12 +220,15 @@ export function parseTachoStatus(stdout: string): TachoStatus | null {
     isRecord(service) &&
     typeof service["kind"] === "string" &&
     typeof service["installed"] === "boolean" &&
-    typeof service["running"] === "boolean"
+    (typeof service["running"] === "boolean" || service["running"] === null)
   ) {
     status.service = {
       kind: service["kind"],
       installed: service["installed"],
       running: service["running"],
+      ...(typeof service["detail"] === "string"
+        ? { detail: service["detail"] }
+        : {}),
     };
   }
   const wal = parsed["wal"];
@@ -237,4 +246,10 @@ export function parseTachoStatus(stdout: string): TachoStatus | null {
   const tierMap = tiers(parsed["tiers"]);
   if (tierMap !== undefined) status.tiers = tierMap;
   return status;
+}
+
+export function serviceStatusText(
+  service: NonNullable<TachoStatus["service"]>,
+): string {
+  return `${service.kind} ${service.running === null ? `state unknown${service.detail ? `: ${service.detail}` : ""}` : service.running ? "running" : service.installed ? "installed, stopped" : "not installed"}`;
 }

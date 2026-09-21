@@ -33,6 +33,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { serviceStatusText } from "./tacho-status";
 import { computeAgentRows, HEALTH_LABEL, summarizeAgents } from "./agents";
 import {
   type ConnectResult,
@@ -1388,9 +1389,7 @@ export function App() {
             {state?.daemon
               ? `up ${state.daemon.uptime_s ?? "?"}s on 127.0.0.1:${host.port}, spool ${state.daemon.spool_depth ?? 0}, last ingest ${ago(state.daemon.last_ingest_at)}`
               : `not answering on 127.0.0.1:${host.port}`}
-            {tacho?.service
-              ? ` · ${tacho.service.kind} ${tacho.service.running ? "running" : tacho.service.installed ? "installed, stopped" : "not installed"}`
-              : ""}
+            {tacho?.service ? ` · ${serviceStatusText(tacho.service)}` : ""}
           </dd>
           <dt>Gateway</dt>
           <dd>
