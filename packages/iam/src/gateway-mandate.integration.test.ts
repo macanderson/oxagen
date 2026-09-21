@@ -50,12 +50,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       }),
     // `machineKeyDenial` stamps the host's gateway observation on every
     // `tacho_gateway_v1` call, allowed or refused (recordGatewayInvocation).
-    // `hasColumn` false for both probed columns is the honest answer this
-    // deployment never claims to have run the observation migration, so the
-    // write is skipped: it is a side effect this file's assertions do not
-    // depend on, and mocking it out keeps the test from needing a real
-    // Postgres plane.
-    hasColumn: async () => false,
+    // `hasColumnFresh` false for both probed columns is the honest answer
+    // this deployment never claims to have run the observation migration,
+    // so the write is skipped: it is a side effect this file's assertions
+    // do not depend on, and mocking it out keeps the test from needing a
+    // real Postgres plane. `recordGatewayInvocation` probes fresh (never
+    // trusting a cached miss) so a write is never suppressed by a stale
+    // negative, so the fresh form is the one this file must mock too.
+    hasColumnFresh: async () => false,
     ambientPlaneKey: async () => "plane-under-test",
     withOrgPlaneSystemDb: async (
       _orgId: string,
