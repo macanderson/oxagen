@@ -14,7 +14,7 @@ type AccountExportState =
     }
   | { kind: "denied" | "failed"; scope: "user" | "org" };
 
-export type PreferencesState =
+type PreferencesState =
   | { kind: "loading" | "denied" | "failed" }
   | { kind: "ready"; draft: PreferencesDraft };
 export type PreferencesSnapshot = {

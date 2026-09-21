@@ -1570,7 +1570,10 @@ it.each([true, false])(
     await user.click(screen.getByRole("tab", { name: "Profile" }));
     await user.click(screen.getByRole("tab", { name: "Preferences" }));
     expect(await screen.findByTestId("account-theme")).toHaveValue("dark");
-    expect(screen.getByTestId("account-preferences-save")).toBeDisabled();
+    expect(screen.getByTestId("account-preferences-save")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     finish?.(
       success
         ? { ok: true, value: { locale: "en", timezone: "UTC", theme: "dark" } }
