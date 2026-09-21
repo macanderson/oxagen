@@ -1,6 +1,6 @@
 import { schema, type withTenantDb } from "@oxagen/database";
 import type { TachoEvent } from "@oxagen/tacho";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   fileIdentityOf,
   languageOf,
@@ -158,6 +158,15 @@ export async function rollupFiles(
     .select({
       path: schema.tachoSessionFiles.path,
       repoRelativePath: schema.tachoSessionFiles.repoRelativePath,
+      linesAdded: schema.tachoSessionFiles.linesAdded,
+      linesRemoved: schema.tachoSessionFiles.linesRemoved,
+      // Only asked for once the column exists, as everywhere else this flag
+      // gates `observedStatus` (see `refreshSessionTitle`): naming it in a
+      // select before the migration lands raises 42703 the same way naming
+      // it in a write does.
+      ...(observedStatusColumn
+        ? { observedStatus: schema.tachoSessionFiles.observedStatus }
+        : {}),
     })
     .from(schema.tachoSessionFiles)
     .where(eq(schema.tachoSessionFiles.sessionId, sessionId));
@@ -165,9 +174,21 @@ export async function rollupFiles(
     stored.map((row) => [fileIdentityOf(row.path).key, row.path]),
   );
   if (observedStatusColumn) {
+    // One set-based UPDATE for every path a complete snapshot clears, not one
+    // awaited statement per row. A row already at rest (null status, zero
+    // counts) is skipped rather than rewritten, so a session that
+    // accumulated thousands of paths does not re-clear them on every
+    // subsequent clean snapshot.
+    const toClear: string[] = [];
     for (const row of stored) {
       const identity = fileIdentityOf(row.path);
       if (byPath.get(identity.key)?.observed !== undefined) continue;
+      if (
+        row.observedStatus === null &&
+        row.linesAdded === 0 &&
+        row.linesRemoved === 0
+      )
+        continue;
       const cleared = [...completeSnapshots.values()].some(
         ({ root, seen }) =>
           repoRelativePathOf(row.path, root) !== undefined &&
@@ -175,6 +196,9 @@ export async function rollupFiles(
           !seen.has(identity.key),
       );
       if (!cleared) continue;
+      toClear.push(row.path);
+    }
+    if (toClear.length > 0) {
       await tx
         .update(schema.tachoSessionFiles)
         .set({
@@ -186,7 +210,7 @@ export async function rollupFiles(
         .where(
           and(
             eq(schema.tachoSessionFiles.sessionId, sessionId),
-            eq(schema.tachoSessionFiles.path, row.path),
+            inArray(schema.tachoSessionFiles.path, toClear),
           ),
         );
     }

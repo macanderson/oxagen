@@ -182,5 +182,40 @@ describe.skipIf(!process.env.DATABASE_URL)(
         linesRemoved: 0,
       });
     });
+
+    it("does not rewrite a row a prior clean snapshot already cleared", async () => {
+      await write([attested("/one"), observed("/one", ["src/a.ts"])]);
+      await write([observed("/one", [])]);
+      const clearedAt = (await rows()).find(
+        (row) => row.path === "/one/src/a.ts",
+      )?.updatedAt;
+      expect(clearedAt).toBeDefined();
+      // A later complete snapshot that still reports the path absent finds
+      // the row already at rest (null status, zero counts) and must skip
+      // it rather than issue another UPDATE: `updatedAt` stays put even
+      // though this pass runs with a distinct timestamp.
+      const later = new Date(now.getTime() + 60_000);
+      await scoped(() =>
+        withTenantDb((tx) =>
+          rollupFiles(
+            tx,
+            scope,
+            sessionId,
+            [observed("/one", [])],
+            later,
+            true,
+          ),
+        ),
+      );
+      const stillCleared = (await rows()).find(
+        (row) => row.path === "/one/src/a.ts",
+      );
+      expect(stillCleared?.updatedAt).toEqual(clearedAt);
+      expect(stillCleared).toMatchObject({
+        observedStatus: null,
+        linesAdded: 0,
+        linesRemoved: 0,
+      });
+    });
   },
 );
