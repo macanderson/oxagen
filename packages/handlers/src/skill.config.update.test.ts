@@ -1,3 +1,4 @@
+import { skillConfigUpdate } from "@oxagen/oxagen/contracts/skill.config.update";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { skillConfigSchema } from "@oxagen/oxagen/skills";
 import { createSkillConfigUpdateHandler } from "./skill.config.update";
@@ -31,7 +32,9 @@ describe("update_skill_config", () => {
         .mockResolvedValue({ number: 12, url: "https://github.test/pull/12" }),
       publish: vi.fn().mockResolvedValue(snapshot),
     };
-    const handler = createSkillConfigUpdateHandler(service);
+    const handle = createSkillConfigUpdateHandler(service);
+    const handler: typeof handle = async (input, ctx) =>
+      skillConfigUpdate.output.parse(await handle(input, ctx));
     expect(
       await handler({ action: "propose", text: "enabled = false" }, makeCTX()),
     ).toMatchObject({ pullRequest: { number: 12 }, published: null });

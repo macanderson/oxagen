@@ -5169,24 +5169,36 @@
     {
       "name": "get_skill_config",
       "file": "skill.config.get.ts",
-      "domain": "unknown",
+      "domain": "skill",
       "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
       ],
-      "layers": {}
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
     },
     {
       "name": "update_skill_config",
       "file": "skill.config.update.ts",
-      "domain": "unknown",
+      "domain": "skill",
       "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
       ],
-      "layers": {}
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
     },
     {
       "name": "list_skills",
@@ -5225,13 +5237,19 @@
     {
       "name": "preview_skill_search",
       "file": "skill.search.preview.ts",
-      "domain": "unknown",
+      "domain": "skill",
       "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
       ],
-      "layers": {}
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
     },
     {
       "name": "get_spend_drill",

@@ -2,6 +2,7 @@
   "name": "preview_skill_search",
   "domain": "skill",
   "description": "Preview approved skill resolution at a published configuration version. Shows a person withheld names and reasons without loading skills into a run.",
+  "mode": "sync",
   "surfaces": [
     "api",
     "mcp"

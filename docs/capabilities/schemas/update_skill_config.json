@@ -2,6 +2,7 @@
   "name": "update_skill_config",
   "domain": "skill",
   "description": "Propose skill configuration in a pull request, import the existing approved repository configuration once, or publish a merged configuration pull request after reading back its commit.",
+  "mode": "sync",
   "surfaces": [
     "api",
     "mcp"
