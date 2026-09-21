@@ -648,14 +648,12 @@ describe("createBranch", () => {
 
 describe("updatePullRequest", () => {
   it("patches only metadata on the existing pull request", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        makeResponse({
-          number: 42,
-          html_url: "https://github.com/acme/my-repo/pull/42",
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        number: 42,
+        html_url: "https://github.com/acme/my-repo/pull/42",
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const client = createGitHubClient({ token: "tok" });
     await expect(

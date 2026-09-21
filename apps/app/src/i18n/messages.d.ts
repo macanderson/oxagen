@@ -2333,6 +2333,26 @@ type Messages = {
         confirm: string;
         pending: string;
       };
+      governance: {
+        heading: string;
+        about: string;
+        unchanged: string;
+        unchangedHint: string;
+        solo: string;
+        team: string;
+        regulated: string;
+        override: string;
+        overrideHint: string;
+        done: {
+          applied: string;
+          overridden: string;
+          proposed: string;
+          reused: string;
+          openPr: string;
+          refused: string;
+          close: string;
+        };
+      };
       archiveWorkspace: {
         open: string;
         title: string;

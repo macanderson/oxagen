@@ -522,6 +522,32 @@ export function buildProgram(): Command {
         await repoInit(bindingId, opts);
       },
     );
+  repoCmd
+    .command("governance")
+    .description(
+      "Set the steering governance mode: who may merge a Context PR in this workspace",
+    )
+    .requiredOption("--mode <mode>", "solo | team | regulated")
+    .option(
+      "--workspace <id>",
+      "The ws_… workspace to change; the scoped workspace when omitted",
+    )
+    .option(
+      "--apply-now",
+      "Commit to the production branch although the mode in force asks for a reviewed pull request; recorded as steering.governance_overridden",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        json?: boolean;
+        mode?: string;
+        workspace?: string;
+        applyNow?: boolean;
+      }) => {
+        const { repoGovernance } = await import("./commands/repo.js");
+        await repoGovernance(opts);
+      },
+    );
   // ── steering: is this checkout running on the records in force? ─────────────
 
   const steeringCmd = program
