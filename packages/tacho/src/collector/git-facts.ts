@@ -18,6 +18,9 @@
  * one where Oxagen saw the thing itself instead of being told about it. File
  * change belongs on the observed side, so it is read here.
  *
+ * A failed diff stays unknown. Only a symbolic HEAD with no branch ref is
+ * unborn and can be measured against the empty tree.
+ *
  * Three rules hold for everything in this file.
  *
  * Nothing throws. A worktree is an operator's machine, and it can be a
@@ -307,58 +310,29 @@ export function parseNameStatusZ(
   return out;
 }
 
-/** Unquote the C-quoted path form git falls back to for tabs and newlines. */
-function unquote(path: string): string {
-  if (!path.startsWith('"') || !path.endsWith('"')) return path;
-  const inner = path.slice(1, -1);
-  return inner.replace(/\\(.)/g, (_match, char: string) => {
-    if (char === "n") return "\n";
-    if (char === "t") return "\t";
-    if (char === "r") return "\r";
-    return char;
-  });
-}
-
-/**
- * Resolve the path field of a numstat row. Git writes a rename as
- * `old => new`, and shortens a shared prefix or suffix into
- * `src/{old => new}.ts`. Both forms resolve to the new path.
- */
-export function resolveNumstatPath(field: string): string {
-  const braced = /^(.*)\{(.*) => (.*)\}(.*)$/.exec(field);
-  if (braced !== null) {
-    return `${braced[1] ?? ""}${braced[3] ?? ""}${braced[4] ?? ""}`.replace(
-      /\/\//g,
-      "/",
-    );
-  }
-  const arrow = field.split(" => ");
-  return arrow.length === 2 ? (arrow[1] ?? field) : field;
-}
-
-/**
- * Parse `git diff --numstat` into per-path line counts.
- *
- * A binary file is reported as `-` for both counts, which is not zero and
- * not a parse failure: it is git saying the question does not apply. Both
- * counts are recorded as zero, and the path still appears, because a binary
- * file that changed is a change.
- */
+/** Parse Git's NUL-delimited numstat. Renames carry separate old/new fields. */
 export function parseNumstat(
   stdout: string,
 ): Map<string, { added: number; removed: number }> {
   const out = new Map<string, { added: number; removed: number }>();
-  for (const line of stdout.split("\n")) {
-    if (line.length === 0) continue;
-    const parts = line.split("\t");
-    if (parts.length < 3) continue;
-    const added = Number.parseInt(parts[0] ?? "", 10);
-    const removed = Number.parseInt(parts[1] ?? "", 10);
-    const path = unquote(resolveNumstatPath(parts.slice(2).join("\t")));
-    if (path.length === 0) continue;
+  const fields = stdout.split("\0");
+  for (let i = 0; i < fields.length; i += 1) {
+    const row = fields[i] ?? "";
+    const first = row.indexOf("\t");
+    const second = row.indexOf("\t", first + 1);
+    if (first < 0 || second < 0) continue;
+    const added = row.slice(0, first);
+    const removed = row.slice(first + 1, second);
+    let path = row.slice(second + 1);
+    if (path === "") {
+      path = fields[i + 2] ?? "";
+      i += 2;
+    }
+    if (!path || !/^(?:\d+|-)$/.test(added) || !/^(?:\d+|-)$/.test(removed))
+      continue;
     out.set(path, {
-      added: Number.isFinite(added) ? added : 0,
-      removed: Number.isFinite(removed) ? removed : 0,
+      added: added === "-" ? 0 : Number(added),
+      removed: removed === "-" ? 0 : Number(removed),
     });
   }
   return out;
@@ -412,7 +386,7 @@ async function untrackedLineCount(
   const stdout = await git(
     exec,
     cwd,
-    ["diff", "--numstat", "--no-index", "--", "/dev/null", absolutePath],
+    ["diff", "--numstat", "--no-index", "-z", "--", "/dev/null", absolutePath],
     [0, 1],
   );
   if (stdout === undefined) return undefined;
@@ -482,13 +456,10 @@ export async function readWorkingTreeChanges(
       : await git(exec, cwd, ["diff", "--name-status", "-z", baseline]).then(
           (out) => (out === undefined ? undefined : parseNameStatusZ(out)),
         );
-  // A baseline git can no longer resolve — a rebase, an amend, a reset that
-  // moved it out of the graph — answers nothing rather than answering wrongly,
-  // and the read falls back to `HEAD`. Treating the failure as "no common
-  // ancestor" and diffing the empty tree would report every file in the
-  // repository as added by this run.
-  const ref =
-    baseline !== undefined && tracked !== undefined ? baseline : "HEAD";
+  // A missing baseline is unknown. Substituting today's HEAD would measure
+  // a different interval and silently erase work the session committed.
+  if (baseline !== undefined && tracked === undefined) return undefined;
+  const ref = baseline ?? "HEAD";
   const entries =
     tracked === undefined
       ? worktree
@@ -502,27 +473,31 @@ export async function readWorkingTreeChanges(
         ];
   if (entries.length === 0) return [];
   const [numstatOut, root] = await Promise.all([
-    git(exec, cwd, ["diff", "--numstat", ref]).then(async (head) => {
+    git(exec, cwd, ["diff", "--numstat", ref, "-z"]).then(async (head) => {
       if (head !== undefined) return head;
-      // No HEAD means the first commit has not been made. A plain
-      // `git diff` then reports only what is unstaged, so a file already
-      // staged in a fresh repository counted as zero added lines even
-      // though `git status` reported it. The empty tree is what HEAD would
-      // be if it existed, so diffing against it asks the same question the
-      // `HEAD` form asks everywhere else.
-      //
-      // It is one diff, not a staged one plus an unstaged one. Those two
-      // overlap: a file staged and then edited again appears in both, and
-      // `parseNumstat` keys by path, so the second row replaced the first
-      // and the file was reported with the later edit's counts instead of
-      // its distance from nothing. Naming the tree without `--cached`
-      // compares the worktree to it directly, which is that distance.
-      return (
-        (await git(exec, cwd, ["diff", "--numstat", EMPTY_TREE_OBJECT])) ?? ""
+      if (ref !== "HEAD") return undefined;
+      // A failed diff is not proof of an unborn repository. Only a symbolic
+      // HEAD whose branch does not exist can be compared with the empty tree.
+      if (
+        (await git(exec, cwd, ["rev-parse", "--verify", "HEAD"])) !== undefined
+      )
+        return undefined;
+      const symbolic = firstLine(
+        await git(exec, cwd, ["symbolic-ref", "-q", "HEAD"]),
       );
+      if (symbolic === undefined) return undefined;
+      const absent = await git(
+        exec,
+        cwd,
+        ["show-ref", "--verify", "--quiet", symbolic],
+        [1],
+      );
+      if (absent === undefined) return undefined;
+      return git(exec, cwd, ["diff", "--numstat", EMPTY_TREE_OBJECT, "-z"]);
     }),
     git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
   ]);
+  if (numstatOut === undefined) return undefined;
   const counts = parseNumstat(numstatOut);
   const absolute = (repoRelative: string): string =>
     root === undefined
@@ -538,7 +513,7 @@ export async function readWorkingTreeChanges(
       // change git reported no line count for (a mode change, for one), and
       // diffing it against nothing would count the whole file as added.
       .filter((entry) => entry.code === "??")
-      .map((entry) => unquote(entry.path))
+      .map((entry) => entry.path)
       .filter(
         (repoRelative) =>
           !repoRelative.endsWith("/") && !counts.has(repoRelative),
@@ -560,11 +535,11 @@ export async function readWorkingTreeChanges(
   }
 
   return entries.map((entry) => {
-    const repoRelative = unquote(entry.path);
+    const repoRelative = entry.path;
     const count = counts.get(repoRelative);
     return {
       path: absolute(repoRelative),
-      repo_relative_path: repoRelative,
+      repo_relative_path: root === undefined ? "" : repoRelative,
       status: statusOf(entry.code),
       lines_added: count?.added ?? 0,
       lines_removed: count?.removed ?? 0,

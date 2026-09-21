@@ -25,7 +25,10 @@
         "human": "A person, name not recorded",
         "agent": "An agent, not a person",
         "service": "A service, not a person"
-      }
+      },
+      "machineNotRecorded": "Session machine facts not recorded.",
+      "machineRecorded": "Recorded in this session: {facts}",
+      "machineEnrollment": "Enrollment hostname and facts: {facts}"
     },
     "resolvedApprovals": {
       "title": "Resolved",
