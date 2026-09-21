@@ -444,11 +444,11 @@ it.each([false, true])(
         avatarUrl: "https://cdn.example/saved.png",
       },
     });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(accountOperations.isPending(shellData().viewer.id, "avatar")).toBe(
         false,
-      ),
-    );
+      );
+    });
     if (newerEdit)
       expect(screen.getByTestId("avatar-letters")).toHaveValue("NEW");
     else

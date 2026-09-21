@@ -94,7 +94,12 @@ function OpenIt() {
           </button>
         ),
       )}
-      <button type="button" onClick={() => setTheme("light")}>
+      <button
+        type="button"
+        onClick={() => {
+          setTheme("light");
+        }}
+      >
         choose light from menu
       </button>
       <output data-testid="which">
@@ -1598,11 +1603,11 @@ it("keeps a menu theme chosen after the pending preferences panel closes", async
     ok: true,
     value: { locale: "en", timezone: "UTC", theme: "dark" },
   });
-  await waitFor(() =>
+  await waitFor(() => {
     expect(
       accountOperations.isPending(shellData().viewer.id, "preferences"),
-    ).toBe(false),
-  );
+    ).toBe(false);
+  });
   expect(document.cookie).toContain("theme=light");
   expect(document.documentElement.dataset.theme).toBe("light");
 });
