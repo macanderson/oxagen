@@ -15,9 +15,8 @@
 // page then reloads, because the run's own status is what says whether it did.
 //
 // A sealed or halted run has nothing to reach, so it draws no controls. A
-// ledger run draws them disabled: its evidence arrives from an external engine
-// that Oxagen holds no revocable run token for, so a queued command would have
-// no connection point to travel down (WL-61). An `observe`-tier run draws them
+// ledger run can pause, resume, or cancel evidence ingress. Steering stays
+// disabled until the producer carries it. An `observe`-tier run draws them
 // disabled for the same reason from the other direction: the session only
 // records what an agent did, and Oxagen was never in the path, so there is
 // nothing at the other end of a command. A viewer `dispatch_command`
@@ -109,9 +108,11 @@ function CommandDialog({
   command,
   runId,
   write,
+  ledgerControl = false,
 }: {
   command: Command;
   runId: string;
+  ledgerControl?: boolean;
   /**
    * The reason a pause carries, or the text a steer sends with the delivery
    * mode picked for it. A halt ignores the mode: the contract refuses a
@@ -123,6 +124,12 @@ function CommandDialog({
   ) => Promise<ActionResult<QueuedCommand>>;
 }) {
   const t = useTranslations("run.commands");
+  const ledgerCopy =
+    command === "cancel"
+      ? "ledgerCancel"
+      : command === "pause"
+        ? "ledgerPause"
+        : "ledgerResume";
   const failureText = useActionFailure();
   const navigate = useNavigate();
   const fieldId = useId();
@@ -184,7 +191,7 @@ function CommandDialog({
             className="flex flex-col gap-3"
           >
             <p className="text-sm text-muted-foreground">
-              {t(`${command}.body`)}
+              {t(ledgerControl ? `${ledgerCopy}.body` : `${command}.body`)}
             </p>
             <label htmlFor={fieldId} className="text-sm font-medium">
               {t(steering ? "steerLabel" : "reasonLabel")}
@@ -201,7 +208,13 @@ function CommandDialog({
               className={`${inputBase} resize-y`}
             />
             <p className="text-xs text-muted-foreground">
-              {t(steering ? "steerHelp" : "reasonHelp")}
+              {t(
+                ledgerControl
+                  ? "ledgerReasonHelp"
+                  : steering
+                    ? "steerHelp"
+                    : "reasonHelp",
+              )}
             </p>
             {steering ? (
               <DeliveryPicker value={mode} onChange={setMode} />
@@ -211,13 +224,17 @@ function CommandDialog({
             )}
             <SubmitButton
               pending={pending}
-              label={t(`${command}.confirm`)}
+              label={t(
+                ledgerControl ? `${ledgerCopy}.confirm` : `${command}.confirm`,
+              )}
               pendingLabel={t(`${command}.pending`)}
             />
           </form>
         ) : (
           <div role="status" className="flex flex-col gap-3 text-sm">
-            <p>{t(`${command}.queued`)}</p>
+            <p>
+              {t(ledgerControl ? `${ledgerCopy}.applied` : `${command}.queued`)}
+            </p>
             {queued.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 {t("noRecipient")}
@@ -292,6 +309,8 @@ export function RunControls({
   status,
   source,
   enforcementTier,
+  ingressRevoked = false,
+  ingressPaused = false,
   orgRole,
   wsRole,
 }: {
@@ -302,12 +321,14 @@ export function RunControls({
   source: RunRow["source"];
   /** Where the run was observed from; an `observe` tier has no connection point. */
   enforcementTier: RunRow["enforcementTier"];
+  ingressRevoked?: boolean;
+  ingressPaused?: boolean;
   orgRole: OrgRole;
   wsRole: WsRole;
 }) {
   const t = useTranslations("run.commands");
   if (status !== "live") return null;
-  if (!acceptsCommands(enforcementTier)) {
+  if (source !== "ledger" && !acceptsCommands(enforcementTier)) {
     return (
       <DisabledControls
         reason={t("observeReason")}
@@ -315,14 +336,52 @@ export function RunControls({
       />
     );
   }
-  if (source === "ledger") {
-    return (
-      <DisabledControls reason={t("ledgerReason")} testId="ledger-no-control" />
-    );
-  }
   if (!canCommandRun(orgRole, wsRole)) {
     return (
       <DisabledControls reason={t("roleReason")} testId="role-no-control" />
+    );
+  }
+  if (source === "ledger" && ingressRevoked)
+    return (
+      <DisabledControls
+        reason={t("ledgerRevoked")}
+        testId="ledger-ingress-revoked"
+      />
+    );
+  if (source === "ledger") {
+    return (
+      <div className="flex flex-col items-start gap-2 lg:items-end">
+        <div className="flex flex-wrap gap-2">
+          <CommandDialog
+            command={ingressPaused ? "resume" : "pause"}
+            runId={runId}
+            ledgerControl
+            write={(text) =>
+              haltRun(org, ws, runId, ingressPaused ? "resume" : "pause", text)
+            }
+          />
+          <button
+            type="button"
+            disabled
+            data-testid="run-steer"
+            className={buttonSecondary}
+          >
+            {t("steer.open")}
+          </button>
+          <CommandDialog
+            command="cancel"
+            runId={runId}
+            ledgerControl
+            write={(text) => haltRun(org, ws, runId, "cancel", text)}
+          />
+        </div>
+        <p
+          data-testid="ledger-control-limit"
+          className="max-w-prose text-xs text-muted-foreground"
+        >
+          {t(ingressPaused ? "ledgerPaused" : "ledgerReason")}
+        </p>
+      </div>
     );
   }
   return (

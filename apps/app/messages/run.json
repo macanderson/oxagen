@@ -210,7 +210,7 @@
       "steerHelp": "Oxagen records this, quotes it, and hands it to the model as content. It is never executed.",
       "noRecipient": "No live run took this command.",
       "reread": "Re-read the run",
-      "ledgerReason": "This run's evidence comes from an external engine. Oxagen holds no run token it can revoke, so there is nothing here to pause, steer or cancel.",
+      "ledgerReason": "Pause refuses the next evidence batch. Resume reopens evidence ingress. Cancel revokes the run credentials. These controls do not stop the external process; steering needs a producer connection.",
       "roleReason": "Sending a command needs an organization Owner or Admin role, or a workspace Owner or Member role.",
       "pause": {
         "open": "Pause",
@@ -284,7 +284,25 @@
           "help": "The agent finishes the whole turn, then reads your text before it starts the next one."
         },
         "ceiling": "This is a ceiling. The run's connection point carries the strongest mode it can at or below it, and the command records both what you asked for and what it carried."
-      }
+      },
+      "ledgerCancel": {
+        "body": "Cancel revokes this run’s evidence credentials and refuses further appends. It does not stop the external process or prove that its work has stopped.",
+        "confirm": "Cancel evidence ingress",
+        "applied": "Further appends are refused and the run’s evidence credentials are revoked. The external process may still be running."
+      },
+      "ledgerRevoked": "Evidence ingress is revoked. This run cannot append more frames or receive a fresh run credential. Its external process may still be running.",
+      "ledgerPaused": "Evidence ingress is paused. New batches are refused until you resume. The external process may still be running.",
+      "ledgerPause": {
+        "body": "Pause refuses new evidence batches at the next ingest boundary. It does not stop the external process.",
+        "confirm": "Pause evidence ingress",
+        "applied": "Evidence ingress is paused. The external process may still be running."
+      },
+      "ledgerResume": {
+        "body": "Resume accepts new evidence batches again. A producer whose credential expired while paused needs a fresh run credential.",
+        "confirm": "Resume evidence ingress",
+        "applied": "Evidence ingress is open. This does not claim that the external process has resumed."
+      },
+      "ledgerReasonHelp": "The reason is recorded with the command. Oxagen does not send it to the external process."
     },
     "record": {
       "reread": "Re-read the run",

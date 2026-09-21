@@ -1194,6 +1194,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .runOutputsGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "create_run_token",
+    async () =>
+      (await import("./run.token.issue"))
+        .runTokenIssueHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "ingest_run_frames",
+    async () =>
+      (await import("./run.frames.ingest"))
+        .runFramesIngestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_run_proof",
     async () =>
       (await import("./run.proof.get")).runProofHandler as CapabilityHandlerFn,

@@ -327,6 +327,15 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "create_run_token",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "create_schema_version",
       "reads": [],
@@ -1538,6 +1547,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "ingest_run_frames",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3630,7 +3648,7 @@
       "writes": []
     }
   ],
-  "contentHash": "50550e1c1e69d377d8c5464e2d6fa92767daf039afb0c8e448beb60d1643178a",
+  "contentHash": "39185c1c12ce702e9a6f5869faef38ee78c3677d06eb78590ea1734111477cb4",
   "domains": [
     {
       "name": "agent",
@@ -7019,6 +7037,12 @@
         },
         {
           "name": "cancel_requested",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "ingress_paused",
           "nullable": false,
           "primaryKey": false,
           "type": "boolean"

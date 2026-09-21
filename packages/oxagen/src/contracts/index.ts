@@ -89,6 +89,8 @@ import { repositoryInstallationAttach } from "./repository.installation.attach";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runOutputsGet } from "./run.outputs.get";
+import { runTokenIssue } from "./run.token.issue";
+import { runFramesIngest } from "./run.frames.ingest";
 import { runProofGet } from "./run.proof.get";
 import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
@@ -664,6 +666,8 @@ export {
   runCostGet,
   runOutputsGet,
   runProofGet,
+  runTokenIssue,
+  runFramesIngest,
   evidenceDisclosureGrainSet,
   spendGet,
   spendDrill,
@@ -1018,6 +1022,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runCostGet,
   runOutputsGet,
   runProofGet,
+  runTokenIssue,
+  runFramesIngest,
   evidenceDisclosureGrainSet,
   spendGet,
   spendDrill,

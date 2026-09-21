@@ -69,6 +69,7 @@
  * org/workspace picker was denied outright again. The tests below pin the
  * behaviour rather than the prose.
  */
+import { LEDGER_RUN_SCOPE_PURPOSE } from "@oxagen/oxagen/ledger-run-token";
 import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/oxagen/cli-session";
 import {
   ambientPlaneKey,
@@ -113,6 +114,7 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
     "get_tacho_bundle",
     "fetch_commands",
   ]),
+  [LEDGER_RUN_SCOPE_PURPOSE]: new Set(["ingest_run_frames"]),
   [STELLA_TELEMETRY_PURPOSE]: new Set(["ingest_stella_operational_telemetry"]),
 };
 
