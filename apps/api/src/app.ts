@@ -268,6 +268,7 @@ import { repositoryListRoute } from "./routes/v1/repository.list";
 import { repositoryTreeGetRoute } from "./routes/v1/repository.tree.get";
 import { repositoryProductionBranchSetRoute } from "./routes/v1/repository.production_branch.set";
 import { repositoryInitPrOpenRoute } from "./routes/v1/repository.init_pr.open";
+import { contextGovernanceModeSetRoute } from "./routes/v1/context.governance_mode.set";
 import { repositoryInstallationListRoute } from "./routes/v1/repository.installation.list";
 import { repositoryInstallationCandidatesRoute } from "./routes/v1/repository.installation.candidates";
 import { repositoryInstallationAttachRoute } from "./routes/v1/repository.installation.attach";
@@ -587,6 +588,7 @@ orgScoped.route(
   repositoryProductionBranchSetRoute,
 );
 orgScoped.route("/repository/init-pr", repositoryInitPrOpenRoute);
+orgScoped.route("/context/governance-mode", contextGovernanceModeSetRoute);
 orgScoped.route(
   "/repository/installation/repositories",
   repositoryInstallationListRoute,

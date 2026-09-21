@@ -293,6 +293,85 @@ describe("export_audit_events walk", () => {
 });
 
 describe("the registered export handler", () => {
+  it.each(["csv", "ndjson"] as const)(
+    "reads and signs stored invalidation detail in %s",
+    async (format) => {
+      vi.stubEnv("AUDIT_EXPORT_SIGNING_SECRET", SECRET);
+      const detail = {
+        ruleId: "rule_1",
+        tool: "publish_release",
+        reason: "classification_changed",
+        before: {
+          consequenceTags: ["read"],
+          measures: null,
+          classification: "read",
+        },
+        after: {
+          consequenceTags: ["write"],
+          measures: null,
+          classification: "write",
+        },
+      };
+      const where: SQL[] = [];
+      const selections: Record<string, unknown>[] = [];
+      mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => unknown) => {
+        const chain = {
+          select: (fields: Record<string, unknown>) => {
+            selections.push(fields);
+            return chain;
+          },
+          from: () => chain,
+          leftJoin: () => chain,
+          where: (cond: SQL) => {
+            where.push(cond);
+            return chain;
+          },
+          orderBy: () => chain,
+          limit: () => chain,
+          offset: () =>
+            Promise.resolve(
+              [
+                stored(1, { eventType: "approval_rule.invalidated", detail }),
+                stored(2),
+              ].map((r) => ({
+                ...r.event,
+                at: r.cursor.at,
+                occurredAt: new Date(r.event.occurredAt),
+              })),
+            ),
+        };
+        return Promise.resolve(fn(chain));
+      });
+      const out = await auditEventsExportHandler(
+        auditEventsExport.input.parse({ format }),
+        ctx(),
+      );
+      expect(selections[0]).toHaveProperty(
+        "detail",
+        schema.securityEvents.detail,
+      );
+      expect(where).toEqual([and(eq(schema.securityEvents.orgId, ORG))]);
+      if (format === "ndjson") {
+        const rows = out.body
+          .trimEnd()
+          .split("\n")
+          .map((line) => JSON.parse(line));
+        expect(rows[0].detail).toEqual(detail);
+        expect(rows[1].detail).toBeNull();
+      } else {
+        expect(out.body.split("\r\n")[0]).toBe(AUDIT_EXPORT_COLUMNS.join(","));
+        expect(out.body).toContain(
+          `"${JSON.stringify(detail).replace(/"/g, '""')}"`,
+        );
+        expect(out.body.split("\r\n")[2]?.endsWith(",")).toBe(true);
+      }
+      expect(out.signature).toBe(hmac(out.body));
+      expect(out.signature).not.toBe(
+        hmac(out.body.replace("classification_changed", "tool_scope_changed")),
+      );
+    },
+  );
+
   it("reads through withSystemDb with the org fence, the named workspace and the cursor after the first page", async () => {
     vi.stubEnv("AUDIT_EXPORT_SIGNING_SECRET", SECRET);
     const where: SQL[] = [];

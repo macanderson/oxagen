@@ -1,0 +1,1 @@
+- [2026-09-20] Proposal reuse must reconcile both branch files and review metadata. Assert persisted PR contents alongside branch contents in reuse witnesses. (source: reflections/2026-09-20-proposal-refresh.md)

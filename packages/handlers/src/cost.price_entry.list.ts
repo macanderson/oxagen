@@ -18,10 +18,13 @@ import {
 import { listPriceEntries, type PriceEntry } from "@oxagen/billing";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 
+import { sealPriceCancellation } from "./lib/price-cancellation-token";
+
 export type PriceEntryListDeps = {
   listPriceEntries: (args: {
     at: Date;
     orgId: string;
+    includeScheduled?: boolean;
   }) => Promise<PriceEntry[]>;
   now: () => Date;
 };
@@ -37,11 +40,35 @@ export function createPriceEntryListHandler(
     );
 
     const at = input.at === undefined ? deps.now() : new Date(input.at);
-    const entries = await deps.listPriceEntries({ at, orgId: ctx.orgId });
+    const entries = await deps.listPriceEntries({
+      at,
+      orgId: ctx.orgId,
+      ...(input.includeScheduled === undefined
+        ? {}
+        : { includeScheduled: input.includeScheduled }),
+    });
     return {
       at: at.toISOString(),
       entries: entries.map((e) => ({
         id: e.id,
+        ...(ctx.surface === "app" &&
+        input.includeScheduled === true &&
+        e.orgId === ctx.orgId &&
+        e.source === "negotiated" &&
+        e.effectiveFrom > at
+          ? {
+              cancellationToken: sealPriceCancellation({
+                id: e.id,
+                orgId: e.orgId,
+                provider: e.provider,
+                model: e.model,
+                tokenClass: e.tokenClass,
+                region: e.region,
+                source: "negotiated",
+                effectiveFrom: e.effectiveFrom.toISOString(),
+              }),
+            }
+          : {}),
         orgId: e.orgId,
         provider: e.provider,
         model: e.model,

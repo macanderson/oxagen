@@ -180,7 +180,66 @@ function stepPair(
   }
   if (frame.kind === "model_call") return { indices: [i], kind: "model" };
   if (frame.kind === "tool_call") return { indices: [i], kind: "tool" };
+  // A run of the same bookkeeping frame is one step with a count, not one row
+  // per frame. Claude Code registers thirty-odd hooks at a session's start and
+  // the recorder writes an `oxagen:hook_health` frame for each, so a run
+  // opened with thirty identical rows before anything a person did.
+  if (isBare(frame)) {
+    const indices = [i];
+    for (let j = i + 1; j < frames.length; j += 1) {
+      const next = frames[j];
+      if (next === undefined || next.type !== frame.type || !isBare(next))
+        break;
+      indices.push(j);
+    }
+    return { indices, kind: "event" };
+  }
   return { indices: [i], kind: "event" };
+}
+
+/** A frame with nothing to read on it: no half, no decision. */
+function isBare(frame: TranscriptEntry): boolean {
+  return (
+    frame.kind === "frame" &&
+    frame.request === null &&
+    frame.response === null &&
+    frame.decision === null
+  );
+}
+
+/**
+ * A wrapped session's tool receipt carries the call's input and its output in
+ * one JSON body. Read them apart so the page can label each, and null for a
+ * body that is not that shape. A shell result is shown as its streams rather
+ * than as the JSON around them.
+ */
+export function toolExchange(
+  text: string,
+): { input: string; output: string } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  if (!("input" in parsed) || !("output" in parsed)) return null;
+  const { input, output } = parsed;
+  return { input: readable(input), output: readable(output) };
+}
+
+function readable(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    const out = "stdout" in value ? value.stdout : undefined;
+    const err = "stderr" in value ? value.stderr : undefined;
+    const parts = [
+      typeof out === "string" && out.length > 0 ? out : null,
+      typeof err === "string" && err.length > 0 ? err : null,
+    ].filter((part): part is string => part !== null);
+    if (parts.length > 0) return parts.join("\n");
+  }
+  return JSON.stringify(value, null, 2);
 }
 
 function stepsOf(
@@ -194,6 +253,23 @@ function stepsOf(
     const first = frames[i];
     if (first === undefined) continue;
     const { indices, kind } = stepPair(frames, i, first);
+    // A wrapped session seals one tool call up to three times: once from the
+    // PostToolUse hook, which carries the body, and once each from the OTel
+    // log and the transcript tailer, which carry a digest and nothing else.
+    // The three share the tool's call id. Read as three steps they drew the
+    // page the way it looked: one call, then two "digest only" rows for it.
+    // Folded on the call id, the call is one step, and `visibleFrames` keeps
+    // the copy that has something to read.
+    if (kind === "tool" && first.callKey !== null) {
+      const last = indices[indices.length - 1] ?? i;
+      for (let j = last + 1; j < frames.length; j += 1) {
+        const later = frames[j];
+        if (later === undefined || claimed.has(j)) continue;
+        if (later.kind === "tool_call" && later.callKey === first.callKey) {
+          indices.push(j);
+        }
+      }
+    }
     for (const index of indices) {
       if (index !== i) claimed.add(index);
     }
@@ -292,6 +368,8 @@ export type StepDigest = {
   /** The step's wall time in ms; null for a one-frame step. */
   durationMs: number | null;
   cost: Money | null;
+  /** How many identical frames this event step folds; null unless more than one. */
+  repeats: number | null;
 };
 
 export function stepDigest(step: TranscriptStep): StepDigest {
@@ -309,6 +387,7 @@ export function stepDigest(step: TranscriptStep): StepDigest {
       status: null,
       durationMs,
       cost,
+      repeats: null,
     };
   }
   if (step.kind === "tool") {
@@ -329,6 +408,7 @@ export function stepDigest(step: TranscriptStep): StepDigest {
       status,
       durationMs,
       cost,
+      repeats: null,
     };
   }
   const outcome = policyOutcome(first);
@@ -348,7 +428,43 @@ export function stepDigest(step: TranscriptStep): StepDigest {
     status: null,
     durationMs,
     cost,
+    repeats: step.frames.length > 1 ? step.frames.length : null,
   };
+}
+
+/** Whether either half of the entry carries text to read. */
+function hasContent(entry: TranscriptEntry): boolean {
+  return [entry.request, entry.response].some(
+    (half) => half !== null && half.text !== null,
+  );
+}
+
+/**
+ * The frames of a step worth drawing. A duplicate seal of the same tool call
+ * that carries only a digest is left out when another frame of the step, for
+ * the same call id, carries the body; a step whose every copy is digest-only
+ * keeps them all, so a run recorded under `digest_only` still shows its
+ * frames.
+ */
+export function visibleFrames(step: TranscriptStep): TranscriptEntry[] {
+  if (step.kind !== "tool") return step.frames;
+  const full = new Set(
+    step.frames.flatMap((frame) =>
+      frame.kind === "tool_call" && frame.callKey !== null && hasContent(frame)
+        ? [frame.callKey]
+        : [],
+    ),
+  );
+  if (full.size === 0) return step.frames;
+  return step.frames.filter(
+    (frame) =>
+      !(
+        frame.kind === "tool_call" &&
+        frame.callKey !== null &&
+        full.has(frame.callKey) &&
+        !hasContent(frame)
+      ),
+  );
 }
 
 /** The frames' cost records summed; null when none carried one. */

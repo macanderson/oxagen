@@ -116,6 +116,89 @@ const rows = [
 ];
 
 describe("get_run_transcript", () => {
+  it("everything: a turn's prompt and reply are the boundary frames' halves", async () => {
+    // The recorder keeps the prompt on turn_start and the reply on turn_end.
+    // The fold keeps both out of the step slots, which used to leave the
+    // prompt on no half at all: the page read as if nobody had typed.
+    const prompt = "please do another round of polish on the runs page";
+    const reply = "Done. The pager reaches every run now.";
+    const { transcript } = harness([
+      tachoRow(0, { kind: "agent_start", toolName: "", toolStatus: "" }),
+      tachoRow(1, {
+        kind: "turn_start",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+        ...stored(prompt, "text/plain"),
+      }),
+      tachoRow(2, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        model: "haiku",
+        provider: "anthropic",
+        turnSeq: 1,
+        ...stored("On it."),
+      }),
+      tachoRow(3, {
+        kind: "turn_end",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+        ...stored(reply, "text/plain"),
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    const start = out.entries[1];
+    const end = out.entries[3];
+    expect(start?.type).toBe("turn_start");
+    expect(start?.request?.text).toBe(prompt);
+    expect(start?.response).toBeNull();
+    expect(end?.type).toBe("turn_end");
+    expect(end?.request).toBeNull();
+    expect(end?.response?.text).toBe(reply);
+    // A boundary without a retained body still shows no half (negative).
+    const bare = harness([
+      tachoRow(0, {
+        kind: "turn_start",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+      }),
+    ]);
+    const none = await bare.transcript(input({ zoom: "everything" }), ctx());
+    expect([none.entries[0]?.request, none.entries[0]?.response]).toEqual([
+      null,
+      null,
+    ]);
+  });
+
+  it("turns: the prompt is the turn's request and the model's reply stays its response", async () => {
+    const { transcript } = harness([
+      tachoRow(0, {
+        kind: "turn_start",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+        ...stored("what is in README?", "text/plain"),
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        model: "haiku",
+        provider: "anthropic",
+        turnSeq: 1,
+        ...stored("A readme."),
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "turns" }), ctx());
+    const turn = out.entries[0];
+    expect(turn?.request?.text).toBe("what is in README?");
+    expect(turn?.response?.text).toBe("A readme.");
+  });
+
   it("everything: one entry per frame, the body on the half that carried it", async () => {
     const { transcript } = harness(rows);
     const out = await transcript(input({ zoom: "everything" }), ctx());
@@ -599,7 +682,10 @@ describe("foldPageStart", () => {
 // ── Reassembly (spec §14) ───────────────────────────────────────────────────
 
 /** A recorded model stream: what a streaming provider actually writes down. */
-function modelStream(chunks: readonly string[], stopReason = "end_turn"): string {
+function modelStream(
+  chunks: readonly string[],
+  stopReason = "end_turn",
+): string {
   const events: string[] = [
     JSON.stringify({
       type: "message_start",
@@ -635,7 +721,10 @@ function modelStream(chunks: readonly string[], stopReason = "end_turn"): string
       index: 1,
       delta: {
         type: "input_json_delta",
-        partial_json: JSON.stringify({ file_path: "/p/notes.md", content: "x".repeat(900) }),
+        partial_json: JSON.stringify({
+          file_path: "/p/notes.md",
+          content: "x".repeat(900),
+        }),
       },
     }),
     JSON.stringify({ type: "content_block_stop", index: 1 }),
@@ -671,8 +760,12 @@ describe("get_run_transcript reassembly", () => {
     expect(assembly).not.toBeNull();
     expect(assembly?.blocks.map((b) => b.kind)).toEqual(["text", "tool_use"]);
     const text = assembly?.blocks[0];
-    expect(text?.kind === "text" && text.text).toBe("I'll write the filing plan.");
-    expect(assembly?.precis).toBe("Wrote the filing plan, then asked for Write.");
+    expect(text?.kind === "text" && text.text).toBe(
+      "I'll write the filing plan.",
+    );
+    expect(assembly?.precis).toBe(
+      "Wrote the filing plan, then asked for Write.",
+    );
     expect(assembly?.stopReason).toBe("end_turn");
     expect(assembly?.ttftMs).toBe(290);
     expect(assembly?.durationMs).toBe(8000);
@@ -700,8 +793,8 @@ describe("get_run_transcript reassembly", () => {
     ]);
 
     const page = await transcript(input({ zoom: "everything" }), ctx());
-    const call = (page.entries[0]?.response ?? page.entries[0]?.request)?.assembly
-      ?.blocks[1];
+    const call = (page.entries[0]?.response ?? page.entries[0]?.request)
+      ?.assembly?.blocks[1];
 
     expect(call?.kind).toBe("tool_use");
     if (call?.kind !== "tool_use") throw new Error("expected a tool call");
@@ -713,7 +806,9 @@ describe("get_run_transcript reassembly", () => {
   });
 
   it("renders the blocks of a stream that was cut off, and says it was", async () => {
-    const cut = modelStream(["half a senten"]).split("event: e\ndata: {\"type\":\"content_block_stop")[0] as string;
+    const cut = modelStream(["half a senten"]).split(
+      'event: e\ndata: {"type":"content_block_stop',
+    )[0] as string;
     const { transcript } = harness([
       tachoRow(1, {
         kind: "llm_call",
@@ -724,7 +819,8 @@ describe("get_run_transcript reassembly", () => {
     ]);
 
     const page = await transcript(input({ zoom: "everything" }), ctx());
-    const assembly = (page.entries[0]?.response ?? page.entries[0]?.request)?.assembly;
+    const assembly = (page.entries[0]?.response ?? page.entries[0]?.request)
+      ?.assembly;
 
     expect(assembly?.partial).toBe(true);
     expect(assembly?.blocks).toHaveLength(1);
@@ -755,13 +851,12 @@ describe("get_run_transcript reassembly", () => {
       }),
     ]);
     const page = await transcript(input({ zoom: "everything" }), ctx());
-    const assembly = (page.entries[0]?.response ?? page.entries[0]?.request)?.assembly;
+    const assembly = (page.entries[0]?.response ?? page.entries[0]?.request)
+      ?.assembly;
 
     // The harness's book prices nothing, so every block's cost is left out
     // rather than drawn as a zero.
     expect(assembly?.blocks.every((b) => b.cost === null)).toBe(true);
-    expect(
-      assembly?.blocks.reduce((sum, b) => sum + b.tokens, 0),
-    ).toBe(400);
+    expect(assembly?.blocks.reduce((sum, b) => sum + b.tokens, 0)).toBe(400);
   });
 });

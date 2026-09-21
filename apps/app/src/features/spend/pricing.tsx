@@ -1,3 +1,4 @@
+"use client";
 // The price book this organization is priced against, and the models it
 // cannot price (Mission Control spec §12.2, ADR-060 §1). The tab leads with
 // the unpriced models because they are the answer to "why does this run have
@@ -7,6 +8,7 @@
 //
 // The two reads are independent, so one failing does not blank the tab: each
 // half renders its own answer, its own empty state or its own refusal.
+import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type {
   PriceBook,
@@ -261,6 +263,47 @@ function PriceBookSection({
       })}
       action={<PriceDialog at={at} />}
     >
+      <PriceTable
+        entries={entries.filter(
+          (entry) => entry.effectiveFrom <= read.value.at,
+        )}
+        at={at}
+        scheduled={false}
+      />
+      {entries.some((entry) => entry.effectiveFrom > read.value.at) ? (
+        <section aria-label={t("book.scheduled")}>
+          <h3 className="px-4 py-3 text-sm font-medium">
+            {t("book.scheduled")}
+          </h3>
+          <PriceTable
+            entries={entries.filter(
+              (entry) => entry.effectiveFrom > read.value.at,
+            )}
+            at={at}
+            scheduled
+          />
+        </section>
+      ) : null}
+    </Panel>
+  );
+}
+
+function PriceTable({
+  entries,
+  at,
+  scheduled,
+}: {
+  entries: PriceEntry[];
+  at: SpendAt;
+  scheduled: boolean;
+}) {
+  const t = useTranslations("spend.pricing");
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(entries.length / 100));
+  const current = Math.min(page, pages - 1);
+  const visible = entries.slice(current * 100, (current + 1) * 100);
+  return (
+    <>
       {entries.length === 0 ? (
         <Empty>{t("book.empty")}</Empty>
       ) : (
@@ -278,7 +321,7 @@ function PriceBookSection({
             </tr>
           </thead>
           <tbody>
-            {entries.map((entry) => (
+            {visible.map((entry) => (
               <tr
                 key={keyOf(entry)}
                 data-model={entry.model}
@@ -321,10 +364,14 @@ function PriceBookSection({
                   <Effective entry={entry} />
                 </td>
                 <td className={cell}>
-                  {entry.negotiated ? (
+                  {entry.negotiated &&
+                  (!scheduled || entry.cancellationToken) ? (
                     <RemoveRateDialog
                       at={at}
                       entry={{
+                        ...(scheduled && entry.cancellationToken
+                          ? { cancellationToken: entry.cancellationToken }
+                          : {}),
                         provider: entry.provider,
                         model: entry.model,
                         tokenClass: entry.tokenClass,
@@ -342,7 +389,33 @@ function PriceBookSection({
           </tbody>
         </table>
       )}
-    </Panel>
+      {pages > 1 ? (
+        <nav
+          aria-label={t("book.pagination")}
+          className="flex items-center justify-between px-4 py-2"
+        >
+          <button
+            type="button"
+            disabled={current === 0}
+            onClick={() => {
+              setPage(current - 1);
+            }}
+          >
+            {t("book.previous")}
+          </button>
+          <span>{t("book.page", { page: current + 1, pages })}</span>
+          <button
+            type="button"
+            disabled={current + 1 === pages}
+            onClick={() => {
+              setPage(current + 1);
+            }}
+          >
+            {t("book.next")}
+          </button>
+        </nav>
+      ) : null}
+    </>
   );
 }
 

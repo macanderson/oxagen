@@ -258,7 +258,12 @@
         "open": "still in effect",
         "until": "until {day}",
         "anyRegion": "any region",
-        "platformPriced": "The platform sets this one"
+        "platformPriced": "The platform sets this one",
+        "scheduled": "Scheduled negotiated rates",
+        "pagination": "Price table pages",
+        "previous": "Previous",
+        "next": "Next",
+        "page": "Page {page} of {pages}"
       },
       "dialog": {
         "open": "Set a negotiated rate",
@@ -305,7 +310,9 @@
         "confirmUnpricedTitle": "This class would become unpriced",
         "confirmUnpriced": "No list or override price covers {model}, {class}. Ending your negotiated rate now, rather than setting a new one first, leaves every call from now on UNPRICED, not priced at the list rate, until you set one.",
         "confirmUnpricedSubmit": "End the rate anyway, leave it unpriced",
-        "confirmUnpricedCancel": "Keep the current rate"
+        "confirmUnpricedCancel": "Keep the current rate",
+        "cancelScheduled": "Cancel this scheduled rate. The preceding rate continues until the next scheduled rate, if any. Later scheduled rates stay in place.",
+        "cancelScheduledSubmit": "Cancel scheduled rate"
       },
       "failure": {
         "orgRoleRequired": "Your organization role cannot change what this organization is billed at. An organization owner, admin or billing member sets a negotiated rate.",

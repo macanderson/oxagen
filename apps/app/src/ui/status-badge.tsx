@@ -37,6 +37,8 @@ export function StatusBadge({
   return (
     <Badge
       tone={status === "live" ? TONE.running : TONE[outcome]}
+      // A run that is open is happening now, and its dot breathes to say so.
+      dot={status === "live" ? "pulse" : true}
       data-status={status}
       data-outcome={outcome}
     >

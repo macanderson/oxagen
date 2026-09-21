@@ -515,19 +515,6 @@ export interface ObservedModelRow {
 }
 
 /**
- * At most this many models feed the price comparison. An organization
- * running more distinct model ids than this has a naming problem, not a
- * pricing one, and an unbounded list would be neither readable nor cheap to
- * rank. This bounds the store read itself against a pathological id
- * cardinality; it is deliberately far above the 500 an unpriced-model report
- * actually shows, because that cap is applied by @oxagen/billing AFTER it has
- * filtered to the models the book cannot price — capping here, before that
- * filter, would let a low-volume unpriced model get silently outranked by
- * 500 priced, uninteresting ones and never reach the comparison at all.
- */
-const OBSERVED_MODEL_SQL_SAFETY_LIMIT = 5000;
-
-/**
  * The interval index a timestamp falls in, given `boundaries` sorted
  * ascending: the count of boundaries at or before it. Boundary 0 covers
  * everything before the first boundary; the book's answer is constant within
@@ -685,9 +672,8 @@ export async function readObservedModels(args: {
       )
       GROUP BY model
       ORDER BY tokens DESC, model
-      LIMIT {limit:UInt32}
     `,
-    query_params: { ...baseParams, limit: OBSERVED_MODEL_SQL_SAFETY_LIMIT },
+    query_params: baseParams,
     format: "JSONEachRow",
   });
   type SummaryRow = {

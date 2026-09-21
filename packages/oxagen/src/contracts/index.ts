@@ -248,6 +248,7 @@ import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
 import { contextSteeringFreshness } from "./context.steering.freshness";
+import { contextGovernanceModeSet } from "./context.governance_mode.set";
 import { connectionList } from "./connection.list";
 import { connectionCreate } from "./connection.create";
 import { connectionGet } from "./connection.get";
@@ -773,6 +774,7 @@ export {
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
+  contextGovernanceModeSet,
   connectionList,
   connectionCreate,
   connectionGet,
@@ -1121,6 +1123,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
+  contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,
