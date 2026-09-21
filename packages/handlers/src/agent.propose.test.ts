@@ -97,6 +97,15 @@ beforeEach(() => {
 });
 
 describe("propose_agent", () => {
+  it("surfaces a metadata update failure instead of reporting a refreshed proposal", async () => {
+    await handler()(input(), ctx());
+    vi.spyOn(github, "updatePullRequest").mockRejectedValueOnce(
+      new Error("update refused"),
+    );
+    await expect(handler()(input(), ctx())).rejects.toThrow("update refused");
+    expect(github.pulls).toHaveLength(1);
+  });
+
   it("refuses to reset or write the production branch", async () => {
     github.repository = { ...REPO, defaultBranch: "agents/perf-watch" };
     await expect(handler()(input(), ctx())).rejects.toMatchObject({
@@ -165,6 +174,12 @@ describe("propose_agent", () => {
     async (harness) => {
       const first = await handler()(input(), ctx());
       const next = await handler()(input({ harness }), ctx());
+      expect(github.pulls).toHaveLength(1);
+      expect(github.pulls[0]?.body).toContain(harness);
+      expect(github.pulls[0]?.body).toContain(next.digest);
+      expect(github.pulls[0]?.body).not.toContain(
+        ".claude/agents/perf-watch.md",
+      );
       expect(next.generatedPath).toBeNull();
       expect(next.pullRequest.number).toBe(first.pullRequest.number);
       expect(

@@ -7,13 +7,8 @@ import {
   hashPrompt,
   type Surface,
 } from "@oxagen/telemetry";
-import { recordTokenUsage } from "./record-token-usage";
-import {
-  chargeUsageCredits,
-  providerCostUsdMicros,
-  CREDIT_REASONS,
-} from "@oxagen/billing";
-import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
+import { admitTokenUsage, recordTokenUsage } from "./record-token-usage";
+import { providerCostUsdMicros, CREDIT_REASONS } from "@oxagen/billing";
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
@@ -32,8 +27,7 @@ export interface EmbedTextOpts {
    * Required telemetry context forwarded from the caller's CapabilityContext.
    * Every embedding call must be metered so the token_usage table is the
    * complete billing record. Tests that do not exercise
-   * the ClickHouse path should mock @oxagen/telemetry.insertTokenUsage rather
-   * than omitting this field.
+   * metering should mock the billing admission and settlement seam.
    */
   telemetry: {
     orgId: string;
@@ -45,9 +39,8 @@ export interface EmbedTextOpts {
      * verbatim into `token_usage.execution_step_id` (a UUID column) and
      * `credit_ledger.reference_id` (a Postgres `uuid` column) — so it MUST be a
      * valid UUID or `null`. Passing a human-readable string like
-     * `embed:<nodeId>` breaks BOTH writes (ClickHouse row dropped, credit charge
-     * thrown-and-swallowed → unbilled). Use a separate field for any such
-     * correlation key.
+     * `embed:<nodeId>` prevents delivery and settlement. Use a separate field
+     * for any such correlation key.
      */
     executionStepId: string | null;
   };
@@ -65,13 +58,13 @@ export interface EmbedTextOpts {
  *
  * Shared by {@link embedText} and {@link embedMany} so a batch is metered as
  * ONE call — one `token_usage` row, one charge — rather than once per item.
- * Both halves are best-effort: an embedding must not fail because a metering
- * write did.
+ * Admission precedes the provider call. Usage delivery and debit commit together.
  */
 async function meterEmbeddingCall(params: {
-  /** Every text in the call, for the prompt hash. */
-  texts: string[];
+  usageId: string;
+  promptHash: string;
   inputTokens: number;
+  usageKnown: boolean;
   durationMs: number;
   telemetry: EmbedTextOpts["telemetry"];
   /** Who paid the vendor; `org` reports the usage and charges nothing. */
@@ -85,70 +78,42 @@ async function meterEmbeddingCall(params: {
     outputTokens: 0,
   });
 
-  try {
-    const promptHash = await hashPrompt(params.texts.join("\n"));
-    await recordTokenUsage([
-      {
-        execution_step_id: executionStepId,
-        org_id: orgId,
-        workspace_id: workspaceId,
-        model: MODEL,
-        provider: providerFromModelId(`openai:${MODEL}`),
-        input_tokens: params.inputTokens,
-        output_tokens: 0,
-        cached_tokens: 0,
-        cost_usd_micros: costUsdMicros,
-        duration_ms: params.durationMs,
-        surface,
-        prompt_hash: promptHash,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-  } catch (err) {
-    // Telemetry is best-effort; never fail the caller.
-    logger.error({ err }, "embed telemetry write failed");
-  }
-
-  // Debit the org's credits for what this embedding call cost. Best-effort and
-  // post-call — a metering failure must not fail the caller (mirrors stream.ts
-  // and generate-object.ts).
-  //
-  // chargeUsageCredits → consumeCredits → withTenantDb → requireScope, which
-  // needs an active tenant scope. Request-path callers have one; Inngest workers
-  // (and fire-and-forget ingestion embeddings) keep tenant scope tight around
-  // their own DB ops and do NOT wrap the embed step, so this charge would
-  // otherwise run scopeless and throw TenantScopeError (silently swallowed →
-  // unbilled embeddings, a revenue leak). Prefer the active ALS scope, else
-  // rebuild it from the trusted telemetry org/workspace. Mirrors stream.ts.
-  //
-  // ADR-053 §3: only when the platform key paid.
-  if (params.fundedBy !== "platform") return;
-  const capturedScope: TenantScope = getScope() ?? { orgId, workspaceId };
-  try {
-    await runInTenantScope(capturedScope, async () => {
-      await chargeUsageCredits({
-        orgId,
-        reason: CREDIT_REASONS.CONSUME_EMBEDDING,
-        // referenceId is the credit_ledger.reference_id Postgres `uuid` column;
-        // pass undefined (→ NULL) when there is no execution step rather than a
-        // non-UUID string, which would throw and silently leave the call unbilled.
-        referenceId: executionStepId ?? undefined,
-        model: MODEL,
-        inputTokens: params.inputTokens,
-        outputTokens: 0,
-        cachedTokens: 0,
-      });
-    });
-  } catch (err) {
-    // Swallow — credit metering must never fail a capability call.
-    logger.error({ err }, "embed credit charge failed");
-  }
+  await recordTokenUsage(
+    params.usageId,
+    {
+      execution_step_id: executionStepId,
+      org_id: orgId,
+      workspace_id: workspaceId,
+      model: MODEL,
+      provider: providerFromModelId(`openai:${MODEL}`),
+      input_tokens: params.inputTokens,
+      output_tokens: 0,
+      cached_tokens: 0,
+      cost_usd_micros: costUsdMicros,
+      duration_ms: params.durationMs,
+      surface,
+      prompt_hash: params.promptHash,
+      created_at: new Date().toISOString(),
+    },
+    params.fundedBy === "platform"
+      ? {
+          orgId,
+          reason: CREDIT_REASONS.CONSUME_EMBEDDING,
+          referenceId: executionStepId ?? undefined,
+          model: MODEL,
+          inputTokens: params.inputTokens,
+          outputTokens: 0,
+          cachedTokens: 0,
+        }
+      : undefined,
+    params.usageKnown,
+  );
 }
 
 /**
  * Embed `text` using the pinned embedding model through the Vercel AI Gateway
  * and write one `token_usage` row to ClickHouse via @oxagen/telemetry
- * (best-effort, never throws). Surface origin and execution step flow through
+ * through a durable delivery queue. Surface origin and execution step flow through
  * `opts.telemetry` so every embedding call is metered alongside language-model
  * calls. The gateway client reads `AI_GATEWAY_API_KEY`
  * from the environment — there is no direct-provider fallback.
@@ -163,6 +128,11 @@ export async function embedText(
   const { provider, fundedBy } = embeddingProvider(opts.credential);
   const model = provider.embeddingModel(GATEWAY_MODEL);
   const startedAt = Date.now();
+  const promptHash = await hashPrompt(text);
+  const usageId = await admitTokenUsage(
+    opts.telemetry.orgId,
+    opts.telemetry.workspaceId,
+  );
 
   const { embedding, usage } = await embed({ model, value: text });
 
@@ -172,13 +142,15 @@ export async function embedText(
   if (!usage) {
     logger.warn(
       { model: MODEL, executionStepId: opts.telemetry.executionStepId },
-      "embedText: usage field absent from embed() response — token count and charge will be zero",
+      "embedText: usage field absent from embed() response; admission needs reconciliation",
     );
   }
 
   await meterEmbeddingCall({
-    texts: [text],
+    usageId,
+    promptHash,
     inputTokens: usage?.tokens ?? 0,
+    usageKnown: usage?.tokens !== undefined,
     durationMs: Date.now() - startedAt,
     telemetry: opts.telemetry,
     fundedBy,
@@ -209,6 +181,11 @@ export async function embedMany(
   const { provider, fundedBy } = embeddingProvider(opts.credential);
   const model = provider.embeddingModel(GATEWAY_MODEL);
   const startedAt = Date.now();
+  const promptHash = await hashPrompt(texts.join("\n"));
+  const usageId = await admitTokenUsage(
+    opts.telemetry.orgId,
+    opts.telemetry.workspaceId,
+  );
 
   const { embeddings, usage } = await embedManyThroughGateway({
     model,
@@ -222,13 +199,15 @@ export async function embedMany(
         count: texts.length,
         executionStepId: opts.telemetry.executionStepId,
       },
-      "embedMany: usage field absent from embedMany() response — token count and charge will be zero",
+      "embedMany: usage field absent from embedMany() response; admission needs reconciliation",
     );
   }
 
   await meterEmbeddingCall({
-    texts,
+    usageId,
+    promptHash,
     inputTokens: usage?.tokens ?? 0,
+    usageKnown: usage?.tokens !== undefined,
     durationMs: Date.now() - startedAt,
     telemetry: opts.telemetry,
     fundedBy,

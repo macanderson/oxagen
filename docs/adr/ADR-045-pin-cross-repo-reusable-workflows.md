@@ -81,3 +81,22 @@ behaviour changing without those tests noticing is the smaller risk.
   at `2dd72c9`.
 - `action-pins` can be adopted by the other three repositories without their
   stubs failing it, which was not true before this.
+
+## Amendment: compare resolved workflows (#2989)
+
+The 2026-09-15 maintainer decision keeps commit pins and compares the resolved
+workflow blob SHAs for both the DoD check and the close guard. Different commits
+may carry identical workflow files. Their callers run the same steps, so that
+case passes. A missing pinned workflow or different file content still fails.
+
+The four caller repositories exclude `macanderson/oxagen` reusable workflows
+from Dependabot actions updates. Maintainers coordinate re-pins when the shared
+workflow changes. Other action updates continue normally.
+
+Raw commit comparison was rejected because unrelated changes raised false drift.
+Ignoring all pin differences was rejected because it misses changed workflow
+steps. Moving references remain rejected for the reasons above. Dependabot
+suppression alone would leave the checker comparing the wrong fact.
+
+The checker-script exposure recorded above is unchanged: called workflows read
+Oxagen's main branch for their script, even while their workflow steps are pinned.

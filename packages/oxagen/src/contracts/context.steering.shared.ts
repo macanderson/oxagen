@@ -67,6 +67,34 @@ export type ProposalStatus = z.infer<typeof proposalStatusSchema>;
 export const governanceModeSchema = z.enum(["solo", "team", "regulated"]);
 export type GovernanceMode = z.infer<typeof governanceModeSchema>;
 
+/** The modes in the order every surface offers them: loosest to strictest. */
+export const GOVERNANCE_MODES = governanceModeSchema.options;
+
+/**
+ * `.oxagen/rules/governance.toml` for a mode.
+ *
+ * One copy, because every producer of this file has to agree with the one
+ * parser of it (`parseGovernanceMode`): `open_init_pr` refuses a draft whose
+ * declared mode differs from the mode chosen, and `set_governance_mode`
+ * commits this text straight to a production branch, where the next
+ * `open_context_pr` reads it back. It lived twice — the init wizard
+ * (apps/app) and `oxagen repo init` (apps/cli) held byte-identical copies —
+ * and a third copy in the handler is what moved it here instead.
+ *
+ * It belongs in the contracts rather than in a handler because the app and
+ * the CLI both draft the text for a person to read BEFORE any capability is
+ * called, and neither may import a handler.
+ */
+export function draftGovernanceToml(mode: GovernanceMode): string {
+  return [
+    "# Read on the production branch when a pull request is opened and again",
+    "# when it is merged. A missing file means team.",
+    `mode = "${mode}"`,
+    `separation_of_duties = ${mode === "regulated" ? "true" : "false"}`,
+    "",
+  ].join("\n");
+}
+
 /** The six §10.3 checks, in the order they run. */
 export const checkNameSchema = z.enum([
   "schema",

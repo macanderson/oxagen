@@ -278,7 +278,7 @@ describe("the findings the Spend page leads with", () => {
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: costPriceEntryList,
-      input: {},
+      input: { includeScheduled: true },
       page: "spend",
     });
   });

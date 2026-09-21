@@ -783,35 +783,68 @@ describe("kill-switch transaction scope", () => {
 });
 
 describe("production kill-switch database seam", () => {
-  it.each(["class", "tool_version"] as const)(
-    "clears %s through the correct database seam",
+  it.each(["class", "org"] as const)(
+    "activates and clears %s through org scope under the workspace write check",
     async (kind) => {
-      const flip = flipTx({
-        generation: 4,
-        activeSwitches: [{ id: "deny-id", publicId: "emd_active" }],
-        liveGrants: 0,
-      });
+      const flip = flipTx({ generation: 4, activeSwitches: [], liveGrants: 0 });
       const roleRead = mocks.withTenantDb.getMockImplementation();
       if (!roleRead) throw new Error("Missing role fixture");
+      // Model the policy refusal at the tenant seam, independently of the handler.
+      mocks.withTenantDb.mockImplementation(() => {
+        throw Object.assign(
+          new Error("workspace_nullable WITH CHECK rejected null workspace"),
+          { code: "42501" },
+        );
+      });
       mocks.withOrgDb
         .mockImplementationOnce(roleRead)
         .mockImplementation((fn: (tx: unknown) => unknown) => fn(flip.tx));
-      mocks.withTenantDb.mockReset();
-      mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-        fn(flip.tx),
-      );
-      await killSwitchSetHandler(
-        {
-          target: { kind, id: kind === "class" ? "moves_money" : "tlv_pay" },
-          on: false,
-          reason: "Recovered",
-        },
+      const target = { kind, id: kind === "class" ? "moves_money" : ORG };
+      const on = await killSwitchSetHandler(
+        { target, on: true, reason: "Pause calls" },
         ctx(),
       );
-      expect(mocks.withOrgDb).toHaveBeenCalledTimes(kind === "class" ? 2 : 1);
-      expect(mocks.withTenantDb).toHaveBeenCalledTimes(
-        kind === "class" ? 0 : 1,
+      expect(on).toMatchObject({ on: true, changed: true });
+      expect(flip.ops).toContainEqual(
+        expect.objectContaining({
+          op: "insert",
+          values: expect.objectContaining({ workspaceId: null }),
+        }),
       );
+      flip.state.activeSwitches = [{ id: "deny-id", publicId: on.switchId }];
+      mocks.withOrgDb.mockImplementationOnce(roleRead);
+      const off = await killSwitchSetHandler(
+        { target, on: false, reason: "Recovered" },
+        ctx(),
+      );
+      expect(off).toMatchObject({ on: false, changed: true });
+      expect(flip.state.activeSwitches).toEqual([]);
+      expect(mocks.withTenantDb).not.toHaveBeenCalled();
+      expect(mocks.withOrgDb).toHaveBeenCalledTimes(4);
     },
   );
+
+  it("clears a tool version through workspace scope", async () => {
+    const flip = flipTx({
+      generation: 4,
+      activeSwitches: [{ id: "deny-id", publicId: "emd_active" }],
+      liveGrants: 0,
+    });
+    const roleRead = mocks.withTenantDb.getMockImplementation();
+    if (!roleRead) throw new Error("Missing role fixture");
+    mocks.withOrgDb.mockImplementation(roleRead);
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn(flip.tx),
+    );
+    await killSwitchSetHandler(
+      {
+        target: { kind: "tool_version", id: "tlv_pay" },
+        on: false,
+        reason: "Recovered",
+      },
+      ctx(),
+    );
+    expect(mocks.withOrgDb).toHaveBeenCalledOnce();
+    expect(mocks.withTenantDb).toHaveBeenCalledOnce();
+  });
 });

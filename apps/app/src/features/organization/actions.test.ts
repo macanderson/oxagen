@@ -36,8 +36,8 @@ const {
   createRole,
   createWorkspace,
   deleteRole,
+  editWorkspace,
   removeOrgMember,
-  renameWorkspace,
   sendInvitation,
   setRolePermissions,
 } = await import("./actions");
@@ -333,22 +333,43 @@ describe("createWorkspace", () => {
   );
 });
 
-describe("renameWorkspace", () => {
+/** What `update_workspace_settings` answers, which the edit reads a slug off. */
+const SETTINGS = {
+  name: "Research",
+  slug: "research",
+  description: null,
+  avatarUrl: null,
+  consequenceRoles: {},
+  steering: { autoSync: false, blockStaleRuns: false },
+};
+
+/** What `set_governance_mode` answers when it commits. */
+const GOVERNANCE = {
+  outcome: "applied" as const,
+  requestedMode: "solo" as const,
+  previousMode: "team" as const,
+  effectiveMode: "solo" as const,
+  fullName: "acme/research",
+  productionBranch: "main",
+  commitSha: "c0ffee1",
+  pullRequest: null,
+  overrodeReview: true,
+};
+
+describe("editWorkspace", () => {
   it("renames and re-slugs the workspace the section names", async () => {
-    invoke.mockResolvedValue({
-      name: "Research",
-      slug: "research",
-      description: null,
-      avatarUrl: null,
-      consequenceRoles: {},
-      steering: { autoSync: false, blockStaleRuns: false },
-    });
+    invoke.mockResolvedValue(SETTINGS);
     expect(
-      await renameWorkspace("acme", "wrk_1", {
+      await editWorkspace("acme", "wrk_1", {
         name: "Research",
         slug: "research",
+        mode: "",
+        applyImmediately: false,
       }),
-    ).toEqual({ ok: true, value: { slug: "research" } });
+    ).toEqual({ ok: true, value: { slug: "research", governance: null } });
+    // One capability, because no mode was picked: the governance half costs a
+    // GitHub round trip and must not run on a plain rename.
+    expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith(
       "update_workspace_settings",
       { workspaceId: "wrk_1", name: "Research", slug: "research" },
@@ -358,12 +379,106 @@ describe("renameWorkspace", () => {
 
   it("refuses an id that is not a workspace's before the kernel runs (negative)", async () => {
     expect(
-      await renameWorkspace("acme", "rol_1", {
+      await editWorkspace("acme", "rol_1", {
         name: "Research",
         slug: "research",
+        mode: "",
+        applyImmediately: false,
       }),
     ).toMatchObject({ ok: false, reason: "invalid", field: "workspaceId" });
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("sets the governance mode after the rename, override and all", async () => {
+    invoke.mockResolvedValueOnce(SETTINGS).mockResolvedValueOnce(GOVERNANCE);
+    expect(
+      await editWorkspace("acme", "wrk_1", {
+        name: "Research",
+        slug: "research",
+        mode: "solo",
+        applyImmediately: true,
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        slug: "research",
+        governance: {
+          ok: true,
+          outcome: "applied",
+          mode: "solo",
+          repo: "acme/research",
+          branch: "main",
+          pullRequest: null,
+          overrodeReview: true,
+        },
+      },
+    });
+    // The rename first, so a taken slug leaves the repository untouched.
+    expect(invoke.mock.calls.map((call) => call[0])).toEqual([
+      "update_workspace_settings",
+      "set_governance_mode",
+    ]);
+    expect(invoke).toHaveBeenLastCalledWith(
+      "set_governance_mode",
+      { workspaceId: "wrk_1", mode: "solo", applyImmediately: true },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("never reaches the repository when the rename is refused (negative)", async () => {
+    invoke.mockRejectedValueOnce(
+      new kernel.HandlerError({ code: "conflict", reason: "slug_taken" }),
+    );
+    expect(
+      await editWorkspace("acme", "wrk_1", {
+        name: "Research",
+        slug: "research",
+        mode: "solo",
+        applyImmediately: false,
+      }),
+    ).toMatchObject({ ok: false, reason: "conflict", code: "slug_taken" });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a refused governance change and still reports the rename", async () => {
+    invoke.mockResolvedValueOnce(SETTINGS).mockRejectedValueOnce(
+      new kernel.HandlerError({
+        code: "conflict",
+        reason: "github_not_connected",
+      }),
+    );
+    // ok, not a refusal: the rename happened, and answering `denied` for the
+    // whole edit would claim otherwise.
+    expect(
+      await editWorkspace("acme", "wrk_1", {
+        name: "Research",
+        slug: "research",
+        mode: "team",
+        applyImmediately: false,
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        slug: "research",
+        governance: { ok: false, code: "github_not_connected" },
+      },
+    });
+  });
+
+  it("refuses an unknown mode without invoking governance (negative)", async () => {
+    invoke.mockResolvedValue(SETTINGS);
+    expect(
+      await editWorkspace("acme", "wrk_1", {
+        name: "Research",
+        slug: "research",
+        mode: "permissive",
+        applyImmediately: false,
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: { governance: { ok: false, reason: "invalid" } },
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 });
 

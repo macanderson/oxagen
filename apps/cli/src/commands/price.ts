@@ -137,8 +137,18 @@ function entryRow(row: PriceEntryRow): string[] {
 
 function renderEntries(rows: PriceEntryRow[], writer: CommandWriter): void {
   printTable(
-    ["PROVIDER", "MODEL", "CLASS", "REGION", "PER 1M", "SOURCE", "FROM", "TO"],
-    rows.map(entryRow),
+    [
+      "ID",
+      "PROVIDER",
+      "MODEL",
+      "CLASS",
+      "REGION",
+      "PER 1M",
+      "SOURCE",
+      "FROM",
+      "TO",
+    ],
+    rows.map((row) => [row.id, ...entryRow(row)]),
     writer,
   );
 }
@@ -257,6 +267,7 @@ export interface PriceRemoveCliOptions {
    * gap in the output afterward.
    */
   confirmUnpriced?: boolean;
+  scheduledEntryId?: string;
   json?: boolean;
 }
 
@@ -304,6 +315,9 @@ export async function priceRemove(
         region: opts.region ?? null,
         at,
         confirmUnpriced: opts.confirmUnpriced ? true : undefined,
+        ...(opts.scheduledEntryId === undefined
+          ? {}
+          : { scheduledEntryId: opts.scheduledEntryId }),
       },
     );
   } catch (err) {
@@ -317,9 +331,7 @@ export async function priceRemove(
       err instanceof Error &&
       err.message.includes(CLOSE_WOULD_UNPRICE)
     )
-      writer.write(
-        "  Re-run with --confirm-unpriced to end the rate anyway.",
-      );
+      writer.write("  Re-run with --confirm-unpriced to end the rate anyway.");
     return;
   }
 
@@ -327,17 +339,51 @@ export async function priceRemove(
     out.data(result);
     return;
   }
+  const fallback = result.fallbackPriced
+    ? "A fallback price covers this model and class."
+    : "No list or override price covers this model and class: it is UNPRICED until one is set.";
+  if (opts.scheduledEntryId !== undefined) {
+    writer.write(
+      `Scheduled rate ${opts.scheduledEntryId} is absent. Active and later rates remain unchanged.`,
+    );
+    return;
+  }
   if (result.closed === null) {
     writer.write(
-      `No open negotiated rate for ${opts.model} ${opts.tokenClass}; nothing to end. It was already priced at the list rate.`,
+      `No open negotiated rate for ${opts.model} ${opts.tokenClass}; nothing to end. ${fallback}`,
     );
     return;
   }
   writer.write(
-    result.fallbackPriced
-      ? `✓ ${result.closed.model} ${result.closed.tokenClass} returns to the list price from ${result.at}.`
-      : `✓ ${result.closed.model} ${result.closed.tokenClass} rate ended from ${result.at}. No list or override price covers this model and class: it is now UNPRICED until one is set.`,
+    `✓ ${result.closed.model} ${result.closed.tokenClass} rate ended from ${result.at}. ${fallback}`,
   );
   writer.write("");
   renderEntries([result.closed], writer);
+}
+
+/** Read current rates, optionally including this organization's scheduled rows. */
+export async function priceList(
+  opts: { at?: string; includeScheduled?: boolean; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  const at = opts.at === undefined ? undefined : parseInstant(opts.at);
+  if (at === null) {
+    process.exitCode = 2;
+    out.error("Invalid --at. Provide an RFC 3339 instant.", "usage");
+    return;
+  }
+  try {
+    const result = await apiPostOrThrow<{
+      at: string;
+      entries: PriceEntryRow[];
+    }>("cost/price-entries", {
+      at,
+      ...(opts.includeScheduled ? { includeScheduled: true } : {}),
+    });
+    if (out.isJson) out.data(result);
+    else renderEntries(result.entries, writer);
+  } catch (err) {
+    out.error(err, "api");
+  }
 }

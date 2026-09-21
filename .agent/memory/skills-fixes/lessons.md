@@ -1,1 +1,2 @@
 - [2026-09-20] Check the consumer's static import graph when isolating a parser. A lazily used function inside an eagerly imported wizard still loads its dependencies into the host bundle. (source: reflections/2026-09-20-skill-preview-inventory.md)
+- [2026-09-20] Proposal reuse must reconcile both branch files and review metadata. Assert persisted PR contents alongside branch contents in reuse witnesses. (source: reflections/2026-09-20-proposal-refresh.md)

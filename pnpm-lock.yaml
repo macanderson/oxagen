@@ -1052,6 +1052,9 @@ importers:
       '@oxagen/run-ledger':
         specifier: workspace:*
         version: link:../run-ledger
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry

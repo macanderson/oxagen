@@ -360,7 +360,7 @@ describe("readModelCallFrames", () => {
       run: { kind: "ledger", runUuid: RUN },
     });
     const { query, query_params } = lastQuery();
-    expect(query).toContain("FROM token_usage");
+    expect(query).toContain("FROM metered_token_usage");
     expect(query).toContain("cache_write_tokens   AS cache_write_5m");
     // `token_usage` has no thinking column, so a gateway frame's reasoning
     // is zero from the mapping rather than from a read.
@@ -494,6 +494,25 @@ describe("readObservedModels", () => {
     answer(classes);
   }
 
+  it("keeps low-volume models beyond 5000 for the price comparison", async () => {
+    const summary = Array.from({ length: 5001 }, (_, index) => ({
+      model: `model-${index}`,
+      provider: "vendor",
+      calls: "1",
+      tokens: String(5001 - index),
+      first_seen: "2026-09-02T09:00:00.000Z",
+      last_seen: "2026-09-02T09:00:00.000Z",
+    }));
+    answerBoth(summary);
+    const rows = await readObservedModels({ orgId: ORG, since: SINCE });
+    expect(rows).toHaveLength(5001);
+    expect(rows.at(-1)?.model).toBe("model-5000");
+    expect(queryMock.mock.calls[0]![0].query).not.toMatch(/\bLIMIT\b/);
+    expect(queryMock.mock.calls[1]![0].query_params.models).toContain(
+      "model-5000",
+    );
+  });
+
   it("folds both frame stores by model id, heaviest first, and reads a per-class breakdown for what it found", async () => {
     answerBoth(
       [
@@ -541,7 +560,7 @@ describe("readObservedModels", () => {
     const summaryCall = queryMock.mock.calls[0]![0];
     const classCall = queryMock.mock.calls[1]![0];
 
-    expect(summaryCall.query).toContain("FROM token_usage");
+    expect(summaryCall.query).toContain("FROM metered_token_usage");
     expect(summaryCall.query).toContain("FROM tacho_events FINAL");
     expect(summaryCall.query).toContain("UNION ALL");
     expect(summaryCall.query).toContain("kind = 'llm_call'");
@@ -561,7 +580,7 @@ describe("readObservedModels", () => {
     expect(summaryCall.query).not.toContain("turn_seq");
     expect(summaryCall.query).toContain("GROUP BY model");
     expect(summaryCall.query).toContain("ORDER BY tokens DESC, model");
-    expect(summaryCall.query).toContain("LIMIT {limit:UInt32}");
+    expect(summaryCall.query).not.toMatch(/\bLIMIT\b/);
     // A gateway row's input_tokens is the inclusive input total, so adding it
     // to cache reads and writes again would double-count them.
     expect(summaryCall.query).toContain(
@@ -572,7 +591,6 @@ describe("readObservedModels", () => {
       since: "2026-08-15 00:00:00.000",
       sources: ["otel_log", "collector", "hook", "transcript"],
       duplicateAttr: "oxagen.llm_call_duplicate_of",
-      limit: 5000,
     });
 
     // The class-bucket read is scoped to exactly the models the summary

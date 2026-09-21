@@ -8,18 +8,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { router, archiveWorkspace, createWorkspace, renameWorkspace } =
-  vi.hoisted(() => ({
+const { router, archiveWorkspace, createWorkspace, editWorkspace } = vi.hoisted(
+  () => ({
     router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
     archiveWorkspace: vi.fn(),
     createWorkspace: vi.fn(),
-    renameWorkspace: vi.fn(),
-  }));
+    editWorkspace: vi.fn(),
+  }),
+);
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
   archiveWorkspace,
   createWorkspace,
-  renameWorkspace,
+  editWorkspace,
 }));
 
 const { workspaceRow } = await import("./organization.builders");
@@ -34,7 +35,7 @@ beforeEach(() => {
   router.refresh.mockReset();
   archiveWorkspace.mockReset();
   createWorkspace.mockReset();
-  renameWorkspace.mockReset();
+  editWorkspace.mockReset();
 });
 
 afterEach(async () => {
@@ -232,7 +233,10 @@ describe("CreateWorkspace", () => {
 
 describe("EditWorkspace", () => {
   it("opens on the workspace's own name and slug and sends what changed", async () => {
-    renameWorkspace.mockResolvedValue({ ok: true, value: { slug: "core" } });
+    editWorkspace.mockResolvedValue({
+      ok: true,
+      value: { slug: "core", governance: null },
+    });
     render(
       <IntlProvider>
         <EditWorkspace org="acme" workspace={workspace} />
@@ -249,10 +253,18 @@ describe("EditWorkspace", () => {
     await userEvent.clear(slug);
     await userEvent.type(slug, "core");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    expect(renameWorkspace).toHaveBeenCalledWith(
+    // The governance radio was left on "leave unchanged", so the mode travels
+    // empty and no governance capability is invoked (see
+    // workspace-governance.test.tsx for the modes themselves).
+    expect(editWorkspace).toHaveBeenCalledWith(
       "acme",
       "wrk_0a1b2c3d4e5f6g7h8j9k0m",
-      { name: "Core platform", slug: "core" },
+      {
+        name: "Core platform",
+        slug: "core",
+        mode: "",
+        applyImmediately: false,
+      },
     );
     expect(router.replace).toHaveBeenCalledWith("/acme");
   });
