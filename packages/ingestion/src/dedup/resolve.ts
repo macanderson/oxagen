@@ -103,11 +103,7 @@ export async function resolveNaturalKey(
         };
       }
     }
-    if (
-      !passANodeId &&
-      mutation.legacyNaturalKey &&
-      mutation.sourceRef.externalUrl
-    ) {
+    if (!passANodeId && mutation.legacyNaturalKey) {
       const legacy = await session.run(
         `MATCH (n:EntityNode {naturalKey: $legacyNaturalKey, orgId: $orgId, workspaceId: $workspaceId})
          WHERE n.sourceRecordType = $sourceRecordType
@@ -123,6 +119,7 @@ export async function resolveNaturalKey(
       // A repository-local number may already represent another repository.
       // Preserve an old public ID only when its recorded URL proves identity.
       const matches = legacy.records.filter((row) => {
+        if (!mutation.sourceRef.externalUrl) return false;
         const sourceExternalUrl: unknown = row.get("sourceExternalUrl");
         if (typeof sourceExternalUrl === "string")
           return sourceExternalUrl === mutation.sourceRef.externalUrl;

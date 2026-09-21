@@ -650,6 +650,25 @@ describe("GitHub legacy record identity", () => {
     );
   });
 
+  it("reports URL-less incoming records without similarity aliasing", async () => {
+    legacyRows([{ nodeId: "legacy", properties: "{}" }]);
+    mocks.embedText.mockResolvedValue([1, 0]);
+    const { externalUrl: _externalUrl, ...sourceRef } = mutation.sourceRef;
+    const result = await resolveEntity({ ...mutation, sourceRef }, "org-1");
+    expect(result.action).toBe("created_principal");
+    expect(result.identityReconciliation).toEqual({
+      reason: "legacy_source_unverified",
+      candidateNodeIds: ["legacy"],
+    });
+    expect(mocks.embedText).not.toHaveBeenCalled();
+    expect(mocks.createAliasEdge).not.toHaveBeenCalled();
+    expect(mocks.upsertEntityNode).toHaveBeenCalledWith(
+      expect.objectContaining({ naturalKey: mutation.naturalKey }),
+      "org-1",
+      {},
+    );
+  });
+
   it("finds a migrated legacy node by its canonical alias after a repository rename", async () => {
     mocks.sessionRun
       .mockResolvedValueOnce({ records: [] })
