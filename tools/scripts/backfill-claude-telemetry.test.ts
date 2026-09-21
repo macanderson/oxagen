@@ -11,7 +11,7 @@
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseAllFiles, type FileRef } from "./backfill-claude-telemetry.js";
 import type { ClaudeSessionRow } from "./backfill-claude-telemetry.js";
 
@@ -94,6 +94,8 @@ describe("parseAllFiles (#2556)", () => {
 describe("legacy backfill address retirement", () => {
   it("produces identical rows for transcripts that differ only in email metadata", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oxagen-backfill-"));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-20T01:00:00.000Z"));
     try {
       const files: FileRef[] = [];
       for (const [index, email] of [
@@ -132,6 +134,7 @@ describe("legacy backfill address retirement", () => {
       expect(JSON.stringify(rows)).not.toContain("@example.test");
       expect(rows[0]).toMatchObject({ tokens_in: 10, tokens_out: 2 });
     } finally {
+      vi.useRealTimers();
       await rm(dir, { recursive: true, force: true });
     }
   });
