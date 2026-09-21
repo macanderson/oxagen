@@ -1,0 +1,1 @@
+- [2026-09-20] A deployed alarm without a confirmed subscriber cannot demonstrate delivered incident notification. Verify AWS filter semantics separately from local alarm arithmetic. (source: reflections/2026-09-20-tacho-alert.md, agent: evidence-fixes)
