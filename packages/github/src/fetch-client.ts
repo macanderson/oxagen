@@ -642,6 +642,21 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     return { number: data.number, htmlUrl: data.html_url };
   }
 
+  async function updatePullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+    title: string;
+    body: string;
+  }): Promise<{ number: number; htmlUrl: string }> {
+    const data = await request<GHPull>(
+      "PATCH",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${args.number}`,
+      { title: args.title, body: args.body },
+    );
+    return { number: data.number, htmlUrl: data.html_url };
+  }
+
   async function listPullRequests(args: {
     owner: string;
     repo: string;
@@ -1073,6 +1088,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     forkRepo,
     createBranch,
     openPullRequest,
+    updatePullRequest,
     listPullRequests,
     getFileContent,
     getTree,

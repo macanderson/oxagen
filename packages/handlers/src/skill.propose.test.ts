@@ -60,6 +60,15 @@ beforeEach(() => {
 });
 
 describe("propose_skill", () => {
+  it("surfaces a metadata update failure instead of reporting a refreshed proposal", async () => {
+    await handler()(input(), ctx());
+    vi.spyOn(github, "updatePullRequest").mockRejectedValueOnce(
+      new Error("update refused"),
+    );
+    await expect(handler()(input(), ctx())).rejects.toThrow("update refused");
+    expect(github.pulls).toHaveLength(1);
+  });
+
   it("refuses to reset or write the production branch", async () => {
     github.repository = { ...REPO, defaultBranch: "skills/release-notes" };
     await expect(handler()(input(), ctx())).rejects.toMatchObject({
@@ -139,10 +148,19 @@ describe("propose_skill", () => {
       ctx(),
     );
     const next = await handler()(
-      input({ files: [{ path: "new.md", content: "new" }] }),
+      input({
+        body: skill("0.2.0"),
+        files: [{ path: "new.md", content: "new" }],
+      }),
       ctx(),
     );
     expect(next.pullRequest.number).toBe(first.pullRequest.number);
+    expect(github.pulls).toHaveLength(1);
+    expect(github.pulls[0]?.body).toContain("0.2.0");
+    expect(github.pulls[0]?.body).toContain(next.digest);
+    expect(github.pulls[0]?.body).not.toContain(first.digest);
+    expect(github.pulls[0]?.body).toContain("new.md");
+    expect(github.pulls[0]?.body).not.toContain("old.md");
     expect(
       await github.readFile(
         REPO,
