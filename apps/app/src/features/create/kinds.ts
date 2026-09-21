@@ -6,11 +6,21 @@
 import type { CreateKind } from "@/shared/create";
 import { type AnyWizardKind, wizardKind } from "./wizard";
 
+// One import per kind while it is in flight or has landed, and none kept
+// after a rejection: a tab opened before a deployment asks for a chunk that is
+// no longer served, and a cached rejection would answer every later attempt
+// with the same failure until the page is reloaded.
 function once(
   load: () => Promise<AnyWizardKind>,
 ): () => Promise<AnyWizardKind> {
   let pending: Promise<AnyWizardKind> | undefined;
-  return () => (pending ??= load());
+  return () => {
+    pending ??= load().catch((err: unknown) => {
+      pending = undefined;
+      throw err;
+    });
+    return pending;
+  };
 }
 
 // Only the selected wizard enters the client graph. In particular, YAML stays

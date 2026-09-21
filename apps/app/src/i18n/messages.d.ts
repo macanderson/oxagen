@@ -1381,6 +1381,11 @@ type Messages = {
       };
     };
     loading: string;
+    loadFailed: {
+      title: string;
+      body: string;
+      retry: string;
+    };
   };
   createAgent: {
     draftIt: string;

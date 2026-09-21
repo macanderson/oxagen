@@ -226,18 +226,77 @@ function LoadedWizard({
   load: () => Promise<AnyWizardKind>;
 }) {
   const [wizard, setWizard] = useState<AnyWizardKind | null>(null);
+  const [failed, setFailed] = useState(false);
+  // Bumped by Try again, which re-runs the effect. `./kinds` keeps no rejected
+  // promise, so the attempt is a fresh import rather than the old failure.
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
-    void load().then((loaded) => {
-      if (live) setWizard(loaded);
-    });
+    load().then(
+      (loaded) => {
+        if (live) setWizard(loaded);
+      },
+      () => {
+        if (live) setFailed(true);
+      },
+    );
     return () => {
       live = false;
     };
-  }, [load]);
+  }, [load, attempt]);
+  if (failed)
+    return (
+      <WizardLoadFailed
+        onOpenChange={props.onOpenChange}
+        onRetry={() => {
+          setFailed(false);
+          setAttempt((n) => n + 1);
+        }}
+      />
+    );
   if (wizard === null)
     return <WizardLoading onOpenChange={props.onOpenChange} />;
   return <Wizard {...props} wizard={wizard} />;
+}
+
+// A wizard module that did not arrive. The usual cause is a tab opened before
+// a deployment asking for a chunk that is no longer served, so the next
+// attempt is worth offering here rather than sending the person to the global
+// error page, whose retry would re-render the same failure.
+function WizardLoadFailed({
+  onOpenChange,
+  onRetry,
+}: {
+  onOpenChange: (open: boolean) => void;
+  onRetry: () => void;
+}) {
+  const t = useTranslations("create");
+  return (
+    <SheetDialog
+      open
+      onOpenChange={onOpenChange}
+      title={t("loadFailed.title")}
+      testId="create-load-failed"
+    >
+      <p role="alert" className="text-sm text-muted-foreground">
+        {t("loadFailed.body")}
+      </p>
+      <div className="mt-4 flex gap-2">
+        <button type="button" className={buttonPrimary} onClick={onRetry}>
+          {t("loadFailed.retry")}
+        </button>
+        <button
+          type="button"
+          className={buttonSecondary}
+          onClick={() => {
+            onOpenChange(false);
+          }}
+        >
+          {t("cancel")}
+        </button>
+      </div>
+    </SheetDialog>
+  );
 }
 
 function WizardLoading({

@@ -218,6 +218,11 @@
         "pendingApproval": "Opening this pull request waits for approval: access request {request}."
       }
     },
-    "loading": "Loading creation form"
+    "loading": "Loading creation form",
+    "loadFailed": {
+      "title": "The form did not load",
+      "body": "Oxagen could not read this wizard. Nothing was written. This usually means the page has been open since before a release.",
+      "retry": "Try again"
+    }
   }
 }
