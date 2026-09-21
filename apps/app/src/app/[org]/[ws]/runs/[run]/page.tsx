@@ -13,15 +13,15 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // The Run page (WL-35, ARCHITECTURE.md §1.2): the run's header and one section
 // chosen by `?tab=`. The tab, the transcript's zoom level and filter chips,
-// the frames cursor and the open frame body are query values, so the run keeps
-// one route.
+// the frames cursor, the open frame body, and the spine's read fold and open
+// groups are query values, so the run keeps one route.
 export default async function RunPage({
   params,
   searchParams,
 }: PageProps<"/[org]/[ws]/runs/[run]">) {
   const { org, ws, run } = await params;
   const ctx = await requireViewer(org, ws);
-  const { tab, zoom, kinds, frames, body } = await searchParams;
+  const { tab, zoom, kinds, frames, body, reads, spine } = await searchParams;
   const t = await getTranslations("pages");
   return (
     <main
@@ -41,6 +41,8 @@ export default async function RunPage({
         kinds={firstParam(kinds) ?? null}
         frames={firstParam(frames) ?? null}
         body={firstParam(body) ?? null}
+        reads={firstParam(reads) ?? null}
+        spine={firstParam(spine) ?? null}
       />
     </main>
   );

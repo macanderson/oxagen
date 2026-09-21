@@ -365,6 +365,15 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
     },
+    "get_run_outputs": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — the outputs spine between the run header and the tabs reads get_run_outputs and draws what the run produced in the order it produced it, with `?reads=hide` folding the read marks and `?spine=` opening a folded group (data/live/runs.ts, features/run/outputs.tsx). It is not a tab: the spine renders on every tab.",
+      "testid": "run-outputs",
+      "proof": "apps/app/src/features/run/outputs.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "d19046fa"
+    },
     "fork_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",

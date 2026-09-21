@@ -19,6 +19,12 @@ export default defineConfig({
   test: {
     clearMocks: true,
     unstubEnvs: true,
+    // A developer whose shell exports `NODE_ENV=development` — the ordinary
+    // state of a shell that also runs `next dev` — otherwise runs a different
+    // suite from CI's: `app-url.ts` reads `NODE_ENV` to pick its fallback
+    // origin, so four tests fail locally and pass on the runner. Pinning it
+    // here makes the run say the same thing wherever it is started.
+    env: { NODE_ENV: "test" },
     // Vitest's 5s default is shorter than the work this package's slowest
     // tests honestly do: a page test dynamically imports and renders an RSC
     // tree, and a section test drives a dialog through several open-and-close

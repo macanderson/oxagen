@@ -478,7 +478,7 @@ describe("the Run page", () => {
     requireViewer.mockResolvedValue(ctx);
   });
 
-  it("hands the run, the tab, the zoom, the chips and the frames cursor the URL names to Run", async () => {
+  it("hands the run, the tab, the zoom, the chips, the frames cursor and the spine's folds the URL names to Run", async () => {
     await expectPageTitle(
       await RUN(),
       routeProps(SEGMENTS, {
@@ -486,6 +486,8 @@ describe("the Run page", () => {
         zoom: "turns",
         kinds: "tools,errors",
         frames: "ZjoyMA",
+        reads: "hide",
+        spine: "0,3",
       }),
       title("run"),
     );
@@ -499,6 +501,8 @@ describe("the Run page", () => {
       kinds: "tools,errors",
       frames: "ZjoyMA",
       body: null,
+      reads: "hide",
+      spine: "0,3",
     });
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
@@ -511,6 +515,8 @@ describe("the Run page", () => {
       kinds: null,
       frames: null,
       body: null,
+      reads: null,
+      spine: null,
     });
   });
 });

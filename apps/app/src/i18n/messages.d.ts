@@ -3767,6 +3767,49 @@ type Messages = {
     };
     loading: string;
     unnamedRun: string;
+    outputs: {
+      label: string;
+      title: string;
+      artifacts: string;
+      reads: string;
+      gates: string;
+      hideReads: string;
+      showReads: string;
+      readMark: string;
+      andMore: string;
+      foldBack: string;
+      moreOfKind: string;
+      frame: string;
+      frameTitle: string;
+      locator: string;
+      reviewApproval: string;
+      gateHint: string;
+      empty: string;
+      footer: string;
+      cut: string;
+      kind: {
+        file: string;
+        media: string;
+        change: string;
+        commit: string;
+        pr: string;
+        gate: string;
+        would: string;
+        read: string;
+      };
+      state: {
+        created: string;
+        written: string;
+        deleted: string;
+        renamed: string;
+        pushed: string;
+        open: string;
+        read: string;
+        awaiting: string;
+        blocked: string;
+        withheld: string;
+      };
+    };
   };
   shell: {
     skipToContent: string;

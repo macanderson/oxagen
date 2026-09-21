@@ -4606,6 +4606,22 @@
       }
     },
     {
+      "name": "get_run_outputs",
+      "file": "run.outputs.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_run_proof",
       "file": "run.proof.get.ts",
       "domain": "run",

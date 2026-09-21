@@ -8,6 +8,7 @@ import type { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import type { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import type { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import type { runGet } from "@oxagen/oxagen/contracts/run.get";
+import type { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { z } from "zod";
 import { Cost, moneyFromMicros } from "@/data/contracts/money";
@@ -16,6 +17,7 @@ import type {
   RunCost,
   RunDetail,
   RunFrameBody,
+  RunOutputs,
   RunTranscript,
 } from "@/data/contracts/run";
 import type { ContractOutput } from "@/server/kernel";
@@ -26,6 +28,7 @@ type RunCostOutput = ContractOutput<typeof runCostGet>;
 type RunTranscriptOutput = ContractOutput<typeof runTranscriptGet>;
 type RunFrameBodyOutput = ContractOutput<typeof runFrameBodyGet>;
 type RunChainOutput = ContractOutput<typeof runChainGet>;
+type RunOutputsOutput = ContractOutput<typeof runOutputsGet>;
 
 /** The contract's own cost shape: its `basis` is the closed set the view also keys on. */
 type ContractCost = NonNullable<RunGetOutput["run"]["cost"]>;
@@ -281,6 +284,34 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
       met: rung.met,
       reason: rung.reason,
     })),
+    complete: out.complete,
+  };
+}
+
+/**
+ * The spine, one node for one node. Nothing is recomputed here: the tally, the
+ * order and the `nameIsLocator` instruction are the contract's, so the page
+ * and the API cannot disagree about what a run produced.
+ */
+export function toRunOutputs(
+  out: RunOutputsOutput,
+): z.input<typeof RunOutputs> {
+  return {
+    source: out.source,
+    nodes: out.nodes.map((node) => ({
+      seq: node.seq,
+      kind: node.kind,
+      name: node.name,
+      nameIsLocator: node.nameIsLocator,
+      where: node.where,
+      state: node.state,
+      note: node.note,
+      stat: node.stat,
+      observedAt: node.observedAt,
+      digestBefore: node.digestBefore,
+      digestAfter: node.digestAfter,
+    })),
+    tally: out.tally,
     complete: out.complete,
   };
 }

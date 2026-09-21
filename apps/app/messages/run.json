@@ -442,6 +442,49 @@
       }
     },
     "loading": "Loading this run",
-    "unnamedRun": "Untitled run"
+    "unnamedRun": "Untitled run",
+    "outputs": {
+      "label": "What this run produced",
+      "title": "What this run produced, in the order it happened",
+      "artifacts": "{count, plural, one {# artifact} other {# artifacts}}",
+      "reads": "{count, plural, one {# read} other {# reads}}",
+      "gates": "{count, plural, one {# gate} other {# gates}}",
+      "hideReads": "Hide reads",
+      "showReads": "Show reads",
+      "readMark": "Read",
+      "andMore": "and {count} more",
+      "foldBack": "Fold these back",
+      "moreOfKind": "{count} more {kind}",
+      "frame": "fr {seq}",
+      "frameTitle": "Open the frame that recorded this",
+      "locator": "The ledger recorded this change without its path.",
+      "reviewApproval": "Review the approval",
+      "gateHint": "The run is stopped here until someone answers.",
+      "empty": "Nothing recorded. This run read nothing and changed nothing.",
+      "footer": "Ordered by the frames, not by kind. A read is a mark, never a change. A gate sits where it stopped the run.",
+      "cut": "This run produced more than one read carries, so the spine ends early.",
+      "kind": {
+        "file": "file writes",
+        "media": "media files",
+        "change": "changes",
+        "commit": "commits",
+        "pr": "pull requests",
+        "gate": "gates",
+        "would": "held calls",
+        "read": "reads"
+      },
+      "state": {
+        "created": "created",
+        "written": "written",
+        "deleted": "deleted",
+        "renamed": "renamed",
+        "pushed": "pushed",
+        "open": "open",
+        "read": "read",
+        "awaiting": "awaiting",
+        "blocked": "blocked",
+        "withheld": "withheld"
+      }
+    }
   }
 }

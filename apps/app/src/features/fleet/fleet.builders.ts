@@ -122,6 +122,7 @@ export function fleetSource(reads: FleetReads) {
       frameBody: refuse,
       cost: refuse,
       chain: refuse,
+      outputs: refuse,
       transcript: refuse,
     },
     approvals: {
