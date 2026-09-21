@@ -10,7 +10,7 @@
 // module reads the file with the app's TOML subset so the definition step can
 // say what the checks will see. It never decides on their behalf.
 import { parseTomlSubset, type TomlTable, tomlGet } from "@/shared/toml-subset";
-import { wordsOf } from "./skill-file";
+import { wordsOf } from "./draft-text";
 
 /** The harnesses an agent can be written for (agentHarnessSchema). No one is the default (ADR-101). */
 export const AGENT_HARNESSES = [

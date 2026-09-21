@@ -8,6 +8,8 @@
  * Pure with respect to I/O: the collector owns persistence, clocks, and the
  * mapping from a running `claude` process to a recorder.
  */
+import { z } from "zod";
+import { isWrappedHarness } from "../wire";
 import { type ChainCursor, GENESIS_CURSOR, sealEvent } from "../chain";
 import type {
   BodyOf,
@@ -89,9 +91,8 @@ export interface RecorderOptions {
    * The custom agent that owns this session, when one does. A harness session
    * id is unique only within the agent that issued it, and the chain uuid is
    * derived from that id, so two custom agents handing out the same id would
-   * otherwise derive one uuid and share a chain. Named harnesses (Claude
-   * Code, Codex, Stella) keep deriving from the bare id, so every chain they
-   * have already recorded keeps its uuid.
+   * otherwise derive one uuid and share a chain. Restored chains retain
+   * their recorded UUID, including states written before harness scoping.
    */
   customAgent?: string;
   parent?: {
@@ -114,6 +115,8 @@ interface SubagentLink {
 
 /** Everything a recorder needs to continue its chain after a restart. */
 export interface RecorderState {
+  /** Absent in legacy states, whose UUID uses the original unscoped seed. */
+  sessionUuid?: string;
   cursor: ChainCursor;
   turnSeq: number;
   turnOpen: boolean;
@@ -245,9 +248,27 @@ export class SessionRecorder {
       options.customAgent === undefined
         ? options.harnessSessionId
         : `${options.customAgent}/${options.harnessSessionId}`;
-    this.sessionUuid = options.parent
-      ? sessionUuid(options.scope, `${seed}/agent/${options.parent.subagentId}`)
-      : sessionUuid(options.scope, seed);
+    const harness = options.context.agent.harness;
+    const scopeHarness =
+      options.restore === undefined &&
+      options.customAgent === undefined &&
+      harness !== "claude-code" &&
+      isWrappedHarness(harness);
+    const scopedSeed = scopeHarness ? `${harness}/${seed}` : seed;
+    // A child always derives from its parent's recorded uuid. Gating this on
+    // the child's own `restore` state made the derivation change across a
+    // restart (a restored child took the unscoped seed while the live child
+    // used the parent's uuid), splitting one subagent into two chains.
+    const derived = options.parent
+      ? sessionUuid(
+          options.scope,
+          `${options.parent.sessionUuid}/agent/${options.parent.subagentId}`,
+        )
+      : sessionUuid(options.scope, scopedSeed);
+    this.sessionUuid =
+      options.restore?.sessionUuid === undefined
+        ? derived
+        : z.string().uuid().parse(options.restore.sessionUuid);
     this.rootSessionUuid = options.parent?.rootSessionUuid ?? this.sessionUuid;
     this.harnessVersion = options.context.agent.harness_version;
     if (options.context.host) this.host = { ...options.context.host };
@@ -317,6 +338,7 @@ export class SessionRecorder {
       };
     }
     return {
+      sessionUuid: this.sessionUuid,
       cursor: { ...this.cursor },
       turnSeq: this.turnSeq,
       turnOpen: this.turnOpen,

@@ -146,6 +146,16 @@ export function SkillsInventory({
                     {harness}
                   </li>
                 ))}
+                {skill.harnessCount > skill.harnesses.length ? (
+                  <li
+                    data-harness-omitted=""
+                    className="px-2 py-0.5 text-xs text-muted-foreground"
+                  >
+                    {t("row.moreHarnesses", {
+                      count: skill.harnessCount - skill.harnesses.length,
+                    })}
+                  </li>
+                ) : null}
               </ul>
             </div>
           </li>

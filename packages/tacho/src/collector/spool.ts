@@ -122,6 +122,9 @@ export interface ShipResult {
  * a malformed or hostile header cannot park the daemon indefinitely, and
  * floored at a second so a reset already in the past does not spin.
  */
+/** Persisted event time bounds withholding across daemon restarts. */
+export const MAX_BODY_AUTHORITY_WAIT_MS = 24 * 60 * 60_000;
+
 const MAX_SERVER_REQUESTED_WAIT_MS = 5 * 60_000;
 function serverRequestedWaitMs(error: ControlError): number | undefined {
   if (error.status !== 429) return undefined;
@@ -147,6 +150,7 @@ export class Shipper {
   private readonly options: ShipperOptions;
   private backoffMs: number;
   private nextAttemptAt = 0;
+  private lastRetentionHoldLogAt: number | undefined;
   private consecutiveFailures = 0;
   private lastRateLimit: RateLimitHint | undefined;
   lastSuccessAt: number | undefined;
@@ -312,10 +316,12 @@ export class Shipper {
   }
 
   /** Ship one batch. Returns what moved; the caller loops. */
-  async shipOnce(): Promise<ShipResult> {
+  async shipOnce(
+    excludedSessions: Set<string> = new Set(),
+  ): Promise<ShipResult> {
     if (!this.ready())
       return { shipped: 0, quarantined: 0, reachable: this.reachable };
-    const batch = this.options.wal.unshipped(TACHO_MAX_BATCH);
+    const batch = this.options.wal.unshipped(TACHO_MAX_BATCH, excludedSessions);
     if (batch.length === 0)
       return { shipped: 0, quarantined: 0, reachable: this.reachable };
     const { own, foreign } = this.partitionByEnrollment(batch);
@@ -359,6 +365,7 @@ export class Shipper {
       // class, is not shipped: an unclassifiable body cannot be shown to
       // be covered, and the boundary fails closed.
       if (
+        retention.proven &&
         contentClass !== undefined &&
         retentionAllows(retention.mandate, contentClass)
       ) {
@@ -385,11 +392,53 @@ export class Shipper {
           `retention: dropped ${String(dropped)} body(ies) the mandate no longer covers`,
         );
     }
+    const held = new Map<string, number>();
+    let released = 0;
+    if (!retention.proven) {
+      for (const event of withdrawn) {
+        const age = this.options.now() - Date.parse(event.ts);
+        if (
+          Number.isFinite(age) &&
+          age >= 0 &&
+          age < MAX_BODY_AUTHORITY_WAIT_MS
+        ) {
+          held.set(
+            event.session_uuid,
+            Math.min(held.get(event.session_uuid) ?? Infinity, event.seq),
+          );
+          excludedSessions.add(event.session_uuid);
+        } else released += 1;
+      }
+    }
+    // Ingest requires a dense chain. Hold the suffix too, but keep other
+    // sessions moving even when this session fills the WAL read limit.
+    const ready = own.filter(
+      (event) => event.seq < (held.get(event.session_uuid) ?? Infinity),
+    );
+    if (
+      held.size > 0 &&
+      (this.lastRetentionHoldLogAt === undefined ||
+        this.options.now() - this.lastRetentionHoldLogAt >= 300_000)
+    ) {
+      this.lastRetentionHoldLogAt = this.options.now();
+      this.options.log(
+        `retention: held ${own.length - ready.length} event(s) in ${held.size} session(s): body authority unproven`,
+      );
+    }
+    if (retention.proven) this.lastRetentionHoldLogAt = undefined;
+    if (released > 0)
+      this.options.log(
+        `retention: releasing ${released} event(s) body-missing: unproven authority exceeded the 24-hour event-age ceiling or event time is invalid`,
+      );
+    if (ready.length === 0) {
+      const next = await this.shipOnce(excludedSessions);
+      return { ...next, quarantined: next.quarantined + quarantined };
+    }
     const bodies = new Map(
       allowed.map((body) => [body.event_id_idem, body] as const),
     );
     const result = await this.shipBatch(
-      this.fitRequestBudget(own, bodies),
+      this.fitRequestBudget(ready, bodies),
       bodies,
     );
     return { ...result, quarantined: result.quarantined + quarantined };

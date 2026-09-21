@@ -13,13 +13,15 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { z } from "zod";
+import { hookInputSchema } from "../claude-code/hooks";
 import { homedir, hostname as osHostname } from "node:os";
 import { join } from "node:path";
 import { execFile, spawnSync } from "node:child_process";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
 import type { SessionRecorder } from "../claude-code/recorder";
-import type { TachoEvent } from "../envelope";
+import { tachoEventSchema, type TachoEvent } from "../envelope";
 import { type FrameBody, retentionAllows } from "../evidence/frame-body";
 import { verifyBundle } from "../host/bundle";
 import {
@@ -57,6 +59,7 @@ import { Wal } from "../host/wal";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
 import {
+  tachoHarnessSchema,
   TACHO_ENFORCEMENT_TIER_ATTR,
   TACHO_GATEWAY_TIER,
   TACHO_METERING_ATTR,
@@ -96,7 +99,9 @@ import {
 } from "./model-routes";
 import {
   parseRegistryState,
+  sessionMapKey,
   type SessionRecord,
+  type RegistryState,
   SessionRegistry,
 } from "./registry";
 import {
@@ -1079,7 +1084,12 @@ async function initializeDaemon(
     for (const session of registry.list()) {
       const head = session.recorder.chainCursor;
       const headSeq = head.seq - 1;
-      if (headSeq <= session.lastCheckpointSeq || session.sealed) continue;
+      if (
+        headSeq <= session.lastCheckpointSeq ||
+        session.sealed ||
+        session.pendingTerminal
+      )
+        continue;
       const message = `${session.recorder.sessionUuid}:${headSeq}:${head.prevHash}`;
       const event = session.recorder.sealCollectorEvent("checkpoint", {
         checkpoint_id: ulid(now()),
@@ -1159,6 +1169,84 @@ async function initializeDaemon(
    * list as well.
    */
   const gitPending = new Map<string, { force: boolean; reconcile: boolean }>();
+  const pendingEndsPath = join(paths.root, "pending-session-ends.json");
+  const terminalSchema = z.object({
+    events: z.array(tachoEventSchema),
+    state: z.custom<RegistryState>(
+      (value) => parseRegistryState(value) !== undefined,
+    ),
+    bodies: z.array(
+      z.object({
+        event_id_idem: z.string(),
+        session_uuid: z.string().uuid(),
+        seq: z.number().int(),
+        content_type: z.string(),
+        content_class: z.enum(["model_call", "tool_call", "approval_receipt"]),
+        bytes_base64: z.string(),
+      }),
+    ),
+  });
+  type PendingSessionEnd = HookEnvelope & {
+    terminal?: z.infer<typeof terminalSchema>;
+  };
+  const pendingSessionEnds = new Map<string, PendingSessionEnd>();
+  const pendingEndSchema = z.tuple([
+    z.string().uuid(),
+    z.object({
+      payload: hookInputSchema.refine(
+        (input) => input.hook_event_name === "SessionEnd",
+      ),
+      env: z.record(z.string(), z.string().optional()).optional(),
+      harness: tachoHarnessSchema.optional(),
+      agent: z.string().optional(),
+      replay: z.object({ receivedAt: z.string().datetime() }).optional(),
+      terminal: terminalSchema.optional(),
+    }),
+  ]);
+  try {
+    const saved = readJsonFileIfExists(pendingEndsPath);
+    if (saved !== undefined && !Array.isArray(saved))
+      throw new Error("expected a list of pending session ends");
+    for (const value of (saved as unknown[] | undefined) ?? []) {
+      const entry = pendingEndSchema.safeParse(value);
+      if (!entry.success) {
+        log("pending session end skipped: invalid saved envelope");
+        continue;
+      }
+      const [uuid, envelope] = entry.data;
+      const session = registry.byUuid(uuid);
+      if (
+        session === undefined ||
+        sessionMapKey(session.harnessSessionId, session) !==
+          sessionMapKey(hookInputSchema.parse(envelope.payload).session_id, {
+            harness: envelope.harness,
+            customAgent: envelope.agent,
+          })
+      ) {
+        log(
+          "pending session end skipped: saved session identity does not match",
+        );
+        continue;
+      }
+      pendingSessionEnds.set(uuid, envelope);
+      // A restart must reopen the same window `recordHookOutcome` guards
+      // in-process: this session has a terminal computed (or about to be
+      // recomputed) that has not reached the WAL, so it must keep refusing
+      // new frames until the retry lands, not just once the retry runs.
+      session.pendingTerminal = true;
+    }
+  } catch (error) {
+    log(
+      `pending session ends unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const persistPendingEnds = () =>
+    writeSensitiveFileAtomic(
+      pendingEndsPath,
+      JSON.stringify([...pendingSessionEnds]),
+    );
+  for (const id of pendingSessionEnds.keys())
+    gitPending.set(id, { force: true, reconcile: true });
 
   /** The most sessions one tick reads worktrees for. */
   const GIT_READS_PER_TICK = 4;
@@ -1230,6 +1318,7 @@ async function initializeDaemon(
        * discarded instead when the session has moved.
        */
       cwd: string;
+      ending?: HookEnvelope;
       // Absent for a repository with no commit yet, which has no HEAD to
       // describe but does have a worktree to reconcile.
       facts?: GitFacts;
@@ -1239,10 +1328,25 @@ async function initializeDaemon(
       const want = gitPending.get(harnessSessionId);
       gitPending.delete(harnessSessionId);
       if (want === undefined) continue;
-      const session = registry.get(harnessSessionId);
+      const session = registry.byUuid(harnessSessionId);
+      const ending = pendingSessionEnds.get(harnessSessionId);
       const cwd = session?.cwd;
-      if (session === undefined || session.sealed || cwd === undefined)
+      if (
+        session === undefined ||
+        session.sealed ||
+        cwd === undefined ||
+        ending?.terminal !== undefined
+      ) {
+        if (ending !== undefined) {
+          await serial.run(async () => {
+            await recordHookOutcome(ending, harnessSessionId);
+            persistState();
+            pendingSessionEnds.delete(harnessSessionId);
+            persistPendingEnds();
+          });
+        }
         continue;
+      }
       const facts = await gitFactsFor(cwd, want.force);
       // Undefined means `rev-parse HEAD` did not answer, which covers a
       // directory that is not a repository AND a repository whose first
@@ -1262,12 +1366,17 @@ async function initializeDaemon(
       const last = lastReconcileAt.get(harnessSessionId);
       const due =
         want.reconcile &&
-        (last === undefined || at - last >= RECONCILE_MIN_INTERVAL_MS);
+        (ending !== undefined ||
+          last === undefined ||
+          at - last >= RECONCILE_MIN_INTERVAL_MS);
       if (due) lastReconcileAt.set(harnessSessionId, at);
+      else if (want.reconcile)
+        requestGitRead(harnessSessionId, { force: true, reconcile: true });
       if (facts === undefined && !due) continue;
       found.push({
         session,
         cwd,
+        ending,
         facts,
         // A read that failed reports no changes rather than an empty list,
         // so no reconciliation frame is sealed for it. A frame saying the
@@ -1288,20 +1397,37 @@ async function initializeDaemon(
     if (found.length === 0) return;
     await serial.run(async () => {
       const events: TachoEvent[] = [];
-      for (const { session, cwd, facts, changes } of found) {
+      for (const { session, cwd, facts, changes, ending } of found) {
         if (session.sealed) continue;
         // The session moved while the probe ran, so this answer describes a
         // repository it is no longer in. A later turn reads the new one.
-        if (session.cwd !== cwd) continue;
+        if (session.cwd !== cwd) {
+          if (ending !== undefined)
+            requestGitRead(session.recorder.sessionUuid, {
+              force: true,
+              reconcile: true,
+            });
+          continue;
+        }
         if (facts !== undefined)
           session.recorder.noteContext(gitContextOf(facts));
-        if (changes === undefined) continue;
-        events.push(
-          session.recorder.sealCollectorEvent(
-            "oxagen:worktree_reconciled",
-            worktreeReconciledBody(changes),
-          ),
-        );
+        if (changes !== undefined)
+          events.push(
+            session.recorder.sealCollectorEvent(
+              "oxagen:worktree_reconciled",
+              worktreeReconciledBody(changes),
+            ),
+          );
+        if (
+          ending !== undefined &&
+          pendingSessionEnds.get(session.recorder.sessionUuid) === ending
+        ) {
+          record(events.splice(0));
+          await recordHookOutcome(ending, session.recorder.sessionUuid);
+          persistState();
+          pendingSessionEnds.delete(session.recorder.sessionUuid);
+          persistPendingEnds();
+        }
       }
       record(events);
     });
@@ -1321,23 +1447,17 @@ async function initializeDaemon(
    *
    * `Stop` is the end of a turn: the agent has finished acting and is
    * handing back, so what the tree holds now is what the turn left behind.
-   * It is the only trigger.
+   * SessionEnd also requests a final read before the chain closes.
    *
-   * `SubagentStop` is not, because a subagent finishes inside its parent's
-   * turn and the parent's own `Stop` observes the same tree once, rather
-   * than once per subagent. `SessionEnd` is not either: it seals the chain
-   * in the same pass that handles it, and a read that lands a tick later
-   * would be sealing a frame onto a chain that has already ended. For Claude
-   * Code the last `Stop` precedes it with nothing in between, so the final
-   * turn is observed anyway. A session killed without a `Stop` leaves its
-   * last turn unobserved, which the record already says with
-   * `unobserved_tail` rather than guessing at it.
+   * `SubagentStop` does not trigger a duplicate read. SessionEnd asks for a
+   * final read and waits off the hook queue before its seal is recorded.
+   * A failed read seals without inventing a clean worktree observation.
    *
    * There is no per-tool-call trigger on purpose: `readWorkingTreeChanges`
    * spawns several git processes, one of them per untracked file, and paying
    * that on every `Edit` would cost more than the fact is worth.
    */
-  const RECONCILE_HOOKS = new Set(["Stop"]);
+  const RECONCILE_HOOKS = new Set(["Stop", "SessionEnd"]);
 
   async function handleHookInner(
     envelope: HookEnvelope,
@@ -1347,20 +1467,66 @@ async function initializeDaemon(
     // after this one rather than on this one, which is what the recorder's
     // context already is, a standing fact carried until something newer
     // replaces it.
-    const payloadFacts = envelope.payload as {
-      hook_event_name?: string;
-      session_id?: string;
-    };
+    const payloadFacts = hookInputSchema.parse(envelope.payload);
     const hookName = payloadFacts.hook_event_name;
-    if (payloadFacts.session_id !== undefined && hookName !== undefined) {
-      requestGitRead(payloadFacts.session_id, {
+    const key = sessionMapKey(payloadFacts.session_id, {
+      harness: envelope.harness,
+      customAgent: envelope.agent,
+    });
+    const findSession = () =>
+      registry
+        .list()
+        .find(
+          (session) => sessionMapKey(session.harnessSessionId, session) === key,
+        );
+    await tailBeforeHook(envelope.payload);
+    const endingSession = findSession();
+    if (
+      hookName === "SessionEnd" &&
+      endingSession?.cwd !== undefined &&
+      !endingSession.sealed &&
+      !endingSession.pendingTerminal
+    ) {
+      const inferredCursorCwd =
+        envelope.harness === "cursor" &&
+        (envelope.payload as Record<string, unknown>)["cursor_cwd_inferred"] ===
+          true;
+      if (payloadFacts.cwd !== undefined && !inferredCursorCwd)
+        registry.ensure(payloadFacts.session_id, {
+          harness: envelope.harness,
+          customAgent: envelope.agent,
+          cwd: payloadFacts.cwd,
+        });
+      const uuid = endingSession.recorder.sessionUuid;
+      pendingSessionEnds.set(uuid, envelope);
+      requestGitRead(uuid, { force: true, reconcile: true });
+      persistState();
+      persistPendingEnds();
+      return {};
+    }
+    const response = await recordHookOutcome(envelope);
+    const session = findSession();
+    if (session !== undefined)
+      requestGitRead(session.recorder.sessionUuid, {
         force: TURN_BOUNDARY_HOOKS.has(hookName),
         reconcile: RECONCILE_HOOKS.has(hookName),
       });
+    return response;
+  }
+
+  async function recordHookOutcome(
+    envelope: HookEnvelope,
+    pendingUuid?: string,
+  ): Promise<Record<string, unknown>> {
+    const pending =
+      pendingUuid === undefined
+        ? undefined
+        : pendingSessionEnds.get(pendingUuid);
+    if (pending?.terminal !== undefined) {
+      flushPendingTerminal(pending.terminal);
+      return {};
     }
-    // After the git read is queued, so the frames the tailer emits are
-    // sealed under the same standing context.
-    await tailBeforeHook(envelope.payload); // transcript tailer
+    const before = pending === undefined ? undefined : registry.state();
     const outcome = await handleHookEvent(
       envelope.payload,
       envelope.env ?? {},
@@ -1379,8 +1545,92 @@ async function initializeDaemon(
       envelope.harness,
       envelope.agent,
     );
-    record(outcome.events, outcome.bodies);
+    if (pending !== undefined) {
+      const state = registry.state();
+      state.sessions = state.sessions.filter(
+        (session) =>
+          sessionMapKey(session.harnessSessionId, session) ===
+          sessionMapKey(hookInputSchema.parse(envelope.payload).session_id, {
+            harness: envelope.harness,
+            customAgent: envelope.agent,
+          }),
+      );
+      state.agents = [];
+      const retention = retentionInForce();
+      pending.terminal = {
+        events: outcome.events,
+        state,
+        bodies: outcome.bodies
+          .filter((body) =>
+            retentionAllows(retention.mandate, body.content_class),
+          )
+          .map(({ bytes, ...body }) => ({
+            ...body,
+            bytes_base64: Buffer.from(bytes).toString("base64"),
+          })),
+      };
+      try {
+        persistPendingEnds();
+      } catch (error) {
+        delete pending.terminal;
+        if (before !== undefined) registry.restore(before);
+        throw error;
+      }
+      // A sealed registry flag means its terminal event is durable. The
+      // journal preserves the exact event bytes and recorder cursor until
+      // then, so `sealed` reports `false` for this window. That must not
+      // reopen the record to new writers: `pendingTerminal` keeps it closed
+      // to `checkpoint`, the model proxy, and a re-entrant SessionEnd while
+      // `sealed` alone would let a concurrent write land a sequence after
+      // the terminal's and fork the chain the retry then rebuilds against.
+      if (outcome.record !== undefined) {
+        outcome.record.sealed = false;
+        outcome.record.pendingTerminal = true;
+      }
+      flushPendingTerminal(pending.terminal);
+    } else record(outcome.events, outcome.bodies);
     return outcome.response;
+  }
+
+  function flushPendingTerminal(
+    terminal: z.infer<typeof terminalSchema>,
+  ): void {
+    const retention = retentionInForce();
+    const bodies = terminal.bodies
+      .filter((body) => retentionAllows(retention.mandate, body.content_class))
+      .map(({ bytes_base64, ...body }) => ({
+        ...body,
+        bytes: Buffer.from(bytes_base64, "base64"),
+      }));
+    wal.appendRecovered(terminal.events, bodies);
+    const saved = terminal.state.sessions[0];
+    const current =
+      saved === undefined
+        ? undefined
+        : registry
+            .list()
+            .find(
+              (session) =>
+                sessionMapKey(session.harnessSessionId, session) ===
+                sessionMapKey(saved.harnessSessionId, saved),
+            );
+    if (
+      current !== undefined &&
+      saved !== undefined &&
+      current.recorder.chainCursor.seq === saved.recorder.cursor.seq &&
+      current.recorder.chainCursor.prevHash === saved.recorder.cursor.prevHash
+    ) {
+      current.sealed = true;
+      current.pendingTerminal = false;
+    }
+    // A mismatch means something else moved this chain while the terminal
+    // waited (or a restart rebuilt it from a state.json older than this
+    // envelope); `restore` rebuilds fresh `SessionRecord`s from `terminal.state`
+    // alone, which carries no `pendingTerminal`, so the restored record comes
+    // back closed (`sealed: true`, `pendingTerminal` unset) with nothing left
+    // to clear.
+    else registry.restore(terminal.state);
+    stateDirty = true;
   }
 
   /** Replay what `tacho-hook` spooled while the daemon was down, in order. */
@@ -1949,11 +2199,13 @@ async function initializeDaemon(
     if (gitLane !== undefined) return gitLane;
     if (stopped || gitPending.size === 0) return Promise.resolve();
     const lane = drainGitReads()
-      .catch((error) =>
+      .catch((error) => {
+        for (const uuid of pendingSessionEnds.keys())
+          requestGitRead(uuid, { force: true, reconcile: true });
         log(
           `git reads failed: ${error instanceof Error ? error.message : String(error)}`,
-        ),
-      )
+        );
+      })
       .finally(() => {
         if (gitLane === lane) gitLane = undefined;
       });
@@ -1986,7 +2238,11 @@ async function initializeDaemon(
       await transcriptTailer.tick();
       if (t - lastSweep >= timers.sweepMs) {
         lastSweep = t;
-        record(registry.sweep(isProcessAlive, timers.idleSessionMs));
+        record(
+          registry.sweep(isProcessAlive, timers.idleSessionMs, (session) =>
+            pendingSessionEnds.has(session.recorder.sessionUuid),
+          ),
+        );
         registry.forgetSealed(timers.walRetainMs);
       }
       if (t - lastCheckpoint >= timers.checkpointMs) {
