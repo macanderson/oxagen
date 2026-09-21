@@ -73,16 +73,18 @@ describe("CreateHost", () => {
       code: "authz_denied",
     });
     mount();
-    act(() => openClone("agent", "agt_original"));
+    act(() => {
+      openClone("agent", "agt_original");
+    });
     await screen.findByTestId("configuration-clone", {}, { timeout: 5000 });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(readCloneDraft).toHaveBeenCalledWith(
         "acme",
         "core-platform",
         "agent",
         "agt_original",
-      ),
-    );
+      );
+    });
     expect(screen.queryByTestId("create-chooser")).toBeNull();
     expect(proposeClone).not.toHaveBeenCalled();
   });
