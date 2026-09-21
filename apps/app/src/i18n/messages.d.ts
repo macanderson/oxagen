@@ -3220,6 +3220,7 @@ type Messages = {
       loadedMore: string;
       badCursor: string;
       pageFailed: string;
+      followDenied: string;
       followLost: string;
       followSealed: string;
       request: string;
