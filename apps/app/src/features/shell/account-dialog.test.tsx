@@ -621,6 +621,8 @@ describe("Preferences", () => {
     });
 
     expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.cookie).toContain("theme=system");
     expect(screen.queryByTestId("account-preferences-saved")).toBeNull();
   });
 
@@ -696,6 +698,61 @@ describe("Preferences", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
     await user.selectOptions(theme, "dark");
     expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+
+  it("discards a theme preview on a tab change without persisting it", async () => {
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "light" },
+    });
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "dark",
+    );
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.cookie).toContain("theme=light");
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.cookie).toContain("theme=light");
+  });
+
+  it("restores the saved theme when the preference write is refused", async () => {
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "light" },
+    });
+    savePreferences.mockResolvedValue({ ok: false, reason: "denied" });
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "dark",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("light");
+    });
+    expect(document.cookie).toContain("theme=light");
+    expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+  });
+
+  it("keeps a successfully saved theme after the preview panel closes", async () => {
+    savePreferences.mockResolvedValue({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "dark" },
+    });
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "dark",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    await waitFor(() => {
+      expect(document.cookie).toContain("theme=dark");
+    });
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.cookie).toContain("theme=dark");
   });
 
   it("previews a date, a number and money under the chosen locale and zone", async () => {

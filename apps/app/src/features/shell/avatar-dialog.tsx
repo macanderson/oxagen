@@ -34,7 +34,7 @@ import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { updateProfile } from "./account-actions";
 import { useAccountOperation } from "./account-operations";
-import { fieldLabel, hint } from "./account-styles";
+import { buttonSmall, fieldLabel, hint } from "./account-styles";
 import { initials as initialsOf } from "./format";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
@@ -176,11 +176,15 @@ function AvatarEditor({ data }: { data: ShellData }) {
       setOutcome("noLetters");
       return;
     }
+    await saveAvatar(stored(draft));
+  }
+
+  async function saveAvatar(avatarUrl: string) {
     if (!operation.begin()) return;
     setOutcome(null);
     try {
       const result = await updateProfile(org.slug, {
-        avatarUrl: stored(draft),
+        avatarUrl,
       });
       if (result.ok) {
         navigate.refresh();
@@ -390,6 +394,21 @@ function AvatarEditor({ data }: { data: ShellData }) {
           code: (chunks) => <span className="font-mono">{chunks}</span>,
         })}
       </p>
+
+      {viewer.avatarUrl ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            className={buttonSmall}
+            disabled={pending}
+            data-testid="avatar-remove"
+            onClick={() => void saveAvatar("")}
+          >
+            {t("remove")}
+          </button>
+          <p className={hint}>{t("removeHint")}</p>
+        </div>
+      ) : null}
 
       {outcome !== null ? (
         <div className="mt-4">

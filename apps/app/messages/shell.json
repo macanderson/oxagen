@@ -215,6 +215,8 @@
       "title": "Your avatar",
       "cancel": "Cancel",
       "save": "Save avatar",
+      "remove": "Remove avatar",
+      "removeHint": "Use your default initials instead.",
       "saving": "Saving",
       "kind": "Kind",
       "kinds": {

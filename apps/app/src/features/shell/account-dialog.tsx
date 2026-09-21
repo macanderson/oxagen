@@ -555,7 +555,7 @@ function previewFor(locale: string, timeZone: string) {
 function PreferencesTab({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account.preferences");
   const navigate = useNavigate();
-  const { theme, setTheme } = useShellState();
+  const { setTheme, previewTheme } = useShellState();
   const localeId = useId();
   const zoneId = useId();
   const themeId = useId();
@@ -571,8 +571,10 @@ function PreferencesTab({ data }: { data: ShellData }) {
     void readPreferences(data.org.slug)
       .then((result) => {
         if (!live) return;
-        if (result.ok) setState({ kind: "ready", draft: result.value });
-        else if (result.reason === "denied") setState({ kind: "denied" });
+        if (result.ok) {
+          setState({ kind: "ready", draft: result.value });
+          setTheme(result.value.theme);
+        } else if (result.reason === "denied") setState({ kind: "denied" });
         else setState({ kind: "failed" });
       })
       .catch(() => {
@@ -580,34 +582,20 @@ function PreferencesTab({ data }: { data: ShellData }) {
       });
     return () => {
       live = false;
+      previewTheme(null);
     };
-  }, [data.org.slug]);
+  }, [data.org.slug, setTheme, previewTheme]);
 
-  // The page follows the draft theme, wherever the draft came from: the store
-  // on load, or the selector after that.
-  //
-  // It used to follow only the selector, and `useTheme` seeds itself from the
-  // theme cookie, which is per browser. So in a new browser, or after the
-  // cookie was cleared, a stored "dark" was shown selected in this form while
-  // the page rendered the system theme: the tab contradicted the page, and
-  // the saved preference was honoured only if the person toggled the control
-  // that already showed the value they wanted.
-  //
-  // Writing the cookie on load is a commit rather than a preview, which is the
-  // distinction #3333 §13 turns on: the value came from the store, so the
-  // cookie is being brought into line with a decision already taken.
-  //
-  // What this does not do is fix the first paint. Someone who never opens
-  // Preferences still gets the cookie's answer, because the shell does not
-  // read the preference server-side. Closing that means seeding the theme
-  // from the preference before the page renders, which is a change to the
-  // shell's data loading and the pre-paint script rather than to this tab.
-  const draftTheme = state.kind === "ready" ? state.draft.theme : null;
+  const mounted = useRef(true);
   useEffect(() => {
-    if (draftTheme !== null && draftTheme !== theme) setTheme(draftTheme);
-  }, [draftTheme, theme, setTheme]);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   function edit(patch: Partial<PreferencesDraft>) {
+    if (patch.theme !== undefined) previewTheme(patch.theme);
     if (outcome === "saved") setOutcome(null);
     editsRef.current += 1;
     setState((s) =>
@@ -625,13 +613,13 @@ function PreferencesTab({ data }: { data: ShellData }) {
     try {
       const result = await savePreferences(data.org.slug, state.draft);
       if (result.ok) {
+        setTheme(result.value.theme);
+        if (mounted.current && editsRef.current === sentAt) previewTheme(null);
         // Only if the form is still the one that was sent, and for the same
         // reason as the Profile tab: a selection made while the save was in
         // flight is a decision the person has taken, and replacing it with the
         // older answer under a "Saved." line hides that it was thrown away.
-        // It bites harder here, because the theme selector commits on change:
-        // the page would already be following the newer theme while the form
-        // reverted to the older one and called it saved.
+        // Keep a newer theme preview while committing the saved value below it.
         if (editsRef.current === sentAt) {
           setState({ kind: "ready", draft: result.value });
           setOutcome("saved");
@@ -645,10 +633,14 @@ function PreferencesTab({ data }: { data: ShellData }) {
         // only when the zone actually moved, and at the URL already showing,
         // so the dialog stays open.
         if (result.value.timezone !== data.viewer.timeZone) navigate.refresh();
-      } else if (result.reason === "invalid") setOutcome("invalid");
-      else if (result.reason === "denied") setOutcome("denied");
-      else setOutcome("failed");
+      } else {
+        if (mounted.current) previewTheme(null);
+        if (result.reason === "invalid") setOutcome("invalid");
+        else if (result.reason === "denied") setOutcome("denied");
+        else setOutcome("failed");
+      }
     } catch {
+      if (mounted.current) previewTheme(null);
       setOutcome("failed");
     } finally {
       operation.end();

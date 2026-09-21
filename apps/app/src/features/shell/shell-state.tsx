@@ -45,6 +45,7 @@ type ShellState = {
   setAssistantOpen: (open: boolean) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  previewTheme: (theme: Theme | null) => void;
 };
 
 const ShellStateContext = createContext<ShellState | null>(null);
@@ -87,7 +88,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     if (!open) setAccountTab("profile");
   }, []);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, previewTheme } = useTheme();
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -119,6 +120,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setAssistantOpen,
       theme,
       setTheme,
+      previewTheme,
     }),
     [
       commandOpen,
@@ -131,6 +133,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       assistantOpen,
       theme,
       setTheme,
+      previewTheme,
     ],
   );
   return <ShellStateContext value={value}>{children}</ShellStateContext>;

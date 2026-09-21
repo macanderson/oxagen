@@ -28,13 +28,20 @@ function swapWithoutTransitions(swap: () => unknown): void {
   });
 }
 
-export function useTheme(): { theme: Theme; setTheme: (theme: Theme) => void } {
+export function useTheme(): {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  previewTheme: (theme: Theme | null) => void;
+} {
   // The pre-paint script already applied the cookie; this reads the same value.
-  const [theme, setThemeState] = useState<Theme>(() =>
+  const [committedTheme, setThemeState] = useState<Theme>(() =>
     typeof document === "undefined"
       ? "system"
       : readThemeCookie(document.cookie),
   );
+
+  const [preview, previewTheme] = useState<Theme | null>(null);
+  const theme = preview ?? committedTheme;
 
   useEffect(() => {
     const mql = window.matchMedia(DARK_QUERY);
@@ -61,5 +68,5 @@ export function useTheme(): { theme: Theme; setTheme: (theme: Theme) => void } {
     setThemeState(next);
   }, []);
 
-  return { theme, setTheme };
+  return { theme, setTheme, previewTheme };
 }

@@ -3714,6 +3714,8 @@ type Messages = {
       title: string;
       cancel: string;
       save: string;
+      remove: string;
+      removeHint: string;
       saving: string;
       kind: string;
       kinds: {

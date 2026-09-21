@@ -359,3 +359,57 @@ describe("Save", () => {
     await expectNoAxe(dialog);
   });
 });
+
+describe("removing an avatar", () => {
+  it("clears a saved avatar even when the replacement draft is invalid", async () => {
+    const { user } = await openEditor({
+      avatarUrl: "https://example.com/avatar.png",
+    });
+    await user.clear(screen.getByTestId("avatar-url"));
+    await user.click(screen.getByTestId("avatar-remove"));
+    expect(updateProfile).toHaveBeenCalledWith(shellData().org.slug, {
+      avatarUrl: "",
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("which")).toHaveTextContent("account");
+    });
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("serializes removal with other avatar saves", async () => {
+    let finish: ((value: unknown) => void) | undefined;
+    updateProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openEditor({
+      avatarUrl: "https://example.com/avatar.png",
+    });
+    await user.click(screen.getByTestId("avatar-remove"));
+    expect(screen.getByTestId("avatar-remove")).toBeDisabled();
+    await user.click(screen.getByTestId("avatar-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(1);
+    finish?.({ ok: false, reason: "denied" });
+    await waitFor(() => {
+      expect(screen.getByTestId("avatar-remove")).toBeEnabled();
+    });
+  });
+
+  it("keeps a refused removal available for retry", async () => {
+    updateProfile.mockResolvedValue({ ok: false, reason: "denied" });
+    const { user } = await openEditor({
+      avatarUrl: "https://example.com/avatar.png",
+    });
+    await user.click(screen.getByTestId("avatar-remove"));
+    expect(await screen.findByTestId("avatar-denied")).toBeVisible();
+    expect(screen.getByTestId("avatar-remove")).toBeEnabled();
+    expect(screen.getByTestId("which")).toHaveTextContent("avatar");
+  });
+
+  it("has no remove control when the account already uses default initials", async () => {
+    await openEditor({ avatarUrl: null });
+    expect(screen.queryByTestId("avatar-remove")).not.toBeInTheDocument();
+  });
+});
