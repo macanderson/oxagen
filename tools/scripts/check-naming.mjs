@@ -158,6 +158,7 @@ const ACTIONS = new Set([
   "change",
   "mark",
   "send",
+  "resend",
   "open",
   "format",
   "parse",

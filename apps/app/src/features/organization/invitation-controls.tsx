@@ -1,0 +1,116 @@
+"use client";
+import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+import { buttonSecondary } from "@/ui/control-styles";
+import { FormAlert } from "@/ui/form-feedback";
+import { useNavigate } from "@/ui/navigation";
+import { resendInvitation, revokeInvitation } from "./actions";
+import {
+  type ActionFailure,
+  UNANSWERED,
+  useActionFailure,
+} from "./action-failure";
+
+export function InvitationControls({
+  org,
+  invitationId,
+  allowed,
+}: {
+  org: string;
+  invitationId: string;
+  allowed: boolean;
+}) {
+  const t = useTranslations("organization.invitations");
+  const describeFailure = useActionFailure();
+  const navigate = useNavigate();
+  const busyRef = useRef(false);
+  const [confirming, setConfirming] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<ActionFailure | null>(null);
+  const [outcome, setOutcome] = useState<
+    "resent" | "revoked" | "deliveryFailed" | null
+  >(null);
+  async function act(verb: "resend" | "revoke") {
+    if (!allowed || busyRef.current || outcome === "revoked") return;
+    busyRef.current = true;
+    setPending(true);
+    setFailure(null);
+    setOutcome(null);
+    try {
+      const result = await (verb === "resend"
+        ? resendInvitation
+        : revokeInvitation)(org, invitationId);
+      if (result.ok) {
+        setOutcome(
+          verb === "resend"
+            ? "delivery" in result.value && result.value.delivery === "failed"
+              ? "deliveryFailed"
+              : "resent"
+            : "revoked",
+        );
+        setConfirming(false);
+        navigate.refresh();
+      } else setFailure(result);
+    } catch {
+      setFailure(UNANSWERED);
+    } finally {
+      busyRef.current = false;
+      setPending(false);
+    }
+  }
+  return (
+    <div className="flex flex-col gap-2" data-testid="invitation-controls">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={buttonSecondary}
+          disabled={!allowed || pending || outcome === "revoked"}
+          onClick={() => void act("resend")}
+        >
+          {t("resend")}
+        </button>
+        <button
+          type="button"
+          className={buttonSecondary}
+          disabled={!allowed || pending || outcome === "revoked"}
+          onClick={() => {
+            setConfirming(true);
+          }}
+        >
+          {t("revoke")}
+        </button>
+      </div>
+      {confirming ? (
+        <div
+          role="group"
+          aria-label={t("confirmTitle")}
+          className="flex flex-col gap-2"
+        >
+          <p>{t("confirmBody")}</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={buttonSecondary}
+              disabled={pending}
+              onClick={() => void act("revoke")}
+            >
+              {t("confirmRevoke")}
+            </button>
+            <button
+              type="button"
+              className={buttonSecondary}
+              disabled={pending}
+              onClick={() => {
+                setConfirming(false);
+              }}
+            >
+              {t("keepInvitation")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {failure ? <FormAlert>{describeFailure(failure)}</FormAlert> : null}
+      <p role="status">{pending ? t("working") : outcome ? t(outcome) : ""}</p>
+    </div>
+  );
+}
