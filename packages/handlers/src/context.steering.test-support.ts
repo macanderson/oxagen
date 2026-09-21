@@ -250,6 +250,30 @@ export class MemoryStore implements SteeringStore {
         : null,
     };
   }
+  /** The same rollup the Postgres store runs: distinct runs, per kind, per lineage. */
+  async recordEffect(scope: { workspaceId: string }, lineageId: string) {
+    const mine = this.appends.filter(
+      (a) =>
+        a.workspaceId === scope.workspaceId &&
+        (a.kind === "context_use" || a.kind === "context_use_feedback"),
+    );
+    if (mine.length === 0) return null;
+    const runs = (kind: string) => {
+      const seen = new Set<string>();
+      for (const a of mine) {
+        if (a.kind !== kind || a.lineageId !== lineageId) continue;
+        for (const ref of a.sourceRefs ?? []) {
+          const run = /^frame:([^/]+)\//.exec(ref)?.[1];
+          if (run) seen.add(run);
+        }
+      }
+      return seen.size;
+    };
+    return {
+      rendered: runs("context_use"),
+      cited: runs("context_use_feedback"),
+    };
+  }
   async listActiveRecords(scope: { workspaceId: string }) {
     return this.records.filter(
       (r) =>
@@ -480,6 +504,13 @@ export class FakeGitHub implements SteeringGitHub {
   heads = new Map<string, string>();
   /** sha → its parent sha. */
   private parents = new Map<string, string>();
+  /**
+   * sha → when it was committed and what its message said. A commit's date and
+   * message are fixed when it is made, which is what lets a test read a
+   * record's provenance back off the commit that published it rather than off
+   * the clock at read time.
+   */
+  private commitMeta = new Map<string, { at: Date; message: string }>();
   branches: { branch: string; from: string }[] = [];
   commits: { path: string; branch: string; message: string }[] = [];
   pulls: {
@@ -540,7 +571,7 @@ export class FakeGitHub implements SteeringGitHub {
     return `head${this.commitNo}`;
   }
   /** A commit on a branch, as anyone with push access makes one. */
-  commit(branch: string, path: string, content: string): string {
+  commit(branch: string, path: string, content: string, message = ""): string {
     const parent = this.shaOf(branch);
     const sha = this.nextSha();
     for (const [key, c] of this.files)
@@ -548,6 +579,10 @@ export class FakeGitHub implements SteeringGitHub {
         this.files.set(`${sha}:${key.slice(parent.length + 1)}`, c);
     this.files.set(`${sha}:${path}`, content);
     this.parents.set(sha, parent);
+    this.commitMeta.set(sha, {
+      at: this.clock(),
+      message: message || `commit ${sha}`,
+    });
     this.heads.set(branch, sha);
     return sha;
   }
@@ -574,6 +609,41 @@ export class FakeGitHub implements SteeringGitHub {
   }
   async readFile(_repo: SteeringRepository, path: string, ref: string) {
     return this.files.get(`${this.shaOf(ref)}:${path}`) ?? null;
+  }
+  /**
+   * The newest commit on `ref` whose tree holds `path`, walking the parent
+   * chain the way git does. Null when nothing on that ref ever wrote it, so a
+   * test can put a file in the constructor's seed — which has no commit behind
+   * it — and see the provenance block report exactly that.
+   */
+  async lastCommitForPath(
+    _repo: SteeringRepository,
+    path: string,
+    ref: string,
+  ) {
+    for (const sha of this.lineage(this.shaOf(ref))) {
+      // GitHub lists the commits that CHANGED the path, not the ones whose
+      // tree happens to hold it. Every commit after a file lands carries that
+      // file forward, so a fake that ignored the parent would hand a record
+      // the provenance of whatever landed on the branch last.
+      const content = this.files.get(`${sha}:${path}`);
+      if (content === undefined) continue;
+      const parent = this.parents.get(sha);
+      if (parent && this.files.get(`${parent}:${path}`) === content) continue;
+      const meta = this.commitMeta.get(sha);
+      // No recorded commit means the file came from the constructor's seed,
+      // which has no commit behind it. Null, so a test can see the provenance
+      // block report exactly that instead of a date the fake invented.
+      if (!meta) return null;
+      return {
+        sha,
+        authorName: "Fixture Author",
+        authorLogin: "fixture-author",
+        committedAt: meta.at.toISOString(),
+        summary: meta.message.split("\n", 1)[0] ?? "",
+      };
+    }
+    return null;
   }
   async ensureBranch(
     _repo: SteeringRepository,
@@ -614,7 +684,12 @@ export class FakeGitHub implements SteeringGitHub {
     _repo: SteeringRepository,
     args: { path: string; content: string; message: string; branch: string },
   ) {
-    const commitSha = this.commit(args.branch, args.path, args.content);
+    const commitSha = this.commit(
+      args.branch,
+      args.path,
+      args.content,
+      args.message,
+    );
     this.commits.push({
       path: args.path,
       branch: args.branch,
@@ -730,12 +805,16 @@ export class FakeGitHub implements SteeringGitHub {
       if (key.startsWith(`${head}:`))
         this.files.set(`${mergeSha}:${key.slice(head.length + 1)}`, content);
     this.parents.set(mergeSha, this.shaOf(pr.base));
+    const mergedAt = this.clock();
+    // The merge commit is the publishing commit: it is what put these bytes on
+    // the production branch, so it is what a record's provenance names.
+    this.commitMeta.set(mergeSha, { at: mergedAt, message: args.commitTitle });
     this.heads.set(pr.base, mergeSha);
     Object.assign(pr, {
       state: "closed",
       merged: true,
       mergeCommitSha: mergeSha,
-      mergedAt: this.clock(),
+      mergedAt,
       headSha: head,
     });
     return { sha: mergeSha };

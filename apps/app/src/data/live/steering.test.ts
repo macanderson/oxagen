@@ -3,11 +3,13 @@
 // reported once.
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
+import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
 import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   contextPrOutput,
   proposalOutput,
+  recordGetOutput,
   recordOutput,
   recordsOutput,
 } from "@/test/steering-outputs";
@@ -94,6 +96,65 @@ describe("steering.records", () => {
   });
 });
 
+describe("steering.record", () => {
+  it("reads the record the lineage names and maps it", async () => {
+    kernelRead.mockResolvedValue(readOk(recordGetOutput()));
+    const read = await steering.record(ctx, "ctx.release.no-reread-changelog");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: contextRecordsGet,
+      input: { recordId: "ctx.release.no-reread-changelog" },
+      page: "steering",
+    });
+    expect(read.ok && read.value.provenance?.commit).toContain("4d5e6f7a8b9c");
+    expect(read.ok && read.value.effect).toEqual({ rendered: 214, cited: 37 });
+  });
+
+  // DoD 4: the file is the backing, and a record the mirror has no row for
+  // still reads. Deleting the row leaves `id` null and changes nothing else.
+  it("reads a record the registry holds no row for", async () => {
+    kernelRead.mockResolvedValue(
+      readOk(
+        recordGetOutput({
+          record: { ...recordOutput(), id: null, updatedAt: null },
+        }),
+      ),
+    );
+    const read = await steering.record(ctx, "ctx.release.no-reread-changelog");
+    expect(read.ok && read.value.record.id).toBeNull();
+    expect(read.ok && read.value.record.statement).toContain("CHANGELOG.md");
+  });
+
+  // An appended record carries a lineage too, and is not in force. Answering
+  // this route with one would show an unpublished sentence as a governed rule.
+  it("answers not-found for an appended record (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ source: "appended", record: {}, provenance: {} }),
+    );
+    expect(await steering.record(ctx, "ctx.appended.thing")).toEqual(
+      readError("not_found", 404),
+    );
+  });
+
+  it("passes a denial through without mapping (negative)", async () => {
+    kernelRead.mockResolvedValue(DENIED);
+    expect(await steering.record(ctx, "ctx.anything")).toEqual(DENIED);
+  });
+
+  it("answers record_unmappable and reports once for a record the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk(recordGetOutput({ record: { ...recordOutput(), lineageId: "" } })),
+    );
+    expect(await steering.record(ctx, "ctx.anything")).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+    expect(captureError.mock.calls[0]?.[0]).toMatchObject({
+      orgId: ctx.orgId,
+      context: "steering.record record_unmappable",
+    });
+  });
+});
+
 describe("steering.proposals", () => {
   it("reads one page of proposals and maps them", async () => {
     kernelRead.mockResolvedValue(
@@ -113,6 +174,29 @@ describe("steering.proposals", () => {
     kernelRead.mockResolvedValue(down);
     expect(await steering.proposals(ctx, { offset: 0 })).toEqual(down);
     expect(captureError).not.toHaveBeenCalled();
+  });
+
+  // #3395: the record page asks whether a change is already open on ONE
+  // lineage. Without the filter it would have to guess from the first page of
+  // every proposal in the workspace.
+  it("narrows to one lineage when the caller names one", async () => {
+    kernelRead.mockResolvedValue(readOk({ proposals: [], total: 0 }));
+    await steering.proposals(ctx, { offset: 0, lineage: "ctx.a.b" });
+    expect(kernelRead.mock.calls[0]?.[1]).toMatchObject({
+      input: { limit: 50, offset: 0, lineageId: "ctx.a.b" },
+    });
+  });
+
+  it("sends no lineage when the caller names none", async () => {
+    kernelRead.mockResolvedValue(readOk({ proposals: [], total: 0 }));
+    await steering.proposals(ctx, { offset: 0 });
+    // Asserted whole rather than field by field: an exact input is the only
+    // way to say `lineageId` was not sent, rather than merely not checked.
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: contextProposalList,
+      input: { limit: 50, offset: 0 },
+      page: "steering",
+    });
   });
 });
 

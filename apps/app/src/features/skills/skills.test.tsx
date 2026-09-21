@@ -125,6 +125,7 @@ const source: DataSource = {
   audit: { events: vi.fn(), exportEvents: vi.fn() },
   steering: {
     records: vi.fn(),
+    record: vi.fn(),
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),

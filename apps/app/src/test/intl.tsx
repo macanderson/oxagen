@@ -17,6 +17,7 @@ import fleet from "../../messages/fleet.json";
 import mandate from "../../messages/mandate.json";
 import onboarding from "../../messages/onboarding.json";
 import organization from "../../messages/organization.json";
+import record from "../../messages/record.json";
 import run from "../../messages/run.json";
 import shell from "../../messages/shell.json";
 import skills from "../../messages/skills.json";
@@ -38,6 +39,7 @@ export const messages = {
   ...mandate,
   ...onboarding,
   ...organization,
+  ...record,
   ...run,
   ...shell,
   ...skills,
