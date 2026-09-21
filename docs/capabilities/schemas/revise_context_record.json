@@ -1,0 +1,397 @@
+{
+  "name": "revise_context_record",
+  "domain": "context",
+  "description": "Revise a published record's statement: raise a proposal carrying its kind, force, effect and scope unchanged, and open the Context PR that publishes the new wording. The lineage is kept; nothing is in force until the pull request merges.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "recordId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "statement": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      }
+    },
+    "required": [
+      "recordId",
+      "statement"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      },
+      "lineageId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "proposed",
+          "pr_open",
+          "checks_running",
+          "checks_passed",
+          "checks_failed",
+          "merged",
+          "rejected"
+        ]
+      },
+      "governanceMode": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "solo",
+              "team",
+              "regulated"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pr": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "url": {
+                "type": "string"
+              },
+              "repository": {
+                "type": "string"
+              },
+              "baseRef": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              },
+              "headSha": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "url",
+              "repository",
+              "baseRef",
+              "branch",
+              "headSha",
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "record": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "recordId": {
+                "type": "string"
+              },
+              "recordHash": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "rule",
+                  "constraint",
+                  "procedure",
+                  "fact",
+                  "memory",
+                  "preference"
+                ]
+              },
+              "force": {
+                "type": "string",
+                "enum": [
+                  "must",
+                  "should",
+                  "may",
+                  "info"
+                ]
+              },
+              "constraintEffect": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "require",
+                      "forbid"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sharingScope": {
+                "type": "string",
+                "enum": [
+                  "repository",
+                  "workspace"
+                ]
+              },
+              "statement": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "recordId",
+              "recordHash",
+              "kind",
+              "force",
+              "constraintEffect",
+              "sharingScope",
+              "statement"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "body": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "checks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "enum": [
+                "schema",
+                "lineage_uniqueness",
+                "record_hash",
+                "secret_pii_scan",
+                "conflict_against_active",
+                "constraint_effect"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "running",
+                "passed",
+                "failed"
+              ]
+            },
+            "summary": {
+              "type": "string"
+            },
+            "detailsUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "startedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "completedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "status",
+            "summary",
+            "detailsUrl",
+            "startedAt",
+            "completedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "onMerge": {
+        "type": "object",
+        "properties": {
+          "publishes": {
+            "type": "object",
+            "properties": {
+              "lineageId": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "lineageId",
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          "bundleVersion": {
+            "type": "object",
+            "properties": {
+              "current": {
+                "type": "integer"
+              },
+              "afterMerge": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "current",
+              "afterMerge"
+            ],
+            "additionalProperties": false
+          },
+          "review": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "publishes",
+          "bundleVersion",
+          "review"
+        ],
+        "additionalProperties": false
+      },
+      "merged": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "commit": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              },
+              "byUserId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "promotionEventId": {
+                "type": "string"
+              },
+              "recordId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "commit",
+              "at",
+              "byUserId",
+              "promotionEventId",
+              "recordId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "proposalId",
+      "lineageId",
+      "status",
+      "governanceMode",
+      "pr",
+      "record",
+      "body",
+      "checks",
+      "onMerge",
+      "merged"
+    ],
+    "additionalProperties": false
+  }
+}

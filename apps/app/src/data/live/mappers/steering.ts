@@ -5,12 +5,14 @@
 // not carried: the page words each governance mode from its own catalog.
 import type { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import type { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
+import type { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
 import type { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
 import type { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import type { z } from "zod";
 import type {
   ContextPr,
   ProposalPage,
+  RecordDetail,
   RecordPage,
   SteeringFreshness,
 } from "@/data/contracts/steering";
@@ -35,6 +37,62 @@ export function toRecordPage(
       publishedAt: record.publishedAt,
     })),
     total: out.total,
+  };
+}
+
+/**
+ * `get_record` on a published lineage to the record page's view model.
+ *
+ * The appended branch of the union has no mapping here: the route names a
+ * lineage, and a `cta_` append is read on the run that wrote it. The adapter
+ * refuses that branch before this runs.
+ */
+export function toRecordDetail(
+  out: Extract<
+    ContractOutput<typeof contextRecordsGet>,
+    { source: "published" }
+  >,
+): z.input<typeof RecordDetail> {
+  return {
+    record: {
+      id: out.record.id,
+      lineage: out.record.lineageId,
+      title: out.record.title,
+      kind: out.record.kind,
+      force: out.record.force,
+      constraintEffect: out.record.constraintEffect,
+      sharingScope: out.record.sharingScope,
+      statement: out.record.statement,
+      status: out.record.status,
+      version: out.record.version,
+      commit: out.record.commit,
+      path: out.record.path,
+      publishedAt: out.record.publishedAt,
+    },
+    backing: out.backing,
+    provenance:
+      out.provenance === null
+        ? null
+        : {
+            commit: out.provenance.commit,
+            authorName: out.provenance.authorName,
+            authorLogin: out.provenance.authorLogin,
+            committedAt: out.provenance.committedAt,
+            summary: out.provenance.summary,
+          },
+    effect:
+      out.effect === null
+        ? null
+        : { rendered: out.effect.rendered, cited: out.effect.cited },
+    versions: out.versions.map((version) => ({
+      id: version.id,
+      version: version.version,
+      checksum: version.checksum,
+      isLatest: version.isLatest,
+      publishedAt: version.publishedAt,
+    })),
+    proposalId: out.proposalId,
+    prUrl: out.prUrl,
   };
 }
 

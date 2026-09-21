@@ -145,9 +145,13 @@ export function onboardingSource(reads: Reads): {
       apiKeys: refuse("org.apiKeys"),
       modelCredential: refuse("org.modelCredential"),
     },
-    skills: { inventory: refuse("skills.inventory") },
+    skills: {
+      inventory: refuse("skills.inventory"),
+      configuration: refuse("skills.configuration"),
+    },
     steering: {
       records: refuse("steering.records"),
+      record: refuse("steering.record"),
       proposals: refuse("steering.proposals"),
       contextPr: refuse("steering.contextPr"),
       freshness: refuse("steering.freshness"),

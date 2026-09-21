@@ -376,6 +376,7 @@ describe("tachod and the transcript", () => {
         reason: "other",
       }),
     ).toBe(200);
+    await restarted.flushGitReads();
     const chain = restarted.wal.read(uuid);
     const kinds = chain.map((e) => e.kind);
     const lastCall = kinds.lastIndexOf("llm_call");

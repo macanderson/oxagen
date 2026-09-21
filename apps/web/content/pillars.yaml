@@ -19,10 +19,10 @@ pillars:
     name: Ontologies
     tagline: The map an agent reasons over.
     description: >-
-      How typed entities, relationships, and time-aware facts turn a pile of
-      documents into a map an agent can cite. Description logics, knowledge
-      graphs, graph-grounded retrieval, and what the research says about
-      grounding answers in structure instead of similarity.
+      Typed entities, relationships, and time-aware facts that turn a pile of
+      documents into a map an agent can cite: description logics, knowledge
+      graphs, graph-grounded retrieval, and the research on grounding an
+      answer in structure instead of similarity.
     order: 1
     treatment: ontology
 
@@ -38,11 +38,11 @@ pillars:
 
   - slug: coding-agents
     name: Coding agents
-    tagline: Agents that change code, on the record.
+    tagline: Agents that read, write, and fix code.
     description: >-
-      What the benchmarks measure, how repository-scale agents plan and repair,
-      and why every turn needs to be reproducible and auditable before a team
-      can trust it in a production tree.
+      What SWE-bench and its peers measure, how these agents plan and repair
+      a change across a whole repository, and what a team needs to trust the
+      result before it reaches a production tree.
     order: 3
     treatment: terminal
 
@@ -51,8 +51,8 @@ pillars:
     tagline: Models that train on their own output.
     description: >-
       Bootstrapped reasoning, self-rewarding training, and the hard limits the
-      research keeps finding: model collapse, the myth of unaided
-      self-correction, and why external verification is not optional.
+      research keeps finding: model collapse and the myth of unaided
+      self-correction.
     order: 4
     treatment: meter
 
@@ -60,9 +60,8 @@ pillars:
     name: Self-evolving agents
     tagline: Agents that rewrite their own playbook.
     description: >-
-      Skill libraries, workflow memory, automated agent design, and systems
-      that modify their own code. What the evidence shows, where it breaks,
-      and what governing a system that changes itself has to look like.
+      Skill libraries, workflow memory, automated agent design, and code that
+      modifies itself. What the evidence shows, and where it breaks.
     order: 5
     treatment: gate
 
@@ -71,9 +70,9 @@ pillars:
     tagline: Work that runs for days without you watching.
     description: >-
       The horizon an agent can hold is getting longer, and the practices that
-      worked at ten minutes do not survive a week. What the measurements show
-      about long runs, why they come apart, and what an operator has to set
-      before starting one: the context an agent is handed, the steering it
-      runs under, and the record it leaves.
+      work at ten minutes do not survive a week. What the measurements show
+      about long runs, and what an operator has to set before starting one:
+      the context an agent is handed, the steering it runs under, and the
+      record it leaves.
     order: 6
     treatment: ledger

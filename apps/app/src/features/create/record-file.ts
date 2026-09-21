@@ -14,7 +14,7 @@ import type {
   RecordForce,
   RecordKind,
 } from "@/data/contracts/steering";
-import { estimateTokens, wordsOf } from "./skill-file";
+import { estimateTokens, wordsOf } from "./draft-text";
 
 /** proposedRecordSchema's statement limit. */
 export const STATEMENT_MAX = 2000;

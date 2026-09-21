@@ -9,7 +9,7 @@ export const skillSearchPreview = registerCapability({
   description:
     "Preview approved skill resolution at a published configuration version. Shows a person withheld names and reasons without loading skills into a run.",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

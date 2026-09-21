@@ -73,7 +73,6 @@ describe("skill configuration publication", () => {
       expect(store.publish).not.toHaveBeenCalled();
     },
   );
-
   it("proposes only valid configuration against the binding's approved branch", async () => {
     const { service, github, repository, store } = setup();
     await expect(

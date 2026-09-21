@@ -15,4 +15,6 @@ The handler checks the role on every plan. Configuration comes only from the app
 
 See [the version 1 configuration format](../specs/skill-resolution-config.md). This is the configuration and human preview increment of #3098. Agent run pinning, belt injection, interjections, reflection quarantine and the Steering console remain separate integration work. Oxagen resolves skills; the harness runs them.
 
-Publication requires the merged PR's changed files to include `.oxagen/skills.toml` without deleting it. A PR that only changes another file cannot supply review provenance for the configuration.
+## App
+
+Open Steering > Skills. Versions shows published history and an editable TOML draft. Opening a PR does not publish it. An organization owner or admin imports repository settings or publishes a verified merged PR.

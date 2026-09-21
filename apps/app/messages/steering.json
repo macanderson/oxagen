@@ -49,6 +49,7 @@
       "emptyTitle": "Nothing steers this workspace yet",
       "empty": "Published records live in .oxagen/rules/ on the workspace repository. A proposal becomes a record when its Context PR merges.",
       "emptyKind": "No record of that kind is in force in this workspace.",
+      "open": "Open the record",
       "authority": "A record never grants authority. A constraint can only require or forbid, and a repository record can narrow what a workspace record allows, never widen it.",
       "facts": {
         "version": "Version",

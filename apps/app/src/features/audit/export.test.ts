@@ -73,10 +73,11 @@ const source: DataSource = {
   },
   audit: { events: refuse, exportEvents },
   onboarding: { state: refuse, firstFrame: refuse },
-  skills: { inventory: refuse },
+  skills: { inventory: refuse, configuration: refuse },
   mandates: { list: refuse, get: refuse },
   steering: {
     records: refuse,
+    record: refuse,
     proposals: refuse,
     contextPr: refuse,
     freshness: refuse,

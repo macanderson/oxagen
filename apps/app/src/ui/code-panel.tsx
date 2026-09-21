@@ -54,7 +54,8 @@ function paint(line: string, language: CodeLanguage): ReactNode[] {
   });
 }
 
-const gutter = "select-none pr-3 text-right tabular-nums text-code-comment/70";
+const gutter =
+  "select-none pr-3 text-right tabular-nums text-code-comment/70";
 
 /** The control that unfolds a pane, and says how much is still folded. */
 function More({
