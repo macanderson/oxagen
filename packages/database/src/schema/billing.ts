@@ -1190,6 +1190,9 @@ export const usageOutbox = billingSchema.table(
       .defaultNow(),
   },
   (t) => ({
+    incompleteIdx: index("usage_outbox_incomplete_idx")
+      .on(t.admittedAt)
+      .where(sql`${t.usageComplete} = false`),
     pendingIdx: index("usage_outbox_pending_idx")
       .on(t.nextAttemptAt)
       .where(sql`${t.deliveredAt} IS NULL AND ${t.payload} IS NOT NULL`),

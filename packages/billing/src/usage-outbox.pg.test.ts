@@ -162,13 +162,17 @@ describe.skipIf(!process.env["DATABASE_URL"])(
     it("retains failed delivery, retries the same identity, and never repeats a debit", async () => {
       mocks.insert.mockRejectedValue(new Error("breaker open"));
       const before = await state();
-      const failed = await deliverUsageOutbox();
+      const boundary = new Date();
+      const failed = await deliverUsageOutbox(100, boundary);
       expect(failed.failed).toBeGreaterThanOrEqual(2);
       expect(
         (await state()).entries.every(
           (entry) => entry.payload !== null && entry.deliveredAt === null,
         ),
       ).toBe(true);
+      const attempts = mocks.insert.mock.calls.length;
+      await deliverUsageOutbox(100, boundary);
+      expect(mocks.insert).toHaveBeenCalledTimes(attempts);
       await withSystemDb((tx) =>
         tx
           .update(schema.usageOutbox)

@@ -100,7 +100,13 @@ export async function finalizeUsage(args: {
 /** Cross-tenant scheduled delivery. Every mutation names its locked admission. */
 export async function deliverUsageOutbox(
   limit = 100,
-): Promise<{ delivered: number; failed: number; incomplete: number }> {
+  eligibleBefore = new Date(),
+): Promise<{
+  selected: number;
+  delivered: number;
+  failed: number;
+  incomplete: number;
+}> {
   let delivered = 0;
   let failed = 0;
   // System access is required for the platform's cross-tenant delivery queue.
@@ -112,7 +118,7 @@ export async function deliverUsageOutbox(
         and(
           isNull(schema.usageOutbox.deliveredAt),
           isNotNull(schema.usageOutbox.payload),
-          lte(schema.usageOutbox.nextAttemptAt, new Date()),
+          lte(schema.usageOutbox.nextAttemptAt, eligibleBefore),
         ),
       )
       .orderBy(asc(schema.usageOutbox.nextAttemptAt))
@@ -186,5 +192,5 @@ export async function deliverUsageOutbox(
       { incomplete, alert: "billing_usage_incomplete" },
       "Provider usage needs reconciliation",
     );
-  return { delivered, failed, incomplete };
+  return { selected: pending.length, delivered, failed, incomplete };
 }
