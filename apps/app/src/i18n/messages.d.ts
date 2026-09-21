@@ -3134,6 +3134,7 @@ type Messages = {
       frames: string;
       cost: string;
       approvals: string;
+      proof: string;
     };
     transcript: {
       title: string;
@@ -3497,6 +3498,70 @@ type Messages = {
     };
     loading: string;
     unnamedRun: string;
+    proof: {
+      title: string;
+      verdict: string;
+      disclosure: string;
+      empty: string;
+      oracle: string;
+      heldOut: string;
+      yes: string;
+      no: string;
+      commandDigest: string;
+      attempt: string;
+      observedAt: string;
+      frame: string;
+      target: string;
+      targetResult: string;
+      head: string;
+      headResult: string;
+      failFingerprint: string;
+      passDigest: string;
+      tamper: string;
+      authoredFingerprint: string;
+      runFingerprint: string;
+      witnessRun: string;
+      attestation: string;
+      attestationNote: string;
+      key: string;
+      signature: string;
+      witnessCosts: string;
+      basisUnknown: string;
+      verdicts: {
+        flipped: string;
+        failing: string;
+        unmoved: string;
+        unsatisfied: string;
+        tampered: string;
+        unverified: string;
+        waived: string;
+      };
+      results: {
+        pass: string;
+        fail: string;
+        excluded: string;
+        inconclusive: string;
+      };
+      oracles: {
+        test_flip: string;
+        build_or_type: string;
+        property: string;
+        golden_snapshot: string;
+        contract: string;
+        metamorphic: string;
+        behavioral_probe: string;
+      };
+      tamperStates: {
+        held: string;
+        broken: string;
+      };
+      bases: {
+        gateway_observed: string;
+        client_attested: string;
+        mixed: string;
+        estimated: string;
+      };
+    };
   };
   shell: {
     skipToContent: string;

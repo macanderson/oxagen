@@ -114,6 +114,7 @@ const source: DataSource = {
     cost: vi.fn(),
     transcript: vi.fn(),
     chain: vi.fn(),
+    proof: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn() },
   agents: {

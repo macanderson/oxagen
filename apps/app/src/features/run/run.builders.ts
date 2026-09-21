@@ -1,3 +1,4 @@
+import type { RunProof } from "@/data/contracts/run-proof";
 // Typed Run values for the Run component tests (ARCHITECTURE.md §5): the
 // detail read, its frames, the cost rollup, a transcript, and a DataSource
 // that answers the Run page's reads with what a test hands it. Importable from
@@ -463,6 +464,7 @@ export function runCost(overrides: Partial<RunCost> = {}): RunCost {
 }
 
 type RunReads = {
+  proof?: Read<RunProof>;
   detail: Read<RunDetail>;
   /** Only read when the Cost tab is open; refused when absent. */
   cost?: Read<RunCost>;
@@ -501,6 +503,7 @@ export function runSource(reads: RunReads) {
     approvals: unknown[][];
     resolvedApprovals: unknown[][];
     chain: unknown[][];
+    proof: unknown[][];
     mandates: unknown[][];
   } = {
     get: [],
@@ -510,6 +513,7 @@ export function runSource(reads: RunReads) {
     approvals: [],
     resolvedApprovals: [],
     chain: [],
+    proof: [],
     mandates: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
@@ -543,6 +547,7 @@ export function runSource(reads: RunReads) {
         );
       },
       chain: answer("chain", reads.chain),
+      proof: answer("proof", reads.proof),
     },
     approvals: {
       pending: answer("approvals", reads.approvals),
@@ -597,3 +602,46 @@ export function runSource(reads: RunReads) {
 }
 
 export const ok = readOk;
+
+export function runProof(overrides: Partial<RunProof> = {}): RunProof {
+  return {
+    runId: "tse_7k2m9q",
+    verdict: "flipped",
+    disclosureGrain: "L0",
+    witnesses: [
+      {
+        witnessId: "witness-tests",
+        oracle: "test_flip",
+        commandDigest: "sha256:command",
+        heldOut: true,
+        verdict: "flipped",
+        attempts: [
+          {
+            attemptNo: 1,
+            frameSeq: "42",
+            observedAt: "2026-09-20T12:00:00.000Z",
+            targetRef: "main",
+            targetSha: "abc123",
+            prRef: "fix/witness",
+            prSha: "def456",
+            targetResult: "fail",
+            prResult: "pass",
+            verdict: "flipped",
+            failFingerprint: "sha256:failure",
+            passOutputDigest: "sha256:output",
+            tamperExclusion: "held",
+            tamper: null,
+            disclosureGrain: "L0",
+            witnessRunId: "arun_witness1",
+            runnerAttestation: {
+              keyId: "runner-key-1",
+              signature: "recorded-signature",
+            },
+          },
+        ],
+      },
+    ],
+    witnessRuns: [{ runId: "arun_witness1", cost: null }],
+    ...overrides,
+  };
+}

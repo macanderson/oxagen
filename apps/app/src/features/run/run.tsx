@@ -16,9 +16,10 @@ import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
 import { RunHeader } from "./header";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
+import { ProofSection } from "./proof";
 import { kindsParam, TranscriptSection } from "./transcript";
 
-const TABS = ["transcript", "cost", "frames", "approvals"] as const;
+const TABS = ["transcript", "cost", "frames", "approvals", "proof"] as const;
 type Tab = (typeof TABS)[number];
 
 /** A frame's position as the contract spells it (`frameSeqSchema`): decimal, at most 19 digits. */
@@ -178,6 +179,15 @@ export async function Run({
         />
       );
       break;
+    case "proof": {
+      section = (
+        <ProofSection
+          read={await source.runs.proof(ctx, detail.run.id)}
+          {...place}
+        />
+      );
+      break;
+    }
     case "frames": {
       const seq = body !== null && FRAME_SEQ.test(body) ? body : null;
       section = (

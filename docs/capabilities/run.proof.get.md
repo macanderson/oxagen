@@ -11,6 +11,7 @@ The Run page's Proof tab (Mission Control spec §8.5; ADR-064): every witness th
 - API: `POST /v1/:org_slug/:workspace_slug/runs/proof`
 - MCP: none. MCP is the surface agents connect to, and a worker must not learn which witness failed or which were held out (§8.5 invariants 2 and 3).
 - Authentication: a signed-in session only (org Owner, Admin or Member; workspace Owner or Member). Every API-key caller is refused with `forbidden` (`session_required`), whoever minted the key.
+- App: the Proof tab at `/{org}/{workspace}/runs/{run}?tab=proof`. It shows recorded verdicts and runner attestations; it does not independently verify the signature. Witness-run links open their run records. Missing verdicts and costs remain unrecorded.
 - Capability name: `get_run_proof`
 - Not billed (`noBillingGate: true`): a console read is never a governed action. IAM default-deny; high sensitivity.
 

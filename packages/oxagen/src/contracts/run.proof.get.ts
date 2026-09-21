@@ -77,7 +77,7 @@ export const runProofGet = registerCapability({
     "Read one run's proof record: every witness that reported on it with each attempt's target and head results, fingerprints and attestation, the run's verdict, the cost of each witness run, and the workspace's disclosure grain.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

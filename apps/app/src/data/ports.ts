@@ -47,6 +47,7 @@ import type {
   TranscriptKind,
   TranscriptZoom,
 } from "./contracts/run";
+import type { RunProof } from "./contracts/run-proof";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
@@ -173,6 +174,7 @@ export interface DataSource {
       q?: { kinds?: TranscriptKind[]; after?: string | null },
     ): Promise<Read<RunTranscript>>;
     chain(ctx: WsCtx, runId: string): Promise<Read<RunChain>>;
+    proof(ctx: WsCtx, runId: string): Promise<Read<RunProof>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {

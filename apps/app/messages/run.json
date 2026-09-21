@@ -42,7 +42,8 @@
       "transcript": "Transcript",
       "frames": "Frames",
       "cost": "Cost",
-      "approvals": "Approvals"
+      "approvals": "Approvals",
+      "proof": "Proof"
     },
     "transcript": {
       "title": "Transcript",
@@ -405,6 +406,70 @@
       }
     },
     "loading": "Loading this run",
-    "unnamedRun": "Untitled run"
+    "unnamedRun": "Untitled run",
+    "proof": {
+      "title": "Proof",
+      "verdict": "Recorded verdict",
+      "disclosure": "Worker disclosure",
+      "empty": "No witness has reported on this run.",
+      "oracle": "Check type",
+      "heldOut": "Held out from the worker",
+      "yes": "Yes",
+      "no": "No",
+      "commandDigest": "Command digest",
+      "attempt": "Attempt {number}",
+      "observedAt": "Observed",
+      "frame": "Recorded frame",
+      "target": "Target revision",
+      "targetResult": "Target result",
+      "head": "Proposed revision",
+      "headResult": "Proposed result",
+      "failFingerprint": "Failure fingerprint",
+      "passDigest": "Passing output digest",
+      "tamper": "Witness integrity",
+      "authoredFingerprint": "Authored fingerprint",
+      "runFingerprint": "Fingerprint at execution",
+      "witnessRun": "Witness run",
+      "attestation": "Recorded runner attestation",
+      "attestationNote": "The record carries this key and signature. This page does not independently verify the signature.",
+      "key": "Signing key",
+      "signature": "Signature",
+      "witnessCosts": "Witness run costs",
+      "basisUnknown": "basis not recorded",
+      "verdicts": {
+        "flipped": "Flipped",
+        "failing": "Failing",
+        "unmoved": "Unmoved",
+        "unsatisfied": "Unsatisfied",
+        "tampered": "Tampered",
+        "unverified": "Unverified",
+        "waived": "Waived"
+      },
+      "results": {
+        "pass": "Pass",
+        "fail": "Fail",
+        "excluded": "Excluded",
+        "inconclusive": "Inconclusive"
+      },
+      "oracles": {
+        "test_flip": "Test flip",
+        "build_or_type": "Build or type check",
+        "property": "Property",
+        "golden_snapshot": "Golden snapshot",
+        "contract": "Contract",
+        "metamorphic": "Metamorphic",
+        "behavioral_probe": "Behavioral probe"
+      },
+      "tamperStates": {
+        "held": "Fingerprint held",
+        "broken": "Fingerprint changed"
+      },
+      "bases": {
+        "gateway_observed": "gateway observed",
+        "client_attested": "client attested",
+        "mixed": "mixed",
+        "estimated": "estimated"
+      }
+    }
   }
 }

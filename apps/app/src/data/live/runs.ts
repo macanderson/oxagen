@@ -14,6 +14,9 @@
 // for `FRAME_PAGE` frames by name, because the mapper needs the size it asked
 // for to tell a full page from the end of the recording.
 import "server-only";
+import { runProofGet } from "@oxagen/oxagen/contracts/run.proof.get";
+import { RunProof } from "@/data/contracts/run-proof";
+import { toRunProof } from "./mappers/run-proof";
 import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
@@ -67,6 +70,15 @@ function view<S extends z.ZodType>(
 }
 
 export const runs: DataSource["runs"] = {
+  async proof(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runProofGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(ctx.orgId, RunProof, toRunProof(read.value), "runs.proof");
+  },
   async list(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: runList,

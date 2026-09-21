@@ -1,6 +1,7 @@
 // The runs port: one list_runs page through the kernel seam at the asked
 // cursor, mapped into the Fleet view, with a refusal passed through and an
 // unmappable record reported once.
+import { runProofGet } from "@oxagen/oxagen/contracts/run.proof.get";
 import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
@@ -685,5 +686,29 @@ describe("runs.chain", () => {
       status: 502,
     });
     expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("proof port", () => {
+  it("uses the session-scoped proof capability and keeps an empty record empty", async () => {
+    const value = {
+      runId: "tse_run1",
+      verdict: null,
+      disclosureGrain: "L0",
+      witnesses: [],
+      witnessRuns: [],
+    };
+    kernelRead.mockResolvedValue(readOk(value));
+    expect(await runs.proof(ctx, "tse_run1")).toEqual(readOk(value));
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runProofGet,
+      input: { runId: "tse_run1" },
+      page: "run",
+    });
+  });
+  it("passes denial through instead of returning an empty proof", async () => {
+    const denied = { ok: false, reason: "denied", permission: "get_run_proof" };
+    kernelRead.mockResolvedValue(denied);
+    expect(await runs.proof(ctx, "tse_run1")).toBe(denied);
   });
 });

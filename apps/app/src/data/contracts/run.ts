@@ -8,9 +8,8 @@
 // where the contract may not have recorded it, and a null renders as "not
 // recorded", never as a zero.
 //
-// Two slices of the mockup's Run page are not here, because this lane does not
-// build them: the Proof tab and the witness run's own tab set (`witnessFor`,
-// spec §8.5), which #2955 owns.
+// The Proof tab has its view model in run-proof.ts. Witness-specific tab
+// variants remain part of #2955.
 import { z } from "zod";
 import { Cost } from "./money";
 import { EnforcementTier, ReplayGrade, RunRow } from "./runs";

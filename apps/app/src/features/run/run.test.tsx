@@ -30,6 +30,7 @@ import {
   mockupTranscript,
   runSource,
   runTranscript,
+  runProof,
   transcriptBody,
   transcriptEntry,
 } from "./run.builders";
@@ -419,7 +420,7 @@ describe("tabs", () => {
   });
 
   it("opens Transcript for a tab that is not a section, Policy included (negative)", async () => {
-    for (const tab of ["proof", "policy"]) {
+    for (const tab of ["unknown", "policy"]) {
       cleanup();
       const { calls } = await renderRun(
         { detail: ok(runDetail()), transcript: ok(runTranscript()) },
@@ -1409,5 +1410,17 @@ describe("loading", () => {
     expect(main?.tagName).toBe("MAIN");
     expect(main).toContainElement(screen.getByRole("heading", { name: "Run" }));
     expect(main).toContainElement(screen.getByRole("status"));
+  });
+});
+
+describe("proof tab routing", () => {
+  it("reads proof only for the selected proof tab", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), proof: ok(runProof()) },
+      { tab: "proof" },
+    );
+    expect(screen.getByTestId("run-proof")).toBeInTheDocument();
+    expect(calls.proof).toEqual([[ctx, "tse_7k2m9q"]]);
+    expect(calls.transcript).toHaveLength(0);
   });
 });
