@@ -61,8 +61,10 @@ describe("recorder identity across upgrades", () => {
         sessionUuid(SCOPE, legacy ? ID : `codex/${ID}`),
       );
       if (legacy)
+        // The legacy parent is unscoped; its child derives from the parent's
+        // recorded uuid, not a harness-scoped seed.
         expect(snapshot.children[0]?.sessionUuid).toBe(
-          sessionUuid(SCOPE, `${ID}/agent/child`),
+          sessionUuid(SCOPE, `${before.sessionUuid}/agent/child`),
         );
       const terminal = restored.finalize("completed", at);
       for (const chain of [snapshot, ...snapshot.children]) {

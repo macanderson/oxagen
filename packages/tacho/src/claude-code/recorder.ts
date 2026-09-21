@@ -255,10 +255,14 @@ export class SessionRecorder {
       harness !== "claude-code" &&
       isWrappedHarness(harness);
     const scopedSeed = scopeHarness ? `${harness}/${seed}` : seed;
+    // A child always derives from its parent's recorded uuid. Gating this on
+    // the child's own `restore` state made the derivation change across a
+    // restart (a restored child took the unscoped seed while the live child
+    // used the parent's uuid), splitting one subagent into two chains.
     const derived = options.parent
       ? sessionUuid(
           options.scope,
-          `${scopeHarness ? options.parent.sessionUuid : scopedSeed}/agent/${options.parent.subagentId}`,
+          `${options.parent.sessionUuid}/agent/${options.parent.subagentId}`,
         )
       : sessionUuid(options.scope, scopedSeed);
     this.sessionUuid =
