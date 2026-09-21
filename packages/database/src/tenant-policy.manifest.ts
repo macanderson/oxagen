@@ -295,6 +295,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "tools.mandates", policyClass: "standard" },
   { table: "tools.mandate_ledger", policyClass: "standard" },
 
+  { table: "skills.config_versions", policyClass: "standard" },
+  { table: "skills.resolutions", policyClass: "standard" },
+
   // ── tacho.* — hosts, sessions, and control state for agents Oxagen does
   //   not run (docs/specs/tacho/data-model.md section 3). Every one carries
   //   org_id + workspace_id NOT NULL → standard tenant_isolation.

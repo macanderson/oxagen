@@ -1192,6 +1192,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_skill_config",
+    async () =>
+      (await import("./skill.config.get"))
+        .skillConfigGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "update_skill_config",
+    async () =>
+      (await import("./skill.config.update"))
+        .skillConfigUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "preview_skill_search",
+    async () =>
+      (await import("./skill.search.preview"))
+        .skillSearchPreviewHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_skills",
     async () =>
       (await import("./skill.list")).skillListHandler as CapabilityHandlerFn,
