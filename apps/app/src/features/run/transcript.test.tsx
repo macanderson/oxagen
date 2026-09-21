@@ -864,9 +864,11 @@ describe("live access changes", () => {
 });
 
 describe("empty transcript access changes", () => {
-  it.each([{ kinds: [] }, { kinds: ["errors"] }] as {
-    kinds: TranscriptKind[];
-  }[])("shows access refusal for filter %j", ({ kinds }) => {
+  const accessCases: { kinds: TranscriptKind[] }[] = [
+    { kinds: [] },
+    { kinds: ["errors"] },
+  ];
+  it.each(accessCases)("shows access refusal for filter %j", ({ kinds }) => {
     const sources: EventTarget[] = [];
     class Source extends EventTarget {
       static readonly CLOSED = 2;
