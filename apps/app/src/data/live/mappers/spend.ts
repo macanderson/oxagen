@@ -210,6 +210,9 @@ export function toPriceBook(
   return {
     at: out.at,
     entries: out.entries.map((entry) => ({
+      ...(entry.cancellationToken === undefined
+        ? {}
+        : { cancellationToken: entry.cancellationToken }),
       provider: entry.provider,
       model: entry.model,
       modelAliases: entry.modelAliases,

@@ -1,3 +1,4 @@
+import { openPriceCancellation } from "./lib/price-cancellation-token";
 import { HandlerError } from "@oxagen/oxagen";
 import { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
 import type { PriceEntry } from "@oxagen/billing";
@@ -24,6 +25,7 @@ vi.mock("@oxagen/iam/org-role", () => ({
 }));
 afterEach(() => {
   gate.refuse = false;
+  vi.unstubAllEnvs();
 });
 
 const NOW = new Date("2026-09-14T15:00:00.000Z");
@@ -75,6 +77,34 @@ describe("list_price_entries", () => {
     });
     expect(out).toEqual({ at: NOW.toISOString(), entries: [] });
     expect(() => costPriceEntryList.output.parse(out)).not.toThrow();
+  });
+
+  it("opts a management read into scheduled negotiated rates", async () => {
+    vi.stubEnv("BETTER_AUTH_SECRET", "test-price-secret-with-32-characters");
+    const h = harness([
+      entry({
+        orgId: SCOPE.orgId,
+        source: "negotiated",
+        effectiveFrom: new Date("2026-12-01T00:00:00Z"),
+      }),
+    ]);
+    const out = await h.handler({ includeScheduled: true }, ctx());
+    expect(h.listPriceEntries).toHaveBeenCalledWith({
+      at: NOW,
+      orgId: SCOPE.orgId,
+      includeScheduled: true,
+    });
+    expect(out.entries[0]?.effectiveFrom).toBe("2026-12-01T00:00:00.000Z");
+    expect(
+      openPriceCancellation(out.entries[0]!.cancellationToken!),
+    ).toMatchObject({
+      id: out.entries[0]!.id,
+      orgId: SCOPE.orgId,
+      effectiveFrom: out.entries[0]!.effectiveFrom,
+    });
+    expect(costPriceEntryList.input.parse({})).not.toHaveProperty(
+      "includeScheduled",
+    );
   });
 
   it("lists the book effective at the instant asked for", async () => {

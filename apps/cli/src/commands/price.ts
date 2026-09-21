@@ -257,6 +257,7 @@ export interface PriceRemoveCliOptions {
    * gap in the output afterward.
    */
   confirmUnpriced?: boolean;
+  scheduledEntryId?: string;
   json?: boolean;
 }
 
@@ -304,6 +305,9 @@ export async function priceRemove(
         region: opts.region ?? null,
         at,
         confirmUnpriced: opts.confirmUnpriced ? true : undefined,
+        ...(opts.scheduledEntryId === undefined
+          ? {}
+          : { scheduledEntryId: opts.scheduledEntryId }),
       },
     );
   } catch (err) {
@@ -339,4 +343,31 @@ export async function priceRemove(
   );
   writer.write("");
   renderEntries([result.closed], writer);
+}
+
+/** Read current rates, optionally including this organization's scheduled rows. */
+export async function priceList(
+  opts: { at?: string; includeScheduled?: boolean; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  const at = opts.at === undefined ? undefined : parseInstant(opts.at);
+  if (at === null) {
+    process.exitCode = 2;
+    out.error("Invalid --at. Provide an RFC 3339 instant.", "usage");
+    return;
+  }
+  try {
+    const result = await apiPostOrThrow<{
+      at: string;
+      entries: PriceEntryRow[];
+    }>("cost/price-entries", {
+      at,
+      ...(opts.includeScheduled ? { includeScheduled: true } : {}),
+    });
+    if (out.isJson) out.data(result);
+    else renderEntries(result.entries, writer);
+  } catch (err) {
+    out.error(err, "api");
+  }
 }

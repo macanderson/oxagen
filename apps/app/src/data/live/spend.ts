@@ -144,7 +144,7 @@ export const spend: DataSource["spend"] = {
     // change, and the contract resolves the read instant itself.
     const read = await kernelRead(ctx, {
       contract: costPriceEntryList,
-      input: {},
+      input: { includeScheduled: true },
       page: "spend",
     });
     return toView(read, PriceBook, toPriceBook, {

@@ -18,7 +18,7 @@ Removed the 5000-model observation cap before the price comparison. Made CLI can
 A cap described as a safety limit retained the same missing-model defect as the smaller cap it replaced.
 
 ### Risks left behind
-The observation query now returns every model in its bounded time window. Query failure stays visible rather than returning a partial comparison. Scheduled rates and atomic card submission remain separate work on #3323.
+The observation query now returns every model in its bounded time window. Query failure stays visible rather than returning a partial comparison. Scheduled rates now have an opt-in management read, cancellation of one selected future row, and bounded UI rendering. The app carries an encrypted cancellation token because its view models forbid raw database IDs. Atomic card submission remains separate work on #3323.
 
 ### Confidence
 Medium. Independent coverage audit passed. CI must run the added witnesses; no additional local tests ran.

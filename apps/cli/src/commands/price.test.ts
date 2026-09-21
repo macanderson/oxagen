@@ -29,7 +29,7 @@ vi.mock("../lib/api.js", async () => {
 });
 
 import { captureWriter } from "../lib/capture-writer";
-import { priceRemove, priceSet, type PriceEntryRow } from "./price";
+import { priceList, priceRemove, priceSet, type PriceEntryRow } from "./price";
 
 function row(over: Partial<PriceEntryRow> = {}): PriceEntryRow {
   return {
@@ -251,5 +251,30 @@ describe("price remove", () => {
     expect(apiPostOrThrow).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(2);
     expect(c.output()).toContain(message);
+  });
+});
+
+describe("price list", () => {
+  it.each([undefined, true])(
+    "opts into scheduled rows only when requested: %s",
+    async (includeScheduled) => {
+      apiPostOrThrow.mockResolvedValue({
+        at: "2026-09-20T00:00:00Z",
+        entries: [row()],
+      });
+      const c = captureWriter();
+      await priceList({ includeScheduled }, c.writer);
+      expect(apiPostOrThrow).toHaveBeenCalledWith("cost/price-entries", {
+        at: undefined,
+        ...(includeScheduled ? { includeScheduled: true } : {}),
+      });
+      expect(c.output()).toContain("claude-sonnet-5");
+    },
+  );
+  it("refuses an invalid instant before reading", async () => {
+    const c = captureWriter();
+    await priceList({ at: "not-an-instant" }, c.writer);
+    expect(apiPostOrThrow).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(2);
   });
 });

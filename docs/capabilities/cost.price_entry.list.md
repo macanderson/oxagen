@@ -10,6 +10,7 @@ The price book as the active organization reads it (Mission Control spec §12.2,
 
 - API: `POST /v1/:org_slug/:workspace_slug/cost/price-entries`
 - MCP: `list_price_entries`
+- CLI: `oxagen price list [--at <instant>] [--include-scheduled]`
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `list_price_entries`
 - Not billed (`noBillingGate: true`). IAM default-deny; low sensitivity.
@@ -19,6 +20,7 @@ The price book as the active organization reads it (Mission Control spec §12.2,
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `at` | string | no | RFC 3339; the read instant when omitted |
+| `includeScheduled` | boolean | no | Also return this organization's future negotiated rows. Omitted or false retains the effective-at-instant read |
 
 ## Output
 
@@ -44,3 +46,7 @@ An entry:
 ## Tenancy
 
 RLS on `cost.price_entries` is the `tenant_isolation` policy, which for this table is org-or-global (`org_id IS NULL OR org_id = <the session's org>`): a tenant session reads the rows with a null `org_id` and its own; a negotiated row for another organization is never returned.
+
+## Scheduled rates
+
+The Pricing tab opts into scheduled rows and groups them by their future start time. Each group renders up to 100 rows per page. Remove sends an authenticated opaque cancellation token for the selected row to `remove_price_entry`, which cancels only that future row and restores the preceding rate until the next scheduled row, if any.
