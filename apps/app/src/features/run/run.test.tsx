@@ -214,10 +214,49 @@ describe("header", () => {
     expect(facts.getByText("claude-sonnet-5")).toBeTruthy();
     expect(facts.getByText("anthropic \u00b7 sonnet")).toBeTruthy();
     expect(facts.getByText("mac-studio.local")).toBeTruthy();
+    expect(facts.getByText("Session machine facts not recorded.")).toBeTruthy();
     expect(
-      facts.getByText("darwin 15.6 \u00b7 arm64 \u00b7 v24.4.0"),
+      facts.getByText(
+        "Enrollment hostname and facts: darwin · 15.6 · arm64 · v24.4.0",
+      ),
     ).toBeTruthy();
     await expectNoAxe(container);
+  });
+
+  it("labels session host observations separately from enrollment facts", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            machine: {
+              hostname: "old-host",
+              platform: "darwin",
+              osVersion: "15.6",
+              arch: "arm64",
+              nodeVersion: "v24.4.0",
+              recorded: {
+                platform: "linux",
+                osVersion: "6.12",
+                arch: "x64",
+                recordedAt: "2026-09-20T00:00:00Z",
+                eventHash: `sha256:${"a".repeat(64)}`,
+              },
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const facts = within(screen.getByTestId("run-facts"));
+    expect(
+      facts.getByText("Recorded in this session: linux · 6.12 · x64"),
+    ).toBeTruthy();
+    expect(
+      facts.getByText(
+        "Enrollment hostname and facts: darwin · 15.6 · arm64 · v24.4.0",
+      ),
+    ).toBeTruthy();
+    expect(facts.queryByText("Session machine facts not recorded.")).toBeNull();
   });
 
   it("reads a model and a machine the run does not carry as not recorded, never a placeholder", async () => {

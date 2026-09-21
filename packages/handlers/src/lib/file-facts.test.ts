@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  fileIdentityOf,
   languageOf,
   observedChangesOf,
   repoRelativePathOf,
@@ -112,8 +113,9 @@ describe("repoRelativePathOf", () => {
     expect(repoRelativePathOf("/repo", "/repo")).toBeUndefined();
   });
 
-  it("returns an already relative path unchanged", () => {
-    expect(repoRelativePathOf("src/a.ts", undefined)).toBe("src/a.ts");
+  it("leaves repository identity unknown for an unplaced relative path", () => {
+    expect(repoRelativePathOf("src/a.ts", undefined)).toBeUndefined();
+    expect(repoRelativePathOf("src/a.ts", "/repo")).toBe("src/a.ts");
   });
 
   it("returns undefined for an absolute path with no known root", () => {
@@ -186,8 +188,8 @@ describe("repoRelativePathOf", () => {
     // normalized. A tool on Windows reports `src\\a.ts` for the file a POSIX
     // host calls `src/a.ts`, and storing both would put two keys in a column
     // whose whole purpose is to read the same on every machine.
-    expect(repoRelativePathOf("src\\a.ts", undefined)).toBe("src/a.ts");
-    expect(repoRelativePathOf("src/a.ts", undefined)).toBe("src/a.ts");
+    expect(repoRelativePathOf("src\\a.ts", "C:/repo")).toBe("src/a.ts");
+    expect(repoRelativePathOf("src/a.ts", "C:/repo")).toBe("src/a.ts");
   });
 });
 
@@ -260,5 +262,33 @@ describe("observedChangesOf", () => {
     });
     expect(rows[0]?.repo_relative_path).toBe("");
     expect(rows[0]?.path).toBe("/repo/src/a.ts");
+  });
+});
+
+describe("fileIdentityOf", () => {
+  it.each([
+    ["src/a.ts", "/repo", "/repo/src/a.ts"],
+    ["./src/a.ts", "/repo", "/repo/src/a.ts"],
+    ["src/../src/a.ts", "/repo", "/repo/src/a.ts"],
+    ["src\\a.ts", "C:\\Repo", "c:/repo/SRC/A.ts"],
+    ["src\\a.ts", "\\\\server\\share", "//SERVER/share/src/a.ts"],
+  ])("matches %s in %s to its absolute identity", (path, root, absolute) => {
+    expect(fileIdentityOf(path, root).key).toBe(fileIdentityOf(absolute).key);
+  });
+
+  it("keeps worktrees, unplaced paths, POSIX case, and literal backslashes distinct", () => {
+    expect(fileIdentityOf("src/a.ts", "/one").key).not.toBe(
+      fileIdentityOf("src/a.ts", "/two").key,
+    );
+    expect(fileIdentityOf("src/a.ts").key).not.toBe(
+      fileIdentityOf("src/a.ts", "/one").key,
+    );
+    expect(fileIdentityOf("/repo/A.ts").key).not.toBe(
+      fileIdentityOf("/repo/a.ts").key,
+    );
+    expect(fileIdentityOf("src\\a.ts", "/repo").path).toBe("/repo/src\\a.ts");
+    expect(fileIdentityOf("src\\a.ts", "/repo").key).not.toBe(
+      fileIdentityOf("src/a.ts", "/repo").key,
+    );
   });
 });
