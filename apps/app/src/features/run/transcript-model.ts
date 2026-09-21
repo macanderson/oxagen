@@ -8,6 +8,7 @@
 // carry is left out rather than drawn as a zero.
 import { type Money, sumMoney } from "@/data/contracts/money";
 import type { TranscriptBody, TranscriptEntry } from "@/data/contracts/run";
+import { type ToolDetail, toolDetail } from "./tool-detail";
 
 /**
  * The one half of the exchange an entry carries, or null.
@@ -107,6 +108,23 @@ const CONTROL: ReadonlySet<string> = new Set([
   "turn_start",
   "turn_end",
 ]);
+/**
+ * The effect frames the recorder writes *about* a tool call: the command it
+ * ran, the file it touched, the host it reached (tacho spec §6.1, stage
+ * `effect`).
+ *
+ * These are not steps. They are the same action the tool frame beside them
+ * already records, written again from the side of what it did to the machine,
+ * and a `command` frame carries no body of its own in the common case. Drawn
+ * as their own rows they doubled every Bash call in the transcript: one line
+ * saying `Bash`, and a second saying `command` with "neither half of this
+ * exchange was recorded" under it. Folded into the step they belong to, they
+ * are what they always were — more evidence for the same step — and the
+ * reader sees one line per thing the agent did. Nothing is dropped: every
+ * folded frame is still in the step's `frames`, still drawn when the step is
+ * opened, and still on the Frames tab.
+ */
+const EFFECT: ReadonlySet<string> = new Set(["command", "file_io", "network"]);
 
 /**
  * Which indices the step opening at `i` owns, and what kind it is.
@@ -127,6 +145,36 @@ const CONTROL: ReadonlySet<string> = new Set([
  * close of the right type, with only TOOL_GATE frames allowed between a tool's
  * request and its call.
  */
+/**
+ * The effect frames that belong to the tool step covering `indices`, appended
+ * to it.
+ *
+ * A frame belongs when it carries the step's `callKey` — which is exact, and
+ * survives two calls running at once — or, when neither side recorded a key,
+ * when it sits immediately after the frames the step already owns. Adjacency
+ * is the fallback and not the rule, so an effect frame that names a different
+ * call is never folded into the wrong step; it stays its own row, which is
+ * the honest reading of a record that says they are different things.
+ */
+function absorbEffects(
+  frames: readonly TranscriptEntry[],
+  indices: number[],
+  callKey: string | null,
+): number[] {
+  const out = [...indices];
+  let at = (out[out.length - 1] ?? 0) + 1;
+  while (at < frames.length) {
+    const next = frames[at];
+    if (next === undefined || !EFFECT.has(next.type)) break;
+    const sameCall = callKey !== null && next.callKey === callKey;
+    const unkeyed = callKey === null && next.callKey === null;
+    if (!sameCall && !unkeyed) break;
+    out.push(at);
+    at += 1;
+  }
+  return out;
+}
+
 function stepPair(
   frames: readonly TranscriptEntry[],
   i: number,
@@ -160,7 +208,10 @@ function stepPair(
         const next = frames[j];
         if (next === undefined) break;
         if (next.type === close && next.callKey === callKey) {
-          return { indices: [i, j], kind: "tool" };
+          return {
+            indices: absorbEffects(frames, [i, j], callKey),
+            kind: "tool",
+          };
         }
       }
       return { indices: [i], kind: "tool" };
@@ -171,7 +222,7 @@ function stepPair(
       if (next === undefined) break;
       if (next.type === close) {
         indices.push(j);
-        return { indices, kind: "tool" };
+        return { indices: absorbEffects(frames, indices, null), kind: "tool" };
       }
       if (!TOOL_GATE.has(next.type)) break;
       indices.push(j);
@@ -179,7 +230,15 @@ function stepPair(
     return { indices, kind: "tool" };
   }
   if (frame.kind === "model_call") return { indices: [i], kind: "model" };
-  if (frame.kind === "tool_call") return { indices: [i], kind: "tool" };
+  if (frame.kind === "tool_call") {
+    // A `tool_call` that opens its own step: the producer wrote no separate
+    // request frame, so this one frame is the whole exchange. Its effect
+    // frames still belong to it.
+    return {
+      indices: absorbEffects(frames, [i], frame.callKey),
+      kind: "tool",
+    };
+  }
   // A run of the same bookkeeping frame is one step with a count, not one row
   // per frame. Claude Code registers thirty-odd hooks at a session's start and
   // the recorder writes an `oxagen:hook_health` frame for each, so a run
@@ -346,11 +405,53 @@ function toolStatus(label: string): string | null {
   return status ?? null;
 }
 
-/** The outcome a policy frame recorded (`policy deny` → `deny`), or null. */
+/**
+ * What a gate frame decided — `allow`, `deny`, `ask` — or null.
+ *
+ * The fold's own `decision` is authoritative and is read first; the label is
+ * the fallback. A gate label leads with the decision and names the call it
+ * was decided on after it (`deny Bash`), falling back to `policy deny` where
+ * the row recorded no tool. So the decision is the label's FIRST word, not
+ * its last, and a label that opens with the frame's own kind recorded no
+ * decision at all.
+ */
 function policyOutcome(frame: TranscriptEntry): string | null {
   if (!TOOL_GATE.has(frame.type)) return null;
+  if (frame.decision !== null) return frame.decision.decision;
   const words = frame.label.split(" ");
-  return words.length > 1 ? (words[words.length - 1] ?? null) : null;
+  const head = words[0] ?? "";
+  if (head === frame.type) return null;
+  if (head === "policy") return words[1] ?? null;
+  return words.length > 1 ? head : null;
+}
+
+/** The call a gate frame decided on (`deny Bash` → `Bash`), or null. */
+function policySubject(frame: TranscriptEntry): string | null {
+  if (!TOOL_GATE.has(frame.type)) return null;
+  const words = frame.label.split(" ");
+  if (words.length < 2) return null;
+  const head = words[0] ?? "";
+  // `policy deny` names a decision and no call; every other two-word gate
+  // label is `<decision-or-kind> <tool>`.
+  if (head === "policy") return null;
+  return words[1] ?? null;
+}
+
+/**
+ * The call a frame's decision was made on, for the surface to name beside
+ * the decision.
+ *
+ * A gate frame names the call in its label. A tool frame that carries a
+ * folded decision *is* the call, so its own name is the subject. Anything
+ * else answers null, and the surface says what was decided without claiming
+ * a subject it does not have.
+ */
+export function decisionSubject(frame: TranscriptEntry): string | null {
+  if (TOOL_GATE.has(frame.type)) return policySubject(frame);
+  if (!TOOL_CLOSE.has(frame.type) && frame.type !== "tool_requested")
+    return null;
+  const name = toolName(frame.label);
+  return name === frame.type ? null : name;
 }
 
 const DENIED = /^(deny|denied|reject|rejected|refused)$/;
@@ -420,6 +521,24 @@ export function stepDigest(step: TranscriptStep): StepDigest {
   if (outcome !== null && DENIED.test(outcome)) node = "deny";
   else if (TOOL_GATE.has(first.type)) node = "policy";
   else if (control) node = "control";
+  // A gate step reads as the decision it made and the call it made it on.
+  // `policy_decision` / `policy allow` named neither: the line said which
+  // table the row came out of, which is the one thing a reader already knew.
+  const subject = policySubject(first);
+  if (node === "policy" || (node === "deny" && TOOL_GATE.has(first.type))) {
+    return {
+      node,
+      name: outcome ?? first.type,
+      arg: subject,
+      // The name already is the decision, so the outcome chip would say it a
+      // second time beside itself.
+      outcome: null,
+      status: null,
+      durationMs,
+      cost,
+      repeats: null,
+    };
+  }
   return {
     node,
     name: first.type,
@@ -430,6 +549,35 @@ export function stepDigest(step: TranscriptStep): StepDigest {
     cost,
     repeats: step.frames.length > 1 ? step.frames.length : null,
   };
+}
+
+/**
+ * What a tool step did, read from the body the recorder kept.
+ *
+ * The close frame is preferred because it holds both halves together
+ * (`{input, output}`); the request frame holds the input alone and is the
+ * fallback, which is what a step that never completed leaves behind. A step
+ * whose bodies were all `digest_only` answers a detail with no panes: the
+ * tool's name is still known from the frame's label, so the line still reads
+ * even when there is nothing to show under it.
+ *
+ * Separate from `stepDigest` because it parses JSON, and the view calls it
+ * behind a `useMemo` while it calls `stepDigest` on every render.
+ */
+export function stepTool(step: TranscriptStep): ToolDetail | null {
+  if (step.kind !== "tool") return null;
+  const close = step.frames.find((frame) => TOOL_CLOSE.has(frame.type));
+  const named = close ?? step.first;
+  const name = toolName(named.label);
+  // A label of `Bash ok` names the tool; a label that is just the frame's
+  // type names nothing, and the body's own `name` is then the only source.
+  const known = name === named.type ? null : name;
+  const ordered = close === undefined ? step.frames : [close, ...step.frames];
+  const body =
+    ordered
+      .flatMap((frame) => [frame.response, frame.request])
+      .find((half) => (half?.text ?? null) !== null)?.text ?? null;
+  return toolDetail(known, body);
 }
 
 /** Whether either half of the entry carries text to read. */

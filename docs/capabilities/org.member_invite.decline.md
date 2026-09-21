@@ -45,3 +45,5 @@ Org Owner, Admin, Member (authenticated users can decline invitations addressed 
 | `not_found` | Invitation does not exist. |
 | `already_consumed` | Invitation has already been accepted or declined. |
 | `unauthorized` | Caller is neither the invitation's target nor an org Admin/Owner. |
+
+The handler verifies the acting user against the invitation email. A different recipient may decline only as an Owner or Admin of the invitation's own organization, with the invoking organization matching that target. The pending-state update is conditional, so a concurrent acceptance cannot be overwritten as declined.

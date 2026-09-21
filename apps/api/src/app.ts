@@ -1,3 +1,5 @@
+import { revokeMemberInviteRoute } from "./routes/v1/org.member_invite.revoke";
+import { resendMemberInviteRoute } from "./routes/v1/org.member_invite.resend";
 import { Hono } from "hono";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { requestLogger } from "./middleware/logger";
@@ -802,6 +804,8 @@ orgScoped.route("/org/members/remove", orgMemberRemoveRoute);
 orgScoped.route("/org/members/role", orgMemberRoleChangeRoute);
 orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
+orgScoped.route("/org/invitations/revoke", revokeMemberInviteRoute);
+orgScoped.route("/org/invitations/resend", resendMemberInviteRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
 // Hard period-to-date spend ceilings (org + workspace, OXA-1079).
