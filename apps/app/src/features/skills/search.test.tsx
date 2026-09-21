@@ -105,7 +105,9 @@ describe("skill search preview", () => {
           "No approved description matched within the score and token limits.",
         ),
       ).toBeTruthy();
-      await waitFor(() => expect(previewSkillSearch).toHaveBeenCalledTimes(2));
+      await waitFor(() => {
+        expect(previewSkillSearch).toHaveBeenCalledTimes(2);
+      });
     },
   );
 });
