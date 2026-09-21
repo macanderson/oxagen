@@ -297,8 +297,7 @@
     "8e66332382bad39f0a8ad18b510dc963aaf800a7f66f2e27152c55eec71c4086"
   ],
   "packages/billing/src/spend-counter.ts": [
-    "8c7f4568022fcec14befdfc41ce0d1d43961746a5520ec2db9aafb3b8915cb5c",
-    "e8379b270cd899a297f6e63768ef6c1051b19cfd005b75d362c9f2429f0cb98e"
+    "8c7f4568022fcec14befdfc41ce0d1d43961746a5520ec2db9aafb3b8915cb5c"
   ],
   "packages/billing/src/subscriptions.ts": [
     "1c822a71fd709a66baec4311d6ecaa76a2cbba0c832bf32577cf71ad2593540f",
