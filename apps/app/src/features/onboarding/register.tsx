@@ -213,7 +213,6 @@ async function wrapStep({
         org={place.org}
         ws={place.ws}
         agentId={identity.id}
-        agentKey={identity.agentKey}
         harness={identity.harness}
         gated={gated}
         back={routes.register(place.org, place.ws, "name")}

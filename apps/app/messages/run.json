@@ -67,6 +67,7 @@
       "agent": "AGENT",
       "stepCount": "{count, plural, one {# step} other {# steps}}",
       "frameCount": "{count, plural, one {# frame} other {# frames}}",
+      "repeats": "×{count}",
       "seqSpan": "seq {from} to {to}",
       "ms": "{ms} ms",
       "live": "live",
@@ -109,13 +110,28 @@
       "loadedMore": "{count} entries read so far. More lie past this page.",
       "badCursor": "That resume point is not one this read wrote, so the next page was refused. Everything above is still the record.",
       "pageFailed": "The next page could not be read. Everything above is still the record.",
+      "followDenied": "Access to this run was refused. Ask a workspace Owner or organization Admin to restore access.",
       "followLost": "The connection to the live head dropped. The run kept recording; read more to catch up.",
       "followSealed": "The run sealed while you were following it. This is the whole recording.",
       "request": "Sent",
       "response": "Returned",
       "decision": "Decision: {decision}, at frame {seq}",
+      "decisionOn": "Decision: {decision} on {subject}, at frame {seq}",
       "calledWith": "Called with",
-      "noHalves": "Neither half of this exchange was recorded. Its envelope is on the Frames tab."
+      "noHalves": "Neither half of this exchange was recorded. Its envelope is on the Frames tab.",
+      "showAll": "Show all",
+      "loadedSkill": "Loaded skill",
+      "pane": {
+        "command": "Command",
+        "output": "Output",
+        "diff": "Change",
+        "contents": "Contents",
+        "asked": "Asked",
+        "arguments": "Arguments",
+        "brief": "Brief",
+        "plan": "Plan",
+        "input": "Input"
+      }
     },
     "frames": {
       "title": "Frames",

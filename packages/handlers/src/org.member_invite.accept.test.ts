@@ -111,9 +111,21 @@ function makeInvitation(
   };
 }
 
-function makeUpdateChain() {
+/**
+ * The accept UPDATE is a compare-and-swap, so `.where()` is awaited directly by
+ * the best-effort mark-expired write and chained into `.returning()` by the
+ * claim. The thenable carries both. `claimedRows` is what the claim gets back:
+ * one row means this transaction won the race, none means it lost.
+ */
+function makeUpdateChain(
+  claimedRows: { id: string }[] = [{ id: "inv-uuid-001" }],
+) {
   const setCalled = vi.fn().mockReturnThis();
-  const whereCalled = vi.fn().mockResolvedValue(undefined);
+  const whereCalled = vi.fn(() =>
+    Object.assign(Promise.resolve(undefined), {
+      returning: vi.fn().mockResolvedValue(claimedRows),
+    }),
+  );
   return { set: setCalled, where: whereCalled };
 }
 
@@ -214,6 +226,43 @@ describe("orgMemberInviteAcceptHandler", () => {
     await expect(
       orgMemberInviteAcceptHandler({ invitationPublicId: "inv_X" }, ctx),
     ).rejects.toMatchObject({ code: "forbidden", reason: "wrong_email" });
+  });
+
+  // Witness for the revoke/accept race. The pending check runs in an earlier
+  // transaction, so an Owner can revoke between that check and this write. The
+  // claim re-asserts `status = 'pending'`: a revoke that already committed
+  // leaves no pending row, the claim updates nothing, and the accept must
+  // abort before it provisions anything. Without the compare-and-swap the
+  // UPDATE matched by id alone, overwrote `revoked` with `accepted`, and the
+  // revoked invitee got a membership row and an IAM principal.
+  it("revoked between the check and the write → conflicts, provisions nothing", async () => {
+    mockDb.query.invitations.findFirst.mockResolvedValue(makeInvitation());
+    mockSelectFn.mockImplementation(() => ({
+      from: () => ({
+        where: () => ({
+          limit: vi.fn().mockResolvedValue([{ email: "alice@example.com" }]),
+        }),
+      }),
+    }));
+    // The revoke committed first, so the claim matches no pending row.
+    mockUpdate.mockReturnValue(makeUpdateChain([]));
+    mockInsert.mockImplementation(() =>
+      makeInsertChain([{ publicId: "oru_SHOULD_NOT_EXIST" }]),
+    );
+
+    const ctx = makeCtx();
+    await expect(
+      orgMemberInviteAcceptHandler(
+        { invitationPublicId: "inv_TESTACCEPT01" },
+        ctx,
+      ),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "invitation_closed",
+    });
+
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(mockProvisionMemberPrincipal).not.toHaveBeenCalled();
   });
 
   it("happy path → creates membership, provisions principal, assigns role", async () => {

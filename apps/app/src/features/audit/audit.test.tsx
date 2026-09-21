@@ -219,6 +219,25 @@ describe("the record", () => {
     expect(details).toHaveTextContent("oxagen-cli/1.4.0");
   });
 
+  it("shows recorded invalidation facts as escaped text", async () => {
+    const detail = {
+      ruleId: "rule_123",
+      reason: "tool_version_changed",
+      before: { name: "<script>alert(1)</script>" },
+      after: { name: "updated" },
+    };
+    events.mockResolvedValue(
+      recordOf([event({ eventType: "approval_rule.invalidated", detail })]),
+    );
+    await renderAudit();
+    const details = rowOf("approval_rule.invalidated").querySelector("details");
+    expect(details).toHaveTextContent("Recorded facts");
+    expect(details?.querySelector("pre")?.textContent).toBe(
+      JSON.stringify(detail, null, 2),
+    );
+    expect(details?.querySelector("script")).toBeNull();
+  });
+
   it("prints the id of an actor who is no longer a member, rather than nothing", async () => {
     events.mockResolvedValue(recordOf([event({ actor: GONE })]));
     await renderAudit();

@@ -1,0 +1,2 @@
+- [2026-09-20] Derive uninstall ownership from both current host metadata and persistent configuration receipts, since reassign can drop a harness without restoring its model URL. (source: reflections/2026-09-20-failure-recovery.md, agent: evidence-fixes)
+- [2026-09-20] Do not clean writer temporaries in Wal construction: status and export instantiate it concurrently with the daemon. Use the single writer's synchronous compaction path. (source: reflections/2026-09-20-failure-recovery.md, agent: evidence-fixes)

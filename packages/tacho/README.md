@@ -298,3 +298,21 @@ install from those assets.
 
 Not here yet: elevation through the control plane with Biscuit tokens (plan
 PR 6), the Claude Agent SDK and custom-agent adapters (PR 5).
+
+### Recovery during shipment and uninstall
+
+An unreadable WAL body leaves its batch queued with exponential backoff. Command
+polling, git reconciliation, and compaction continue. The daemon's compaction
+scan removes abandoned UUID-suffixed body rewrite files. Read-only status and
+export commands leave those files alone so they cannot interrupt a live rewrite.
+A cleanup failure preserves the original evidence and surfaces the filesystem error.
+
+Unenroll restores model URLs for the harnesses listed in valid host metadata
+and any harness with a model URL receipt left by an earlier enrollment.
+Missing or malformed metadata triggers a sweep of every supported model URL.
+A failed restore for an enrolled harness keeps the gateway and credentials for
+retry. Systemd removal retains the unit on disable failure and restores it on
+reload failure. Windows process inspection errors appear in status detail while
+uninstall still requires confirmation that the daemon has stopped.
+
+Windows process-inspection failures report an unknown running state and retain the error in CLI and Desktop status. A failed orphan rewrite cleanup is reported independently, so compaction can still remove unrelated expired evidence.

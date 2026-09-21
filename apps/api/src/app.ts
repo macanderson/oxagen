@@ -1,3 +1,5 @@
+import { revokeMemberInviteRoute } from "./routes/v1/org.member_invite.revoke";
+import { resendMemberInviteRoute } from "./routes/v1/org.member_invite.resend";
 import { Hono } from "hono";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { requestLogger } from "./middleware/logger";
@@ -268,6 +270,7 @@ import { repositoryListRoute } from "./routes/v1/repository.list";
 import { repositoryTreeGetRoute } from "./routes/v1/repository.tree.get";
 import { repositoryProductionBranchSetRoute } from "./routes/v1/repository.production_branch.set";
 import { repositoryInitPrOpenRoute } from "./routes/v1/repository.init_pr.open";
+import { contextGovernanceModeSetRoute } from "./routes/v1/context.governance_mode.set";
 import { repositoryInstallationListRoute } from "./routes/v1/repository.installation.list";
 import { repositoryInstallationCandidatesRoute } from "./routes/v1/repository.installation.candidates";
 import { repositoryInstallationAttachRoute } from "./routes/v1/repository.installation.attach";
@@ -584,6 +587,7 @@ orgScoped.route(
   repositoryProductionBranchSetRoute,
 );
 orgScoped.route("/repository/init-pr", repositoryInitPrOpenRoute);
+orgScoped.route("/context/governance-mode", contextGovernanceModeSetRoute);
 orgScoped.route(
   "/repository/installation/repositories",
   repositoryInstallationListRoute,
@@ -799,6 +803,8 @@ orgScoped.route("/org/members/remove", orgMemberRemoveRoute);
 orgScoped.route("/org/members/role", orgMemberRoleChangeRoute);
 orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
+orgScoped.route("/org/invitations/revoke", revokeMemberInviteRoute);
+orgScoped.route("/org/invitations/resend", resendMemberInviteRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
 // Hard period-to-date spend ceilings (org + workspace, OXA-1079).

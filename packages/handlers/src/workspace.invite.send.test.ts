@@ -222,9 +222,12 @@ describe("invitation note delivery", () => {
       );
       await vi.waitFor(() => {
         expect(mocks.sendEmail).toHaveBeenCalledWith(
+          expect.objectContaining({ text: expect.stringContaining(message) }),
+        );
+        expect(mocks.sendEmail).toHaveBeenCalledWith(
           expect.objectContaining({
             to: "note@example.com",
-            text: expect.stringContaining(message),
+            text: expect.stringContaining(`/invite/${DEFAULT_ROW.publicId}`),
             html: expect.stringContaining(
               "Join the cost review.<br>Bring your questions.",
             ),

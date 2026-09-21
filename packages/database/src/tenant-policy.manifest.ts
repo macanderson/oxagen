@@ -93,6 +93,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.payment_methods", policyClass: "org_only" },
   { table: "billing.invoices", policyClass: "org_only" },
   { table: "billing.credit_balances", policyClass: "org_only" },
+  { table: "billing.usage_outbox", policyClass: "standard" },
   { table: "billing.credit_ledger", policyClass: "org_only" },
   { table: "billing.credit_lots", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },

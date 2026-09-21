@@ -581,6 +581,26 @@ describe("a prompt with more credentials than one event can record", () => {
       String(many.length),
     );
   });
+
+  it("cuts an unpromoted field at the envelope's attribute bound rather than losing the event", () => {
+    // The daemon refused a whole PostToolUse over one 5,000-character
+    // leftover ("String must contain at most 4096 character(s)" at
+    // attrs.hook.compact_summary), spent the seq, and the chain read as
+    // broken. The envelope's bound is the cap here.
+    const long = "s".repeat(5000);
+    const { event } = sealPrompt({ some_new_upstream_field: long });
+    const kept = event?.attrs["hook.some_new_upstream_field"];
+    expect(kept?.length).toBe(4096);
+    expect(kept?.endsWith("…")).toBe(true);
+    expect(kept?.startsWith("ssss")).toBe(true);
+    // A field within the bound is carried whole (negative).
+    const exact = "e".repeat(4096);
+    expect(
+      sealPrompt({ some_new_upstream_field: exact }).event?.attrs[
+        "hook.some_new_upstream_field"
+      ],
+    ).toBe(exact);
+  });
 });
 
 describe("holding bodies beside the chain", () => {

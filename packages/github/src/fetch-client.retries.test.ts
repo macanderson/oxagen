@@ -197,6 +197,30 @@ describe("fork polling cancellation and limits", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("preserves cancellation raced by a successful availability response", async () => {
+    const controller = new AbortController();
+    const reason = { cancelledBy: "operator" };
+    const available = fork();
+    const read = available.json.bind(available);
+    vi.spyOn(available, "json").mockImplementation(async () => {
+      const body = await read();
+      controller.abort(reason);
+      return body;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(fork())
+      .mockResolvedValueOnce(available);
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      createGitHubClient({
+        token: "token",
+        signal: controller.signal,
+      }).forkRepo(forkArgs),
+    ).rejects.toBe(reason);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects a timed-out availability request without another poll", async () => {
     const fetchMock = vi
       .fn()

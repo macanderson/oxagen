@@ -29,7 +29,7 @@ import { ReadFailure } from "@/ui/read-failure";
 import { Panel } from "./parts";
 import { isNonEmpty } from "./transcript-model";
 import { TranscriptView } from "./transcript-view";
-import { LiveEmptyFollow } from "./use-run-stream";
+import { LiveEmptyFollow } from "./live-empty-follow";
 
 type Place = { org: string; ws: string; runId: string };
 
