@@ -97,13 +97,6 @@ CREATE POLICY tenant_org_wide_read ON skills.resolutions
   FOR SELECT
   USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
 
-CREATE POLICY tenant_org_wide_read ON skills.config_versions
-  FOR SELECT
-  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
-CREATE POLICY tenant_org_wide_read ON skills.resolutions
-  FOR SELECT
-  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
-
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oxagen_app') THEN
