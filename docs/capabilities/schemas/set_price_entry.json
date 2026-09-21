@@ -249,6 +249,9 @@
                   "type": "string",
                   "format": "uuid"
                 },
+                "cancellationToken": {
+                  "type": "string"
+                },
                 "orgId": {
                   "anyOf": [
                     {
@@ -360,6 +363,9 @@
                     "id": {
                       "type": "string",
                       "format": "uuid"
+                    },
+                    "cancellationToken": {
+                      "type": "string"
                     },
                     "orgId": {
                       "anyOf": [
