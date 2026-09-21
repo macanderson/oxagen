@@ -125,12 +125,14 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
   const joinedAt = new Date();
 
   const result = await withSystemDb(async (tx) => {
-    // (a) Mark invitation accepted.
-    // NOTE: the pending/expiry checks above ran in an EARLIER transaction and
-    // this UPDATE does not re-assert `status = 'pending'`, so it is not a
-    // compare-and-swap. An invitation revoked (or accepted a second time)
-    // between the check and here is still accepted.
-    await tx
+    // (a) Mark invitation accepted, as a compare-and-swap.
+    // The pending/expiry checks above ran in an EARLIER transaction, so by the
+    // time this runs an Owner may have revoked the invitation, or a second
+    // accept may have taken it. Re-asserting `status = 'pending'` is what makes
+    // the two mutually exclusive: whichever transaction commits first wins, and
+    // the loser updates no row. Without it, a revoke that returned success was
+    // overwritten here and the invitee was admitted anyway.
+    const [claimed] = await tx
       .update(schema.invitations)
       .set({
         status: "accepted",
@@ -138,7 +140,23 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
         updatedAt: joinedAt,
         updatedById: ctx.userId,
       })
-      .where(eq(schema.invitations.id, invitation.id));
+      .where(
+        and(
+          eq(schema.invitations.id, invitation.id),
+          eq(schema.invitations.status, "pending"),
+        ),
+      )
+      .returning({ id: schema.invitations.id });
+
+    // Thrown inside the transaction, so no membership row and no IAM principal
+    // is left behind by an accept that lost the race.
+    if (!claimed) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "invitation_closed",
+        message: `Invitation '${input.invitationPublicId}' is no longer pending`,
+      });
+    }
 
     // (b) Insert org_users row.
     const [orgUser] = await tx
