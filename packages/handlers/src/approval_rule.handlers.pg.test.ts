@@ -49,6 +49,7 @@ import {
 } from "@oxagen/oxagen";
 
 const doubles = vi.hoisted(() => ({
+  invalidationFailure: false,
   roles: new Map<string, string | null>(),
   events: [] as Array<{ eventType: string; capability: string | null }>,
 }));
@@ -68,18 +69,32 @@ vi.mock("@oxagen/iam/org-role", () => ({
   },
 }));
 
-vi.mock("@oxagen/database/security", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@oxagen/database/security")>()),
-  emitSecurityEvent: (e: { eventType: string; capability: string | null }) => {
-    doubles.events.push({ eventType: e.eventType, capability: e.capability });
-  },
-  emitSecurityEventAsync: async (e: {
-    eventType: string;
-    capability: string | null;
-  }) => {
-    doubles.events.push({ eventType: e.eventType, capability: e.capability });
-  },
-}));
+vi.mock("@oxagen/database/security", async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import("@oxagen/database/security")>();
+  return {
+    ...real,
+    emitSecurityEventIn: (
+      ...args: Parameters<typeof real.emitSecurityEventIn>
+    ) => {
+      if (doubles.invalidationFailure)
+        throw new Error("Audit store unavailable");
+      return real.emitSecurityEventIn(...args);
+    },
+    emitSecurityEvent: (e: {
+      eventType: string;
+      capability: string | null;
+    }) => {
+      doubles.events.push({ eventType: e.eventType, capability: e.capability });
+    },
+    emitSecurityEventAsync: async (e: {
+      eventType: string;
+      capability: string | null;
+    }) => {
+      doubles.events.push({ eventType: e.eventType, capability: e.capability });
+    },
+  };
+});
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "auto-approval rule handlers against Postgres",
@@ -427,151 +442,199 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     beforeEach(() => {
       doubles.events.length = 0;
+      doubles.invalidationFailure = false;
       clearDecisionRulesCache();
     });
 
-    it("disables a reclassified rule and records its event in Postgres", async () => {
-      const slug = `classify_${tag}`;
-      const tool = await declareCapabilityTool(slug, {
-        declared: [],
-        classified: [],
-      });
-      try {
-        doubles.roles.set(ownerUserId, "Admin");
-        await set(ownerUserId, [
-          {
-            ...RULE,
-            id: "classify-rule",
-            tools: [slug],
-            maxMeasures: {},
-            allowTargets: {},
-          },
-        ]);
-        const { toolClassificationSetHandler } = await import(
-          "./tool.classification.set"
-        );
-        const version = await withSystemDb((tx) =>
-          tx.query.toolVersions.findFirst({
-            where: eq(schema.toolVersions.id, tool.versionId),
-          }),
-        );
-        if (!version) throw new Error("Missing fixture version");
-        await inScope(() =>
-          toolClassificationSetHandler(
-            {
-              toolVersionId: version.publicId,
-              riskGrade: "high",
-              reason: "Funds move",
-              classification: {
-                sideEffect: "write",
-                egress: "local",
-                consequenceTags: ["moves_money"],
-                measures: {},
-                dataClasses: [],
-              },
-            },
-            ctx(ownerUserId),
-          ),
-        );
-        const out = await inScope(() =>
-          approvalRuleListHandler({}, ctx(ownerUserId)),
-        );
-        expect(out.items[0]).toMatchObject({
-          enabled: false,
-          createdBy: ownerPublicId,
-          disabledReason: { code: "classification_changed", tool: `${slug}@1` },
+    it.each(["exact", "wildcard"])(
+      "rolls back failed classification and invalidates the active rule (%s)",
+      async (pattern) => {
+        const slug = `classify_${tag}`;
+        const tool = await declareCapabilityTool(slug, {
+          declared: [],
+          classified: [],
         });
-        const events = await withSystemDb((tx) =>
-          tx
-            .select()
-            .from(schema.securityEvents)
-            .where(eq(schema.securityEvents.workspaceId, workspaceId)),
-        );
-        expect(events).toContainEqual(
-          expect.objectContaining({
-            eventType: "approval_rule.invalidated",
-            actorUserId: ownerUserId,
-            detail: expect.objectContaining({
-              ruleId: "classify-rule",
-              tool: `${slug}@1`,
+        try {
+          doubles.roles.set(ownerUserId, "Admin");
+          await set(ownerUserId, [
+            {
+              ...RULE,
+              id: "classify-rule",
+              tools: [pattern === "wildcard" ? `${slug}*` : slug],
+              maxMeasures: {},
+              allowTargets: {},
+            },
+          ]);
+          const { toolClassificationSetHandler } = await import(
+            "./tool.classification.set"
+          );
+          const version = await withSystemDb((tx) =>
+            tx.query.toolVersions.findFirst({
+              where: eq(schema.toolVersions.id, tool.versionId),
             }),
-          }),
-        );
-      } finally {
-        doubles.roles.set(ownerUserId, "Owner");
-        await removeTools([tool]);
-      }
-    });
-
-    it("keeps rules unchanged when a retained inactive version is classified", async () => {
-      const slug = `inactive_${tag}`;
-      const tool = await declareCapabilityTool(slug, {
-        declared: [],
-        classified: [],
-      });
-      try {
-        await set(ownerUserId, [
-          {
-            ...RULE,
-            id: "inactive-rule",
-            tools: [slug],
-            maxMeasures: {},
-            allowTargets: {},
-          },
-        ]);
-        const before = await settingsOf();
-        const old = await withSystemDb(async (tx) => {
-          const version = await tx.query.toolVersions.findFirst({
-            where: eq(schema.toolVersions.id, tool.versionId),
-          });
+          );
           if (!version) throw new Error("Missing fixture version");
-          const values = { ...version, id: undefined, publicId: undefined };
-          const [retained] = await tx
-            .insert(schema.toolVersions)
-            .values({ ...values, versionNumber: 2, isLatest: false })
-            .returning();
-          if (!retained) throw new Error("Missing retained version");
-          return retained;
-        });
-        const { toolClassificationSetHandler } = await import(
-          "./tool.classification.set"
-        );
-        await inScope(() =>
-          toolClassificationSetHandler(
-            {
-              toolVersionId: old.publicId,
-              riskGrade: "high",
-              reason: "Historical classification",
-              classification: {
-                sideEffect: "write",
-                egress: "local",
-                consequenceTags: ["moves_money"],
-                measures: {},
-                dataClasses: [],
+          const savedRules = await settingsOf();
+          doubles.invalidationFailure = true;
+          try {
+            await expect(
+              inScope(() =>
+                toolClassificationSetHandler(
+                  {
+                    toolVersionId: version.publicId,
+                    riskGrade: "high",
+                    reason: "Funds move",
+                    classification: {
+                      sideEffect: "write",
+                      egress: "local",
+                      consequenceTags: ["moves_money"],
+                      measures: {},
+                      dataClasses: [],
+                    },
+                  },
+                  ctx(ownerUserId),
+                ),
+              ),
+            ).rejects.toThrow("Audit store unavailable");
+            expect(await settingsOf()).toEqual(savedRules);
+            const unchanged = await withSystemDb((tx) =>
+              tx.query.toolVersions.findFirst({
+                where: eq(schema.toolVersions.id, tool.versionId),
+              }),
+            );
+            expect(unchanged?.classification).toEqual(version.classification);
+          } finally {
+            doubles.invalidationFailure = false;
+          }
+          await inScope(() =>
+            toolClassificationSetHandler(
+              {
+                toolVersionId: version.publicId,
+                riskGrade: "high",
+                reason: "Funds move",
+                classification: {
+                  sideEffect: "write",
+                  egress: "local",
+                  consequenceTags: ["moves_money"],
+                  measures: {},
+                  dataClasses: [],
+                },
               },
+              ctx(ownerUserId),
+            ),
+          );
+          const out = await inScope(() =>
+            approvalRuleListHandler({}, ctx(ownerUserId)),
+          );
+          expect(out.items[0]).toMatchObject({
+            enabled: false,
+            createdBy: ownerPublicId,
+            disabledReason: {
+              code: "classification_changed",
+              tool: `${slug}@1`,
             },
-            ctx(ownerUserId),
-          ),
-        );
-        expect(await settingsOf()).toEqual(before);
-        const retained = await withSystemDb((tx) =>
-          tx.query.toolVersions.findFirst({
-            where: eq(schema.toolVersions.id, old.id),
-          }),
-        );
-        expect(retained?.isLatest).toBe(false);
-        expect(retained?.classification).toMatchObject({
-          consequenceTags: ["moves_money"],
+          });
+          const events = await withSystemDb((tx) =>
+            tx
+              .select()
+              .from(schema.securityEvents)
+              .where(eq(schema.securityEvents.workspaceId, workspaceId)),
+          );
+          expect(events).toContainEqual(
+            expect.objectContaining({
+              eventType: "approval_rule.invalidated",
+              actorUserId: ownerUserId,
+              detail: expect.objectContaining({
+                ruleId: "classify-rule",
+                tool: `${slug}@1`,
+              }),
+            }),
+          );
+        } finally {
+          doubles.roles.set(ownerUserId, "Owner");
+          await removeTools([tool]);
+        }
+      },
+    );
+
+    it.each(["exact", "wildcard", "irrelevant"])(
+      "keeps rules unchanged when an inactive version is classified (%s)",
+      async (pattern) => {
+        const slug = `inactive_${tag}`;
+        const tool = await declareCapabilityTool(slug, {
+          declared: [],
+          classified: [],
         });
-        await withSystemDb((tx) =>
-          tx
-            .delete(schema.toolVersions)
-            .where(eq(schema.toolVersions.id, old.id)),
-        );
-      } finally {
-        await removeTools([tool]);
-      }
-    });
+        try {
+          await set(ownerUserId, [
+            {
+              ...RULE,
+              id: "inactive-rule",
+              tools: [
+                pattern === "irrelevant"
+                  ? "stripe__create_payment"
+                  : pattern === "wildcard"
+                    ? `${slug}*`
+                    : slug,
+              ],
+              maxMeasures: {},
+              allowTargets: {},
+            },
+          ]);
+          const before = await settingsOf();
+          const old = await withSystemDb(async (tx) => {
+            const version = await tx.query.toolVersions.findFirst({
+              where: eq(schema.toolVersions.id, tool.versionId),
+            });
+            if (!version) throw new Error("Missing fixture version");
+            const values = { ...version, id: undefined, publicId: undefined };
+            const [retained] = await tx
+              .insert(schema.toolVersions)
+              .values({ ...values, versionNumber: 2, isLatest: false })
+              .returning();
+            if (!retained) throw new Error("Missing retained version");
+            return retained;
+          });
+          const { toolClassificationSetHandler } = await import(
+            "./tool.classification.set"
+          );
+          await inScope(() =>
+            toolClassificationSetHandler(
+              {
+                toolVersionId: old.publicId,
+                riskGrade: "high",
+                reason: "Historical classification",
+                classification: {
+                  sideEffect: "write",
+                  egress: "local",
+                  consequenceTags: ["moves_money"],
+                  measures: {},
+                  dataClasses: [],
+                },
+              },
+              ctx(ownerUserId),
+            ),
+          );
+          expect(await settingsOf()).toEqual(before);
+          const retained = await withSystemDb((tx) =>
+            tx.query.toolVersions.findFirst({
+              where: eq(schema.toolVersions.id, old.id),
+            }),
+          );
+          expect(retained?.isLatest).toBe(false);
+          expect(retained?.classification).toMatchObject({
+            consequenceTags: ["moves_money"],
+          });
+          await withSystemDb((tx) =>
+            tx
+              .delete(schema.toolVersions)
+              .where(eq(schema.toolVersions.id, old.id)),
+          );
+        } finally {
+          await removeTools([tool]);
+        }
+      },
+    );
 
     it("publishing a changed untagged measure disables the rule before evaluation", async () => {
       const slug = `measure_${tag}`;

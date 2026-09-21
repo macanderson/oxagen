@@ -491,3 +491,38 @@ resource "aws_cloudwatch_metric_alarm" "container_restart_loop" {
   ok_actions    = [aws_sns_topic.alerts.arn]
   tags          = { Brand = local.brand }
 }
+
+# Tacho intake can fail while unrelated API requests keep the target healthy.
+# requestLogger emits one JSON record after each response, including limiter
+# failures. The api container ships stdout to /oxagen-app/api.
+resource "aws_cloudwatch_log_metric_filter" "tacho_ingress_5xx" {
+  name           = "oxagen-tacho-ingress-5xx"
+  log_group_name = aws_cloudwatch_log_group.service["api"].name
+  pattern        = "{ $.msg = \"request\" && $.path = \"/v1/tacho/*\" && $.status >= 500 && $.status < 600 }"
+
+  metric_transformation {
+    name          = "TachoIngress5xx"
+    namespace     = "Oxagen/API"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "tacho_ingress_5xx" {
+  alarm_name        = "oxagen-tacho-ingress-5xx"
+  alarm_description = "Tacho intake returned at least one 5xx in each of three consecutive 5-minute periods. This detects sustained /v1/tacho/* failures such as the rate-limit-store outage in #3167 while ignoring a one-period deploy burst. Inspect request records in /oxagen-app/api."
+
+  namespace           = "Oxagen/API"
+  metric_name         = "TachoIngress5xx"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+  tags          = { Brand = local.brand }
+}
