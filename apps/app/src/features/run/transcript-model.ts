@@ -253,6 +253,23 @@ function stepsOf(
     const first = frames[i];
     if (first === undefined) continue;
     const { indices, kind } = stepPair(frames, i, first);
+    // A wrapped session seals one tool call up to three times: once from the
+    // PostToolUse hook, which carries the body, and once each from the OTel
+    // log and the transcript tailer, which carry a digest and nothing else.
+    // The three share the tool's call id. Read as three steps they drew the
+    // page the way it looked: one call, then two "digest only" rows for it.
+    // Folded on the call id, the call is one step, and `visibleFrames` keeps
+    // the copy that has something to read.
+    if (kind === "tool" && first.callKey !== null) {
+      const last = indices[indices.length - 1] ?? i;
+      for (let j = last + 1; j < frames.length; j += 1) {
+        const later = frames[j];
+        if (later === undefined || claimed.has(j)) continue;
+        if (later.kind === "tool_call" && later.callKey === first.callKey) {
+          indices.push(j);
+        }
+      }
+    }
     for (const index of indices) {
       if (index !== i) claimed.add(index);
     }
@@ -413,6 +430,41 @@ export function stepDigest(step: TranscriptStep): StepDigest {
     cost,
     repeats: step.frames.length > 1 ? step.frames.length : null,
   };
+}
+
+/** Whether either half of the entry carries text to read. */
+function hasContent(entry: TranscriptEntry): boolean {
+  return [entry.request, entry.response].some(
+    (half) => half !== null && half.text !== null,
+  );
+}
+
+/**
+ * The frames of a step worth drawing. A duplicate seal of the same tool call
+ * that carries only a digest is left out when another frame of the step, for
+ * the same call id, carries the body; a step whose every copy is digest-only
+ * keeps them all, so a run recorded under `digest_only` still shows its
+ * frames.
+ */
+export function visibleFrames(step: TranscriptStep): TranscriptEntry[] {
+  if (step.kind !== "tool") return step.frames;
+  const full = new Set(
+    step.frames.flatMap((frame) =>
+      frame.kind === "tool_call" && frame.callKey !== null && hasContent(frame)
+        ? [frame.callKey]
+        : [],
+    ),
+  );
+  if (full.size === 0) return step.frames;
+  return step.frames.filter(
+    (frame) =>
+      !(
+        frame.kind === "tool_call" &&
+        frame.callKey !== null &&
+        full.has(frame.callKey) &&
+        !hasContent(frame)
+      ),
+  );
 }
 
 /** The frames' cost records summed; null when none carried one. */

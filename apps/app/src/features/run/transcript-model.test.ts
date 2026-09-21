@@ -12,6 +12,7 @@ import {
   playDelay,
   stepDigest,
   toolExchange,
+  visibleFrames,
 } from "./transcript-model";
 
 const { entries } = mockupTranscript();
@@ -484,5 +485,96 @@ describe("toolExchange", () => {
     expect(toolExchange("not json")).toBeNull();
     expect(toolExchange('{"path":"README.md"}')).toBeNull();
     expect(toolExchange("[1,2]")).toBeNull();
+  });
+});
+
+describe("a tool call sealed by three sources", () => {
+  const call = "toolu_01dupe";
+  const digestOnly = (seq: number) =>
+    transcriptEntry({
+      seq: String(seq),
+      endSeq: String(seq),
+      kind: "tool_call",
+      type: "tool_call",
+      label: "Read ok",
+      callKey: call,
+      kinds: ["tools"],
+      request: null,
+      response: transcriptBody({
+        seq: String(seq),
+        type: "tool_call",
+        fidelity: "digest_only",
+        bytesRef: null,
+        text: null,
+      }),
+      turn: 1,
+      cost: null,
+      cumulativeCost: null,
+    });
+  const frames = [
+    transcriptEntry({
+      seq: "0",
+      endSeq: "0",
+      kind: "tool_call",
+      type: "tool_requested",
+      label: "Read",
+      callKey: call,
+      kinds: ["tools"],
+      request: transcriptBody({ seq: "0", type: "tool_requested", text: "{}" }),
+      response: null,
+      turn: 1,
+      cost: null,
+      cumulativeCost: null,
+    }),
+    transcriptEntry({
+      seq: "1",
+      endSeq: "1",
+      kind: "tool_call",
+      type: "tool_call",
+      label: "Read ok",
+      callKey: call,
+      kinds: ["tools"],
+      request: null,
+      response: transcriptBody({
+        seq: "1",
+        type: "tool_call",
+        text: '{"input":{},"output":"x"}',
+      }),
+      turn: 1,
+      cost: null,
+      cumulativeCost: null,
+    }),
+    transcriptEntry({ seq: "2", endSeq: "2", turn: 1 }),
+    digestOnly(3),
+    digestOnly(4),
+  ];
+
+  it("folds the hook, OTel and transcript copies into one step on the call id", () => {
+    const [turn] = buildTranscript(frames);
+    expect(turn?.steps.map((s) => [s.id, s.kind, s.frames.length])).toEqual([
+      ["s0", "tool", 4],
+      ["s2", "model", 1],
+    ]);
+  });
+
+  it("draws only the copy that carries the body", () => {
+    const [turn] = buildTranscript(frames);
+    const step = turn?.steps[0];
+    if (step === undefined) throw new Error("expected the tool step");
+    expect(visibleFrames(step).map((f) => f.seq)).toEqual(["0", "1"]);
+    // Every copy digest-only: nothing to prefer, so every copy stays (negative).
+    const bare = buildTranscript([digestOnly(0), digestOnly(1)])[0]?.steps[0];
+    if (bare === undefined) throw new Error("expected the bare step");
+    expect(visibleFrames(bare).map((f) => f.seq)).toEqual(["0", "1"]);
+  });
+
+  it("does not fold a call with no call id, or a different one (negative)", () => {
+    const other = { ...digestOnly(3), callKey: "toolu_other" };
+    const none = { ...digestOnly(4), callKey: null };
+    const [requested, called] = frames;
+    if (requested === undefined || called === undefined)
+      throw new Error("expected the request and the call");
+    const [turn] = buildTranscript([requested, called, other, none]);
+    expect(turn?.steps.map((s) => s.id)).toEqual(["s0", "s3", "s4"]);
   });
 });

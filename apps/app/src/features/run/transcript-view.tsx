@@ -72,6 +72,7 @@ import {
   toolExchange,
   type TranscriptStep,
   type TranscriptTurn,
+  visibleFrames,
 } from "./transcript-model";
 import { useRunStream } from "./use-run-stream";
 
@@ -433,7 +434,7 @@ function StepRow({
       {open ? (
         <div className="pr-3 pb-2.5">
           <div className="ml-0 overflow-hidden rounded-md border border-border bg-background md:ml-[76px]">
-            {step.frames.map((frame) => (
+            {visibleFrames(step).map((frame) => (
               <FrameDetail key={frame.seq} frame={frame} {...place} />
             ))}
           </div>
