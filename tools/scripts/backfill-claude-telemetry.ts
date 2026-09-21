@@ -498,7 +498,14 @@ export async function insertRows(
     const missing = chunk.filter((row) => !existing.has(identity(row)));
     if (missing.length === 0) continue;
     const ndjson = missing.map((r) => JSON.stringify(r)).join("\n");
-    const body = `INSERT INTO internal.claude_sessions FORMAT JSONEachRow\n${ndjson}`;
+    // The rows carry ISO-8601 timestamps with a `Z` suffix, which ClickHouse's
+    // default `basic` date parser rejects mid-value. The read side above already
+    // reads the same strings through parseDateTime64BestEffort; this is the
+    // write side of that same decision.
+    const body =
+      `INSERT INTO internal.claude_sessions ` +
+      `SETTINGS date_time_input_format = 'best_effort' ` +
+      `FORMAT JSONEachRow\n${ndjson}`;
     const res = await request(url, {
       method: "POST",
       headers: {

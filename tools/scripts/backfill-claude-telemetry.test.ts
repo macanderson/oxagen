@@ -317,7 +317,7 @@ it.skipIf(!process.env["CLICKHOUSE_URL"])(
     try {
       await query(`CREATE TABLE ${table} AS ${database}.claude_sessions`);
       await query(
-        `INSERT INTO ${table} FORMAT JSONEachRow\n${JSON.stringify({ ...old, user_email: "legacy@example.test" })}`,
+        `INSERT INTO ${table} SETTINGS date_time_input_format = 'best_effort' FORMAT JSONEachRow\n${JSON.stringify({ ...old, user_email: "legacy@example.test" })}`,
       );
       expect(await insertRows([old, next], request)).toBe(1);
       expect(await insertRows([old, next], request)).toBe(0);
