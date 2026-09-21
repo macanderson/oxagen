@@ -77,6 +77,7 @@ export type ProposeAgentDeps = {
     | "putFile"
     | "findOpenPullRequest"
     | "openPullRequest"
+    | "updatePullRequest"
   >;
   facts(args: {
     orgId: string;
@@ -314,21 +315,27 @@ export function createProposeAgentHandler(
         branch,
       }));
 
-    const pullRequest =
-      open ??
-      (await deps.github.openPullRequest(repo, {
-        title: `Agent: ${input.slug}`,
-        head: branch,
-        base,
-        body: prBody({
-          slug: input.slug,
-          agentKey: facts.agentKey,
-          harness: input.harness,
-          digest,
-          files: [path, ...(generatedPath === null ? [] : [generatedPath])],
-          rationale: input.rationale,
-        }),
-      }));
+    const metadata = {
+      title: `Agent: ${input.slug}`,
+      body: prBody({
+        slug: input.slug,
+        agentKey: facts.agentKey,
+        harness: input.harness,
+        digest,
+        files: [path, ...(generatedPath === null ? [] : [generatedPath])],
+        rationale: input.rationale,
+      }),
+    };
+    const pullRequest = open
+      ? await deps.github.updatePullRequest(repo, {
+          number: open.number,
+          ...metadata,
+        })
+      : await deps.github.openPullRequest(repo, {
+          head: branch,
+          base,
+          ...metadata,
+        });
 
     return {
       slug: input.slug,

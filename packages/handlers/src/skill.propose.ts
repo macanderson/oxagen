@@ -48,6 +48,7 @@ export type ProposeSkillDeps = {
     | "putFile"
     | "findOpenPullRequest"
     | "openPullRequest"
+    | "updatePullRequest"
   >;
 };
 
@@ -76,7 +77,7 @@ function prBody(args: {
       ? "Drafted in the Oxagen skill wizard from a description, and edited by the person who opened this pull request."
       : "Read out of an uploaded bundle in the Oxagen skill wizard.",
     "",
-    `- Digest at open: \`${args.digest}\`. The checks cover these submitted bytes. Later pushes require a new review.`,
+    `- Submitted digest: \`${args.digest}\`. The checks cover these submitted bytes. Later pushes require a new review.`,
     `- Load cost: about ${args.tokens.toLocaleString("en-US")} tokens, inside the ${args.budget.toLocaleString("en-US")}-token search budget.`,
     "- This file grants nothing. Every action it names still goes through the toolbelt and the policy that governs it.",
     "",
@@ -200,27 +201,33 @@ export function createProposeSkillHandler(
       }));
     }
 
-    const pullRequest =
-      open ??
-      (await deps.github.openPullRequest(repo, {
-        title:
-          replaces === null
-            ? `Skill: ${input.name}`
-            : `Skill: ${input.name} ${version}`,
-        head: branch,
-        base,
-        body: prBody({
-          name: input.name,
-          version,
-          replaces,
-          origin: input.origin,
-          digest,
-          tokens,
-          budget,
-          rationale: input.rationale,
-          files: written,
-        }),
-      }));
+    const metadata = {
+      title:
+        replaces === null
+          ? `Skill: ${input.name}`
+          : `Skill: ${input.name} ${version}`,
+      body: prBody({
+        name: input.name,
+        version,
+        replaces,
+        origin: input.origin,
+        digest,
+        tokens,
+        budget,
+        rationale: input.rationale,
+        files: written,
+      }),
+    };
+    const pullRequest = open
+      ? await deps.github.updatePullRequest(repo, {
+          number: open.number,
+          ...metadata,
+        })
+      : await deps.github.openPullRequest(repo, {
+          head: branch,
+          base,
+          ...metadata,
+        });
 
     return {
       name: input.name,
