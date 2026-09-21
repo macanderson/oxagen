@@ -844,5 +844,58 @@ describe("live access changes", () => {
     expect(screen.getByTestId("transcript-count")).not.toHaveTextContent(
       "connection",
     );
+    expect(screen.getByTestId("transcript-more")).toBeDisabled();
+    expect(
+      screen.getByTestId("transcript").querySelector(".animate-pulse"),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: /go live/i })).toBeNull();
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "0" } });
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      "Ask a workspace Owner",
+    );
+    expect(sources).toHaveLength(1);
+    const slider = screen.getByRole("slider");
+    fireEvent.change(slider, { target: { value: slider.getAttribute("max") } });
+    expect(sources).toHaveLength(1);
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      "Ask a workspace Owner",
+    );
+  });
+});
+
+describe("empty transcript access changes", () => {
+  it.each([{ kinds: [] }, { kinds: ["errors"] }] as {
+    kinds: TranscriptKind[];
+  }[])("shows access refusal for filter %j", ({ kinds }) => {
+    const sources: EventTarget[] = [];
+    class Source extends EventTarget {
+      static readonly CLOSED = 2;
+      readyState = 1;
+      constructor() {
+        super();
+        sources.push(this);
+      }
+      close() {
+        this.readyState = Source.CLOSED;
+      }
+    }
+    vi.stubGlobal("EventSource", Source);
+    renderSection({
+      read: readOk(runTranscript({ entries: [] })),
+      kinds,
+      status: "live",
+    });
+    act(() => {
+      sources[0]?.dispatchEvent(
+        new MessageEvent("error", {
+          data: JSON.stringify({ code: "forbidden" }),
+        }),
+      );
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Ask a workspace Owner or organization Admin",
+    );
+    expect(screen.getByTestId("transcript-empty")).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

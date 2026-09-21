@@ -17,6 +17,7 @@
 // signal is coalesced: the hook calls back once per `COALESCE_MS`, however
 // many frames landed in that window.
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useNavigate } from "@/ui/navigation";
 
 /** How long frames are gathered before the player is told to read the tail. */
@@ -60,7 +61,13 @@ export function useRunStream({
   const latest = useRef(onFrames);
   latest.current = onFrames;
 
+  const deniedUrl = useRef<string | null>(null);
+
   useEffect(() => {
+    if (deniedUrl.current === url) {
+      setState("denied");
+      return;
+    }
     if (!enabled) {
       setState("off");
       return;
@@ -146,9 +153,9 @@ export function useRunStream({
         terminalError = true;
         es.close();
         flushSignal(code === "invalid_input");
-        setState(
-          code === "authz_denied" || code === "forbidden" ? "denied" : "lost",
-        );
+        const denied = code === "authz_denied" || code === "forbidden";
+        if (denied) deniedUrl.current = url;
+        setState(denied ? "denied" : "lost");
       });
       es.onerror = () => {
         // EventSource reconnects on its own unless the connection is closed
@@ -185,9 +192,10 @@ export function LiveEmptyFollow({
   org: string;
   ws: string;
   runId: string;
-}): null {
+}) {
   const navigate = useNavigate();
-  useRunStream({
+  const t = useTranslations("run.transcript");
+  const stream = useRunStream({
     url: `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(
       ws,
     )}/runs/${encodeURIComponent(runId)}/stream`,
@@ -196,5 +204,10 @@ export function LiveEmptyFollow({
       navigate.refresh();
     },
   });
-  return null;
+  if (stream !== "denied" && stream !== "lost") return null;
+  return (
+    <p role="alert" className="mt-2 text-sm text-muted-foreground">
+      {t(stream === "denied" ? "followDenied" : "followLost")}
+    </p>
+  );
 }
