@@ -444,3 +444,98 @@ export async function repoInit(
     "Nothing reaches the production branch until a person merges it.",
   );
 }
+
+// ── governance ──────────────────────────────────────────────────────────────
+
+/** `set_governance_mode`'s answer, as the API returns it. */
+interface GovernanceModeResult {
+  outcome: "applied" | "proposed" | "unchanged";
+  requestedMode: GovernanceMode;
+  previousMode: GovernanceMode | null;
+  effectiveMode: GovernanceMode | null;
+  fullName: string;
+  productionBranch: string;
+  commitSha: string | null;
+  pullRequest: { number: number; htmlUrl: string; reused: boolean } | null;
+  overrodeReview: boolean;
+}
+
+export interface GovernanceOptions {
+  json?: boolean;
+  workspace?: string;
+  applyNow?: boolean;
+}
+
+/**
+ * `oxagen repo governance --mode <mode>` — set the workspace's steering
+ * governance mode by writing `.oxagen/rules/governance.toml`.
+ *
+ * The route is not this command's choice: under `solo` the server commits to
+ * the production branch, and under `team` or `regulated` it opens a pull
+ * request for a person to merge. `--apply-now` asks it to commit anyway, which
+ * only an org Owner or Admin, or a workspace Owner or Admin, may do — and which
+ * is recorded as `steering.governance_overridden`.
+ */
+export async function repoGovernance(
+  opts: GovernanceOptions & { mode?: string } = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const line =
+    "oxagen repo governance --mode solo|team|regulated [--workspace <ws_…>] [--apply-now] [--json]";
+  const mode = opts.mode as GovernanceMode | undefined;
+  if (mode === undefined || !GOVERNANCE_MODES.includes(mode)) {
+    return usage(
+      writer,
+      `expected a mode of solo, team or regulated, got ${JSON.stringify(opts.mode)}`,
+      line,
+    );
+  }
+  const out = createOutput({ json: opts.json }, writer);
+  let result: GovernanceModeResult;
+  try {
+    result = await apiPostOrThrow<GovernanceModeResult>(
+      "context/governance-mode",
+      {
+        mode,
+        applyImmediately: opts.applyNow === true,
+        ...(opts.workspace === undefined
+          ? {}
+          : { workspaceId: opts.workspace }),
+      },
+    );
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  if (result.outcome === "unchanged") {
+    writer.write(
+      `${result.fullName} already runs under ${result.requestedMode}; nothing was written.`,
+    );
+    return;
+  }
+  if (result.outcome === "applied") {
+    writer.write(
+      `${result.fullName} now runs under ${result.requestedMode} (${result.productionBranch}, ${result.commitSha ?? "committed"}).`,
+    );
+    if (result.overrodeReview) {
+      // Said plainly, because the override is the part someone may later ask
+      // about, and the CLI is where it is easiest to spend without noticing.
+      writer.write(
+        `Committed without review, which ${result.previousMode ?? "the mode in force"} asks for. Recorded as steering.governance_overridden.`,
+      );
+    }
+    return;
+  }
+  writer.write(
+    result.pullRequest?.reused === true
+      ? `Updated the open pull request on ${result.fullName}: ${result.pullRequest.htmlUrl}`
+      : `Opened ${result.pullRequest?.htmlUrl ?? "a pull request"} on ${result.fullName}.`,
+  );
+  writer.write(
+    `${result.fullName} still runs under ${result.effectiveMode ?? "an unreadable governance.toml"} until a person merges it. Pass --apply-now to commit instead.`,
+  );
+}
