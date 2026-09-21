@@ -112,6 +112,22 @@ describe("list_unpriced_models", () => {
     expect(out.since).toBe("2026-07-02T00:00:00.000Z");
   });
 
+  it("refuses a reversed observation window before reading usage", async () => {
+    const h = harness([]);
+    await expect(
+      h.handler(
+        { since: "2026-09-02T00:00:00.000Z", at: "2026-09-01T00:00:00.000Z" },
+        ctx(),
+      ),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "unpriced_model_window_reversed",
+    });
+    expect(h.readUnpricedModels).not.toHaveBeenCalled();
+    await h.handler({ since: NOW.toISOString(), at: NOW.toISOString() }, ctx());
+    expect(h.readUnpricedModels).toHaveBeenCalledOnce();
+  });
+
   it("honours an explicit window", async () => {
     const h = harness([]);
     await h.handler({ since: "2026-09-01T00:00:00.000Z" }, ctx());

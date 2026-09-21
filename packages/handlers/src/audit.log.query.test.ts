@@ -56,6 +56,7 @@ const input = (
 ) => auditLogQuery.input.parse(over);
 
 const read = {
+  select: [] as Record<string, unknown>[],
   where: [] as SQL[],
   limit: [] as number[],
   offset: [] as number[],
@@ -64,7 +65,8 @@ let stored: Record<string, unknown>[] = [];
 
 function eventsTx() {
   return {
-    select: () => {
+    select: (fields: Record<string, unknown>) => {
+      read.select.push(fields);
       const chain = {
         from: () => chain,
         leftJoin: () => chain,
@@ -125,6 +127,7 @@ async function refusal(promise: Promise<unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  read.select = [];
   read.where = [];
   read.limit = [];
   read.offset = [];
@@ -160,6 +163,7 @@ describe("query_audit_log from the organization (the org-only sentinel)", () => 
         ip: "203.0.113.7",
         userAgent: "Mozilla/5.0",
         requestId: "req_1",
+        detail: null,
       },
       expect.objectContaining({
         ip: null,
@@ -173,6 +177,43 @@ describe("query_audit_log from the organization (the org-only sentinel)", () => 
       limit: 50,
       offset: 0,
     });
+  });
+
+  it("returns stored invalidation evidence and accepts legacy events without detail", async () => {
+    roles({ org: "Owner" });
+    const detail = {
+      ruleId: "rule_1",
+      tool: "publish_release",
+      reason: "classification_changed",
+      before: {
+        consequenceTags: ["read"],
+        measures: null,
+        classification: "read",
+      },
+      after: {
+        consequenceTags: ["write"],
+        measures: null,
+        classification: "write",
+      },
+    };
+    stored = [
+      row(1, { eventType: "approval_rule.invalidated", detail }),
+      row(2),
+    ];
+    const out = await auditLogQueryHandler(input(), orgCall());
+    expect(read.select[0]).toHaveProperty(
+      "detail",
+      schema.securityEvents.detail,
+    );
+    expect(read.where).toEqual([and(orgIs)]);
+    expect(out.events[0]?.detail).toEqual(detail);
+    expect(out.events[1]?.detail).toBeNull();
+    expect(auditLogQuery.output.parse(out)).toEqual(out);
+    const legacy = {
+      ...out,
+      events: out.events.map(({ detail: _detail, ...event }) => event),
+    };
+    expect(auditLogQuery.output.parse(legacy)).toEqual(legacy);
   });
 
   it("gives an org Admin the whole organization's feed", async () => {

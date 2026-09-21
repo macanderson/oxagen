@@ -40,8 +40,11 @@ export function Badge({
   ...rest
 }: {
   tone: BadgeTone;
-  /** `.b .d`: the 5px dot in the state hue. Off for a kind or a tier. */
-  dot?: boolean;
+  /**
+   * `.b .d`: the 5px dot in the state hue. Off for a kind or a tier;
+   * `"pulse"` breathes, for a state that is happening right now.
+   */
+  dot?: boolean | "pulse";
   /** `.b-tier`: mono, lowercase, regular weight. */
   mono?: boolean;
   children: ReactNode;
@@ -54,7 +57,8 @@ export function Badge({
       {dot ? (
         <span
           aria-hidden="true"
-          className="size-[5px] flex-none rounded-full bg-current"
+          data-pulse={dot === "pulse" ? "true" : undefined}
+          className={`size-[5px] flex-none rounded-full bg-current ${dot === "pulse" ? "animate-pulse" : ""}`}
         />
       ) : null}
       {children}

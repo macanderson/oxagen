@@ -513,6 +513,7 @@ export async function loadPriceBook(args: {
 export async function listPriceEntries(args: {
   at: Date;
   orgId: string;
+  includeScheduled?: boolean;
 }): Promise<PriceEntry[]> {
   const rows = await withTenantDb((tx) =>
     tx
@@ -524,10 +525,21 @@ export async function listPriceEntries(args: {
             isNull(schema.priceEntries.orgId),
             eq(schema.priceEntries.orgId, args.orgId),
           ),
-          lte(schema.priceEntries.effectiveFrom, args.at),
           or(
-            isNull(schema.priceEntries.effectiveTo),
-            gt(schema.priceEntries.effectiveTo, args.at),
+            and(
+              lte(schema.priceEntries.effectiveFrom, args.at),
+              or(
+                isNull(schema.priceEntries.effectiveTo),
+                gt(schema.priceEntries.effectiveTo, args.at),
+              ),
+            ),
+            args.includeScheduled === true
+              ? and(
+                  eq(schema.priceEntries.orgId, args.orgId),
+                  eq(schema.priceEntries.source, "negotiated"),
+                  gt(schema.priceEntries.effectiveFrom, args.at),
+                )
+              : undefined,
           ),
         ),
       )
@@ -1808,6 +1820,8 @@ export async function closeNegotiatedPriceEntry(args: {
    * guard below would then refuse an end nobody backdated.
    */
   at?: Date;
+  /** Cancel only this future row and restore its predecessor window. */
+  scheduledEntryId?: string;
   /**
    * The write instant, which decides whether a scheduled row has begun.
    * Injected by tests; omitted, it is read after the locks, for the reason
@@ -1839,6 +1853,65 @@ export async function closeNegotiatedPriceEntry(args: {
     // both, because the cancellation left no row to tell them apart, and a
     // retry of a lost response must succeed.
     if (own.length === 0) return { at: atInstant, closed: null, cancelled: [] };
+
+    if (args.scheduledEntryId !== undefined) {
+      const selected = own.find((row) => row.id === args.scheduledEntryId);
+      if (!selected) return { at: now, closed: null, cancelled: [] };
+      if (selected.effectiveFrom.getTime() <= now.getTime())
+        throw new HandlerError({
+          code: "conflict",
+          reason: "price_entry_already_started",
+          message:
+            "This rate has started. Refresh the price book and end the active rate instead.",
+        });
+      const predecessor = own.find(
+        (row) =>
+          row.effectiveTo?.getTime() === selected.effectiveFrom.getTime(),
+      );
+      if (predecessor) {
+        const everyModel = await readKeyRows(tx, args, {
+          includeList: false,
+          anyProvider: true,
+          anyModel: true,
+        });
+        const names = [predecessor.model, ...predecessor.modelAliases].map(
+          resolverIdentity,
+        );
+        const conflict = everyModel.find(
+          (row) =>
+            row.id !== selected.id &&
+            row.id !== predecessor.id &&
+            (selected.effectiveTo === null ||
+              row.effectiveFrom < selected.effectiveTo) &&
+            (row.effectiveTo === null ||
+              row.effectiveTo > selected.effectiveFrom) &&
+            [row.model, ...row.modelAliases]
+              .map(resolverIdentity)
+              .some((other) =>
+                names.some(
+                  (name) =>
+                    isSameModelIdentity(name, other) ||
+                    isSameModelIdentity(other, name),
+                ),
+              ),
+        );
+        if (conflict)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "price_entry_alias_conflict",
+            message:
+              "Cancelling this rate would extend its predecessor into another negotiated rate. End the conflicting rate first.",
+          });
+        await tx
+          .update(schema.priceEntries)
+          .set({ effectiveTo: selected.effectiveTo, updatedAt: now })
+          .where(eq(schema.priceEntries.id, predecessor.id));
+      }
+      await tx
+        .delete(schema.priceEntries)
+        .where(eq(schema.priceEntries.id, selected.id));
+      return { at: now, closed: null, cancelled: [rowToEntry(selected)] };
+    }
 
     const at = atInstant.getTime();
     // The row in effect at `at`, not the open one: after a future-dated

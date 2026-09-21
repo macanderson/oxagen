@@ -33,6 +33,7 @@ import type { SpendAt } from "./view";
 
 /** The key the write addresses: the tuple `cost.price_entries` arbitrates on. */
 type RemovableEntry = {
+  cancellationToken?: string;
   provider: string;
   model: string;
   tokenClass: PriceTokenClass;
@@ -75,6 +76,9 @@ export function RemoveRateDialog({
     setPending(true);
     try {
       const result = await removePriceEntryAction(at, {
+        ...(entry.cancellationToken === undefined
+          ? {}
+          : { cancellationToken: entry.cancellationToken }),
         provider: entry.provider,
         model: entry.model,
         tokenClass: entry.tokenClass,
@@ -83,7 +87,10 @@ export function RemoveRateDialog({
       });
       if (result.ok) {
         setNeedsConfirm(false);
-        if (result.value.fallbackPriced) {
+        if (
+          entry.cancellationToken !== undefined ||
+          result.value.fallbackPriced
+        ) {
           finish();
           return;
         }
@@ -210,15 +217,25 @@ export function RemoveRateDialog({
             className="flex flex-col gap-3"
           >
             <p className="text-sm text-foreground">
-              {t("remove.body", { model: entry.model, class: tokenClass })}
+              {entry.cancellationToken === undefined
+                ? t("remove.body", { model: entry.model, class: tokenClass })
+                : t("remove.cancelScheduled")}
             </p>
-            <p className="text-sm text-muted-foreground">{t("remove.kept")}</p>
+            {entry.cancellationToken === undefined ? (
+              <p className="text-sm text-muted-foreground">
+                {t("remove.kept")}
+              </p>
+            ) : null}
             {alert === null ? null : (
               <FormAlert testId="spend-remove-rate-failure">{alert}</FormAlert>
             )}
             <SubmitButton
               pending={pending}
-              label={t("remove.submit")}
+              label={
+                entry.cancellationToken === undefined
+                  ? t("remove.submit")
+                  : t("remove.cancelScheduledSubmit")
+              }
               pendingLabel={t("remove.pending")}
             />
           </form>

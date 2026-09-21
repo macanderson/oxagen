@@ -115,6 +115,7 @@ import "./contracts/connection.mappings.suggest";
 import "./contracts/connection.pause";
 import "./contracts/connection.preview";
 import "./contracts/connection.update";
+import "./contracts/context.governance_mode.set";
 import "./contracts/context.pr.get";
 import "./contracts/context.pr.merge";
 import "./contracts/context.pr.open";

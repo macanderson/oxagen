@@ -29,6 +29,8 @@ import { iamRoleDelete } from "@oxagen/oxagen/contracts/iam.role.delete";
 import { iamRoleGrantsSet } from "@oxagen/oxagen/contracts/iam.role.grants.set";
 import { orgMemberRemove } from "@oxagen/oxagen/contracts/org.member.remove";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.change";
+import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
+import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { workspaceInviteSend } from "@oxagen/oxagen/contracts/workspace.invite.send";
@@ -163,19 +165,141 @@ export async function createWorkspace(
   return result.ok ? { ok: true, value: { slug: result.value.slug } } : result;
 }
 
-/** Renames a workspace of this organization, and re-slugs it; the old slug keeps redirecting. */
-export async function renameWorkspace(
+/**
+ * What the Edit workspace dialog may also change: the steering governance mode
+ * (ADR-061). Left blank the mode is not touched and `set_governance_mode` is
+ * never invoked, so a plain rename costs exactly what it always cost — no
+ * GitHub round trip, no commit.
+ */
+export type GovernanceDraft = {
+  /** A mode, or "" to leave the workspace steering as it already does. */
+  mode: string;
+  /**
+   * Commit although the mode in force asks for a reviewed pull request. It is
+   * the caller's own privilege, not an escalation: every role that can open
+   * this dialog may already commit the file on GitHub by hand. What it buys is
+   * the `steering.governance_overridden` record a hand commit would not leave.
+   */
+  applyImmediately: boolean;
+};
+
+export type WorkspaceEditDraft = WorkspaceDraft & GovernanceDraft;
+
+/**
+ * How the governance half of an edit ended, as the dialog has to tell it.
+ *
+ * `null` means nobody asked. A refusal is carried here rather than returned as
+ * the edit's own refusal because the rename ran first and succeeded: answering
+ * the whole edit `denied` would claim the name did not change when it did. The
+ * dialog says both halves, and the section reloads either way.
+ */
+export type GovernanceChanged =
+  | {
+      ok: true;
+      outcome: "applied" | "proposed" | "unchanged";
+      mode: string;
+      /** `owner/name` and the branch, so the dialog names where the change went. */
+      repo: string;
+      branch: string;
+      /**
+       * Where to merge it, when the change went to review. `reused` is a pull
+       * request that was already open on `oxagen/governance` and now carries
+       * this change too, which is worth saying: its title and body were written
+       * for the earlier proposal.
+       */
+      pullRequest: { number: number; htmlUrl: string; reused: boolean } | null;
+      overrodeReview: boolean;
+    }
+  | { ok: false; reason: string; code: string | null };
+
+export type WorkspaceEdited = {
+  slug: string;
+  governance: GovernanceChanged | null;
+};
+
+/**
+ * The Edit workspace dialog's write: the name and slug, and the governance mode
+ * when the person picked one. It renames and re-slugs the workspace; the old
+ * slug keeps redirecting.
+ *
+ * Two capabilities, in this order and not the other, because the rename is the
+ * half that fails: `slug_taken` is its likely refusal and it costs nothing to
+ * reach, so a refused rename leaves the repository untouched. The reverse order
+ * would commit a governance change and then refuse the edit that carried it.
+ *
+ * The dialog never claims to know the mode currently in force. Reading it means
+ * a GitHub round trip per workspace through `get_repository_tree`, which wants a
+ * binding id and a workspace-scoped role this org-only section does not hold —
+ * so the control offers "leave unchanged" as its default rather than
+ * pre-selecting a value it cannot verify.
+ */
+export async function editWorkspace(
   org: string,
   workspaceId: string,
-  draft: WorkspaceDraft,
-): Promise<ActionResult<{ slug: string }>> {
+  draft: WorkspaceEditDraft,
+): Promise<ActionResult<WorkspaceEdited>> {
   const ctx = await requireViewer(org);
-  const result = await kernelWrite(ctx, workspaceSettingsWrite, {
+  const renamed = await kernelWrite(ctx, workspaceSettingsWrite, {
     workspaceId,
     name: draft.name.trim(),
     slug: draft.slug.trim(),
   });
-  return result.ok ? { ok: true, value: { slug: result.value.slug } } : result;
+  if (!renamed.ok) return renamed;
+
+  const mode = draft.mode.trim();
+  if (mode === "") {
+    return { ok: true, value: { slug: renamed.value.slug, governance: null } };
+  }
+  // The radio's value reaches a contract enum, so an unknown one is refused
+  // here rather than sent: the answer is about governance, and a refusal
+  // covering the whole edit would misreport the rename that already ran. The
+  // enum's own parse does the narrowing, so nothing here asserts the string is
+  // a mode.
+  const picked = governanceModeSchema.safeParse(mode);
+  if (!picked.success) {
+    return {
+      ok: true,
+      value: {
+        slug: renamed.value.slug,
+        governance: { ok: false, reason: "invalid", code: "invalid_input" },
+      },
+    };
+  }
+
+  const governance = await kernelWrite(ctx, contextGovernanceModeSet, {
+    workspaceId,
+    mode: picked.data,
+    applyImmediately: draft.applyImmediately,
+  });
+  return {
+    ok: true,
+    value: {
+      slug: renamed.value.slug,
+      governance: governance.ok
+        ? {
+            ok: true,
+            outcome: governance.value.outcome,
+            mode: governance.value.requestedMode,
+            repo: governance.value.fullName,
+            branch: governance.value.productionBranch,
+            pullRequest:
+              governance.value.pullRequest === null
+                ? null
+                : {
+                    number: governance.value.pullRequest.number,
+                    htmlUrl: governance.value.pullRequest.htmlUrl,
+                    reused: governance.value.pullRequest.reused,
+                  },
+            overrodeReview: governance.value.overrodeReview,
+          }
+        : {
+            ok: false,
+            reason: governance.reason,
+            // `pending_approval` is the one failure that carries no code.
+            code: "code" in governance ? governance.code : null,
+          },
+    },
+  };
 }
 
 /**
