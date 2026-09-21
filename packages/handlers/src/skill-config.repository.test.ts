@@ -6,6 +6,7 @@ describe("skill repository resolution", () => {
   const scope = { orgId: "org", workspaceId: "workspace" };
   const bound = {
     bindingId: "binding",
+    connectionId: "approved-connection",
     repositoryId: "123",
     owner: "owner",
     repo: "repo",
@@ -28,7 +29,10 @@ describe("skill repository resolution", () => {
       productionBranch: "release",
       bindingId: "binding",
     });
-    expect(token).toHaveBeenCalledWith(scope);
+    expect(token).toHaveBeenCalledWith({
+      ...scope,
+      connectionId: "approved-connection",
+    });
   });
   it("does not mint a token for an unbound workspace", async () => {
     const token = vi.fn();

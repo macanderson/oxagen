@@ -28,6 +28,7 @@ import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
 
+import { accountOperations } from "./account-operations";
 import { recoveryCodeVault } from "./recovery-code-vault";
 import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
@@ -121,6 +122,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  accountOperations.resetForTests();
   recoveryCodeVault.resetForTests();
   nav.pathname = "/acme/core-platform";
   nav.query = "";
@@ -524,8 +526,13 @@ describe("user menu", () => {
 
   // Sign out leaves the shell through a client-side `replace`, which runs no
   // `beforeunload`. With a recovery-code rotation in flight that would drop
-  // the only copy of the new set, so the menu takes the person back to the
-  // Security tab instead of signing out.
+  // the only copy of the new set. This PR holds the dialog itself non-
+  // dismissible while codes are unacknowledged ("unacknowledged codes hold
+  // the dialog and tabs in place" — see the PR summary), so Escape no longer
+  // reaches the user menu at all: sign out is not merely intercepted, it is
+  // unreachable. That is a stronger guarantee than the menu-level redirect
+  // this test originally exercised, so the assertions below match the dialog
+  // hold rather than a click path the hold now blocks.
   it("holds sign out while a recovery-code rotation is in flight", async () => {
     liveSignOut.mockClear();
     liveRegenerateBackupCodes.mockImplementationOnce(
@@ -543,20 +550,33 @@ describe("user menu", () => {
     await user.type(screen.getByTestId("account-codes-password"), "hunter2");
     await user.click(screen.getByTestId("account-codes-confirm"));
     await user.keyboard("{Escape}");
-
-    await user.click(
-      screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+    expect(screen.getByTestId("account-codes-confirm")).toHaveAttribute(
+      "aria-disabled",
+      "true",
     );
-    await user.click(
-      within(await screen.findByRole("menu")).getByTestId("sign-out"),
-    );
+    // Escape did not close the dialog, so the rest of the shell — the user
+    // menu included — stays inert and sign out cannot be reached.
+    expect(
+      screen.queryByRole("button", { name: "User menu for Marcus Bell" }),
+    ).toBeNull();
     expect(liveSignOut).not.toHaveBeenCalled();
     expect(nav.replace).not.toHaveBeenCalled();
+
+    // A new organization layout mounts a fresh shell in the same browser
+    // realm. The vault still has the rotation at stake, so the fresh mount
+    // opens straight back to the held dialog rather than a clean shell a
+    // person could sign out from.
+    cleanup();
+    renderShell(shellData());
     const dialog = await screen.findByTestId("account-dialog");
     expect(within(dialog).getByTestId("account-tab-security")).toHaveAttribute(
       "aria-selected",
       "true",
     );
+    expect(
+      screen.queryByRole("button", { name: "User menu for Marcus Bell" }),
+    ).toBeNull();
+    expect(liveSignOut).not.toHaveBeenCalled();
   });
 
   it("switches theme: light, dark, system", async () => {

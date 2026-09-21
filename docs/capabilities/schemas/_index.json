@@ -1066,7 +1066,8 @@
       "name": "get_export_status",
       "domain": "privacy",
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

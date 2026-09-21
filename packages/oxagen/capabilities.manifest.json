@@ -3918,11 +3918,13 @@
       "domain": "privacy",
       "mode": "sync",
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
         "unit": true,
         "docs": true,
         "app": true

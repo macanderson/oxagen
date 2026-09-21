@@ -4,6 +4,7 @@
 // organizations and workspaces the switchers list come from `shell.context`;
 // the zone the chrome's dates render in comes from `shell.preferences`.
 import "server-only";
+import { createHash } from "node:crypto";
 import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
 import type { DataSource } from "@/data/ports";
 import { getAuthUser } from "@/features/auth";
@@ -23,7 +24,11 @@ export async function shellSource(
   // a missing one is a programming error, never a signed-out render.
   if (user === null) throw new Error("shell_without_session");
   return {
-    org: { slug: ctx.orgSlug, name: ctx.orgName },
+    org: {
+      key: createHash("sha256").update(`account:${ctx.orgId}`).digest("hex"),
+      slug: ctx.orgSlug,
+      name: ctx.orgName,
+    },
     viewer: {
       name: user.name || null,
       email: user.email,

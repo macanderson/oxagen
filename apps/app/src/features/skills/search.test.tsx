@@ -146,5 +146,7 @@ it("keeps one pending request pinned to an explicitly selected older version", a
     },
   });
   await screen.findByRole("status");
-  expect(screen.getByLabelText("Configuration version")).toBeEnabled();
+  await waitFor(() => {
+    expect(screen.getByLabelText("Configuration version")).toBeEnabled();
+  });
 });
