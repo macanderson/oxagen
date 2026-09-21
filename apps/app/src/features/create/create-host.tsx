@@ -16,7 +16,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Suspense, use, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CREATE_EVENT,
   CREATE_KINDS,
@@ -213,13 +213,31 @@ function Wizard({
   );
 }
 
+// The wizard modules load on demand (`./kinds`). An effect resolves the chosen
+// one and holds it in state, and the loading dialog stands in until it lands.
+// Reading the promise during render with `React.use` under a `Suspense`
+// boundary left that fallback in place after the promise had settled, so the
+// wizard never opened; `create-host.test.tsx` and `record-wizard.test.tsx`
+// both pin the transition.
 function LoadedWizard({
   load,
   ...props
 }: Omit<Parameters<typeof Wizard>[0], "wizard"> & {
   load: () => Promise<AnyWizardKind>;
 }) {
-  return <Wizard {...props} wizard={use(load())} />;
+  const [wizard, setWizard] = useState<AnyWizardKind | null>(null);
+  useEffect(() => {
+    let live = true;
+    void load().then((loaded) => {
+      if (live) setWizard(loaded);
+    });
+    return () => {
+      live = false;
+    };
+  }, [load]);
+  if (wizard === null)
+    return <WizardLoading onOpenChange={props.onOpenChange} />;
+  return <Wizard {...props} wizard={wizard} />;
 }
 
 function WizardLoading({
@@ -320,15 +338,13 @@ export function CreateHost({
   if (open.kind === null || wizard === undefined)
     return <Chooser ctx={ctx} onChoose={show} onOpenChange={close} />;
   return (
-    <Suspense fallback={<WizardLoading onOpenChange={close} />}>
-      <LoadedWizard
-        key={open.session}
-        kind={open.kind}
-        load={wizard}
-        {...(open.prefill === undefined ? {} : { prefill: open.prefill })}
-        ctx={ctx}
-        onOpenChange={close}
-      />
-    </Suspense>
+    <LoadedWizard
+      key={open.session}
+      kind={open.kind}
+      load={wizard}
+      {...(open.prefill === undefined ? {} : { prefill: open.prefill })}
+      ctx={ctx}
+      onOpenChange={close}
+    />
   );
 }
