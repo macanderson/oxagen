@@ -37,3 +37,47 @@ export const SkillInventory = z.object({
   nextCursor: z.string().nullable(),
 });
 export type SkillInventory = z.infer<typeof SkillInventory>;
+
+const SkillVersion = z.object({
+  id: z.string(),
+  version: z.string(),
+  commitSha: z.string(),
+  pullRequestNumber: z.number().int().positive().nullable(),
+  digest: z.string(),
+  publishedAt: Instant,
+});
+export const SkillConfiguration = z.object({
+  config: z.object({
+    enabled: z.boolean(),
+    search: z.object({ budget: Count, cutoff: z.number(), limit: Count }),
+  }),
+  draftText: z.string(),
+  current: SkillVersion.nullable(),
+  versions: z.array(SkillVersion),
+});
+export type SkillConfiguration = z.infer<typeof SkillConfiguration>;
+
+const SkillCandidate = z.object({
+  id: z.string(),
+  version: z.string(),
+  digest: z.string(),
+  source: z.string(),
+  description: z.string(),
+  tokenCost: Count,
+});
+export const SkillSearchPreview = z.object({
+  version: z.string(),
+  repositoryCommitSha: z.string(),
+  tokenCost: Count,
+  results: z.array(SkillCandidate.extend({ score: z.number() })),
+  withheld: z.array(
+    SkillCandidate.extend({
+      reason: z.enum(["out_of_scope", "unapproved_digest"]),
+    }),
+  ),
+});
+export type SkillSearchPreview = z.infer<typeof SkillSearchPreview>;
+export type SkillConfigChange = {
+  pullRequest: { number: number; url: string } | null;
+  published: z.infer<typeof SkillVersion> | null;
+};

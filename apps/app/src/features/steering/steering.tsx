@@ -7,6 +7,7 @@
 // it shows.
 import { Suspense } from "react";
 import { useTranslations } from "next-intl";
+import { firstParam } from "@/shared/safe-path";
 import type { Read } from "@/data/read";
 import type { SteeringFreshness } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
@@ -42,11 +43,13 @@ async function TabBody({
   ctx,
   source,
   view,
+  skillView,
   at,
 }: {
   ctx: WsCtx;
   source: DataSource;
   view: SteeringView;
+  skillView: string | undefined;
   at: SteeringAt;
 }) {
   switch (view.tab) {
@@ -70,7 +73,12 @@ async function TabBody({
     case "skills":
       return (
         <Suspense fallback={<SkillsLoading />}>
-          <Skills ctx={ctx} source={source} cursor={view.cursor} />
+          <Skills
+            ctx={ctx}
+            source={source}
+            cursor={view.cursor}
+            view={skillView}
+          />
         </Suspense>
       );
     case "proposals": {
@@ -116,7 +124,15 @@ export async function Steering({
           decides this, not the query string. */}
       <PageRecord route="steering" id={view.proposal} />
       <SteeringTabs at={at} current={view.tab} />
-      {await TabBody({ ctx, source, view, at })}
+      {
+        await TabBody({
+          ctx,
+          source,
+          view,
+          at,
+          skillView: firstParam(searchParams.view),
+        })
+      }
     </div>
   );
 }

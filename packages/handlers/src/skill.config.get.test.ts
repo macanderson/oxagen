@@ -1,5 +1,6 @@
 import { skillConfigGet } from "@oxagen/oxagen/contracts/skill.config.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { parseSkillConfig } from "./skill-resolution";
 import { skillConfigSchema } from "@oxagen/oxagen/skills";
 import { createSkillConfigGetHandler } from "./skill.config.get";
 import { makeCTX } from "./test-utils/fixtures";
@@ -26,6 +27,7 @@ describe("get_skill_config", () => {
       current: null,
       versions: [],
     });
+    expect(parseSkillConfig(result.draftText).config).toEqual(result.config);
     expect(gate.assertOrgRole).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "owner" }),
       { org: ["Owner", "Admin", "Member"], workspace: ["Owner", "Member"] },
