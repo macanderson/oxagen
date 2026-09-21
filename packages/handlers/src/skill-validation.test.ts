@@ -117,3 +117,48 @@ describe("YAML required values", () => {
     },
   );
 });
+
+describe("wizard YAML parity", () => {
+  it("accepts quoted names and semantic versions", () => {
+    expect(
+      failed(
+        run({
+          body: body([
+            'name: "release-notes"',
+            'version: "1.2.3"',
+            'scope: "workspace:core"',
+          ]),
+        }),
+      ),
+    ).toEqual([]);
+  });
+  it.each([
+    ["name: duplicate"],
+    ["other: &grant shell", "tools: *grant"],
+    ["<<: {tools: all}"],
+    ['"allowed-tools": [shell]'],
+    ['"permi\\u0073sions": {all: true}'],
+  ])("refuses ambiguous YAML or disguised authority %j", (...extra) => {
+    expect(
+      failed(
+        run({
+          body: body([
+            "name: release-notes",
+            "version: 1.0.0",
+            "scope: workspace:core",
+            ...extra,
+          ]),
+        }),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+  it.each(["name", "version", "scope"])("rejects null required %s", (key) => {
+    expect(
+      failed(
+        run({
+          body: GOOD.replace(new RegExp(`^${key}:.*$`, "m"), `${key}: null`),
+        }),
+      ),
+    ).toContain("frontmatter_incomplete");
+  });
+});

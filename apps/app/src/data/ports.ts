@@ -72,6 +72,7 @@ import type {
 import type {
   ContextPr,
   ProposalPage,
+  RecordDetail,
   RecordKind,
   RecordPage,
   SteeringFreshness,
@@ -348,8 +349,8 @@ export interface DataSource {
     ): Promise<Read<SkillInventory>>;
   };
   /**
-   * The Steering page's three noBillingGate reads on the workspace; caller:
-   * features/steering/steering.tsx.
+   * The Steering page's reads on the workspace, each noBillingGate; callers:
+   * features/steering/steering.tsx and features/record/record.tsx.
    */
   steering: {
     /** list_records, status active: one page of the records in force, of one kind or all */
@@ -357,8 +358,23 @@ export interface DataSource {
       ctx: WsCtx,
       q: { kind: RecordKind | null; offset: number },
     ): Promise<Read<RecordPage>>;
-    /** list_proposals: one page, newest first */
-    proposals(ctx: WsCtx, q: { offset: number }): Promise<Read<ProposalPage>>;
+    /**
+     * get_record on a lineage: the published record's page (#3395). Reads the
+     * record back out of `.oxagen/rules/<lineage>.toml` on the production
+     * branch, so it answers for a lineage the registry has no row for; 404
+     * when neither the repository nor the registry holds it.
+     */
+    record(ctx: WsCtx, lineage: string): Promise<Read<RecordDetail>>;
+    /**
+     * list_proposals: one page, newest first. `lineage` narrows to the
+     * proposals raised on one record, which is how the record page answers
+     * whether a change is already open against it (#3395) rather than
+     * guessing from the first page of everything.
+     */
+    proposals(
+      ctx: WsCtx,
+      q: { offset: number; lineage?: string },
+    ): Promise<Read<ProposalPage>>;
     /** get_context_pr: one proposal's state machine, checks and what merge will do */
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
     /** get_steering_freshness: what is published, where, and the two gates */

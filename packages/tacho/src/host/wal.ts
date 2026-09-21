@@ -31,6 +31,8 @@ import {
   existsSync,
   readdirSync,
   readSync,
+  readFileSync,
+  truncateSync,
   renameSync,
   statSync,
   unlinkSync,
@@ -199,6 +201,56 @@ export class Wal {
     if (events.some((event) => event.kind === "agent_stop")) {
       this.persistCursor();
     }
+  }
+
+  /** Retry a journaled terminal batch without duplicating an already durable prefix. */
+  appendRecovered(
+    events: readonly TachoEvent[],
+    bodies: readonly FrameBody[] = [],
+  ): void {
+    const durable = new Map<string, Map<number, TachoEvent>>();
+    const missing: TachoEvent[] = [];
+    for (const event of events) {
+      let rows = durable.get(event.session_uuid);
+      if (!rows) {
+        const path = this.fileFor(event.session_uuid);
+        if (existsSync(path)) {
+          const bytes = readFileSync(path);
+          if (bytes.length > 0 && bytes[bytes.length - 1] !== 10) {
+            const boundary = bytes.lastIndexOf(10) + 1;
+            let complete = false;
+            try {
+              JSON.parse(bytes.subarray(boundary).toString("utf8"));
+              complete = true;
+            } catch {
+              /* A torn final line is replaced from the durable journal. */
+            }
+            if (complete) appendFileSync(path, "\n");
+            else truncateSync(path, boundary);
+          }
+        }
+        rows = new Map(
+          this.read(event.session_uuid).map((row) => [row.seq, row]),
+        );
+        durable.set(event.session_uuid, rows);
+      }
+      const prior = rows.get(event.seq);
+      if (!prior) missing.push(event);
+      else if (
+        prior.hash !== event.hash ||
+        prior.event_id_idem !== event.event_id_idem
+      )
+        throw new Error(
+          `WAL recovery conflict at ${event.session_uuid}:${event.seq}`,
+        );
+    }
+    this.append(missing, bodies);
+    // The event write can succeed before the cursor file fails. Rebuild that
+    // metadata on retry even when every event was already durable.
+    for (const event of events)
+      if (event.kind === "agent_stop")
+        this.cursor.sealed[event.session_uuid] = event.ts;
+    this.persistCursor();
   }
 
   private bodyFailure(
@@ -379,10 +431,14 @@ export class Wal {
   }
 
   /** Up to `limit` unshipped events, grouped by session in seq order. */
-  unshipped(limit: number): TachoEvent[] {
+  unshipped(
+    limit: number,
+    excludedSessions: ReadonlySet<string> = new Set(),
+  ): TachoEvent[] {
     const out: TachoEvent[] = [];
     for (const session of this.sessions()) {
-      if (!this.hasUnshipped(session)) continue;
+      if (excludedSessions.has(session) || !this.hasUnshipped(session))
+        continue;
       const through = this.shippedThrough(session);
       for (const event of this.read(session)) {
         if (event.seq <= through) continue;

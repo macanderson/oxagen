@@ -151,6 +151,7 @@ export function onboardingSource(reads: Reads): {
     },
     steering: {
       records: refuse("steering.records"),
+      record: refuse("steering.record"),
       proposals: refuse("steering.proposals"),
       contextPr: refuse("steering.contextPr"),
       freshness: refuse("steering.freshness"),

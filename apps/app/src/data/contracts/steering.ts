@@ -188,3 +188,59 @@ export const SteeringFreshness = z.object({
   }),
 });
 export type SteeringFreshness = z.infer<typeof SteeringFreshness>;
+
+/**
+ * One published record's page (#3395; MC spec §10.2), from `get_record`.
+ *
+ * `backing` says where the bytes came from. `file` means the record was read
+ * back out of `.oxagen/rules/<lineage>.toml` on the production branch, which
+ * is what actually steers a run; `registry` means the Postgres mirror
+ * answered because the repository could not. The page prints the difference
+ * rather than hiding it, because a reader deciding whether to trust a rule
+ * needs to know which one they are looking at.
+ *
+ * `id` is nullable here and nowhere else a published record appears: a file
+ * the mirror has no row for is still in force.
+ */
+export const RecordDetail = z.object({
+  record: PublishedRecord.extend({
+    id: PublicId.nullable(),
+    /** `retired` and `superseded` both read as archived on the page. */
+    status: z.enum(["active", "retired", "superseded"]),
+  }),
+  backing: z.enum(["file", "registry"]),
+  /**
+   * The commit that published the record, read from the file's history every
+   * time. Null when there is no history to read: no repository is bound, or
+   * GitHub refused.
+   */
+  provenance: z
+    .object({
+      commit: z.string().min(1),
+      authorName: z.string(),
+      authorLogin: z.string().nullable(),
+      committedAt: Instant,
+      summary: z.string(),
+    })
+    .nullable(),
+  /**
+   * Distinct runs that rendered the record, and distinct runs that cited it.
+   * Null when the workspace has no context-use rollup at all, which the page
+   * renders as not recorded and never as a zero: a zero reads as every run
+   * ignoring the rule.
+   */
+  effect: z.object({ rendered: Count, cited: Count }).nullable(),
+  versions: z.array(
+    z.object({
+      id: PublicId,
+      version: z.number().int().positive(),
+      checksum: z.string().min(1),
+      isLatest: z.boolean(),
+      publishedAt: Instant.nullable(),
+    }),
+  ),
+  /** The proposal whose merge published the active version; null otherwise. */
+  proposalId: PublicId.nullable(),
+  prUrl: z.string().min(1).nullable(),
+});
+export type RecordDetail = z.infer<typeof RecordDetail>;
