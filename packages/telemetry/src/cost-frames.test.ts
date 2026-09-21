@@ -360,7 +360,7 @@ describe("readModelCallFrames", () => {
       run: { kind: "ledger", runUuid: RUN },
     });
     const { query, query_params } = lastQuery();
-    expect(query).toContain("FROM token_usage");
+    expect(query).toContain("FROM metered_token_usage");
     expect(query).toContain("cache_write_tokens   AS cache_write_5m");
     // `token_usage` has no thinking column, so a gateway frame's reasoning
     // is zero from the mapping rather than from a read.
@@ -541,7 +541,7 @@ describe("readObservedModels", () => {
     const summaryCall = queryMock.mock.calls[0]![0];
     const classCall = queryMock.mock.calls[1]![0];
 
-    expect(summaryCall.query).toContain("FROM token_usage");
+    expect(summaryCall.query).toContain("FROM metered_token_usage");
     expect(summaryCall.query).toContain("FROM tacho_events FINAL");
     expect(summaryCall.query).toContain("UNION ALL");
     expect(summaryCall.query).toContain("kind = 'llm_call'");
