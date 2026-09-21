@@ -7,7 +7,7 @@ import {
   type SkillConfigChange,
   type SkillSearchPreview,
 } from "@/data/contracts/skills";
-import { toSkillSearchPreview } from "@/data/live/mappers/skills";
+import { toSkillSearchPreview } from "./preview";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
