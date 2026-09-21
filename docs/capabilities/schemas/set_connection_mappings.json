@@ -57,6 +57,7 @@
           ],
           "additionalProperties": false
         },
+        "minItems": 1,
         "description": "Confirmed entity type mappings to save"
       },
       "activateConnection": {

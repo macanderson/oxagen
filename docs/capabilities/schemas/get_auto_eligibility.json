@@ -70,7 +70,8 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 128
-                }
+                },
+                "maxItems": 64
               },
               "floor": {
                 "type": "boolean"

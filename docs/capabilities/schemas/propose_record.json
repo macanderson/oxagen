@@ -106,6 +106,7 @@
               "minLength": 1,
               "maxLength": 64
             },
+            "maxItems": 500,
             "default": []
           },
           "agents": {
@@ -115,6 +116,7 @@
               "minLength": 1,
               "maxLength": 128
             },
+            "maxItems": 100,
             "default": []
           },
           "recordIds": {
@@ -124,6 +126,7 @@
               "minLength": 1,
               "maxLength": 128
             },
+            "maxItems": 50,
             "default": []
           },
           "evidenceLinks": {
@@ -133,6 +136,7 @@
               "minLength": 1,
               "maxLength": 512
             },
+            "maxItems": 100,
             "default": []
           }
         },

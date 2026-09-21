@@ -46,7 +46,9 @@
             "node",
             "edge"
           ]
-        }
+        },
+        "minItems": 1,
+        "maxItems": 10
       },
       "slug": {
         "type": "string",
@@ -124,7 +126,8 @@
             "properties"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 25
       }
     },
     "required": [
