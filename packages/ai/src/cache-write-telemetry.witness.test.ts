@@ -43,6 +43,7 @@ vi.mock("@opentelemetry/api", () => ({
   SpanStatusCode: { OK: 1 },
   context: { active: vi.fn(() => ({})), with: vi.fn((_ctx, fn) => fn()) },
   trace: {
+    getActiveSpan: vi.fn(() => undefined),
     getTracer: vi.fn(() => ({
       startSpan: vi.fn(() => ({
         setAttributes: mocks.setAttributes,

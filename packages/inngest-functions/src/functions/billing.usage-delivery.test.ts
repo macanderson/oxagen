@@ -8,8 +8,9 @@ vi.mock("../create-function", () => ({
 }));
 vi.mock("../logger", () => ({ logger: { info: vi.fn() } }));
 await import("./billing.usage-delivery");
+const registration = mocks.create.mock.calls[0]!;
 it("registers a minute delivery sweep and preserves the retry result", async () => {
-  const [config, trigger, handler] = mocks.create.mock.calls[0]!;
+  const [config, trigger, handler] = registration;
   expect(config).toMatchObject({ id: "billing.usage-delivery", retries: 3 });
   expect(trigger).toEqual({ cron: "* * * * *" });
   mocks.deliver
@@ -28,7 +29,7 @@ it("registers a minute delivery sweep and preserves the retry result", async () 
 });
 
 it("drains more than 100 rows with one frozen boundary and serialized sweeps", async () => {
-  const [config, , handler] = mocks.create.mock.calls[0]!;
+  const [config, , handler] = registration;
   expect(config.concurrency).toEqual({ limit: 1 });
   mocks.deliver
     .mockReset()
