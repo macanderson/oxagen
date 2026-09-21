@@ -3206,8 +3206,22 @@ type Messages = {
       request: string;
       response: string;
       decision: string;
+      decisionOn: string;
       calledWith: string;
       noHalves: string;
+      showAll: string;
+      loadedSkill: string;
+      pane: {
+        command: string;
+        output: string;
+        diff: string;
+        contents: string;
+        asked: string;
+        arguments: string;
+        brief: string;
+        plan: string;
+        input: string;
+      };
     };
     frames: {
       title: string;
