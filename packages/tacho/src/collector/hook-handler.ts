@@ -369,6 +369,8 @@ async function routeHook(
     );
   }
   const at = replay?.receivedAt ?? toProtocolTimestamp(deps.now());
+  const inferredCwd =
+    harness === "cursor" && input["cursor_cwd_inferred"] === true;
   const { record } = deps.registry.ensure(input.session_id, {
     ambient: false,
     lastHookEvent: input.hook_event_name,
@@ -377,12 +379,16 @@ async function routeHook(
     ...(input.transcript_path !== undefined
       ? { transcriptPath: input.transcript_path }
       : {}),
-    ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
+    ...(input.cwd !== undefined && !inferredCwd ? { cwd: input.cwd } : {}),
     ...(pidFromEnv(env) !== undefined ? { pid: pidFromEnv(env) } : {}),
   });
+  if (inferredCwd && record.cwd === undefined && input.cwd !== undefined) {
+    record.cwd = input.cwd;
+  }
+  const locatedRaw = inferredCwd ? { ...input, cwd: record.cwd } : raw;
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
-  const payload = invocationToolUseId(raw, input, record);
+  const payload = invocationToolUseId(locatedRaw, input, record);
   const view = deps.policy();
   const events: TachoEvent[] = [];
   const replayAttrs: Record<string, string> =

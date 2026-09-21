@@ -7,6 +7,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { digestBytes } from "../digest";
+import { translateCursorPayload } from "../claude-code/cursor-adapter";
 import { verifyChain } from "../chain";
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { hookInputSchema } from "../claude-code/hooks";
@@ -881,5 +882,58 @@ describe("handleHookEvent over the recorded session", () => {
       deps,
     );
     expect(end.bodies).toEqual([]);
+  });
+});
+
+describe("Cursor session working directories", () => {
+  it("keeps the explicit active root across later inferred hooks", async () => {
+    const { deps } = harness();
+    const send = (
+      hook_event_name: string,
+      extra: Record<string, unknown> = {},
+    ) =>
+      handleHookEvent(
+        translateCursorPayload({
+          conversation_id: "multi-root",
+          hook_event_name,
+          workspace_roots: ["/repo/first", "/repo/second"],
+          ...extra,
+        }),
+        {},
+        deps,
+        undefined,
+        "cursor",
+      );
+    expect((await send("sessionStart")).record?.cwd).toBe("/repo/first");
+    expect(
+      (
+        await send("preToolUse", {
+          cwd: "/repo/second",
+          tool_name: "Read",
+          tool_input: { path: "a.ts" },
+          tool_use_id: "one",
+        })
+      ).record?.cwd,
+    ).toBe("/repo/second");
+    expect(
+      (
+        await send("postToolUse", {
+          tool_name: "Read",
+          tool_use_id: "one",
+          tool_output: "body",
+        })
+      ).record?.cwd,
+    ).toBe("/repo/second");
+    expect((await send("stop")).record?.cwd).toBe("/repo/second");
+    expect(
+      (
+        await send("preToolUse", {
+          cwd: "/repo/first",
+          tool_name: "Read",
+          tool_input: { path: "b.ts" },
+          tool_use_id: "two",
+        })
+      ).record?.cwd,
+    ).toBe("/repo/first");
   });
 });
