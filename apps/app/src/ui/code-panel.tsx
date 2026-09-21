@@ -85,7 +85,7 @@ function More({
       >
         ▶
       </span>
-      {open ? label : `${label} (${hidden} more)`}
+      {open ? label : `${label} (${String(hidden)} more)`}
     </button>
   );
 }
@@ -136,10 +136,11 @@ export function CodePanel({
         <table className="w-full border-collapse">
           <tbody>
             {shown.map((line, index) => (
+              // eslint-disable-next-line @eslint-react/no-array-index-key -- the key is the source line number, which is unique and stable; these rows are never reordered, filtered, or inserted into
               <tr key={startLine + index}>
                 <td
                   className={`${gutter} w-px align-top`}
-                  style={{ minWidth: `${width}ch` }}
+                  style={{ minWidth: `${String(width)}ch` }}
                 >
                   {startLine + index}
                 </td>
@@ -202,7 +203,7 @@ export function DiffPanel({
   language?: CodeLanguage;
   label: string;
 }) {
-  const stat = `+${diff.added} −${diff.removed}`;
+  const stat = `+${String(diff.added)} −${String(diff.removed)}`;
   return (
     <div
       data-testid="diff-panel"
@@ -216,15 +217,15 @@ export function DiffPanel({
         </span>
       </div>
       <div className={`${codeText} overflow-x-auto`}>
-        {diff.hunks.map((hunk, index) => (
+        {diff.hunks.map((hunk) => (
           <table
-            key={`${hunk.beforeStart}-${hunk.afterStart}-${index}`}
+            key={`${String(hunk.beforeStart)}-${String(hunk.afterStart)}`}
             className="w-full border-collapse border-t border-border first:border-t-0"
           >
             <tbody>
-              {hunk.lines.map((line, row) => (
+              {hunk.lines.map((line) => (
                 <tr
-                  key={`${line.op}-${line.before ?? "n"}-${line.after ?? "n"}-${row}`}
+                  key={`${line.op}-${String(line.before ?? "n")}-${String(line.after ?? "n")}`}
                   className={OP_ROW[line.op]}
                 >
                   <td className={`${gutter} w-px pl-2.5 align-top`}>

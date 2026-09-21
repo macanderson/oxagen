@@ -69,7 +69,7 @@ describe("buildDiff", () => {
   });
 
   it("drops the unchanged middle of a large file and splits the hunks", () => {
-    const filler = Array.from({ length: 40 }, (_, i) => `line ${i}`);
+    const filler = Array.from({ length: 40 }, (_, i) => `line ${String(i)}`);
     const before = ["head", ...filler, "tail"].join("\n");
     const after = ["HEAD", ...filler, "TAIL"].join("\n");
     const diff = buildDiff(before, after);
@@ -102,7 +102,10 @@ describe("buildDiff", () => {
   });
 
   it("falls back to a wholesale replacement rather than build a huge table", () => {
-    const big = Array.from({ length: 2000 }, (_, i) => `line ${i}`).join("\n");
+    const big = Array.from(
+      { length: 2000 },
+      (_, i) => `line ${String(i)}`,
+    ).join("\n");
     const diff = buildDiff(big, `${big}\nmore`);
     expect(diff.wholesale).toBe(true);
     expect(diff.removed).toBe(2000);

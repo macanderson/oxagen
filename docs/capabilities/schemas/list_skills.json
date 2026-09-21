@@ -91,7 +91,9 @@
               "items": {
                 "type": "string",
                 "maxLength": 512
-              }
+              },
+              "minItems": 1,
+              "maxItems": 20
             },
             "harnessCount": {
               "type": "integer",
@@ -113,7 +115,8 @@
             "lastSeenAt"
           ],
           "additionalProperties": false
-        }
+        },
+        "maxItems": 100
       },
       "nextCursor": {
         "anyOf": [
