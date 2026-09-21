@@ -16,8 +16,14 @@ const mocks = vi.hoisted(() => ({
 // "streamText" returns an object that has the stream shape; tests call
 // onFinish manually to exercise the telemetry path without a real LLM.
 mocks.streamText.mockImplementation(
-  (args: { onFinish: (...a: unknown[]) => unknown }) => ({
-    _onFinish: args.onFinish,
+  (args: {
+    prepareStep: () => Promise<unknown>;
+    onFinish: (...a: unknown[]) => unknown;
+  }) => ({
+    _onFinish: async (...a: unknown[]) => {
+      await args.prepareStep();
+      return args.onFinish(...a);
+    },
   }),
 );
 mocks.insertTokenUsage.mockResolvedValue(undefined);
@@ -50,6 +56,13 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     ...real,
     providerCostUsdMicros: mocks.providerCostUsdMicros,
     chargeUsageCredits: mocks.chargeUsageCredits,
+    admitUsage: vi.fn(async () => "00000000-0000-4000-8000-000000000099"),
+    finalizeUsage: vi.fn(
+      async ({ row, charge }: { row: unknown; charge?: unknown }) => {
+        await mocks.insertTokenUsage([row]);
+        if (charge) await mocks.chargeUsageCredits(charge);
+      },
+    ),
     recordSpend: mocks.recordSpend,
   };
 });
@@ -379,7 +392,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     );
   });
 
-  it("swallows a credit-charge error and still calls onFinish", async () => {
+  it("does not report completion when credit-charge fails", async () => {
     mocks.chargeUsageCredits.mockRejectedValueOnce(new Error("billing down"));
     let calledOnFinish = false;
     const result = streamAgentReply({
@@ -391,8 +404,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
         calledOnFinish = true;
       },
     }) as StreamResult;
-    await result._onFinish(USAGE_EVENT);
-    expect(calledOnFinish).toBe(true);
+    await expect(result._onFinish(USAGE_EVENT)).rejects.toThrow("billing down");
+    expect(calledOnFinish).toBe(false);
   });
 
   it("onFinish hashes the last user message content", async () => {
@@ -425,7 +438,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     );
   });
 
-  it("swallows a ClickHouse insertTokenUsage error and still calls onFinish", async () => {
+  it("does not report completion when durable persistence fails", async () => {
     mocks.insertTokenUsage.mockRejectedValueOnce(new Error("CH down"));
     let calledOnFinish = false;
     const result = streamAgentReply({
@@ -437,12 +450,11 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
         calledOnFinish = true;
       },
     }) as StreamResult;
-    // Should not throw
-    await result._onFinish(USAGE_EVENT);
-    expect(calledOnFinish).toBe(true);
+    await expect(result._onFinish(USAGE_EVENT)).rejects.toThrow("CH down");
+    expect(calledOnFinish).toBe(false);
   });
 
-  it("swallows a hashPrompt error and still calls onFinish", async () => {
+  it("does not report completion when hashPrompt fails", async () => {
     mocks.hashPrompt.mockRejectedValueOnce(new Error("hash failure"));
     let calledOnFinish = false;
     const result = streamAgentReply({
@@ -454,8 +466,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
         calledOnFinish = true;
       },
     }) as StreamResult;
-    await result._onFinish(USAGE_EVENT);
-    expect(calledOnFinish).toBe(true);
+    await expect(result._onFinish(USAGE_EVENT)).rejects.toThrow("hash failure");
+    expect(calledOnFinish).toBe(false);
   });
 
   it("forwards text, usage and finishReason to the caller-supplied onFinish", async () => {
@@ -783,4 +795,107 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
       });
     });
   });
+});
+
+describe("stream durable lifecycle", () => {
+  it("refuses admission before the provider step and does not settle", async () => {
+    const billing = await import("@oxagen/billing");
+    vi.mocked(billing.admitUsage).mockRejectedValueOnce(
+      new Error("admission unavailable"),
+    );
+    streamAgentReply({
+      fundedBy: "platform",
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    });
+    const options = mocks.streamText.mock.calls[0]![0];
+    await expect(options.prepareStep()).rejects.toThrow(
+      "admission unavailable",
+    );
+    expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
+  });
+  it("settles reported steps on cancellation once and marks usage incomplete", async () => {
+    const billing = await import("@oxagen/billing");
+    vi.mocked(billing.finalizeUsage).mockClear();
+    const onFinish = vi.fn();
+    streamAgentReply({
+      fundedBy: "platform",
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      onFinish,
+    });
+    const options = mocks.streamText.mock.calls[0]![0];
+    await options.prepareStep();
+    const partial = {
+      steps: [
+        {
+          usage: {
+            inputTokens: 100,
+            outputTokens: 20,
+            totalTokens: 120,
+            inputTokenDetails: { cacheReadTokens: 30, cacheWriteTokens: 10 },
+          },
+        },
+      ],
+    };
+    await options.onAbort(partial);
+    await options.onAbort(partial);
+    expect(billing.finalizeUsage).toHaveBeenCalledTimes(1);
+    expect(billing.finalizeUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        complete: false,
+        row: expect.objectContaining({
+          input_tokens: 100,
+          output_tokens: 20,
+          cached_tokens: 30,
+          cache_write_tokens: 10,
+        }),
+      }),
+    );
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+  it("does not invent usage for an interrupted first step", async () => {
+    streamAgentReply({
+      fundedBy: "platform",
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    });
+    const options = mocks.streamText.mock.calls[0]![0];
+    await options.prepareStep();
+    await options.onAbort({ steps: [] });
+    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+    expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
+  });
+});
+
+it("settles known earlier steps when a later provider step errors", async () => {
+  const billing = await import("@oxagen/billing");
+  vi.mocked(billing.finalizeUsage).mockClear();
+  const onError = vi.fn();
+  streamAgentReply({
+    fundedBy: "platform",
+    chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+    messages: MESSAGES,
+    telemetry: TELEMETRY,
+    onError,
+  });
+  const options = mocks.streamText.mock.calls[0]![0];
+  await options.prepareStep();
+  options.onStepEnd({
+    usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 },
+  });
+  const error = { error: new Error("later provider call failed") };
+  await options.onError(error);
+  expect(billing.finalizeUsage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      complete: false,
+      row: expect.objectContaining({ input_tokens: 50, output_tokens: 10 }),
+    }),
+  );
+  expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+  expect(onError).toHaveBeenCalledWith(error);
 });

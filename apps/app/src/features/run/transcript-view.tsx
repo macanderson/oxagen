@@ -52,9 +52,8 @@ import {
 import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
-import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
-import { formatClock, formatCount } from "@/ui/money-format";
+import { formatClock, formatCount, formatDuration } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
@@ -212,7 +211,7 @@ function FrameDetail({
   runId,
 }: { frame: TranscriptEntry } & Place) {
   const t = useTranslations("run.transcript");
-  const format = useFormatter();
+  const locale = useLocale();
   const place = { org, ws, runId };
   // The halves are read by name, never positionally. At `everything` a frame
   // carries one of them; at a folded zoom a tool step carries its input in
@@ -245,7 +244,11 @@ function FrameDetail({
         <span className="ml-auto font-mono text-[10.5px] text-muted-foreground">
           {t("frameHead", {
             seq: frame.seq,
-            time: format.dateTime(new Date(frame.at), { timeStyle: "medium" }),
+            // Run-relative, not wall-clock: a frame's place in the run is
+            // what a reader is locating, and it is the reading the transport
+            // below counts in. The absolute instant stays on the step rail's
+            // `dateTime`, so nothing the record holds is dropped.
+            time: formatDuration(frame.elapsedMs, locale),
             fidelity: t(`fidelity.${headline?.fidelity ?? "digest_only"}`),
           })}
         </span>
@@ -315,7 +318,6 @@ function StepRow({
   place: Place;
 }) {
   const t = useTranslations("run.transcript");
-  const format = useFormatter();
   const locale = useLocale();
   const { first } = step;
   const isNow = pos >= step.from && pos <= step.to;
@@ -339,10 +341,7 @@ function StepRow({
             dateTime={first.at}
             className="pr-2 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground"
           >
-            {format.dateTime(new Date(first.at), {
-              minute: "2-digit",
-              second: "2-digit",
-            })}
+            {formatClock(first.elapsedMs / 1000, locale)}
           </time>
           <span className="relative text-center before:absolute before:-top-3 before:-bottom-3 before:left-1/2 before:w-px before:bg-border">
             <span
@@ -730,6 +729,8 @@ export function TranscriptView({
     },
   });
 
+  const activelyLive = live && stream !== "denied" && stream !== "lost";
+
   // The seal changes the header, the badges and the record actions, none of
   // which this component owns, so the page is re-read once when it happens.
   useEffect(() => {
@@ -738,10 +739,10 @@ export function TranscriptView({
 
   // Read ahead of the playhead, so playback does not stall at a page boundary.
   useEffect(() => {
-    if (!isPlaying || cursor === null || reading) return;
+    if (!isPlaying || cursor === null || reading || stream === "denied") return;
     if (pos < head - PREFETCH_WITHIN) return;
     void loadMore();
-  }, [isPlaying, pos, head, cursor, reading, loadMore]);
+  }, [isPlaying, pos, head, cursor, reading, loadMore, stream]);
 
   // Playback walks the frames at their recorded pace.
   useEffect(() => {
@@ -810,7 +811,7 @@ export function TranscriptView({
       className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted px-3 py-2.5">
-        {status !== "live" ? (
+        {stream === "denied" ? null : status !== "live" ? (
           <span className="inline-flex shrink-0 items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
             {t(`recorded.${status}`)}
           </span>
@@ -975,7 +976,7 @@ export function TranscriptView({
             key={turn.id}
             turn={turn}
             pos={pos}
-            running={live && turn.id === lastTurnId}
+            running={activelyLive && turn.id === lastTurnId}
             openIds={shown}
             onToggle={toggle}
             place={place}
@@ -985,13 +986,15 @@ export function TranscriptView({
       <div className="flex flex-wrap items-center gap-2 border-t border-border bg-muted px-3 py-2.5 text-xs text-muted-foreground">
         <span
           aria-hidden="true"
-          className={`size-1.5 rounded-full ${live ? "animate-pulse bg-success" : "bg-muted-foreground"}`}
+          className={`size-1.5 rounded-full ${activelyLive ? "animate-pulse bg-success" : "bg-muted-foreground"}`}
         />
         <span data-testid="transcript-count">
           {live
-            ? stream === "lost"
-              ? t("followLost")
-              : t("recording")
+            ? stream === "denied"
+              ? t("followDenied")
+              : stream === "lost"
+                ? t("followLost")
+                : t("recording")
             : stream === "sealed"
               ? t("followSealed")
               : cursor !== null
@@ -1008,7 +1011,7 @@ export function TranscriptView({
           <button
             type="button"
             data-testid="transcript-more"
-            disabled={reading}
+            disabled={reading || stream === "denied"}
             onClick={() => {
               void loadMore();
             }}

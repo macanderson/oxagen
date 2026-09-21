@@ -12,6 +12,7 @@
  */
 import {
   existsSync,
+  lstatSync,
   readdirSync,
   rmdirSync,
   rmSync,
@@ -31,7 +32,11 @@ import {
   readHostFileLenient,
   writeHostFile,
 } from "../host/host-file";
-import type { ModelBaseUrlHarness } from "../host/model-base-url";
+import {
+  modelBaseUrlBackupPath,
+  hasOrphanedModelBaseUrl,
+  type ModelBaseUrlHarness,
+} from "../host/model-base-url";
 import { stripTachoSettings } from "../host/settings-writer";
 import { stripStellaHooks } from "../host/stella-writer";
 import { toProtocolTimestamp } from "../timestamp";
@@ -152,14 +157,13 @@ export const MODEL_BASE_URL_HARNESSES: ModelBaseUrlHarness[] = [
 ];
 
 /**
- * Take the model base URLs back out of every harness that can carry one.
- * Always both harnesses, whatever host.json lists, for the reason
- * `stripEnrollmentHooks` strips every file: a lost host.json must not leave a
- * harness pointed at a port nothing listens on, which stops that agent
- * making any model call at all. Returns the files changed and the failures.
+ * Restore enrolled harnesses and any harness with a model URL receipt, which
+ * can survive a reassign. With missing or invalid metadata, sweep every
+ * supported harness so a lost host.json cannot
+ * leave an agent pointing at a stopped gateway.
  */
 export async function restoreModelBaseUrlsFor(
-  host: Pick<HostFile, "port"> | undefined,
+  host: Pick<HostFile, "port" | "harnesses"> | undefined,
   deps: CliDeps,
 ): Promise<{ restored: string[]; failed: string[] }> {
   const restored: string[] = [];
@@ -167,6 +171,14 @@ export async function restoreModelBaseUrlsFor(
   if (deps.modelBaseUrls === undefined) return { restored, failed };
   for (const harness of MODEL_BASE_URL_HARNESSES) {
     try {
+      if (host !== undefined && !host.harnesses.includes(harness)) {
+        try {
+          lstatSync(modelBaseUrlBackupPath(harness, deps.home));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          if (!hasOrphanedModelBaseUrl(harness, deps.home)) continue;
+        }
+      }
       const state = await deps.modelBaseUrls.restore({
         home: deps.home,
         // Restore recognises the proxy's URL on any port; the port only
