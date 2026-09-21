@@ -242,3 +242,51 @@ describe("price remove", () => {
     expect(c.output()).toContain(message);
   });
 });
+
+describe("atomic price card", () => {
+  const options = {
+    provider: "anthropic",
+    model: "claude-sonnet-5",
+    tokenClass: "input_uncached",
+    usdPerMillion: "3",
+  };
+  it("sends additional classes in one request", async () => {
+    apiPostOrThrow.mockResolvedValue({
+      entry: row(),
+      closed: null,
+      additionalEntries: [
+        {
+          entry: row({ tokenClass: "output", microsPerMillion: "15000000" }),
+          closed: null,
+        },
+      ],
+    });
+    const c = captureWriter();
+    await priceSet(
+      { ...options, additionalRate: ["output=15", "cache_read=0.3"] },
+      c.writer,
+    );
+    expect(apiPostOrThrow).toHaveBeenCalledOnce();
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "cost/price-entries/set",
+      expect.objectContaining({
+        additionalRates: [
+          { tokenClass: "output", usdPerMillion: 15 },
+          { tokenClass: "cache_read", usdPerMillion: 0.3 },
+        ],
+      }),
+    );
+    expect(c.output()).toContain("output");
+  });
+  it.each(["output=-1", "input_uncached=4", "invalid=4", "output=4=5"])(
+    "refuses invalid additional rate %s before the request",
+    async (rate) => {
+      await priceSet(
+        { ...options, additionalRate: [rate] },
+        captureWriter().writer,
+      );
+      expect(apiPostOrThrow).not.toHaveBeenCalled();
+      expect(process.exitCode).toBe(2);
+    },
+  );
+});

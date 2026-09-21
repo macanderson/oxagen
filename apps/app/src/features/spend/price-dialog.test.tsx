@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
 // The Pricing tab's two dialogs with their actions faked.
 //
-// Set a negotiated rate reads a whole rate card and sends it as one
-// set_price_entry call per token class, so the case that matters is the one
-// that stops halfway: the dialog must never report a half-written card as a
-// success, and must say which classes are in effect and which are not. Remove
-// must say what ending a rate actually does — fall back to the list price —
-// and must not call it a delete. Axe checks the state each test ends in,
-// the open dialog's portal included (INV-26).
+// A submitted card crosses the action boundary once, including every class.
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
@@ -22,7 +16,13 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 // Typed on the values argument, so reading a call's payload back is not an
 // `any` the lint rules refuse to let escape.
 const setPriceEntryAction =
-  vi.fn<(at: unknown, values: Record<string, unknown>) => unknown>();
+  vi.fn<
+    (
+      at: unknown,
+      values: Record<string, unknown>,
+      additional: Record<string, unknown>[],
+    ) => unknown
+  >();
 const removePriceEntryAction = vi.fn();
 vi.mock("./actions", () => ({
   setBudgetAction: vi.fn(),
@@ -120,7 +120,7 @@ describe("Set a negotiated rate", () => {
     expect(setPriceEntryAction).not.toHaveBeenCalled();
   });
 
-  it("sends one call per class, in class order, under the one date typed", async () => {
+  it("sends every class in one atomic call", async () => {
     setPriceEntryAction.mockResolvedValue({ ok: true, value: null });
     await openDialog();
     await fill({
@@ -136,8 +136,13 @@ describe("Set a negotiated rate", () => {
         "/acme/core-platform/spend?tab=pricing",
       );
     });
-    expect(setPriceEntryAction).toHaveBeenCalledTimes(2);
-    expect(setPriceEntryAction.mock.calls.map(([, values]) => values)).toEqual([
+    expect(setPriceEntryAction).toHaveBeenCalledTimes(1);
+    expect(
+      setPriceEntryAction.mock.calls.flatMap(([, first, rest]) => [
+        first,
+        ...rest,
+      ]),
+    ).toEqual([
       expect.objectContaining({
         tokenClass: "input_uncached",
         usdPerMillion: "3",
@@ -165,12 +170,13 @@ describe("Set a negotiated rate", () => {
     const before = Date.now();
     await submit();
     await waitFor(() => {
-      expect(setPriceEntryAction).toHaveBeenCalledTimes(3);
+      expect(setPriceEntryAction).toHaveBeenCalledTimes(1);
     });
 
-    const instants = setPriceEntryAction.mock.calls.map(
-      ([, values]) => values["effectiveFrom"],
+    const instants = setPriceEntryAction.mock.calls.flatMap(([, first, rest]) =>
+      [first, ...rest].map((values) => values["effectiveFrom"]),
     );
+    expect(instants).toHaveLength(3);
     expect(new Set(instants).size).toBe(1);
     const [instant] = instants;
     if (typeof instant !== "string") throw new Error("no instant was sent");
@@ -180,14 +186,12 @@ describe("Set a negotiated rate", () => {
     expect(new Date(instant).getTime()).toBeGreaterThanOrEqual(before - 1_000);
   });
 
-  it("names the classes written and the classes not written when a call is refused halfway (negative)", async () => {
-    setPriceEntryAction
-      .mockResolvedValueOnce({ ok: true, value: null })
-      .mockResolvedValueOnce({
-        ok: false,
-        reason: "denied",
-        code: "org_role_required",
-      });
+  it("keeps every class unwritten when the atomic call is refused (negative)", async () => {
+    setPriceEntryAction.mockResolvedValueOnce({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
     await openDialog();
     await fill({
       Vendor: "anthropic",
@@ -204,23 +208,24 @@ describe("Set a negotiated rate", () => {
     await submit();
 
     const written = await screen.findByTestId("spend-price-written");
-    expect(written).toHaveTextContent("In effect now: Input.");
+    expect(written).toHaveTextContent(
+      "Nothing was written. The price book is unchanged.",
+    );
     expect(screen.getByTestId("spend-price-not-written")).toHaveTextContent(
-      "Not written: Output and Reasoning.",
+      "Not written: Input, Output and Reasoning.",
     );
     expect(screen.getByTestId("spend-price-failure")).toHaveTextContent(
       "An organization owner, admin or billing member sets a negotiated rate.",
     );
-    // A half-written card is not a success: the dialog stays open and nothing
-    // navigates away from it.
+    // A refused card stays open with every entered value.
     expect(
       screen.getByRole("dialog", { name: "Set a negotiated rate" }),
     ).toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
-    expect(setPriceEntryAction).toHaveBeenCalledTimes(2);
+    expect(setPriceEntryAction).toHaveBeenCalledTimes(1);
   });
 
-  it("says the book is unchanged when the very first call is refused (negative)", async () => {
+  it("does not claim the book is unchanged when the response is unavailable", async () => {
     setPriceEntryAction.mockResolvedValue({
       ok: false,
       reason: "unavailable",
@@ -235,12 +240,10 @@ describe("Set a negotiated rate", () => {
     });
     await submit();
 
-    expect(await screen.findByTestId("spend-price-written")).toHaveTextContent(
-      "Nothing was written. The price book is unchanged.",
-    );
-    expect(screen.getByTestId("spend-price-not-written")).toHaveTextContent(
-      "Not written: Input and Output.",
-    );
+    expect(
+      await screen.findByTestId("spend-price-failure"),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("spend-price-written")).toBeNull();
     expect(setPriceEntryAction).toHaveBeenCalledTimes(1);
   });
 
@@ -431,7 +434,9 @@ describe("Remove a negotiated rate", () => {
       screen.getByRole("button", { name: "Keep the current rate" }),
     );
     expect(
-      await screen.findByRole("dialog", { name: "Fall back to the list price" }),
+      await screen.findByRole("dialog", {
+        name: "Fall back to the list price",
+      }),
     ).toBeInTheDocument();
     expect(removePriceEntryAction).toHaveBeenCalledTimes(1);
   });

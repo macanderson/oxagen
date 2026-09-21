@@ -86,13 +86,8 @@ export function isFindingId(value: string): boolean {
 
 // ── The price book's two writes ──────────────────────────────────────────────
 //
-// `set_price_entry` and `remove_price_entry` each address ONE token class,
-// because `cost.price_entries` holds one effective-dated row per (provider,
-// model, class, region) and each statement is atomic on exactly the row the
-// resolver later picks. A rate card with four classes on it is therefore four
-// calls, and the form below is the input to one of them: the dialog reads the
-// card once, builds one of these per class the person filled, and sends them
-// in sequence under one `effectiveFrom`.
+// Each class uses the same form parser. The action combines validated classes
+// into one atomic card before calling set_price_entry.
 
 /** The values one `set_price_entry` call is built from, as typed. */
 export type PriceEntryFormValues = {

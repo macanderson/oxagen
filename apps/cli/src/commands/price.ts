@@ -22,10 +22,7 @@
  * this command is the platform's book, and only an org Owner, Admin or
  * Billing member may write it.
  *
- * A whole rate card is several calls, one per token class, sharing one
- * `--effective-from`. That is the contract's shape and not an omission: each
- * token class is its own effective-dated row, so one call per class is the
- * only way each write is atomic — see the `set_price_entry` contract.
+ * Add --additional-rate class=usd for other classes in the same atomic card.
  *
  * Output discipline (ADR-023 §4): `--json` emits the exact contract payload as
  * one line on stdout; pretty mode renders a table; failures are uniform
@@ -71,6 +68,7 @@ export interface PriceEntryRow {
 }
 
 interface PriceEntrySetResult {
+  additionalEntries?: { entry: PriceEntryRow; closed: PriceEntryRow | null }[];
   entry: PriceEntryRow;
   closed: PriceEntryRow | null;
 }
@@ -146,6 +144,7 @@ function renderEntries(rows: PriceEntryRow[], writer: CommandWriter): void {
 // ── price set ─────────────────────────────────────────────────────────────
 
 export interface PriceSetCliOptions {
+  additionalRate?: string[];
   provider?: string;
   model?: string;
   tokenClass?: string;
@@ -200,6 +199,28 @@ export async function priceSet(
     effectiveFrom = parsed;
   }
 
+  const additionalRates: { tokenClass: TokenClass; usdPerMillion: number }[] =
+    [];
+  const classes = new Set([opts.tokenClass]);
+  for (const value of opts.additionalRate ?? []) {
+    const [tokenClass = "", amount = "", extra] = value.split("=");
+    const price = parseUsdPerMillion(amount);
+    if (
+      !isTokenClass(tokenClass) ||
+      price === null ||
+      extra !== undefined ||
+      classes.has(tokenClass)
+    ) {
+      process.exitCode = 2;
+      out.error(
+        "Invalid --additional-rate. Use a distinct class=usd amount for each class.",
+        "usage",
+      );
+      return;
+    }
+    classes.add(tokenClass);
+    additionalRates.push({ tokenClass, usdPerMillion: price });
+  }
   let result: PriceEntrySetResult;
   try {
     result = await apiPostOrThrow<PriceEntrySetResult>(
@@ -214,6 +235,7 @@ export async function priceSet(
         region: null,
         modelAliases: opts.alias?.length ? opts.alias : undefined,
         usdPerMillion,
+        ...(additionalRates.length ? { additionalRates } : {}),
         effectiveFrom,
       },
     );
@@ -231,7 +253,11 @@ export async function priceSet(
   );
   writer.write("");
   renderEntries(
-    result.closed ? [result.entry, result.closed] : [result.entry],
+    [
+      result.entry,
+      ...(result.additionalEntries ?? []).map((write) => write.entry),
+      ...(result.closed ? [result.closed] : []),
+    ],
     writer,
   );
   if (result.closed) {
@@ -317,9 +343,7 @@ export async function priceRemove(
       err instanceof Error &&
       err.message.includes(CLOSE_WOULD_UNPRICE)
     )
-      writer.write(
-        "  Re-run with --confirm-unpriced to end the rate anyway.",
-      );
+      writer.write("  Re-run with --confirm-unpriced to end the rate anyway.");
     return;
   }
 

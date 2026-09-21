@@ -1491,6 +1491,7 @@ async function lockNegotiatedKey(
  */
 export async function setNegotiatedPriceEntry(
   args: SetNegotiatedPriceEntryArgs,
+  transaction?: Tx,
 ): Promise<NegotiatedPriceWrite> {
   if (args.microsPerMillion < 0n)
     throw new RangeError(`a price must be a non-negative integer of micros`);
@@ -1503,7 +1504,7 @@ export async function setNegotiatedPriceEntry(
   // list depends on that — while an explicit empty array clears them.
   const modelAliases = args.modelAliases;
   const key = entryKey({ ...args, region });
-  return withTenantDb(async (tx) => {
+  const write = async (tx: Tx): Promise<NegotiatedPriceWrite> => {
     // The names this write will end up carrying, resolved BEFORE the locks
     // and the overlap check, because both are about names. With the list
     // omitted, the write inherits the aliases of the key's latest row (open
@@ -1745,6 +1746,40 @@ export async function setNegotiatedPriceEntry(
       entry: rowToEntry(stored),
       closed: closed === null ? null : rowToEntry(closed),
     };
+  };
+  return transaction ? write(transaction) : withTenantDb(write);
+}
+
+/** Commit a model's classes together. Readers see the old card or the new card. */
+export async function setNegotiatedPriceCard(
+  args: Omit<
+    SetNegotiatedPriceEntryArgs,
+    "tokenClass" | "microsPerMillion" | "unit"
+  > & {
+    rates: { tokenClass: PriceTokenClass; microsPerMillion: bigint }[];
+  },
+): Promise<NegotiatedPriceWrite[]> {
+  const classes = args.rates.map((rate) => rate.tokenClass);
+  if (classes.length === 0 || new Set(classes).size !== classes.length) {
+    throw new RangeError("A price card needs distinct token classes");
+  }
+  return withTenantDb(async (tx) => {
+    // Every card locks classes in the same order before writing any row.
+    for (const tokenClass of [...classes].sort()) {
+      await lockNegotiatedClass(tx, { ...args, tokenClass });
+    }
+    const now = args.now ?? new Date();
+    const effectiveFrom = args.effectiveFrom ?? now;
+    const writes: NegotiatedPriceWrite[] = [];
+    for (const rate of args.rates) {
+      writes.push(
+        await setNegotiatedPriceEntry(
+          { ...args, ...rate, now, effectiveFrom },
+          tx,
+        ),
+      );
+    }
+    return writes;
   });
 }
 
