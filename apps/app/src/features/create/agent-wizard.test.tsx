@@ -164,7 +164,8 @@ afterEach(async () => {
 describe("the agent wizard: describe", () => {
   it("opens on Describe with five steps, and says it is not Register an agent", async () => {
     mount();
-    await screen.findByTestId("create-agent");
+    // The first lazy import includes Vitest transformation under CI load.
+    await screen.findByTestId("create-agent", {}, { timeout: 5000 });
     expect(currentStep()).toContain(shell("steps.describe"));
     const rail = screen.getByTestId("wizard-rail").textContent;
     for (const step of ["identity", "definition", "toolbelt", "pullRequest"])

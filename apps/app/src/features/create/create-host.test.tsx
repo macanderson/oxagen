@@ -109,7 +109,8 @@ describe("CreateHost", () => {
     const card = dialog.querySelector<HTMLButtonElement>('[data-kind="skill"]');
     if (card === null) throw new Error("no skill card");
     fireEvent.click(card);
-    await screen.findByTestId("create-skill");
+    // The first lazy import includes Vitest transformation under CI load.
+    await screen.findByTestId("create-skill", {}, { timeout: 5000 });
     const rail = screen.getByTestId("wizard-rail");
     const current = rail.querySelector('[aria-current="step"]');
     expect(current?.textContent).toContain(t("steps.source"));

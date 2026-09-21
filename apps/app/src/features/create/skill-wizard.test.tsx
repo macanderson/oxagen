@@ -137,7 +137,8 @@ afterEach(async () => {
 describe("the skill wizard: source", () => {
   it("offers three ways in, keeps the registry closed and says why, and waits for a choice", async () => {
     mount();
-    await screen.findByTestId("create-skill");
+    // The first lazy import includes Vitest transformation under CI load.
+    await screen.findByTestId("create-skill", {}, { timeout: 5000 });
     expect(primary().disabled).toBe(true);
     const registry = screen
       .getByText(t("skill.source.registry.title"))
