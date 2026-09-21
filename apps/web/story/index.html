@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oxagen, a founder's story</title>
+<meta name="description" content="Oxagen was built in seven months by one founder directing coding agents. This page reads that work back from the record: 21,861 GitHub contributions, 6,341 commits, and 8,133 prompts.">
+<link rel="canonical" href="https://oxagen.sh/story">
+<meta name="theme-color" content="#0A0A0C">
+<meta name="color-scheme" content="dark light">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://oxagen.sh/story">
+<meta property="og:site_name" content="Oxagen">
+<meta property="og:title" content="Oxagen, a founder's story">
+<meta property="og:description" content="Seven months, 6,341 commits, and 4,427 merged pull requests. What one founder directing coding agents actually produced, measured against published baselines.">
+<meta property="og:image" content="https://oxagen.sh/research-assets/mac-bw-1080.jpg">
+<meta property="og:image:width" content="1080">
+<meta property="og:image:height" content="1080">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@oxagenai">
+<meta name="twitter:title" content="Oxagen, a founder's story">
+<meta name="twitter:description" content="Seven months, 6,341 commits, and 4,427 merged pull requests. What one founder directing coding agents actually produced, measured against published baselines.">
+<meta name="twitter:image" content="https://oxagen.sh/research-assets/mac-bw-1080.jpg">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/geist-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Oxagen, a founder's story", "description": "How Oxagen was built in seven months, read from the record.", "datePublished": "2026-09-21", "author": {"@type": "Person", "name": "Mac Anderson", "url": "https://github.com/macanderson"}, "publisher": {"@type": "Organization", "name": "Oxagen, Inc.", "url": "https://oxagen.sh"}, "mainEntityOfPage": "https://oxagen.sh/story", "image": "https://oxagen.sh/research-assets/mac-bw-1080.jpg"}</script>
+<style>
+/* The site already serves these three families. Linking them instead of
+   embedding base64 drops the page by about 120 KB and keeps one cached copy
+   shared with every other page on oxagen.sh. */
+@font-face { font-family: "Space Grotesk"; src: url("/fonts/space-grotesk-latin-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Space Grotesk"; src: url("/fonts/space-grotesk-latin-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Space Grotesk"; src: url("/fonts/space-grotesk-latin-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Space Grotesk"; src: url("/fonts/space-grotesk-latin-700.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Geist"; src: url("/fonts/geist-latin-wght.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Monaspace Neon"; src: url("/fonts/monaspace-neon-latin-wght.woff2") format("woff2"); font-weight: 200 800; font-style: normal; font-display: swap; }
+
+:root {
+  --ink: #09090B; --panel: #18181B; --hl: #27272A; --border: #27272A; --rule: #3F3F46;
+  --fg: #FFFFFF; --body: #E4E4E7; --muted: #A1A1AA; --dim: #71717A;
+  --gold: #D4AF37; --accent-text: #D4AF37; --on-gold: #09090B;
+  --joy: #14A8A1; --heat: #D2663F;
+  --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Monaspace Neon", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius: 12px; --wrap: 1120px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --ink: #FFFFFF; --panel: #FFFFFF; --hl: #F4F4F5; --border: #E4E4E7; --rule: #D4D4D8;
+    --fg: #09090B; --body: #27272A; --muted: #71717A; --dim: #A1A1AA;
+    --accent-text: #8A7223; --joy: #008C78; --heat: #A8471F; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --ink: #FFFFFF; --panel: #FFFFFF; --hl: #F4F4F5; --border: #E4E4E7; --rule: #D4D4D8;
+  --fg: #09090B; --body: #27272A; --muted: #71717A; --dim: #A1A1AA;
+  --accent-text: #8A7223; --joy: #008C78; --heat: #A8471F; color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ink); color: var(--body); font-family: var(--font); font-size: 18px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: var(--wrap); margin: 0 auto; padding-inline: 24px; }
+@media (max-width: 600px) { .wrap { padding-inline: 16px; } body { font-size: 16px; } }
+.mono, .num { font-family: var(--mono); font-feature-settings: "calt", "liga"; }
+.num { font-variant-numeric: tabular-nums; }
+h1, h2, h3 { font-family: var(--font-display); color: var(--fg); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(40px, 7vw, 72px); line-height: 1.05; font-weight: 700; letter-spacing: -0.03em; }
+h2 { font-size: clamp(28px, 4vw, 40px); line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 22px; line-height: 1.3; font-weight: 500; }
+h4 { font-family: var(--font); font-size: 17px; font-weight: 600; color: var(--fg); margin: 0; }
+p { margin: 0; max-width: 66ch; }
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); font-weight: 500; }
+.eyebrow.first { color: var(--accent-text); }
+.lead { font-size: 20px; color: var(--body); max-width: 60ch; }
+.muted { color: var(--muted); }
+a { color: var(--fg); }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+header.top { border-bottom: 1px solid var(--border); }
+header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px; }
+.logo { color: var(--fg); width: 132px; height: auto; display: block; }
+.tag { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+section { border-top: 1px solid var(--border); padding-block: 56px; }
+section.hero { border-top: 0; padding-block: 64px 40px; }
+.stack { display: grid; gap: 16px; }
+.hero .stack { gap: 20px; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 36px; }
+@media (max-width: 860px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; background: var(--panel); display: grid; gap: 4px; align-content: start; }
+.stat .label { font-size: 13px; color: var(--muted); }
+.stat .value { font-family: var(--mono); font-size: clamp(26px, 3.4vw, 34px); color: var(--fg); line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stat .sub { font-size: 13px; color: var(--muted); line-height: 1.45; }
+.note { border-left: 2px solid var(--rule); padding: 4px 0 4px 16px; color: var(--muted); font-size: 15px; max-width: 72ch; }
+
+/* The hive */
+.hive-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 28px; }
+.hive-box { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); padding: 16px; }
+.hive-svg { width: 100%; height: auto; display: block; touch-action: manipulation; }
+.hive-svg .cell { cursor: pointer; }
+.hive-svg .cell path { stroke: var(--border); stroke-width: 1; transition: opacity .2s; }
+.hive-svg .cell.dim path, .hive-svg .cell.dim circle { opacity: .18; }
+.hive-svg .cell.sel path { stroke: var(--gold); stroke-width: 2.2; }
+.hive-svg .cell:hover path { stroke: var(--muted); }
+.hive-svg text { fill: var(--muted); font-family: var(--font); font-size: 10px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 14px; }
+.controls input[type=range] { flex: 1 1 220px; accent-color: var(--fg); }
+button { font-family: var(--font); font-size: 14px; border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--rule); background: transparent; color: var(--fg); }
+button:hover { background: var(--hl); }
+button.gold { background: var(--gold); color: var(--on-gold); border-color: var(--gold); font-weight: 600; min-width: 132px; }
+button.gold:hover { background: #F1CE65; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px 20px; font-size: 13px; color: var(--muted); margin-top: 12px; align-items: center; }
+.legend .ramp { display: inline-flex; gap: 2px; vertical-align: middle; margin-inline: 6px; }
+.legend .ramp i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; vertical-align: middle; margin-right: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.chip { font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--rule); background: transparent; color: var(--body); }
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--ink); border-color: var(--fg); }
+
+.reader { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); padding: 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 32px; min-height: 330px; align-content: start; }
+.reader .rcol { display: grid; gap: 14px; align-content: start; }
+@media (max-width: 800px) { .reader { grid-template-columns: 1fr; min-height: 0; } }
+.reader .date { font-family: var(--display, var(--font-display)); font-size: 26px; color: var(--fg); font-weight: 500; line-height: 1.2; }
+.reader .chap { font-size: 13px; color: var(--muted); }
+.big { font-family: var(--mono); font-size: 44px; color: var(--fg); line-height: 1; font-variant-numeric: tabular-nums; }
+.kv { display: grid; grid-template-columns: 110px minmax(0, 1fr) 52px; gap: 6px 10px; align-items: center; font-size: 14px; }
+.kv .k { color: var(--muted); }
+.kv .v { font-family: var(--mono); text-align: right; color: var(--fg); font-size: 13px; }
+.bar { height: 8px; border-radius: 4px; background: var(--hl); overflow: hidden; }
+.bar b { display: block; height: 100%; background: var(--fg); border-radius: 4px; }
+.bar.joy b { background: var(--joy); } .bar.heat b { background: var(--heat); }
+.milestone { border-left: 2px solid var(--rule); padding-left: 14px; font-size: 16px; color: var(--body); }
+.milestone.empty { color: var(--muted); font-size: 14px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tags span { font-size: 12px; font-family: var(--mono); color: var(--body); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.running { font-size: 13px; color: var(--muted); }
+
+/* Chapters */
+.chapters { display: grid; gap: 0; margin-top: 28px; }
+.chapter { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 20px; padding-block: 22px; border-top: 1px solid var(--border); }
+.chapter:first-child { border-top: 0; }
+@media (max-width: 700px) { .chapter { grid-template-columns: 1fr; gap: 8px; } }
+.chapter .when { font-family: var(--mono); font-size: 13px; color: var(--muted); padding-top: 6px; }
+.chapter .when button { margin-top: 10px; font-size: 13px; padding: 5px 10px; }
+.chapter p { color: var(--body); margin-top: 8px; }
+.chapter blockquote { margin: 12px 0 0; font-family: var(--mono); font-size: 14px; color: var(--fg); border-left: 2px solid var(--rule); padding-left: 12px; max-width: 70ch; }
+
+/* charts */
+.chart-box { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); padding: 16px; margin-top: 24px; overflow-x: auto; }
+.chart-box svg { display: block; width: 100%; height: auto; min-width: 560px; }
+.chart-box svg text { fill: var(--muted); font-family: var(--font); font-size: 11px; }
+.chart-box svg .axis { stroke: var(--rule); stroke-width: 1; }
+.chart-box svg .grid { stroke: var(--border); stroke-width: 1; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; margin-top: 24px; }
+@media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+.card { border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; background: var(--panel); display: grid; gap: 12px; align-content: start; }
+.card ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+.card li { display: grid; gap: 2px; font-size: 15px; }
+.card li .d { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.card li q { color: var(--fg); font-family: var(--mono); font-size: 13.5px; quotes: "“" "”"; }
+
+.topics { display: grid; grid-template-columns: minmax(130px, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px 16px; align-items: center; font-size: 14px; margin-top: 24px; }
+.topics .h { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+.topics .row-bar { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; align-items: center; }
+.topics .row-bar span { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right; }
+
+.clock-wrap { display: grid; grid-template-columns: minmax(260px, 380px) minmax(0, 1fr); gap: 32px; align-items: center; margin-top: 24px; }
+@media (max-width: 760px) { .clock-wrap { grid-template-columns: 1fr; } }
+.clock-wrap svg { width: 100%; height: auto; }
+.clock-wrap svg text { fill: var(--muted); font-family: var(--mono); font-size: 10px; }
+
+.workbench { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 24px; }
+.tool { text-align: left; display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--body); }
+.tool:hover { border-color: var(--rule); background: var(--hl); }
+.tool b { color: var(--fg); font-weight: 600; font-size: 15px; }
+.tool span { font-size: 13px; color: var(--muted); line-height: 1.45; }
+.tool em { font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+.beliefs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 24px; }
+.belief { padding: 16px 18px; border-left: 2px solid var(--rule); display: grid; gap: 6px; }
+.belief h4 { font-size: 16px; }
+.belief q { font-family: var(--mono); font-size: 13.5px; color: var(--fg); }
+
+.close { display: grid; gap: 20px; }
+.close .quote { font-family: var(--font-display); font-size: clamp(24px, 3vw, 32px); line-height: 1.3; color: var(--fg); max-width: 34ch; font-weight: 500; text-wrap: balance; }
+.mandate { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 8px; }
+@media (max-width: 860px) { .mandate { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mandate div { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; background: var(--panel); font-size: 14px; display: grid; gap: 4px; }
+.mandate b { color: var(--fg); font-size: 15px; }
+footer { border-top: 1px solid var(--border); padding-block: 32px 48px; font-size: 14px; color: var(--muted); }
+footer .wrap { display: grid; gap: 12px; }
+footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 80ch; }
+
+#tip { position: fixed; pointer-events: none; z-index: 10; background: var(--panel); color: var(--body); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.45; max-width: 260px; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+#tip b { color: var(--fg); font-family: var(--mono); font-weight: 500; }
+
+/* ---- throughput table ---- */
+.bars { display: grid; gap: 14px; margin: 4px 0 0; }
+.bar-row { display: grid; grid-template-columns: minmax(170px, 1.1fr) minmax(0, 3fr) auto; gap: 14px; align-items: center; }
+.bar-row .who { font-size: 14px; color: var(--body); line-height: 1.35; }
+.bar-row .who small { display: block; color: var(--dim); font-size: 12px; margin-top: 2px; }
+.bar-track { display: block; height: 18px; background: var(--hl); border-radius: 4px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; min-width: 3px; border-radius: 4px; background: var(--rule); }
+.bar-row.mine .bar-fill { background: var(--gold); }
+.bar-row.mine .who { color: var(--fg); font-weight: 500; }
+.bar-row .num { font-family: var(--mono); font-size: 14px; color: var(--body); white-space: nowrap; }
+.bar-row.mine .num { color: var(--accent-text); }
+.compare { display: grid; gap: 34px; }
+.compare h3 { font-family: var(--font-display); font-size: 19px; font-weight: 600; margin: 0 0 4px; color: var(--fg); }
+.compare h3 + p { margin: 0 0 14px; color: var(--muted); font-size: 14.5px; max-width: 78ch; }
+.srcs { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--dim); max-width: 84ch; }
+.srcs a { color: var(--muted); }
+.srcs a:hover { color: var(--accent-text); }
+.caveat { border-left: 2px solid var(--rule); padding: 2px 0 2px 14px; color: var(--muted); font-size: 14px; max-width: 80ch; }
+
+/* ---- bio ---- */
+.bio { display: grid; grid-template-columns: 150px 1fr; gap: 26px; align-items: start; }
+.bio img { width: 150px; height: 150px; border-radius: var(--radius); display: block; filter: grayscale(1) contrast(1.04); border: 1px solid var(--border); }
+.bio .who { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--fg); margin: 0 0 6px; }
+.bio p { margin: 0 0 10px; color: var(--muted); font-size: 14.5px; max-width: 62ch; }
+.bio .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.bio .links a { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; color: var(--body); text-decoration: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; transition: border-color .15s, color .15s; }
+.bio .links a:hover { border-color: var(--rule); color: var(--fg); }
+.bio .links svg { width: 14px; height: 14px; fill: currentColor; opacity: .75; }
+@media (max-width: 720px) {
+  .bio { grid-template-columns: 1fr; gap: 18px; }
+  .bar-row { grid-template-columns: 1fr; gap: 5px; }
+  .bar-row .num { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a href="/" aria-label="Oxagen home"><svg class="logo" xmlns="http://www.w3.org/2000/svg"  viewBox="0 0 604.125 115.625" role="img" aria-label="oxagen"><g transform="translate(21.575,22.616) scale(3.437130)"><g data-mark="hive"><path d="M0.000 -6.080L5.800 -3.040L5.800 3.040L0.000 6.080L-5.800 3.040L-5.800 -3.040Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M13.080 -6.080L18.880 -3.040L18.880 3.040L13.080 6.080L7.280 3.040L7.280 -3.040Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M6.540 4.160L12.340 7.200L12.340 13.280L6.540 16.320L0.740 13.280L0.740 7.200Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M19.620 3.660L25.897 6.950L25.897 13.530L19.620 16.820L13.343 13.530L13.343 6.950Z" fill="#D4AF37"/><path d="M0.000 13.900L6.277 17.190L6.277 23.770L0.000 27.060L-6.277 23.770L-6.277 17.190Z" fill="#D4AF37" opacity="0.55"/><path d="M13.080 14.400L18.880 17.440L18.880 23.520L13.080 26.560L7.280 23.520L7.280 17.440Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/></g></g><g transform="translate(150.257,11.190)"><path class="letters" d="M33.9083 68.758Q24.1657 68.758 16.4786 64.7737Q8.79142 60.7894 4.39571 53.2965Q0 45.8035 0 35.3862V33.3718Q0 22.9544 4.39571 15.4615Q8.79142 7.96854 16.4786 3.98427Q24.1657 0 33.9083 0Q43.6509 0 51.3381 3.98427Q59.0252 7.96854 63.4209 15.4615Q67.8166 22.9544 67.8166 33.3718V35.3862Q67.8166 45.8035 63.4209 53.2965Q59.0252 60.7894 51.3381 64.7737Q43.6509 68.758 33.9083 68.758ZM33.9083 55.3486Q42.1895 55.3486 47.4689 50.0198Q52.7484 44.691 52.7484 35.0142V33.7437Q52.7484 24.067 47.5233 18.7382Q42.2981 13.4094 33.9083 13.4094Q25.6502 13.4094 20.3592 18.7382Q15.0683 24.067 15.0683 33.7437V35.0142Q15.0683 44.691 20.3592 50.0198Q25.6502 55.3486 33.9083 55.3486Z M176.569 68.758Q169.637 68.758 164.119 66.3453Q158.601 63.9327 155.387 59.2935Q152.173 54.6542 152.173 48.0088Q152.173 41.3403 155.387 36.8558Q158.601 32.3712 164.27 30.1017Q169.94 27.8323 177.174 27.8323H196.047V23.8925Q196.047 18.7316 192.874 15.5274Q189.701 12.3232 182.99 12.3232Q176.411 12.3232 173.049 15.3842Q169.686 18.4452 168.627 23.3593L154.691 18.7315Q156.27 13.6133 159.748 9.39702Q163.225 5.18071 169.049 2.59035Q174.874 0 183.208 0Q195.972 0 203.326 6.42816Q210.681 12.8563 210.681 24.9392V50.4707Q210.681 54.4204 214.368 54.4204H219.795V66.9148H209.197Q204.464 66.9148 201.442 64.5334Q198.42 62.1521 198.42 58.1563V57.8864H196.126Q195.392 59.6967 193.399 62.2985Q191.406 64.9004 187.388 66.8292Q183.369 68.758 176.569 68.758ZM179.05 56.4348Q186.581 56.4348 191.314 52.1592Q196.047 47.8837 196.047 40.6031V39.2405H178.175Q173.175 39.2405 170.208 41.3881Q167.241 43.5358 167.241 47.5513Q167.241 51.5668 170.34 54.0008Q173.439 56.4348 179.05 56.4348Z M227.767 34.6423V32.6279Q227.767 22.3817 231.86 15.0863Q235.953 7.79081 242.768 3.8954Q249.582 0 257.706 0Q266.935 0 271.762 3.33256Q276.589 6.66512 278.81 10.4107H281.042V1.8432H295.801V79.33Q295.801 85.6989 292.104 89.4725Q288.408 93.2462 282.079 93.2462H238.369V80.0541H277.023Q280.779 80.0541 280.779 76.1043V57.2775H278.547Q277.161 59.5683 274.665 61.8904Q272.168 64.2125 268.057 65.7414Q263.946 67.2702 257.706 67.2702Q249.582 67.2702 242.756 63.3748Q235.93 59.4794 231.848 52.1724Q227.767 44.8655 227.767 34.6423ZM261.938 54.0781Q270.151 54.0781 275.573 48.8612Q280.996 43.6443 280.996 34.2704V32.9999Q280.996 23.4943 275.627 18.3432Q270.259 13.1921 261.938 13.1921Q253.749 13.1921 248.315 18.3432Q242.881 23.4943 242.881 32.9999V34.2704Q242.881 43.6443 248.315 48.8612Q253.749 54.0781 261.938 54.0781Z M344.764 68.758Q334.998 68.758 327.583 64.6108Q320.167 60.4636 316.031 52.9048Q311.896 45.346 311.896 35.1689V33.589Q311.896 23.3889 315.977 15.8416Q320.059 8.2944 327.397 4.1472Q334.735 0 344.385 0Q353.881 0 360.956 4.1867Q368.031 8.37341 371.981 15.8515Q375.931 23.3297 375.931 33.2895V38.6974H327.181Q327.468 46.3334 332.587 50.9496Q337.707 55.5658 345.198 55.5658Q352.522 55.5658 356.101 52.3534Q359.681 49.141 361.553 45.0629L373.985 51.4813Q372.119 55.0656 368.63 59.1042Q365.141 63.1428 359.394 65.9504Q353.648 68.758 344.764 68.758ZM327.313 27.2892H360.622Q360.095 20.7986 355.7 16.9954Q351.304 13.1921 344.277 13.1921Q337.055 13.1921 332.691 16.9954Q328.327 20.7986 327.313 27.2892Z M391.548 66.9148V1.8432H406.353V10.9769H408.585Q410.303 7.25429 414.832 3.99908Q419.361 0.743866 428.435 0.743866Q435.956 0.743866 441.695 4.12911Q447.434 7.51435 450.651 13.5903Q453.868 19.6663 453.868 27.9442V66.9148H438.8V29.1226Q438.8 21.1969 434.891 17.3492Q430.983 13.5015 423.9 13.5015Q415.872 13.5015 411.244 18.8237Q406.617 24.146 406.617 33.9445V66.9148Z" fill="currentColor"/><path class="accent" d="M73.9979 66.9148 98.2261 34.0696 74.3764 1.8432H91.9626L107.9 24.3499H110.131L126.068 1.8432H143.654L119.805 34.0696L144.033 66.9148H126.206L110.131 44.0065H107.9L91.8244 66.9148Z" fill="#D4AF37"/></g></svg></a>
+    <span class="tag">a founder's story · 26 feb to 20 sep 2026</span>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap stack">
+    <span class="eyebrow first">A founder's story</span>
+    <h1>Oxagen was built in seven months, by one person directing agents.</h1>
+    <p class="lead">Mac Anderson built an agent, a benchmark, a protocol, a verifier, a fleet, and a memory plane before he built Oxagen. He wrote little of it by hand. He directed coding agents, and along the way he learned what running a workforce of them actually costs you. Oxagen is the answer to that. This page reads the seven months back from the record: his GitHub history, his git history, and the 8,133 prompts he typed to Claude Code.</p>
+    <div class="stats">
+      <div class="stat"><span class="label">GitHub contributions</span><span class="value" id="s-contrib">21,861</span><span class="sub">26 Feb to 20 Sep 2026. Commits, pull requests, issues, and reviews, as GitHub counts them.</span></div>
+      <div class="stat"><span class="label">Commits that landed</span><span class="value">6,341</span><span class="sub">On the default branch of 13 repositories, 28 May to 20 Sep. 54.7 a day.</span></div>
+      <div class="stat"><span class="label">Pull requests merged</span><span class="value">4,427</span><span class="sub">Same window. 38.2 a day, peaking at 72.6 in the week of 20 Aug.</span></div>
+      <div class="stat"><span class="label">Prompts to Claude Code</span><span class="value">8,133</span><span class="sub">29 Jun to 20 Sep 2026, across 1,769 conversations.</span></div>
+    </div>
+    <p class="note">The GitHub totals start on 26 February 2026, the first day of real activity on the account this year. Before that, GitHub shows 38 contributions in all of 2025. The commit and pull request totals start on 28 May 2026, the first commit in any local clone. The prompt log starts on 29 June 2026, when he set up a new laptop, so the earlier laptop's conversations are missing.</p>
+  </div>
+</section>
+
+<section id="throughput">
+  <div class="wrap stack">
+    <span class="eyebrow">How this compares</span>
+    <h2>Against the numbers the industry publishes</h2>
+    <p>Four months is a short window, so every figure below is stated per week and nothing is annualized. The window is 28 May to 20 September 2026: 116 calendar days, 16.6 weeks, about 83 working days. He committed on 114 of the 116 days. The published baselines are medians and percentiles, because no credible source publishes a mean. These distributions have a long right tail, so a mean would describe nobody.</p>
+
+    <div class="compare">
+      <div>
+        <h3>Pull requests merged, per week</h3>
+        <p>The one measurement that compares like for like. Both sides count pull requests merged into a default branch, per person, per calendar week.</p>
+        <div class="bars">
+          <div class="bar-row mine">
+            <span class="who">Him<small>13 repositories, 4,427 merged</small></span>
+            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
+            <span class="num">267</span>
+          </div>
+          <div class="bar-row">
+            <span class="who">Top 10 percent<small>Technology companies under 100 engineers</small></span>
+            <span class="bar-track"><span class="bar-fill" style="width:2.1%"></span></span>
+            <span class="num">5.5</span>
+          </div>
+          <div class="bar-row">
+            <span class="who">Median<small>Same population</small></span>
+            <span class="bar-track"><span class="bar-fill" style="width:1.4%"></span></span>
+            <span class="num">3.8</span>
+          </div>
+        </div>
+        <p class="muted">He merged about 70 times what the median engineer in that population merges, and about 48 times what the top decile merges. His own peak week, 20 August, was 508.</p>
+      </div>
+
+      <div>
+        <h3>Changes landed on the default branch, per week</h3>
+        <p>Google measures a change, not a commit. A change is one reviewed unit landed in the monorepo, and Google squashes, so one change can carry several commits. That makes the Google column a floor on commits rather than a match for them, and the multiple below is therefore larger than the honest one. Google does not publish the ratio, so the honest number cannot be computed.</p>
+        <div class="bars">
+          <div class="bar-row mine">
+            <span class="who">Him, commits<small>6,341 on default branches</small></span>
+            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
+            <span class="num">383</span>
+          </div>
+          <div class="bar-row">
+            <span class="who">Google, changes<small>80 percent of developers sit below this</small></span>
+            <span class="bar-track"><span class="bar-fill" style="width:1.8%"></span></span>
+            <span class="num">7</span>
+          </div>
+          <div class="bar-row">
+            <span class="who">Google, changes<small>Median developer</small></span>
+            <span class="bar-track"><span class="bar-fill" style="width:0.8%"></span></span>
+            <span class="num">3</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3>Lines of code, added and removed</h3>
+        <p>Counted on default branches only, for source files, with lock files, build output, snapshots, fixtures, fonts, and generated code excluded. Deletions count as work, because most of the removal here is the same person taking out what he put in a week earlier.</p>
+        <div class="bars">
+          <div class="bar-row mine">
+            <span class="who">Added<small>Source files, 116 days</small></span>
+            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
+            <span class="num">3,906,359</span>
+          </div>
+          <div class="bar-row">
+            <span class="who">Removed<small>Same basis</small></span>
+            <span class="bar-track"><span class="bar-fill" style="width:39.2%"></span></span>
+            <span class="num">1,529,699</span>
+          </div>
+        </div>
+        <p class="muted">That is 235,700 source lines added a week and 92,300 removed, leaving 2,376,660 net. Counting every file he touched, including generated output, the totals are 19,036,241 added and 16,999,466 removed. The largest single file change added 2,000 lines or more only 27 times across 19,223 distinct files, so the totals come from steady churn rather than from a handful of dumps.</p>
+        <p class="muted"><strong>This row has no baseline, and that is the finding.</strong> Nothing credible publishes lines of code added per developer per day. The figures in circulation are one developer measuring their own repository, or one project's whole effort divided by the lines it shipped, which charges design and testing hours to code. The large modern code datasets measure what share of new code gets rewritten, not how many lines a person writes. So the two numbers above stand alone. They show scale. They do not show rank.</p>
+
+      </div>
+
+      <p class="caveat">He did not type this. Agents wrote the code and he ran them, reviewed them, and merged them. The comparison is between one person operating a fleet and one person writing by hand, which is the point of the page and not a footnote to it. Two more things cut against him. These repositories are four months old and carry no release train, no on-call rotation, and no other engineers to coordinate with, so a commit here costs less than a commit at Google. And a pull request he opened and merged himself passed no second reader.</p>
+
+      <div>
+        <h3>Sources</h3>
+        <ul class="srcs">
+          <li>Caitlin Sadowski, Emma Söderberg, Luke Church, Michal Sipko, and Alberto Bacchelli, &ldquo;Modern Code Review: A Case Study at Google,&rdquo; ICSE Software Engineering in Practice, 2018. About 9 million reviewed changes, January 2014 to July 2016. The median developer authors about 3 changes a week and 80 percent author fewer than 7. <a href="https://sback.it/publications/icse2018seip.pdf" rel="nofollow">sback.it/publications/icse2018seip.pdf</a></li>
+          <li>DX, &ldquo;Engineering Benchmarks,&rdquo; the diffs-per-engineer measure, defined as pull requests merged each week per engineer. Technology companies under 100 engineers: 3.8 at the median, 5.53 at the 90th percentile. DX does not disclose the sample size. <a href="https://getdx.com/research/benchmarks/" rel="nofollow">getdx.com/research/benchmarks</a></li>
+          <li>His own numbers come from the git history of 13 local clones, counting the default branch only and deduplicating by commit hash. A rebased branch repeats its commits under a different hash, so counting every branch would have inflated the total by nearly half.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section id="hive">
+  <div class="wrap stack">
+    <span class="eyebrow">Every day, one cell</span>
+    <h2>The hive</h2>
+    <p>Each hexagon is one day, Monday at the top, one column per week. The brighter the cell, the more GitHub contributions that day. A teal dot marks a day with happy words in his prompts, and a rust dot marks a day with swearing. Select a day to read it, or play the seven months as a time-lapse.</p>
+    <div class="hive-grid">
+      <div class="hive-box">
+        <svg class="hive-svg" id="hiveSvg" role="grid" aria-label="Daily activity calendar, 23 February to 20 September 2026"></svg>
+        <div class="controls">
+          <button class="gold" id="playBtn" type="button">Play the story</button>
+          <label for="scrub" class="muted" style="font-size:13px">Day</label>
+          <input type="range" id="scrub" min="0" max="209" value="0" aria-label="Scrub through days">
+        </div>
+        <div class="legend">
+          <span>Contributions <span class="ramp" id="rampKey"></span> 0 to 1,144</span>
+          <span><span class="dot" style="background:var(--joy)"></span>happy words</span>
+          <span><span class="dot" style="background:var(--heat)"></span>swearing</span>
+        </div>
+        <div class="chips" id="chapterChips" role="group" aria-label="Highlight a chapter"></div>
+      </div>
+      <aside class="reader" id="reader" aria-live="polite"></aside>
+    </div>
+  </div>
+</section>
+
+<section id="chapters">
+  <div class="wrap stack">
+    <span class="eyebrow">Nine chapters</span>
+    <h2>How the seven months went</h2>
+    <p>Each chapter comes from reading the prompts in order. The quotes are his, trimmed, with the swearing taken out.</p>
+    <div class="chapters" id="chapterList"></div>
+  </div>
+</section>
+
+<section id="weather">
+  <div class="wrap stack">
+    <span class="eyebrow">When he was happy, when he swore</span>
+    <h2>July was for building. August was for proving it.</h2>
+    <p>Above the line, happy words in his prompts each day. Below it, swear words. Both count the same thing, words, so they share one scale. Happy words spread across the July launch weeks. The swearing sits almost entirely in August, in the weeks he spent trying to prove that Stella was done when it said it was done.</p>
+    <div class="chart-box"><svg id="moodSvg" role="img" aria-label="Happy words and swear words per day, 29 June to 20 September 2026"></svg></div>
+    <div class="two">
+      <div class="card">
+        <h3>What he was building when it went well</h3>
+        <ul>
+          <li><span class="d">12 jul</span>Stella's first week in public. The README brief asked for a project that would <q>inspire a community that is sick of token waste.</q></li>
+          <li><span class="d">19 jul</span>A fleet design with no coordinator, where every agent works in one worktree. <q>BUILD THIS DESIGN I LOVE THIS.</q></li>
+          <li><span class="d">31 jul</span>Watching the first honest Terminal-Bench run climb to 58 of 89. <q>I would have worked hard for a reason.</q></li>
+          <li><span class="d">2 aug</span>A git-backed journal that can resume any turn. <q>an amazingly elegant answer to the durability problem.</q></li>
+          <li><span class="d">13 aug</span>Cutting 72 tools down to five. <q>less is more and way less is best.</q></li>
+          <li><span class="d">11 sep</span>Starting Oxagen over from a clean spec and 12 parallel mockup builds. <q>We need to be perfect here.</q></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What he was building when he swore at Claude</h3>
+        <ul>
+          <li><span class="d">31 jul</span>A "fair" benchmark that turned out to carry a hidden budget cap. <q>Dont lie.</q></li>
+          <li><span class="d">4 aug</span>A Files tab that showed no reads and no writes, and a verifier that never wrote its test. <q>I WILL NOT TOLERATE WIERDNESS IN THE CRUD SYSTEMS</q></li>
+          <li><span class="d">8 aug</span>A full day of benchmark runs he could not trust. The code graph was silently empty because <span class="mono">init</span> never ran. <q>NEVER RUN A BENCHMARK WITH A BUDGET CAP</q></li>
+          <li><span class="d">11 aug</span>A pipeline mode that scored below the bare loop, because correct work was thrown away at the sandbox boundary.</li>
+          <li><span class="d">22 aug</span>A redesign reported as finished that did not match the drawings. <q>Burning tokens for what?</q></li>
+        </ul>
+        <p class="muted" style="font-size:14px">The pattern is the same every time: an agent said something was done, and it was not. That is the problem Stella's witness tests, and later Oxagen's record, exist to answer.</p>
+      </div>
+    </div>
+    <h3 style="margin-top:40px">By topic, per 100 prompts</h3>
+    <p class="muted" style="font-size:15px">Each prompt is tagged with its strongest topic by keyword. Design earns the most happy words. Verification and model providers earn the most swearing. The two columns use separate scales.</p>
+    <div class="topics" id="topicGrid"></div>
+  </div>
+</section>
+
+<section id="clock">
+  <div class="wrap stack">
+    <span class="eyebrow">When he works</span>
+    <h2>The 1 a.m. hour</h2>
+    <div class="clock-wrap">
+      <svg id="clockSvg" viewBox="0 0 360 360" role="img" aria-label="Prompts by hour of day, with swear words marked"></svg>
+      <div class="stack">
+        <p>Each spoke is one hour of the day, and its length is the number of prompts typed in that hour. Rust dots mark swearing, sized by count.</p>
+        <p>He prompts every hour except the early morning. The busiest hour is 1 p.m. with 638 prompts. The hours from midnight to 5 a.m. hold 919 prompts, 11 percent of the total, and 53 of the 124 swear words, 43 percent. The 1 a.m. hour alone holds 32.</p>
+        <p class="muted">Wednesday is his busiest day of the week, with 1,363 prompts. Monday is his quietest, with 973. He prompts more on Sundays than on Mondays.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="engines">
+  <div class="wrap stack">
+    <span class="eyebrow">Two products, one workbench</span>
+    <h2>Oxagen and Stella took turns</h2>
+    <p>Weekly commits in the two main repositories. Oxagen started first, on 28 May. In the week of 6 July it took 1,421 commits, and then it went almost silent while Stella took over through August. The week of 14 September, Oxagen came back with 3,501 commits in one week, rebuilt around the decision that Stella would be its engine.</p>
+    <div class="chart-box"><svg id="engineSvg" role="img" aria-label="Weekly commits for Oxagen and Stella, May to September 2026"></svg></div>
+  </div>
+</section>
+
+<section id="built">
+  <div class="wrap stack">
+    <span class="eyebrow">What he built</span>
+    <h2>Nearly everything in the agent stack</h2>
+    <p>Each tile is something he designed and shipped in these seven months. Select one to jump the hive to the day it started.</p>
+    <div class="workbench" id="workbench"></div>
+  </div>
+</section>
+
+<section id="beliefs">
+  <div class="wrap stack">
+    <span class="eyebrow">What he kept insisting on</span>
+    <h2>The rules that came out of the fights</h2>
+    <p>Most of these started as a frustrated prompt and ended as a line in a CLAUDE.md file, a gate in CI, or a design rule for both products.</p>
+    <div class="beliefs" id="beliefList"></div>
+  </div>
+</section>
+
+<section id="why">
+  <div class="wrap close">
+    <span class="eyebrow">What it became</span>
+    <h2>Why Oxagen</h2>
+    <p class="quote">After the agent, the benchmark, the protocol, the verifier, and the fleet, the agent turned out not to be the hard part. Knowing what it did, what it cost, and who allowed it was.</p>
+    <p>That is what Oxagen is: workforce management for autonomous agents. Give each agent its own identity. Set its authority, budget, tools, and skills in one mandate. For actions routed through Oxagen, the agent asks, a rule your team wrote answers, and the record keeps the answer with its cost beside it.</p>
+    <div class="mandate">
+      <div><b>Access</b>The identity the agent acts as, and what it may request.</div>
+      <div><b>Budget and rules</b>What it may spend, and the rules it works under.</div>
+      <div><b>Equipment</b>The tools, skills, and business context it may use.</div>
+      <div><b>Record</b>What each governed run read, changed, and cost, and which rule answered each request.</div>
+    </div>
+    <p>Oxagen shows you every governed action, the rule that answered it, the person who approved it, and which agent spent what, on whose behalf.</p>
+    <p>That is the record this page was written from, turned into a product.</p>
+  </div>
+</section>
+<section id="bio">
+  <div class="wrap close">
+    <div class="bio">
+      <picture>
+        <source type="image/webp" srcset="/research-assets/mac-bw-360.webp 360w, /research-assets/mac-bw-720.webp 720w, /research-assets/mac-bw-1080.webp 1080w" sizes="150px">
+        <img src="/research-assets/mac-bw-360.jpg" srcset="/research-assets/mac-bw-360.jpg 360w, /research-assets/mac-bw-720.jpg 720w, /research-assets/mac-bw-1080.jpg 1080w" sizes="150px" width="150" height="150" loading="lazy" decoding="async" alt="Mac Anderson">
+      </picture>
+      <div>
+        <p class="who">Mac Anderson, founder of Oxagen</p>
+        <p>He built Stella, the open source coding agent this work started from, and Oxagen, the control plane it led to. Stella is AGPL and free to run. Oxagen is what you use when the agents are no longer yours alone.</p>
+        <div class="links">
+          <a href="https://github.com/macanderson/stella" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>Star Stella</a>
+          <a href="https://github.com/macanderson" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>Follow on GitHub</a>
+          <a href="https://linkedin.com/in/macanderson" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.6 5.5H.9V16h2.7V5.5ZM2.25 0a1.57 1.57 0 1 0 0 3.13 1.57 1.57 0 0 0 0-3.13ZM16 9.9c0-2.9-1.55-4.25-3.62-4.25-1.67 0-2.42.92-2.83 1.56V5.5H6.86c.03.76 0 10.5 0 10.5h2.69v-5.87c0-.24.02-.48.09-.65.19-.48.63-.98 1.37-.98.97 0 1.35.74 1.35 1.82V16H16V9.9Z"/></svg>Connect on LinkedIn</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <h4>How this page was made</h4>
+    <ul>
+      <li>GitHub contributions come from GitHub's contribution calendar for the account <span class="mono">macanderson</span>, 26 February to 20 September 2026, private repositories included. For 1 January to 20 September, GitHub counts 7,345 commits, 4,732 pull requests, 5,076 issues, and 4,577 private contributions.</li>
+      <li>Prompts come from Claude Code's prompt history on one laptop, 29 June to 20 September 2026. The earlier laptop's history is not included. Prompts were loaded into SQLite and read in full, in order.</li>
+            <li>Commits and lines come from the default branch of 13 local clones, deduped by commit hash, for the 10 name and email pairs Mac has committed under across two GitHub organizations. Counting the default branch only, rather than every branch, is what GitHub's contribution graph counts, and it does not double count a rebased branch. Pull request counts come from the GitHub search API for <span class="mono">author:macanderson</span> over the same dates.</li>
+      <li>Lines are reported in three buckets. All lines, every text line in every diff. Authored lines, with machine output removed: lockfiles, build output, vendored code, snapshots, benchmark artifacts, and event logs. Code lines, narrowed further to recognised source extensions, which is the bucket the published studies measure. The page reports code lines.</li>
+      <li>Happy words and swear words are counted by fixed word lists. The word "wow" is excluded, because a mockup brief pasted into 15 sessions on 11 September repeated it 30 times. No swear word is printed on this page.</li>
+      <li>Topics are assigned by keyword, one per prompt. About half the prompts matched no topic and are left out of the topic table.</li>
+      <li>Benchmark numbers are the ones Mac published or typed at the time. The 58 of 89 result is Stella against Claude Code on Terminal-Bench 2.1, both on the same GLM model, on 31 July 2026.</li>
+    </ul>
+  </div>
+</footer>
+<div id="tip" hidden></div>
+
+<script>
+const DATA = {"days":[{"d":"2026-02-20","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-02-21","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-02-22","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-02-23","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-02-24","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-02-25","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-02-26","c":22,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-02-27","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-02-28","c":1,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-01","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-02","c":2,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-03","c":2,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-04","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-05","c":1,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-06","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-07","c":7,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-08","c":8,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-09","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-10","c":1,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-11","c":25,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-12","c":19,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-13","c":36,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-14","c":10,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-15","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-16","c":79,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-17","c":13,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-18","c":151,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-19","c":102,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-20","c":109,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-21","c":46,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-22","c":3,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-23","c":52,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-24","c":5,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-25","c":11,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-26","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-27","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-28","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-29","c":1,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-30","c":5,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-03-31","c":1,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-01","c":1,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-02","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-03","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-04","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-05","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-06","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-07","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-08","c":5,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-09","c":8,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-10","c":1,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-11","c":58,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-12","c":1,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-13","c":45,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-14","c":28,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-15","c":42,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-16","c":58,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-17","c":52,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-18","c":118,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-19","c":114,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-20","c":104,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-21","c":58,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-22","c":89,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-23","c":241,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-24","c":158,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-25","c":126,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-26","c":14,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-27","c":139,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-28","c":77,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-29","c":249,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-04-30","c":60,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-01","c":194,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-02","c":9,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-03","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-04","c":14,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-05","c":60,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-06","c":103,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-07","c":57,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-08","c":55,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-09","c":81,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-10","c":44,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-11","c":53,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-12","c":67,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-13","c":155,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-14","c":34,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-15","c":131,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-16","c":48,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-17","c":144,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-18","c":99,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-19","c":67,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-20","c":36,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-21","c":138,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-22","c":151,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-23","c":55,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-24","c":68,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-25","c":27,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-26","c":39,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-27","c":56,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-28","c":22,"p":0,"j":0,"f":0,"x":0,"ox":15,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-05-29","c":15,"p":0,"j":0,"f":0,"x":0,"ox":11,"st":0,"ot":0,"tp":[],"sc":["oxagen:phase-1","oxagen:oxagen","oxagen:mcp"],"fix":2,"feat":1},{"d":"2026-05-30","c":82,"p":0,"j":0,"f":0,"x":0,"ox":78,"st":0,"ot":0,"tp":[],"sc":["oxagen:iam","oxagen:security","oxagen:mcp","oxagen:app"],"fix":12,"feat":11},{"d":"2026-05-31","c":63,"p":0,"j":0,"f":0,"x":0,"ox":52,"st":0,"ot":0,"tp":[],"sc":["oxagen:audit","oxagen:iam","oxagen:db","oxagen:billing"],"fix":13,"feat":8},{"d":"2026-06-01","c":37,"p":0,"j":0,"f":0,"x":0,"ox":40,"st":0,"ot":0,"tp":[],"sc":["oxagen:nightly","oxagen:ci","oxagen:chat","oxagen:turbo"],"fix":8,"feat":1},{"d":"2026-06-02","c":39,"p":0,"j":0,"f":0,"x":0,"ox":36,"st":0,"ot":0,"tp":[],"sc":["oxagen:api","oxagen:e2e","oxagen:database","oxagen:ui"],"fix":9,"feat":4},{"d":"2026-06-03","c":24,"p":0,"j":0,"f":0,"x":0,"ox":24,"st":0,"ot":0,"tp":[],"sc":["oxagen:billing","oxagen:app","oxagen:security","oxagen:db"],"fix":8,"feat":10},{"d":"2026-06-04","c":12,"p":0,"j":0,"f":0,"x":0,"ox":12,"st":0,"ot":0,"tp":[],"sc":["oxagen:app/shell","oxagen:billing","oxagen:app"],"fix":5,"feat":2},{"d":"2026-06-05","c":124,"p":0,"j":0,"f":0,"x":0,"ox":121,"st":0,"ot":0,"tp":[],"sc":["oxagen:app","oxagen:billing","oxagen:telemetry","oxagen:inngest"],"fix":21,"feat":10},{"d":"2026-06-06","c":119,"p":0,"j":0,"f":0,"x":0,"ox":115,"st":0,"ot":0,"tp":[],"sc":["oxagen:plugins","oxagen:e2e","oxagen:app","oxagen:plan"],"fix":22,"feat":51},{"d":"2026-06-07","c":98,"p":0,"j":0,"f":0,"x":0,"ox":96,"st":0,"ot":0,"tp":[],"sc":["oxagen:security","oxagen:rls","oxagen:notifications","oxagen:e2e"],"fix":25,"feat":6},{"d":"2026-06-08","c":124,"p":0,"j":0,"f":0,"x":0,"ox":121,"st":0,"ot":0,"tp":[],"sc":["oxagen:database","oxagen:cli","oxagen:handlers","oxagen:ai"],"fix":60,"feat":17},{"d":"2026-06-09","c":99,"p":0,"j":0,"f":0,"x":0,"ox":99,"st":0,"ot":0,"tp":[],"sc":["oxagen:ingestion","oxagen:tests","oxagen:e2e","oxagen:database/tests"],"fix":44,"feat":14},{"d":"2026-06-10","c":81,"p":0,"j":0,"f":0,"x":0,"ox":80,"st":0,"ot":0,"tp":[],"sc":["oxagen:mcp","oxagen:app","oxagen:api","oxagen:ingestion"],"fix":21,"feat":8},{"d":"2026-06-11","c":62,"p":0,"j":0,"f":0,"x":0,"ox":62,"st":0,"ot":0,"tp":[],"sc":["oxagen:ci","oxagen:app","oxagen:e2e","oxagen:mcp"],"fix":28,"feat":1},{"d":"2026-06-12","c":21,"p":0,"j":0,"f":0,"x":0,"ox":19,"st":0,"ot":0,"tp":[],"sc":["oxagen:telemetry","oxagen:tooling","oxagen:reference","oxagen:e2e"],"fix":10,"feat":2},{"d":"2026-06-13","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-06-14","c":21,"p":0,"j":0,"f":0,"x":0,"ox":21,"st":0,"ot":0,"tp":[],"sc":["oxagen:ui,brand","oxagen:ui","oxagen:hooks","oxagen:github"],"fix":2,"feat":2},{"d":"2026-06-15","c":51,"p":0,"j":0,"f":0,"x":0,"ox":31,"st":0,"ot":0,"tp":[],"sc":["oxagen:ci","oxagen:agent","oxagen:app","oxagen:workspace.settings"],"fix":9,"feat":10},{"d":"2026-06-16","c":26,"p":0,"j":0,"f":0,"x":0,"ox":18,"st":0,"ot":0,"tp":[],"sc":["oxagen:ci","oxagen:storage","oxagen:pnpm","oxagen:package"],"fix":7,"feat":3},{"d":"2026-06-17","c":16,"p":0,"j":0,"f":0,"x":0,"ox":16,"st":0,"ot":0,"tp":[],"sc":["oxagen:ui","oxagen:handlers","oxagen:db","oxagen:app"],"fix":1,"feat":7},{"d":"2026-06-18","c":41,"p":0,"j":0,"f":0,"x":0,"ox":41,"st":0,"ot":0,"tp":[],"sc":["oxagen:app","oxagen:handlers","oxagen:ui","oxagen:plugins"],"fix":18,"feat":19},{"d":"2026-06-19","c":23,"p":0,"j":0,"f":0,"x":0,"ox":22,"st":0,"ot":0,"tp":[],"sc":["oxagen:e2e","oxagen:env-manager","oxagen:docs","oxagen:api"],"fix":10,"feat":2},{"d":"2026-06-20","c":21,"p":0,"j":0,"f":0,"x":0,"ox":15,"st":0,"ot":0,"tp":[],"sc":["oxagen:app","oxagen:agents","oxagen:packages","oxagen:claude"],"fix":2,"feat":0},{"d":"2026-06-21","c":43,"p":0,"j":0,"f":0,"x":0,"ox":28,"st":0,"ot":0,"tp":[],"sc":["oxagen:app","oxagen:ui","oxagen:hooks","oxagen:handlers"],"fix":8,"feat":5},{"d":"2026-06-22","c":67,"p":0,"j":0,"f":0,"x":0,"ox":35,"st":0,"ot":0,"tp":[],"sc":["oxagen:ingestion","oxagen:connectors","oxagen:test","oxagen:oxagen"],"fix":19,"feat":8},{"d":"2026-06-23","c":95,"p":0,"j":0,"f":0,"x":0,"ox":70,"st":0,"ot":0,"tp":[],"sc":["oxagen:ingestion","oxagen:test","oxagen:schema-registry","oxagen:schema"],"fix":31,"feat":18},{"d":"2026-06-24","c":68,"p":0,"j":0,"f":0,"x":0,"ox":43,"st":0,"ot":0,"tp":[],"sc":["oxagen:chat","oxagen:billing","oxagen:app","oxagen:api"],"fix":17,"feat":7},{"d":"2026-06-25","c":19,"p":0,"j":0,"f":0,"x":0,"ox":18,"st":0,"ot":0,"tp":[],"sc":["oxagen:ci","oxagen:build"],"fix":2,"feat":0},{"d":"2026-06-26","c":45,"p":0,"j":0,"f":0,"x":0,"ox":22,"st":0,"ot":0,"tp":[],"sc":["oxagen:cli","oxagen:ci","oxagen:agent","oxagen:telemetry"],"fix":5,"feat":7},{"d":"2026-06-27","c":84,"p":0,"j":0,"f":0,"x":0,"ox":46,"st":0,"ot":0,"tp":[],"sc":["oxagen:bench","oxagen:cli","oxagen:agent","oxagen:schema"],"fix":18,"feat":16},{"d":"2026-06-28","c":223,"p":0,"j":0,"f":0,"x":0,"ox":138,"st":0,"ot":0,"tp":[],"sc":["oxagen:cli","oxagen:app","oxagen:agent","oxagen:database"],"fix":53,"feat":39},{"d":"2026-06-29","c":20,"p":35,"j":1,"f":0,"x":0,"ox":10,"st":0,"ot":0,"tp":["Machine setup","Models & providers","Infra & deploy"],"sc":["oxagen:bench","oxagen:memory","oxagen:mcp"],"fix":4,"feat":2},{"d":"2026-06-30","c":46,"p":93,"j":7,"f":6,"x":0,"ox":22,"st":0,"ot":0,"tp":["Context & memory","Infra & deploy","Video & content"],"sc":["oxagen:cli","oxagen:app","oxagen:ui","oxagen:schemas"],"fix":6,"feat":9},{"d":"2026-07-01","c":126,"p":147,"j":2,"f":13,"x":1,"ox":70,"st":0,"ot":0,"tp":["CI, PRs & gates","Models & providers","TUI & deck"],"sc":["oxagen:cli","oxagen:docs","oxagen:app","oxagen:ui"],"fix":25,"feat":21},{"d":"2026-07-02","c":124,"p":82,"j":1,"f":5,"x":0,"ox":61,"st":0,"ot":0,"tp":["CI, PRs & gates","Context & memory","Plugins, tools & MCP"],"sc":["oxagen:cli","oxagen:app","oxagen:bench","oxagen:agent"],"fix":20,"feat":19},{"d":"2026-07-03","c":139,"p":115,"j":4,"f":13,"x":0,"ox":70,"st":0,"ot":0,"tp":["CI, PRs & gates","Models & providers","Context & memory"],"sc":["oxagen:cli","oxagen:specs","oxagen:config","oxagen:env"],"fix":20,"feat":22},{"d":"2026-07-04","c":174,"p":113,"j":3,"f":25,"x":0,"ox":89,"st":0,"ot":0,"tp":["CI, PRs & gates","Infra & deploy","Video & content"],"sc":["oxagen:budget","oxagen:app","oxagen:test","oxagen:mcp"],"fix":38,"feat":24},{"d":"2026-07-05","c":26,"p":14,"j":0,"f":0,"x":0,"ox":13,"st":0,"ot":0,"tp":["Plugins, tools & MCP","TUI & deck","Models & providers"],"sc":["oxagen:decks","oxagen:app","oxagen:engram","oxagen:api"],"fix":3,"feat":1},{"d":"2026-07-06","c":186,"p":72,"j":1,"f":9,"x":0,"ox":169,"st":0,"ot":0,"tp":["CI, PRs & gates","Plugins, tools & MCP","Context & memory"],"sc":["oxagen:cli","oxagen:app","oxagen:agent-engine","oxagen:engram"],"fix":34,"feat":46},{"d":"2026-07-07","c":190,"p":89,"j":5,"f":23,"x":0,"ox":160,"st":0,"ot":0,"tp":["Plugins, tools & MCP","Context & memory","CI, PRs & gates"],"sc":["oxagen:cli","oxagen:app","oxagen:web","oxagen:decks"],"fix":34,"feat":34},{"d":"2026-07-08","c":303,"p":114,"j":1,"f":24,"x":0,"ox":236,"st":0,"ot":0,"tp":["CI, PRs & gates","Infra & deploy","Plugins, tools & MCP"],"sc":["oxagen:cli","oxagen:app","oxagen:reland","oxagen:chat"],"fix":51,"feat":44},{"d":"2026-07-09","c":259,"p":65,"j":1,"f":6,"x":0,"ox":250,"st":0,"ot":0,"tp":["CI, PRs & gates","Plugins, tools & MCP","TUI & deck"],"sc":["oxagen:app","oxagen:ci","oxagen:sandbox","oxagen:github"],"fix":54,"feat":20},{"d":"2026-07-10","c":396,"p":106,"j":3,"f":19,"x":0,"ox":341,"st":0,"ot":0,"tp":["CI, PRs & gates","Verification & witness","Models & providers"],"sc":["oxagen:app","oxagen:cli","oxagen:agent-engine","oxagen:database"],"fix":80,"feat":52},{"d":"2026-07-11","c":296,"p":216,"j":2,"f":19,"x":0,"ox":190,"st":46,"ot":0,"tp":["Plugins, tools & MCP","Models & providers","CI, PRs & gates"],"sc":["oxagen:rust-cli","oxagen:cli","oxagen:stella","oxagen:mcp-oauth"],"fix":40,"feat":76},{"d":"2026-07-12","c":169,"p":143,"j":7,"f":21,"x":1,"ox":75,"st":26,"ot":0,"tp":["CI, PRs & gates","Benchmarks","TUI & deck"],"sc":["oxagen:app","oxagen:evals","oxagen:bench-arena","stella:stella-tui"],"fix":28,"feat":9},{"d":"2026-07-13","c":125,"p":98,"j":0,"f":9,"x":0,"ox":37,"st":29,"ot":0,"tp":["CI, PRs & gates","TUI & deck","Infra & deploy"],"sc":["stella:stella-tui","stella:stella-cli","oxagen:e2e","oxagen:app"],"fix":13,"feat":15},{"d":"2026-07-14","c":48,"p":41,"j":0,"f":10,"x":0,"ox":12,"st":17,"ot":0,"tp":["Context & memory","TUI & deck","Models & providers"],"sc":["oxagen:cli","stella:stella-tui","stella:stella-graph","oxagen:billing"],"fix":6,"feat":4},{"d":"2026-07-15","c":30,"p":70,"j":0,"f":20,"x":0,"ox":10,"st":7,"ot":0,"tp":["CI, PRs & gates","Context & memory","Verification & witness"],"sc":[],"fix":3,"feat":1},{"d":"2026-07-16","c":118,"p":120,"j":0,"f":18,"x":0,"ox":3,"st":63,"ot":0,"tp":["CI, PRs & gates","Plugins, tools & MCP","TUI & deck"],"sc":["stella:tui","stella:tools","stella:store","stella:memory"],"fix":19,"feat":16},{"d":"2026-07-17","c":99,"p":93,"j":4,"f":8,"x":0,"ox":2,"st":40,"ot":25,"tp":["Plugins, tools & MCP","Machine setup","Context & memory"],"sc":["stella:tui","stella:tools","stella:stella-cli","stella:skills"],"fix":8,"feat":5},{"d":"2026-07-18","c":98,"p":86,"j":7,"f":5,"x":1,"ox":19,"st":35,"ot":2,"tp":["CI, PRs & gates","Models & providers","Context & memory"],"sc":["stella:tui","oxagen:agent-worker","oxagen:agent-runner","oxagen:agent"],"fix":12,"feat":16},{"d":"2026-07-19","c":110,"p":108,"j":3,"f":16,"x":1,"ox":0,"st":59,"ot":0,"tp":["CI, PRs & gates","Context & memory","Brand & design"],"sc":["stella:tools","stella:engine","stella:design","stella:sessions"],"fix":8,"feat":22},{"d":"2026-07-20","c":131,"p":94,"j":0,"f":56,"x":1,"ox":19,"st":31,"ot":2,"tp":["Context & memory","Models & providers","CI, PRs & gates"],"sc":["stella:cli","oxagen:specs","stella:model","oxagen:agent-rbac"],"fix":6,"feat":15},{"d":"2026-07-21","c":209,"p":55,"j":0,"f":8,"x":0,"ox":91,"st":45,"ot":11,"tp":["CI, PRs & gates","Brand & design","Verification & witness"],"sc":["oxagen:agent-rbac","oxagen:telemetry","oxagen:billing","oxagen:app"],"fix":33,"feat":38},{"d":"2026-07-22","c":82,"p":98,"j":2,"f":7,"x":0,"ox":12,"st":34,"ot":5,"tp":["Plugins, tools & MCP","Context & memory","CI, PRs & gates"],"sc":["stella:pipeline","stella:cgp","stella:triage","stella:stella"],"fix":7,"feat":8},{"d":"2026-07-23","c":289,"p":185,"j":0,"f":11,"x":0,"ox":13,"st":84,"ot":10,"tp":["CI, PRs & gates","Context & memory","Plugins, tools & MCP"],"sc":["stella:core","stella:cli","stella:tui","stella:stella-tools"],"fix":28,"feat":28},{"d":"2026-07-24","c":36,"p":27,"j":0,"f":3,"x":0,"ox":0,"st":23,"ot":2,"tp":["CI, PRs & gates","Models & providers","Context & memory"],"sc":["stella:stella-store","stella:model","stella:usage","stella:tools"],"fix":4,"feat":8},{"d":"2026-07-25","c":195,"p":80,"j":0,"f":15,"x":1,"ox":0,"st":92,"ot":0,"tp":["CI, PRs & gates","Brand & design","Context & memory"],"sc":["stella:stella-tools","stella:stella-core","stella:stella-mcp","stella:stella-cli"],"fix":19,"feat":7},{"d":"2026-07-26","c":106,"p":106,"j":1,"f":33,"x":2,"ox":6,"st":62,"ot":2,"tp":["CI, PRs & gates","Context & memory","TUI & deck"],"sc":["stella:tui","stella:security","stella:core","stella:ci"],"fix":9,"feat":5},{"d":"2026-07-27","c":73,"p":123,"j":0,"f":11,"x":1,"ox":0,"st":35,"ot":1,"tp":["Context & memory","Video & content","CI, PRs & gates"],"sc":["stella:context","stella:stella-pipeline","stella:serve,observatory","stella:cli"],"fix":9,"feat":7},{"d":"2026-07-28","c":43,"p":50,"j":0,"f":2,"x":0,"ox":0,"st":23,"ot":0,"tp":["Video & content","Plugins, tools & MCP","Models & providers"],"sc":["stella:tools","stella:stella-tui","stella:scripts","stella:reflection"],"fix":5,"feat":1},{"d":"2026-07-29","c":197,"p":99,"j":4,"f":7,"x":1,"ox":13,"st":87,"ot":8,"tp":["Plugins, tools & MCP","Context & memory","CI, PRs & gates"],"sc":["stella:tui","stella:deck","stella:website","stella:serve"],"fix":22,"feat":15},{"d":"2026-07-30","c":87,"p":107,"j":0,"f":10,"x":0,"ox":0,"st":73,"ot":0,"tp":["CI, PRs & gates","Verification & witness","Benchmarks"],"sc":["stella:config","stella:verify","stella:serve","stella:receipts"],"fix":17,"feat":15},{"d":"2026-07-31","c":133,"p":253,"j":3,"f":40,"x":0,"ox":0,"st":102,"ot":3,"tp":["Models & providers","CI, PRs & gates","Brand & design"],"sc":["stella:bench","stella:website","stella:verify","stella:tui"],"fix":22,"feat":22},{"d":"2026-08-01","c":134,"p":134,"j":2,"f":23,"x":0,"ox":2,"st":91,"ot":3,"tp":["CI, PRs & gates","Models & providers","Benchmarks"],"sc":["stella:cli","stella:website","stella:ci","stella:bench"],"fix":31,"feat":5},{"d":"2026-08-02","c":108,"p":98,"j":1,"f":43,"x":3,"ox":0,"st":64,"ot":0,"tp":["CI, PRs & gates","Verification & witness","Models & providers"],"sc":["stella:bench","stella:pipeline","stella:design","stella:tui"],"fix":16,"feat":14},{"d":"2026-08-03","c":111,"p":50,"j":0,"f":7,"x":1,"ox":0,"st":62,"ot":0,"tp":["TUI & deck","CI, PRs & gates","Models & providers"],"sc":["stella:tui","stella:gate","stella:bench","stella:stella-serve"],"fix":7,"feat":13},{"d":"2026-08-04","c":208,"p":279,"j":3,"f":193,"x":9,"ox":0,"st":134,"ot":0,"tp":["Verification & witness","CI, PRs & gates","Models & providers"],"sc":["stella:arenabench","stella:tui","stella:bench","stella:files"],"fix":27,"feat":15},{"d":"2026-08-05","c":345,"p":212,"j":1,"f":73,"x":2,"ox":0,"st":144,"ot":0,"tp":["CI, PRs & gates","Benchmarks","Audit & quality"],"sc":["stella:stella-cli","stella:arenabench","stella:stella-pipeline","stella:stella-tui"],"fix":55,"feat":26},{"d":"2026-08-06","c":466,"p":253,"j":1,"f":41,"x":2,"ox":0,"st":193,"ot":0,"tp":["CI, PRs & gates","Verification & witness","Models & providers"],"sc":["stella:stella-pipeline","stella:stella-cli","stella:stella-core","stella:gate"],"fix":94,"feat":33},{"d":"2026-08-07","c":272,"p":203,"j":4,"f":62,"x":4,"ox":0,"st":128,"ot":0,"tp":["CI, PRs & gates","Benchmarks","Models & providers"],"sc":["stella:arenabench","stella:bench","stella:stella-cli","stella:stella-pipeline"],"fix":38,"feat":19},{"d":"2026-08-08","c":256,"p":171,"j":3,"f":147,"x":34,"ox":0,"st":134,"ot":0,"tp":["Benchmarks","Context & memory","CI, PRs & gates"],"sc":["stella:arenabench","stella:stella-cli","stella:stella-context","stella:gate"],"fix":40,"feat":29},{"d":"2026-08-09","c":282,"p":195,"j":2,"f":70,"x":6,"ox":0,"st":137,"ot":0,"tp":["Verification & witness","CI, PRs & gates","Benchmarks"],"sc":["stella:stella-cli","stella:stella-pipeline","stella:stella-tools","stella:design-system"],"fix":43,"feat":19},{"d":"2026-08-10","c":211,"p":164,"j":2,"f":21,"x":0,"ox":0,"st":107,"ot":0,"tp":["CI, PRs & gates","Plugins, tools & MCP","Verification & witness"],"sc":["stella:stella-core","stella:stella-tools","stella:stella-pipeline","stella:stella-cli"],"fix":26,"feat":28},{"d":"2026-08-11","c":175,"p":179,"j":0,"f":66,"x":14,"ox":0,"st":84,"ot":1,"tp":["Verification & witness","Models & providers","Benchmarks"],"sc":["stella:stella-pipeline","stella:bench","stella:arenabench","stella:stella-tools"],"fix":24,"feat":4},{"d":"2026-08-12","c":256,"p":260,"j":5,"f":68,"x":5,"ox":0,"st":134,"ot":0,"tp":["Plugins, tools & MCP","CI, PRs & gates","Benchmarks"],"sc":["stella:stella-tools","stella:stella-cli","stella:arenabench","stella:stella-graph"],"fix":46,"feat":21},{"d":"2026-08-13","c":118,"p":189,"j":4,"f":52,"x":2,"ox":0,"st":61,"ot":0,"tp":["Plugins, tools & MCP","Benchmarks","Models & providers"],"sc":["stella:stella-cli","stella:arenabench","stella:stella-tools","stella:stella-graph"],"fix":15,"feat":12},{"d":"2026-08-14","c":59,"p":37,"j":2,"f":10,"x":1,"ox":0,"st":47,"ot":0,"tp":["Benchmarks","Verification & witness","Plugins, tools & MCP"],"sc":["stella:arenabench","stella:stella-core","stella:stella-tools","stella:tb21"],"fix":13,"feat":12},{"d":"2026-08-15","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0},{"d":"2026-08-16","c":213,"p":125,"j":2,"f":15,"x":0,"ox":0,"st":187,"ot":0,"tp":["CI, PRs & gates","Plugins, tools & MCP","Verification & witness"],"sc":["stella:stella-cli","stella:stella-core","stella:stella-tools","stella:steering"],"fix":48,"feat":48},{"d":"2026-08-17","c":243,"p":84,"j":1,"f":17,"x":0,"ox":0,"st":108,"ot":0,"tp":["CI, PRs & gates","Plugins, tools & MCP","Verification & witness"],"sc":["stella:stella-tools","stella:stella-cli","stella:stella-tui","stella:stella-protocol"],"fix":29,"feat":15},{"d":"2026-08-18","c":238,"p":67,"j":0,"f":10,"x":0,"ox":0,"st":95,"ot":0,"tp":["CI, PRs & gates","Plugins, tools & MCP","Context & memory"],"sc":["stella:stella-cli","stella:stella-tools","stella:stella-transcript","stella:stella-runtime"],"fix":24,"feat":17},{"d":"2026-08-19","c":367,"p":116,"j":0,"f":31,"x":3,"ox":17,"st":134,"ot":0,"tp":["CI, PRs & gates","Verification & witness","Plugins, tools & MCP"],"sc":["stella:stella-cli","stella:stella-autonomy","stella:workspace","stella:stella-cli,stella-core"],"fix":64,"feat":30},{"d":"2026-08-20","c":59,"p":18,"j":0,"f":12,"x":5,"ox":3,"st":38,"ot":0,"tp":["Context & memory","CI, PRs & gates","TUI & deck"],"sc":["stella:stella-tui","stella:bench","stella:stella-autonomy","stella:website"],"fix":19,"feat":5},{"d":"2026-08-21","c":182,"p":94,"j":0,"f":47,"x":5,"ox":0,"st":133,"ot":5,"tp":["Infra & deploy","CI, PRs & gates","TUI & deck"],"sc":["stella:stella-tui","stella:stella-tools","stella:stella-cli","stella:deck"],"fix":48,"feat":20},{"d":"2026-08-22","c":139,"p":61,"j":0,"f":21,"x":4,"ox":9,"st":112,"ot":5,"tp":["CI, PRs & gates","TUI & deck","Verification & witness"],"sc":["stella:stella-tui","stella:stella-cli","stella:stella-tui,stella-cli","stella:tui-v2"],"fix":42,"feat":22},{"d":"2026-08-23","c":326,"p":82,"j":1,"f":9,"x":0,"ox":3,"st":305,"ot":0,"tp":["CI, PRs & gates","TUI & deck","Plugins, tools & MCP"],"sc":["stella:stella-cli","stella:stella-tui","stella:stella-core","stella:stella-protocol"],"fix":94,"feat":51},{"d":"2026-08-24","c":385,"p":136,"j":0,"f":6,"x":1,"ox":28,"st":255,"ot":1,"tp":["CI, PRs & gates","TUI & deck","Plugins, tools & MCP"],"sc":["stella:stella-tui","stella:stella-cli","oxagen:e2e","oxagen:ci"],"fix":78,"feat":57},{"d":"2026-08-25","c":239,"p":33,"j":0,"f":0,"x":0,"ox":18,"st":152,"ot":0,"tp":["CI, PRs & gates","Video & content","Plugins, tools & MCP"],"sc":["stella:stella-runtime","stella:stella-cli","oxagen:ci","stella:guards"],"fix":40,"feat":5},{"d":"2026-08-26","c":464,"p":118,"j":0,"f":72,"x":1,"ox":13,"st":198,"ot":17,"tp":["CI, PRs & gates","TUI & deck","Infra & deploy"],"sc":["stella:stella-tui","stella:stella-cli","stella:ci","stella:stella-store"],"fix":43,"feat":47},{"d":"2026-08-27","c":226,"p":28,"j":0,"f":0,"x":0,"ox":6,"st":117,"ot":3,"tp":["CI, PRs & gates","TUI & deck","Video & content"],"sc":["stella:stella-cli","stella:stella-tui","stella:stella-core","stella:stella-autonomy"],"fix":65,"feat":16},{"d":"2026-08-28","c":68,"p":12,"j":0,"f":11,"x":0,"ox":0,"st":16,"ot":0,"tp":["Models & providers","Infra & deploy","Context & memory"],"sc":["stella:workspace","stella:stella-tui","stella:stella-store","stella:stella-graph"],"fix":3,"feat":2},{"d":"2026-08-29","c":254,"p":51,"j":0,"f":11,"x":0,"ox":8,"st":59,"ot":49,"tp":["Video & content","Infra & deploy","CI, PRs & gates"],"sc":["stella:stella-cli","context-graph-protocol:sdk","context-graph-protocol:contextgraph-types","context-graph-protocol:contextgraph-host"],"fix":17,"feat":28},{"d":"2026-08-30","c":1144,"p":38,"j":1,"f":1,"x":0,"ox":1,"st":66,"ot":4,"tp":["CI, PRs & gates","Audit & quality","TUI & deck"],"sc":["stella:stella-cli","stella:stella-tui","stella:skills","stella:self-driving"],"fix":16,"feat":13},{"d":"2026-08-31","c":171,"p":31,"j":1,"f":4,"x":0,"ox":30,"st":16,"ot":52,"tp":["Models & providers","Infra & deploy","Context & memory"],"sc":["rainforest:db","oxagen:agent-engine","rainforest:seed","rainforest:jobs"],"fix":16,"feat":43},{"d":"2026-09-01","c":31,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":16,"tp":[],"sc":["rainforest:seed","rainforest:pnl","rainforest:palette","rainforest:audit"],"fix":2,"feat":11},{"d":"2026-09-02","c":152,"p":15,"j":0,"f":5,"x":0,"ox":5,"st":61,"ot":3,"tp":["Models & providers","Infra & deploy","CI, PRs & gates"],"sc":["stella:stella-cli","stella:stella-core","stella:scripts","stella:stella-tools"],"fix":26,"feat":7},{"d":"2026-09-03","c":117,"p":4,"j":0,"f":0,"x":0,"ox":1,"st":51,"ot":0,"tp":[],"sc":["stella:stella-cli","stella:stella-core","stella:stella-tui","stella:stella-store"],"fix":31,"feat":4},{"d":"2026-09-04","c":117,"p":6,"j":0,"f":2,"x":0,"ox":5,"st":41,"ot":0,"tp":["Verification & witness","Context & memory","CI, PRs & gates"],"sc":["stella:stella-cli","stella:stella-records","stella:stella-runtime","stella:bench"],"fix":16,"feat":9},{"d":"2026-09-05","c":384,"p":24,"j":1,"f":2,"x":0,"ox":9,"st":199,"ot":7,"tp":["Context & memory","Models & providers","Video & content"],"sc":["stella:stella-cli","stella:stella-tui","stella:scripts","stella:stella-protocol"],"fix":72,"feat":33},{"d":"2026-09-06","c":294,"p":121,"j":0,"f":44,"x":0,"ox":21,"st":140,"ot":15,"tp":["Infra & deploy","CI, PRs & gates","Plugins, tools & MCP"],"sc":["stella:stella-cli","stella:stella-core","stella:scripts","context-graph-protocol:scr"],"fix":48,"feat":21},{"d":"2026-09-07","c":258,"p":10,"j":0,"f":0,"x":0,"ox":59,"st":135,"ot":12,"tp":["Verification & witness","Models & providers","Benchmarks"],"sc":["stella:stella-cli","stella:adr","oxagen:ci","stella:stella-tools"],"fix":65,"feat":33},{"d":"2026-09-08","c":58,"p":49,"j":0,"f":10,"x":0,"ox":37,"st":32,"ot":5,"tp":["CI, PRs & gates","TUI & deck","Models & providers"],"sc":["oxagen:infra","oxagen:tacho","stella:ci","oxagen:ci"],"fix":23,"feat":6},{"d":"2026-09-09","c":66,"p":67,"j":0,"f":6,"x":1,"ox":18,"st":19,"ot":0,"tp":["CI, PRs & gates","Business & fundraising","Audit & quality"],"sc":["oxagen:infra","stella:tui","stella:scripts","stella:stella-core"],"fix":17,"feat":3},{"d":"2026-09-10","c":82,"p":20,"j":0,"f":0,"x":0,"ox":32,"st":15,"ot":34,"tp":["Video & content","CI, PRs & gates","TUI & deck"],"sc":["stella:stella-core","context-graph-protocol:attest","oxagen:billing","oxagen:infra"],"fix":35,"feat":5},{"d":"2026-09-11","c":73,"p":140,"j":5,"f":100,"x":1,"ox":23,"st":30,"ot":24,"tp":["Brand & design","Context & memory","Plugins, tools & MCP"],"sc":["stella:stella-tools","stella:bench","context-graph-protocol:attest","stella:scripts"],"fix":31,"feat":5},{"d":"2026-09-12","c":125,"p":92,"j":1,"f":15,"x":3,"ox":15,"st":4,"ot":85,"tp":["CI, PRs & gates","Brand & design","Plugins, tools & MCP"],"sc":["stella:readme","oxagen:mission-control","oxagen:contracts","oxagen:specs"],"fix":0,"feat":2},{"d":"2026-09-13","c":121,"p":81,"j":3,"f":19,"x":3,"ox":59,"st":9,"ot":23,"tp":["CI, PRs & gates","Brand & design","Video & content"],"sc":["oxagen:contracts","stella:context","oxagen:app","oxagen:tacho"],"fix":5,"feat":0},{"d":"2026-09-14","c":104,"p":76,"j":0,"f":7,"x":0,"ox":191,"st":0,"ot":37,"tp":["CI, PRs & gates","Brand & design","Machine setup"],"sc":["oxagen:tacho","cgp-website:dod","oxagen:stripe","oxagen:installer"],"fix":3,"feat":0},{"d":"2026-09-15","c":166,"p":137,"j":1,"f":26,"x":2,"ox":461,"st":3,"ot":60,"tp":["CI, PRs & gates","Brand & design","Plugins, tools & MCP"],"sc":["oxagen:app","oxagen:ingestion","oxagen:blog","oxagen:architecture"],"fix":18,"feat":0},{"d":"2026-09-16","c":88,"p":47,"j":1,"f":16,"x":0,"ox":152,"st":1,"ot":11,"tp":["Video & content","CI, PRs & gates","Plugins, tools & MCP"],"sc":["oxagen:blog","oxagen:agent","oxagen:ops","oxagen:run-ledger"],"fix":13,"feat":0},{"d":"2026-09-17","c":184,"p":110,"j":2,"f":25,"x":1,"ox":583,"st":7,"ot":41,"tp":["CI, PRs & gates","Business & fundraising","Machine setup"],"sc":["oxagen:app","oxagen:cost","oxagen:test","oxagen:steering"],"fix":16,"feat":7},{"d":"2026-09-18","c":237,"p":155,"j":2,"f":19,"x":0,"ox":1085,"st":7,"ot":49,"tp":["CI, PRs & gates","Plugins, tools & MCP","Brand & design"],"sc":["oxagen:steering","oxagen:app","oxagen:billing","oxagen:cost"],"fix":127,"feat":3},{"d":"2026-09-19","c":285,"p":99,"j":0,"f":5,"x":0,"ox":805,"st":2,"ot":22,"tp":["CI, PRs & gates","Video & content","Plugins, tools & MCP"],"sc":["oxagen:mandates","oxagen:app","oxagen:tacho","oxagen:repositories"],"fix":133,"feat":11},{"d":"2026-09-20","c":129,"p":65,"j":0,"f":5,"x":1,"ox":224,"st":27,"ot":45,"tp":["CI, PRs & gates","Infra & deploy","Plugins, tools & MCP"],"sc":["oxagen:app","oxagen:database","oxagen:tacho","stella:stella-core"],"fix":67,"feat":10},{"d":"2026-09-21","c":0,"p":0,"j":0,"f":0,"x":0,"ox":0,"st":0,"ot":0,"tp":[],"sc":[],"fix":0,"feat":0}],"hours":[{"h":0,"p":337,"x":14,"f":70},{"h":1,"p":236,"x":32,"f":146},{"h":2,"p":215,"x":6,"f":43},{"h":3,"p":116,"x":1,"f":15},{"h":4,"p":15,"x":0,"f":1},{"h":5,"p":9,"x":0,"f":2},{"h":6,"p":58,"x":1,"f":18},{"h":7,"p":49,"x":0,"f":6},{"h":8,"p":167,"x":1,"f":29},{"h":9,"p":225,"x":0,"f":23},{"h":10,"p":393,"x":0,"f":54},{"h":11,"p":552,"x":4,"f":75},{"h":12,"p":527,"x":1,"f":219},{"h":13,"p":638,"x":4,"f":213},{"h":14,"p":556,"x":2,"f":97},{"h":15,"p":542,"x":0,"f":102},{"h":16,"p":594,"x":6,"f":142},{"h":17,"p":448,"x":2,"f":60},{"h":18,"p":523,"x":11,"f":88},{"h":19,"p":348,"x":5,"f":110},{"h":20,"p":410,"x":7,"f":103},{"h":21,"p":431,"x":15,"f":168},{"h":22,"p":346,"x":6,"f":58},{"h":23,"p":398,"x":6,"f":79}],"topics":[{"t":"CI, PRs & gates","n":863,"j":7,"f":181,"x":11},{"t":"Plugins, tools & MCP","n":382,"j":14,"f":220,"x":10},{"t":"Models & providers","n":306,"j":12,"f":140,"x":12},{"t":"Context & memory","n":278,"j":10,"f":131,"x":7},{"t":"Verification & witness","n":264,"j":6,"f":185,"x":13},{"t":"Benchmarks","n":216,"j":2,"f":121,"x":4},{"t":"Brand & design","n":167,"j":13,"f":128,"x":2},{"t":"TUI & deck","n":156,"j":8,"f":97,"x":5},{"t":"Infra & deploy","n":155,"j":3,"f":146,"x":3},{"t":"Video & content","n":140,"j":6,"f":77,"x":2},{"t":"Machine setup","n":104,"j":5,"f":8,"x":0},{"t":"Audit & quality","n":88,"j":6,"f":33,"x":2},{"t":"Business & fundraising","n":63,"j":1,"f":21,"x":1}],"stats":{"cal_total":21874,"since_feb26":21861,"prompts":8133,"sessions":1769,"local_commits":13468,"words":383957,"prof":124,"prof_prompts":97,"late":919,"late_prof":53,"model_cmd":248,"clear_cmd":213,"longest_session":273,"active_days":189,"span_days":207.0,"fix":3046,"feat":1755,"months":[["2026-02",23],["2026-03",689],["2026-04",1846],["2026-05",2167],["2026-06",1749],["2026-07",4597],["2026-08",7719],["2026-09",3071]],"weekday":[[0,973],[1,1072],[2,1363],[3,1181],[4,1241],[5,1127],[6,1176]]}};
+const MILESTONES = {"2026-02-26": "The first real day on GitHub this year: 22 contributions.", "2026-05-28": "The first commits to the Oxagen repository: the foundations and the agent runtime.", "2026-06-29": "A new laptop. The prompt log starts here, with a request to set it up for coding.", "2026-06-30": "Heavy work begins on the TypeScript Oxagen command-line agent, plus an SWE-bench harness he asks to keep honest.", "2026-07-01": "First mention of Rust: “I will be rebuilding the CLI in rust shortly.”", "2026-07-03": "The mission for the month: “Stripe for agents,” a metered, governed control plane.", "2026-07-07": "The pivot from metered billing to governance, traceability, budgets, and permissions. “If you see it you own it” goes into CLAUDE.md.", "2026-07-10": "The thesis: “determinism is fast, cheap, reproducable, and better than intelligence 10/10 times.” The mutation verifier idea arrives the same night.", "2026-07-11": "The Rust agent gets a name, Stella, and its own public repository. The witness test idea: the old code fails the test and the new code passes it.", "2026-07-12": "ArenaBench becomes its own repository. Stella's full-screen terminal interface, the command deck, begins.", "2026-07-16": "Pipeline design: done is proven by a test written first and hidden from the worker.", "2026-07-17": "Stella 0.3.0 ships. The context protocol splits into its own repository.", "2026-07-19": "Fleets with no coordinator: every agent in one worktree, a lock on first write.", "2026-07-20": "Open Context Protocol is renamed Context Graph Protocol.", "2026-07-22": "The motto: “verification can not lie.” Stella becomes an official open-source project.", "2026-07-23": "arena-bench goes public. The Context Graph Protocol SDK ships to npm.", "2026-07-27": "Context records: steering stored as TOML in git. Context as code.", "2026-07-29": "The first pitch deck. Vera is named for the first time.", "2026-07-31": "The first pre-registered Terminal-Bench 2.1 head-to-head against Claude Code, same model: Stella solves 58 of 89.", "2026-08-02": "The durability design: a git-backed journal that can resume any turn and stops agents from overwriting each other.", "2026-08-04": "A power cut. Stella survives it and keeps working. “Judge” is renamed “verifier.”", "2026-08-05": "The reference-grade Rust rule goes into CLAUDE.md: “I want to be famous for correctness in enngineering and exceellent in agent systems architecture. #1 or go home.” The always-on improvement loop ships.", "2026-08-06": "The improvement loop is renamed self-driving. Stella 0.7.0 ships with its own release notes site.", "2026-08-08": "The hardest day. A day of benchmark runs he could not trust, a code graph that was silently empty, and a hidden $1-per-task cap behind Stella's “losses.” The new rule: prove a defect with a failing test before describing it.", "2026-08-09": "Verification becomes model-free: a deterministic fail-to-pass flip, or nothing.", "2026-08-10": "Tool-first architecture: every capability is a tool, and each tool has one job.", "2026-08-11": "A Sonnet 5 head-to-head: Stella 18 of 20, Claude Code 19 of 19, and Stella cost about four times more. He calls it a prompt problem and goes after cost.", "2026-08-12": "Semantic code search works end to end. The 72-tool menu starts shrinking toward five.", "2026-08-13": "“The 5 tools kicked ass.” Vera is announced: verification moves out of Stella into a plugin.", "2026-08-16": "One loop, with wrappers as plugins. The raw loop becomes the default.", "2026-08-19": "The pipeline crate is deleted. Self-driving Stella starts working its own backlog.", "2026-08-21": "Everything moves to AWS. Stella's tools get plain verbs: read, write, edit, run.", "2026-08-22": "The plan is approved: Stella becomes the agent engine inside Oxagen.", "2026-08-23": "ArenaBench moves to its own public repository. Plain prose becomes a rule.", "2026-08-26": "The way he works with agents becomes written standing decisions, shared across every repository.", "2026-08-29": "Rainforest: a supply-chain demo app that Stella has to build by itself.", "2026-08-30": "The busiest day on GitHub: 1,144 contributions. A file-by-file review of Oxagen files 1,059 issues.", "2026-08-31": "“Rip this sucker in pieces.” Generative AI leaves Oxagen. “I think Stella has the best agent. I think Oxagen has the best control plane.”", "2026-09-02": "Agents get their own identities, with role-based permissions.", "2026-09-05": "The Terminal-Bench 2.1 page goes up: Stella 58, Claude Code 44, out of 89 tasks on the same model.", "2026-09-06": "The fix-over-file rule. Wrappers so Oxagen can govern Claude Code and Codex.", "2026-09-08": "The rerun: 57 solved. The search tool was called 2 times, against 1,949 bash greps. He orders it fixed.", "2026-09-09": "The pricing unit becomes the governed action.", "2026-09-11": "Start over, on purpose. A clean-slate spec for the control plane, and about 12 parallel sessions building demo mockups.", "2026-09-14": "A macOS installer ships that wraps Claude Code and Codex.", "2026-09-17": "The Oxagen repository moves to its own organization. The roadmap becomes public.", "2026-09-18": "Oxagen becomes a gateway for model calls. The obsidian and gold house brand lands.", "2026-09-19": "Every model call on his own machine now routes through Oxagen: “configure my machine exactly as you would a customers where all model calls route through oxagen.”"};
+const CHAPTERS = [{"id": "before", "short": "Before the log", "title": "Before the log", "to": "2026-06-28", "jump": "2026-05-28", "range": "26 Feb to 28 Jun", "body": "GitHub shows the work starting on 26 February. March brought 689 contributions, April 1,846, and May 2,167. On 28 May the first commits land in the Oxagen repository: the foundations and the agent runtime. The prompts from these months lived on an earlier laptop, so this chapter is told by commits alone.", "quote": "", "from": "2026-02-23"}, {"id": "beat", "short": "Beat Claude Code", "title": "Beat Claude Code", "to": "2026-07-09", "jump": "2026-07-07", "range": "29 Jun to 9 Jul", "body": "A new laptop, and a sprint on the TypeScript Oxagen command-line agent: caching, effort levels, a code graph, and an SWE-bench harness. On 3 July the mission is “Stripe for agents.” Four days later he drops metered billing for governance, traceability, budgets, and permissions, and writes “if you see it you own it” into his agent instructions.", "quote": "i do not want to falsely promote that oxagen is better", "from": "2026-06-29"}, {"id": "stella", "short": "Stella is born", "title": "Stella is born", "to": "2026-07-19", "jump": "2026-07-11", "range": "10 Jul to 19 Jul", "body": "A night of “crazy ideas” produces the mutation verifier: prove each test fails without its fix. The next day the Rust rewrite gets a name, Stella, and a public repository, and the witness test becomes the definition of done. By 17 July Stella 0.3.0 installs from Homebrew, and fleets run with no coordinator at all.", "quote": "determinism is fast, cheap, reproducable, and better than intelligence 10/10 times.", "from": "2026-07-10"}, {"id": "proof", "short": "Protocols and proof", "title": "Protocols and proof", "to": "2026-07-31", "jump": "2026-07-31", "range": "20 Jul to 31 Jul", "body": "The context protocol becomes the Context Graph Protocol, with an SDK on npm. ArenaBench goes public. Context records put steering into git as TOML. It ends on 31 July with the first pre-registered head-to-head against Claude Code on Terminal-Bench 2.1, same model on both sides. Stella solves 58 of 89, and he publishes the run.", "quote": "verification can not lie", "from": "2026-07-20"}, {"id": "hard", "short": "The hard weeks", "title": "The hard weeks", "to": "2026-08-11", "jump": "2026-08-08", "range": "1 Aug to 11 Aug", "body": "Proving it was harder than building it. Benchmark runs carried hidden caps. A verifier model spent four minutes and never wrote its test. On 8 August the code graph turned out to be silently empty, and Stella's “losses” traced back to a $1-per-task budget cap. Out of it came rules that still hold: prove a defect with a failing test first, verification is model-free, and a benchmark is never capped. On 11 August he published the unflattering number too: on Sonnet 5, Stella cost about four times what Claude Code did.", "quote": "WE HAVE MOVED TO FAST AND I AM WORRIED I WILL HAVE TO THROW AWAY THIS PROJECT", "from": "2026-08-01"}, {"id": "less", "short": "Less is more", "title": "Less is more", "to": "2026-08-19", "jump": "2026-08-13", "range": "12 Aug to 19 Aug", "body": "Semantic search works, and 72 tools shrink to five. Verification leaves Stella and becomes Vera, a plugin that can veto a turn. The core becomes one loop, everything else becomes a plugin in any language, and on 19 August the pipeline crate is deleted. Self-driving Stella starts working through its own issue backlog.", "quote": "less is more and way less is best the 5 tools kicked ass", "from": "2026-08-12"}, {"id": "fleets", "short": "Fleets, not prompts", "title": "Fleets, not prompts", "to": "2026-08-30", "jump": "2026-08-30", "range": "20 Aug to 30 Aug", "body": "His typed prompts drop, and the work climbs. He runs ten to fifteen sessions at once on long autonomous goals, so most of his prompts are “go,” “resume,” and “merge.” He moves everything to AWS, writes his steering down as standing decisions, and has Stella build a supply-chain demo app on its own. On 30 August a file-by-file review of Oxagen files 1,059 issues, and GitHub counts 1,144 contributions, the most of any day.", "quote": "it is supposed to be hands off autonomous with controls to rollback", "from": "2026-08-20"}, {"id": "plane", "short": "The control plane", "title": "Oxagen becomes the control plane", "to": "2026-09-10", "jump": "2026-08-31", "range": "31 Aug to 10 Sep", "body": "He tears the generative AI out of Oxagen and makes Stella the engine inside it. Agents get their own identities and permissions, the same way people do. The Terminal-Bench page goes up, Stella 58 and Claude Code 44 of 89. Wrappers let Oxagen govern Claude Code and Codex, and the unit of price becomes the governed action.", "quote": "I think stella has the best agent. I think oxagen has the best control plane.", "from": "2026-08-31"}, {"id": "over", "short": "Start over", "title": "Start over, on purpose", "to": "2026-09-20", "jump": "2026-09-11", "range": "11 Sep to 20 Sep", "body": "He starts Oxagen over from a clean spec: wrap any agent, decide what each tool call may do, replay every run, and reconcile spend to the cent. About twelve parallel sessions build the demo mockups in one day. Within the week a macOS installer wraps Claude Code and Codex, Oxagen becomes a gateway for model calls, and every model call on his own laptop routes through it.", "quote": "they are worried about agents and the damage is done at tool call level.", "from": "2026-09-11"}];
+const BUILT = [{"date": "2026-06-30", "name": "A coding agent CLI", "what": "The first Oxagen command-line agent, in TypeScript, with effort levels, caching, and a code graph."}, {"date": "2026-06-30", "name": "An SWE-bench harness", "what": "His first benchmark rig, built with orders not to flatter his own agent."}, {"date": "2026-07-10", "name": "A mutation verifier", "what": "Proves a test fails without its fix before the fix counts."}, {"date": "2026-07-11", "name": "Stella", "what": "An open-source Rust terminal coding agent. Bring your own key, any model."}, {"date": "2026-07-11", "name": "Witness tests", "what": "Done means a test that fails on the old code and passes on the new."}, {"date": "2026-07-12", "name": "ArenaBench", "what": "A harness for comparing agents like for like, now its own public repository."}, {"date": "2026-07-12", "name": "The command deck", "what": "Stella's full-screen terminal interface."}, {"date": "2026-07-19", "name": "Fleets", "what": "Many agents in one worktree with no coordinator, locking on first write."}, {"date": "2026-07-20", "name": "Context Graph Protocol", "what": "An open protocol for the context graphs agents reason over, with an SDK."}, {"date": "2026-07-27", "name": "Context records", "what": "Steering stored as TOML in git, with tests that check it helped."}, {"date": "2026-08-02", "name": "Durable turns", "what": "A git-backed journal that can resume any turn."}, {"date": "2026-08-06", "name": "Self-driving", "what": "A loop that audits the code, files issues, and fixes them."}, {"date": "2026-08-06", "name": "The Observatory", "what": "A local dashboard that replays every Stella run."}, {"date": "2026-08-10", "name": "Tool-first architecture", "what": "Every capability is a tool, and every tool has one job."}, {"date": "2026-08-12", "name": "Semantic code search", "what": "Embeddings over a tree-sitter code graph, behind one search tool."}, {"date": "2026-08-13", "name": "Vera", "what": "Verification as a plugin that can veto a turn."}, {"date": "2026-08-16", "name": "A plugin socket", "what": "One loop, with everything else a plugin, in Rust, TypeScript, or Python."}, {"date": "2026-08-27", "name": "Voice input", "what": "Hold the spacebar and talk to Stella."}, {"date": "2026-08-29", "name": "Rainforest", "what": "A supply-chain demo app that Stella built on its own."}, {"date": "2026-09-02", "name": "Agent identities", "what": "Each agent gets its own identity and role-based permissions."}, {"date": "2026-09-06", "name": "Claude Code and Codex wrappers", "what": "Hooks that put other vendors' agents under Oxagen's rules."}, {"date": "2026-09-11", "name": "The Oxagen control plane", "what": "Identity, authority, budget, tools, and the record, in one place."}, {"date": "2026-09-14", "name": "A desktop installer", "what": "A macOS app that wraps Claude Code and Codex."}, {"date": "2026-09-18", "name": "A model gateway", "what": "Model calls routed through Oxagen, priced and recorded."}];
+const BELIEFS = [{"name": "Proof over claims", "quote": "verification can not lie", "when": "22 Jul. It became the witness test."}, {"name": "Determinism first", "quote": "determinism is fast, cheap, reproducable, and better than intelligence 10/10 times.", "when": "10 Jul. It became Stella's design thesis."}, {"name": "Measure like for like", "quote": "WE ARE TO NEVER RUN A BENCHMARK WITH A BUDGET CAP OR OUTPUT TOKEN CAP", "when": "8 Aug. It is now a rule for every benchmark run."}, {"name": "Prove the bug first", "quote": "Make me prove a defect with a failing test before I'm allowed to describe it.", "when": "8 Aug. It went into AGENTS.md and CLAUDE.md."}, {"name": "Less is more", "quote": "less is more and way less is best", "when": "13 Aug. 72 tools became five."}, {"name": "Nothing gets lost", "quote": "Any lost work is unforgivable", "when": "2 Aug. It became durable turns."}, {"name": "Plain words", "quote": "An 8th grader should be able to conceptually grasp the work", "when": "3 Aug. It became a prose rule, and later a CI gate."}, {"name": "Fix what you see", "quote": "IF YOU SEE IT YOU OWN IT", "when": "7 Jul. It grew into fix over file."}, {"name": "Govern the tool call", "quote": "the damage is done at tool call level.", "when": "11 Sep. It shaped how Oxagen answers requests."}, {"name": "Owned intelligence", "quote": "oxagen believes both people and companies should have owned intelligence", "when": "6 Sep. It is the long bet under both products."}];
+
+const $ = s => document.querySelector(s);
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs = {}, parent) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+const fmt = n => n.toLocaleString('en-US');
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DOW = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const parse = d => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd)); };
+const nice = d => { const t = parse(d); return `${t.getUTCDate()} ${MONTHS[t.getUTCMonth()]} ${t.getUTCFullYear()}`; };
+
+// Build the 30-week calendar from Monday 23 Feb.
+const byDate = Object.fromEntries(DATA.days.map(d => [d.d, d]));
+const START = parse('2026-02-23');
+const CAL = [];
+for (let i = 0; i < 210; i++) {
+  const t = new Date(START.getTime() + i * 86400000);
+  const key = t.toISOString().slice(0, 10);
+  CAL.push(byDate[key] || { d: key, c: 0, p: 0, j: 0, f: 0, x: 0, ox: 0, st: 0, ot: 0, tp: [], sc: [], fix: 0, feat: 0 });
+}
+const MAXC = Math.max(...CAL.map(d => d.c));
+const intensity = c => c <= 0 ? 0 : Math.log1p(c) / Math.log1p(MAXC);
+const fillFor = c => c <= 0 ? 'transparent' : `color-mix(in oklab, var(--fg) ${Math.round(10 + intensity(c) * 82)}%, var(--panel))`;
+const chapterOf = d => CHAPTERS.find(c => d >= c.from && d <= c.to);
+const LOG_START = '2026-06-29';
+
+// Ramp key
+{ const k = $('#rampKey'); [1, 10, 60, 300, 1144].forEach(c => { const i = document.createElement('i'); i.style.background = fillFor(c); k.appendChild(i); }); }
+
+// Hive
+const R = 11, W = 1.5 * R, H = Math.sqrt(3) * R;
+const PADX = 16, PADY = 26;
+const svg = $('#hiveSvg');
+const vbW = PADX * 2 + 29 * W + 2 * R, vbH = PADY + 7 * H + H / 2 + 8;
+svg.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`);
+const hex = (cx, cy, r) => { let p = ''; for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k; p += (k ? 'L' : 'M') + (cx + r * Math.cos(a)).toFixed(2) + ' ' + (cy + r * Math.sin(a)).toFixed(2); } return p + 'Z'; };
+const cells = [];
+let lastMonth = -1;
+CAL.forEach((d, i) => {
+  const col = Math.floor(i / 7), row = i % 7;
+  const cx = PADX + R + col * W, cy = PADY + R * 0.9 + row * H + (col % 2 ? H / 2 : 0);
+  const t = parse(d.d);
+  if (row === 0 && t.getUTCMonth() !== lastMonth && t.getUTCDate() <= 7) { lastMonth = t.getUTCMonth(); const tx = el('text', { x: cx - R * 0.6, y: 12 }, svg); tx.textContent = MONTHS[lastMonth]; }
+  const g = el('g', { class: 'cell', role: 'gridcell', 'data-i': i, tabindex: i === 0 ? 0 : -1, 'aria-label': `${nice(d.d)}: ${d.c} contributions` }, svg);
+  el('path', { d: hex(cx, cy, R * 0.94), fill: fillFor(d.c) }, g);
+  if (d.x > 0) el('circle', { cx: cx + R * 0.34, cy: cy + R * 0.3, r: Math.min(2 + d.x * 0.35, 5), fill: 'var(--heat)', stroke: 'var(--panel)', 'stroke-width': 1 }, g);
+  if (d.j >= 2) el('circle', { cx: cx - R * 0.34, cy: cy - R * 0.3, r: Math.min(1.8 + d.j * 0.35, 4.2), fill: 'var(--joy)', stroke: 'var(--panel)', 'stroke-width': 1 }, g);
+  if (MILESTONES[d.d]) el('circle', { cx: cx, cy: cy + R * 0.55, r: 1.3, fill: 'var(--muted)' }, g);
+  g.addEventListener('click', () => { stop(); select(i, true); });
+  g.addEventListener('mouseenter', e => showTip(e, `<b>${nice(d.d)}</b><br>${fmt(d.c)} contributions${d.d >= LOG_START ? `<br>${d.p} prompts` : ''}${MILESTONES[d.d] ? '<br>' + MILESTONES[d.d] : ''}`));
+  g.addEventListener('mousemove', moveTip); g.addEventListener('mouseleave', hideTip);
+  cells.push(g);
+});
+svg.addEventListener('keydown', e => {
+  const map = { ArrowRight: 7, ArrowLeft: -7, ArrowDown: 1, ArrowUp: -1, Home: -9999, End: 9999 };
+  if (!(e.key in map)) return; e.preventDefault(); stop();
+  select(Math.max(0, Math.min(209, cur + map[e.key])), true, true);
+});
+
+// Reader
+let cur = 0, running = 0;
+const bar = (v, max, cls = '') => `<div class="bar ${cls}"><b style="width:${max ? Math.min(100, v / max * 100) : 0}%"></b></div>`;
+const MAXP = Math.max(...CAL.map(d => d.p)), MAXCM = Math.max(...CAL.map(d => d.ox + d.st + d.ot));
+function renderReader(i) {
+  const d = CAL[i], ch = chapterOf(d.d), t = parse(d.d);
+  const before = CAL.slice(0, i + 1).reduce((a, b) => a + b.c, 0);
+  const inLog = d.d >= LOG_START;
+  $('#reader').innerHTML = `<div class="rcol">
+    <div><div class="date">${DOW[(t.getUTCDay() + 6) % 7]}, ${nice(d.d)}</div><div class="chap">${ch ? ch.title : 'Before the story'}</div></div>
+    <div><div class="big">${fmt(d.c)}</div><div class="running">GitHub contributions that day · ${fmt(before)} since 23 Feb</div></div>
+    <div class="kv">
+      <span class="k">Oxagen commits</span>${bar(d.ox, MAXCM)}<span class="v">${d.ox}</span>
+      <span class="k">Stella commits</span>${bar(d.st, MAXCM)}<span class="v">${d.st}</span>
+      <span class="k">Other repos</span>${bar(d.ot, MAXCM)}<span class="v">${d.ot}</span>
+      ${inLog ? `<span class="k">Prompts</span>${bar(d.p, MAXP)}<span class="v">${d.p}</span>
+      <span class="k">Happy words</span>${bar(d.j, 8, 'joy')}<span class="v">${d.j}</span>
+      <span class="k">Swear words</span>${bar(d.x, 34, 'heat')}<span class="v">${d.x}</span>` : ''}
+    </div></div><div class="rcol">
+    ${MILESTONES[d.d] ? `<div class="milestone">${MILESTONES[d.d]}</div>` : `<div class="milestone empty">${inLog ? 'No milestone recorded for this day.' : 'The prompt log starts on 29 June, so days before it show commits only.'}</div>`}
+    ${d.tp.length ? `<div><div class="chap" style="margin-bottom:6px">Prompt topics</div><div class="tags">${d.tp.map(x => `<span>${x}</span>`).join('')}</div></div>` : ''}
+    ${d.sc.length ? `<div><div class="chap" style="margin-bottom:6px">Busiest commit scopes</div><div class="tags">${d.sc.map(x => `<span>${x}</span>`).join('')}</div></div>` : ''}</div>`;
+}
+function select(i, focus = false, keyFocus = false) {
+  cells[cur].classList.remove('sel'); cells[cur].setAttribute('tabindex', -1);
+  cur = i; cells[i].classList.add('sel'); cells[i].setAttribute('tabindex', 0);
+  if (keyFocus) cells[i].focus();
+  $('#scrub').value = i; renderReader(i);
+}
+$('#scrub').addEventListener('input', e => { stop(); select(+e.target.value); });
+
+// Play
+let timer = null;
+function stop() { if (timer) { clearInterval(timer); timer = null; $('#playBtn').textContent = 'Play the story'; } }
+$('#playBtn').addEventListener('click', () => {
+  if (timer) return stop();
+  let i = cur >= 209 ? 0 : cur;
+  $('#playBtn').textContent = 'Pause';
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  timer = setInterval(() => { select(i); i++; if (i > 209) stop(); }, reduce ? 260 : 90);
+});
+
+// Chapter chips
+let activeChap = null;
+function highlight(ch) {
+  activeChap = ch;
+  cells.forEach((g, i) => g.classList.toggle('dim', !!ch && !(CAL[i].d >= ch.from && CAL[i].d <= ch.to)));
+  document.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', ch && b.dataset.id === ch.id ? 'true' : 'false'));
+}
+const chipBox = $('#chapterChips');
+const allChip = document.createElement('button'); allChip.className = 'chip'; allChip.type = 'button'; allChip.textContent = 'All days'; allChip.dataset.id = ''; allChip.setAttribute('aria-pressed', 'true');
+allChip.onclick = () => { highlight(null); allChip.setAttribute('aria-pressed', 'true'); }; chipBox.appendChild(allChip);
+CHAPTERS.forEach(ch => {
+  const b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = ch.short; b.dataset.id = ch.id; b.setAttribute('aria-pressed', 'false');
+  b.onclick = () => { stop(); highlight(ch); allChip.setAttribute('aria-pressed', 'false'); select(CAL.findIndex(d => d.d === ch.jump)); };
+  chipBox.appendChild(b);
+});
+function jumpTo(date, ch) {
+  stop(); const i = CAL.findIndex(d => d.d === date); if (i < 0) return;
+  if (ch) { highlight(ch); allChip.setAttribute('aria-pressed', 'false'); }
+  select(i); document.getElementById('hive').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
+
+// Chapter list
+const cl = $('#chapterList');
+CHAPTERS.forEach(ch => {
+  const sum = CAL.filter(d => d.d >= ch.from && d.d <= ch.to).reduce((a, b) => a + b.c, 0);
+  const div = document.createElement('article'); div.className = 'chapter';
+  div.innerHTML = `<div class="when">${ch.range}<br>${fmt(sum)} contributions<br><button type="button">Show in the hive</button></div>
+    <div><h3>${ch.title}</h3><p>${ch.body}</p>${ch.quote ? `<blockquote>“${ch.quote}”</blockquote>` : ''}</div>`;
+  div.querySelector('button').onclick = () => jumpTo(ch.jump, ch);
+  cl.appendChild(div);
+});
+
+// Tooltip
+const tip = $('#tip');
+function showTip(e, html) { tip.innerHTML = html; tip.hidden = false; moveTip(e); }
+function moveTip(e) { const x = Math.min(e.clientX + 14, innerWidth - 280), y = e.clientY + 14 + 120 > innerHeight ? e.clientY - 110 : e.clientY + 14; tip.style.left = x + 'px'; tip.style.top = y + 'px'; }
+function hideTip() { tip.hidden = true; }
+
+// Mood chart
+{
+  const days = CAL.filter(d => d.d >= LOG_START);
+  const s = $('#moodSvg'), w = 1000, h = 300, L = 40, Rm = 12, T = 26, B = 36, mid = T + (h - T - B) / 2, half = (h - T - B) / 2;
+  s.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  const max = 35, bw = (w - L - Rm) / days.length;
+  [-30, -20, -10, 10, 20, 30].forEach(v => { const y = mid - v / max * half; el('line', { x1: L, x2: w - Rm, y1: y, y2: y, class: 'grid' }, s); const t = el('text', { x: L - 6, y: y + 4, 'text-anchor': 'end' }, s); t.textContent = Math.abs(v); });
+  el('line', { x1: L, x2: w - Rm, y1: mid, y2: mid, class: 'axis' }, s);
+  const up = el('text', { x: L, y: 14 }, s); up.textContent = 'Happy words ↑';
+  const dn = el('text', { x: L, y: h - 6 }, s); dn.textContent = 'Swear words ↓';
+  days.forEach((d, k) => {
+    const x = L + k * bw;
+    if (d.j) el('rect', { x: x + 1, y: mid - d.j / max * half, width: Math.max(bw - 2, 1), height: d.j / max * half, rx: 2, fill: 'var(--joy)' }, s);
+    if (d.x) el('rect', { x: x + 1, y: mid, width: Math.max(bw - 2, 1), height: d.x / max * half, rx: 2, fill: 'var(--heat)' }, s);
+    const t = parse(d.d);
+    if (t.getUTCDate() === 1 || k === 0) { const tx = el('text', { x: x, y: h - B + 16 }, s); tx.textContent = `${t.getUTCDate()} ${MONTHS[t.getUTCMonth()]}`; }
+    const hit = el('rect', { x, y: T, width: bw, height: h - T - B, fill: 'transparent', style: 'cursor:pointer' }, s);
+    hit.addEventListener('mouseenter', e => showTip(e, `<b>${nice(d.d)}</b><br>${d.j} happy words · ${d.x} swear words<br>${d.p} prompts${MILESTONES[d.d] ? '<br>' + MILESTONES[d.d] : ''}`));
+    hit.addEventListener('mousemove', moveTip); hit.addEventListener('mouseleave', hideTip);
+    hit.addEventListener('click', () => jumpTo(d.d));
+  });
+  const ann = (date, txt, above) => { const k = days.findIndex(d => d.d === date); if (k < 0) return; const x = L + k * bw + bw / 2; const d = days[k]; const y = above ? mid - d.j / max * half - 8 : mid + d.x / max * half + 14; const t = el('text', { x: x + 6, y, 'font-size': 11 }, s); t.textContent = txt; };
+  ann('2026-08-08', '8 Aug: the benchmark day', false);
+  ann('2026-07-12', 'Stella goes public', true);
+}
+
+// Topic grid
+{
+  const g = $('#topicGrid');
+  const rows = DATA.topics.filter(t => t.n >= 60).map(t => ({ ...t, jr: t.j / t.n * 100, xr: t.x / t.n * 100 })).sort((a, b) => b.jr - a.jr);
+  const mj = Math.max(...rows.map(r => r.jr)), mx = Math.max(...rows.map(r => r.xr));
+  g.innerHTML = `<span class="h">Topic</span><span class="h">Happy words</span><span class="h">Swear words</span>` + rows.map(r => `
+    <span>${r.t} <span class="muted mono" style="font-size:11px">${r.n}</span></span>
+    <div class="row-bar">${bar(r.jr, mj, 'joy')}<span>${r.jr.toFixed(1)}</span></div>
+    <div class="row-bar">${bar(r.xr, mx, 'heat')}<span>${r.xr.toFixed(1)}</span></div>`).join('');
+}
+
+// Clock
+{
+  const s = $('#clockSvg'), c = 180, r0 = 46, r1 = 150;
+  const maxP = Math.max(...DATA.hours.map(h => h.p));
+  [0.5, 1].forEach(f => el('circle', { cx: c, cy: c, r: r0 + (r1 - r0) * f, fill: 'none', stroke: 'var(--border)' }, s));
+  DATA.hours.forEach(h => {
+    const a = (h.h / 24) * Math.PI * 2 - Math.PI / 2, len = r0 + (r1 - r0) * (h.p / maxP);
+    const x0 = c + Math.cos(a) * r0, y0 = c + Math.sin(a) * r0, x1 = c + Math.cos(a) * len, y1 = c + Math.sin(a) * len;
+    el('line', { x1: x0, y1: y0, x2: x1, y2: y1, stroke: 'var(--fg)', 'stroke-width': 7, 'stroke-linecap': 'round', opacity: 0.85 }, s);
+    if (h.x) el('circle', { cx: c + Math.cos(a) * (len + 12), cy: c + Math.sin(a) * (len + 12), r: 2.5 + Math.sqrt(h.x) * 1.3, fill: 'var(--heat)' }, s);
+    if (h.h % 3 === 0) { const t = el('text', { x: c + Math.cos(a) * (r0 - 14), y: c + Math.sin(a) * (r0 - 14) + 3, 'text-anchor': 'middle' }, s); t.textContent = String(h.h).padStart(2, '0'); }
+    const hit = el('line', { x1: x0, y1: y0, x2: c + Math.cos(a) * (r1 + 20), y2: c + Math.sin(a) * (r1 + 20), stroke: 'transparent', 'stroke-width': 18 }, s);
+    hit.addEventListener('mouseenter', e => showTip(e, `<b>${String(h.h).padStart(2, '0')}:00</b><br>${fmt(h.p)} prompts · ${h.x} swear words`));
+    hit.addEventListener('mousemove', moveTip); hit.addEventListener('mouseleave', hideTip);
+  });
+}
+
+// Engines: weekly commits, two small multiples on one x scale
+{
+  const wk = {};
+  DATA.days.forEach(d => { if (d.d < '2026-05-25') return; const t = parse(d.d); const mon = new Date(t.getTime() - ((t.getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10); wk[mon] = wk[mon] || { ox: 0, st: 0 }; wk[mon].ox += d.ox; wk[mon].st += d.st; });
+  const weeks = Object.keys(wk).sort();
+  const s = $('#engineSvg'), w = 1000, lane = 120, L = 90, Rm = 16, T = 12, gap = 34, h = T + lane * 2 + gap + 30;
+  s.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  const max = Math.max(...weeks.map(k => Math.max(wk[k].ox, wk[k].st)));
+  const bw = (w - L - Rm) / weeks.length;
+  [['ox', 'Oxagen', T], ['st', 'Stella', T + lane + gap]].forEach(([key, name, y0]) => {
+    const base = y0 + lane;
+    el('line', { x1: L, x2: w - Rm, y1: base, y2: base, class: 'axis' }, s);
+    const lab = el('text', { x: 0, y: y0 + 16, 'font-size': 14 }, s); lab.textContent = name; lab.style.fill = 'var(--fg)';
+    const mx = el('text', { x: 0, y: y0 + 34 }, s); mx.textContent = `peak ${fmt(Math.max(...weeks.map(k => wk[k][key])))}`;
+    weeks.forEach((k, i) => {
+      const v = wk[k][key], bh = v / max * (lane - 8), x = L + i * bw;
+      if (v) el('rect', { x: x + 2, y: base - bh, width: bw - 4, height: bh, rx: 3, fill: key === 'ox' ? 'var(--fg)' : 'var(--muted)' }, s);
+      const hit = el('rect', { x, y: y0, width: bw, height: lane, fill: 'transparent' }, s);
+      hit.addEventListener('mouseenter', e => showTip(e, `<b>Week of ${nice(k)}</b><br>${name}: ${fmt(v)} commits`));
+      hit.addEventListener('mousemove', moveTip); hit.addEventListener('mouseleave', hideTip);
+    });
+  });
+  weeks.forEach((k, i) => { const t = parse(k); if (t.getUTCDate() <= 7) { const tx = el('text', { x: L + i * bw + 2, y: h - 8 }, s); tx.textContent = MONTHS[t.getUTCMonth()]; } });
+}
+
+// Workbench
+{
+  const wb = $('#workbench');
+  BUILT.forEach(b => {
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'tool';
+    btn.innerHTML = `<em>${nice(b.date)}</em><b>${b.name}</b><span>${b.what}</span>`;
+    btn.onclick = () => jumpTo(b.date);
+    wb.appendChild(btn);
+  });
+}
+// Beliefs
+$('#beliefList').innerHTML = BELIEFS.map(b => `<div class="belief"><h4>${b.name}</h4><q>${b.quote}</q><span class="muted" style="font-size:13px">${b.when}</span></div>`).join('');
+
+highlight(null);
+select(CAL.findIndex(d => d.d === '2026-07-11'));
+</script>
+
+</body>
+</html>
