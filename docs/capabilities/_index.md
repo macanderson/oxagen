@@ -600,3 +600,5 @@ after the registered name separately when their contract uses a dotted stem.
 | [update_model_settings](workspace.model_settings.write.md) | [workspace.model_settings.write.ts](../../packages/oxagen/src/contracts/workspace.model_settings.write.ts) | api, mcp, agent |
 | [update_prompt_settings](prompt.settings.write.md) | [prompt.settings.write.ts](../../packages/oxagen/src/contracts/prompt.settings.write.ts) | api, mcp, agent |
 | [update_workspace_settings](workspace.settings.write.md) | [workspace.settings.write.ts](../../packages/oxagen/src/contracts/workspace.settings.write.ts) | api, mcp, agent |
+| [resend_member_invite](org.member_invite.resend.md) | [org.member_invite.resend.ts](../../packages/oxagen/src/contracts/org.member_invite.resend.ts) | api, mcp |
+| [revoke_member_invite](org.member_invite.revoke.md) | [org.member_invite.revoke.ts](../../packages/oxagen/src/contracts/org.member_invite.revoke.ts) | api, mcp |

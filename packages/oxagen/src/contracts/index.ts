@@ -1219,3 +1219,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   routerStatsList,
   routerDecisionPreview,
 ] as const;
+
+export * from "./org.member_invite.resend";
+
+export * from "./org.member_invite.revoke";

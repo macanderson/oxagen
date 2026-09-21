@@ -196,6 +196,8 @@ import "./contracts/org.member.add";
 import "./contracts/org.member.remove";
 import "./contracts/org.member_invite.accept";
 import "./contracts/org.member_invite.decline";
+import "./contracts/org.member_invite.resend";
+import "./contracts/org.member_invite.revoke";
 import "./contracts/org.member_role.change";
 import "./contracts/org.model_credential.delete";
 import "./contracts/org.model_credential.get";

@@ -2391,6 +2391,12 @@ type Messages = {
       expires: string;
       never: string;
       empty: string;
+      actions: string;
+      resend: string;
+      revoke: string;
+      working: string;
+      resent: string;
+      revoked: string;
     };
     invite: {
       open: string;

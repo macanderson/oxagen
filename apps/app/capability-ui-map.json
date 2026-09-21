@@ -1076,7 +1076,7 @@
         {
           "route": "/[org]/[ws]/runs/[run]?tab=approvals",
           "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-          "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 the Approvals tab draws the same card and the same Decide dialog Fleet's panel draws, over the same kernel seam (features/fleet/approvals-panel.tsx, features/fleet/approval-decision.tsx, features/run/run.tsx)",
+          "entry": "/[org]/[ws]/runs/[run]?tab=approvals — the Approvals tab draws the same card and the same Decide dialog Fleet's panel draws, over the same kernel seam (features/fleet/approvals-panel.tsx, features/fleet/approval-decision.tsx, features/run/run.tsx)",
           "testid": "decide",
           "proof": "apps/app/src/features/run/run.test.tsx",
           "verifiedAt": "2026-09-20",
@@ -1096,13 +1096,31 @@
         {
           "route": "/[org]/[ws]/runs/[run]?tab=approvals",
           "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-          "entry": "/[org]/[ws]/runs/[run]?tab=approvals \u2014 the card on the Approvals tab draws the recorded eligibility line, and opening its dialog reads get_auto_eligibility again (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
+          "entry": "/[org]/[ws]/runs/[run]?tab=approvals — the card on the Approvals tab draws the recorded eligibility line, and opening its dialog reads get_auto_eligibility again (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
           "testid": "eligibility",
           "proof": "apps/app/src/features/run/run.test.tsx",
           "verifiedAt": "2026-09-20",
           "verifiedBy": "session-018UrgFq-mc1-review"
         }
       ]
+    },
+    "resend_member_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "People pending invitations: resend",
+      "testid": "invitation-controls",
+      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "assigned-issue-batch; CI pending"
+    },
+    "revoke_member_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "People pending invitations: revoke",
+      "testid": "invitation-controls",
+      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "assigned-issue-batch; CI pending"
     }
   }
 }

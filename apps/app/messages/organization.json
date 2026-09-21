@@ -125,7 +125,13 @@
       "sent": "Sent",
       "expires": "Expires",
       "never": "Never",
-      "empty": "No invitations are waiting for an answer."
+      "empty": "No invitations are waiting for an answer.",
+      "actions": "Actions",
+      "resend": "Resend",
+      "revoke": "Revoke",
+      "working": "Saving invitation",
+      "resent": "Invitation email sent. It expires in seven days.",
+      "revoked": "Invitation revoked."
     },
     "invite": {
       "open": "Invite",

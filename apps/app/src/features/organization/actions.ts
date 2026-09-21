@@ -1,4 +1,6 @@
 "use server";
+import { resendMemberInvite } from "@oxagen/oxagen/contracts/org.member_invite.resend";
+import { revokeMemberInvite } from "@oxagen/oxagen/contracts/org.member_invite.revoke";
 import { INVITABLE_ROLES, type InvitableRole } from "./invitation-roles";
 // The two writes on the People page (ARCHITECTURE.md §1.2): change a member's
 // organization role and remove a member. Both run through the kernel seam for
@@ -314,4 +316,32 @@ export async function sendInvitation(
         },
       }
     : result;
+}
+
+export async function resendInvitation(
+  org: string,
+  invitationPublicId: string,
+): Promise<
+  ActionResult<{
+    invitationPublicId: string;
+    status: "pending";
+    expiresAt: string | null;
+  }>
+> {
+  const ctx = await requireViewer(org);
+  return kernelWrite(ctx, resendMemberInvite, { invitationPublicId });
+}
+
+export async function revokeInvitation(
+  org: string,
+  invitationPublicId: string,
+): Promise<
+  ActionResult<{
+    invitationPublicId: string;
+    status: "revoked";
+    expiresAt: string | null;
+  }>
+> {
+  const ctx = await requireViewer(org);
+  return kernelWrite(ctx, revokeMemberInvite, { invitationPublicId });
 }
