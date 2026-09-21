@@ -39,17 +39,7 @@ describe("skill search preview", () => {
             score: 0.9,
           },
         ],
-        withheld: [
-          {
-            skillRef: "secret",
-            version: "2.0.0",
-            digest: "sha256:b",
-            source: "workspace",
-            description: "",
-            tokenCost: 90,
-            reason: "unapproved_digest",
-          },
-        ],
+        withheld: [{ skillRef: "secret", reason: "unapproved_digest" }],
       },
     });
     const user = userEvent.setup();
@@ -57,7 +47,10 @@ describe("skill search preview", () => {
     await user.type(screen.getByLabelText("Search query"), "review changes");
     await user.click(screen.getByRole("button", { name: "Preview search" }));
     expect(await screen.findByText("review@1.0.0")).toBeTruthy();
-    expect(screen.getByText("secret@2.0.0")).toBeTruthy();
+    // A withheld row is its slug and its reason. It carries no version,
+    // because the contract sends none: asserting `secret@2.0.0` here passed
+    // only while the fixture invented a field the handler never returns.
+    expect(screen.getByText("secret")).toBeTruthy();
     expect(
       screen.getByText("Content differs from the approved digest"),
     ).toBeTruthy();

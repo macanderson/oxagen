@@ -76,8 +76,16 @@ export const SkillSearchPreview = z.object({
   repositoryCommitSha: z.string(),
   tokenCost: Count,
   results: z.array(SkillCandidate.extend({ score: z.number() })),
+  /**
+   * A withheld skill is named and explained, never described: the contract
+   * returns its slug and the reason alone, so that previewing a search cannot
+   * disclose the version, digest or description of a skill this workspace is
+   * not approved to load. Extending `SkillCandidate` here declared five fields
+   * the handler never sends, which the page then rendered as `undefined`.
+   */
   withheld: z.array(
-    SkillCandidate.extend({
+    z.object({
+      skillRef: SkillCandidate.shape.skillRef,
       reason: z.enum(["out_of_scope", "unapproved_digest"]),
     }),
   ),
