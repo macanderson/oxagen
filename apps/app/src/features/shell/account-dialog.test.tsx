@@ -1606,3 +1606,19 @@ it("keeps a menu theme chosen after the pending preferences panel closes", async
   expect(document.cookie).toContain("theme=light");
   expect(document.documentElement.dataset.theme).toBe("light");
 });
+
+it("revalidates a clean preference draft when reopening after an external change", async () => {
+  const { user } = await openDialog("preferences");
+  await screen.findByTestId("account-theme");
+  await user.click(screen.getByRole("tab", { name: "Profile" }));
+  readPreferences.mockResolvedValueOnce({
+    ok: true,
+    value: { locale: "en", timezone: "Asia/Tokyo", theme: "dark" },
+  });
+  await user.click(screen.getByRole("tab", { name: "Preferences" }));
+  expect(await screen.findByTestId("account-timezone")).toHaveValue(
+    "Asia/Tokyo",
+  );
+  expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+  expect(readPreferences).toHaveBeenCalledTimes(2);
+});

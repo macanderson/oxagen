@@ -610,9 +610,17 @@ function PreferencesTab({ data }: { data: ShellData }) {
     let live = true;
     mountedRef.current = true;
     const expectedTheme = themeRevision();
+    const cached = accountOperations.readPreferences(data.viewer.id);
     if (
-      accountOperations.readPreferences(data.viewer.id).state.kind !== "ready"
+      cached.state.kind !== "ready" ||
+      (!cached.dirty &&
+        !accountOperations.isPending(data.viewer.id, "preferences"))
     ) {
+      update((current) => ({
+        ...current,
+        state: { kind: "loading" },
+        outcome: null,
+      }));
       void readPreferences(data.org.slug)
         .then((result) => {
           if (!live) return;
@@ -651,6 +659,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
           ? { kind: "ready", draft: { ...current.state.draft, ...patch } }
           : current.state,
       revision: current.revision + 1,
+      dirty: true,
       outcome: null,
     }));
   }
@@ -674,6 +683,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
                 ...current,
                 state: { kind: "ready", draft: result.value },
                 outcome: "saved",
+                dirty: false,
               }
             : current,
         );

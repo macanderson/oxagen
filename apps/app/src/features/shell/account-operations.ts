@@ -21,11 +21,13 @@ export type PreferencesSnapshot = {
   state: PreferencesState;
   outcome: "saved" | "invalid" | "denied" | "failed" | null;
   revision: number;
+  dirty: boolean;
 };
 const INITIAL_PREFERENCES: PreferencesSnapshot = {
   state: { kind: "loading" },
   outcome: null,
   revision: 0,
+  dirty: false,
 };
 const preferencesByAccount = new Map<string, PreferencesSnapshot>();
 const avatarsByAccount = new Map<
