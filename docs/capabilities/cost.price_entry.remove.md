@@ -44,7 +44,7 @@ One token class per call, for the same reason `set_price_entry` takes one: a tok
 |---|---|---|
 | `at` | string | the instant the negotiated rate stopped applying |
 | `closed` | object or null | the row that was in effect at `at`, as closed, in the `cost.price_entry.list` entry shape, or null when nothing was in effect at that instant |
-| `fallbackPriced` | boolean | whether a list, override or other negotiated row still prices this model and class from `at` on. False means the class has no fallback and is now unpriced, not list-priced — callers must say so rather than repeat the usual "falls back to the list price" line. Always true when `closed` is null, since nothing changed. |
+| `fallbackPriced` | boolean | whether a list, override or other negotiated row still prices this model and class from `at` on. False means the class has no fallback and is now unpriced, not list-priced — callers must say so rather than repeat the usual "falls back to the list price" line. Resolved from the current book when `closed` is null. |
 
 Re-ending a class this organization has already ended answers `closed: null` and changes nothing, so a retry is safe. So is a retry after a cancellation: a scheduled row that never began is deleted when it is cancelled, and the retry finds nothing and answers the same null close. A key this organization never negotiated gets that answer too.
 
@@ -68,3 +68,13 @@ Emits `billing.plan_changed` (SOC 2 CC6.3), whether or not a row was open: the r
 ## Tenancy
 
 The write runs through `withTenantDb` in the caller's scope and reads only the caller's rows; a list row (`org_id` null) is never read or updated. The handler refuses an organization on a dedicated Postgres plane before the store is called, because `loadPriceBook` and the rollup read the price book from the shared plane (ADR-042).
+
+## Cancel one scheduled rate
+
+Pass `scheduledEntryId` with the model, provider, class, and region key to cancel only that future row. Omit `at`. The transaction deletes the selected row, restores its predecessor's end to the cancelled row's previous end, and retains later scheduled rows. A missing selected row is an idempotent no-op. A row that has already started returns `price_entry_already_started`.
+
+The store takes the negotiated class and key locks before checking the start time. If extending the predecessor would overlap another negotiated model identity, it refuses with `price_entry_alias_conflict` before changing either row. Cancellation does not remove current pricing, so it does not require `confirmUnpriced`.
+
+CLI: `oxagen price remove --provider <provider> --model <model> --token-class <class> --scheduled-entry-id <id>`.
+
+The app uses `cancellationToken` instead of the database ID. The management read encrypts and authenticates the row identity, organization, model key, source, and start instant under a domain-specific key derived from `BETTER_AUTH_SECRET`. The handler refuses a token for another organization or key, a changed row, or a tampered token before the store write. Key rotation invalidates existing tokens; refresh the price book to obtain a new one.

@@ -1,4 +1,7 @@
 /**
+ * `scheduledEntryId` cancels only one future row, restores its predecessor,
+ * and retains later scheduled rows. An already-started row is refused.
+ *
  * `remove_price_entry`: end this organization's negotiated rate for one model
  * and token class (Mission Control spec §12.2; ADR-060 §1). From `at` on, the
  * frame resolves to the provider list price again — when one exists.
@@ -81,6 +84,10 @@ export const costPriceEntryRemove = registerCapability({
       region: z.string().min(1).max(64).nullable().optional(),
       /** RFC 3339; the write instant when omitted. Must be after the row starts. */
       at: z.string().datetime().optional(),
+      /** Cancel only this future row, restoring its predecessor and keeping later rates. Cannot be combined with at. */
+      scheduledEntryId: z.string().uuid().optional(),
+      /** Opaque app alternative to scheduledEntryId, issued by the management read. */
+      cancellationToken: z.string().max(4096).optional(),
       /**
        * Required (true) when closing this row would leave the class with no
        * list, override or other negotiated fallback — the handler checks
@@ -101,7 +108,7 @@ export const costPriceEntryRemove = registerCapability({
        * model and class from `at` on. False means the class has no fallback
        * and is now unpriced, not list-priced — the caller must say so rather
        * than repeat the usual "falls back to the list price" line. Always
-       * true when `closed` is null: nothing changed.
+       * resolved again when `closed` is null, including cancellation retries.
        */
       fallbackPriced: z.boolean(),
     })

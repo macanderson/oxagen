@@ -32,6 +32,8 @@ import { assertDataPlaneUsable, resolveDataPlane } from "@oxagen/tenancy";
 import { logger } from "./logger";
 import { toPriceEntryDto } from "./lib/price-entry-dto";
 
+import { openPriceCancellation } from "./lib/price-cancellation-token";
+
 export type PriceEntryRemoveDeps = {
   closeNegotiatedPriceEntry: (args: {
     orgId: string;
@@ -40,6 +42,7 @@ export type PriceEntryRemoveDeps = {
     tokenClass: PriceTokenClass;
     region?: string | null;
     at?: Date;
+    scheduledEntryId?: string;
   }) => Promise<NegotiatedPriceClose>;
   /**
    * Read BEFORE the close, so the handler can refuse rather than leave the
@@ -111,7 +114,49 @@ export function createPriceEntryRemoveHandler(
     // close, and a race between this read and the store's own lock wait is
     // no worse than the same race the store already runs against a
     // concurrent write.
+    let scheduledEntryId = input.scheduledEntryId;
+    const cancellation =
+      input.cancellationToken === undefined
+        ? undefined
+        : openPriceCancellation(input.cancellationToken);
+    if (cancellation !== undefined) {
+      if (
+        scheduledEntryId !== undefined ||
+        cancellation.orgId !== ctx.orgId ||
+        cancellation.provider !== input.provider ||
+        cancellation.model !== input.model ||
+        cancellation.tokenClass !== input.tokenClass ||
+        cancellation.region !== (input.region ?? null)
+      )
+        throw new HandlerError({
+          code: "conflict",
+          reason: "price_cancellation_invalid",
+          message:
+            "This cancellation token does not match the selected rate. Refresh the price book.",
+        });
+      scheduledEntryId = cancellation.id;
+    }
+    if (scheduledEntryId !== undefined && input.at !== undefined)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "scheduled_cancellation_at",
+        message: "Omit at when cancelling a scheduled rate.",
+      });
     const preCloseBook = await deps.loadPriceBook({ orgId: ctx.orgId });
+    const selected =
+      cancellation === undefined
+        ? undefined
+        : preCloseBook.find((entry) => entry.id === cancellation.id);
+    if (
+      selected &&
+      (selected.source !== cancellation?.source ||
+        selected.effectiveFrom.toISOString() !== cancellation.effectiveFrom)
+    )
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_cancellation_invalid",
+        message: "The selected rate changed. Refresh the price book.",
+      });
     const guardAt = input.at === undefined ? new Date() : new Date(input.at);
     const activeOwnRow = resolvePriceEntry(preCloseBook, {
       orgId: ctx.orgId,
@@ -138,7 +183,12 @@ export function createPriceEntryRemoveHandler(
         ) !== null
       : true;
 
-    if (hasActiveOwnRow && !wouldFallback && input.confirmUnpriced !== true)
+    if (
+      scheduledEntryId === undefined &&
+      hasActiveOwnRow &&
+      !wouldFallback &&
+      input.confirmUnpriced !== true
+    )
       throw new HandlerError({
         code: "conflict",
         reason: "price_entry_close_would_unprice",
@@ -159,6 +209,7 @@ export function createPriceEntryRemoveHandler(
       tokenClass: input.tokenClass,
       region: input.region ?? null,
       at: input.at === undefined ? undefined : new Date(input.at),
+      ...(scheduledEntryId === undefined ? {} : { scheduledEntryId }),
     });
 
     // Nothing was actually closed (already ended, or never negotiated): the

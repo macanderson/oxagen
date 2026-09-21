@@ -4053,6 +4053,11 @@ type Messages = {
         until: string;
         anyRegion: string;
         platformPriced: string;
+        scheduled: string;
+        pagination: string;
+        previous: string;
+        next: string;
+        page: string;
       };
       dialog: {
         open: string;
@@ -4100,6 +4105,8 @@ type Messages = {
         confirmUnpriced: string;
         confirmUnpricedSubmit: string;
         confirmUnpricedCancel: string;
+        cancelScheduled: string;
+        cancelScheduledSubmit: string;
       };
       failure: {
         orgRoleRequired: string;
