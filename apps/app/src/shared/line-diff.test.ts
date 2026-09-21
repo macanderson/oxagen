@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDiff, diffStat } from "./line-diff";
-
-// Not part of the module's production surface (only `buildDiff` itself calls
-// either), so they hang off `buildDiff.testing`; see the comment on that
-// assignment in `line-diff.ts`.
-const { DIFF_CONTEXT, diffLines } = buildDiff.testing;
+import { buildDiff, DIFF_CONTEXT, diffLines, diffStat } from "./line-diff";
 
 describe("diffStat", () => {
   it("counts nothing for an unchanged draft", () => {

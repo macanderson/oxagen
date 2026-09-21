@@ -3,12 +3,9 @@ import {
   type CodeToken,
   languageForPath,
   tokenizeCode,
+  tokenizeJson,
+  tokenizeShell,
 } from "./code-highlight";
-
-// Not part of the module's production surface (only `tokenizeCode` itself
-// calls either), so they hang off `tokenizeCode.testing`; see the comment on
-// that assignment in `code-highlight.ts`.
-const { tokenizeJson, tokenizeShell } = tokenizeCode.testing;
 
 /** The tokens, rejoined. Every scanner must rebuild its source exactly. */
 function rebuild(tokens: readonly CodeToken[]): string {

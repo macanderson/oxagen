@@ -25,12 +25,8 @@ const DEFAULT_PROMPT = "Reply with exactly the word OK and nothing else.";
 const BINARY: Record<WrappedHarness, string> = {
   "claude-code": "claude",
   codex: "codex",
-  // Cursor's CLI binary is `agent` (verified 2026-09-18 against
-  // https://cursor.com/docs/cli/installation, fetched that day); the
-  // installer also links `cursor-agent`, which `cursorFacts` probes first.
-  // This is only the name the messages use, and `agent` is the one Cursor's
-  // own docs use; what is actually spawned is the path the probe found.
-  cursor: "agent",
+  // The probe requires Cursor's unambiguous alias, not a generic agent binary.
+  cursor: "cursor-agent",
   stella: "stella",
 };
 

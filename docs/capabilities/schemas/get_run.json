@@ -612,7 +612,8 @@
                 "cost"
               ],
               "additionalProperties": false
-            }
+            },
+            "maxItems": 500
           },
           "cursor": {
             "anyOf": [

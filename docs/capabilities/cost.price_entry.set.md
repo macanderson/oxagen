@@ -17,9 +17,11 @@ The row a new rate supersedes is **closed, never overwritten**: `effective_to` i
 - Capability name: `set_price_entry`
 - Not billed (`noBillingGate: true`). IAM default-deny; **high** sensitivity.
 
-## Why one token class per call
+## Atomic cards
 
-A negotiated contract usually names several classes at once, so a whole-card input is the shape a human has in front of them. It is not the shape the store can honour: `cost.price_entries` holds one row per (provider, model, token class, region, `effective_from`), each effective-dated on its own, and the writer upserts one row per statement. A four-class card would be four statements, and a failure after the second would leave the organization priced at a blend — negotiated input, list output — that nobody agreed to and that nothing in the book would flag. One class per call keeps the capability atomic on exactly the row the resolver later picks. A whole card is a loop with one `effectiveFrom` for every class; `oxagen price set` is that loop's one step.
+`additionalRates` adds other token classes for the same provider and model. All classes share the aliases and effective instant. The writer locks the classes in sorted order, then commits every row in one Postgres transaction. A failure rolls back the whole card. A concurrent rollup reads the complete old card until commit and the complete new card afterward.
+
+The Pricing dialog submits one card per call. CLI callers use repeatable `--additional-rate output=15` flags. Existing calls without additional rates keep their input and output shape. This choice preserves immediate pricing without a future activation delay or a separate repricing path (#3323).
 
 ## Input
 
@@ -29,6 +31,7 @@ A negotiated contract usually names several classes at once, so a whole-card inp
 | `model` | string | yes | 1–256 chars; the canonical model id the frame reports |
 | `tokenClass` | enum | yes | `input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning`, `server_tool_request`, `embedding_input`, `rerank`, `image`, `video_second` |
 | `usdPerMillion` | number | yes | ≥ 0, ≤ 1,000,000 — USD per one million units, as the contract reads it (`2.40`, not `2400000`); recorded to the nearest micro-USD |
+| `additionalRates` | array | no | 1 to 10 objects with distinct `tokenClass` and `usdPerMillion`; cannot repeat the primary class |
 | `region` | string or null | no | null (default) is the region-agnostic row |
 | `modelAliases` | string[] | no | up to 32; extra ids the rate also prices; replaces the stored list |
 | `effectiveFrom` | string | no | RFC 3339; the write instant when omitted. Never earlier than the open row's |
@@ -40,6 +43,7 @@ The `unit` is derived from the token class (`token`, `request`, `image` or `seco
 | Field | Type | Description |
 |---|---|---|
 | `entry` | object | the row now in effect for the key, in the `cost.price_entry.list` entry shape |
+| `additionalEntries` | array, optional | each additional class's `entry` and `closed`, in input order; present only for a card |
 | `closed` | object or null | the row this write closed at `effectiveFrom`, or null when nothing was open for the key or the write corrected a row that had not shipped yet |
 
 ## Errors

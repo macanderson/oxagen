@@ -94,8 +94,10 @@ function read(src: string, at: number, re: RegExp): string | null {
  * accent and everything after it is an argument. "Command position" resets
  * after a pipe, a `&&`, a `;` and a newline, so every command in a chain is
  * found, not just the first.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
-function tokenizeShell(source: string): CodeToken[] {
+export function tokenizeShell(source: string): CodeToken[] {
   const tokens: CodeToken[] = [];
   let pos = 0;
   // True while the next bare word would be the command rather than an argument.
@@ -171,8 +173,12 @@ const JSON_LITERAL = /(?:true|false|null)\b/y;
 const JSON_SPACE = /[ \t\r\n]+/y;
 const JSON_PUNCT = /[{}[\],:]/y;
 
-/** JSON as coloured tokens. A string before a `:` is a key, not a value. */
-function tokenizeJson(source: string): CodeToken[] {
+/**
+ * JSON as coloured tokens. A string before a `:` is a key, not a value.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
+export function tokenizeJson(source: string): CodeToken[] {
   const tokens: CodeToken[] = [];
   let pos = 0;
   const push = (kind: CodeTokenKind, text: string) => {
@@ -225,19 +231,6 @@ export function tokenizeCode(
 ): CodeToken[] {
   return SCANNERS[language](source);
 }
-
-/**
- * `knip --production --strict` (INV-16, `apps/app/ARCHITECTURE.md` §4) reads
- * a test-only export as dead code, since production traversal never opens a
- * test file. `tokenizeShell` and `tokenizeJson` are exercised directly by
- * `code-highlight.test.ts`, so they hang off `tokenizeCode`, which
- * production already imports, rather than carry their own export (see the
- * matching comment on `toolDetail` in `../features/run/tool-detail.ts`).
- * A direct property, not `Object.assign` (INV-02 bans it everywhere but the
- * viewer seam): the compiler widens `tokenizeCode`'s own type to include it
- * without a cast.
- */
-tokenizeCode.testing = { tokenizeShell, tokenizeJson };
 
 /**
  * The language a file's contents are painted in, from its path.

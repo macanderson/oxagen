@@ -124,10 +124,6 @@ export function CodePanel({
   const folded = !open && lines.length > budget;
   const shown = folded ? lines.slice(0, budget) : lines;
   const width = String(startLine + lines.length - 1).length;
-  // Numbered ahead of the render map so the row key comes from the line's
-  // own number, a stable identity for this pane, rather than from the
-  // render pass's array position.
-  const numbered = shown.map((line, i) => ({ line, lineNo: startLine + i }));
 
   return (
     <div className="overflow-hidden rounded-md border border-border bg-code-bg">
@@ -139,13 +135,14 @@ export function CodePanel({
       <div id={id} className={`${codeText} overflow-x-auto p-2.5`}>
         <table className="w-full border-collapse">
           <tbody>
-            {numbered.map(({ line, lineNo }) => (
-              <tr key={lineNo}>
+            {shown.map((line, index) => (
+              // eslint-disable-next-line @eslint-react/no-array-index-key -- the key is the source line number, which is unique and stable; these rows are never reordered, filtered, or inserted into
+              <tr key={startLine + index}>
                 <td
                   className={`${gutter} w-px align-top`}
                   style={{ minWidth: `${String(width)}ch` }}
                 >
-                  {lineNo}
+                  {startLine + index}
                 </td>
                 <td className="whitespace-pre-wrap break-words align-top text-foreground">
                   {line === "" ? " " : paint(line, language)}
@@ -222,18 +219,12 @@ export function DiffPanel({
       <div className={`${codeText} overflow-x-auto`}>
         {diff.hunks.map((hunk) => (
           <table
-            // A hunk's start lines are strictly increasing across the diff,
-            // so this pair is already a stable, unique key without the
-            // render pass's array position.
             key={`${String(hunk.beforeStart)}-${String(hunk.afterStart)}`}
             className="w-full border-collapse border-t border-border first:border-t-0"
           >
             <tbody>
               {hunk.lines.map((line) => (
                 <tr
-                  // Line numbers only repeat across a change (a "del" and an
-                  // "add" can share neither side), so op plus both sides is
-                  // already unique within a hunk without the row index.
                   key={`${line.op}-${String(line.before ?? "n")}-${String(line.after ?? "n")}`}
                   className={OP_ROW[line.op]}
                 >

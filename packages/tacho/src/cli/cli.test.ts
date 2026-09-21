@@ -2840,6 +2840,18 @@ describe("cursor", () => {
     apiUrl: "https://api.test",
   };
 
+  it("names the required Cursor alias when the probe cannot find it", async () => {
+    const d = deps({ cursor: () => ({}) });
+    const result = await enroll({ ...WHERE, harnesses: ["cursor"] }, d);
+    expect(result.warnings.join("\n")).toContain(
+      "`cursor-agent` alias is not on PATH",
+    );
+    expect(await verify({ harness: "cursor" }, d)).toMatchObject({
+      ok: false,
+      detail: "`cursor-agent` is not on PATH",
+    });
+  });
+
   it("writes hooks, reports them, and unenroll takes them back out", async () => {
     const d = deps({ claude: () => ({}) });
     // scratchPaths sets CURSOR_CONFIG_DIR, so two files are written: nothing
@@ -2897,7 +2909,9 @@ describe("cursor", () => {
       command: "/usr/local/bin/audit.sh",
     });
     expect(d.lines.join("\n")).toContain(`Cursor: ${primary}`);
-    expect(d.lines.join("\n")).toContain("agent 2026.09.10 at /usr/local/bin/agent");
+    expect(d.lines.join("\n")).toContain(
+      "agent 2026.09.10 at /usr/local/bin/agent",
+    );
 
     const report = await status({ json: true }, d);
     expect(report.host?.cursor_version).toBe("2026.09.10");
