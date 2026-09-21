@@ -199,10 +199,14 @@ describe("tenant policy manifest", () => {
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 115: `skills.config_versions` and `skills.resolutions` are this
+    // 116: `skills.config_versions` and `skills.resolutions` are this
     // branch's versioned skill-resolution config and the per-run record of
     // which version answered. Both carry org_id and workspace_id and are
     // read and written through withTenantDb, so both are `standard`.
+    //
+    // Was 114 as of billing.usage_outbox, which retains scoped usage
+    // delivery state. Both sides of this merge branched from 113, so the
+    // merged manifest holds 113 + 2 + 1.
     //
     // Was 113 as of `org.assistant_model_keys` (ADR-131), the OpenRouter key
     // Oxagen mints for one organisation at signup. One row per
@@ -244,7 +248,7 @@ describe("tenant policy manifest", () => {
     // said 91, so it had already drifted from the number it was describing — a
     // count nobody can check against its own comment is a pin with no ratchet
     // behind it.
-    expect(POLICY_MANIFEST.length).toBe(115);
+    expect(POLICY_MANIFEST.length).toBe(116);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

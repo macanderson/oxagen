@@ -3200,6 +3200,7 @@ type Messages = {
       loadedMore: string;
       badCursor: string;
       pageFailed: string;
+      followDenied: string;
       followLost: string;
       followSealed: string;
       request: string;
@@ -5067,8 +5068,12 @@ type Messages = {
     };
     runStatus: {
       live: string;
-      sealed: string;
-      halted: string;
+      running: string;
+      completed: string;
+      failed: string;
+      cancelled: string;
+      crashed: string;
+      unknown: string;
     };
     generated: {
       label: string;

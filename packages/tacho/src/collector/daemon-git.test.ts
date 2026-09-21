@@ -9,7 +9,7 @@
  * git context, so a checkout that went detached stops reporting the branch
  * it left.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { writeSensitiveFileAtomic } from "../host/fs";
 import { readHostFile, writeHostFile } from "../host/host-file";
 import { mergeTachoSettings } from "../host/settings-writer";
@@ -79,7 +79,7 @@ describe("the daemon's git seam", () => {
     execAsync?: ExecAsync,
     // Called on every control-plane request, so a test can record where the
     // poll falls relative to the git spawns.
-    onFetch?: () => void,
+    onFetch?: (url: string) => void,
     // Run the real interval driver, for the one case that is about the driver's
     // `ticking` guard rather than about the order inside a single tick.
     driver?: { shipMs: number },
@@ -109,8 +109,8 @@ describe("the daemon's git seam", () => {
     );
     const handle = await startDaemon({
       paths,
-      fetch: async () => {
-        onFetch?.();
+      fetch: async (url) => {
+        onFetch?.(url);
         throw new Error("ECONNREFUSED");
       },
       exec,
@@ -144,6 +144,35 @@ describe("the daemon's git seam", () => {
       (event) => event.kind === "oxagen:worktree_reconciled",
     );
   }
+
+  it("continues command polling, reconciliation, and compaction after a body read fails", async () => {
+    const calls: string[][] = [];
+    const requests: string[] = [];
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, calls),
+      () => 3_600_000,
+      undefined,
+      (url) => requests.push(url),
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    const bodies = vi
+      .spyOn(handle.wal, "bodiesFor")
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error("body stream failed"), { code: "EIO" });
+      });
+    const compact = vi.spyOn(handle.wal, "compact");
+    requests.length = 0;
+    await expect(handle.tick()).resolves.toBeUndefined();
+    expect(handle.shipper.lastError).toBe("body stream failed");
+    expect(handle.shipper.ready()).toBe(false);
+    expect(handle.wal.unshipped(100).length).toBeGreaterThan(0);
+    expect(requests.some((url) => url.endsWith("/commands"))).toBe(true);
+    expect(reconciliations(handle)).toHaveLength(1);
+    expect(compact).toHaveBeenCalledOnce();
+    bodies.mockRestore();
+    compact.mockRestore();
+  });
 
   it("spawns no git while a hook is being answered", async () => {
     const calls: string[][] = [];
