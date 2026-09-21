@@ -1,0 +1,148 @@
+# A pull request that changes a schema carries `migration-required`, applied
+# here rather than asked of the author (SCR-006).
+#
+# WHY THIS IS A WORKFLOW AND NOT A CHECKLIST
+#
+# The rule it enforces has been written down before and obeyed four times out
+# of five. #1275, #2796, #3449 and #3692 are all one failure: a schema change
+# merged, deployed, and its migration never reached production. Every one of
+# them had a human or an agent who could have remembered. So this does not
+# remind anybody — it reads the diff and applies the label, and re-applies it
+# if someone takes it off while the diff still changes a schema.
+#
+# `migration-gate` in pipeline.yml is what actually stops the bad deploy. This
+# is the other half: the gate acts at deploy time, when the change is already
+# on main and the person who wrote it has moved on. The label acts while the
+# pull request is open and its author is still reading it, which is the only
+# moment the migration is cheap to sequence.
+#
+# WHAT IT DOES NOT DO
+#
+# It applies no migration and blocks no merge. CLAUDE.md sends production
+# applies through the manual `db-migrate.yml` and `store-migrate.yml`
+# workflows, and #3653 leaves "may CI apply migrations" a maintainer decision.
+# A label is a statement about the diff, which is exactly as much as this can
+# know: whether the migration SHOULD be applied before this deploy is a
+# judgement about production, and `migration-gate` is where that is made,
+# against the real stores.
+name: migration-label
+
+on:
+  pull_request_target:
+    # `unlabeled` is the interesting one. Without it the label is a suggestion
+    # anybody can dismiss; with it, removing the label re-triggers this and the
+    # label comes back while the diff still warrants it. Removing it for real
+    # means removing the schema change.
+    types: [opened, synchronize, reopened, unlabeled]
+
+# pull_request_target runs against the BASE repo with a writable token, which
+# is why it can label a pull request at all. It therefore must never check out
+# or execute the head branch's code — it does neither: the only thing it reads
+# from the fork is the list of changed file PATHS, through the API.
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: migration-label-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const LABEL = 'migration-required'
+            const pr = context.payload.pull_request
+            const { owner, repo } = context.repo
+
+            // Every path whose change means production carries a schema this
+            // branch no longer matches. Kept as a literal list rather than a
+            // loose "anything with migration in the name", so that adding a
+            // store is a deliberate edit with a reviewer — the same reasoning
+            // scr-corpus-check.mjs gives for listing its five repos.
+            //
+            // Postgres appears twice on purpose. The atlas/ directory is the
+            // migration itself; src/schema is Drizzle, which is the source of
+            // truth Atlas reads. A schema edit with no migration beside it is
+            // the more dangerous of the two, because nothing downstream has
+            // anything to apply — so it must label too, not only the case
+            // where the author already remembered.
+            const WATCHED = [
+              { prefix: 'packages/database/atlas/migrations/', store: 'Postgres (migration)' },
+              { prefix: 'packages/database/src/schema/',       store: 'Postgres (Drizzle schema)' },
+              { prefix: 'packages/telemetry/src/migrations/',  store: 'ClickHouse' },
+              { prefix: 'packages/ontology/src/schema.cypher', store: 'Neo4j' },
+            ]
+
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              { owner, repo, pull_number: pr.number, per_page: 100 },
+            )
+
+            // A deleted file still changes the schema the branch declares, so
+            // status is not filtered on.
+            const hits = []
+            for (const { filename } of files) {
+              for (const w of WATCHED) {
+                if (filename.startsWith(w.prefix)) hits.push({ filename, store: w.store })
+              }
+            }
+
+            const names = (pr.labels || []).map(l => (typeof l === 'string' ? l : l.name))
+            const labelled = names.includes(LABEL)
+
+            if (hits.length === 0) {
+              // The label is removed when the schema change is gone, so it
+              // never outlives the diff that justified it. A stale red label
+              // is worse than none: it teaches the next reader to discount it.
+              if (labelled) {
+                await github.rest.issues.removeLabel({
+                  owner, repo, issue_number: pr.number, name: LABEL,
+                }).catch(() => {})
+                core.info(`removed ${LABEL}: no schema paths remain in the diff`)
+              } else {
+                core.info('no schema paths in the diff')
+              }
+              return
+            }
+
+            const stores = [...new Set(hits.map(h => h.store))].sort()
+            core.info(`${hits.length} schema file(s) touched: ${stores.join(', ')}`)
+
+            if (labelled) {
+              core.info(`${LABEL} already present`)
+              return
+            }
+
+            await github.rest.issues.addLabels({
+              owner, repo, issue_number: pr.number, labels: [LABEL],
+            })
+
+            // Commented once, on the transition to labelled, so a long-lived
+            // branch that keeps touching schema files does not accumulate a
+            // comment per push. Re-labelling after a manual removal does
+            // comment again, which is intended: that is a new decision to
+            // argue with.
+            const list = hits
+              .map(h => `- \`${h.filename}\` — ${h.store}`)
+              .sort()
+              .join('\n')
+
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: pr.number,
+              body:
+                `Labelled \`${LABEL}\`: this branch changes a schema.\n\n${list}\n\n` +
+                'Production must carry the migration **before or with** the deploy of this change. ' +
+                'Apply it with the **DB Migrate (manual)** workflow for Postgres, or ' +
+                '**Store Migrate (manual)** for ClickHouse and Neo4j.\n\n' +
+                'Merging is not blocked. `migration-gate` in `pipeline.yml` holds the deploy ' +
+                'until the stores actually carry the schema, so an unapplied migration stops ' +
+                'the rollout rather than breaking production — but it stops it after merge, ' +
+                'when you have moved on. Sequencing it now is cheaper.\n\n' +
+                'Removing this label re-adds it while the diff still changes a schema (SCR-006).',
+            })
+            core.info(`applied ${LABEL}`)
