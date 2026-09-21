@@ -25,6 +25,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { codexHookPresence } from "../host/codex-writer";
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
+import { modelBaseUrlBackupPath } from "../host/model-base-url";
 import { readHostFile } from "../host/host-file";
 import { tachoHookPresence } from "../host/settings-writer";
 import { readStellaHooksFile, stellaHookPresence } from "../host/stella-writer";
@@ -43,7 +44,9 @@ import {
   USER_CLAUDE_SETTINGS,
 } from "./install-rig";
 import { status } from "./status";
+import { serviceManagerFor } from "../host/service";
 import { unenroll } from "./unenroll";
+import { reassign } from "./reassign";
 
 const ALL: TachoHarness[] = [
   "claude-code",
@@ -450,6 +453,169 @@ describe("install rig: failure injection", () => {
     expect(rig.requests).toEqual([]);
     expect(rig.serviceLoaded()).toBe(false);
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("uninstalls Codex despite an unrelated malformed Claude settings file", async () => {
+    const rig = buildRig(seedHome());
+    expect((await enroll({ harnesses: ["codex"] }, rig.deps)).ok).toBe(true);
+    writeFileSync(rig.deps.paths.claudeSettings, '{ "hooks": ');
+    const result = await unenroll({ purge: true }, rig.deps);
+    expect(result.revoked).toBe(true);
+    expect(rig.serviceLoaded()).toBe(false);
+    expect(existsSync(rig.deps.paths.deviceKey)).toBe(false);
+    expect(readFileSync(rig.deps.paths.codexHooks, "utf8")).not.toContain(
+      TEST_ENROLLMENT,
+    );
+    expect(
+      readFileSync(join(rig.deps.home, ".codex", "config.toml"), "utf8"),
+    ).not.toContain(String(RIG_GATEWAY_PORT));
+  });
+
+  it.each(["claude-code", "codex"] as const)(
+    "restores a dropped %s receipt after reassign",
+    async (dropped) => {
+      const rig = buildRig(seedHome());
+      expect(
+        (await enroll({ harnesses: ["claude-code", "codex"] }, rig.deps)).ok,
+      ).toBe(true);
+      const retained = dropped === "codex" ? "claude-code" : "codex";
+      expect((await reassign({ harnesses: [retained] }, rig.deps)).ok).toBe(
+        true,
+      );
+      expect(readHostFile(rig.deps.paths.hostFile)?.harnesses).toEqual([
+        retained,
+      ]);
+      const config =
+        dropped === "codex"
+          ? join(rig.deps.home, ".codex", "config.toml")
+          : rig.deps.paths.claudeSettings;
+      const routed = readFileSync(config, "utf8");
+      expect(routed).toContain(String(RIG_GATEWAY_PORT));
+      if (dropped === "claude-code") {
+        writeFileSync(config, "{broken");
+        expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(false);
+        expect(rig.serviceLoaded()).toBe(true);
+        expect(existsSync(rig.deps.paths.deviceKey)).toBe(true);
+        writeFileSync(config, routed);
+      }
+      expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+      expect(readFileSync(config, "utf8")).not.toContain(
+        String(RIG_GATEWAY_PORT),
+      );
+      expect(rig.serviceLoaded()).toBe(false);
+    },
+  );
+
+  it.each(["claude-code", "codex"] as const)(
+    "removes a dropped %s proxy URL when its receipt is missing",
+    async (dropped) => {
+      const rig = buildRig(seedHome());
+      expect(
+        (await enroll({ harnesses: ["claude-code", "codex"] }, rig.deps)).ok,
+      ).toBe(true);
+      const retained = dropped === "codex" ? "claude-code" : "codex";
+      expect((await reassign({ harnesses: [retained] }, rig.deps)).ok).toBe(
+        true,
+      );
+      rmSync(modelBaseUrlBackupPath(dropped, rig.deps.home));
+      const config =
+        dropped === "codex"
+          ? join(rig.deps.home, ".codex", "config.toml")
+          : rig.deps.paths.claudeSettings;
+      const routed = readFileSync(config, "utf8");
+      expect(routed).toContain(String(RIG_GATEWAY_PORT));
+      if (dropped === "claude-code") {
+        writeFileSync(config, routed.trimEnd().slice(0, -1));
+        expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(false);
+        expect(rig.serviceLoaded()).toBe(true);
+        writeFileSync(config, routed);
+      }
+      expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+      expect(readFileSync(config, "utf8")).not.toContain(
+        String(RIG_GATEWAY_PORT),
+      );
+      expect(rig.serviceLoaded()).toBe(false);
+    },
+  );
+
+  it.each(["missing", "malformed"])(
+    "sweeps every model URL when host metadata is %s",
+    async (state) => {
+      const rig = buildRig(seedHome());
+      expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+      if (state === "missing") rmSync(rig.deps.paths.hostFile);
+      else writeFileSync(rig.deps.paths.hostFile, "{broken");
+      writeFileSync(rig.deps.paths.claudeSettings, '{ "hooks": ');
+      const result = await unenroll({ purge: true }, rig.deps);
+      expect(result.ok).toBe(false);
+      expect(rig.serviceLoaded()).toBe(true);
+      expect(existsSync(rig.deps.paths.deviceKey)).toBe(true);
+      expect(result.warnings.join("\n")).toContain("gateway remains installed");
+    },
+  );
+
+  it("keeps credentials through a systemd reload failure and removes them on retry", async () => {
+    const rig = buildRig(seedHome({ platform: "linux" }));
+    expect((await enroll({ harnesses: ["codex"] }, rig.deps)).ok).toBe(true);
+    const key = readFileSync(rig.deps.paths.deviceKey);
+    let failReload = true;
+    const manager = serviceManagerFor({
+      platform: "linux",
+      home: rig.deps.home,
+      exec: (_command, args) => {
+        if (args.includes("is-active"))
+          return { status: 3, stdout: "inactive", stderr: "" };
+        if (args.includes("daemon-reload") && failReload)
+          return { status: 1, stdout: "", stderr: "no bus" };
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+    const deps = { ...rig.deps, serviceManager: manager };
+    expect((await unenroll({ purge: true }, deps)).revoked).toBe(false);
+    expect(readFileSync(deps.paths.deviceKey)).toEqual(key);
+    expect(existsSync(deps.paths.hostFile)).toBe(true);
+    expect(existsSync(manager.unitPath)).toBe(true);
+    failReload = false;
+    expect((await unenroll({ purge: true }, deps)).ok).toBe(true);
+    expect(existsSync(deps.paths.deviceKey)).toBe(false);
+    expect(existsSync(deps.paths.hostFile)).toBe(false);
+    expect((await unenroll({ purge: true }, deps)).ok).toBe(true);
+  });
+
+  it("returns the CLI and Desktop JSON status when Windows cannot inspect the process", async () => {
+    const rig = buildRig(seedHome());
+    expect((await enroll({ harnesses: ["codex"] }, rig.deps)).ok).toBe(true);
+    writeFileSync(rig.deps.paths.pid, "42");
+    const serviceManager = serviceManagerFor({
+      platform: "win32",
+      home: rig.deps.home,
+      pidPath: rig.deps.paths.pid,
+      exec: (command) =>
+        command === "tasklist"
+          ? { status: 1, stdout: "", stderr: "access denied" }
+          : { status: 0, stdout: "", stderr: "" },
+    });
+    const report = await status(
+      { json: true },
+      { ...rig.deps, serviceManager },
+    );
+    expect(report.enrolled).toBe(true);
+    expect(report.service?.running).toBeNull();
+    expect(report.service?.detail).toContain("Cannot inspect daemon pid 42");
+    const lines: string[] = [];
+    await status(
+      {},
+      { ...rig.deps, serviceManager, out: (line) => lines.push(line) },
+    );
+    expect(lines.join("\n")).toContain(
+      "state unknown: Cannot inspect daemon pid 42",
+    );
+    expect(JSON.parse(JSON.stringify(report)).service.detail).toContain(
+      "access denied",
+    );
+    expect(() => serviceManager.uninstall()).toThrow(
+      "Cannot inspect daemon pid 42",
+    );
   });
 
   it("preserves the gateway until broken settings can be restored on retry", async () => {

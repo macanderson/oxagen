@@ -193,7 +193,6 @@ describe("service removal failures", () => {
           ? { status: 4, stdout: "unknown", stderr: "" }
           : ok;
     const manager = serviceManagerFor({ platform: "linux", home, exec });
-    manager.install(spec(home));
     manager.uninstall();
     manager.uninstall();
     expect(existsSync(manager.unitPath)).toBe(false);

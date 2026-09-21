@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTachoStatus } from "./tacho-status";
+import { parseTachoStatus, serviceStatusText } from "./tacho-status";
 
 /** What `tacho status --json` prints for an enrolled host with both wrappers. */
 const ENROLLED = {
@@ -35,6 +35,24 @@ const ENROLLED = {
 };
 
 describe("parseTachoStatus", () => {
+  it("shows unknown process state and its inspection failure", () => {
+    const status = parseTachoStatus(
+      JSON.stringify({
+        ...ENROLLED,
+        service: {
+          kind: "windows-startup",
+          installed: true,
+          running: null,
+          detail: "tasklist denied",
+        },
+      }),
+    );
+    expect(status?.service?.running).toBeNull();
+    expect(serviceStatusText(status!.service!)).toBe(
+      "windows-startup state unknown: tasklist denied",
+    );
+  });
+
   it("keeps the members the panels show and drops the rest", () => {
     expect(parseTachoStatus(JSON.stringify(ENROLLED, null, 2))).toEqual({
       enrolled: true,
@@ -50,7 +68,12 @@ describe("parseTachoStatus", () => {
         missing: ["preToolUse"],
       },
       stellaHooks: { complete: false, present: [], missing: ["PreToolUse"] },
-      service: { kind: "launchd", installed: true, running: true },
+      service: {
+        kind: "launchd",
+        installed: true,
+        running: true,
+        detail: "pid 12",
+      },
       wal: { sessions: 2, unshipped: 7 },
     });
     // The CLI appends a newline; an unenrolled machine has nothing else.
