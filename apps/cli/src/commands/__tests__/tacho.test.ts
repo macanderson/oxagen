@@ -31,14 +31,25 @@ const outcomes = {
   },
   exportCommand: true,
 };
-vi.mock("@oxagen/tacho/cli", async () => ({
-  // The real parser: what the operator sees on a typo is its message, so
-  // the mock must not paper over it.
-  parseHarnesses: (
+// The real parser: what the operator sees on a typo is its message, so the
+// mock must not paper over it. It is pulled in `vi.hoisted`, which runs while
+// the file is evaluated, rather than inside the factory below. A factory is
+// evaluated on the first import of the mocked id, and that first import
+// happens inside the first test — so an `await vi.importActual` there spends
+// the module graph's transform cost (~1.2s on an idle machine) out of that
+// test's 5s budget. Under the nightly's parallel run over every package it
+// spends more than the whole budget: the first test times out, and the
+// half-applied mock then hands the second test the real `status`, which
+// throws on the fake deps. That is nightly #35579035588 and #35442768833.
+const { parseHarnesses: actualParseHarnesses } = await vi.hoisted(async () => {
+  const actual =
     await vi.importActual<typeof import("@oxagen/tacho/cli")>(
       "@oxagen/tacho/cli",
-    )
-  ).parseHarnesses,
+    );
+  return { parseHarnesses: actual.parseHarnesses };
+});
+vi.mock("@oxagen/tacho/cli", () => ({
+  parseHarnesses: actualParseHarnesses,
   defaultCliDeps: (overrides: Record<string, unknown>) => ({
     fake: true,
     ...overrides,
