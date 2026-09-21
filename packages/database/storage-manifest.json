@@ -2628,6 +2628,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "resend_member_invite",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "resolve_approval",
       "reads": [],
@@ -2728,6 +2738,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "revoke_member_invite",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -3561,7 +3581,7 @@
       "writes": []
     }
   ],
-  "contentHash": "653d28606071935168b5b5c3c720803e53f7f929963fafab9e7940ead8192eeb",
+  "contentHash": "dc4ab92e5ea415f7bcb57db57d56801ccd06cbd28055199e64eaa2d5bf9f8f4c",
   "domains": [
     {
       "name": "agent",

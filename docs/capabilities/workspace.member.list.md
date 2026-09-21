@@ -55,3 +55,5 @@ None (read-only). Queries Postgres inside the tenant scope (`withTenantDb`, RLS 
 ## Errors
 
 None explicitly defined in the contract. A scope outside `org | workspace` is refused by the input schema.
+
+Expired pending invitations remain in the organization read so an Owner or Admin can resend or revoke them. Expiry still prevents acceptance until a resend renews the invitation.
