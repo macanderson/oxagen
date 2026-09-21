@@ -70,6 +70,7 @@ A workspace-scoped call that names no workspace reads the whole organization for
 | `ip` | string \| null | Client IP, when recorded |
 | `userAgent` | string \| null | Client user agent, when recorded |
 | `requestId` | string \| null | Request id |
+| `detail` | object \| null (optional) | Stored event evidence. Approval-rule invalidations include the rule, tool, reason, and before/after facts. Legacy events return null. |
 
 ## Example
 
