@@ -59,152 +59,73 @@ jobs:
           role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
 
-      # Without the plugin `start-session` fails on "SessionManagerPlugin is
-      # not found", which reads like a missing instance rather than a missing
-      # package on the runner.
-      - name: Install the Session Manager plugin
-        run: |
-          set -euo pipefail
-          curl -fsSL -o /tmp/sm.deb \
-            "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
-          sudo dpkg -i /tmp/sm.deb
-          session-manager-plugin --version
-
-      # Neo4j keeps no migration ledger, so the only way to ask what it has is
-      # to ask it. cypher-shell comes from Neo4j's own apt repository; the
-      # runner has no Neo4j otherwise.
-      #
-      # The apt package tracks the latest Neo4j line, which needs Java 21; the
-      # runner's default is 17. On that Java cypher-shell prints "Unsupported
-      # Java 17 detected", exits 0, and returns no rows — for every query. The
-      # check read that as an empty database and filed "production is behind"
-      # against a store that carried the whole schema (#3036). So Java 21 is
-      # set up first, and the version check below insists on a version line
-      # rather than on an exit code, because the exit code is the thing that
-      # lied.
-      - name: Set up Java 21 for cypher-shell
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Install cypher-shell
-        run: |
-          set -euo pipefail
-          curl -fsSL https://debian.neo4j.com/neotechnology.gpg.key \
-            | sudo gpg --dearmor -o /usr/share/keyrings/neo4j.gpg
-          echo "deb [signed-by=/usr/share/keyrings/neo4j.gpg] https://debian.neo4j.com stable latest" \
-            | sudo tee /etc/apt/sources.list.d/neo4j.list > /dev/null
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq cypher-shell
-          version=$(cypher-shell --version 2>&1 || true)
-          echo "$version"
-          case "$version" in
-            *[Uu]nsupported*|*[Ee]rror*|"")
-              echo "::error::cypher-shell cannot run on this runner; every Neo4j query would return nothing and read as an empty store."
-              exit 1 ;;
-          esac
-
-      # By tag, not by a pinned id: the node is replaced whenever its user data
-      # changes, and a pinned id points at a terminated box after the first
-      # replacement. Same reasoning as the deploy and store-migrate.yml.
-      - name: Find the node
-        id: node
-        run: |
-          set -euo pipefail
-          INSTANCE=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=oxagen-app" \
-                      "Name=instance-state-name,Values=running" \
-            --query 'Reservations[].Instances[].InstanceId' --output text)
-          if [ "$(printf '%s' "$INSTANCE" | wc -w)" -ne 1 ]; then
-            echo "::error::expected exactly one running instance tagged Name=oxagen-app, got: $INSTANCE"
-            exit 1
-          fi
-          echo "instance=$INSTANCE" >> "$GITHUB_OUTPUT"
-          echo "node: $INSTANCE"
-
-      # Both stores bind 127.0.0.1 on the node and neither is exposed to the
-      # VPC, so a forwarded port is the only way in. Backgrounded, then waited
-      # on: `start-session` does not return once the tunnel is up.
-      - name: Open the tunnels
-        run: |
-          set -euo pipefail
-          open_tunnel() {
-            local remote=$1 local_port=$2 label=$3
-            aws ssm start-session \
-              --target "${{ steps.node.outputs.instance }}" \
-              --document-name AWS-StartPortForwardingSession \
-              --parameters "{\"portNumber\":[\"$remote\"],\"localPortNumber\":[\"$local_port\"]}" \
-              > "/tmp/tunnel-$label.log" 2>&1 &
-            echo $! > "/tmp/tunnel-$label.pid"
-          }
-          open_tunnel 8123 8123 clickhouse
-          open_tunnel 7687 7687 neo4j
-
-          # Waited for rather than slept through: SSM takes a few seconds and a
-          # fixed sleep is either short on a bad day or wasted on a good one.
-          for port in 8123 7687; do
-            opened=0
-            for _ in $(seq 1 30); do
-              if timeout 1 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/$port" 2>/dev/null; then
-                echo "  port $port is open"
-                opened=1
-                break
-              fi
-              sleep 2
-            done
-            # Naming the port that never opened turns "could not be read" into
-            # a cause. Not fatal here: the check below produces the right
-            # verdict either way, and a store answering over one tunnel while
-            # the other is dead is worth seeing rather than aborting on.
-            [ "$opened" = "1" ] || echo "::warning::port $port never opened after 60s"
-          done
-          echo "--- tunnel logs ---"
-          tail -3 /tmp/tunnel-*.log || true
-
-      - name: Read the production store config
-        run: |
-          set -euo pipefail
-          # Written to the environment file rather than echoed: these are
-          # SecureString values and a `set -x` here would print them.
-          # NEO4J_DATABASE is on this list for the same reason store-migrate.yml
-          # reads it: SHOW CONSTRAINTS and SHOW INDEXES answer for one database,
-          # and the applier writes to the one this parameter names. Omitting it
-          # pointed the check at the connection default and reported "0 present"
-          # about a database nothing migrates.
-          for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
-                     NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
-            value=$(aws ssm get-parameter --name "/oxagen/production/$key" \
-              --with-decryption --query Parameter.Value --output text)
-            echo "::add-mask::$value"
-            echo "$key=$value" >> "$GITHUB_ENV"
-          done
-          echo "read 8 parameters"
-
-      # The parameters name the stores as the node reaches them, over loopback.
-      # This runner reaches them over a forwarded port on its own loopback, so
-      # the host is right and only the scheme/port need to survive the trip.
-      # Rewritten here rather than in the script, because the tunnel is this
-      # workflow's arrangement and the script should not have to know about it.
-      - name: Point the endpoints at the tunnel
-        run: |
-          set -euo pipefail
-          echo "CLICKHOUSE_URL=http://127.0.0.1:8123/" >> "$GITHUB_ENV"
-          echo "NEO4J_URI=bolt://127.0.0.1:7687" >> "$GITHUB_ENV"
-          echo "endpoints point at the forwarded ports"
+      # The tunnel, the Session Manager plugin, cypher-shell on Java 21 and the
+      # Parameter Store read all moved to a composite action when
+      # pipeline.yml's `migration-gate` came to need the same setup. Every
+      # comment explaining why each step is shaped the way it is moved with it;
+      # read `.github/actions/open-store-tunnels/action.yml` before changing any
+      # of it. Two copies would drift, and the half that drifts is the half that
+      # reports a store unreadable for a reason already fixed next door.
+      - name: Open the store tunnels
+        uses: ./.github/actions/open-store-tunnels
 
       # The exit code is captured rather than allowed to fail the step, because
-      # the three outcomes this script distinguishes have to survive into the
+      # the three outcomes these scripts distinguish have to survive into the
       # reporting below. The run is failed at the end instead, so a red run
       # still means what it means.
       - name: Compare production against this repository
-        id: drift
+        id: stores
         run: |
           set +e
           bash infra/tools/check-store-drift.sh | tee /tmp/drift.txt
           code=${PIPESTATUS[0]}
           echo "code=$code" >> "$GITHUB_OUTPUT"
           exit 0
+
+      # Postgres was missing from this job until a fourth occurrence of #1275.
+      # This file's own header said why: "Postgres has `atlas migrate status`
+      # and a revision table to answer that; these two had neither a caller nor
+      # an equivalent." Postgres had the ANSWER and no CALLER — nothing in the
+      # repository ever asked it — so the store with the best instrumentation
+      # was the only one whose drift was invisible on every trigger, and it is
+      # the one that has taken production down.
+      #
+      # It needs no tunnel: Aurora is asked by sending `atlas migrate status`
+      # to the node over SSM, which is what run-db-migrations.sh does without
+      # --apply. It runs after the stores only so the tunnels above are not
+      # left idling through it.
+      - name: Compare production Postgres against this repository
+        id: pg
+        run: |
+          set +e
+          bash infra/tools/check-postgres-drift.sh | tee /tmp/pg-drift.txt
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # One verdict from three stores, with the precedence bump_status uses
+      # inside the scripts: unknown outranks behind, because the response to
+      # each is different. An empty code is a step that did not run, which is
+      # unknown and never current.
+      - name: Combine the verdicts
+        id: drift
+        env:
+          PG: ${{ steps.pg.outputs.code }}
+          STORES: ${{ steps.stores.outputs.code }}
+        run: |
+          set -uo pipefail
+          pg=${PG:-2}
+          stores=${STORES:-2}
+          if [ "$pg" = "2" ] || [ "$stores" = "2" ]; then code=2
+          elif [ "$pg" = "1" ] || [ "$stores" = "1" ]; then code=1
+          else code=0
+          fi
+          echo "postgres: $pg    clickhouse/neo4j: $stores    verdict: $code"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # Both outputs feed the issue body. Postgres first: it is the store
+          # whose drift had no other caller, so it is the one a reader is least
+          # likely to have heard about another way.
+          cat /tmp/pg-drift.txt /tmp/drift.txt > /tmp/combined.txt 2>/dev/null || true
 
       # Matches infra-drift.yml next door: found by a dedicated label rather
       # than by matching a title, closed only on a real clean answer, and
@@ -247,18 +168,20 @@ jobs:
             }
 
             let detail = ''
-            try { detail = fs.readFileSync('/tmp/drift.txt', 'utf8').slice(-6000) }
+            try { detail = fs.readFileSync('/tmp/combined.txt', 'utf8').slice(-6000) }
             catch { detail = '(output unavailable)' }
 
             const behind = code === '1'
             const title = behind
-              ? 'Production store schema is behind this repository'
+              ? 'Production database schema is behind this repository'
               : 'The store drift check could not read the stores'
 
             let body = behind
-              ? 'A committed ClickHouse or Neo4j migration has not reached production.\n\n'
-                + 'Apply it with the **Store Migrate (manual)** workflow, and read its pending list before setting `apply`: '
-                + 'a store whose ledger was lost reports its whole history as pending, and applying from there is not what you want.\n'
+              ? 'A committed migration has not reached production.\n\n'
+                + 'Apply it with the **Store Migrate (manual)** workflow for ClickHouse and Neo4j, or the **DB Migrate (manual)** '
+                + 'workflow for Postgres, and read the pending list before setting `apply`: a store whose ledger was lost reports '
+                + 'its whole history as pending, and applying from there is not what you want.\n\n'
+                + 'Until it is applied, `migration-gate` in pipeline.yml blocks every deploy of api and app.\n'
               : 'The check did not complete, so nothing here says the stores are current — this is not a drift report.\n\n'
                 + 'Usual causes are the SSM tunnel not coming up and a credential that no longer reads `/oxagen/production/*`.\n'
 
