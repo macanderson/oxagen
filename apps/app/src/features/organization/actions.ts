@@ -171,7 +171,7 @@ export async function createWorkspace(
  * never invoked, so a plain rename costs exactly what it always cost — no
  * GitHub round trip, no commit.
  */
-export type GovernanceDraft = {
+type GovernanceDraft = {
   /** A mode, or "" to leave the workspace steering as it already does. */
   mode: string;
   /**
