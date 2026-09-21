@@ -218,6 +218,59 @@ describe("legacy replacement keys", () => {
     );
     expect(request).toHaveBeenCalledOnce();
   });
+  it("names the three settings it needs rather than reaching a store it cannot address", async () => {
+    // An empty password is a password. Only an unset one is a missing setting,
+    // which is why the guard reads `pass === undefined` and not `!pass`.
+    for (const missing of [
+      "PRODUCTION_ANALYTICS_URL",
+      "PRODUCTION_ANALYTICS_USER",
+      "PRODUCTION_ANALYTICS_PASSWORD",
+    ]) {
+      env();
+      vi.stubEnv(missing, "");
+      if (missing === "PRODUCTION_ANALYTICS_PASSWORD") {
+        // Empty is accepted, so this one has to be genuinely unset to refuse.
+        const request = vi
+          .fn<typeof fetch>()
+          .mockResolvedValueOnce(new Response(""))
+          .mockResolvedValueOnce(new Response(""));
+        expect(await insertRows([next], request)).toBe(1);
+        vi.stubEnv(missing, undefined);
+      }
+      const request = vi.fn<typeof fetch>();
+      await expect(insertRows([next], request)).rejects.toThrow(
+        "Set PRODUCTION_ANALYTICS_URL, PRODUCTION_ANALYTICS_USER, PRODUCTION_ANALYTICS_PASSWORD",
+      );
+      expect(request).not.toHaveBeenCalled();
+      vi.unstubAllEnvs();
+    }
+  });
+  it("refuses an entry whose identity is not a pair of UUIDs", async () => {
+    // The identity goes into the lookup as SQL literals, so a value that is
+    // not a UUID is refused before it is interpolated rather than quoted.
+    env();
+    for (const row of [
+      { ...next, session_id: "not-a-uuid" },
+      { ...next, entry_uuid: "'); drop table internal.claude_sessions; --" },
+    ]) {
+      const request = vi.fn<typeof fetch>();
+      await expect(insertRows([row], request)).rejects.toThrow(
+        "Invalid backfill entry identity",
+      );
+      expect(request).not.toHaveBeenCalled();
+    }
+  });
+  it("reports the store's refusal of the insert, with its status and body", async () => {
+    env();
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(""))
+      .mockResolvedValueOnce(new Response("TOO_MANY_PARTS", { status: 500 }));
+    await expect(insertRows([next], request)).rejects.toThrow(
+      "ClickHouse 500: TOO_MANY_PARTS",
+    );
+    expect(request).toHaveBeenCalledTimes(2);
+  });
 });
 
 it.skipIf(!process.env["CLICKHOUSE_URL"])(
