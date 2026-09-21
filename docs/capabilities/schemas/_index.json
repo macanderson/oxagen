@@ -1,5 +1,5 @@
 {
-  "generatedCount": 337,
+  "generatedCount": 340,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1498,6 +1498,17 @@
       "consumes": []
     },
     {
+      "name": "get_skill_config",
+      "domain": "skill",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_spend",
       "domain": "spend",
       "surfaces": [
@@ -2590,6 +2601,17 @@
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "preview_skill_search",
+      "domain": "skill",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -3768,6 +3790,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "update_skill_config",
+      "domain": "skill",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
