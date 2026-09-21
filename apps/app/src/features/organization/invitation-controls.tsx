@@ -73,7 +73,9 @@ export function InvitationControls({
           type="button"
           className={buttonSecondary}
           disabled={!allowed || pending || outcome === "revoked"}
-          onClick={() => setConfirming(true)}
+          onClick={() => {
+            setConfirming(true);
+          }}
         >
           {t("revoke")}
         </button>
@@ -98,7 +100,9 @@ export function InvitationControls({
               type="button"
               className={buttonSecondary}
               disabled={pending}
-              onClick={() => setConfirming(false)}
+              onClick={() => {
+                setConfirming(false);
+              }}
             >
               {t("keepInvitation")}
             </button>
