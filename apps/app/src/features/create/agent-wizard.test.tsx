@@ -32,6 +32,10 @@ vi.mock("./actions", () => ({
   proposeSkill: vi.fn(),
 }));
 
+// Await real module transformation before asserting UI behavior.
+const { WIZARDS } = await import("./kinds");
+await Promise.all([WIZARDS.agent?.()]);
+
 const { CreateHost } = await import("./create-host");
 
 const t = translator("createAgent");

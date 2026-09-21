@@ -31,6 +31,10 @@ vi.mock("./bundle", async (importOriginal) => ({
   readBundle,
 }));
 
+// Await real module transformation before asserting UI behavior.
+const { WIZARDS } = await import("./kinds");
+await Promise.all([WIZARDS.skill?.()]);
+
 const { CreateHost } = await import("./create-host");
 const { BundleReadError } = await import("./bundle");
 
@@ -370,6 +374,75 @@ describe("the skill wizard: upload a bundle", () => {
     fireEvent.click(primary());
     return screen.findByTestId<HTMLInputElement>("wizard-bundle");
   }
+
+  it("previews and submits YAML-quoted names and versions from a differently named upload", async () => {
+    const body = BODY.replace(
+      "name: release-notes",
+      'name: "release-notes"',
+    ).replace("version: 2.2.0", 'version: "2.2.0"');
+    readBundle.mockResolvedValue({
+      fileName: "unrelated.skill",
+      size: body.length,
+      body,
+      files: [],
+      digest: DIGEST,
+    });
+    proposeSkill.mockResolvedValue(
+      opened({ name: "release-notes", version: "2.2.0" }),
+    );
+    const input = await toUpload();
+    fireEvent.change(input, {
+      target: { files: [new File([body], "unrelated.skill")] },
+    });
+    await screen.findByTestId("bundle-summary");
+    fireEvent.click(primary());
+    await screen.findByTestId("wizard-file");
+    expect(screen.getByTestId("derived")).toHaveTextContent("release-notes");
+    expect(screen.getByTestId("derived")).toHaveTextContent("2.2.0");
+    expect(primary()).toBeEnabled();
+    fireEvent.click(primary());
+    await screen.findByTestId("pr-branch");
+    await waitFor(() => expect(primary()).toBeEnabled());
+    fireEvent.click(primary());
+    await screen.findByTestId("pr-opened");
+    expect(proposeSkill).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      expect.objectContaining({ name: "release-notes", body }),
+    );
+  });
+
+  it.each([
+    "name: duplicate",
+    "other: &name value\nalias: *name",
+    "<<: {tools: shell}",
+    '"allowed-tools": [shell]',
+    '"permi\\u0073sions": {all: true}',
+  ])("blocks invalid YAML or grants at review: %s", async (extra) => {
+    const body = BODY.replace(
+      "scope: workspace:core-platform",
+      `scope: workspace:core-platform\n${extra}`,
+    );
+    readBundle.mockResolvedValue({
+      fileName: "release-notes.skill",
+      size: body.length,
+      body,
+      files: [],
+      digest: DIGEST,
+    });
+    const input = await toUpload();
+    fireEvent.change(input, {
+      target: { files: [new File([body], "release-notes.skill")] },
+    });
+    await screen.findByTestId("bundle-summary");
+    fireEvent.click(primary());
+    await screen.findByTestId("wizard-file");
+    expect(primary()).toBeDisabled();
+    expect(
+      screen.getByText(t("skill.review.invalidFrontmatter")),
+    ).toBeVisible();
+    expect(proposeSkill).not.toHaveBeenCalled();
+  });
 
   it("reads the bundle in the tab, shows its version and digest, and commits every file", async () => {
     readBundle.mockResolvedValue({

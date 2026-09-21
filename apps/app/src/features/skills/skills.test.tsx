@@ -170,6 +170,29 @@ afterEach(async () => {
 });
 
 describe("Skills › loaded", () => {
+  it.each([20, 23])(
+    "shows omitted harness names only above the cap (%s)",
+    async (count) => {
+      const model = inventory();
+      const [first] = model.skills;
+      if (!first) throw new Error("inventory() must hold at least one skill");
+      model.skills = [
+        {
+          ...first,
+          harnesses: Array.from(
+            { length: 20 },
+            (_, index) => `harness-${String(index)}`,
+          ),
+          harnessCount: count,
+        },
+      ];
+      read.mockResolvedValue(readOk(model));
+      await renderSkills();
+      if (count > 20) expect(screen.getByText("+3 more")).toBeVisible();
+      else expect(document.querySelector("[data-harness-omitted]")).toBeNull();
+    },
+  );
+
   it("states the window and its counts, and prints each reported name with its sessions, harnesses and last sighting", async () => {
     read.mockResolvedValue(readOk(inventory()));
     await renderSkills();

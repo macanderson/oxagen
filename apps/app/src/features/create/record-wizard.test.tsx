@@ -50,6 +50,10 @@ vi.mock("@/ui/navigation", async (importOriginal) => {
   };
 });
 
+// Await real module transformation before asserting UI behavior.
+const { WIZARDS } = await import("./kinds");
+await Promise.all([WIZARDS.record?.()]);
+
 const { CreateHost } = await import("./create-host");
 
 const t = translator("createRecord");
