@@ -1,0 +1,1 @@
+- [2026-09-20] Project a cancellation fence from the locked CTE after contention, and reject machine-key issuance before resolving its creator. (source: reflections/2026-09-20-ledger-ingress.md, agent: evidence-fixes)

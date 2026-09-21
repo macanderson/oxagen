@@ -16,6 +16,11 @@ import { runScope } from "./run.list";
 export const runTokenIssueHandler: CapabilityHandler<
   typeof runTokenIssue
 > = async (input, ctx) => {
+  if (ctx.apiKeyId)
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "operator_session_required",
+    });
   const userId = await resolveActingUserId(ctx);
   if (!userId)
     throw new HandlerError({ code: "forbidden", reason: "operator_required" });

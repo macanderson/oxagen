@@ -51,6 +51,13 @@ beforeEach(() => {
 });
 afterEach(clearDataPlaneResolver);
 describe("run credential issuance", () => {
+  it("refuses a machine key even when its creator is an operator", async () => {
+    await expect(
+      runTokenIssueHandler(input, { ...ctx, apiKeyId: "key_operator" }),
+    ).rejects.toMatchObject({ reason: "operator_session_required" });
+    expect(mocks.actor).not.toHaveBeenCalled();
+    expect(mocks.tenant).not.toHaveBeenCalled();
+  });
   it("refuses a dedicated plane before minting an unusable credential", async () => {
     setDataPlaneResolver(async (orgId, kind) => ({
       orgId,
