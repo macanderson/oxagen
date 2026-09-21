@@ -323,9 +323,10 @@ macanderson org repos.
   Build and test only the crates/packages/modules touched by the change
   (plus direct dependents on interface changes). The full suite is CI's job.
   Here: `pnpm --filter <package> test:unit <file>.test.ts`, never bare `pnpm test`
-  or `turbo run test:unit`. **Not `... test`**: no package in this repository
-  defines a `test` script, so `pnpm --filter <package> test` exits 0 having run
-  nothing at all.
+  or `turbo run test:unit`. **Not `... test`**: no workspace package defines a
+  `test` script, so `pnpm --filter <package> test` exits 0 having run nothing at
+  all. Only the repo root defines one, and it is `turbo run test:unit`, the full
+  suite this rule exists to keep out of the inner loop.
 - **[SCR-002](docs/scr/SCR-002-durability-first-architecture.md) —
   Architecture decisions:** Do not ask. Choose the most durable option — the
   one that can't be questioned in 10 years as the right move. Cheap-and-easy
