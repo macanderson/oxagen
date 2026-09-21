@@ -1,0 +1,1 @@
+- [2026-09-20] Test audit evidence through registered query/export handlers and retain explicit org-fence assertions. (source: reflections/2026-09-20-audit-detail.md, agent: evidence-fixes)
