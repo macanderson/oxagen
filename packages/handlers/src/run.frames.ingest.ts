@@ -68,7 +68,8 @@ export const runFramesIngestHandler: CapabilityHandler<
       throw new HandlerError({
         code: "conflict",
         reason: "run_not_writable",
-        message: "The attempt is sealed or its run was cancelled",
+        message:
+          "The attempt is sealed, or its evidence ingress is paused or cancelled",
       });
     throw error;
   }

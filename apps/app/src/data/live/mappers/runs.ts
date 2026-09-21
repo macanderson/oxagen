@@ -63,6 +63,7 @@ export function toRunRow(
     verdict: run.verdict,
     enforcementTier: run.enforcementTier,
     ingressRevoked: run.ingressRevoked ?? false,
+    ingressPaused: run.ingressPaused ?? false,
     completenessGaps: run.completenessGaps,
     canSummarize: run.canSummarize,
     startedAt: run.startedAt,

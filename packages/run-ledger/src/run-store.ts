@@ -712,6 +712,7 @@ export interface AttemptRow {
   claimed_at: string | Date;
   seal_id: string | null;
   cancel_requested?: boolean;
+  ingress_paused?: boolean;
   terminal_status: string | null;
   reason_code: string | null;
   event_count: number | string | null;
@@ -1089,6 +1090,7 @@ export interface LockedAttemptRow {
   attempt_number: number | string;
   seal_id: string | null;
   cancel_requested?: boolean;
+  ingress_paused?: boolean;
   /** The run's pinned retention policy (`agent_runs.retention_policy_id`). */
   retention_mode: string | null;
   retained_content_classes: readonly string[] | string | null;
@@ -1238,7 +1240,7 @@ export function buildCreateRunSql(
  */
 export function buildLockRunForAttemptSql(runId: string): SQL {
   return sql`
-    SELECT id, org_id, workspace_id, spec_version, status, cancel_requested, attempt_count, max_attempts
+    SELECT id, org_id, workspace_id, spec_version, status, cancel_requested, ingress_paused, attempt_count, max_attempts
     FROM agent.agent_runs
     WHERE id = ${runId}::uuid
     FOR UPDATE
@@ -1322,7 +1324,7 @@ export function buildMarkRunAttemptedSql(
 export function buildLockAttemptForWriteSql(attemptId: string): SQL {
   return sql`
     WITH locked AS (
-      SELECT r.id, r.cancel_requested
+      SELECT r.id, r.cancel_requested, r.ingress_paused
       FROM agent.agent_runs r
       WHERE r.id = (
         SELECT run_id FROM agent.agent_run_attempts WHERE id = ${attemptId}::uuid
@@ -1337,6 +1339,7 @@ export function buildLockAttemptForWriteSql(attemptId: string): SQL {
       a.workspace_id,
       a.attempt_number,
       lk.cancel_requested,
+      lk.ingress_paused,
       s.id            AS seal_id,
       rpv.mode        AS retention_mode,
       rpv.retained_content_classes
@@ -2133,6 +2136,7 @@ export function createPostgresRunStore(
           spec_version: number | string;
           status: string;
           cancel_requested?: boolean;
+          ingress_paused?: boolean;
           attempt_count: number | string;
           max_attempts: number | string | null;
         }>;
@@ -2149,6 +2153,10 @@ export function createPostgresRunStore(
         }
         if (run.cancel_requested)
           throw new RunStoreStateError(`run ${input.runId} was cancelled`);
+        if (run.ingress_paused)
+          throw new RunStoreStateError(
+            `run ${input.runId} evidence ingress is paused`,
+          );
         const maxAttempts = Number(run.max_attempts);
         const attemptNumber = Number(run.attempt_count) + 1;
         if (attemptNumber > maxAttempts) {
@@ -2223,6 +2231,8 @@ export function createPostgresRunStore(
           );
           if (attempt.cancel_requested)
             throw new AttemptNotWritableError(input.attemptId, "cancelled");
+          if (attempt.ingress_paused)
+            throw new AttemptNotWritableError(input.attemptId, "paused");
           await options.authorizeAppend?.(tx, attempt);
           conflictScope = {
             orgId: attempt.org_id,

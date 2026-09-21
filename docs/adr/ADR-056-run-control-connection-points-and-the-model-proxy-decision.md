@@ -252,3 +252,9 @@ refuses before minting a secret on a dedicated plane. Adding authenticated
 plane discovery remains part of #2953. The run read exposes `ingressRevoked`
 separately from process status. Repeat cancellation returns the existing
 applied receipt, and the Run page disables the cancelled ingress control.
+
+### 2026-09-20: ledger pause and resume
+
+Ledger Pause sets `agent_runs.ingress_paused` under the run row lock. The next evidence append or attempt admission refuses the paused run before writing. Resume clears that fence under the same lock. Both changes and their applied command receipts commit together. Cancellation remains separate and terminal: Resume refuses a cancelled run and never revives revoked credentials. These actions govern evidence admission, not the external process.
+
+The app reads the ingress flag independently of run outcome and labels the pause accordingly. The command receipt keeps the operator's reason. A pause does not extend credential expiry. After a long pause an operator must issue a new credential when resuming evidence delivery.

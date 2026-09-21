@@ -116,6 +116,7 @@ describe("toRunPage", () => {
           verdict: null,
           enforcementTier: "gateway",
           ingressRevoked: false,
+          ingressPaused: false,
           completenessGaps: [],
           canSummarize: true,
           startedAt: "2026-09-15T08:00:00.000Z",
@@ -161,12 +162,20 @@ describe("toRunPage", () => {
 
   it("keeps ledger ingress revocation separate from recorded process status", () => {
     const page = toRunPage({
-      runs: [{ ...ledgerRun, status: "live", ingressRevoked: true }],
+      runs: [
+        {
+          ...ledgerRun,
+          status: "live",
+          ingressRevoked: true,
+          ingressPaused: true,
+        },
+      ],
       nextCursor: null,
     });
     expect(RunPage.parse(page).runs[0]).toMatchObject({
       status: "live",
       ingressRevoked: true,
+      ingressPaused: true,
     });
   });
 

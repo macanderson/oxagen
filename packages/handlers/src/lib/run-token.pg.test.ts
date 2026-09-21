@@ -148,91 +148,42 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toMatchObject({ reason: "run_not_found" });
     });
 
-    it("a writer waiting on cancellation reads the locked row's new fence", async () => {
-      let release!: () => void;
-      const hold = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      let locked!: () => void;
-      const gotLock = new Promise<void>((resolve) => {
-        locked = resolve;
-      });
-      const cancelling = scoped(() =>
-        withTenantDb(async (tx) => {
-          const id = await postgresCommandStore(tx).cancelLedgerRun(cancel);
-          locked();
-          await hold;
-          return id;
-        }),
-      );
-      await Promise.race([gotLock, cancelling]);
-      let pidReady!: (pid: number) => void;
-      const pidPromise = new Promise<number>((resolve) => {
-        pidReady = resolve;
-      });
-      const waiting = scoped(() =>
-        withTenantDb(async (tx) => {
-          const [row] = (await tx.execute(
-            sql`SELECT pg_backend_pid() AS pid`,
-          )) as unknown as Array<{ pid: number }>;
-          if (!row) throw new Error("No database backend id");
-          pidReady(row.pid);
-          return (await tx.execute(
-            buildLockAttemptForWriteSql(attemptId),
-          )) as unknown as LockedAttemptRow[];
-        }),
-      );
-      try {
-        const pid = await Promise.race([
-          pidPromise,
-          waiting.then(() => {
-            throw new Error("Writer completed before reporting its backend id");
-          }),
-        ]);
-        let blocked = false;
-        const deadline = Date.now() + 5000;
-        while (!blocked && Date.now() < deadline) {
-          const rows = (await withSystemDb((tx) =>
-            tx.execute(
-              sql`SELECT wait_event_type FROM pg_stat_activity WHERE pid = ${pid}`,
-            ),
-          )) as unknown as Array<{ wait_event_type: string }>;
-          blocked = rows[0]?.wait_event_type === "Lock";
-          if (!blocked) await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-        expect(blocked).toBe(true);
-      } finally {
-        release();
-      }
-      const [receipt, rows] = await Promise.all([cancelling, waiting]);
-      expect(rows[0]?.cancel_requested).toBe(true);
-      expect(
-        await scoped(() =>
+    it("rolls back pause and receipt together, then resumes the same credential", async () => {
+      const change = (command: "pause" | "resume") =>
+        scoped(() =>
           withTenantDb((tx) =>
-            postgresCommandStore(tx).cancelLedgerRun(cancel),
+            postgresCommandStore(tx).setLedgerPaused({ ...cancel, command }),
           ),
+        );
+      const failure = new Error("pause receipt failed");
+      await expect(
+        scoped(() =>
+          withTenantDb(async (tx) => {
+            await postgresCommandStore(tx).setLedgerPaused({
+              ...cancel,
+              command: "pause",
+            });
+            throw failure;
+          }),
         ),
-      ).toBe(receipt);
+      ).rejects.toBe(failure);
       await withSystemDb(async (tx) => {
         expect(
           (
-            await tx.query.apiKeys.findFirst({
-              where: eq(schema.apiKeys.id, keyId),
+            await tx.query.agentRuns.findFirst({
+              where: eq(schema.agentRuns.id, runId),
             })
-          )?.deletedAt,
-        ).not.toBeNull();
+          )?.ingressPaused,
+        ).toBe(false);
         expect(
           await tx
             .select()
             .from(schema.tachoControlCommands)
-            .where(
-              and(
-                eq(schema.tachoControlCommands.publicId, receipt),
-                eq(schema.tachoControlCommands.outcome, "applied"),
-              ),
-            ),
-        ).toHaveLength(1);
+            .where(eq(schema.tachoControlCommands.targetId, runPublicId)),
+        ).toHaveLength(0);
       });
+      const pauseReceipt = await change("pause");
+      expect(await change("pause")).toBe(pauseReceipt);
       await expect(
         scoped(() =>
           createPostgresRunStore().appendAttemptBatch({
@@ -240,7 +191,193 @@ describe.skipIf(!process.env.DATABASE_URL)(
             events: [],
           }),
         ),
-      ).rejects.toMatchObject({ reason: "cancelled" });
-    }, 15_000);
+      ).rejects.toMatchObject({ reason: "paused" });
+      const resumeReceipt = await change("resume");
+      expect(await change("resume")).toBe(resumeReceipt);
+      await expect(
+        scoped(() =>
+          createPostgresRunStore().appendAttemptBatch({
+            attemptId,
+            events: [],
+          }),
+        ),
+      ).resolves.toBeDefined();
+      await withSystemDb(async (tx) => {
+        const key = await tx.query.apiKeys.findFirst({
+          where: eq(schema.apiKeys.id, keyId),
+        });
+        expect(key?.deletedAt).toBeNull();
+        expect(key?.expiresAt?.getTime()).toBeGreaterThan(Date.now());
+        const receipts = await tx
+          .select()
+          .from(schema.tachoControlCommands)
+          .where(eq(schema.tachoControlCommands.targetId, runPublicId));
+        expect(receipts.map((receipt) => receipt.outcomeDetail).sort()).toEqual(
+          ["ledger_ingress_paused", "ledger_ingress_resumed"],
+        );
+        await tx
+          .delete(schema.tachoControlCommands)
+          .where(eq(schema.tachoControlCommands.targetId, runPublicId));
+      });
+    });
+
+    it.each(["pause", "cancel"] as const)(
+      "a writer waiting on %s reads the locked row's new fence",
+      async (command) => {
+        let release!: () => void;
+        const hold = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        let locked!: () => void;
+        const gotLock = new Promise<void>((resolve) => {
+          locked = resolve;
+        });
+        const cancelling = scoped(() =>
+          withTenantDb(async (tx) => {
+            const id =
+              command === "cancel"
+                ? await postgresCommandStore(tx).cancelLedgerRun(cancel)
+                : await postgresCommandStore(tx).setLedgerPaused({
+                    ...cancel,
+                    command,
+                  });
+            locked();
+            await hold;
+            return id;
+          }),
+        );
+        await Promise.race([gotLock, cancelling]);
+        let pidReady!: (pid: number) => void;
+        const pidPromise = new Promise<number>((resolve) => {
+          pidReady = resolve;
+        });
+        const waiting = scoped(() =>
+          withTenantDb(async (tx) => {
+            const [row] = (await tx.execute(
+              sql`SELECT pg_backend_pid() AS pid`,
+            )) as unknown as Array<{ pid: number }>;
+            if (!row) throw new Error("No database backend id");
+            pidReady(row.pid);
+            return (await tx.execute(
+              buildLockAttemptForWriteSql(attemptId),
+            )) as unknown as LockedAttemptRow[];
+          }),
+        );
+        try {
+          const pid = await Promise.race([
+            pidPromise,
+            waiting.then(() => {
+              throw new Error(
+                "Writer completed before reporting its backend id",
+              );
+            }),
+          ]);
+          let blocked = false;
+          const deadline = Date.now() + 5000;
+          while (!blocked && Date.now() < deadline) {
+            const rows = (await withSystemDb((tx) =>
+              tx.execute(
+                sql`SELECT wait_event_type FROM pg_stat_activity WHERE pid = ${pid}`,
+              ),
+            )) as unknown as Array<{ wait_event_type: string }>;
+            blocked = rows[0]?.wait_event_type === "Lock";
+            if (!blocked)
+              await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          expect(blocked).toBe(true);
+        } finally {
+          release();
+        }
+        const [receipt, rows] = await Promise.all([cancelling, waiting]);
+        if (command === "pause") {
+          expect(rows[0]?.ingress_paused).toBe(true);
+          await expect(
+            scoped(() =>
+              createPostgresRunStore().appendAttemptBatch({
+                attemptId,
+                events: [],
+              }),
+            ),
+          ).rejects.toMatchObject({ reason: "paused" });
+          await scoped(() =>
+            withTenantDb((tx) =>
+              postgresCommandStore(tx).setLedgerPaused({
+                ...cancel,
+                command: "resume",
+              }),
+            ),
+          );
+          await withSystemDb((tx) =>
+            tx
+              .delete(schema.tachoControlCommands)
+              .where(eq(schema.tachoControlCommands.targetId, runPublicId)),
+          );
+          return;
+        }
+        expect(rows[0]?.cancel_requested).toBe(true);
+        expect(
+          await scoped(() =>
+            withTenantDb((tx) =>
+              postgresCommandStore(tx).cancelLedgerRun(cancel),
+            ),
+          ),
+        ).toBe(receipt);
+        await withSystemDb(async (tx) => {
+          expect(
+            (
+              await tx.query.apiKeys.findFirst({
+                where: eq(schema.apiKeys.id, keyId),
+              })
+            )?.deletedAt,
+          ).not.toBeNull();
+          expect(
+            await tx
+              .select()
+              .from(schema.tachoControlCommands)
+              .where(
+                and(
+                  eq(schema.tachoControlCommands.publicId, receipt),
+                  eq(schema.tachoControlCommands.outcome, "applied"),
+                ),
+              ),
+          ).toHaveLength(1);
+        });
+        await expect(
+          scoped(() =>
+            createPostgresRunStore().appendAttemptBatch({
+              attemptId,
+              events: [],
+            }),
+          ),
+        ).rejects.toMatchObject({ reason: "cancelled" });
+        await expect(
+          scoped(() =>
+            withTenantDb((tx) =>
+              postgresCommandStore(tx).setLedgerPaused({
+                ...cancel,
+                command: "resume",
+              }),
+            ),
+          ),
+        ).rejects.toMatchObject({ reason: "run_cancelled" });
+        await withSystemDb(async (tx) => {
+          expect(
+            (
+              await tx.query.apiKeys.findFirst({
+                where: eq(schema.apiKeys.id, keyId),
+              })
+            )?.deletedAt,
+          ).not.toBeNull();
+          expect(
+            (
+              await tx.query.agentRuns.findFirst({
+                where: eq(schema.agentRuns.id, runId),
+              })
+            )?.cancelRequested,
+          ).toBe(true);
+        });
+      },
+      15_000,
+    );
   },
 );

@@ -5,7 +5,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
+import {
+  HandlerError,
+  isHandlerError,
+  type CapabilityContext,
+} from "@oxagen/oxagen";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { schema } from "@oxagen/database";
 
@@ -163,6 +167,17 @@ class MemoryStore implements CommandStore {
   async cancelLedgerRun({ publicId }: { publicId: string }) {
     if (!this.ledgerRuns.includes(publicId)) throw new Error("run_not_found");
     return "tcm_ledger_cancel";
+  }
+  async setLedgerPaused({
+    publicId,
+    command,
+  }: {
+    publicId: string;
+    command: "pause" | "resume";
+  }) {
+    if (!this.ledgerRuns.includes(publicId))
+      throw new HandlerError({ code: "not_found", reason: "run_not_found" });
+    return `tcm_ledger_${command}`;
   }
   async ledgerRunExists(_scope: unknown, publicId: string) {
     return this.ledgerRuns.includes(publicId);
@@ -482,17 +497,28 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
     expect(store.rows).toHaveLength(0);
   });
 
-  it("a ledger pause, which has no producer connection", async () => {
-    const ledger = "arun_5f0c2e9a1b7d4c3e8f6a02";
-    const store = new MemoryStore([], [ledger]);
-    await expect(
-      handlerOver(store)(
-        parse({ target: { kind: "run", id: ledger }, command: "pause" }),
-        OPERATOR,
-      ),
-    ).rejects.toSatisfy(conflict("no_connection_point"));
-    expect(store.rows).toEqual([]);
-  });
+  it.each(["pause", "resume"] as const)(
+    "dispatches ledger %s through the ingress transaction",
+    async (command) => {
+      const ledger = "arun_5f0c2e9a1b7d4c3e8f6a02";
+      const store = new MemoryStore([], [ledger]);
+      const control = vi.spyOn(store, "setLedgerPaused");
+      await expect(
+        handlerOver(store)(
+          parse({ target: { kind: "run", id: ledger }, command }),
+          OPERATOR,
+        ),
+      ).resolves.toEqual({ commandIds: [`tcm_ledger_${command}`] });
+      expect(control).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: { orgId: ORG, workspaceId: WORKSPACE },
+          publicId: ledger,
+          command,
+        }),
+      );
+      expect(store.rows).toEqual([]);
+    },
+  );
 
   it("a run neither store holds, and another workspace, are not found", async () => {
     const store = new MemoryStore([session()]);

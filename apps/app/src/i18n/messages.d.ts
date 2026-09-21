@@ -3366,6 +3366,18 @@ type Messages = {
         applied: string;
       };
       ledgerRevoked: string;
+      ledgerPaused: string;
+      ledgerPause: {
+        body: string;
+        confirm: string;
+        applied: string;
+      };
+      ledgerResume: {
+        body: string;
+        confirm: string;
+        applied: string;
+      };
+      ledgerReasonHelp: string;
     };
     record: {
       reread: string;

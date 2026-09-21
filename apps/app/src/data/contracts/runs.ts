@@ -181,6 +181,7 @@ export const RunRow = z.object({
   verdict: ProofVerdict.nullable(),
   enforcementTier: EnforcementTier,
   ingressRevoked: z.boolean().optional(),
+  ingressPaused: z.boolean().optional(),
   /** Empty while the run is live, or where the seal recorded none. */
   completenessGaps: z.array(CompletenessGap),
   /**

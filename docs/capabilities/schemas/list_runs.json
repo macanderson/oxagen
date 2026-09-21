@@ -54,6 +54,9 @@
             "ingressRevoked": {
               "type": "boolean"
             },
+            "ingressPaused": {
+              "type": "boolean"
+            },
             "agentKey": {
               "anyOf": [
                 {

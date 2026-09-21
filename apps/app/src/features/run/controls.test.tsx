@@ -253,6 +253,65 @@ describe("run controls", () => {
     );
   });
 
+  it.each([false, true])(
+    "controls ledger ingress honestly, paused=%s",
+    async (paused) => {
+      haltRun.mockResolvedValue({
+        ok: true,
+        value: { commandIds: ["tcm_ingress"] },
+      });
+      const user = userEvent.setup();
+      render(
+        <IntlProvider>
+          <RunControls
+            org="acme"
+            ws="core-platform"
+            runId="arun_record1"
+            status="live"
+            source="ledger"
+            enforcementTier="observe"
+            ingressPaused={paused}
+            orgRole="owner"
+            wsRole="owner"
+          />
+        </IntlProvider>,
+      );
+      const command = paused ? "resume" : "pause";
+      expect(
+        screen.queryByTestId(`run-${paused ? "pause" : "resume"}`),
+      ).toBeNull();
+      expect(screen.getByTestId("run-steer")).toBeDisabled();
+      if (paused)
+        expect(screen.getByTestId("ledger-control-limit")).toHaveTextContent(
+          "Evidence ingress is paused",
+        );
+      await user.click(screen.getByTestId(`run-${command}`));
+      expect(screen.getByRole("dialog")).not.toHaveTextContent(
+        "The agent carries on",
+      );
+      expect(screen.getByRole("dialog")).not.toHaveTextContent(
+        "The model reads this on resume",
+      );
+      await user.click(
+        screen.getByRole("button", {
+          name: paused ? "Resume evidence ingress" : "Pause evidence ingress",
+        }),
+      );
+      await waitFor(() =>
+        expect(haltRun).toHaveBeenCalledWith(
+          "acme",
+          "core-platform",
+          "arun_record1",
+          command,
+          "",
+        ),
+      );
+      expect(await screen.findByTestId("queued-command")).toHaveTextContent(
+        "tcm_ingress",
+      );
+    },
+  );
+
   it("cancels ledger ingress without claiming that the external process stopped", async () => {
     haltRun.mockResolvedValue({
       ok: true,
@@ -273,8 +332,9 @@ describe("run controls", () => {
         />
       </IntlProvider>,
     );
-    for (const command of ["pause", "resume", "steer"])
-      expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
+    expect(screen.getByTestId("run-pause")).toBeEnabled();
+    expect(screen.queryByTestId("run-resume")).toBeNull();
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
     expect(screen.getByTestId("run-cancel")).toBeEnabled();
     await user.click(screen.getByTestId("run-cancel"));
     expect(screen.getByTestId("run-cancel-dialog")).toHaveTextContent(

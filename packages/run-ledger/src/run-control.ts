@@ -13,6 +13,7 @@ export async function lockRunForControl(
       publicId: schema.agentRuns.publicId,
       status: schema.agentRuns.status,
       cancelled: schema.agentRuns.cancelRequested,
+      paused: schema.agentRuns.ingressPaused,
     })
     .from(schema.agentRuns)
     .where(
@@ -32,5 +33,18 @@ export async function cancelRunInTransaction(tx: Tx, runId: string, now: Date) {
   await tx
     .update(schema.agentRuns)
     .set({ cancelRequested: true, updatedAt: now })
+    .where(eq(schema.agentRuns.id, runId));
+}
+
+/** Pause affects evidence admission, not the producer's process. */
+export async function setRunIngressPaused(
+  tx: Tx,
+  runId: string,
+  paused: boolean,
+  now: Date,
+) {
+  await tx
+    .update(schema.agentRuns)
+    .set({ ingressPaused: paused, updatedAt: now })
     .where(eq(schema.agentRuns.id, runId));
 }

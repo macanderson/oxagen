@@ -207,6 +207,7 @@ export function RunHeader({
             source={run.source}
             enforcementTier={run.enforcementTier}
             ingressRevoked={run.ingressRevoked}
+            ingressPaused={run.ingressPaused}
             orgRole={orgRole}
             wsRole={wsRole}
           />

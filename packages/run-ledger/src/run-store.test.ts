@@ -1516,6 +1516,31 @@ describe("appendAttemptBatch", () => {
     expect(locked?.sql).toContain("lk.cancel_requested");
   });
 
+  it("refuses a paused run before authorization or evidence writes", async () => {
+    const { tx, executed } = makeRoutingTx([
+      {
+        match: LOCK_ATTEMPT,
+        rows: [makeAttemptRow({ ingress_paused: true })],
+      },
+    ]);
+    useTx(tx);
+    const authorizeAppend = vi.fn();
+    await expect(
+      createPostgresRunStore({ authorizeAppend }).appendAttemptBatch({
+        attemptId: UUID_ATTEMPT,
+        events: [toolEvent(1)],
+      }),
+    ).rejects.toMatchObject({
+      code: "run_attempt_not_writable",
+      reason: "paused",
+    });
+    expect(authorizeAppend).not.toHaveBeenCalled();
+    expect(ranSql(executed, INSERT_EVENTS)).toBe(false);
+    const locked = executed.find((q) => LOCK_ATTEMPT.test(q.sql));
+    expect(locked?.sql).toContain("r.ingress_paused");
+    expect(locked?.sql).toContain("lk.ingress_paused");
+  });
+
   it("authorizes inside the locked append transaction and refuses before event writes", async () => {
     const { tx, executed } = makeRoutingTx([
       { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
