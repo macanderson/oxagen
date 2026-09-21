@@ -193,7 +193,7 @@ describe("CreateHost when a wizard module does not arrive", () => {
     let calls = 0;
     WIZARDS.skill = () => {
       calls += 1;
-      loads();
+      void loads();
       return calls === 1
         ? Promise.reject(new Error("chunk 404"))
         : (original?.() ?? Promise.reject(new Error("no wizard")));
