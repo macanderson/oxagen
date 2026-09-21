@@ -58,7 +58,10 @@ export async function recordSpend(
         updated_at = now()
     `);
   if (transaction) await run(transaction);
-  else await withSystemDb(run);
+  else {
+    // tenancy: global billing counters use the authenticated ingestion caller's orgId and workspaceId.
+    await withSystemDb(run);
+  }
 }
 
 /**

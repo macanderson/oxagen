@@ -79,6 +79,34 @@ function seam(
 }
 
 describe("the GitHub seam", () => {
+  it("refreshes the existing pull request and surfaces GitHub refusals", async () => {
+    const updatePullRequest = vi
+      .fn<GitHubClient["updatePullRequest"]>()
+      .mockResolvedValueOnce({
+        number: 17,
+        htmlUrl: "https://github.com/a-intel/platform/pull/17",
+      })
+      .mockRejectedValueOnce(new Error("metadata refused"));
+    const { gh } = seam(fakeClient({ updatePullRequest }));
+    const repo = await gh.resolveRepository(SCOPE);
+    const metadata = {
+      number: 17,
+      title: "Skill: release-notes",
+      body: "New submitted bytes",
+    };
+    await expect(gh.updatePullRequest(repo, metadata)).resolves.toMatchObject({
+      number: 17,
+    });
+    expect(updatePullRequest).toHaveBeenCalledWith({
+      owner: "a-intel",
+      repo: "platform",
+      ...metadata,
+    });
+    await expect(gh.updatePullRequest(repo, metadata)).rejects.toMatchObject({
+      reason: "github_refused",
+    });
+  });
+
   it("refuses an existing proposal branch in exclusive mode without deleting it", async () => {
     const deleteBranch = vi.fn<GitHubClient["deleteBranch"]>();
     const { gh } = seam(

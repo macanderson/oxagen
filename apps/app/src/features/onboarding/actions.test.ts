@@ -194,6 +194,21 @@ describe("registerAgent", () => {
     );
   });
 
+  it.each(["claude-agent-sdk", "custom"])(
+    "refuses unsupported %s before minting an identity",
+    async (harness) => {
+      expect(
+        await registerAgent("acme", "core-platform", { ...agentForm, harness }),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "agentHarnessInvalid",
+        field: "harness",
+      });
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
   it("sends a description only when one was written", async () => {
     invoke.mockResolvedValue(registered);
     await registerAgent("acme", "core-platform", {

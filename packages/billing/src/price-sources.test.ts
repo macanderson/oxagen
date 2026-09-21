@@ -61,23 +61,15 @@ function fakeFetch(
 }
 
 describe("deriveCacheWrite1h", () => {
-  it("says nothing about a one-hour tier when the five-minute rate is unknown", () => {
-    expect(deriveCacheWrite1h(3, null)).toBe(null);
-    expect(deriveCacheWrite1h(0, null)).toBe(null);
+  it("leaves an unknown provider unpriced even when its five-minute write has a premium", () => {
+    expect(deriveCacheWrite1h("other", 3, 3.75)).toBeNull();
+    expect(deriveCacheWrite1h("openai", 2.5, 2.5)).toBeNull();
+    expect(deriveCacheWrite1h("anthropic", 3, null)).toBeNull();
   });
-
-  it("leaves a write with no premium over fresh input alone", () => {
-    // OpenAI's automatic caching: a write bills at the input rate, so there is
-    // no provider write tier to scale up to an hour.
-    expect(deriveCacheWrite1h(2.5, 2.5)).toBe(2.5);
-    expect(deriveCacheWrite1h(2.5, 1)).toBe(1);
-  });
-
-  it("scales a premium write by two-over-one-and-a-quarter", () => {
-    // Anthropic Sonnet: $3 input, $3.75 five-minute write, so the hour tier is
-    // 2x input = $6.
-    expect(deriveCacheWrite1h(3, 3.75)).toBeCloseTo(6, 10);
-    expect(deriveCacheWrite1h(15, 18.75)).toBeCloseTo(30, 10);
+  it("uses the documented Anthropic base-input multiplier", () => {
+    expect(deriveCacheWrite1h("anthropic", 3, 3.75)).toBe(6);
+    expect(deriveCacheWrite1h("anthropic", 15, 18.75)).toBe(30);
+    expect(deriveCacheWrite1h("anthropic", 0, 0)).toBe(0);
   });
 });
 
@@ -124,10 +116,10 @@ describe("inCodeCardPrices", () => {
       source: "in_code_card",
     });
     // A bare id has no prefix to strip, so it carries no alias — and an
-    // OpenAI-style write with no premium keeps its own rate at the hour tier.
+    // A five-minute rate does not establish an OpenAI one-hour cache tier.
     expect(gpt.aliases).toEqual([]);
     expect(gpt.provider).toBe("openai");
-    expect(gpt.cacheWrite1hPer1M).toBe(2.5);
+    expect(gpt.cacheWrite1hPer1M).toBeNull();
   });
 
   it("aliases a hyphenated Anthropic release to its dotted and gateway forms", () => {
@@ -199,6 +191,14 @@ describe("parseOpenRouterCatalog", () => {
       image: "0",
     },
   };
+
+  it("does not invent a one-hour rate for another provider with the same cache-write premium", () => {
+    const price = parseOpenRouterCatalog({
+      data: [{ ...row, id: "other/model", canonical_slug: "other/model" }],
+    })[0]!;
+    expect(price.cacheWrite5mPer1M).toBe(3.75);
+    expect(price.cacheWrite1hPer1M).toBeNull();
+  });
 
   it("scales per-token USD strings up to USD per million tokens", () => {
     const price = parseOpenRouterCatalog({ data: [row] })[0]!;
@@ -287,6 +287,19 @@ describe("parseModelsDevCatalog", () => {
       },
     },
   };
+
+  it("requires a known provider policy when reading a models.dev cache-write premium", () => {
+    const price = parseModelsDevCatalog({
+      other: {
+        id: "other",
+        models: {
+          model: { cost: { input: 3, output: 15, cache_write: 3.75 } },
+        },
+      },
+    })[0]!;
+    expect(price.cacheWrite5mPer1M).toBe(3.75);
+    expect(price.cacheWrite1hPer1M).toBeNull();
+  });
 
   it("takes models.dev costs as already-per-million and scales nothing", () => {
     const price = parseModelsDevCatalog(body)[0]!;

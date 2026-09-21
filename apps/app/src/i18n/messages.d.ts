@@ -651,6 +651,7 @@ type Messages = {
       ip: string;
       request: string;
       userAgent: string;
+      detail: string;
       notRecorded: string;
     };
     outcomes: {
@@ -1742,6 +1743,7 @@ type Messages = {
     };
   };
   fleet: {
+    loading: string;
     actions: {
       register: string;
     };
@@ -2198,12 +2200,6 @@ type Messages = {
           pending: string;
           again: string;
         };
-        sdk: {
-          title: string;
-          body: string;
-          install: string;
-          credential: string;
-        };
         token: {
           label: string;
           once: string;
@@ -2213,6 +2209,10 @@ type Messages = {
         back: string;
         continue: string;
         advancing: string;
+        unavailable: {
+          title: string;
+          body: string;
+        };
       };
       run: {
         title: string;
@@ -3169,6 +3169,7 @@ type Messages = {
       agent: string;
       stepCount: string;
       frameCount: string;
+      repeats: string;
       seqSpan: string;
       ms: string;
       live: string;
@@ -3211,6 +3212,7 @@ type Messages = {
       loadedMore: string;
       badCursor: string;
       pageFailed: string;
+      followDenied: string;
       followLost: string;
       followSealed: string;
       request: string;
@@ -4063,6 +4065,11 @@ type Messages = {
         until: string;
         anyRegion: string;
         platformPriced: string;
+        scheduled: string;
+        pagination: string;
+        previous: string;
+        next: string;
+        page: string;
       };
       dialog: {
         open: string;
@@ -4110,6 +4117,8 @@ type Messages = {
         confirmUnpriced: string;
         confirmUnpricedSubmit: string;
         confirmUnpricedCancel: string;
+        cancelScheduled: string;
+        cancelScheduledSubmit: string;
       };
       failure: {
         orgRoleRequired: string;

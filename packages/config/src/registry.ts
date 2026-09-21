@@ -2236,11 +2236,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "macanderson",
   },
-  OXAGEN_HOUSE_BRAND: {
+  OXAGEN_BRAND_KIT: {
     group: "Operator scripts",
     description:
       "Path to the house brand kit checkout (oxagenai/oxagen-brand) sync-brand-assets.mjs copies marks and the branding skill from. " +
-      "Defaults to a sibling directory of this repository.",
+      "Defaults to ../oxagen-brand.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_HOUSE_BRAND: {
+    group: "Operator scripts",
+    description:
+      "Deprecated alias for OXAGEN_BRAND_KIT, accepted for one transition release.",
     secret: false,
     clientExposed: false,
     services: [],

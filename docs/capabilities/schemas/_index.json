@@ -2228,7 +2228,8 @@
       "domain": "cost",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

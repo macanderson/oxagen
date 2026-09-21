@@ -402,6 +402,16 @@ function Details({ event }: { event: AuditEvent }) {
         <dd className={mono}>{event.request ?? <NotRecordedValue />}</dd>
         <dt className={label}>{t("events.userAgent")}</dt>
         <dd className="break-all">{event.userAgent ?? <NotRecordedValue />}</dd>
+        <dt className={label}>{t("events.detail")}</dt>
+        <dd className="min-w-0">
+          {event.detail == null ? (
+            <NotRecordedValue />
+          ) : (
+            <pre className="max-w-prose whitespace-pre-wrap break-all font-mono">
+              {JSON.stringify(event.detail, null, 2)}
+            </pre>
+          )}
+        </dd>
       </dl>
     </details>
   );
