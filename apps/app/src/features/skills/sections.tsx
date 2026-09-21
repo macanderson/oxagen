@@ -14,7 +14,12 @@ import { SafeLink } from "@/ui/navigation";
 import { useFormatter } from "@/ui/formatter";
 
 /** Where the section renders: the workspace and the page of the inventory it read. */
-type SkillsAt = { org: string; ws: string; cursor: string | null };
+type SkillsAt = {
+  org: string;
+  ws: string;
+  cursor: string | null;
+  view?: string;
+};
 
 type Failed = Extract<Read<never>, { ok: false }>;
 
@@ -203,11 +208,11 @@ export function SkillsFailure({ read, at }: { read: Failed; at: SkillsAt }) {
             {t("error.code", { code: read.code, status: String(read.status) })}
           </p>
           <SafeLink
-            to={
-              at.cursor === null
-                ? routes.skills(at.org, at.ws)
-                : routes.skills(at.org, at.ws, { cursor: at.cursor })
-            }
+            to={routes.steering(at.org, at.ws, {
+              tab: "skills",
+              cursor: at.cursor ?? undefined,
+              view: at.view === "catalog" ? undefined : at.view,
+            })}
             className={linkText}
           >
             {t("retry")}

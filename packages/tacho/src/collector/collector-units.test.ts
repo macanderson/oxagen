@@ -190,7 +190,9 @@ describe("inbox", () => {
       m0: "failed",
       st: "received",
       r: "applied",
-      k: "applied",
+      // SIGKILL was refused, so the kill is not `applied`: the process is
+      // still running and `oxagen:kill_attempted` records `failed`.
+      k: "failed",
       c: "applied",
       rb: "failed",
       x: "expired",
@@ -259,6 +261,42 @@ describe("inbox", () => {
     expect(
       (second.events[1]?.body as { kill_outcome: string }).kill_outcome,
     ).toBe("no_pid");
+    // The acknowledgement reports the same fact as the event beside it.
+    const noPidAck = second.acknowledgements.find((a) => a.command_id === "c2");
+    expect(noPidAck?.status).toBe("failed");
+    expect(noPidAck?.detail).toMatch(/no_pid/);
+  });
+
+  it("acknowledges a cancel as applied only when the signal was delivered", async () => {
+    let clock = Date.parse("2026-09-10T10:00:00.000Z");
+    const now = () => (clock += 1000);
+    const { registry, record, host } = registryWithSession(now);
+    const deps = {
+      registry,
+      hostRecorder: () => host.recorder,
+      kill: () => true,
+      refreshBundle: async () => {},
+      onHostSuspended: () => {},
+      now,
+    };
+    const result = await applyCommands(
+      [
+        command({
+          id: "c",
+          command: "cancel",
+          session_uuid: record.recorder.sessionUuid,
+        }),
+      ],
+      deps,
+    );
+    const ack = result.acknowledgements.find((a) => a.command_id === "c");
+    expect(ack?.status).toBe("applied");
+    expect(ack?.detail).toBeUndefined();
+    expect(
+      result.events
+        .filter((e) => e.kind === "oxagen:kill_attempted")
+        .map((e) => (e.body as { kill_outcome: string }).kill_outcome),
+    ).toEqual(["sent"]);
   });
 });
 

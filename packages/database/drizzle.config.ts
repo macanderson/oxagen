@@ -41,6 +41,7 @@ export default defineConfig({
     "tacho",
     "cost",
     "tools",
+    "skills",
   ],
   verbose: true,
   strict: true,

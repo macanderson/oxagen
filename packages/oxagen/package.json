@@ -29,7 +29,8 @@
     "./approval-rules/schemas": "./src/approval-rules/schemas.ts",
     "./mandates/schemas.sample": "./src/mandates/schemas.sample.ts",
     "./client-ip": "./src/client-ip.ts",
-    "./skill-frontmatter": "./src/skill-frontmatter.ts"
+    "./skill-frontmatter": "./src/skill-frontmatter.ts",
+    "./skills": "./src/skills.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

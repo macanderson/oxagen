@@ -1,0 +1,494 @@
+{
+  "name": "get_skill_config",
+  "domain": "skill",
+  "description": "Read the published skill resolution configuration and its immutable version history. A workspace with no imported configuration starts with skills off.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "version": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "config": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "const": 1,
+            "default": 1
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 48
+                },
+                "path": {
+                  "const": ".oxagen/skills"
+                },
+                "skills": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "maxLength": 48
+                      },
+                      "version": {
+                        "type": "string"
+                      },
+                      "digest": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "version",
+                      "digest"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 1000,
+                  "default": []
+                }
+              },
+              "required": [
+                "id",
+                "path"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 1,
+            "default": []
+          },
+          "search": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "on_demand",
+                "default": "on_demand"
+              },
+              "cutoff": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "default": 0
+              },
+              "budget": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000,
+                "default": 6000
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 10
+              }
+            },
+            "additionalProperties": false,
+            "default": {}
+          },
+          "unbound_repo": {
+            "const": "ask",
+            "default": "ask"
+          },
+          "reflection": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "default": false
+              },
+              "use": {
+                "const": "research",
+                "default": "research"
+              },
+              "retention_days": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 90,
+                "default": 30
+              }
+            },
+            "additionalProperties": false,
+            "default": {}
+          }
+        },
+        "additionalProperties": false,
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "draftText": {
+        "type": "string"
+      },
+      "current": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 48
+              },
+              "version": {
+                "type": "string"
+              },
+              "commitSha": {
+                "type": "string"
+              },
+              "pullRequestNumber": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "digest": {
+                "type": "string"
+              },
+              "config": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "const": 1,
+                    "default": 1
+                  },
+                  "enabled": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 48
+                        },
+                        "path": {
+                          "const": ".oxagen/skills"
+                        },
+                        "skills": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "maxLength": 48
+                              },
+                              "version": {
+                                "type": "string"
+                              },
+                              "digest": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "version",
+                              "digest"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 1000,
+                          "default": []
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "path"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 1,
+                    "default": []
+                  },
+                  "search": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "const": "on_demand",
+                        "default": "on_demand"
+                      },
+                      "cutoff": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "default": 0
+                      },
+                      "budget": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100000,
+                        "default": 6000
+                      },
+                      "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100,
+                        "default": 10
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {}
+                  },
+                  "unbound_repo": {
+                    "const": "ask",
+                    "default": "ask"
+                  },
+                  "reflection": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "use": {
+                        "const": "research",
+                        "default": "research"
+                      },
+                      "retention_days": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 90,
+                        "default": 30
+                      }
+                    },
+                    "additionalProperties": false,
+                    "default": {}
+                  }
+                },
+                "additionalProperties": false,
+                "x-server-validated": true,
+                "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+              },
+              "publishedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "commitSha",
+              "pullRequestNumber",
+              "digest",
+              "config",
+              "publishedAt"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "versions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 48
+            },
+            "version": {
+              "type": "string"
+            },
+            "commitSha": {
+              "type": "string"
+            },
+            "pullRequestNumber": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "digest": {
+              "type": "string"
+            },
+            "config": {
+              "type": "object",
+              "properties": {
+                "version": {
+                  "const": 1,
+                  "default": 1
+                },
+                "enabled": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "maxLength": 48
+                      },
+                      "path": {
+                        "const": ".oxagen/skills"
+                      },
+                      "skills": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "maxLength": 48
+                            },
+                            "version": {
+                              "type": "string"
+                            },
+                            "digest": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "version",
+                            "digest"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "maxItems": 1000,
+                        "default": []
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 1,
+                  "default": []
+                },
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "const": "on_demand",
+                      "default": "on_demand"
+                    },
+                    "cutoff": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "default": 0
+                    },
+                    "budget": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100000,
+                      "default": 6000
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100,
+                      "default": 10
+                    }
+                  },
+                  "additionalProperties": false,
+                  "default": {}
+                },
+                "unbound_repo": {
+                  "const": "ask",
+                  "default": "ask"
+                },
+                "reflection": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "use": {
+                      "const": "research",
+                      "default": "research"
+                    },
+                    "retention_days": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 90,
+                      "default": 30
+                    }
+                  },
+                  "additionalProperties": false,
+                  "default": {}
+                }
+              },
+              "additionalProperties": false,
+              "x-server-validated": true,
+              "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+            },
+            "publishedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "commitSha",
+            "pullRequestNumber",
+            "digest",
+            "config",
+            "publishedAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "config",
+      "draftText",
+      "current",
+      "versions"
+    ],
+    "additionalProperties": false
+  }
+}
