@@ -413,3 +413,48 @@ describe("removing an avatar", () => {
     expect(screen.queryByTestId("avatar-remove")).not.toBeInTheDocument();
   });
 });
+
+it.each([false, true])(
+  "reconciles a reopened avatar editor after the pending save, newer edit=%s",
+  async (newerEdit) => {
+    let finish: ((result: unknown) => void) | undefined;
+    updateProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openEditor();
+    await user.click(screen.getByTestId("avatar-kind-photo"));
+    await user.type(
+      screen.getByTestId("avatar-url"),
+      "https://cdn.example/saved.png",
+    );
+    await user.click(screen.getByTestId("avatar-save"));
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "open avatar" }));
+    if (newerEdit) {
+      await user.clear(screen.getByTestId("avatar-letters"));
+      await user.type(screen.getByTestId("avatar-letters"), "NEW");
+    }
+    finish?.({
+      ok: true,
+      value: {
+        displayName: "Marcus Bell",
+        avatarUrl: "https://cdn.example/saved.png",
+      },
+    });
+    await waitFor(() =>
+      expect(accountOperations.isPending(shellData().viewer.id, "avatar")).toBe(
+        false,
+      ),
+    );
+    if (newerEdit)
+      expect(screen.getByTestId("avatar-letters")).toHaveValue("NEW");
+    else
+      expect(await screen.findByTestId("avatar-url")).toHaveValue(
+        "https://cdn.example/saved.png",
+      );
+    expect(screen.getByTestId("which")).toHaveTextContent("avatar");
+  },
+);

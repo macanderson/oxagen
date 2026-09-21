@@ -2,6 +2,7 @@
 // and the shell.context read for that context. This file proves the shell
 // receives the context's organization, the session's person and the port's
 // read, and refuses to render without a session.
+import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAuthUser = vi.fn();
@@ -111,7 +112,11 @@ beforeEach(() => {
 describe("shellSource", () => {
   it("hands the context's organization, the signed-in person, their zone and the shell.context read to the shell", async () => {
     expect(await shellSource(ctx, source)).toEqual({
-      org: { slug: "acme", name: "Acme Robotics" },
+      org: {
+        key: createHash("sha256").update(`account:${ctx.orgId}`).digest("hex"),
+        slug: "acme",
+        name: "Acme Robotics",
+      },
       viewer: {
         name: "Marcus Bell",
         email: "marcus.bell@acme.example",
@@ -165,4 +170,31 @@ describe("shellSource", () => {
       "shell_without_session",
     );
   });
+});
+
+it("keys account state by immutable organization identity across slug changes", async () => {
+  const original = await shellSource(ctx, source);
+  const renamed = await shellSource(
+    unsafeMint(OrgCtx, {
+      userId: ctx.userId,
+      orgId: ctx.orgId,
+      orgSlug: "renamed",
+      orgName: ctx.orgName,
+      orgRole: ctx.orgRole,
+    }),
+    source,
+  );
+  const replacement = await shellSource(
+    unsafeMint(OrgCtx, {
+      userId: ctx.userId,
+      orgId: "7a000000-0000-4000-8000-0000000000b2",
+      orgSlug: ctx.orgSlug,
+      orgName: ctx.orgName,
+      orgRole: ctx.orgRole,
+    }),
+    source,
+  );
+  expect(renamed.org.key).toBe(original.org.key);
+  expect(replacement.org.key).not.toBe(original.org.key);
+  expect(original.org.key).not.toContain(ctx.orgId);
 });

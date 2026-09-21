@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
+import type { PreferencesDraft } from "./account-actions";
 
 type AccountOperation = "profile" | "preferences" | "avatar";
 type AccountExportState =
@@ -12,6 +13,25 @@ type AccountExportState =
       exportId: string;
     }
   | { kind: "denied" | "failed"; scope: "user" | "org" };
+
+export type PreferencesState =
+  | { kind: "loading" | "denied" | "failed" }
+  | { kind: "ready"; draft: PreferencesDraft };
+export type PreferencesSnapshot = {
+  state: PreferencesState;
+  outcome: "saved" | "invalid" | "denied" | "failed" | null;
+  revision: number;
+};
+const INITIAL_PREFERENCES: PreferencesSnapshot = {
+  state: { kind: "loading" },
+  outcome: null,
+  revision: 0,
+};
+const preferencesByAccount = new Map<string, PreferencesSnapshot>();
+const avatarsByAccount = new Map<
+  string,
+  { value: string; previous: string | null }
+>();
 
 const IDLE: AccountExportState = { kind: "idle" };
 const pending = new Set<string>();
@@ -34,6 +54,27 @@ export const accountOperations = {
   resetForTests(): void {
     pending.clear();
     exportsByAccount.clear();
+    preferencesByAccount.clear();
+    avatarsByAccount.clear();
+    emit();
+  },
+  readPreferences(userId: string): PreferencesSnapshot {
+    return preferencesByAccount.get(userId) ?? INITIAL_PREFERENCES;
+  },
+  setPreferences(
+    userId: string,
+    update: (current: PreferencesSnapshot) => PreferencesSnapshot,
+  ): void {
+    preferencesByAccount.set(userId, update(this.readPreferences(userId)));
+    emit();
+  },
+  readAvatar(
+    userId: string,
+  ): { value: string; previous: string | null } | null {
+    return avatarsByAccount.get(userId) ?? null;
+  },
+  setAvatar(userId: string, value: string, previous: string | null): void {
+    avatarsByAccount.set(userId, { value, previous });
     emit();
   },
   isPending(userId: string, operation: AccountOperation): boolean {
@@ -50,17 +91,17 @@ export const accountOperations = {
     pending.delete(keyOf(userId, operation));
     emit();
   },
-  readExport(userId: string, orgSlug: string): AccountExportState {
-    return exportsByAccount.get(keyOf(userId, orgSlug)) ?? IDLE;
+  readExport(userId: string, orgKey: string): AccountExportState {
+    return exportsByAccount.get(keyOf(userId, orgKey)) ?? IDLE;
   },
-  setExport(userId: string, orgSlug: string, state: AccountExportState): void {
-    exportsByAccount.set(keyOf(userId, orgSlug), state);
+  setExport(userId: string, orgKey: string, state: AccountExportState): void {
+    exportsByAccount.set(keyOf(userId, orgKey), state);
     emit();
   },
-  beginExport(userId: string, orgSlug: string, scope: "user" | "org"): boolean {
-    const state = this.readExport(userId, orgSlug);
+  beginExport(userId: string, orgKey: string, scope: "user" | "org"): boolean {
+    const state = this.readExport(userId, orgKey);
     if (state.kind === "pending" || state.kind === "queued") return false;
-    this.setExport(userId, orgSlug, { kind: "pending", scope });
+    this.setExport(userId, orgKey, { kind: "pending", scope });
     return true;
   },
 };
@@ -83,22 +124,45 @@ export function useAccountOperation(
   };
 }
 
-export function useAccountExport(userId: string, orgSlug: string) {
+export function useAccountExport(userId: string, orgKey: string) {
   const state = useSyncExternalStore(
     subscribe,
-    () => accountOperations.readExport(userId, orgSlug),
+    () => accountOperations.readExport(userId, orgKey),
     () => IDLE,
   );
   const begin = useCallback(
     (scope: "user" | "org") =>
-      accountOperations.beginExport(userId, orgSlug, scope),
-    [userId, orgSlug],
+      accountOperations.beginExport(userId, orgKey, scope),
+    [userId, orgKey],
   );
   const setState = useCallback(
     (next: AccountExportState) => {
-      accountOperations.setExport(userId, orgSlug, next);
+      accountOperations.setExport(userId, orgKey, next);
     },
-    [userId, orgSlug],
+    [userId, orgKey],
   );
   return { state, begin, setState };
+}
+
+export function useAccountPreferences(userId: string) {
+  const snapshot = useSyncExternalStore(
+    subscribe,
+    () => accountOperations.readPreferences(userId),
+    () => INITIAL_PREFERENCES,
+  );
+  const update = useCallback(
+    (change: (current: PreferencesSnapshot) => PreferencesSnapshot) => {
+      accountOperations.setPreferences(userId, change);
+    },
+    [userId],
+  );
+  return { ...snapshot, update };
+}
+
+export function useAccountAvatar(userId: string) {
+  return useSyncExternalStore(
+    subscribe,
+    () => accountOperations.readAvatar(userId),
+    () => null,
+  );
 }

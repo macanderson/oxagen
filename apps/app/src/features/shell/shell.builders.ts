@@ -16,7 +16,11 @@ const SHELL_VIEWER = {
   timeZone: "America/Los_Angeles",
 } as const;
 
-const SHELL_ORG = { slug: "acme", name: "Acme Robotics" } as const;
+const SHELL_ORG = {
+  key: "org_acme",
+  slug: "acme",
+  name: "Acme Robotics",
+} as const;
 
 const SHELL_CONTEXT = readOk({
   orgs: [SHELL_ORG],

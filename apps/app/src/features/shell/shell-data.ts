@@ -6,7 +6,7 @@ import type { ShellContext } from "@/data/contracts/shell";
 import type { Read } from "@/data/read";
 
 export type ShellData = {
-  org: { slug: string; name: string };
+  org: { key: string; slug: string; name: string };
   viewer: {
     name: string | null;
     email: string;

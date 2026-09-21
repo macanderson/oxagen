@@ -78,7 +78,7 @@ const { AvatarDialog } = await import("./avatar-dialog");
 
 /** The dialog renders from shell state, so a test needs the way a person opens it. */
 function OpenIt() {
-  const { openAccount, avatarOpen, accountOpen } = useShellState();
+  const { openAccount, avatarOpen, accountOpen, setTheme } = useShellState();
   return (
     <>
       {(["profile", "preferences", "security", "privacy"] as const).map(
@@ -94,6 +94,9 @@ function OpenIt() {
           </button>
         ),
       )}
+      <button type="button" onClick={() => setTheme("light")}>
+        choose light from menu
+      </button>
       <output data-testid="which">
         {avatarOpen ? "avatar" : accountOpen ? "account" : "none"}
       </output>
@@ -1513,3 +1516,93 @@ it.each(["profile", "preferences", "security", "privacy"] as const)(
   },
   60_000,
 );
+
+it.each(["denied", "throw"])(
+  "keeps a newer preview when an earlier save fails: %s",
+  async (failure) => {
+    let finish: ((result: unknown) => void) | undefined;
+    let reject: ((reason: Error) => void) | undefined;
+    savePreferences.mockImplementation(
+      () =>
+        new Promise((resolve, refuse) => {
+          finish = resolve;
+          reject = refuse;
+        }),
+    );
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "light",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    await user.selectOptions(screen.getByTestId("account-theme"), "dark");
+    if (failure === "throw") reject?.(new Error("offline"));
+    else finish?.({ ok: false, reason: "denied" });
+    await screen.findByTestId(
+      `account-preferences-${failure === "throw" ? "failed" : "denied"}`,
+    );
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+  },
+);
+
+it.each([true, false])(
+  "retains the submitted draft and settlement across a tab remount, success=%s",
+  async (success) => {
+    let finish: ((result: unknown) => void) | undefined;
+    savePreferences.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "dark",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    await user.click(screen.getByRole("tab", { name: "Profile" }));
+    await user.click(screen.getByRole("tab", { name: "Preferences" }));
+    expect(await screen.findByTestId("account-theme")).toHaveValue("dark");
+    expect(screen.getByTestId("account-preferences-save")).toBeDisabled();
+    finish?.(
+      success
+        ? { ok: true, value: { locale: "en", timezone: "UTC", theme: "dark" } }
+        : { ok: false, reason: "denied" },
+    );
+    await screen.findByTestId(
+      `account-preferences-${success ? "saved" : "denied"}`,
+    );
+    expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+    expect(readPreferences).toHaveBeenCalledTimes(1);
+  },
+);
+
+it("keeps a menu theme chosen after the pending preferences panel closes", async () => {
+  let finish: ((result: unknown) => void) | undefined;
+  savePreferences.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { user } = await openDialog("preferences");
+  await user.selectOptions(await screen.findByTestId("account-theme"), "dark");
+  await user.click(screen.getByTestId("account-preferences-save"));
+  await user.click(screen.getByRole("tab", { name: "Profile" }));
+  await user.click(
+    screen.getByRole("button", { name: "choose light from menu" }),
+  );
+  finish?.({
+    ok: true,
+    value: { locale: "en", timezone: "UTC", theme: "dark" },
+  });
+  await waitFor(() =>
+    expect(
+      accountOperations.isPending(shellData().viewer.id, "preferences"),
+    ).toBe(false),
+  );
+  expect(document.cookie).toContain("theme=light");
+  expect(document.documentElement.dataset.theme).toBe("light");
+});

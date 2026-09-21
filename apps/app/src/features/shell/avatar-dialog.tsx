@@ -33,7 +33,11 @@ import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { updateProfile } from "./account-actions";
-import { useAccountOperation } from "./account-operations";
+import {
+  accountOperations,
+  useAccountAvatar,
+  useAccountOperation,
+} from "./account-operations";
 import { buttonSmall, fieldLabel, hint } from "./account-styles";
 import { initials as initialsOf } from "./format";
 import type { ShellData } from "./shell-data";
@@ -146,8 +150,16 @@ function AvatarEditor({ data }: { data: ShellData }) {
   const lettersId = useId();
   const urlId = useId();
   const shown = viewer.name ?? viewer.email;
+  const settledAvatar = useAccountAvatar(viewer.id);
+  const currentAvatar =
+    settledAvatar &&
+    (viewer.avatarUrl === settledAvatar.previous ||
+      viewer.avatarUrl === settledAvatar.value)
+      ? settledAvatar.value
+      : viewer.avatarUrl;
+  const editsRef = useRef(0);
   const [draft, setDraft] = useState<Draft>(() =>
-    draftFrom(viewer.avatarUrl, initialsOf(shown)),
+    draftFrom(currentAvatar, initialsOf(shown)),
   );
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const operation = useAccountOperation(viewer.id, "avatar");
@@ -160,7 +172,14 @@ function AvatarEditor({ data }: { data: ShellData }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (editsRef.current === 0) {
+      setDraft(draftFrom(currentAvatar, initialsOf(shown)));
+    }
+  }, [currentAvatar, shown]);
+
   function edit(patch: Partial<Draft>) {
+    editsRef.current += 1;
     setOutcome(null);
     setDraft((d) => ({ ...d, ...patch }));
   }
@@ -182,13 +201,20 @@ function AvatarEditor({ data }: { data: ShellData }) {
   async function saveAvatar(avatarUrl: string) {
     if (!operation.begin()) return;
     setOutcome(null);
+    const sentAt = editsRef.current;
     try {
       const result = await updateProfile(org.slug, {
         avatarUrl,
       });
       if (result.ok) {
+        accountOperations.setAvatar(
+          viewer.id,
+          result.value.avatarUrl ?? "",
+          viewer.avatarUrl,
+        );
         navigate.refresh();
-        if (mountedRef.current) setAvatarOpen(false);
+        if (mountedRef.current && editsRef.current === sentAt)
+          setAvatarOpen(false);
       } else if (result.reason === "invalid") setOutcome("invalid");
       else if (result.reason === "denied") setOutcome("denied");
       else setOutcome("failed");

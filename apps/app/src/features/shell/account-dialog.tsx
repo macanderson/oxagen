@@ -63,7 +63,12 @@ import {
 } from "./account-styles";
 import { initials } from "./format";
 import { recoveryCodeVault, useRecoveryCodeVault } from "./recovery-code-vault";
-import { useAccountOperation, useAccountExport } from "./account-operations";
+import {
+  accountOperations,
+  useAccountPreferences,
+  useAccountOperation,
+  useAccountExport,
+} from "./account-operations";
 import {
   liveListSessions,
   liveRegenerateBackupCodes,
@@ -545,12 +550,6 @@ function ProfileTab({
 
 /* ============================== Preferences ============================== */
 
-type PrefsState =
-  | { kind: "loading" }
-  | { kind: "denied" }
-  | { kind: "failed" }
-  | { kind: "ready"; draft: PreferencesDraft };
-
 const THEMES: readonly Theme[] = ["system", "dark", "light"];
 
 /** The zones the browser knows, plus UTC, with the stored one kept even when it is not among them. */
@@ -598,93 +597,102 @@ function previewFor(locale: string, timeZone: string) {
 function PreferencesTab({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account.preferences");
   const navigate = useNavigate();
-  const { setTheme, previewTheme } = useShellState();
+  const { setTheme, previewTheme, themeRevision } = useShellState();
   const localeId = useId();
   const zoneId = useId();
   const themeId = useId();
-  const [state, setState] = useState<PrefsState>({ kind: "loading" });
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const { state, outcome, update } = useAccountPreferences(data.viewer.id);
   const operation = useAccountOperation(data.viewer.id, "preferences");
   const { pending } = operation;
-  /** Edit counter, for the same reason as the Profile tab's: see `onSubmit`. */
-  const editsRef = useRef(0);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     let live = true;
-    void readPreferences(data.org.slug)
-      .then((result) => {
-        if (!live) return;
-        if (result.ok) {
-          setState({ kind: "ready", draft: result.value });
-          setTheme(result.value.theme);
-        } else if (result.reason === "denied") setState({ kind: "denied" });
-        else setState({ kind: "failed" });
-      })
-      .catch(() => {
-        if (live) setState({ kind: "failed" });
-      });
+    mountedRef.current = true;
+    const expectedTheme = themeRevision();
+    if (
+      accountOperations.readPreferences(data.viewer.id).state.kind !== "ready"
+    ) {
+      void readPreferences(data.org.slug)
+        .then((result) => {
+          if (!live) return;
+          update((current) => ({
+            ...current,
+            state: result.ok
+              ? { kind: "ready", draft: result.value }
+              : { kind: result.reason === "denied" ? "denied" : "failed" },
+          }));
+          if (result.ok) setTheme(result.value.theme, expectedTheme);
+        })
+        .catch(() => {
+          if (live)
+            update((current) => ({ ...current, state: { kind: "failed" } }));
+        });
+    }
     return () => {
       live = false;
+      mountedRef.current = false;
       previewTheme(null);
     };
-  }, [data.org.slug, setTheme, previewTheme]);
-
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  }, [
+    data.viewer.id,
+    data.org.slug,
+    setTheme,
+    previewTheme,
+    themeRevision,
+    update,
+  ]);
 
   function edit(patch: Partial<PreferencesDraft>) {
     if (patch.theme !== undefined) previewTheme(patch.theme);
-    if (outcome === "saved") setOutcome(null);
-    editsRef.current += 1;
-    setState((s) =>
-      s.kind === "ready"
-        ? { kind: "ready", draft: { ...s.draft, ...patch } }
-        : s,
-    );
+    update((current) => ({
+      state:
+        current.state.kind === "ready"
+          ? { kind: "ready", draft: { ...current.state.draft, ...patch } }
+          : current.state,
+      revision: current.revision + 1,
+      outcome: null,
+    }));
   }
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (state.kind !== "ready" || !operation.begin()) return;
-    const sentAt = editsRef.current;
-    setOutcome(null);
+    const sentAt = accountOperations.readPreferences(data.viewer.id).revision;
+    const expectedTheme = themeRevision();
+    const unchanged = () =>
+      accountOperations.readPreferences(data.viewer.id).revision === sentAt;
+    update((current) => ({ ...current, outcome: null }));
     try {
       const result = await savePreferences(data.org.slug, state.draft);
       if (result.ok) {
-        setTheme(result.value.theme);
-        if (mountedRef.current && editsRef.current === sentAt) previewTheme(null);
-        // Only if the form is still the one that was sent, and for the same
-        // reason as the Profile tab: a selection made while the save was in
-        // flight is a decision the person has taken, and replacing it with the
-        // older answer under a "Saved." line hides that it was thrown away.
-        // Keep a newer theme preview while committing the saved value below it.
-        if (editsRef.current === sentAt) {
-          setState({ kind: "ready", draft: result.value });
-          setOutcome("saved");
-        }
-        // The zone this row holds is the one every date in the app renders in:
-        // the organization layout reads it server-side and hands it to
-        // <ViewerClock> and the chrome's <TimeZoneProvider>. Without this the
-        // stored zone changes and every date on the page keeps the zone the
-        // request started in until a full reload, across client-side
-        // navigation too, because the shell lives in the layout. Re-rendered
-        // only when the zone actually moved, and at the URL already showing,
-        // so the dialog stays open.
+        setTheme(result.value.theme, expectedTheme);
+        if (mountedRef.current && unchanged()) previewTheme(null);
+        update((current) =>
+          current.revision === sentAt
+            ? {
+                ...current,
+                state: { kind: "ready", draft: result.value },
+                outcome: "saved",
+              }
+            : current,
+        );
         if (result.value.timezone !== data.viewer.timeZone) navigate.refresh();
       } else {
-        if (mountedRef.current) previewTheme(null);
-        if (result.reason === "invalid") setOutcome("invalid");
-        else if (result.reason === "denied") setOutcome("denied");
-        else setOutcome("failed");
+        if (mountedRef.current && unchanged()) previewTheme(null);
+        update((current) => ({
+          ...current,
+          outcome:
+            result.reason === "invalid"
+              ? "invalid"
+              : result.reason === "denied"
+                ? "denied"
+                : "failed",
+        }));
       }
     } catch {
-      if (mountedRef.current) previewTheme(null);
-      setOutcome("failed");
+      if (mountedRef.current && unchanged()) previewTheme(null);
+      update((current) => ({ ...current, outcome: "failed" }));
     } finally {
       operation.end();
     }
@@ -1298,7 +1306,7 @@ function PrivacyTab({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account.privacy");
   const { state, setState, begin } = useAccountExport(
     data.viewer.id,
-    data.org.slug,
+    data.org.key,
   );
 
   async function ask(scope: "user" | "org") {
