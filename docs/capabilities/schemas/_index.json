@@ -359,6 +359,16 @@
       "consumes": []
     },
     {
+      "name": "create_run_token",
+      "domain": "run",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "create_schema_version",
       "domain": "schema",
       "surfaces": [
@@ -1688,6 +1698,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "ingest_run_frames",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

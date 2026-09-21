@@ -257,7 +257,11 @@ export class RunEventSequenceGapError extends Error {
  * `expired`, `fenced`) went with `agent.agent_run_attempt_leases`. The seal is
  * now the only fence.
  */
-export type AttemptRejectionReason = "unknown_attempt" | "sealed";
+export type AttemptRejectionReason =
+  | "unknown_attempt"
+  | "sealed"
+  | "cancelled"
+  | "paused";
 
 /**
  * An append or a second seal was attempted against an attempt that may not take

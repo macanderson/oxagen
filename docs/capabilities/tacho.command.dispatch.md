@@ -15,7 +15,7 @@ A new command supersedes an earlier `queued` command of the same kind on the sam
 - API: `POST /v1/:org_slug/:workspace_slug/commands`
 - MCP: `dispatch_command`
 - Authentication: session or API key; the handler requires org Owner or Admin, or workspace Owner or Member on the workspace the call is scoped to, of the signed-in user or the key's creator (`assertOrgRole`, `resolveActingUserId`, INV-29), and records that user as the issuer; a key with no recorded creator is refused `forbidden / no_principal` — the kernel's IAM check allows everything for a non-enterprise organisation
-- App: `/[org]/[ws]/runs/[run]` draws Pause, Resume, Steer and Cancel on a live wrapped run, and `/[org]/[ws]` (Fleet) draws Pause, Resume and Cancel on a live wrapped run's row. Steer stays on the run page, where its text and its delivery mode have room. A run that is not live draws no controls; an `observe`-tier run, a ledger run, and a viewer the handler would refuse each draw the recorded reason in their place, so nobody is sent to a refusal they could have read on the page
+- App: `/[org]/[ws]/runs/[run]` draws Pause, Resume, Steer and Cancel on a live wrapped run, and `/[org]/[ws]` (Fleet) draws Pause, Resume and Cancel on a live wrapped run's row. Steer stays on the run page, where its text and its delivery mode have room. A run that is not live draws no controls; an `observe`-tier wrapped run and a viewer the handler would refuse each draw the recorded reason in their place, so nobody is sent to a refusal they could have read on the page
 - Capability name: `dispatch_command`
 - Not billed (`noBillingGate: true`): a lapsed bucket must never leave an agent unstoppable. IAM default-deny; high sensitivity.
 
@@ -38,7 +38,7 @@ A new command supersedes an earlier `queued` command of the same kind on the sam
 
 ## Recipients and refusals
 
-- A direct target that cannot receive is refused, never queued (§7.3): a sealed run is `conflict` / `run_sealed`; an `observe`-tier run is `conflict` / `observe_tier`; a ledger run (`arun_…`) is `conflict` / `no_connection_point` — no producer in this tree appends to `@oxagen/run-ledger` and no run token exists, so there is no boundary to refuse and nothing to revoke.
+- A direct target that cannot receive is refused, never queued (§7.3): a sealed run is `conflict` / `run_sealed`; an `observe`-tier run is `conflict` / `observe_tier`; a ledger run (`arun_…`) refuses steering with `conflict` / `no_connection_point`. Its pause and resume commands fence evidence ingress at the next batch boundary. Cancel revokes the run credentials and permanently fences appends. Applied command receipts describe ingress state, not external process state.
 - A broadcast reaches every live root session in the workspace (or the agent's). An `observe`-tier recipient is recorded as `failed` with `outcome_detail: observe_tier` so the report is complete (§7.6). Sealed runs are not live and are not enumerated.
 - `not_found`: a run id neither store holds in the caller's workspace, or a workspace id other than the caller's.
 - `forbidden`: the actor holds none of org Owner, org Admin, workspace Owner or workspace Member.
@@ -46,3 +46,7 @@ A new command supersedes an earlier `queued` command of the same kind on the sam
 ## Honesty
 
 Records from a Tacho host are `client_attested` evidence (ADR-040 section 4): the hook adapter denies at the harness, never at a gateway. Every session carries its `enforcementTier`; nothing here claims prevention where it has observation, and the mode shown is the one recorded as achieved.
+
+## Ledger ingress controls
+
+A ledger run shows Pause or Resume according to its recorded ingress state, plus Cancel. Pause refuses new evidence batches and attempt admission under the same run lock used by ingestion. Resume clears only the pause fence. It cannot reverse cancellation or revive a revoked credential. Credentials can expire while paused, so a producer may need an operator to issue a fresh credential after resume. Command receipts retain the reason and distinguish `ledger_ingress_paused`, `ledger_ingress_resumed`, and `ledger_ingress_revoked`. No command claims the external process stopped or received a model message.
