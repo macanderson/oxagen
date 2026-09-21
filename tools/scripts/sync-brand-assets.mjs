@@ -10,25 +10,15 @@
  *
  *   node tools/scripts/sync-brand-assets.mjs [--brand <dir>] [--check]
  *
- * --brand   where the kit is checked out. Defaults to $OXAGEN_HOUSE_BRAND,
- *           then ../oxagen-house-brand beside this repo (the kit's former name).
- * --check   verify the vendored files match what the kit would emit, write
- *           nothing, exit non-zero on drift. This is what CI runs.
+ * --brand   kit checkout. Defaults to $OXAGEN_BRAND_KIT, then the deprecated
+ *           $OXAGEN_HOUSE_BRAND alias, then ../oxagen-brand.
+ * --check   verify vendored files without writing. Exit non-zero on drift.
  *
- * TWO BRAND RULES ARE ENFORCED HERE, not left to reviewers:
- *
- *   1. Oxagen's logo is the WORDMARK. The kit also emits an Oxagen lockup
- *      (the Ox mark in a plate, then the word); it is never shipped to a
- *      frontend. `FORBIDDEN` below fails the sync if one ever appears in a
- *      public directory.
- *   2. Stella's mark lives inside its word — `stella*`, the asterisk in gold.
- *      That combined form is the Stella lockup, and it is the only Stella
- *      lockup there is; the kit emits no separate one.
- *
- * PNG favicons follow the kit's own rule (build/build.py: build_favicons):
- * a PNG cannot adapt to the tab's colour scheme, and Oxagen's `Ox` is one
- * colour, so every Oxagen raster icon comes from the dark TILE — opaque and
- * legible wherever the tab is painted. The SVG favicon stays adaptive.
+ * Each surface has an explicit mark allowlist. The product uses the wordmark
+ * where a word fits and the hive for square icons. The kit also supplies a
+ * lockup, but no current product surface selects it. Stella uses its wordmark
+ * and asterisk. Raster icons use the opaque dark tile; SVG favicons adapt.
+
  */
 
 import { createHash } from "node:crypto";
@@ -43,15 +33,53 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 const argv = process.argv.slice(2);
 const CHECK = argv.includes("--check");
-const brandArg = argv.indexOf("--brand");
-const BRAND = resolve(
-  brandArg >= 0 && argv[brandArg + 1]
-    ? argv[brandArg + 1]
-    : process.env.OXAGEN_HOUSE_BRAND || join(REPO, "../oxagen-house-brand"),
-);
+export function brandPath(args, env, repo = REPO) {
+  const brandArg = args.indexOf("--brand");
+  return resolve(
+    brandArg >= 0 && args[brandArg + 1]
+      ? args[brandArg + 1]
+      : env.OXAGEN_BRAND_KIT ||
+          env.OXAGEN_HOUSE_BRAND ||
+          join(repo, "../oxagen-brand"),
+  );
+}
+const BRAND = brandPath(argv, process.env);
 
-/** A lockup must never reach a frontend under this name. */
-const FORBIDDEN = /oxagen-lockup/i;
+const NEXT_MARKS = ["oxagen", "stella"].flatMap((brand) =>
+  [
+    "wordmark",
+    "wordmark-on-dark",
+    "wordmark-on-light",
+    "icon",
+    "icon-tile-dark",
+    "icon-tile-light",
+    "avatar-light",
+    "avatar-dark",
+  ].map((variant) => `${brand}-${variant}.svg`),
+);
+const SURFACE_MARKS = {
+  "apps/app/public/brand": NEXT_MARKS,
+  "apps/docs/public/brand": NEXT_MARKS,
+  "apps/app_deprecated/public/brand": NEXT_MARKS,
+  "apps/web/assets/brand": [
+    "wordmark",
+    "wordmark-on-dark",
+    "icon",
+    "icon-tile-dark",
+    "spinner",
+  ].map((variant) => `oxagen-${variant}.svg`),
+};
+
+/** Reject an unselected mark before writing or checking the surface. */
+export function assertSurfaceMark(relPath) {
+  const marker = relPath.indexOf("/brand/");
+  if (marker < 0) return;
+  const surface = relPath.slice(0, marker + "/brand".length);
+  const file = relPath.slice(marker + "/brand/".length);
+  if (!SURFACE_MARKS[surface]?.includes(file)) {
+    throw new Error(`mark is not selected for ${surface}: ${file}`);
+  }
+}
 
 /* ── the sizes each surface asks for ─────────────────────────────────────── */
 
@@ -146,11 +174,7 @@ const written = [];
 const drifted = [];
 
 function emit(relPath, data) {
-  if (FORBIDDEN.test(relPath)) {
-    throw new Error(
-      `refusing to ship "${relPath}": Oxagen's logo is the wordmark, never the lockup`,
-    );
-  }
+  assertSurfaceMark(relPath);
   const abs = join(REPO, relPath);
   const buf = Buffer.isBuffer(data) ? data : Buffer.from(data, "utf8");
   let current = null;
@@ -454,8 +478,7 @@ function tokens() {
  *
  * Each wordmark is two paths: `letters`, which takes currentColor and so flips
  * with the theme, and `accent` — the ONE gold glyph (the `x` of oxagen, the
- * asterisk of stella). The icons are a single path inside a transform, one
- * colour, because the house rule is that a mark never carries the metal.
+ * asterisk of stella). The hive keeps each outline and gold cell from the kit.
  */
 function marks() {
   const read = (name) => readFileSync(svg(name), "utf8");
@@ -593,54 +616,66 @@ export const STELLA: BrandGeometry = ${JSON.stringify(data.stella, null, 2)};
  * only drift this misses is someone hand-editing one, which shows up in the
  * diff of the PR that does it.
  */
-try {
-  readFileSync(join(BRAND, "tokens/house-tokens.json"));
-} catch {
-  const where = `clone oxagenai/oxagen-brand and point OXAGEN_HOUSE_BRAND at it (the default path is the kit's former name).`;
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    readFileSync(join(BRAND, "tokens/house-tokens.json"));
+  } catch {
+    const where =
+      "Clone oxagenai/oxagen-brand beside this repo or set OXAGEN_BRAND_KIT.";
+    if (CHECK) {
+      console.log(
+        `brand: SKIPPED. No house kit at ${BRAND}, so no asset was verified. ${where}`,
+      );
+      process.exit(0);
+    }
+    console.error(`brand kit not found at ${BRAND}\n${where}`);
+    process.exit(2);
+  }
+
+  for (const surface of Object.keys(SURFACE_MARKS)) {
+    try {
+      for (const file of readdirSync(join(REPO, surface))) {
+        assertSurfaceMark(`${surface}/${file}`);
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  skill();
+  fonts();
+  tokens();
+  marks();
+  nextSurface("apps/app/public", "oxagen");
+  nextSurface("apps/docs/public", "oxagen");
+  // Deprecated app still boots locally and in archive deploys; keep its public
+  // marks on the same kit tip as the live surfaces so a stray open does not
+  // show the retired Ox lettermark or cream paper.
+  nextSurface("apps/app_deprecated/public", "oxagen");
+  nextAppIcon("apps/docs", "oxagen");
+  nextAppIcon("apps/app_deprecated", "oxagen");
+  staticSurface("apps/web", "oxagen");
+
+  const version = JSON.parse(
+    readFileSync(join(BRAND, "tokens/house-tokens.json"), "utf8"),
+  ).version;
+
   if (CHECK) {
+    if (drifted.length) {
+      console.error(`brand assets are stale against house kit ${version}:`);
+      for (const f of drifted) console.error(`  ${f}`);
+      console.error(`\nrun: node tools/scripts/sync-brand-assets.mjs`);
+      process.exit(1);
+    }
+    console.log(`brand: every vendored asset matches house kit ${version}`);
+  } else {
+    const digest = createHash("sha256")
+      .update(written.sort().join("\n"))
+      .digest("hex")
+      .slice(0, 12);
     console.log(
-      `brand: SKIPPED — no house kit at ${BRAND}, so no asset was verified. ${where}`,
+      written.length
+        ? `brand: synced ${written.length} file(s) from house kit ${version} (${digest})`
+        : `brand: already current with house kit ${version}`,
     );
-    process.exit(0);
   }
-  console.error(`brand kit not found at ${BRAND}\n${where}`);
-  process.exit(2);
-}
-
-skill();
-fonts();
-tokens();
-marks();
-nextSurface("apps/app/public", "oxagen");
-nextSurface("apps/docs/public", "oxagen");
-// Deprecated app still boots locally and in archive deploys; keep its public
-// marks on the same kit tip as the live surfaces so a stray open does not
-// show the retired Ox lettermark or cream paper.
-nextSurface("apps/app_deprecated/public", "oxagen");
-nextAppIcon("apps/docs", "oxagen");
-nextAppIcon("apps/app_deprecated", "oxagen");
-staticSurface("apps/web", "oxagen");
-
-const version = JSON.parse(
-  readFileSync(join(BRAND, "tokens/house-tokens.json"), "utf8"),
-).version;
-
-if (CHECK) {
-  if (drifted.length) {
-    console.error(`brand assets are stale against house kit ${version}:`);
-    for (const f of drifted) console.error(`  ${f}`);
-    console.error(`\nrun: node tools/scripts/sync-brand-assets.mjs`);
-    process.exit(1);
-  }
-  console.log(`brand: every vendored asset matches house kit ${version}`);
-} else {
-  const digest = createHash("sha256")
-    .update(written.sort().join("\n"))
-    .digest("hex")
-    .slice(0, 12);
-  console.log(
-    written.length
-      ? `brand: synced ${written.length} file(s) from house kit ${version} (${digest})`
-      : `brand: already current with house kit ${version}`,
-  );
 }
