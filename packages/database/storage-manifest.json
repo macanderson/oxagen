@@ -965,7 +965,8 @@
       "name": "get_export_status",
       "reads": [],
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -3549,7 +3550,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d03ec821ad94e54ec5743b463a2967c625b056a04f938a4b9303ed788d5f560a",
+  "contentHash": "bc7697b047aafe610053b7e4a6bfec4ffa3f52c5b142a1d8fc5abba185ad5a39",
   "domains": [
     {
       "name": "agent",
