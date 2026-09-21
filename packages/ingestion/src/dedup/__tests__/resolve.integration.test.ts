@@ -41,6 +41,11 @@ import type { EntityMutation } from "../../types";
 const ORG_ID = "00000000-0000-4000-8000-0000000da052";
 const WORKSPACE_ID = "00000000-0000-4000-8000-0000000da053";
 const NATURAL_KEY = "github:oxa-2052-dedup-regression:redelivered-42";
+// The graph_node_public_id constraint (schema.cypher §GraphNode) makes publicId
+// unique across the whole graph, not per org. A hardcoded fixture id can
+// collide with a duplicate principal created when an earlier interrupted run
+// left a stale node behind, so derive a run-unique id from the worker context.
+const LEGACY_PUBLIC_ID = `legacy-identity-node-${process.env.VITEST_POOL_ID ?? "0"}-${Date.now().toString(36)}`;
 
 function makeMutation(overrides: Partial<EntityMutation> = {}): EntityMutation {
   return {
@@ -235,13 +240,14 @@ describe("GitHub legacy identity (real Neo4j)", () => {
     try {
       await session.run(
         `MERGE (n:Task:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
-        SET n.publicId = 'legacy-identity-node', n.workspaceId = $workspaceId,
+        SET n.publicId = $legacyPublicId, n.workspaceId = $workspaceId,
             n.sourceRecordType = 'issue', n.properties = $properties, n.canonicalNaturalKey = null
         MERGE (n)-[:TEST_IDENTITY_LINK]->(n)`,
         {
           naturalKey: NATURAL_KEY,
           orgId: ORG_ID,
           workspaceId: WORKSPACE_ID,
+          legacyPublicId: LEGACY_PUBLIC_ID,
           properties: JSON.stringify({ url: originalUrl }),
         },
       );
@@ -273,7 +279,7 @@ describe("GitHub legacy identity (real Neo4j)", () => {
               ORG_ID,
             ),
         );
-        expect(result.principalNodeId).toBe("legacy-identity-node");
+        expect(result.principalNodeId).toBe(LEGACY_PUBLIC_ID);
         expect(result.action).toBe("updated_principal");
       }
       const result = await session.run(

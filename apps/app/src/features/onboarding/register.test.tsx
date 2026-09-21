@@ -118,16 +118,16 @@ describe("the wrap step", () => {
     expect(
       screen.getByRole("button", { name: "Mint the one-time token" }),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("wrap-sdk")).toBeNull();
+    expect(screen.queryByTestId("wrap-unavailable")).toBeNull();
   });
 
-  it("offers the in-process path for an SDK agent, with no token to mint", async () => {
+  it("shows the missing SDK adapter without invented installation instructions", async () => {
     await renderStep("wrap", "agt_releasebot", {
       state: readOk(onboardingGate()),
       agent: readOk(agentDetail({ identity: { harness: "claude-agent-sdk" } })),
     });
-    expect(screen.getByTestId("wrap-sdk")).toHaveTextContent(
-      "Wrap it in your own process",
+    expect(screen.getByTestId("wrap-unavailable")).toHaveTextContent(
+      "Wrapping is not available for this harness",
     );
     expect(
       screen.queryByRole("button", { name: "Mint the one-time token" }),

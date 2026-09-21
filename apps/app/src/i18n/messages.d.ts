@@ -2200,12 +2200,6 @@ type Messages = {
           pending: string;
           again: string;
         };
-        sdk: {
-          title: string;
-          body: string;
-          install: string;
-          credential: string;
-        };
         token: {
           label: string;
           once: string;
@@ -2215,6 +2209,10 @@ type Messages = {
         back: string;
         continue: string;
         advancing: string;
+        unavailable: {
+          title: string;
+          body: string;
+        };
       };
       run: {
         title: string;
@@ -2334,6 +2332,26 @@ type Messages = {
         title: string;
         confirm: string;
         pending: string;
+      };
+      governance: {
+        heading: string;
+        about: string;
+        unchanged: string;
+        unchangedHint: string;
+        solo: string;
+        team: string;
+        regulated: string;
+        override: string;
+        overrideHint: string;
+        done: {
+          applied: string;
+          overridden: string;
+          proposed: string;
+          reused: string;
+          openPr: string;
+          refused: string;
+          close: string;
+        };
       };
       archiveWorkspace: {
         open: string;
