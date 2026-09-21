@@ -2,7 +2,7 @@
 // clients outside their owning packages. Every tenant data access must go
 // through a scope-aware wrapper so Row-Level Security stays load-bearing:
 //   - Postgres:   withTenantDb (scoped) / withOrgDb (organisation-wide read,
-//                 RLS still on, ADR-075) / withSystemDb (explicit, audited bypass)
+//                 RLS still on, ADR-075) / withSystemDb (explicit bypass; call-site justification checked)
 //   - Neo4j:      scopedSession()
 //   - ClickHouse: chInsert / chSelect
 // Imported by both the root config (non-Next packages + apps/api, apps/mcp) and
@@ -20,7 +20,7 @@ export const tenancySeamRestrictedImports = {
       message:
         "Raw db() bypasses tenant RLS scoping. Use withTenantDb (scoped), " +
         "withOrgDb (organisation-wide read, RLS still on) or withSystemDb " +
-        "(explicit, audited bypass) from @oxagen/database. (OXA-1515)",
+        "(explicit bypass; call-site justification checked) from @oxagen/database. (OXA-1515)",
     },
     {
       name: "@oxagen/database/client",
