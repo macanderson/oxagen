@@ -283,7 +283,7 @@ As it now stands:
    today (unlike Claude Code and Codex, which vendor-document theirs).
    Establish whether either exposes an equivalent knob before committing to
    build it. **1 day.**
-6. **Open, for Stella only. Route Stella through the proxy.** PR 5 found the
+6. **Open, for Stella only, filed as #3717. Route Stella through the proxy.** PR 5 found the
    knob: the user-scope `providers.<id>.base_url` key in
    `~/.stella/stella.toml`, the same TOML shape `model-base-url.ts` already
    edits for Codex. It needs `ModelBaseUrlHarness` widened, a route in
