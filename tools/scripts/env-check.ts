@@ -168,6 +168,11 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // where `tacho enroll --harness stella` writes its hook block
   // (packages/tacho/src/host/paths.ts). Stella's contract, not ours.
   "STELLA_HOME",
+  // Stella's override for where its managed settings live. `tacho status`
+  // reads it to report a managed providers.anthropic.base_url that shadows
+  // the gateway's (packages/tacho/src/host/model-base-url.ts). Stella's
+  // contract, not ours.
+  "STELLA_MANAGED_SETTINGS",
   "CLAUDE_CODE_BRIDGE_SESSION_ID",
   "CLAUDE_CODE_ENTRYPOINT",
   "CLAUDE_EFFORT",

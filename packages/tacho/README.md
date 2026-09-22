@@ -94,10 +94,21 @@ credential stays on the machine and is never written to a frame or a log.
 |---|---|---|---|
 | Claude Code | `~/.claude/settings.json`, `env.ANTHROPIC_BASE_URL` | `http://127.0.0.1:<port>/anthropic` | API key (`X-Api-Key`) and claude.ai subscription (`Authorization: Bearer`) |
 | Codex | `~/.codex/config.toml`, top-level `openai_base_url` | `http://127.0.0.1:<port>/backend-api/codex` | API key (forwarded to `api.openai.com/v1`) and ChatGPT login (a request carrying `ChatGPT-Account-ID` is forwarded to `chatgpt.com/backend-api/codex`) |
+| Stella | `$STELLA_HOME/stella.toml` (or the legacy `settings.json` when only that exists), `providers.anthropic.base_url` | `http://127.0.0.1:<port>/stella/anthropic` | Anthropic API key (`x-api-key`), which stays Stella's own: custody is never taken from Stella |
 
-Cursor and Stella get hook entries but no base URL, so their model calls go
-straight to the vendor. Stella has a writable one and Cursor has none;
-`docs/audits/2026-09-21-model-gateway-arming.md` has the evidence for both.
+Stella's URL has a prefix of its own because Stella sends no session header.
+The prefix tells the proxy the call is Stella's, and the one live Stella
+session gets it; with two live Stella sessions the call is filed on the
+daemon's chain. The table goes directly before Tacho's hooks block in
+`stella.toml`, so each enroll's re-append of that block leaves it in place. A
+`providers.anthropic.base_url` you set yourself is left alone, and `tacho
+enroll` and `tacho status` say Stella's calls are not routed. Stella's other
+providers (OpenRouter, Z.ai, xAI, DeepSeek, Gemini and the rest) still go
+straight to the vendor, because the proxy has no upstream for them.
+
+Cursor gets hook entries but no base URL, so its model calls go straight to
+the vendor. It has no setting short of a TLS-intercepting proxy with a CA
+install; `docs/audits/2026-09-21-model-gateway-arming.md` has the evidence.
 
 The daemon reports what each of these files holds now on every health poll
 (`model_base_urls`), and `list_tacho_hosts` returns it. Reverting the key is

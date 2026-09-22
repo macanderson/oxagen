@@ -335,6 +335,7 @@ describe("install rig: macOS, every harness", () => {
 describe("install rig: the gateway's model base URLs", () => {
   const CLAUDE_URL = `http://127.0.0.1:${RIG_GATEWAY_PORT}/anthropic`;
   const CODEX_URL = `http://127.0.0.1:${RIG_GATEWAY_PORT}/backend-api/codex`;
+  const STELLA_URL = `http://127.0.0.1:${RIG_GATEWAY_PORT}/stella/anthropic`;
 
   it("are written once the model proxy is listening, and come back out byte for byte", async () => {
     const seed = seedHome();
@@ -347,6 +348,13 @@ describe("install rig: the gateway's model base URLs", () => {
     // proxy, and a large one overflows the context before the first prompt.
     expect(settings.env["ENABLE_TOOL_SEARCH"]).toBe("true");
     expect(text(seed.home, ".codex", "config.toml")).toContain(CODEX_URL);
+    // Stella's table sits before Tacho's hooks block, so the next enroll's
+    // strip-and-append leaves it where it is.
+    const stellaToml = text(seed.home, ".stella", "stella.toml");
+    expect(stellaToml).toContain(
+      `[providers.anthropic]\nbase_url = "${STELLA_URL}"\n# >>> tacho enrollment`,
+    );
+    expect(stellaToml).toContain("# stella, hand-edited");
     // The user's own Codex config is otherwise as they wrote it.
     expect(text(seed.home, ".codex", "config.toml")).toContain(
       "# my codex config",
@@ -359,6 +367,7 @@ describe("install rig: the gateway's model base URLs", () => {
     expect(report.modelBaseUrls?.map((h) => [h.harness, h.ours])).toEqual([
       ["claude-code", true],
       ["codex", true],
+      ["stella", true],
     ]);
     expect(report.modelBaseUrls?.[0]?.toolSearch).toEqual({
       current: "true",

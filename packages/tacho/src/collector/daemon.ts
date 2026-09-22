@@ -16,7 +16,7 @@ import {
 import { z } from "zod";
 import { hookInputSchema } from "../claude-code/hooks";
 import { homedir, hostname as osHostname } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { execFile, spawnSync } from "node:child_process";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
@@ -2030,13 +2030,16 @@ async function initializeDaemon(
       const state = await readModelBaseUrlState({
         home: options.home ?? homedir(),
         port: modelProxyPortFor(host),
-        harnesses: ["claude-code", "codex"],
+        stellaHome: dirname(options.paths.stellaToml),
+        harnesses: ["claude-code", "codex", "stella"],
       });
       const next: Partial<ModelUpstreams> = {};
       for (const entry of state.harnesses) {
         if (entry.previous === null) continue;
+        // Stella never displaces a value (its own URL is left in place), so
+        // it has no previous upstream to report.
         if (entry.harness === "claude-code") next.anthropic = entry.previous;
-        else {
+        else if (entry.harness === "codex") {
           next.openai = entry.previous;
           next.chatgpt = entry.previous;
         }

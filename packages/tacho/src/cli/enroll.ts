@@ -3,7 +3,7 @@
  * under Oxagen control. Each step is idempotent and printed as it runs.
  */
 import { existsSync, lstatSync } from "node:fs";
-import { join } from "node:path";
+import { dirname } from "node:path";
 import { verifyBundle } from "../host/bundle";
 import {
   CLAUDE_DESKTOP_RESTART_NOTE,
@@ -25,7 +25,10 @@ import {
 import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
 import { acquireInstallLock } from "../host/install-lock";
-import type { ModelBaseUrlHarness } from "../host/model-base-url";
+import {
+  type ModelBaseUrlHarness,
+  modelBaseUrlFile,
+} from "../host/model-base-url";
 import { mcpConfigShapeProblem } from "../host/mcp-config-writer";
 import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
@@ -1062,15 +1065,18 @@ export async function enrollLocked(
       gateway = health?.gateway;
       if (!healthy) await deps.sleep(250);
     }
-    // The gateway (ADR-094): point Claude Code and Codex at the daemon's
+    // The gateway (ADR-094): point Claude Code, Codex and Stella at the daemon's
     // loopback model proxy. Only here, after the daemon has said the proxy
     // is listening and on which port, and never before: a base URL that
     // names a dead port stops the agent making any model call, which is a
     // worse machine than one whose model calls are not routed.
     const routed = harnesses.filter(
       (harness): harness is ModelBaseUrlHarness =>
-        harness === "claude-code" || harness === "codex",
+        harness === "claude-code" ||
+        harness === "codex" ||
+        harness === "stella",
     );
+    const stellaHome = dirname(deps.paths.stellaToml);
     if (
       deps.modelBaseUrls !== undefined &&
       options.printManaged !== true &&
@@ -1087,10 +1093,10 @@ export async function enrollLocked(
         // operator is told the calls are not routed.
         const writable = routed.filter((harness) => {
           if (unhooked.includes(harness)) return false;
-          const file =
-            harness === "claude-code"
-              ? join(deps.home, ".claude", "settings.json")
-              : join(deps.home, ".codex", "config.toml");
+          const file = modelBaseUrlFile(harness, {
+            home: deps.home,
+            stellaHome,
+          });
           let linked = false;
           try {
             linked = lstatSync(file).isSymbolicLink();
@@ -1107,11 +1113,19 @@ export async function enrollLocked(
         try {
           const state = await deps.modelBaseUrls.apply({
             home: deps.home,
+            stellaHome,
             port: gateway.port,
             harnesses: writable,
           });
           routedOk = true;
           for (const entry of state.harnesses) {
+            if (!entry.ours) {
+              warnings.push(
+                entry.leftAlone ??
+                  `${entry.key} in ${entry.file} does not point at the proxy, so ${TACHO_HARNESS_LABELS[entry.harness]} model calls are not routed through Oxagen`,
+              );
+              continue;
+            }
             deps.out(
               `      ${TACHO_HARNESS_LABELS[entry.harness]} model calls go through 127.0.0.1:${gateway.port} (${entry.key} in ${entry.file})`,
             );
