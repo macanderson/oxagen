@@ -6,8 +6,14 @@
 //   frames.ndjson     one JCS envelope per frame, in sequence order
 //   attestation.json  one Ed25519 attestation per sealed attempt (spec §8.3)
 //                     plus the verifying public key and its id
+//   redactions.json   what the host redacted and what the bundle withholds,
+//                     as kinds and counts, never a value
 //   verify.mjs        recomputes the RFC 6962 root over frames.ndjson and
 //                     checks every attestation with node:crypto alone
+//
+// `oxagen verify <bundle>` (@oxagen/tacho `verifyRunExport`) is the full
+// check an auditor runs: it recomputes every frame's digest and chain link and
+// reports held or broken per frame.
 import { zipSync } from "fflate";
 import {
   type Attestation,
@@ -16,31 +22,14 @@ import {
   jcs,
   type JsonValue,
   merkleRoot,
+  RUN_EXPORT_FORMAT,
+  type RunExportManifest,
   signAttestation,
+  summarizeRunExportRedactions,
 } from "@oxagen/tacho";
 import type { SealedSegment } from "./run-record";
 
-export const BUNDLE_FORMAT = "oxagen.run-export/1";
-
-interface RunExportManifest {
-  format: typeof BUNDLE_FORMAT;
-  run_id: string;
-  source: "ledger" | "tacho";
-  exported_at: string;
-  frame_count: number;
-  /** RFC 6962 root over every frame digest in frames.ndjson, in order. */
-  merkle_root: string;
-  attester_key_id: string;
-  attempts: Array<{
-    attempt_id: string;
-    frame_count: number;
-    merkle_root: string;
-    archive_segment_digest: string | null;
-    enforcement_tier: string;
-    completeness_gaps: string[];
-    replay_grade: string | null;
-  }>;
-}
+export const BUNDLE_FORMAT = RUN_EXPORT_FORMAT;
 
 interface RunExportBundle {
   bytes: Uint8Array;
@@ -108,15 +97,15 @@ export function buildRunExportBundle(input: {
       frame_count: segment.frameCount,
       merkle_root: attested[i]?.merkleRoot ?? "",
       archive_segment_digest: attested[i]?.segmentDigest ?? null,
+      event_stream_digest: segment.eventStreamDigest,
       enforcement_tier: segment.enforcementTier,
       completeness_gaps: [...segment.completenessGaps],
       replay_grade: segment.replayGrade,
     })),
   };
-  const frames = input.segments
-    .flatMap((segment) => segment.envelopes)
-    .map((envelope) => jcs(envelope))
-    .join("\n");
+  const envelopes = input.segments.flatMap((segment) => segment.envelopes);
+  const frames = envelopes.map((envelope) => jcs(envelope)).join("\n");
+  const redactions = summarizeRunExportRedactions(envelopes);
   const attestationFile: JsonValue = {
     public_key_pem: input.key.publicKeyPem,
     key_id: input.key.keyId,
@@ -129,6 +118,7 @@ export function buildRunExportBundle(input: {
       "attestation.json": encoder.encode(
         JSON.stringify(attestationFile, null, 2),
       ),
+      "redactions.json": encoder.encode(JSON.stringify(redactions, null, 2)),
       "verify.mjs": encoder.encode(VERIFIER_SCRIPT),
     },
     { level: 6 },
@@ -137,36 +127,44 @@ export function buildRunExportBundle(input: {
 }
 
 /**
- * The verifier an export ships. It depends on node:crypto and node:fs alone
- * and reimplements: JCS over the attestation payload (keys sorted, no
- * whitespace, which is what RFC 8785 yields for the flat payload); the RFC
- * 6962 tree over the frame digests; the Ed25519 check with the bundled key,
- * whose id must be the first 16 hex chars of sha256 over the JSON string of
- * the PEM (the platform's key-id rule).
+ * The verifier an export ships, for a reviewer who will not install the
+ * Oxagen CLI. It depends on node:crypto and node:fs alone and reimplements
+ * what `oxagen verify` checks: JCS (keys sorted, no whitespace, which is what
+ * RFC 8785 yields for these shapes); each ledger frame's payload and event
+ * digest and dense attempt sequence; each wrapped frame's prev_hash link;
+ * each ledger attempt's stream fold; the RFC 6962 tree over the frame
+ * digests; the Ed25519 check with the bundled key, whose id must be the first
+ * 16 hex chars of sha256 over the JSON string of the PEM (the platform's
+ * key-id rule); and the redaction summary against the frames.
  */
 const VERIFIER_SCRIPT = `#!/usr/bin/env node
 // verify.mjs — verifies an Oxagen run export offline.
 //   node verify.mjs <directory with manifest.json, frames.ndjson, attestation.json>
+// Prints held or broken for every frame, then every bundle check. Exit 1 on
+// anything broken. \`oxagen verify <bundle.zip>\` runs the same checks.
 import { createHash, createPublicKey, verify } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const dir = process.argv[2] ?? ".";
-const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
-const attestation = JSON.parse(readFileSync(join(dir, "attestation.json"), "utf8"));
-const text = readFileSync(join(dir, "frames.ndjson"), "utf8");
+const read = (name) => readFileSync(join(dir, name), "utf8");
+const manifest = JSON.parse(read("manifest.json"));
+const attestation = JSON.parse(read("attestation.json"));
+const text = read("frames.ndjson");
 const lines = text.length === 0 ? [] : text.split("\\n");
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest();
 const hex = (buf) => "sha256:" + buf.toString("hex");
+const DIGEST = /^sha256:[0-9a-f]{64}$/;
 
 function canonical(value) {
   if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
   if (value !== null && typeof value === "object") {
-    return "{" + Object.keys(value).sort().map((k) => JSON.stringify(k) + ":" + canonical(value[k])).join(",") + "}";
+    return "{" + Object.keys(value).filter((k) => value[k] !== undefined).sort().map((k) => JSON.stringify(k) + ":" + canonical(value[k])).join(",") + "}";
   }
   return JSON.stringify(value);
 }
+const digestJcs = (value) => hex(sha256(Buffer.from(canonical(value), "utf8")));
 
 function treeHash(leaves) {
   if (leaves.length === 0) return sha256(Buffer.alloc(0));
@@ -175,32 +173,85 @@ function treeHash(leaves) {
   while (k * 2 < leaves.length) k *= 2;
   return sha256(Buffer.concat([Buffer.from([1]), treeHash(leaves.slice(0, k)), treeHash(leaves.slice(k))]));
 }
+const rootOf = (digests) => hex(treeHash(digests.map((d) => Buffer.from(d.slice(7), "hex"))));
 
-const frames = lines.map((line) => JSON.parse(line));
-const digests = frames.map((frame) => frame.event_digest ?? frame.hash);
 const failures = [];
-if (digests.some((d) => typeof d !== "string" || !/^sha256:[0-9a-f]{64}$/.test(d))) failures.push("a frame carries no digest");
+const frames = lines.map((line) => { try { return JSON.parse(line); } catch { return {}; } });
+const digests = frames.map((frame) => frame.event_digest ?? frame.hash);
+
+let offset = 0;
+for (const attempt of manifest.attempts) {
+  let prevSeq = null;
+  let prevHash = null;
+  let stream = digestJcs([]);
+  for (let i = offset; i < Math.min(offset + attempt.frame_count, frames.length); i += 1) {
+    const f = frames[i];
+    const why = [];
+    if (typeof digests[i] !== "string" || !DIGEST.test(digests[i])) why.push("no sha256 digest");
+    if (manifest.source === "ledger") {
+      if (f.payload_inline !== null && f.payload_inline !== undefined && digestJcs(f.payload_inline) !== f.payload_digest) why.push("payload does not hash to payload_digest");
+      const eventDigest = digestJcs({ attempt_seq: f.attempt_seq, event_schema_version: f.event_schema_version, event_type: f.event_type, stage: f.stage, payload_digest: f.payload_digest, observed_at: f.observed_at });
+      if (eventDigest !== f.event_digest) why.push("identity fields do not hash to event_digest");
+      const due = prevSeq === null ? 1 : prevSeq + 1;
+      if (f.attempt_seq !== due) why.push("attempt_seq " + f.attempt_seq + " where " + due + " was due");
+      prevSeq = f.attempt_seq;
+      stream = digestJcs({ previous: stream, entry: [f.attempt_seq, f.event_schema_version, f.event_type, f.payload_digest] });
+    } else {
+      const expected = prevHash ?? (f.seq === 0 ? hex(sha256(Buffer.alloc(0))) : null);
+      if (expected !== null && f.prev_hash !== expected) why.push("prev_hash does not link to the previous frame");
+      if (prevSeq !== null && f.seq !== prevSeq + 1) why.push("seq " + f.seq + " where " + (prevSeq + 1) + " was due");
+      prevSeq = f.seq;
+      prevHash = f.hash;
+    }
+    const label = "frame " + (i + 1) + " (" + attempt.attempt_id + " #" + (f.attempt_seq ?? f.seq) + ")";
+    if (why.length > 0) failures.push(label + " broken: " + why.join("; "));
+    else console.log(label + " held");
+  }
+  if (manifest.source === "ledger" && typeof attempt.event_stream_digest === "string" && stream !== attempt.event_stream_digest) failures.push("attempt " + attempt.attempt_id + ": frames do not fold to the sealed event_stream_digest");
+  offset += attempt.frame_count;
+}
 if (frames.length !== manifest.frame_count) failures.push(\`frame count \${frames.length} differs from the manifest's \${manifest.frame_count}\`);
-const root = hex(treeHash(digests.map((d) => Buffer.from(d.slice(7), "hex"))));
+const allDigests = digests.every((d) => typeof d === "string" && DIGEST.test(d));
+const root = allDigests ? rootOf(digests) : "none";
 if (root !== manifest.merkle_root) failures.push(\`Merkle root \${root} differs from the manifest's \${manifest.merkle_root}\`);
 
 const keyId = sha256(Buffer.from(JSON.stringify(attestation.public_key_pem), "utf8")).toString("hex").slice(0, 16);
 if (keyId !== attestation.key_id || keyId !== manifest.attester_key_id) failures.push("the bundled key does not match the recorded key id");
 const publicKey = createPublicKey(attestation.public_key_pem);
-let offset = 0;
+let covered = 0;
 for (const a of attestation.attestations) {
   const ok = a.alg === "ed25519" && a.key_id === keyId && verify(null, Buffer.from(canonical(a.payload), "utf8"), publicKey, Buffer.from(a.sig, "base64"));
   if (!ok) failures.push(\`attestation for \${a.payload.attempt_id} does not verify\`);
-  const attemptDigests = digests.slice(offset, offset + a.payload.frame_count);
-  offset += a.payload.frame_count;
-  const attemptRoot = hex(treeHash(attemptDigests.map((d) => Buffer.from(d.slice(7), "hex"))));
-  if (attemptRoot !== a.payload.merkle_root) failures.push(\`attempt \${a.payload.attempt_id}: frames do not hash to the attested root\`);
+  const slice = digests.slice(covered, covered + a.payload.frame_count);
+  covered += a.payload.frame_count;
+  if (!allDigests || rootOf(slice) !== a.payload.merkle_root) failures.push(\`attempt \${a.payload.attempt_id}: frames do not hash to the attested root\`);
 }
-if (offset !== frames.length) failures.push("attestations do not cover every frame");
+if (covered !== frames.length) failures.push("attestations do not cover every frame");
+
+if (existsSync(join(dir, "redactions.json"))) {
+  const claimed = JSON.parse(read("redactions.json"));
+  const redacted = new Map();
+  const withheld = new Map();
+  let total = 0;
+  const bump = (map, kind, count) => { const e = map.get(kind) ?? { count: 0, frames: 0 }; e.count += count; e.frames += 1; map.set(kind, e); };
+  for (const f of frames) {
+    const list = f.content?.redactions;
+    if (Array.isArray(list)) {
+      const per = new Map();
+      for (const r of list) { const k = typeof r?.reason === "string" ? r.reason : "unknown"; per.set(k, (per.get(k) ?? 0) + 1); }
+      for (const [k, n] of per) { bump(redacted, k, n); total += n; }
+    }
+    if (typeof f.content?.bytes_ref === "string") bump(withheld, "frame_body", 1);
+    if (typeof f.encrypted_payload_ref === "string") bump(withheld, "encrypted_payload", 1);
+  }
+  const tally = (m) => [...m.entries()].map(([kind, v]) => ({ kind, count: v.count, frames: v.frames })).sort((x, y) => x.kind.localeCompare(y.kind));
+  const recomputed = { format: claimed.format, redacted: tally(redacted), redacted_total: total, withheld: tally(withheld) };
+  if (canonical(recomputed) !== canonical(claimed)) failures.push("redactions.json does not match what the frames record");
+}
 
 if (failures.length > 0) {
-  for (const f of failures) console.error("FAIL " + f);
+  for (const f of failures) console.error("BROKEN " + f);
   process.exit(1);
 }
-console.log(\`OK \${manifest.run_id}: \${frames.length} frames, root \${root}, \${attestation.attestations.length} attestation(s) by key \${keyId}\`);
+console.log(\`HELD \${manifest.run_id}: \${frames.length} frames, root \${root}, \${attestation.attestations.length} attestation(s) by key \${keyId}\`);
 `;

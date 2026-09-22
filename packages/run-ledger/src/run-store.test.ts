@@ -91,6 +91,7 @@ import {
 import {
   EMPTY_EVENT_STREAM_DIGEST,
   EVENT_SCHEMA_VERSION,
+  computeEventDigest,
   MAX_INLINE_PAYLOAD_BYTES,
   advanceEventStreamDigest,
 } from "./event-payload-registry";
@@ -755,6 +756,35 @@ describe("prepareAttemptEvent", () => {
     })();
     expect(isRunStoreStateError(err)).toBe(true);
     expect(err).toBeInstanceOf(RunStoreStateError);
+  });
+
+  it("digests observedAt in the form the archive segment writes back, so an export can recompute event_digest", () => {
+    const utc = prepareAttemptEvent({
+      ...toolEvent(1),
+      observedAt: "2026-07-21T12:00:00.000Z",
+    });
+    const offset = prepareAttemptEvent({
+      ...toolEvent(1),
+      observedAt: "2026-07-21T14:00:00+02:00",
+    });
+    expect(offset.observedAt).toBe("2026-07-21T12:00:00.000Z");
+    expect(offset.eventDigest).toBe(utc.eventDigest);
+    expect(offset.eventDigest).toBe(
+      computeEventDigest({
+        attemptSeq: 1,
+        eventSchemaVersion: EVENT_SCHEMA_VERSION,
+        eventType: offset.eventType,
+        stage: offset.stage,
+        payloadDigest: offset.payloadDigest,
+        observedAt: new Date("2026-07-21T12:00:00Z").toISOString(),
+      }),
+    );
+  });
+
+  it("refuses an observedAt that is not an instant (negative)", () => {
+    expect(() =>
+      prepareAttemptEvent({ ...toolEvent(1), observedAt: "not a time" }),
+    ).toThrow(RunStoreStateError);
   });
 
   it("refuses neither", () => {
