@@ -1,4 +1,4 @@
-# ADR-138: The gateway brokers the vendor credential: a wrapped harness holds a run token
+# ADR-142: The gateway brokers the vendor credential: a wrapped harness holds a run token
 
 - **Status:** Accepted
 - **Date:** 2026-09-22

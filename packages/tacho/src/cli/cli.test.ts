@@ -2998,7 +2998,7 @@ describe("cursor", () => {
   });
 });
 
-describe("brokered credentials (ADR-138)", () => {
+describe("brokered credentials (ADR-142)", () => {
   const ANTHROPIC_KEY = "sk-ant-api03-FAKE-ENROLL-CUSTODY-0001";
   const OPENAI_KEY = "sk-proj-FAKE-ENROLL-CUSTODY-0002";
 

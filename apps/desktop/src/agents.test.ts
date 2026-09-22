@@ -191,7 +191,7 @@ describe("computeAgentRows: hook presence", () => {
     expect(stella.details).toEqual(["Stella 1.0.0", "hooks complete"]);
   });
 
-  it("says how each harness gets its model credential (ADR-138)", () => {
+  it("says how each harness gets its model credential (ADR-142)", () => {
     const tacho: TachoStatus = {
       enrolled: true,
       hooks: { complete: true, present: ["Stop"], missing: [] },

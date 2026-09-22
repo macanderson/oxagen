@@ -1,5 +1,5 @@
 /**
- * The gateway mints run tokens (ADR-138). `tacho credential issue` asks the
+ * The gateway mints run tokens (ADR-142). `tacho credential issue` asks the
  * daemon over the local socket, the daemon answers with a token from here,
  * and every mint is sealed on the host's own chain as a `token_issued` frame
  * that names the token's id and expiry and never the token.

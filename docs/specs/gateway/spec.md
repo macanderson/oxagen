@@ -45,7 +45,7 @@ What it does, from `packages/tacho/src/collector/model-proxy.ts` and
 | Frame bodies under a workspace's retention mandate, on the hook path | Built (#3332), see §3.3 |
 
 Two properties of the proxy are load-bearing for everything below, and both are
-deliberate (ADR-094, amended by ADR-138). The vendor credential stays on the
+deliberate (ADR-094, amended by ADR-142). The vendor credential stays on the
 machine and Oxagen's servers never hold it: on a brokered provider the gateway
 holds it in custody under `TACHO_HOME` and the harness holds a run token; on a
 harness-held provider it crosses in memory, forwarded untouched. Prompt bodies
@@ -53,7 +53,7 @@ go to the vendor the harness chose and never to Oxagen. Only the frame goes up.
 
 | Capability | State |
 |---|---|
-| The credential seam: `tacho enroll` takes the vendor key into the gateway's custody, Claude Code's `apiKeyHelper` and Codex's `auth.json` hold run tokens, the proxy verifies and swaps, refuses a foreign credential, and records `oxagen.credential_basis` on every frame | Built (ADR-138) |
+| The credential seam: `tacho enroll` takes the vendor key into the gateway's custody, Claude Code's `apiKeyHelper` and Codex's `auth.json` hold run tokens, the proxy verifies and swaps, refuses a foreign credential, and records `oxagen.credential_basis` on every frame | Built (ADR-142) |
 
 ## 2. What unpluggable can mean, and where
 
@@ -221,7 +221,7 @@ the turn's outcome before it raises anything.
   adds a hop and an availability dependency, it puts every prompt body and
   every customer's source code through Oxagen's network, and it moves the
   vendor credential off the machine or forces a second one. Custody on the
-  machine is a different question, and ADR-138 answered it on 2026-09-22: the
+  machine is a different question, and ADR-142 answered it on 2026-09-22: the
   gateway daemon holds the key and the harness holds a run token. That is the
   ADR §1 cites. The contained tier still reaches unpluggability by confining
   egress; custody makes the bypass a key recovery rather than a one-line edit.

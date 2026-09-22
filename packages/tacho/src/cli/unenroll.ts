@@ -410,7 +410,7 @@ async function unenrollLocked(
   }
 
   // First of all: each harness gets its vendor key back from custody and
-  // its run token or helper taken out (ADR-138), before the base URL goes
+  // its run token or helper taken out (ADR-142), before the base URL goes
   // and long before the daemon stops. A harness left with a run token and
   // no gateway has no credential at all.
   const credentials = await restoreCredentials(host, deps, "unenroll");

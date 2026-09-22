@@ -444,7 +444,7 @@ async function initializeDaemon(
   const hostRecorder = hostRecord.recorder;
 
   /**
-   * The credential seam (ADR-138): the vendor credentials this gateway holds
+   * The credential seam (ADR-142): the vendor credentials this gateway holds
    * in custody, and the key that signs the run tokens a brokered harness
    * presents instead. Both are re-read from disk on use rather than cached,
    * so `tacho enroll` taking a key into custody, or `tacho unenroll` rotating
@@ -662,7 +662,7 @@ async function initializeDaemon(
       // Omitted until a read succeeds: absent means nothing was said, and a
       // daemon that could not read the files has nothing to say.
       ...(modelBaseUrls.length > 0 ? { model_base_urls: modelBaseUrls } : {}),
-      // Which providers this host brokers (ADR-138): names and a basis,
+      // Which providers this host brokers (ADR-142): names and a basis,
       // never a secret. Read from the store each time, so a key `tacho
       // enroll` just took into custody is reported on the next poll.
       credentials: RUN_TOKEN_PROVIDERS.map((provider) => ({
@@ -2301,7 +2301,7 @@ async function initializeDaemon(
       // The loopback model proxy. `calls_observed` counts model calls since
       // the daemon started; a session's own count is on its row below.
       gateway: gatewayStatus(),
-      // What the gateway holds in custody (ADR-138): provider, kind, source
+      // What the gateway holds in custody (ADR-142): provider, kind, source
       // and when it was taken. The secret is not here and has no field.
       credential_custody: (() => {
         try {
@@ -2549,7 +2549,7 @@ async function initializeDaemon(
    */
   /**
    * Codex reads a static run token from `auth.json` and has no helper to
-   * fetch a fresh one, so the gateway that issued it renews it (ADR-138):
+   * fetch a fresh one, so the gateway that issued it renews it (ADR-142):
    * once an hour, when the token in place no longer verifies for this
    * enrollment or is inside the renewal window, a new one is minted through
    * the issuer (so the record carries it) and written in place. A host with

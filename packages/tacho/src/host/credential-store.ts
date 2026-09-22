@@ -1,5 +1,5 @@
 /**
- * The gateway's custody of a model vendor's credential (ADR-138).
+ * The gateway's custody of a model vendor's credential (ADR-142).
  *
  * On the brokered credential path the harness holds a run token and the
  * daemon holds the vendor key, so the key needs a home on the machine that

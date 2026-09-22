@@ -97,7 +97,7 @@ export const tachoCommandFetch = registerCapability({
             .max(8)
             .optional(),
           /**
-           * Which model providers the host brokers (ADR-138), mirroring
+           * Which model providers the host brokers (ADR-142), mirroring
            * `daemonHealthSchema.credentials`: a basis per provider, never a
            * secret. Same reason as `bundle_features`: this object is
            * `.strict()`, so a field the daemon sends and this contract does

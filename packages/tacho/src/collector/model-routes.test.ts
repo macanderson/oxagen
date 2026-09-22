@@ -2,7 +2,7 @@
  * The proxy's header and error shaping on its own. `model-proxy.test.ts`
  * proves the same over real sockets; this file pins the two seams a vendor
  * SDK reads by the letter: which headers cross when a credential is swapped
- * (ADR-138), and what a refusal looks like in each vendor's error body.
+ * (ADR-142), and what a refusal looks like in each vendor's error body.
  */
 import { describe, expect, it } from "vitest";
 import {
