@@ -53,6 +53,7 @@ import {
 import {
   insertTachoEvents,
   selectTachoEvents,
+  storeOverloadedFrom,
   type TachoEventInsert,
 } from "@oxagen/telemetry";
 import { recordSpend } from "@oxagen/billing";
@@ -1614,11 +1615,22 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       );
     }
   }
-  const storedRefs = await storedBytesRefs(
-    input.events,
-    result.recordedHeads,
-    bytesRefs,
-  );
+  // This read reaches the same node the append below does, and it is on the
+  // retry path by construction: a batch that failed at the append is re-sent,
+  // and a re-sent event carrying content is exactly what sends this query. A
+  // refusal here has to be answered as a refusal too, or the second attempt
+  // 500s one call earlier than the first (#3662).
+  let storedRefs: Map<string, string>;
+  try {
+    storedRefs = await storedBytesRefs(
+      input.events,
+      result.recordedHeads,
+      bytesRefs,
+    );
+  } catch (err) {
+    refuseIfStoreOverloaded(err, ctx, input.events.length);
+    throw err;
+  }
   // Nothing derived from `event.anthropic` is stored. The producer chooses that
   // block, so any stable value computed from it and readable back would be an
   // oracle: submit the hash of a guessed address, read the result, compare it
@@ -1637,6 +1649,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   try {
     await insertTachoEvents(inserts);
   } catch (err) {
+    // A store refusing this write under pressure is answered as a refusal,
+    // with a wait. Everything else is the fault it looks like (#3662).
+    refuseIfStoreOverloaded(err, ctx, inserts.length);
     logger.error(
       {
         err,
@@ -1674,6 +1689,46 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     control: result.control,
   };
 };
+
+/**
+ * Answer a store that is refusing work as a refusal, or return and let the
+ * caller treat the failure as the fault it is.
+ *
+ * The distinction is the whole of #3662. A ClickHouse node over its memory
+ * limit, at its concurrent-query limit, or behind on its merges is refusing
+ * for a reason this batch had no part in, and it accepts the same bytes once
+ * the pressure passes. Thrown on, `store_overloaded` leaves the route as a 503
+ * with a `Retry-After`; the raw error leaves it as a 500, which the host reads
+ * as a server fault and ships the batch straight back into.
+ *
+ * Nothing is lost on either path. The host's WAL cursor advances only on a
+ * 2xx, so a refused batch stays on disk, and a re-sent batch re-inserts every
+ * event — which is how a ClickHouse failure after the Postgres commit has
+ * always recovered (see `storedBytesRefs`). What the refusal changes is when
+ * the host tries again.
+ */
+function refuseIfStoreOverloaded(
+  err: unknown,
+  ctx: Scope,
+  events: number,
+): void {
+  const overloaded = storeOverloadedFrom(err);
+  if (overloaded === null) return;
+  // Warn, not error: a store asking for room is a condition to wait out, and
+  // logging it as a fault buries the faults this level is read for.
+  logger.warn(
+    {
+      err,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      events,
+      store: overloaded.store,
+      retryAfterSeconds: overloaded.retryAfterSeconds,
+    },
+    "tacho.events.ingest: the store refused this batch under pressure; the host keeps it and ships it again",
+  );
+  throw overloaded;
+}
 
 /**
  * The body references already stored for re-sent events that carry content

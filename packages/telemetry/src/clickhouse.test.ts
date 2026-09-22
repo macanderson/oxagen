@@ -6,7 +6,13 @@
 // relying on consumer mocks.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { hashPrompt, providerFromModelId } from "./clickhouse";
+import {
+  hashPrompt,
+  providerFromModelId,
+  StoreOverloadedError,
+  storeOverloadedFrom,
+} from "./clickhouse";
+import { CircuitOpenError } from "./circuit-breaker";
 import type {
   AuditEventRow,
   EvalResultRow,
@@ -1093,5 +1099,91 @@ describe("providerFromModelId — meta / mistral / deepseek prefix forms", () =>
 
   it("xai/grok-3 → 'xai' (slash gateway form)", () => {
     expect(providerFromModelId("xai/grok-3")).toBe("xai");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// storeOverloadedFrom — backpressure told apart from a fault (#3662)
+// ---------------------------------------------------------------------------
+
+/** The real client's parser, past this file's `@clickhouse/client` mock. */
+async function parseClickhouseError(raw: string): Promise<unknown> {
+  const real =
+    await vi.importActual<typeof import("@clickhouse/client")>(
+      "@clickhouse/client",
+    );
+  return real.parseError(raw);
+}
+
+describe("storeOverloadedFrom", () => {
+  // One of the two refusals from the 2026-09-21 production logs, parsed the way
+  // the client parses a real one. A fixture invented here would prove the
+  // classifier against itself.
+  const MEMORY_REFUSAL =
+    "Code: 241. DB::Exception: Memory limit (total) exceeded: would use 1.66 GiB " +
+    "(attempt to allocate chunk of 4363399 bytes), maximum: 1.50 GiB. " +
+    "OvercommitTracker decision: Query was selected to stop by OvercommitTracker. " +
+    "(MEMORY_LIMIT_EXCEEDED) (version 24.8.4.13 (official build))";
+
+  it("classifies the production memory refusal as backpressure", async () => {
+    const refusal = storeOverloadedFrom(
+      await parseClickhouseError(MEMORY_REFUSAL),
+    );
+    expect(refusal).not.toBeNull();
+    expect(refusal?.code).toBe("store_overloaded");
+    expect(refusal?.store).toBe("clickhouse");
+    expect(refusal?.retryAfterSeconds).toBeGreaterThan(0);
+    expect(refusal?.message).toContain("over its memory limit");
+    expect(refusal?.message).toContain("Retry after");
+  });
+
+  it("recognises a memory refusal the client could not parse into a code", () => {
+    // parseError hands back a plain Error when the response does not match its
+    // regex, so the text is the only signal left.
+    const refusal = storeOverloadedFrom(
+      new Error("Memory limit (total) exceeded: would use 1.66 GiB"),
+    );
+    expect(refusal?.code).toBe("store_overloaded");
+  });
+
+  it("classifies the other at-capacity codes", () => {
+    for (const code of ["202", "203", "252"]) {
+      const refusal = storeOverloadedFrom(
+        Object.assign(new Error("at capacity"), { code }),
+      );
+      expect(refusal?.code).toBe("store_overloaded");
+    }
+  });
+
+  it("carries the breaker's own wait when the breaker is what refused", () => {
+    const refusal = storeOverloadedFrom(
+      new CircuitOpenError("clickhouse", 12_000),
+    );
+    expect(refusal?.retryAfterSeconds).toBe(12);
+  });
+
+  it("floors the wait at one second", () => {
+    expect(
+      storeOverloadedFrom(new CircuitOpenError("clickhouse", 10))
+        ?.retryAfterSeconds,
+    ).toBe(1);
+  });
+
+  it("leaves an ordinary failure unclassified", async () => {
+    // A row the store could not parse is the caller's fault and repeating it
+    // changes nothing, so it keeps the answer it has: a 500, not a retry.
+    const unparseable = await parseClickhouseError(
+      "Code: 27. DB::Exception: Cannot parse input: expected '\"' before: 'x'. " +
+        "(CANNOT_PARSE_INPUT_ASSERTION_FAILED) (version 24.8.4.13 (official build))",
+    );
+    expect(storeOverloadedFrom(unparseable)).toBeNull();
+    expect(storeOverloadedFrom(new Error("clickhouse down"))).toBeNull();
+    expect(storeOverloadedFrom(null)).toBeNull();
+    expect(storeOverloadedFrom("241")).toBeNull();
+  });
+
+  it("returns a refusal it is handed back unchanged", () => {
+    const refusal = new StoreOverloadedError("clickhouse", "it is busy", 5);
+    expect(storeOverloadedFrom(refusal)).toBe(refusal);
   });
 });
