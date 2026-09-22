@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS "org"."sso_group_roles" (
   CONSTRAINT "sso_group_roles_provider_id_sso_providers_provider_id_fk"
     FOREIGN KEY ("provider_id") REFERENCES "auth"."sso_providers" ("provider_id") ON DELETE CASCADE,
   CONSTRAINT "sso_group_roles_role_check"
-    CHECK ("role" IN ('admin', 'compliance', 'billing', 'member', 'viewer'))
+    CHECK ("role" IN ('admin', 'compliance', 'billing', 'member'))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS "sso_group_roles_provider_group_idx"

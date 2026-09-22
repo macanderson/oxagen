@@ -568,7 +568,9 @@ export const ssoGroupRoles = orgSchema.table(
     // The group name exactly as the IdP sends it. Compared case-sensitively,
     // because IdPs treat "Admins" and "admins" as different groups.
     idpGroup: text("idp_group").notNull(),
-    // An org role name, lowercase: admin, compliance, billing, member, viewer.
+    // An org role name, lowercase: admin, compliance or billing (the org IAM
+    // roles), or member (membership with no org-wide role, as an invitation
+    // grants).
     role: text("role").notNull(),
   },
   (t) => ({
@@ -579,7 +581,7 @@ export const ssoGroupRoles = orgSchema.table(
     orgIdx: index("sso_group_roles_org_idx").on(t.orgId),
     roleCheck: check(
       "sso_group_roles_role_check",
-      sql`${t.role} IN ('admin', 'compliance', 'billing', 'member', 'viewer')`,
+      sql`${t.role} IN ('admin', 'compliance', 'billing', 'member')`,
     ),
   }),
 );
