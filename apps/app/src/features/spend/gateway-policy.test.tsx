@@ -156,9 +156,9 @@ describe("the gateway policy section", () => {
   });
 
   it("reports a saved policy that no machine is enrolled to apply", async () => {
-    // Distinct from the partial case: zero hosts is not "some are too old",
-    // it is a policy with nothing to apply it to, and saying "enforced"
-    // alone would be a claim about machines that are not there.
+    // Distinct from the stored case: zero hosts is not "none of them reads
+    // the lists", it is a policy with nothing to apply it to at all, and one
+    // sentence must not stand for both.
     setGatewayPolicyAction.mockResolvedValue({
       ok: true,
       value: { hosts: 0, hostsEnforcingModels: 0 },

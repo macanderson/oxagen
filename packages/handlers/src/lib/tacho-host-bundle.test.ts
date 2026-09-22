@@ -256,86 +256,31 @@ describe("the prices the host's model proxy needs (ADR-094)", () => {
 });
 
 describe("the wrapped-session policy on the bundle", () => {
-  it("signs the workspace's own mode and ceiling, not a literal", () => {
-    // The defect this table was added for: `budget.mode` was the string
-    // "observed" in the source, so the proxy's `session_budget_exceeded`
-    // branch was real code nothing in production could reach
-    // (docs/audits/2026-09-21-model-gateway-arming.md §2).
-    expect(bundle(CURRENT).budget).toEqual({ mode: "observed" });
-    expect(
-      bundle(CURRENT, {
-        mode: "enforced",
-        sessionLimitUsd: 25,
-        modelAllow: null,
-        modelDeny: [],
-      }).budget,
-    ).toEqual({ mode: "enforced", session_limit_usd: 25 });
+  it("signs no clause from the workspace's session policy", () => {
+    // The bundle's budget is the agent's mandate (`deriveBundleBudget`,
+    // #3710), and `models` is not signed at all. The workspace's own policy
+    // is stored and read back by `get_tacho_session_policy` and reaches no
+    // host, which is why the panel that sets it says "Not applied". This is
+    // the assertion that fails first if a clause is wired in without the
+    // decision the audit's §3 is reopened for.
+    expect(bundle(CURRENT)).not.toHaveProperty("models");
+    expect(bundle([BUNDLE_FEATURE_MODEL_ALLOWLIST])).not.toHaveProperty(
+      "models",
+    );
+    expect(bundle(CURRENT).budget).toEqual(NO_MANDATE.budget);
   });
 
-  it("omits the ceiling rather than sending a null one", () => {
-    // `session_limit_usd` is `.optional()`, not nullable, so a workspace with
-    // no ceiling has to leave the key out or the host refuses the mandate.
-    const armed = bundle(CURRENT, {
-      mode: "enforced",
-      sessionLimitUsd: null,
-      modelAllow: [],
-      modelDeny: [],
-    });
-    expect(armed.budget).toEqual({ mode: "enforced" });
-    expect(armed.budget).not.toHaveProperty("session_limit_usd");
-  });
-
-  it("sends the model lists only to a host that named the field", () => {
-    const policy = {
-      mode: "enforced" as const,
-      sessionLimitUsd: null,
-      modelAllow: ["claude-opus-*"],
-      modelDeny: ["gpt-4o"],
-    };
-    // A host that did not advertise is never told, because the host's schema
-    // is strict and would refuse the whole mandate over the one field.
-    expect(bundle(CURRENT, policy)).not.toHaveProperty("models");
-    expect(bundle([], policy)).not.toHaveProperty("models");
-    const told = bundle([BUNDLE_FEATURE_MODEL_ALLOWLIST], policy);
-    expect(told.models).toEqual({
-      allow: ["claude-opus-*"],
-      deny: ["gpt-4o"],
-    });
+  it("refuses the field on a host schema that predates it", () => {
+    // The gate still has to work when the clause arrives: the host's bundle
+    // schema is `.strict()`, so an older daemon rejects the whole mandate
+    // over the one field rather than ignoring it.
     const older = policyBundleSchema.omit({ models: true }).strict();
     expect(() =>
       older.parse({
-        ...told,
+        ...bundle(CURRENT),
+        models: { allow: null, deny: [] },
         signature: { key_id: "k", alg: "ed25519", sig: "s" },
       }),
     ).toThrow();
-  });
-
-  it("keeps a null allowlist apart from an empty one, all the way to the etag", () => {
-    // Collapsing the two would make "permit nothing" mean "permit
-    // everything" on the host, which is the fail-open `gateway_tools`
-    // documents. Asserting the etag as well as the value proves the
-    // difference survives into the field the host refetches on.
-    const features = [BUNDLE_FEATURE_MODEL_ALLOWLIST];
-    const base = {
-      mode: "enforced" as const,
-      sessionLimitUsd: 1,
-      modelDeny: [],
-    };
-    const none = bundle(features, { ...base, modelAllow: null });
-    const nothing = bundle(features, { ...base, modelAllow: [] });
-    expect(none.models).toEqual({ allow: null, deny: [] });
-    expect(nothing.models).toEqual({ allow: [], deny: [] });
-    expect(none.etag).not.toBe(nothing.etag);
-  });
-
-  it("moves the etag when the policy moves", () => {
-    const observed = bundle(CURRENT);
-    const enforced = bundle(CURRENT, {
-      mode: "enforced",
-      sessionLimitUsd: 5,
-      modelAllow: null,
-      modelDeny: [],
-    });
-    expect(enforced.etag).not.toBe(observed.etag);
   });
 });
