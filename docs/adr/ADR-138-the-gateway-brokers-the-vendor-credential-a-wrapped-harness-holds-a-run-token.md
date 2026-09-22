@@ -55,12 +55,16 @@ on the machine can spend.
 The gateway takes the model vendor's credential into its own custody on the
 machine, and the harness is given a **run token** in its place.
 
-1. **Custody.** `tacho enroll` takes the vendor key out of the harness's own
-   files (`env.ANTHROPIC_API_KEY` or `env.ANTHROPIC_AUTH_TOKEN` in Claude
+1. **Custody.** `tacho enroll` seals before it edits: the keys are read off
+   the harness's own files (`env.ANTHROPIC_API_KEY` or `env.ANTHROPIC_AUTH_TOKEN` in Claude
    Code's `settings.json`; `OPENAI_API_KEY` in Codex's `auth.json`) or from
-   `TACHO_BROKER_<PROVIDER>_API_KEY` in the enrolling shell, and seals it in
+   `TACHO_BROKER_<PROVIDER>_API_KEY` in the enrolling shell, sealed in
    `credentials.json` under `TACHO_HOME`, AES-256-GCM under a key in its own
-   file beside it, both mode 0600 (`packages/tacho/src/host/credential-store.ts`).
+   file beside it, both mode 0600 (`packages/tacho/src/host/credential-store.ts`),
+   and only then are the files rewritten, so a crash or a store fault between
+   the two leaves every key where it was and never nowhere. A harness whose
+   file could not be pointed at the gateway has its key released again, so
+   custody never holds a key for a harness that still sends its own.
    The secret never appears in a sidecar, a frame, a log line, a status report
    or the wire to Oxagen's servers. The vendor credential still stays on the
    machine. Oxagen's servers still never hold it.
@@ -75,7 +79,13 @@ machine, and the harness is given a **run token** in its place.
    bounded by the enrollment's expiry, and the proxy checks host status and
    the signing key on every call, so that token dies with the enrollment too.
    Every mint is a `token_issued` frame on the host's chain: the token's id
-   and expiry, never the token.
+   and expiry, never the token. Only the daemon mints. When it does not
+   answer, `tacho credential issue` prints nothing and says why, because the
+   proxy the token would be spent at is the daemon, and a token minted around
+   it would buy nothing but an unrecorded credential. The daemon renews a
+   static token itself, once an hour, when the one in `auth.json` no longer
+   verifies for the enrollment or is within seven days of its expiry, so a
+   brokered Codex never stops at the token's end.
 3. **The proxy verifies and swaps.** A provider with a credential in custody
    is *brokered*: every call to it must carry a run token, the proxy verifies
    the signature, expiry, host and provider, drops the token, attaches the
@@ -94,14 +104,24 @@ machine, and the harness is given a **run token** in its place.
    status` say where each harness gets its credential and what is in custody,
    by provider, kind, source and date.
 5. **Restore is exact.** `tacho unenroll` gives every key back to the file it
-   came from, removes the helper or the static token, then shreds the store
-   and the signing key, before the base URL comes out and long before the
-   daemon stops. `tacho enroll --credentials passthrough` does the same
-   without unenrolling. Uninstall leaves the harness signed in as it was.
+   came from (creating the file when it is gone), removes the helper or the
+   static token, then shreds the store and the signing key, before the base
+   URL comes out and long before the daemon stops. Custody is released only
+   once the file says the key landed; a file that already holds a key of the
+   person's own keeps it, and the older one in custody is discarded with a
+   warning. A store that cannot be opened stops nothing on unenroll: the
+   tokens come out anyway, since the gateway they worked at is going, and the
+   warning names the key to set by hand. `tacho enroll --credentials
+   passthrough` does the same without unenrolling, and there an unreadable
+   store keeps the tokens in place, since the gateway stays. Uninstall leaves
+   the harness signed in as it was.
 6. **Subscription logins are left alone.** A claude.ai login has no key to
    take; the helper wins over it, so a brokered host sends the run token
-   however the person signed in. A ChatGPT login in Codex's `auth.json` cannot
-   be brokered and stays `harness_held`, and the state says so.
+   however the person signed in, and a login sent beside the token is dropped
+   with it. A ChatGPT login in Codex's `auth.json` cannot be brokered, with or
+   without a key beside it, and stays `harness_held`: chatgpt.com takes no API
+   key, so a call carrying a `ChatGPT-Account-ID` crosses as the harness's own
+   whatever the host holds for OpenAI.
 
 ### Why this and not the alternatives
 

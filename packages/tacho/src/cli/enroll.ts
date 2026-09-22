@@ -1141,10 +1141,14 @@ export async function enrollLocked(
                 );
               warnings.push(...outcome.warnings);
             } else {
-              const outcome = await restoreCredentials(host, deps);
+              const outcome = await restoreCredentials(
+                host,
+                deps,
+                "passthrough",
+              );
               for (const file of outcome.restored)
                 deps.out(`      credential given back to ${file}`);
-              warnings.push(...outcome.failed);
+              warnings.push(...outcome.failed, ...outcome.warnings);
             }
           } catch (error) {
             warnings.push(

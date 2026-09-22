@@ -45,9 +45,11 @@ describe("the custody store", () => {
       kind: "api_key",
       source: "claude-code:settings.env",
       taken_at: "2026-09-22T12:00:00.000Z",
-      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       prefix: "sk-ant-a…",
     });
+    // No digest of the secret leaves the store either: a hash of a key is
+    // an oracle, and `status` is what `tacho status` repeats.
+    expect(JSON.stringify(store.status())).not.toContain("sha256");
     for (const name of readdirSync(dir)) {
       const text = readFileSync(join(dir, name), "utf8");
       expect(text).not.toContain(SECRET);

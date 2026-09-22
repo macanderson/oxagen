@@ -38,7 +38,9 @@ import {
   helperCommandFor,
   type ModelCredentialOptions,
   type ModelCredentialState,
+  peekModelCredentials,
   readModelCredentialState,
+  type TakenCredential,
   type RestoreSecrets,
   restoreModelCredentials,
 } from "../host/model-credential";
@@ -390,6 +392,8 @@ export interface CliDeps {
    * into custody.
    */
   modelCredentials?: {
+    /** The secrets apply would take, without writing; sealed before apply. */
+    peek: (options: ModelCredentialOptions) => Promise<TakenCredential[]>;
     apply: (options: ModelCredentialOptions) => Promise<ModelCredentialState>;
     restore: (
       options: ModelCredentialOptions,
@@ -727,6 +731,7 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
       read: (options) => readModelBaseUrlState(options),
     },
     modelCredentials: {
+      peek: (options) => peekModelCredentials(options),
       apply: (options) => applyModelCredentials(options),
       restore: (options, secrets) => restoreModelCredentials(options, secrets),
       read: (options) => readModelCredentialState(options),

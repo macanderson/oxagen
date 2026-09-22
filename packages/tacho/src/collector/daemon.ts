@@ -51,6 +51,12 @@ import {
 } from "../host/host-file";
 import { readModelBaseUrlState } from "../host/model-base-url";
 import {
+  applyModelCredentials,
+  type ModelCredentialHarnessState,
+  readModelCredentialState,
+  staticTokenStillGood,
+} from "../host/model-credential";
+import {
   loadOrCreateRunTokenKey,
   readRunTokenKey,
   RUN_TOKEN_PROVIDERS,
@@ -148,6 +154,23 @@ export const DEFAULT_TIMERS: DaemonTimers = {
   idleSessionMs: 6 * 60 * 60_000,
   walRetainMs: 7 * 24 * 60 * 60_000,
 };
+
+/** How often the daemon looks at Codex's static run token. */
+const STATIC_TOKEN_RENEWAL_CHECK_MS = 60 * 60_000;
+
+/** The `OPENAI_API_KEY` member of `~/.codex/auth.json`, whatever it holds. */
+function codexStaticToken(home: string): string | undefined {
+  try {
+    const raw = readJsonFileIfExists(join(home, ".codex", "auth.json"));
+    const value =
+      typeof raw === "object" && raw !== null
+        ? (raw as { OPENAI_API_KEY?: unknown }).OPENAI_API_KEY
+        : undefined;
+    return typeof value === "string" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export interface DaemonOptions {
   paths: TachoPaths;
@@ -436,7 +459,7 @@ async function initializeDaemon(
   runTokenKey();
   function inCustody(provider: "anthropic" | "openai"): boolean {
     try {
-      return credentialStore.status().some((c) => c.provider === provider);
+      return credentialStore.has(provider);
     } catch (error) {
       log(
         `credential store unreadable: ${error instanceof Error ? error.message : String(error)}`,
@@ -1925,6 +1948,7 @@ async function initializeDaemon(
       ? { beforeForward: options.beforeForward }
       : {}),
     credentials: {
+      brokered: (provider) => inCustody(provider),
       custody: (provider) => {
         try {
           return credentialStore.read(provider);
@@ -2380,8 +2404,63 @@ async function initializeDaemon(
    * means "and the reconciliation it asked for has landed". The interval driver
    * does NOT use it, for the reason {@link startGitReads} gives.
    */
+  /**
+   * Codex reads a static run token from `auth.json` and has no helper to
+   * fetch a fresh one, so the gateway that issued it renews it (ADR-138):
+   * once an hour, when the token in place no longer verifies for this
+   * enrollment or is inside the renewal window, a new one is minted through
+   * the issuer (so the record carries it) and written in place. A host with
+   * no OpenAI key in custody, or a Codex on a ChatGPT login, is left alone.
+   */
+  let lastStaticRenewalAt = 0;
+  async function renewStaticTokens(): Promise<void> {
+    if (!host.harnesses.includes("codex")) return;
+    if (now() - lastStaticRenewalAt < STATIC_TOKEN_RENEWAL_CHECK_MS) return;
+    lastStaticRenewalAt = now();
+    if (host.host_status !== "active" || !inCustody("openai")) return;
+    const home = options.home ?? homedir();
+    let state: ModelCredentialHarnessState | undefined;
+    try {
+      state = (await readModelCredentialState({ home, harnesses: ["codex"] }))
+        .harnesses[0];
+    } catch (error) {
+      log(
+        `static token renewal: cannot read Codex's auth file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    if (state === undefined || !state.brokered) return;
+    const current = codexStaticToken(home);
+    if (staticTokenStillGood(current, host, paths.runTokenKey, now())) return;
+    const issued = api.issueRunToken?.({
+      harness: "codex",
+      placement: "static",
+    });
+    if (issued === undefined || issued.status !== 200) {
+      log(
+        `static token renewal: not issued (${issued?.body.error ?? "no issuer"})`,
+      );
+      return;
+    }
+    try {
+      await applyModelCredentials({
+        home,
+        harnesses: ["codex"],
+        staticTokens: { codex: issued.body.token },
+      });
+      log(
+        `renewed Codex's static run token ${issued.body.token_id}, expires ${issued.body.expires_at}`,
+      );
+    } catch (error) {
+      log(
+        `static token renewal: could not write Codex's auth file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   async function tick(): Promise<void> {
     await controlTick();
+    await renewStaticTokens();
     await gitLane;
   }
 
@@ -2396,6 +2475,7 @@ async function initializeDaemon(
         // control path is done, or a fourteen-minute git drain would drop every
         // poll in between and put the stall straight back.
         controlTick()
+          .then(() => renewStaticTokens())
           .catch((error) => {
             // The code and the first frame name the site. A message alone
             // ("Cannot create a string longer than 0x1fffffe8 characters",

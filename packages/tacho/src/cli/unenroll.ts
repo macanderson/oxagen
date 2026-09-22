@@ -408,9 +408,10 @@ async function unenrollLocked(
   // its run token or helper taken out (ADR-138), before the base URL goes
   // and long before the daemon stops. A harness left with a run token and
   // no gateway has no credential at all.
-  const credentials = await restoreCredentials(host, deps);
+  const credentials = await restoreCredentials(host, deps, "unenroll");
   for (const file of credentials.restored)
     deps.out(`      model credential given back to ${file}`);
+  warnings.push(...credentials.warnings);
   for (const failure of credentials.failed) {
     incomplete = true;
     warnings.push(

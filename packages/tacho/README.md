@@ -98,7 +98,9 @@ credential stays on the machine and is never written to a frame or a log.
 ### The credential seam: the harness holds a run token
 
 By default `tacho enroll` also takes the vendor key out of the harness and
-gives the harness a **run token** instead (ADR-138). The key is sealed in
+gives the harness a **run token** instead (ADR-138). It seals the key first
+and edits the file second, so a crash between the two leaves the key where it
+was. The key is sealed in
 `credentials.json` under `TACHO_HOME`, AES-256-GCM under `credentials.key`
 beside it, both mode 0600, and it is read by `tachod` and by nothing else. A
 run token is `oxrt_<claims>.<hmac>`, signed by `run-token.key`, naming this
@@ -109,7 +111,7 @@ leaves the harness with no credential the vendor accepts.
 | Harness | What the harness holds | How it is refreshed |
 |---|---|---|
 | Claude Code | `apiKeyHelper` in `~/.claude/settings.json` runs `tacho credential issue --harness claude-code`, which prints a fifteen-minute token; `env.ANTHROPIC_API_KEY` and `env.ANTHROPIC_AUTH_TOKEN` are taken into custody, since either would win over the helper | Claude Code re-runs the helper every five minutes and on any 401 |
-| Codex | `OPENAI_API_KEY` in `~/.codex/auth.json` holds a static token bounded by the enrollment's expiry | Re-minted on `tacho enroll`; dies with the enrollment, the signing key, or a host revoke |
+| Codex | `OPENAI_API_KEY` in `~/.codex/auth.json` holds a static token bounded by the enrollment's expiry | `tachod` re-mints it once an hour when it nears expiry or no longer verifies for the enrollment; `tacho enroll` does the same; it dies with the enrollment, the signing key, or a host revoke |
 
 The proxy verifies the token, drops it, and attaches the custody credential in
 the vendor's own header. A call to a brokered provider that brings its own
@@ -124,7 +126,11 @@ frame on the host's chain, by id and expiry, never the token.
 A provider with nothing in custody is `harness_held` and crosses as before: a
 claude.ai subscription has no key to take (the helper wins over it, so a
 brokered host sends the token however the person signed in), and a ChatGPT
-login in Codex's `auth.json` cannot be brokered, and `tacho status` says so.
+login in Codex's `auth.json` cannot be brokered, so a call carrying
+`ChatGPT-Account-ID` crosses as the harness's own whatever the host holds,
+and `tacho status` says so. Only `tachod` mints: when it is not running,
+`tacho credential issue` prints nothing and says why, since the proxy the
+token would be spent at is the daemon.
 `TACHO_BROKER_ANTHROPIC_API_KEY` and `TACHO_BROKER_OPENAI_API_KEY` in the
 enrolling shell hand a key to custody that was never in a harness file.
 `tacho enroll --credentials passthrough` gives every key back; `tacho

@@ -340,6 +340,222 @@ describe("apply", () => {
       ),
     ).rejects.toThrow(/not valid JSON/);
   });
+
+  it("takes a key the person put back after enrolling, and remembers the member once", async () => {
+    seed(settingsPath(), SETTINGS);
+    const options = { home, harnesses: ["claude-code"] as const };
+    await applyModelCredentials(
+      { ...options, harnesses: [...options.harnesses], helperCommand: HELPER },
+      internals(),
+    );
+    const settings = JSON.parse(readFileSync(settingsPath(), "utf8"));
+    settings.env.ANTHROPIC_API_KEY = "sk-ant-api03-PUT-BACK-BY-HAND";
+    seed(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`);
+    const again = await applyModelCredentials(
+      { ...options, harnesses: [...options.harnesses], helperCommand: HELPER },
+      internals(),
+    );
+    expect(again.taken.map((t) => t.credential.secret)).toEqual([
+      "sk-ant-api03-PUT-BACK-BY-HAND",
+    ]);
+    expect(again.harnesses[0]).toMatchObject({ brokered: true, changed: true });
+    expect(readFileSync(settingsPath(), "utf8")).not.toContain("PUT-BACK");
+    expect(
+      JSON.parse(readFileSync(again.harnesses[0]!.backup, "utf8")),
+    ).toMatchObject({
+      taken: [{ member: "ANTHROPIC_API_KEY", kind: "api_key" }],
+    });
+  });
+
+  it("keeps the file's own indent and line endings", async () => {
+    seed(
+      authPath(),
+      `{\r\n\t"OPENAI_API_KEY": "${OPENAI_KEY}",\r\n\t"last_refresh": "x"\r\n}\r\n`,
+    );
+    await applyModelCredentials(
+      {
+        home,
+        harnesses: ["codex"],
+        helperCommand: HELPER,
+        staticTokens: { codex: STATIC },
+      },
+      internals(),
+    );
+    const written = readFileSync(authPath(), "utf8");
+    expect(written).toBe(
+      `{\r\n\t"OPENAI_API_KEY": "${STATIC}",\r\n\t"last_refresh": "x"\r\n}\r\n`,
+    );
+  });
+});
+
+describe("restore", () => {
+  it("puts the key back by name into a file edited since apply, and keeps the edits", async () => {
+    seed(settingsPath(), SETTINGS);
+    await applyModelCredentials(
+      { home, harnesses: ["claude-code"], helperCommand: HELPER },
+      internals(),
+    );
+    const edited = JSON.parse(readFileSync(settingsPath(), "utf8"));
+    edited.env.NEW_SINCE = "1";
+    edited.model = "opus";
+    edited.hooks.Stop.push({ hooks: [{ type: "command", command: "x" }] });
+    seed(settingsPath(), `${JSON.stringify(edited, null, 2)}\n`);
+    const restored = await restoreModelCredentials(
+      { home, harnesses: ["claude-code"], helperCommand: HELPER },
+      { secrets: { anthropic: { kind: "api_key", secret: KEY } } },
+      internals(),
+    );
+    expect(restored.harnesses[0]).toMatchObject({
+      changed: true,
+      brokered: false,
+    });
+    expect(JSON.parse(readFileSync(settingsPath(), "utf8"))).toEqual({
+      env: {
+        ANTHROPIC_API_KEY: KEY,
+        ANTHROPIC_BASE_URL: "http://127.0.0.1:4319/anthropic",
+        OTHER: "kept",
+        NEW_SINCE: "1",
+      },
+      hooks: { Stop: [{ hooks: [{ type: "command", command: "x" }] }] },
+      unknown: [1, 2, 3],
+      model: "opus",
+    });
+    expect(existsSync(modelCredentialBackupPath("claude-code", home))).toBe(
+      false,
+    );
+  });
+
+  it("puts a released key back even when the receipt is lost or unreadable", async () => {
+    // The caller releases the secret from custody once restore returns, so
+    // a restore that dropped it for want of a receipt would lose the key.
+    for (const damage of [
+      (backup: string) => rmSync(backup),
+      (backup: string) => writeFileSync(backup, "{ not a receipt"),
+      (backup: string) =>
+        writeFileSync(backup, JSON.stringify({ schema: "something.else" })),
+    ]) {
+      seed(settingsPath(), SETTINGS);
+      const applied = await applyModelCredentials(
+        { home, harnesses: ["claude-code"], helperCommand: HELPER },
+        internals(),
+      );
+      damage(applied.harnesses[0]!.backup);
+      const restored = await restoreModelCredentials(
+        { home, harnesses: ["claude-code"], helperCommand: HELPER },
+        { secrets: { anthropic: { kind: "api_key", secret: KEY } } },
+        internals(),
+      );
+      expect(restored.harnesses[0]).toMatchObject({
+        changed: true,
+        brokered: false,
+      });
+      const settings = JSON.parse(readFileSync(settingsPath(), "utf8"));
+      expect(settings.apiKeyHelper).toBeUndefined();
+      expect(settings.env.ANTHROPIC_API_KEY).toBe(KEY);
+      expect(existsSync(applied.harnesses[0]!.backup)).toBe(false);
+    }
+    // With no receipt the kind decides the member: a bearer is what
+    // `ANTHROPIC_AUTH_TOKEN` holds.
+    seed(settingsPath(), JSON.stringify({ apiKeyHelper: HELPER }));
+    await restoreModelCredentials(
+      { home, harnesses: ["claude-code"], helperCommand: HELPER },
+      { secrets: { anthropic: { kind: "bearer", secret: "corp-bearer" } } },
+      internals(),
+    );
+    expect(JSON.parse(readFileSync(settingsPath(), "utf8"))).toEqual({
+      env: { ANTHROPIC_AUTH_TOKEN: "corp-bearer" },
+    });
+  });
+
+  it("leaves a Codex key the person already put back alone, and drops the receipt", async () => {
+    seed(authPath(), AUTH);
+    const applied = await applyModelCredentials(
+      {
+        home,
+        harnesses: ["codex"],
+        helperCommand: HELPER,
+        staticTokens: { codex: STATIC },
+      },
+      internals(),
+    );
+    const own = `{\n  "OPENAI_API_KEY": "sk-proj-THEIR-OWN-AGAIN",\n  "last_refresh": "y"\n}\n`;
+    seed(authPath(), own);
+    const restored = await restoreModelCredentials(
+      { home, harnesses: ["codex"], helperCommand: HELPER },
+      { secrets: { openai: { kind: "bearer", secret: OPENAI_KEY } } },
+      internals(),
+    );
+    expect(restored.harnesses[0]).toMatchObject({
+      changed: false,
+      brokered: false,
+    });
+    expect(readFileSync(authPath(), "utf8")).toBe(own);
+    expect(existsSync(applied.harnesses[0]!.backup)).toBe(false);
+  });
+
+  it("puts Codex's key back into a file edited since apply, keeping the edits", async () => {
+    seed(authPath(), AUTH);
+    await applyModelCredentials(
+      {
+        home,
+        harnesses: ["codex"],
+        helperCommand: HELPER,
+        staticTokens: { codex: STATIC },
+      },
+      internals(),
+    );
+    const edited = JSON.parse(readFileSync(authPath(), "utf8"));
+    edited.tokens = { id_token: "later-login" };
+    seed(authPath(), `${JSON.stringify(edited, null, 2)}\n`);
+    const restored = await restoreModelCredentials(
+      { home, harnesses: ["codex"], helperCommand: HELPER },
+      { secrets: { openai: { kind: "bearer", secret: OPENAI_KEY } } },
+      internals(),
+    );
+    expect(restored.harnesses[0]!.changed).toBe(true);
+    expect(JSON.parse(readFileSync(authPath(), "utf8"))).toEqual({
+      OPENAI_API_KEY: OPENAI_KEY,
+      last_refresh: "2026-09-01T00:00:00Z",
+      tokens: { id_token: "later-login" },
+    });
+  });
+
+  it("removes a static token nothing was released for, and a file that did not exist before", async () => {
+    seed(authPath(), AUTH);
+    await applyModelCredentials(
+      {
+        home,
+        harnesses: ["codex"],
+        helperCommand: HELPER,
+        staticTokens: { codex: STATIC },
+      },
+      internals(),
+    );
+    // Custody was shredded or never had the key: the token comes out and
+    // the rest of the file stays, so Codex asks for a login rather than
+    // sending a token the gateway will refuse.
+    const restored = await restoreModelCredentials(
+      { home, harnesses: ["codex"], helperCommand: HELPER },
+      {},
+      internals(),
+    );
+    expect(restored.harnesses[0]!.changed).toBe(true);
+    expect(JSON.parse(readFileSync(authPath(), "utf8"))).toEqual({
+      last_refresh: "2026-09-01T00:00:00Z",
+    });
+    // A restore with nothing to do says so and touches nothing.
+    const again = await restoreModelCredentials(
+      { home, harnesses: ["codex", "claude-code"], helperCommand: HELPER },
+      {},
+      internals(),
+    );
+    expect(
+      again.harnesses.map((h) => [h.harness, h.changed, h.reason]),
+    ).toEqual([
+      ["codex", false, undefined],
+      ["claude-code", false, "no_file"],
+    ]);
+  });
 });
 
 describe("read and orphans", () => {
@@ -372,5 +588,45 @@ describe("read and orphans", () => {
     expect(hasOrphanedModelCredential("codex", home)).toBe(false);
     rmSync(settingsPath());
     expect(hasOrphanedModelCredential("claude-code", home)).toBe(false);
+  });
+
+  it("still recognises an orphan in a file that no longer parses", () => {
+    // A half-edited file that still names our helper or holds a token is
+    // one the sweep must visit; one that mentions neither is not ours.
+    seed(settingsPath(), `{ "apiKeyHelper": "${HELPER}", broken`);
+    seed(authPath(), `{ "OPENAI_API_KEY": "${STATIC}", broken`);
+    expect(hasOrphanedModelCredential("claude-code", home)).toBe(true);
+    expect(hasOrphanedModelCredential("codex", home)).toBe(true);
+    seed(settingsPath(), "{ broken");
+    seed(authPath(), '{ "OPENAI_API_KEY": "sk-proj-x", broken');
+    expect(hasOrphanedModelCredential("claude-code", home)).toBe(false);
+    expect(hasOrphanedModelCredential("codex", home)).toBe(false);
+  });
+
+  it("reads a file that does not parse as not brokered, without throwing", async () => {
+    seed(settingsPath(), "{ broken");
+    seed(authPath(), "{ broken");
+    const state = await readModelCredentialState(
+      { home, harnesses: ["claude-code", "codex"], helperCommand: HELPER },
+      internals(),
+    );
+    expect(
+      state.harnesses.map((h) => [h.harness, h.brokered, h.helper]),
+    ).toEqual([
+      ["claude-code", false, null],
+      ["codex", false, undefined],
+    ]);
+    // A managed settings file that sets our own helper is no shadow.
+    seed(
+      join(home, "managed-settings.json"),
+      JSON.stringify({ apiKeyHelper: HELPER }),
+    );
+    seed(settingsPath(), JSON.stringify({ apiKeyHelper: HELPER }));
+    const managed = await readModelCredentialState(
+      { home, harnesses: ["claude-code"], helperCommand: HELPER },
+      internals(),
+    );
+    expect(managed.harnesses[0]).toMatchObject({ brokered: true });
+    expect(managed.harnesses[0]!.shadowedBy).toBeUndefined();
   });
 });

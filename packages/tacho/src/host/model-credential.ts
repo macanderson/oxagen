@@ -48,7 +48,13 @@ import {
 import { basename, dirname, join } from "node:path";
 import type { CredentialKind, HeldCredential } from "./credential-store";
 import { claudeManagedSettingsPath } from "./model-base-url";
-import { looksLikeRunToken, type RunTokenProvider } from "./run-token";
+import {
+  looksLikeRunToken,
+  peekRunTokenClaims,
+  readRunTokenKey,
+  type RunTokenProvider,
+  verifyRunToken,
+} from "./run-token";
 
 export type ModelCredentialHarness = "claude-code" | "codex";
 
@@ -68,9 +74,11 @@ export interface ModelCredentialOptions {
   /**
    * The command line Claude Code's `apiKeyHelper` runs. Ends in
    * `credential issue --harness claude-code`; `isTachoHelper` recognises it
-   * whatever binary it names.
+   * whatever binary it names. Required when `claude-code` is among the
+   * harnesses applied; a Codex-only apply (the daemon renewing a static
+   * token) needs none.
    */
-  helperCommand: string;
+  helperCommand?: string;
   /** Codex only: the static run token to write into `auth.json`. */
   staticTokens?: Partial<Record<ModelCredentialHarness, string>>;
 }
@@ -94,9 +102,28 @@ export interface ModelCredentialHarnessState {
    * keeps in `auth.json`, a file that is a symlink apply will not rewrite, a
    * file that does not exist and nothing to write into it.
    */
-  reason?: "subscription_login" | "symlink" | "no_file" | "no_token";
+  reason?:
+    | "subscription_login"
+    | "symlink"
+    | "no_file"
+    | "no_token"
+    | "foreign_key_present";
+  /**
+   * Restore only: whether the released secret the caller supplied was written
+   * back into the file. False when the caller supplied none, and when the
+   * file already held a key of the person's own (`foreign_key_present`), in
+   * which case the caller keeps or discards custody knowingly rather than
+   * releasing a secret that went nowhere.
+   */
+  secretRestored?: boolean;
   /** Claude Code only: what `apiKeyHelper` holds now. */
   helper?: string | null;
+  /**
+   * Codex only: when the static run token in `auth.json` expires, read off
+   * the token's own claims. A brokered Codex whose token is near this date
+   * is one the daemon renews; one past it is refused until it does.
+   */
+  tokenExpiresAt?: string;
   /**
    * A managed settings file that sets `apiKeyHelper` to something else.
    * Managed settings win, so the harness does not run ours.
@@ -338,6 +365,7 @@ function describe(
   const text = readTextIfExists(file);
   let brokered = false;
   let helper: string | null | undefined;
+  let tokenExpiresAt: string | undefined;
   let shadow: { file: string; value: string } | undefined;
   let why = reason;
   if (text === undefined) {
@@ -360,7 +388,7 @@ function describe(
       typeof env[CLAUDE_AUTH_TOKEN] !== "string";
     shadow = managedHelperShadow(
       internals.managedSettingsFile ?? claudeManagedSettingsPath(),
-      options.helperCommand,
+      options.helperCommand ?? "",
     );
   } else {
     let auth: JsonObject = {};
@@ -371,6 +399,11 @@ function describe(
     }
     const key = auth[CODEX_KEY];
     brokered = looksLikeRunToken(typeof key === "string" ? key : undefined);
+    if (brokered) {
+      const claims = peekRunTokenClaims(key as string);
+      if (claims !== undefined)
+        tokenExpiresAt = new Date(claims.exp).toISOString();
+    }
     if (!brokered && why === undefined && auth["tokens"] !== undefined)
       why = "subscription_login";
   }
@@ -380,6 +413,7 @@ function describe(
     brokered,
     ...(why !== undefined && !brokered ? { reason: why } : {}),
     ...(helper !== undefined ? { helper } : {}),
+    ...(tokenExpiresAt !== undefined ? { tokenExpiresAt } : {}),
     ...(shadow !== undefined ? { shadowedBy: shadow } : {}),
     changed,
     backup,
@@ -419,13 +453,18 @@ function applyClaude(
       delete rest[member];
     }
   }
+  const helperCommand = options.helperCommand;
+  if (helperCommand === undefined)
+    throw new Error(
+      "applying Claude Code's credential needs the helper command line",
+    );
   const current = settings[HELPER_KEY];
-  const helperOk = current === options.helperCommand;
+  const helperOk = current === helperCommand;
   if (helperOk && took.length === 0 && existing !== undefined)
     return { changed: false };
   const previousHelper =
     typeof current === "string" && !isTachoHelper(current) ? current : null;
-  settings[HELPER_KEY] = options.helperCommand;
+  settings[HELPER_KEY] = helperCommand;
   if (env !== undefined || Object.keys(rest).length > 0) settings["env"] = rest;
   const next = serializeLike(text, settings);
   const sidecar: Sidecar = existing
@@ -470,6 +509,15 @@ function applyCodex(
   const existing = readSidecar(backup);
   const current = auth[CODEX_KEY];
   const hasKey = typeof current === "string" && current.length > 0;
+  if (
+    auth["tokens"] !== undefined &&
+    !looksLikeRunToken(typeof current === "string" ? current : undefined)
+  ) {
+    // A ChatGPT login, with or without a key beside it: Codex prefers the
+    // login, so a token written here would not be what it sends, and the
+    // chatgpt.com upstream takes no API key anyway. Left as it is.
+    return { changed: false, reason: "subscription_login" };
+  }
   if (hasKey && !looksLikeRunToken(current as string)) {
     taken.push({
       harness: "codex",
@@ -477,10 +525,6 @@ function applyCodex(
       credential: { kind: "bearer", secret: current as string },
       member: CODEX_KEY,
     });
-  } else if (!hasKey && auth["tokens"] !== undefined) {
-    // A ChatGPT login: nothing to take into custody, and a token written
-    // here would not be what Codex sends. Left as it is.
-    return { changed: false, reason: "subscription_login" };
   }
   if (token === undefined) {
     // Nothing to write: the caller took the key (above) but issued no token.
@@ -513,10 +557,16 @@ export interface RestoreSecrets {
   secrets?: Partial<Record<RunTokenProvider, HeldCredential>>;
 }
 
+interface RestoreOutcome {
+  changed: boolean;
+  secretRestored: boolean;
+  reason?: ModelCredentialHarnessState["reason"];
+}
+
 function restoreClaude(
   options: ModelCredentialOptions,
   released: HeldCredential | undefined,
-): boolean {
+): RestoreOutcome {
   const file = fileFor("claude-code", options.home);
   const backup = sidecarFor(file);
   const sidecar = readSidecar(backup);
@@ -525,8 +575,21 @@ function restoreClaude(
     if (existsSync(backup)) unlinkSync(backup);
   };
   if (text === undefined) {
+    // The file is gone. A released key still has to land somewhere the
+    // harness reads, so it goes into a fresh settings file rather than back
+    // into a store that is about to be shredded.
+    if (released !== undefined) {
+      const member =
+        released.kind === "bearer" ? CLAUDE_AUTH_TOKEN : CLAUDE_API_KEY;
+      writeAtomicPreserving(
+        file,
+        serializeLike(undefined, { env: { [member]: released.secret } }),
+      );
+      dropSidecar();
+      return { changed: true, secretRestored: true };
+    }
     dropSidecar();
-    return false;
+    return { changed: false, secretRestored: false };
   }
   // Edited or not, the secret has to go back by name: a byte-exact restore
   // of the original would put it back too, but the file may hold hook
@@ -544,6 +607,7 @@ function restoreClaude(
   // which member Claude Code reads that kind from. A lost receipt must not
   // lose the key, because the caller releases it from custody once this
   // returns.
+  let secretRestored = false;
   if (released !== undefined) {
     const member =
       sidecar?.taken.find((t) => t.kind === released.kind)?.member ??
@@ -552,6 +616,7 @@ function restoreClaude(
     env[member] = released.secret;
     settings["env"] = env;
     touched = true;
+    secretRestored = true;
   } else if (sidecar?.created_env === true) {
     const env = envOf(settings);
     if (env !== undefined && Object.keys(env).length === 0) {
@@ -561,22 +626,22 @@ function restoreClaude(
   }
   if (!touched) {
     dropSidecar();
-    return false;
+    return { changed: false, secretRestored };
   }
   const next = serializeLike(text, settings);
   if (next === text) {
     dropSidecar();
-    return false;
+    return { changed: false, secretRestored };
   }
   writeAtomicPreserving(file, next);
   dropSidecar();
-  return true;
+  return { changed: true, secretRestored };
 }
 
 function restoreCodex(
   options: ModelCredentialOptions,
   released: HeldCredential | undefined,
-): boolean {
+): RestoreOutcome {
   const file = fileFor("codex", options.home);
   const backup = sidecarFor(file);
   const sidecar = readSidecar(backup);
@@ -585,15 +650,30 @@ function restoreCodex(
     if (existsSync(backup)) unlinkSync(backup);
   };
   if (text === undefined) {
+    if (released !== undefined) {
+      writeAtomicPreserving(
+        file,
+        serializeLike(undefined, { [CODEX_KEY]: released.secret }),
+      );
+      dropSidecar();
+      return { changed: true, secretRestored: true };
+    }
     dropSidecar();
-    return false;
+    return { changed: false, secretRestored: false };
   }
   const auth = parseObject(text, file);
   const current = auth[CODEX_KEY];
   if (!looksLikeRunToken(typeof current === "string" ? current : undefined)) {
-    // Somebody already put their own value back, or logged in again.
+    // Somebody already put a key of their own back, or logged in again. Their
+    // value wins; the caller is told the released key went nowhere.
     dropSidecar();
-    return false;
+    return {
+      changed: false,
+      secretRestored: false,
+      ...(typeof current === "string" && current.length > 0
+        ? { reason: "foreign_key_present" as const }
+        : {}),
+    };
   }
   if (released !== undefined) auth[CODEX_KEY] = released.secret;
   else delete auth[CODEX_KEY];
@@ -604,12 +684,12 @@ function restoreCodex(
   ) {
     unlinkSync(file);
     dropSidecar();
-    return true;
+    return { changed: true, secretRestored: released !== undefined };
   }
   const next = serializeLike(text, auth);
   writeAtomicPreserving(file, next);
   dropSidecar();
-  return true;
+  return { changed: true, secretRestored: released !== undefined };
 }
 
 function unique(
@@ -660,13 +740,64 @@ export async function restoreModelCredentials(
 ): Promise<ModelCredentialState> {
   const harnesses = unique(options.harnesses).map((harness) => {
     const released = restore.secrets?.[HARNESS_PROVIDER[harness]];
-    const changed =
+    const outcome =
       harness === "claude-code"
         ? restoreClaude(options, released)
         : restoreCodex(options, released);
-    return describe(harness, options, changed, internals);
+    return {
+      ...describe(harness, options, outcome.changed, internals, outcome.reason),
+      secretRestored: outcome.secretRestored,
+    };
   });
   return { harnesses, taken: [] };
+}
+
+/**
+ * The secrets apply would take, without writing anything. The caller seals
+ * them first and applies second, so a crash between the two leaves the key
+ * where it was rather than nowhere.
+ */
+export async function peekModelCredentials(
+  options: ModelCredentialOptions,
+): Promise<TakenCredential[]> {
+  const taken: TakenCredential[] = [];
+  for (const harness of unique(options.harnesses)) {
+    const file = fileFor(harness, options.home);
+    const text = readTextIfExists(file);
+    if (text === undefined) continue;
+    const document = parseObject(text, file);
+    if (harness === "claude-code") {
+      const env = envOf(document) ?? {};
+      for (const [member, kind] of [
+        [CLAUDE_API_KEY, "api_key"],
+        [CLAUDE_AUTH_TOKEN, "bearer"],
+      ] as const) {
+        const value = env[member];
+        if (typeof value === "string" && value.length > 0)
+          taken.push({
+            harness,
+            provider: "anthropic",
+            credential: { kind, secret: value },
+            member: `env.${member}`,
+          });
+      }
+    } else {
+      const current = document[CODEX_KEY];
+      if (
+        document["tokens"] === undefined &&
+        typeof current === "string" &&
+        current.length > 0 &&
+        !looksLikeRunToken(current)
+      )
+        taken.push({
+          harness,
+          provider: "openai",
+          credential: { kind: "bearer", secret: current },
+          member: CODEX_KEY,
+        });
+    }
+  }
+  return taken;
 }
 
 /** What each harness file holds now. Reads only. */
@@ -700,4 +831,30 @@ export function hasOrphanedModelCredential(
       text.includes("credential issue --harness") || text.includes("oxrt_")
     );
   }
+}
+
+/** A static token this close to its expiry is re-minted rather than kept. */
+export const STATIC_TOKEN_RENEW_WINDOW_MS = 7 * 24 * 60 * 60_000;
+
+/**
+ * Whether the run token a Codex file holds is one this host's gateway will
+ * still honour for a while: signed by the key on disk, bound to this
+ * enrollment, and not inside the renewal window. Anything else is re-minted.
+ */
+export function staticTokenStillGood(
+  token: string | undefined,
+  host: { host_enrollment_id: string },
+  keyPath: string,
+  now: number,
+): boolean {
+  if (token === undefined || !looksLikeRunToken(token)) return false;
+  const key = readRunTokenKey(keyPath);
+  if (key === undefined) return false;
+  const verdict = verifyRunToken(token, {
+    key,
+    host: host.host_enrollment_id,
+    provider: "openai",
+    now,
+  });
+  return verdict.ok && verdict.claims.exp - now > STATIC_TOKEN_RENEW_WINDOW_MS;
 }

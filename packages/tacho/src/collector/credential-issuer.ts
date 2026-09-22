@@ -91,10 +91,20 @@ export function issueRunToken(
   ).includes(input.placement)
     ? (input.placement as RunTokenPlacement)
     : "helper";
-  const ttl =
-    typeof input.ttl_ms === "number" && Number.isFinite(input.ttl_ms)
-      ? input.ttl_ms
-      : undefined;
+  if (
+    input.ttl_ms !== undefined &&
+    (typeof input.ttl_ms !== "number" ||
+      !Number.isFinite(input.ttl_ms) ||
+      input.ttl_ms <= 0)
+  )
+    return {
+      status: 400,
+      body: {
+        error: "ttl_ms must be a positive number of milliseconds",
+        code: "ttl_invalid",
+      },
+    };
+  const ttl = input.ttl_ms;
   const host = deps.host();
   if (host.host_status !== "active")
     return {
@@ -123,8 +133,9 @@ export function issueRunToken(
     };
   const now = deps.now();
   const notAfter = Date.parse(host.expires_at);
+  const key = deps.key();
   const minted = mintRunToken({
-    key: deps.key(),
+    key,
     host: host.host_enrollment_id,
     harness,
     provider,
@@ -150,6 +161,8 @@ export function issueRunToken(
             [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
             [TACHO_CREDENTIAL_BASIS_ATTR]: TACHO_CREDENTIAL_GATEWAY_BROKERED,
             [TACHO_RUN_TOKEN_ATTR]: minted.claims.tid,
+            // Which signing key minted it, so a rotation reads on the record.
+            "oxagen.run_token_key": key.id,
             "oxagen.provider": provider,
             "oxagen.harness": harness,
             "oxagen.run_token_placement": placement,

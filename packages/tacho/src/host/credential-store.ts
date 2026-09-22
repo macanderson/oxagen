@@ -19,13 +19,17 @@
  * gateway rather than the harness, so the harness cannot spend it anywhere
  * but through the gateway.
  */
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-} from "node:crypto";
-import { existsSync, readFileSync, unlinkSync } from "node:fs";
+  closeSync,
+  existsSync,
+  fsyncSync,
+  openSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeSync,
+} from "node:fs";
 import { z } from "zod";
 import { writeSensitiveFileAtomic } from "./fs";
 import { type RunTokenProvider, RUN_TOKEN_PROVIDERS } from "./run-token";
@@ -75,8 +79,6 @@ const entrySchema = z
     kind: z.enum(CREDENTIAL_KINDS),
     source: z.enum(CREDENTIAL_SOURCES),
     taken_at: z.string(),
-    /** sha256 over the secret: lets a status report say "unchanged" without the secret. */
-    digest: z.string().regex(/^sha256:[0-9a-f]{64}$/),
     /** The first few characters, the way a vendor console shows a key. */
     prefix: z.string().max(12),
     sealed: sealedSchema,
@@ -92,17 +94,26 @@ const fileSchema = z
 
 type StoredEntry = z.output<typeof entrySchema>;
 
-/** What the store says about a provider without saying the secret. */
+/**
+ * What the store says about a provider without saying the secret. The digest
+ * the file keeps is not here: a hash of a key is a verification oracle, and
+ * `tacho status` and the daemon's `/status` route repeat this object.
+ */
 export interface CredentialCustody {
   provider: RunTokenProvider;
   kind: CredentialKind;
   source: CredentialSource;
   taken_at: string;
-  digest: string;
   prefix: string;
 }
 
 export interface CredentialStore {
+  /**
+   * Whether a provider is in custody. Reads the file and never the key, so
+   * the proxy can decide a call's basis without decrypting anything, and a
+   * host with no key file at all still answers.
+   */
+  has: (provider: RunTokenProvider) => boolean;
   /** The secret for a provider, or undefined when none is in custody. */
   read: (provider: RunTokenProvider) => HeldCredential | undefined;
   /** Take a secret into custody, replacing any earlier one for the provider. */
@@ -129,18 +140,57 @@ export interface CredentialStorePaths {
 
 const KEY_BYTES = 32;
 
-function loadOrCreateKey(path: string): Buffer {
+function readKey(path: string): Buffer | undefined {
   try {
     const hex = readFileSync(path, "utf8").trim();
     if (!/^[0-9a-f]{64}$/i.test(hex))
       throw new Error(`${path} does not hold a 32-byte key`);
     return Buffer.from(hex, "hex");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
   }
+}
+
+/** The key for a write: created on first use. */
+function loadOrCreateKey(path: string): Buffer {
+  const existing = readKey(path);
+  if (existing !== undefined) return existing;
   const key = randomBytes(KEY_BYTES);
   writeSensitiveFileAtomic(path, `${key.toString("hex")}\n`);
   return key;
+}
+
+/**
+ * The key for a read: never created. A store file with no key beside it is
+ * a store nobody can open, and minting a fresh key here would turn that into
+ * "unable to authenticate data" with the cause hidden.
+ */
+function requireKey(path: string): Buffer {
+  const key = readKey(path);
+  if (key === undefined)
+    throw new Error(
+      `${path} is missing, so the credentials in custody cannot be opened`,
+    );
+  return key;
+}
+
+/**
+ * Overwrite a small secret file in place, so the bytes on the old blocks are
+ * gone before the name is. A rename onto a new inode would leave them.
+ */
+function overwriteInPlace(path: string): void {
+  let fd: number | undefined;
+  try {
+    const size = statSync(path).size;
+    fd = openSync(path, "r+");
+    writeSync(fd, randomBytes(Math.max(size, KEY_BYTES * 2)), 0, undefined, 0);
+    fsyncSync(fd);
+  } catch {
+    // Gone already, or not ours to write. The unlink below still runs.
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
 }
 
 function seal(key: Buffer, secret: string, aad: string) {
@@ -176,10 +226,6 @@ function open(
   ]).toString("utf8");
 }
 
-function digestOf(secret: string): string {
-  return `sha256:${createHash("sha256").update(secret, "utf8").digest("hex")}`;
-}
-
 /** The visible head of a key, the way a vendor console prints one. */
 export function credentialPrefix(secret: string): string {
   const head = secret.slice(0, Math.min(8, Math.max(0, secret.length - 4)));
@@ -192,7 +238,6 @@ function custodyOf(entry: StoredEntry): CredentialCustody {
     kind: entry.kind,
     source: entry.source,
     taken_at: entry.taken_at,
-    digest: entry.digest,
     prefix: entry.prefix,
   };
 }
@@ -206,7 +251,8 @@ function custodyOf(entry: StoredEntry): CredentialCustody {
 export function openCredentialStore(
   paths: CredentialStorePaths,
 ): CredentialStore {
-  const keyOf = () => loadOrCreateKey(paths.key);
+  const keyForWrite = () => loadOrCreateKey(paths.key);
+  const keyForRead = () => requireKey(paths.key);
 
   function readAll(): StoredEntry[] {
     let text: string;
@@ -236,13 +282,14 @@ export function openCredentialStore(
   }
 
   return {
+    has: (provider) => readAll().some((e) => e.provider === provider),
     read: (provider) => {
       const entry = readAll().find((e) => e.provider === provider);
       if (entry === undefined) return undefined;
       return {
         kind: entry.kind,
         secret: open(
-          keyOf(),
+          keyForRead(),
           entry.sealed,
           `${CREDENTIAL_STORE_SCHEMA}:${provider}`,
         ),
@@ -256,9 +303,12 @@ export function openCredentialStore(
         kind,
         source,
         taken_at: new Date(now).toISOString(),
-        digest: digestOf(secret),
         prefix: credentialPrefix(secret),
-        sealed: seal(keyOf(), secret, `${CREDENTIAL_STORE_SCHEMA}:${provider}`),
+        sealed: seal(
+          keyForWrite(),
+          secret,
+          `${CREDENTIAL_STORE_SCHEMA}:${provider}`,
+        ),
       };
       writeAll([...readAll().filter((e) => e.provider !== provider), entry]);
       return custodyOf(entry);
@@ -268,7 +318,7 @@ export function openCredentialStore(
       const entry = entries.find((e) => e.provider === provider);
       if (entry === undefined) return undefined;
       const secret = open(
-        keyOf(),
+        keyForRead(),
         entry.sealed,
         `${CREDENTIAL_STORE_SCHEMA}:${provider}`,
       );
@@ -277,13 +327,10 @@ export function openCredentialStore(
     },
     status: () => readAll().map(custodyOf),
     shred: () => {
-      // The key first: a crash between the two leaves ciphertext nobody can
-      // open, never a readable secret with no key to guard it.
-      if (existsSync(paths.key))
-        writeSensitiveFileAtomic(
-          paths.key,
-          randomBytes(KEY_BYTES).toString("hex"),
-        );
+      // The key first, overwritten where it lies: a crash between the two
+      // leaves ciphertext nobody can open, never a readable secret with no
+      // key to guard it.
+      if (existsSync(paths.key)) overwriteInPlace(paths.key);
       for (const path of [paths.file, paths.key])
         if (existsSync(path)) unlinkSync(path);
     },

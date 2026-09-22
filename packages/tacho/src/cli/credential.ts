@@ -24,7 +24,10 @@
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { HeldCredential } from "../host/credential-store";
+import type {
+  CredentialSource,
+  HeldCredential,
+} from "../host/credential-store";
 import { readJsonFileIfExists } from "../host/fs";
 import { type HostFile, readHostFile } from "../host/host-file";
 import {
@@ -32,14 +35,16 @@ import {
   hasOrphanedModelCredential,
   type ModelCredentialHarness,
   type ModelCredentialHarnessState,
+  type ModelCredentialState,
   modelCredentialBackupPath,
+  staticTokenStillGood,
 } from "../host/model-credential";
-import {
-  mintRunToken,
-  readRunTokenKey,
-  type RunTokenPlacement,
-  type RunTokenProvider,
-} from "../host/run-token";
+
+export {
+  STATIC_TOKEN_RENEW_WINDOW_MS,
+  staticTokenStillGood,
+} from "../host/model-credential";
+import type { RunTokenPlacement, RunTokenProvider } from "../host/run-token";
 import { TACHO_HARNESS_LABELS } from "../wire";
 import type { CliDeps } from "./deps";
 
@@ -94,8 +99,11 @@ export interface IssueResult {
 }
 
 /**
- * Print one run token. The daemon is asked first, so the issue is recorded
- * on the host's chain; the key on disk answers when the daemon does not.
+ * Print one run token. Only the daemon mints, so every token the harness ever
+ * holds is a `token_issued` frame on the host's chain. When the daemon does
+ * not answer, no token is printed: the proxy is the daemon, so a token minted
+ * around it would buy a model call that cannot happen anyway, and the harness
+ * is told why instead.
  */
 export async function credentialIssue(
   options: IssueOptions,
@@ -107,79 +115,35 @@ export async function credentialIssue(
       ok: false,
       detail: `run tokens are issued for ${MODEL_CREDENTIAL_HARNESSES.join(" and ")}; got "${harness}"`,
     };
-  const provider = HARNESS_PROVIDER[harness];
   const placement: RunTokenPlacement = options.placement ?? "helper";
   const answer = await deps.daemonPost?.("/credential/issue", {
     harness,
     placement,
   });
-  if (answer !== undefined) {
-    let parsed: { token?: unknown; error?: unknown; code?: unknown } = {};
-    try {
-      parsed = JSON.parse(answer.body) as typeof parsed;
-    } catch {
-      parsed = {};
-    }
-    if (answer.status === 200 && typeof parsed.token === "string")
-      return { ok: true, token: parsed.token, detail: "issued by tachod" };
-    if (answer.status === 400 || answer.status === 403)
-      return {
-        ok: false,
-        detail:
-          typeof parsed.error === "string"
-            ? parsed.error
-            : `tachod refused to issue a run token (${answer.status})`,
-      };
-    // Any other answer is a daemon fault, and the key on disk still decides.
-  }
-  const host = readHost(deps);
-  if (host === undefined)
-    return {
-      ok: false,
-      detail: "this machine is not enrolled; run `tacho enroll`",
-    };
-  if (host.host_status !== "active")
-    return {
-      ok: false,
-      detail: `this host is ${host.host_status} by its Oxagen operator, so no run token is issued`,
-    };
-  let held: HeldCredential | undefined;
-  try {
-    held = deps.credentialStore?.read(provider);
-  } catch (error) {
-    return {
-      ok: false,
-      detail: `the credential store cannot be read: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
-  if (held === undefined)
-    return {
-      ok: false,
-      detail: `the gateway holds no ${provider} credential in custody, so a run token would buy nothing; run \`tacho enroll\` again`,
-    };
-  const key = readRunTokenKey(deps.paths.runTokenKey);
-  if (key === undefined)
+  if (answer === undefined) {
+    const host = readHost(deps);
     return {
       ok: false,
       detail:
-        "no run token signing key on this machine; start tachod or run `tacho enroll` again",
+        host === undefined
+          ? "this machine is not enrolled; run `tacho enroll`"
+          : "tachod is not answering, so no run token is issued: the gateway it would be spent at is down. Run `tacho status`",
     };
-  const notAfter = Date.parse(host.expires_at);
-  const minted = mintRunToken({
-    key,
-    host: host.host_enrollment_id,
-    harness,
-    provider,
-    placement,
-    now: deps.now(),
-    ...(placement === "static" && Number.isFinite(notAfter)
-      ? { notAfter }
-      : {}),
-  });
+  }
+  let parsed: { token?: unknown; error?: unknown } = {};
+  try {
+    parsed = JSON.parse(answer.body) as typeof parsed;
+  } catch {
+    parsed = {};
+  }
+  if (answer.status === 200 && typeof parsed.token === "string")
+    return { ok: true, token: parsed.token, detail: "issued by tachod" };
   return {
-    ok: true,
-    token: minted.token,
-    detail: "issued from the signing key on disk; tachod did not answer",
+    ok: false,
+    detail:
+      typeof parsed.error === "string"
+        ? parsed.error
+        : `tachod refused to issue a run token (${answer.status})`,
   };
 }
 
@@ -276,7 +240,13 @@ export interface BrokerOutcome {
 /**
  * The enrollment step: take the routed harnesses' vendor keys into custody
  * and point the harnesses at run tokens. Called once the proxy is listening.
- * Idempotent: a re-enroll takes only what a person put back since.
+ *
+ * Seal first, then edit. The keys are read off the files (`peek`) and out of
+ * the enrolling shell, sealed in the store, and only then are the files
+ * rewritten, so a crash or a store fault between the two leaves every key
+ * where it was and never nowhere. Idempotent: a re-enroll takes only what a
+ * person put back since, and re-mints Codex's token only when the one in
+ * place no longer verifies for this enrollment or is near its expiry.
  */
 export async function brokerCredentials(
   host: HostFile,
@@ -289,61 +259,91 @@ export async function brokerCredentials(
   const targets = harnesses.filter(isCredentialHarness);
   if (store === undefined || contract === undefined || targets.length === 0)
     return { harnesses: [], taken: [], warnings };
+  const helperCommand = deps.runtime.credentialHelperCommand;
 
-  // Keys handed over by the enrolling shell go into custody first, so a
-  // Codex host with a key in the environment and none in `auth.json` is
-  // brokered too.
-  const takenNow: RunTokenProvider[] = [];
+  // 1. What there is to take: the files first, the shell second. A key in
+  // the file is the one the harness is using today, so it wins over one
+  // exported for the occasion.
+  const offered = new Map<
+    RunTokenProvider,
+    { credential: HeldCredential; source: CredentialSource }
+  >();
+  for (const taken of await contract.peek({
+    home: deps.home,
+    harnesses: targets,
+    helperCommand,
+  })) {
+    offered.set(taken.provider, {
+      credential: taken.credential,
+      source:
+        taken.harness === "claude-code"
+          ? "claude-code:settings.env"
+          : "codex:auth.json",
+    });
+  }
   for (const harness of targets) {
     const provider = HARNESS_PROVIDER[harness];
     const fromEnv = deps.env[brokerEnvVar(provider)];
-    if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
-      store.take(
-        provider,
-        {
+    if (
+      !offered.has(provider) &&
+      typeof fromEnv === "string" &&
+      fromEnv.trim().length > 0
+    )
+      offered.set(provider, {
+        credential: {
           kind: provider === "anthropic" ? "api_key" : "bearer",
           secret: fromEnv.trim(),
         },
-        "enroll:env",
-        deps.now(),
-      );
-      takenNow.push(provider);
-    }
+        source: "enroll:env",
+      });
   }
 
-  // Codex has no helper, so its token is minted here and written once. It
-  // is bounded by the enrollment's expiry, and the proxy still checks host
-  // status on every call, so it dies with the enrollment either way.
+  // 2. Seal. Nothing has been written to a harness file yet, so a store that
+  // refuses leaves the machine exactly as it was.
+  const takenNow: RunTokenProvider[] = [];
+  for (const [provider, offer] of offered) {
+    store.take(provider, offer.credential, offer.source, deps.now());
+    takenNow.push(provider);
+  }
+
+  // 3. Codex's static token, minted by the daemon so the issue is on the
+  // record, only when custody can back it and the one in place will not do.
   const staticTokens: Partial<Record<ModelCredentialHarness, string>> = {};
-  if (targets.includes("codex")) {
-    // A re-enroll leaves a token that is already in place alone; only a file
-    // that still holds the key, or one with no key while custody has one,
-    // gets a token minted for it.
-    const already = (
-      await contract.read({
-        home: deps.home,
-        harnesses: ["codex"],
-        helperCommand: deps.runtime.credentialHelperCommand,
-      })
-    ).harnesses[0]?.brokered;
-    const hasKey =
-      already !== true &&
-      (store.status().some((c) => c.provider === "openai") ||
-        codexFileHoldsKey(deps));
-    if (hasKey) {
-      const issued = await issueStatic(host, "codex", deps);
-      if (issued.token !== undefined) staticTokens.codex = issued.token;
-      else warnings.push(`Codex keeps its own credential: ${issued.detail}`);
+  if (targets.includes("codex") && store.has("openai")) {
+    const before = (
+      await contract.read({ home: deps.home, harnesses: ["codex"] })
+    ).harnesses[0];
+    if (before?.reason !== "subscription_login") {
+      const current = codexFileToken(deps);
+      if (
+        !staticTokenStillGood(current, host, deps.paths.runTokenKey, deps.now())
+      ) {
+        const issued = await issueStatic("codex", deps);
+        if (issued.token !== undefined) staticTokens.codex = issued.token;
+        else warnings.push(`Codex keeps its own credential: ${issued.detail}`);
+      }
     }
   }
 
-  const state = await contract.apply({
-    home: deps.home,
-    harnesses: targets,
-    helperCommand: deps.runtime.credentialHelperCommand,
-    staticTokens,
-  });
+  // 4. Edit the files. Anything apply reports as taken was already sealed
+  // above; a value that appeared between peek and apply is sealed now. If
+  // the edit fails, custody taken by this call is given up again: the keys
+  // are still in the files, and a provider in custody whose harness was not
+  // pointed at the gateway would have every call refused as foreign.
+  let state: ModelCredentialState;
+  try {
+    state = await contract.apply({
+      home: deps.home,
+      harnesses: targets,
+      helperCommand,
+      staticTokens,
+    });
+  } catch (error) {
+    for (const provider of takenNow) store.release(provider);
+    throw error;
+  }
   for (const taken of state.taken) {
+    if (offered.has(taken.provider)) continue;
     store.take(
       taken.provider,
       taken.credential,
@@ -352,79 +352,67 @@ export async function brokerCredentials(
         : "codex:auth.json",
       deps.now(),
     );
-    if (!takenNow.includes(taken.provider)) takenNow.push(taken.provider);
+    takenNow.push(taken.provider);
   }
-  // Codex: the key was just taken out of the file and no token was minted
-  // for it yet. Mint now and apply once more.
-  if (
-    targets.includes("codex") &&
-    staticTokens.codex === undefined &&
-    state.taken.some((t) => t.harness === "codex")
-  ) {
-    const issued = await issueStatic(host, "codex", deps);
-    if (issued.token !== undefined) {
-      const again = await contract.apply({
-        home: deps.home,
-        harnesses: ["codex"],
-        helperCommand: deps.runtime.credentialHelperCommand,
-        staticTokens: { codex: issued.token },
-      });
-      const codex = again.harnesses[0];
-      if (codex !== undefined) {
-        const index = state.harnesses.findIndex((h) => h.harness === "codex");
-        if (index >= 0) state.harnesses[index] = codex;
+
+  // 5. Reconcile. A harness the files could not point at the gateway must
+  // not have its key in custody either, or every call it makes is refused as
+  // a foreign credential. The key goes back where it came from.
+  for (const entry of state.harnesses) {
+    const provider = HARNESS_PROVIDER[entry.harness];
+    if (entry.brokered) {
+      if (!store.has(provider)) {
+        // A helper with nothing behind it would be refused on every call.
+        await contract.restore(
+          { home: deps.home, harnesses: [entry.harness], helperCommand },
+          {},
+        );
+        const index = state.harnesses.indexOf(entry);
+        state.harnesses[index] = {
+          ...entry,
+          brokered: false,
+          changed: false,
+          reason: "no_token",
+        };
+        warnings.push(
+          `${TACHO_HARNESS_LABELS[entry.harness]} keeps its own login: no ${provider} key was found in ${entry.file} or ${brokerEnvVar(provider)}, so there is nothing for the gateway to take into custody. A subscription login crosses the proxy as it is`,
+        );
       }
-    } else warnings.push(`Codex keeps its own credential: ${issued.detail}`);
-  }
-  // A Claude Code helper written while nothing is in custody would leave the
-  // harness with a helper that refuses. Keep the helper only when the
-  // gateway can back it.
-  const claude = state.harnesses.find((h) => h.harness === "claude-code");
-  if (
-    claude !== undefined &&
-    claude.brokered &&
-    !store.status().some((c) => c.provider === "anthropic")
-  ) {
-    await contract.restore(
-      {
-        home: deps.home,
-        harnesses: ["claude-code"],
-        helperCommand: deps.runtime.credentialHelperCommand,
-      },
-      {},
-    );
-    const index = state.harnesses.indexOf(claude);
-    state.harnesses[index] = {
-      ...claude,
-      brokered: false,
-      changed: false,
-      reason: "no_token",
-    };
-    warnings.push(
-      `Claude Code keeps its own login: no Anthropic API key was found in ${claude.file} or ${brokerEnvVar("anthropic")}, so there is nothing for the gateway to take into custody. A claude.ai subscription login crosses the proxy as it is`,
-    );
+      continue;
+    }
+    if (store.has(provider) && takenNow.includes(provider)) {
+      const released = store.release(provider);
+      const index = takenNow.indexOf(provider);
+      if (index >= 0) takenNow.splice(index, 1);
+      const offer = offered.get(provider);
+      if (offer?.source === "enroll:env" || released === undefined) continue;
+      // The key came out of the file by peek and the file was not rewritten,
+      // so it is still there; custody was the only copy to drop.
+      warnings.push(
+        `${TACHO_HARNESS_LABELS[entry.harness]} keeps its own credential (${entry.reason ?? "not brokered"}), so its ${provider} key was not taken into custody`,
+      );
+    }
   }
   return { harnesses: state.harnesses, taken: takenNow, warnings };
 }
 
-function codexFileHoldsKey(deps: CliDeps): boolean {
+/** The `OPENAI_API_KEY` member of Codex's auth.json, whatever it holds. */
+function codexFileToken(deps: CliDeps): string | undefined {
   try {
     // The same file the writer edits: `~/.codex/auth.json` under `home`.
     const raw = readJsonFileIfExists(join(deps.home, ".codex", "auth.json"));
-    return (
-      typeof raw === "object" &&
-      raw !== null &&
-      typeof (raw as { OPENAI_API_KEY?: unknown }).OPENAI_API_KEY ===
-        "string" &&
-      !(raw as { OPENAI_API_KEY: string }).OPENAI_API_KEY.startsWith("oxrt_")
-    );
+    const value =
+      typeof raw === "object" && raw !== null
+        ? (raw as { OPENAI_API_KEY?: unknown }).OPENAI_API_KEY
+        : undefined;
+    return typeof value === "string" ? value : undefined;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
+/** A static token for Codex, from the daemon and nowhere else. */
 async function issueStatic(
-  host: HostFile,
   harness: ModelCredentialHarness,
   deps: CliDeps,
 ): Promise<{ token?: string; detail: string }> {
@@ -432,60 +420,62 @@ async function issueStatic(
     harness,
     placement: "static",
   });
-  if (answer?.status === 200) {
-    try {
-      const parsed = JSON.parse(answer.body) as { token?: unknown };
-      if (typeof parsed.token === "string")
-        return { token: parsed.token, detail: "issued by tachod" };
-    } catch {
-      // Fall through to the key on disk.
-    }
-  }
-  const key = readRunTokenKey(deps.paths.runTokenKey);
-  if (key === undefined)
+  if (answer === undefined)
     return {
       detail:
-        "tachod did not issue a run token and no signing key is on disk yet; run `tacho enroll` again once tachod is up",
+        "tachod did not answer, so no run token was issued; run `tacho enroll` again once tachod is up",
     };
-  const notAfter = Date.parse(host.expires_at);
+  let parsed: { token?: unknown; error?: unknown } = {};
   try {
-    return {
-      token: mintRunToken({
-        key,
-        host: host.host_enrollment_id,
-        harness,
-        provider: HARNESS_PROVIDER[harness],
-        placement: "static",
-        now: deps.now(),
-        ...(Number.isFinite(notAfter) ? { notAfter } : {}),
-      }).token,
-      detail: "issued from the signing key on disk",
-    };
-  } catch (error) {
-    return { detail: error instanceof Error ? error.message : String(error) };
+    parsed = JSON.parse(answer.body) as typeof parsed;
+  } catch {
+    parsed = {};
   }
+  if (answer.status === 200 && typeof parsed.token === "string")
+    return { token: parsed.token, detail: "issued by tachod" };
+  return {
+    detail:
+      typeof parsed.error === "string"
+        ? parsed.error
+        : `tachod refused to issue a run token (${answer.status})`,
+  };
 }
 
 export interface RestoreOutcome {
   restored: string[];
   failed: string[];
+  warnings: string[];
 }
+
+/**
+ * How a restore treats a store it cannot open. `unenroll` strips the token
+ * and the helper anyway and warns, because the gateway they work at is about
+ * to be removed and a refusing helper is worse than a missing key.
+ * `passthrough` keeps them and fails, because the gateway stays and the key
+ * may yet be recovered.
+ */
+export type RestoreMode = "unenroll" | "passthrough";
 
 /**
  * The unenrollment step: give every harness its key back and empty custody.
  * Sweeps every brokerable harness, enrolled or not, the way the base URL
  * restore does: a lost host.json must not leave a harness holding a run
- * token for a gateway that is about to stop.
+ * token for a gateway that is about to stop. Custody is released only once
+ * the file says the key landed; a key with nowhere to go stays in custody
+ * under `passthrough` and is discarded with a warning under `unenroll`.
  */
 export async function restoreCredentials(
   host: Pick<HostFile, "harnesses"> | undefined,
   deps: CliDeps,
+  mode: RestoreMode = "unenroll",
 ): Promise<RestoreOutcome> {
   const restored: string[] = [];
   const failed: string[] = [];
+  const warnings: string[] = [];
   const contract = deps.modelCredentials;
   const store = deps.credentialStore;
-  if (contract === undefined) return { restored, failed };
+  if (contract === undefined) return { restored, failed, warnings };
+  const helperCommand = deps.runtime.credentialHelperCommand;
   for (const harness of MODEL_CREDENTIAL_HARNESSES) {
     try {
       if (host !== undefined && !host.harnesses.includes(harness)) {
@@ -496,34 +486,50 @@ export async function restoreCredentials(
           continue;
       }
       const provider = HARNESS_PROVIDER[harness];
+      const label = TACHO_HARNESS_LABELS[harness];
       let released: HeldCredential | undefined;
+      let unreadable: string | undefined;
       try {
         released = store?.read(provider);
       } catch (error) {
-        // The file keeps its run token or helper: the gateway is still
-        // installed and still honours them, and stripping them here would
-        // leave the harness with no credential at all while the key sits
-        // in a store nobody can open. The caller stops and says so.
-        failed.push(
-          `the ${provider} credential in custody cannot be read (${error instanceof Error ? error.message : String(error)}); ${TACHO_HARNESS_LABELS[harness]} keeps its run token until the store is fixed`,
+        unreadable = error instanceof Error ? error.message : String(error);
+      }
+      if (unreadable !== undefined) {
+        if (mode === "passthrough") {
+          failed.push(
+            `the ${provider} credential in custody cannot be read (${unreadable}); ${label} keeps its run token until the store is fixed`,
+          );
+          continue;
+        }
+        warnings.push(
+          `the ${provider} credential in custody cannot be read (${unreadable}). ${label}'s run token was taken out anyway, since the gateway it worked at is being removed; set the ${provider} key in ${label} by hand`,
         );
-        continue;
       }
       const state = await contract.restore(
-        {
-          home: deps.home,
-          harnesses: [harness],
-          helperCommand: deps.runtime.credentialHelperCommand,
-        },
+        { home: deps.home, harnesses: [harness], helperCommand },
         released !== undefined ? { secrets: { [provider]: released } } : {},
       );
-      for (const entry of state.harnesses)
+      for (const entry of state.harnesses) {
         if (entry.changed) restored.push(entry.file);
-      // The file has its key back (or never had one): custody is over.
-      if (released !== undefined) store?.release(provider);
+        if (released === undefined) continue;
+        if (entry.secretRestored === true) {
+          store?.release(provider);
+          continue;
+        }
+        if (mode === "unenroll") {
+          store?.release(provider);
+          warnings.push(
+            `${entry.file} already holds a ${provider} credential of its own, so the older one the gateway held was not written back and is discarded with the store`,
+          );
+        } else {
+          warnings.push(
+            `${entry.file} already holds a ${provider} credential of its own, so the one the gateway holds stays in custody; run \`tacho credential status\` to see it`,
+          );
+        }
+      }
     } catch (error) {
       failed.push(error instanceof Error ? error.message : String(error));
     }
   }
-  return { restored, failed };
+  return { restored, failed, warnings };
 }

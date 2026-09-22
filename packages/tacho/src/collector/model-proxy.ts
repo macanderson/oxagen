@@ -214,6 +214,9 @@ export interface ModelProxyPolicy {
  * provider is `harness_held`.
  */
 export interface CredentialBroker {
+  /** Whether the provider is brokered on this host. Reads no secret. */
+  brokered: (provider: RunTokenProvider) => boolean;
+  /** The custody credential, opened only once a run token has verified. */
   custody: (provider: RunTokenProvider) => HeldCredential | undefined;
   verify: (token: string, provider: RunTokenProvider) => RunTokenVerdict;
 }
@@ -415,18 +418,26 @@ export function sessionFromAnthropicMetadata(
   return /_session_([0-9a-fA-F-]{8,64})$/.exec(userId)?.[1];
 }
 
-/** The one credential a request carries, whichever header it rides. */
+/**
+ * The credential a request carries. A run token wins over anything else it
+ * sent: a Claude Code signed in to claude.ai and running the helper may send
+ * its login as `Authorization` beside the token in `X-Api-Key`, and both are
+ * dropped on attach, so the token is the one that decides.
+ */
 function presentedCredential(
   req: IncomingMessage,
 ): { header: string; value: string } | undefined {
+  let first: { header: string; value: string } | undefined;
   for (const name of CREDENTIAL_HEADERS) {
     const raw = header(req, name);
     if (raw === undefined) continue;
     const value =
       name === "authorization" ? raw.replace(/^Bearer\s+/i, "") : raw;
-    if (value.length > 0) return { header: name, value };
+    if (value.length === 0) continue;
+    if (looksLikeRunToken(value)) return { header: name, value };
+    first ??= { header: name, value };
   }
-  return undefined;
+  return first;
 }
 
 /** A refusal that the harness can act on by itself gets a 401; the rest 403. */
@@ -593,8 +604,15 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
   ): ResolvedCredential {
     const broker = deps.credentials;
     const presented = presentedCredential(req);
-    const held = broker?.custody(route.provider);
-    if (broker === undefined || held === undefined) {
+    // The ChatGPT login: Codex sends its OAuth bearer with a
+    // `ChatGPT-Account-ID`, and chatgpt.com takes no API key, so custody of an
+    // OpenAI key has nothing to offer this call. It crosses as the harness's
+    // own whatever the host holds.
+    const brokered =
+      broker !== undefined &&
+      route.upstream !== "chatgpt" &&
+      broker.brokered(route.provider);
+    if (broker === undefined || !brokered) {
       // Nothing in custody for this provider: the harness's own credential
       // crosses untouched. A run token presented here is refused all the
       // same, because the vendor would refuse it and the person deserves a
@@ -638,6 +656,19 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         refusal: {
           code: verdict.code,
           message: CREDENTIAL_MESSAGES[verdict.code],
+        },
+      };
+    }
+    // Only now is the secret opened: a call that never presented a valid
+    // token never causes a decrypt.
+    const held = broker.custody(route.provider);
+    if (held === undefined) {
+      return {
+        basis: TACHO_CREDENTIAL_GATEWAY_BROKERED,
+        claims: verdict.claims,
+        refusal: {
+          code: "credential_unavailable",
+          message: CREDENTIAL_MESSAGES.credential_unavailable,
         },
       };
     }

@@ -4,7 +4,13 @@
  * to the proxy the way Claude Code and Codex do.
  */
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import {
   createServer,
   type IncomingMessage,
@@ -25,6 +31,7 @@ import { applyModelBaseUrls } from "../host/model-base-url";
 import {
   generateRunTokenKey,
   mintRunToken,
+  peekRunTokenClaims,
   readRunTokenKey,
 } from "../host/run-token";
 import {
@@ -1587,12 +1594,16 @@ describe("the credential seam (ADR-138)", () => {
   async function bootBrokered(
     vendorUrl: string,
     providers: Array<"anthropic" | "openai"> = ["anthropic"],
+    bundleOverrides: Partial<Omit<PolicyBundle, "signature">> = {},
+    hostOverrides: Partial<ReturnType<typeof testHostFile>> = {},
   ) {
     const plane = controlPlane();
     const paths = scratchPaths();
     const signer = bundleSigner();
-    const bundle = signer.sign(unsignedBundle({ model_prices: PRICES }));
-    const hostFile = testHostFile(signer, bundle);
+    const bundle = signer.sign(
+      unsignedBundle({ model_prices: PRICES, ...bundleOverrides }),
+    );
+    const hostFile = testHostFile(signer, bundle, hostOverrides);
     writeHostFile(paths.hostFile, hostFile);
     const store = openCredentialStore({
       file: paths.credentials,
@@ -1837,6 +1848,113 @@ describe("the credential seam (ADR-138)", () => {
     ]);
   });
 
+  it("speaks each vendor's 401 shape, and reads a token that only looks like one as malformed", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { paths, port, hostFile } = await bootBrokered(fake.url, [
+      "anthropic",
+      "openai",
+    ]);
+    const junk = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", "oxrt_not-a-token-at-all"],
+      body: "{}",
+    });
+    expect(junk.status).toBe(401);
+    expect(junk.headers["x-oxagen-refusal"]).toBe("run_token_malformed");
+    expect(JSON.parse(junk.body.toString())).toEqual({
+      type: "error",
+      error: {
+        type: "authentication_error",
+        message: expect.stringMatching(
+          /not a run token.*\(run_token_malformed\)$/,
+        ),
+      },
+    });
+    // Codex reads OpenAI's shape: `invalid_api_key` is the code its SDK
+    // surfaces as an authentication failure rather than retrying.
+    const key = readRunTokenKey(paths.runTokenKey)!;
+    const expired = mintRunToken({
+      key,
+      host: hostFile.host_enrollment_id,
+      harness: "codex",
+      provider: "openai",
+      placement: "static",
+      now: Date.now() - 40 * 24 * 60 * 60_000,
+    });
+    const codex = await call(port, {
+      path: "/backend-api/codex/responses",
+      headers: ["Authorization", `Bearer ${expired.token}`],
+      body: "{}",
+    });
+    expect(codex.status).toBe(401);
+    expect(codex.headers["x-oxagen-refusal"]).toBe("run_token_expired");
+    expect(JSON.parse(codex.body.toString())).toEqual({
+      error: {
+        message: expect.stringContaining("expired"),
+        type: "invalid_request_error",
+        param: null,
+        code: "invalid_api_key",
+      },
+    });
+    // A 403 keeps the seam's own code where OpenAI's SDK shows it.
+    const foreign = await call(port, {
+      path: "/backend-api/codex/responses",
+      headers: ["Authorization", "Bearer sk-proj-THEIR-OWN"],
+      body: "{}",
+    });
+    expect(foreign.status).toBe(403);
+    expect(JSON.parse(foreign.body.toString()).error).toMatchObject({
+      type: "invalid_request_error",
+      code: "foreign_credential",
+    });
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it("lets the operator's pause outrank the credential seam", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { port } = await bootBrokered(fake.url, ["anthropic"], {
+      host_status: "paused",
+    });
+    // A foreign key on a brokered provider would be `foreign_credential`;
+    // the person is told the host is paused first, since that is the
+    // decision that stands whatever they present.
+    const answer = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", LEAKED_KEY],
+      body: "{}",
+    });
+    expect(answer.status).toBe(403);
+    expect(answer.headers["x-oxagen-refusal"]).toBe("host_paused");
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it("fails closed for a run token when the store cannot be read, and reports every provider harness held", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, paths, port, log, issue } = await bootBrokered(fake.url);
+    const { token } = issue("claude-code");
+    writeFileSync(paths.credentials, "{ not a store");
+    const answer = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", token],
+      body: "{}",
+    });
+    expect(answer.status).toBe(403);
+    expect(answer.headers["x-oxagen-refusal"]).toBe("credential_unavailable");
+    expect(fake.requests).toHaveLength(0);
+    expect(log.some((l) => l.includes("credential store unreadable"))).toBe(
+      true,
+    );
+    expect(handle.api.health()["credentials"]).toEqual([
+      { provider: "anthropic", basis: "harness_held" },
+      { provider: "openai", basis: "harness_held" },
+    ]);
+    expect(handle.api.status()["credential_custody"]).toEqual([]);
+    // No token is minted over a store nobody can open.
+    expect(handle.api.issueRunToken!({ harness: "claude-code" })).toMatchObject(
+      { status: 403, body: { code: "credential_unavailable" } },
+    );
+  });
+
   it("brokers Codex with a bearer, and passes a provider with nothing in custody through untouched", async () => {
     const fake = await vendor((_req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -1903,6 +2021,113 @@ describe("the credential seam (ADR-138)", () => {
     });
   });
 
+  it("lets a ChatGPT login cross as the harness's own even when an OpenAI key is in custody", async () => {
+    const fake = await vendor((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          id: "resp_2",
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }),
+      );
+    });
+    const { port, handle } = await bootBrokered(fake.url, ["openai"]);
+    const answer = await call(port, {
+      path: "/backend-api/codex/responses",
+      headers: [
+        "Authorization",
+        `Bearer ${FAKE_BEARER}`,
+        "ChatGPT-Account-ID",
+        "acct_1",
+      ],
+      body: JSON.stringify({ model: "gpt-5", input: "hi" }),
+    });
+    expect(answer.status).toBe(200);
+    const seen = fake.requests[0]!;
+    // chatgpt.com takes the login, never an API key, so the bearer crossed.
+    expect(seen.url).toBe("/backend-api/codex/responses");
+    expect(headerOf(seen.rawHeaders, "authorization")).toBe(
+      `Bearer ${FAKE_BEARER}`,
+    );
+    await until(() =>
+      handle.wal
+        .read(handle.hostRecorder.sessionUuid)
+        .some((e) => e.kind === "llm_call"),
+    );
+    const frame = handle.wal
+      .read(handle.hostRecorder.sessionUuid)
+      .find((e) => e.kind === "llm_call")!;
+    expect(frame.attrs[TACHO_CREDENTIAL_BASIS_ATTR]).toBe("harness_held");
+  });
+
+  it("prefers a run token over a login sent beside it, and strips both on the way out", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { port, issue } = await bootBrokered(fake.url);
+    const { token } = issue("claude-code");
+    const answer = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["Authorization", `Bearer ${FAKE_BEARER}`, "X-Api-Key", token],
+      body: JSON.stringify({ model: "claude-sonnet-5", messages: [] }),
+    });
+    expect(answer.status).toBe(200);
+    const seen = fake.requests[0]!;
+    expect(headerOf(seen.rawHeaders, "x-api-key")).toBe(FAKE_KEY);
+    expect(headerOf(seen.rawHeaders, "authorization")).toBeUndefined();
+  });
+
+  it("renews Codex's static token on the tick when it nears its expiry, and records the mint", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, paths, hostFile } = await bootBrokered(
+      fake.url,
+      ["openai"],
+      {},
+      { harnesses: ["claude-code", "codex"] },
+    );
+    const home = join(paths.root, "..");
+    const key = readRunTokenKey(paths.runTokenKey)!;
+    const nearlyOver = mintRunToken({
+      key,
+      host: hostFile.host_enrollment_id,
+      harness: "codex",
+      provider: "openai",
+      placement: "static",
+      now: Date.now(),
+      ttlMs: 60 * 60_000,
+    });
+    mkdirSync(join(home, ".codex"), { recursive: true });
+    writeFileSync(
+      join(home, ".codex", "auth.json"),
+      JSON.stringify({ OPENAI_API_KEY: nearlyOver.token, keep: "me" }),
+    );
+    await handle.tick();
+    const written = JSON.parse(
+      readFileSync(join(home, ".codex", "auth.json"), "utf8"),
+    ) as { OPENAI_API_KEY: string; keep: string };
+    expect(written.keep).toBe("me");
+    expect(written.OPENAI_API_KEY).not.toBe(nearlyOver.token);
+    const claims = peekRunTokenClaims(written.OPENAI_API_KEY)!;
+    expect(claims.host).toBe(hostFile.host_enrollment_id);
+    expect(claims.exp - Date.now()).toBeGreaterThan(20 * 24 * 60 * 60_000);
+    expect(
+      handle.wal
+        .read(handle.hostRecorder.sessionUuid)
+        .some(
+          (e) =>
+            e.kind === "token_issued" &&
+            e.attrs["oxagen.run_token_placement"] === "static",
+        ),
+    ).toBe(true);
+    // A second tick inside the hour changes nothing.
+    await handle.tick();
+    expect(
+      (
+        JSON.parse(readFileSync(join(home, ".codex", "auth.json"), "utf8")) as {
+          OPENAI_API_KEY: string;
+        }
+      ).OPENAI_API_KEY,
+    ).toBe(written.OPENAI_API_KEY);
+  });
+
   it("issues a token over the collector's socket route with the local bearer, and to nobody else", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const { handle, hostFile } = await bootBrokered(fake.url);
@@ -1936,6 +2161,11 @@ describe("the credential seam (ADR-138)", () => {
       });
     const denied = await post(undefined, { harness: "claude-code" });
     expect(denied.status).toBe(401);
+    const wrong = await post(hostFile.local_token, { harness: "stella" });
+    expect(wrong.status).toBe(400);
+    expect(JSON.parse(wrong.body)).toMatchObject({
+      code: "harness_not_brokered",
+    });
     const issued = await post(hostFile.local_token, { harness: "claude-code" });
     expect(issued.status).toBe(200);
     const parsed = JSON.parse(issued.body) as {
