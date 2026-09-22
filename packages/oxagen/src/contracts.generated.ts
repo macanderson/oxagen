@@ -316,6 +316,7 @@ import "./contracts/skill.config.update";
 import "./contracts/skill.list";
 import "./contracts/skill.propose";
 import "./contracts/skill.search.preview";
+import "./contracts/skill.search.summarize";
 import "./contracts/spend.drill";
 import "./contracts/spend.get";
 import "./contracts/spend.shared";

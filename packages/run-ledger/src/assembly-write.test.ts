@@ -23,21 +23,46 @@ describe("writeAssembly", () => {
 
     const outcome = await writeAssembly(
       { putAssembly },
-      { ...scope(), bytes: Buffer.from(STREAM, "utf8"), timing: { ttftMs: 88, durationMs: 900 } },
+      { ...scope(), bytes: Buffer.from(STREAM, "utf8") },
     );
 
     expect(outcome).toBe("stored");
     expect(putAssembly).toHaveBeenCalledTimes(1);
-    const written = (putAssembly.mock.calls as unknown as Array<
-      [{ bodyRef: string; bytes: Uint8Array }]
-    >)[0]?.[0] as { bodyRef: string; bytes: Uint8Array };
+    const written = (
+      putAssembly.mock.calls as unknown as Array<
+        [{ bodyRef: string; bytes: Uint8Array }]
+      >
+    )[0]?.[0] as { bodyRef: string; bytes: Uint8Array };
     expect(written.bodyRef).toBe(REF);
     const assembly = decodeAssembly(written.bytes);
     expect(assembly?.blocks).toHaveLength(1);
     expect(assembly?.stopReason).toBe("end_turn");
-    expect(assembly?.ttftMs).toBe(88);
-    expect(assembly?.durationMs).toBe(900);
     expect(assembly?.usage.outputTokens).toBe(9);
+  });
+
+  it("stores nothing that is not derived from the bytes, so two calls can share the object", async () => {
+    // #3526. The object's key is the body's own digest, so two calls in one
+    // workspace whose retained response bytes are identical land on it in
+    // turn. Anything call-specific in the stored object is therefore the
+    // LAST call's, read back on the first call's run. Timing is the case in
+    // point: it belongs to the call, not to the bytes, so it is not here.
+    const puts: Array<{ bodyRef: string; bytes: Uint8Array }> = [];
+    const putAssembly = vi.fn(
+      async (input: { bodyRef: string; bytes: Uint8Array }) => {
+        puts.push(input);
+      },
+    );
+    const bytes = Buffer.from(STREAM, "utf8");
+
+    await writeAssembly({ putAssembly }, { ...scope(), bytes });
+    await writeAssembly({ putAssembly }, { ...scope(), bytes });
+
+    const [first, second] = puts.map((p) => decodeAssembly(p.bytes));
+    expect(first?.ttftMs).toBeNull();
+    expect(first?.durationMs).toBeNull();
+    // Identical bytes fold to identical objects, which is what makes one key
+    // for both of them safe.
+    expect(JSON.stringify(first)).toBe(JSON.stringify(second));
   });
 
   it("leaves a body that is not a model stream alone", async () => {
@@ -66,7 +91,10 @@ describe("writeAssembly", () => {
 
   it("reports a store with no assembly seam rather than refusing the frame", async () => {
     expect(
-      await writeAssembly({}, { ...scope(), bytes: Buffer.from(STREAM, "utf8") }),
+      await writeAssembly(
+        {},
+        { ...scope(), bytes: Buffer.from(STREAM, "utf8") },
+      ),
     ).toBe("no_store");
   });
 
@@ -76,7 +104,10 @@ describe("writeAssembly", () => {
     });
 
     await expect(
-      writeAssembly({ putAssembly }, { ...scope(), bytes: Buffer.from(STREAM, "utf8") }),
+      writeAssembly(
+        { putAssembly },
+        { ...scope(), bytes: Buffer.from(STREAM, "utf8") },
+      ),
     ).resolves.toBe("failed");
   });
 

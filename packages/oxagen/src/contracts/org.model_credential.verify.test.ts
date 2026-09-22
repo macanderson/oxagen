@@ -72,6 +72,44 @@ describe("org.model_credential.verify capability", () => {
     ).toThrow();
   });
 
+  it.each([
+    "https://169.254.169.254/v1",
+    "https://127.0.0.1/v1",
+    // A candidate endpoint is probed with the candidate key attached, and an
+    // address carrying a credential is one the probe would report back in a
+    // transport error (#3314, finding 3).
+    "https://user:s3cret@api.together.xyz/v1",
+    "https://sk-live-secret@api.together.xyz/v1",
+  ])("refuses the candidate endpoint %s as invalid input", (baseUrl) => {
+    // Verify probes the URL before anything is stored, so the same guard runs
+    // here as on the set path: a refusal from the schema is `invalid_input` on
+    // every surface, where the same throw from the handler is an unclassified
+    // server error.
+    const result = orgModelCredentialVerify.input.safeParse({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl,
+      toolProbeModel: "some-model",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.path).toEqual(["baseUrl"]);
+    }
+  });
+
+  it("refuses a candidate endpoint that carries a credential with a message naming the reason", () => {
+    const result = orgModelCredentialVerify.input.safeParse({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://user:s3cret@api.together.xyz/v1",
+      toolProbeModel: "some-model",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toMatch(/username or password/);
+    }
+  });
+
   it("reports a verdict with the vendor's reason and never the key", () => {
     const refused = orgModelCredentialVerify.output.parse({
       ok: false,

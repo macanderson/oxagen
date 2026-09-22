@@ -13,15 +13,19 @@ import {
   tachoHostStatusSchema,
 } from "@oxagen/oxagen/tacho/schemas";
 import { gatewayMandateTools } from "@oxagen/iam/machine-key-scope";
+import { fetchAgentRunAuthz } from "@oxagen/iam";
+import { collectResourceScope } from "@oxagen/oxagen/iam";
+import { loadRuleSetIn } from "@oxagen/rules";
 import { PROVIDER_RATE_CARD, usdPerMillionToMicros } from "@oxagen/billing";
 import {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
-  BUNDLE_FEATURE_MODEL_ALLOWLIST,
+  BUNDLE_FEATURE_HOOK_FAIL_OPEN,
   BUNDLE_FEATURE_MODEL_PRICES,
   digestJcs,
   type JsonValue,
 } from "@oxagen/tacho";
-import { schema } from "@oxagen/database";
+import { FAIL_OPEN_HOOK_PATHS } from "@oxagen/tacho/claude-code";
+import { schema, type Tx } from "@oxagen/database";
 import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
 import {
   and,
@@ -43,10 +47,10 @@ import {
   hostReadColumns,
 } from "./tacho-gateway-columns";
 import {
-  readTachoSessionPolicyIn,
-  type SessionPolicyTx,
-  type TachoSessionPolicy,
-} from "./tacho-session-policy";
+  type AgentBudgetDoc,
+  deriveBundleBudget,
+  mapMandateToBundlePermissions,
+} from "./tacho-mandate";
 import { readWorkspaceSteering, type SteeringTx } from "./tacho-steering";
 
 export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
@@ -62,7 +66,16 @@ interface TachoTx {
     };
     tachoControlCommands: { findMany: (args: unknown) => Promise<unknown> };
     retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
-    tachoSessionPolicy: { findFirst: (args: unknown) => Promise<unknown> };
+    // The mandate read (`resolveHostMandate`): the host's agent identity and
+    // its active version's config, for the budget half of the mandate.
+    agents: { findFirst: (args: unknown) => Promise<unknown> };
+    agentVersions: { findFirst: (args: unknown) => Promise<unknown> };
+    // The decision-rules half of the mandate. `loadRuleSetIn` (`@oxagen/rules`)
+    // reads it, and it runs on a cast to the real `Tx` because that signature
+    // asks for the whole thing. Naming the table it touches is what keeps the
+    // cast honest: a fake built to this interface and missing `workspaces`
+    // type-checks past the cast and throws at the first call (#3710).
+    workspaces: { findFirst: (args: unknown) => Promise<unknown> };
   };
   // The steering read (`readWorkspaceSteering`): the ledger count and the
   // records joined to their pinned versions.
@@ -315,52 +328,126 @@ function modelPrices(host: TachoHostRow): {
   return { model_prices: rows };
 }
 
-/**
- * The workspace's wrapped-session policy, as the two bundle clauses that carry
- * it (ADR-094; docs/audits/2026-09-21-model-gateway-arming.md).
- *
- * `budget.mode` used to be the literal `"observed"` here, which made the
- * `session_budget_exceeded` branch in `model-proxy.ts` unreachable in
- * production: the gateway metered every call and refused none. The mode is now
- * the workspace's own answer, and the one mode governs both enforced clauses,
- * so a host either applies its mandate or it does not.
- *
- * `models` is gated on `BUNDLE_FEATURE_MODEL_ALLOWLIST` for the reason
- * `gatewayTools` gives: `policyBundleSchema` is `.strict()` on the host, so a
- * daemon built before this field rejects the *whole* mandate the moment a
- * bundle carries one. A host that has not advertised keeps calling any model
- * it likes until it upgrades. That cost is real, which is why
- * `update_tacho_session_policy` returns how many hosts are in that state —
- * a saved allowlist governing no machine must not read as an enforced one.
- *
- * `allow: null` and `allow: []` stay apart on the wire. `null` is *no
- * allowlist stated*; `[]` is an allowlist that permits nothing. Collapsing
- * them would make "permit nothing" mean "permit everything", which is the
- * fail-open the `gateway_tools` note describes.
- */
-function budgetAndModels(
-  host: TachoHostRow,
-  policy: TachoSessionPolicy,
-): {
+/** The tool-RBAC-and-budget half of a host's mandate, resolved for the wire. */
+export interface HostMandate {
+  permissions: PolicyBundle["permissions"];
   budget: PolicyBundle["budget"];
-  models?: PolicyBundle["models"];
-} {
-  const budget: PolicyBundle["budget"] = {
-    mode: policy.mode,
-    ...(policy.sessionLimitUsd !== null
-      ? { session_limit_usd: policy.sessionLimitUsd }
-      : {}),
-  };
+}
+
+/**
+ * `FAIL_OPEN_HOOK_PATHS` (`@oxagen/tacho/claude-code`, `hook-client.ts`) is
+ * the canonical list: the same file that decides. Signed verbatim onto a
+ * bundle whose host advertised it can parse one, so the set an operator
+ * relies on is read from the record, not from source.
+ */
+function hookFailOpen(host: TachoHostRow): { hook_fail_open?: string[] } {
   const advertised: unknown = host.bundleFeatures;
-  const parsesModels =
-    Array.isArray(advertised) &&
-    advertised.includes(BUNDLE_FEATURE_MODEL_ALLOWLIST);
-  if (!parsesModels) return { budget };
+  if (
+    !Array.isArray(advertised) ||
+    !advertised.includes(BUNDLE_FEATURE_HOOK_FAIL_OPEN)
+  )
+    return {};
+  return { hook_fail_open: [...FAIL_OPEN_HOOK_PATHS] };
+}
+
+/**
+ * The agent-definition `budget` table off the host's agent's ACTIVE version
+ * config (`agent.propose.ts`'s own reading of the same doc), or `undefined`
+ * when the host names no agent, the agent has no published version, or the
+ * config carries no `budget` table at all.
+ */
+async function readAgentBudgetDoc(
+  tx: TachoTx,
+  agentId: string | null,
+): Promise<AgentBudgetDoc | undefined> {
+  if (agentId === null) return undefined;
+  const agent = (await tx.query.agents.findFirst({
+    where: eq(schema.agents.id, agentId),
+    columns: { activeVersionId: true },
+  })) as { activeVersionId: string | null } | undefined;
+  if (!agent?.activeVersionId) return undefined;
+  const version = (await tx.query.agentVersions.findFirst({
+    where: eq(schema.agentVersions.id, agent.activeVersionId),
+    columns: { config: true },
+  })) as { config: unknown } | undefined;
+  const config = version?.config;
+  const budgetTable =
+    typeof config === "object" && config !== null
+      ? (config as Record<string, unknown>)["budget"]
+      : undefined;
+  if (typeof budgetTable !== "object" || budgetTable === null) return undefined;
+  const table = budgetTable as Record<string, unknown>;
+  const perRunMicros = table["per_run_micros"];
+  const perDayMicros = table["per_day_micros"];
   return {
-    budget,
-    models: { allow: policy.modelAllow, deny: policy.modelDeny },
+    ...(typeof perRunMicros === "number" ? { perRunMicros } : {}),
+    ...(typeof perDayMicros === "number" ? { perDayMicros } : {}),
   };
 }
+
+/**
+ * The host's mandate, resolved from the agent it wraps: tool RBAC and
+ * external-tool rules mapped onto the harness permission shape
+ * (`mapMandateToBundlePermissions`, `packages/handlers/src/lib/tacho-mandate.ts`),
+ * and the budget mode derived from the agent's own declared budget
+ * (`deriveBundleBudget`).
+ *
+ * Each half degrades independently, never to an invented value: tool RBAC
+ * contributes nothing when the host names no agent principal
+ * (`agentPrincipalId` null, e.g. a freshly enrolled host before
+ * `register_agent` runs), the workspace's decision rules still apply either
+ * way (they govern the workspace, not one agent's own grants), and the
+ * budget stays `observed` when the host names no agent, the agent has no
+ * published version, or its config carries no budget table.
+ */
+export async function resolveHostMandate(
+  tx: TachoTx,
+  ctx: { orgId: string; workspaceId: string },
+  host: TachoHostRow,
+): Promise<HostMandate> {
+  const mcpRules = host.agentPrincipalId
+    ? await (async () => {
+        const snapshot = await fetchAgentRunAuthz({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          agentPrincipalId: host.agentPrincipalId as string,
+          humanPrincipalId: null,
+        });
+        const scope = collectResourceScope(
+          host.agentPrincipalId as string,
+          snapshot.grants,
+          snapshot.roles,
+          snapshot.roleGrants,
+        );
+        return scope.mcp?.ruleSets.flat() ?? [];
+      })()
+    : [];
+  const ruleSet = await loadRuleSetIn(tx as unknown as Tx, ctx.workspaceId);
+  const permissions = mapMandateToBundlePermissions({
+    mcpRules,
+    externalToolRules: ruleSet?.rules ?? [],
+  });
+  const budgetDoc = await readAgentBudgetDoc(tx, host.agentId);
+  const budget = deriveBundleBudget(budgetDoc);
+  return { permissions, budget };
+}
+
+/**
+ * The bundle carries no `models` clause today.
+ *
+ * The workspace's allow and deny lists are stored
+ * (`workspace.tacho_session_policy`) and read back by
+ * `get_tacho_session_policy`, and nothing signs them into a bundle. The clause
+ * they would fill fires on `budget.mode === "enforced"`, and that mode is set
+ * from the agent's mandate budget (#3710) — so emitting the lists here would
+ * arm them on every workspace that had already set an agent budget, which is
+ * not a decision a model list's author made. `unsignedBundle` emits the
+ * mandate's budget and nothing else until that ordering is settled.
+ *
+ * `BUNDLE_FEATURE_MODEL_ALLOWLIST` stays declared, and hosts keep advertising
+ * it, so the gate is already in the field when the clause arrives. See
+ * `docs/audits/2026-09-21-model-gateway-arming.md`.
+ */
 
 /**
  * The unsigned bundle for a host at this moment (spec section 7.1).
@@ -370,18 +457,16 @@ function budgetAndModels(
  * that a caller cannot build a bundle and forget it: a record that silently
  * failed to reach the agent is the defect #2592 was filed about.
  *
- * `sessionPolicy` is the workspace's wrapped-session policy
- * (`readTachoSessionPolicyIn`). It is required for the same reason: it was a
- * literal here for the whole of Phase 4, and nothing about the bundle said so.
- * `OBSERVED_ONLY` is the honest value for a caller that has no workspace to
- * read one from, and it is the only shape that reproduces the old behaviour.
+ * `mandate` is the tool-RBAC-and-budget half (`resolveHostMandate`), likewise
+ * required: a caller building a bundle without resolving it would silently
+ * reproduce the empty mandate this replaces.
  */
 export function unsignedBundle(
   host: TachoHostRow,
   denyGeneration: DenyGeneration,
   retention: BundleRetention,
   contextSystem: string | null,
-  sessionPolicy: TachoSessionPolicy,
+  mandate: HostMandate,
   now: Date = new Date(),
 ): Omit<PolicyBundle, "signature"> {
   const status = tachoHostStatusSchema.parse(host.status);
@@ -392,18 +477,15 @@ export function unsignedBundle(
     host_enrollment_id: host.publicId,
     host_status: status,
     deny_generation: denyGeneration,
-    permissions: {
-      allow: [] as string[],
-      deny: [] as string[],
-      ask: [] as string[],
-    },
+    permissions: mandate.permissions,
     tools: {} as PolicyBundle["tools"],
-    ...budgetAndModels(host, sessionPolicy),
+    budget: mandate.budget,
     context: { system: contextSystem },
     retention,
     mode,
     ...gatewayTools(host),
     ...modelPrices(host),
+    ...hookFailOpen(host),
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(
     "sha256:".length,
@@ -543,19 +625,18 @@ export async function controlEnvelope(
   host: TachoHostRow,
   now: Date = new Date(),
 ): Promise<ControlEnvelope> {
-  const [denyGeneration, retention, steering, sessionPolicy] =
-    await Promise.all([
-      readDenyGeneration(tx, ctx.orgId, ctx.workspaceId),
-      readWorkspaceRetention(tx, ctx.orgId, ctx.workspaceId),
-      readWorkspaceSteering(tx, ctx.orgId, ctx.workspaceId),
-      readTachoSessionPolicyIn(tx as SessionPolicyTx, ctx.workspaceId),
-    ]);
+  const [denyGeneration, retention, steering, mandate] = await Promise.all([
+    readDenyGeneration(tx, ctx.orgId, ctx.workspaceId),
+    readWorkspaceRetention(tx, ctx.orgId, ctx.workspaceId),
+    readWorkspaceSteering(tx, ctx.orgId, ctx.workspaceId),
+    resolveHostMandate(tx, ctx, host),
+  ]);
   const bundle = unsignedBundle(
     host,
     denyGeneration,
     retention,
     steering,
-    sessionPolicy,
+    mandate,
     now,
   );
   const commands = await drainCommands(tx, host, now);

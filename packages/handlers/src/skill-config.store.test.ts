@@ -2,8 +2,123 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { eq, sql } from "drizzle-orm";
-import { postgresSkillConfigStore } from "./skill-config.store";
+import {
+  postgresSkillConfigStore,
+  resolvePublication,
+  type NewSkillConfig,
+} from "./skill-config.store";
 import { parseSkillConfig } from "./skill-resolution";
+
+describe("what a publication adds to a binding's history", () => {
+  const bindingId = "11111111-1111-4111-8111-111111111111";
+  const configA = parseSkillConfig("enabled = true");
+  const configB = parseSkillConfig("enabled = false");
+  const merged = (
+    label: string,
+    commit: string,
+    pullRequestNumber: number | null,
+    publishedAt: string,
+    parsed = configA,
+  ): typeof schema.skillConfigVersions.$inferSelect => ({
+    id: crypto.randomUUID(),
+    publicId: `skv_${label}`,
+    orgId: "22222222-2222-4222-8222-222222222222",
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    createdAt: new Date(publishedAt),
+    createdById: null,
+    versionLabel: label,
+    repositoryBindingId: bindingId,
+    commitSha: commit.repeat(40),
+    pullRequestNumber,
+    enabled: parsed.config.enabled,
+    configDigest: parsed.digest,
+    sources: parsed.config.sources,
+    search: parsed.config.search,
+    unboundRepo: parsed.config.unbound_repo,
+    reflection: parsed.config.reflection,
+    publishedAt: new Date(publishedAt),
+  });
+  const publication = (
+    commit: string,
+    pullRequestNumber: number | null,
+    publishedAt: string,
+    parsed = configA,
+  ): NewSkillConfig => ({
+    repositoryBindingId: bindingId,
+    commitSha: commit.repeat(40),
+    pullRequestNumber,
+    publishedAt,
+    ...parsed,
+  });
+
+  it("reuses the recorded version when the same commit is published again", () => {
+    const first = merged("skl_v1", "a", 1, "2026-09-20T10:00:00.000Z");
+    expect(
+      resolvePublication(
+        [first],
+        publication("a", 1, "2026-09-20T10:00:00.000Z"),
+      ),
+    ).toBe(first);
+  });
+
+  it("refuses a commit whose bytes no longer match its recorded configuration", () => {
+    const first = merged("skl_v1", "a", 1, "2026-09-20T10:00:00.000Z");
+    expect(() =>
+      resolvePublication(
+        [first],
+        publication("a", 1, "2026-09-20T10:00:00.000Z", configB),
+      ),
+    ).toThrow(
+      expect.objectContaining({ reason: "skill_config_digest_changed" }),
+    );
+  });
+
+  it("refuses a later import that names no pull request", () => {
+    const first = merged("skl_v1", "a", null, "2026-09-20T10:00:00.000Z");
+    expect(() =>
+      resolvePublication(
+        [first],
+        publication("b", null, "2026-09-20T11:00:00.000Z", configB),
+      ),
+    ).toThrow(
+      expect.objectContaining({ reason: "skill_config_already_imported" }),
+    );
+  });
+
+  it("records a new version when a later pull request merges identical bytes", () => {
+    const first = merged("skl_v1", "a", 1, "2026-09-20T10:00:00.000Z");
+    expect(
+      resolvePublication(
+        [first],
+        publication("c", 3, "2026-09-20T12:00:00.000Z"),
+      ),
+    ).toBeNull();
+  });
+
+  it("refuses a pull request that merged before the recorded head", () => {
+    const head = merged("skl_v1", "b", 2, "2026-09-20T11:00:00.000Z", configB);
+    expect(() =>
+      resolvePublication(
+        [head],
+        publication("a", 1, "2026-09-20T10:00:00.000Z"),
+      ),
+    ).toThrow(expect.objectContaining({ reason: "skill_config_superseded" }));
+  });
+
+  it("refuses the first pull request again once a revert restored its bytes", () => {
+    const history = [
+      merged("skl_v1", "a", 1, "2026-09-20T10:00:00.000Z"),
+      merged("skl_v2", "b", 2, "2026-09-20T11:00:00.000Z", configB),
+      merged("skl_v3", "c", 3, "2026-09-20T12:00:00.000Z"),
+    ];
+    expect(() =>
+      resolvePublication(
+        history,
+        publication("a", 1, "2026-09-20T10:00:00.000Z"),
+      ),
+    ).toThrow(expect.objectContaining({ reason: "skill_config_superseded" }));
+  });
+});
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "published skill configuration against Postgres",

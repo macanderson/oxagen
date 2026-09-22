@@ -54,6 +54,18 @@ export function SkillVersions({
   } | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // A publication refreshes this page, whether it came from the form below or
+  // from another admin. The refreshed configuration carries the version now
+  // published and its normalized text, so the draft adopts that text: a draft
+  // held from before the publication proposes reverting what was just
+  // published (#3666).
+  const currentId = configuration.current?.id ?? null;
+  const [publishedId, setPublishedId] = useState(currentId);
+  if (publishedId !== currentId) {
+    setPublishedId(currentId);
+    setText(configuration.draftText);
+  }
+
   function write(action: () => Promise<ActionResult<SkillConfigChange>>) {
     if (pending || !canEdit) return;
     setFailure(null);

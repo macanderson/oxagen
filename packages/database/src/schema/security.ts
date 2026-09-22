@@ -19,6 +19,13 @@
 //   DEFAULT heap drains expired rows in batches of 10,000. Application access
 //   goes through the parent because direct child grants are withheld.
 //   Add event types in the compliance taxonomy and a new CHECK migration.
+//   A narrowing CHECK migration must add its constraint NOT VALID. Maintenance
+//   builds each child without checks, moves the DEFAULT rows in, and restores
+//   the constraints in the parent's validation state, so rows written before
+//   the narrowing keep their place. Each month, each expired partition, and
+//   the drain run in their own subtransaction: one that fails rolls back alone
+//   and reports itself in the result's `skipped` array, and the rest of
+//   maintenance commits. See 20260922120000_audit_partition_granular_failures.sql.
 
 import {
   boolean,

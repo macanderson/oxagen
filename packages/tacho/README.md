@@ -75,7 +75,7 @@ command lines are double-quoted for `cmd.exe`, and paths go through
 |---|---|
 | `tachod` (`src/collector/`) | The collector. Listens on a Unix socket and `127.0.0.1:<port>` with a per-install bearer; normalizes hooks, OTLP, and spool replays into per-session hash chains; appends to an NDJSON WAL; ships batches to `ingest_tacho_events` at least once with backoff and bisection; applies operator commands from the control envelope; watches for hooks removed and transcripts that advance with no hook stream; signs chain-head checkpoints with the device key; continues every chain across a restart from `daemon.json` |
 | `tacho-hook` (`src/claude-code/hook-main.ts`) | The command hook Claude Code runs on `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, and `Stop`. Hands the payload to the daemon over the socket inside a 50 ms connect budget; if the daemon is down it decides from the cached, signature-verified bundle, spools the event, and still answers, so enforcement never depends on the daemon |
-| `tacho` (`src/cli/`) | `enroll`, `status`, `reassign`, `unenroll`, `export` (tacho NDJSON, `contextgraph-trace` journal, OTLP JSON), `verify`, `daemon`, `hook` |
+| `tacho` (`src/cli/`) | `enroll`, `status`, `reassign`, `unenroll`, `export` (tacho NDJSON, `contextgraph-trace` journal, OTLP JSON), `verify`, `daemon`, `hook`, `credential issue` (what Claude Code runs as its `apiKeyHelper`) and `credential status` |
 
 Telemetry-only events (`PostToolUse`, `SubagentStart`, `SessionEnd`, and the
 rest of the 28 http events) post straight to the daemon; a failure there is
@@ -85,10 +85,10 @@ recorded as a chained `telemetry_gap`, never as a blocked action.
 
 `tachod` also stands between a wrapped harness and its model vendor (ADR-094).
 It serves a second loopback listener, on the port after the collector's unless
-`host.json` pins `model_proxy_port`, and forwards each request to the vendor
-unchanged. The prompt goes from your machine to the vendor you chose. Oxagen
-receives a frame: digests, token counts, latency and status, never a body. The
-vendor credential crosses in memory and is never written or logged.
+`host.json` pins `model_proxy_port`, and forwards each request to the vendor.
+The prompt goes from your machine to the vendor you chose. Oxagen receives a
+frame: digests, token counts, latency and status, never a body. The vendor
+credential stays on the machine and is never written to a frame or a log.
 
 | Harness | File and key | Value written | Logins covered |
 |---|---|---|---|
@@ -102,6 +102,53 @@ straight to the vendor. Stella has a writable one and Cursor has none;
 The daemon reports what each of these files holds now on every health poll
 (`model_base_urls`), and `list_tacho_hosts` returns it. Reverting the key is
 still one edit; it is no longer a silent one.
+### The credential seam: the harness holds a run token
+
+By default `tacho enroll` also takes the vendor key out of the harness and
+gives the harness a **run token** instead (ADR-138). It seals the key first
+and edits the file second, so a crash between the two leaves the key where it
+was. The key is sealed in
+`credentials.json` under `TACHO_HOME`, AES-256-GCM under `credentials.key`
+beside it, both mode 0600, and it is read by `tachod` and by nothing else. A
+run token is `oxrt_<claims>.<hmac>`, signed by `run-token.key`, naming this
+host, the harness, the provider and an expiry. It works at this machine's
+gateway and nowhere else: the vendor refuses it, and reverting the base URL
+leaves the harness with no credential the vendor accepts.
+
+| Harness | What the harness holds | How it is refreshed |
+|---|---|---|
+| Claude Code | `apiKeyHelper` in `~/.claude/settings.json` runs `tacho credential issue --harness claude-code`, which prints a fifteen-minute token; `env.ANTHROPIC_API_KEY` and `env.ANTHROPIC_AUTH_TOKEN` are taken into custody, since either would win over the helper | Claude Code re-runs the helper every five minutes and on any 401 |
+| Codex | `OPENAI_API_KEY` in `~/.codex/auth.json` holds a static token bounded by the enrollment's expiry | `tachod` re-mints it once an hour when it nears expiry or no longer verifies for the enrollment; `tacho enroll` does the same; it dies with the enrollment, the signing key, or a host revoke |
+
+The proxy verifies the token, drops it, and attaches the custody credential in
+the vendor's own header. A call to a brokered provider that brings its own
+vendor key is refused as `foreign_credential` (a key exported in the shell
+wins over the helper, and the message names the variable to unset); one with
+no credential as `run_token_required`; an expired or foreign-signed token is
+answered 401 so the harness fetches a new one. Every frame the proxy seals
+carries `oxagen.credential_basis`, `gateway_brokered` or `harness_held`, and a
+brokered call carries `oxagen.run_token_id`. Every mint is a `token_issued`
+frame on the host's chain, by id and expiry, never the token.
+
+A provider with nothing in custody is `harness_held` and crosses as before: a
+claude.ai subscription has no key to take (the helper wins over it, so a
+brokered host sends the token however the person signed in), and a ChatGPT
+login in Codex's `auth.json` cannot be brokered, so a call carrying
+`ChatGPT-Account-ID` crosses as the harness's own whatever the host holds,
+and `tacho status` says so. Only `tachod` mints: when it is not running,
+`tacho credential issue` prints nothing and says why, since the proxy the
+token would be spent at is the daemon.
+`TACHO_BROKER_ANTHROPIC_API_KEY` and `TACHO_BROKER_OPENAI_API_KEY` in the
+enrolling shell hand a key to custody that was never in a harness file.
+`tacho enroll --credentials passthrough` gives every key back; `tacho
+unenroll` does the same first of all, then shreds the store and the signing
+key. `tacho credential status` shows what is held by provider, kind, source
+and date, and never the secret.
+
+`src/host/model-credential.ts` writes and restores the harness files,
+`src/host/credential-store.ts` is the custody, and `src/host/run-token.ts`
+the token codec. Cursor and Stella are not brokered: neither routes its model
+calls through the gateway.
 
 `src/host/model-base-url.ts` writes and restores both, and is the contract the
 CLI and the desktop app call:
@@ -200,14 +247,28 @@ hooks for MDM-managed machines; the record is still labelled `client_attested`.
 
 ## What the daemon is today, and what it grows into
 
-What the signed bundle carries today is one thing: the workspace's steering. The
-server compiles its active `must` and `should` context records into
-`context.system` (`packages/handlers/src/lib/tacho-steering.ts`, ADR-091), which
-`SessionStart` delivers. Permissions are empty, and `budget.mode` is the
-workspace's own answer (`packages/handlers/src/lib/tacho-host.ts`,
-`unsignedBundle`, reading `workspace.tacho_session_policy`); a workspace that
-has set nothing gets `observed`, so `PreToolUse` there can deny only on host
-status or a paused session. Operator steer commands are the only
+The signed bundle carries the workspace's steering and, on governed calls, the
+agent's own mandate. The server compiles its active `must` and `should` context
+records into `context.system` (`packages/handlers/src/lib/tacho-steering.ts`,
+ADR-091), which `SessionStart` delivers. `permissions.{allow,deny,ask}` are
+mapped from the agent's tool RBAC (`packages/iam`'s `resourceScope.mcp` rules)
+and the workspace's external-tool decision rules onto the harness's own
+permission shape (`resolveHostMandate`, `mapMandateToBundlePermissions`,
+`packages/handlers/src/lib/tacho-mandate.ts`), so `PreToolUse` and Claude
+Code's own permission-request event can deny a call the mandate names, not
+only on host status or a paused session. What still reaches no rule here: a
+decision rule that names an internal MCP server id rather than a server:tool
+glob, and any business-capability rule unrelated to a tool call. Both keep
+governing the in-app agent's own calls at `packages/agent/src/runtime/
+mcp-rbac.ts`, just not this second, harness-facing surface (see
+`tacho-mandate.ts`'s `decisionRuleToHarnessRule`). `budget.mode` is
+`"enforced"` only when the agent's own definition names a `per_run_micros` or
+`per_day_micros` figure (`deriveBundleBudget`); otherwise it stays
+`"observed"`, and nothing reads `session_limit_usd` yet: the loopback proxy
+that would enforce it is Phase 4, below. The bundle carries no `models` clause
+at all: a workspace's model allow and deny lists are stored and read back
+(`workspace.tacho_session_policy`, `get_tacho_session_policy`) and signed into
+no bundle, so the proxy refuses no model. Operator steer commands are the only
 live text channel from the server to a running agent. Token and cost numbers for
 Claude Code are the harness's own telemetry, self-reported. Codex and Stella export
 none. There is no model proxy and no sandbox. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
@@ -251,12 +312,24 @@ The order of build is Phase 0 merged, Phase 4 in build, then Phases 1, 2, 3 and
 branch merges.
 
 The words for the `harness` tier are "delivered", "recorded", "client-attested"
-and "fail-open". Never "enforced". "Fail-open" describes the tier: the person at
-the keyboard can remove the hook entry or disable hooks, and the action proceeds.
-It does not describe the hook process, which fails closed against its cached
-bundle: in enforce mode a stale or unverified bundle denies non-read-only tools.
-Five events run as command hooks (`COMMAND_HOOK_EVENTS`), and four of them can
-refuse. `Stop` is the fifth.
+and "fail-open". Never "enforced" without the qualifier: on a governed call
+(one the hook actually sees), `PreToolUse` and the permission-request event
+deny a tool the mandate names, offline, from the signed bundle, even with the
+daemon down. "Fail-open" describes the tier: the person at the keyboard can
+remove the hook entry, disable hooks, or run another build of the harness, and
+none of that is visible to Oxagen. The hook sees only the calls the harness
+routes through it. It does not describe the hook process, which fails closed
+against its cached bundle for a tool the mandate denies, and fails open only
+for a tool the mandate never mentions (deferring to the harness's own
+permission prompt) or an event that carries no tool identity to evaluate at
+all (`SessionStart`, `UserPromptSubmit`, and the non-blocking record-only
+events). The exact list is `FAIL_OPEN_HOOK_PATHS`
+(`src/claude-code/hook-client.ts`), signed onto a bundle whose host advertises
+it can parse one (`hook_fail_open`), so an operator reads the fail-open set
+from the record rather than from this file. In enforce mode a stale or
+unverified bundle denies non-read-only tools regardless. Five events run as
+command hooks (`COMMAND_HOOK_EVENTS`), and four of them can refuse. `Stop` is
+the fifth.
 
 The tier words are fixed by ADR-095: `observe`, `harness`, `gateway`,
 `contained`, computed from what was actually routed.

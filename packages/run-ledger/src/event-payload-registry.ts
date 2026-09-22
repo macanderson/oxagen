@@ -255,6 +255,27 @@ const contextFramesSelectedSchema = z
   })
   .strict();
 
+/**
+ * Standing instructions a producer applied to the turn's prompt, or refused
+ * to. The in-app agent's workspace instructions
+ * (`workspaces.prompt_config.additionalInstructions`) are the first of these:
+ * steering that changes how the agent behaves, which the record has to name
+ * or a reader cannot tell what the model was told. The digest identifies the
+ * exact text; the text itself rides the frame's body, never this payload.
+ */
+const contextInstructionsAppliedSchema = z
+  .object({
+    /** Where the instructions came from, e.g. `workspace_prompt_config`. */
+    provider: shortLabelSchema,
+    outcome: z.enum(["applied", "refused"]),
+    instructions_digest: sha256DigestSchema,
+    instructions_chars: countSchema,
+    budget_chars: countSchema,
+    /** Set when the outcome is `refused`; why the prompt carries none. */
+    reason_code: reasonCodeSchema.optional(),
+  })
+  .strict();
+
 const modelOutcomeSchema = z.enum([
   "completed",
   "failed",
@@ -553,6 +574,11 @@ export const EVENT_TYPE_REGISTRY = {
     stage: "context",
     contentClass: "context_selection",
     schema: contextFramesSelectedSchema,
+  },
+  "context.instructions_applied": {
+    stage: "context",
+    contentClass: "context_selection",
+    schema: contextInstructionsAppliedSchema,
   },
   "model.call_completed": {
     stage: "model",

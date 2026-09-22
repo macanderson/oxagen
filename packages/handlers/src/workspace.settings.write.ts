@@ -150,13 +150,29 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
         // here would silently clear every other key in the bag, which is
         // exactly the clobber that moved `description` and `promptConfig`
         // out into columns of their own (audit §1.7).
+        //
+        // Both sides of that merge are guarded on `jsonb_typeof(...) =
+        // 'object'` rather than on COALESCE, because COALESCE answers SQL
+        // NULL and neither of these values is one. A bag holding JSON `null`,
+        // and a `steering` key holding JSON `null`, a string or an array, all
+        // pass COALESCE untouched, and `jsonb ||` combines a non-object with
+        // the patch as an ARRAY. Measured on Postgres 16, the old expression
+        // turned `{"steering": null}` into `{"steering": [null, {...}]}` and
+        // a bag of JSON `null` into a top-level array. `readGatePolicy`
+        // (context.steering.freshness.ts) then fails to parse the block and
+        // reports both freshness gates off, and this capability is the only
+        // surface that could repair it, so one malformed value disabled both
+        // gates permanently. Normalising a non-object to `{}` makes the write
+        // the repair path it was always meant to be: the checkbox fixes the
+        // block instead of re-merging into it.
         if (input.steering !== undefined) {
+          const bag = sql`CASE WHEN jsonb_typeof(${schema.workspaces.settings}) = 'object' THEN ${schema.workspaces.settings} ELSE '{}'::jsonb END`;
+          const block = sql`CASE WHEN jsonb_typeof(${schema.workspaces.settings} -> 'steering') = 'object' THEN ${schema.workspaces.settings} -> 'steering' ELSE '{}'::jsonb END`;
           updates.settings = sql`
-            COALESCE(${schema.workspaces.settings}, '{}'::jsonb)
+            ${bag}
             || jsonb_build_object(
                  'steering',
-                 COALESCE(${schema.workspaces.settings} -> 'steering', '{}'::jsonb)
-                   || ${JSON.stringify(input.steering)}::jsonb
+                 ${block} || ${JSON.stringify(input.steering)}::jsonb
                )`;
         }
 

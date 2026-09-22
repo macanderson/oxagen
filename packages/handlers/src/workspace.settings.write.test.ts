@@ -447,6 +447,56 @@ describe("workspace.settings.write handler", () => {
     ).resolves.toEqual({ code: "not_found", reason: "workspace_not_found" });
   });
 
+  // ── The steering gates in the settings bag (#3328) ───────────────────────
+  // The write is the only surface that can repair the `steering` block, so it
+  // has to survive a block that is not an object. Measured on Postgres 16,
+  // the earlier COALESCE form did not: COALESCE answers SQL NULL, JSON `null`
+  // is not one, and `jsonb ||` combines a non-object with the patch as an
+  // array. `{"steering": null}` merged to `{"steering": [null, {...}]}`,
+  // `readGatePolicy` then reported both freshness gates off, and the checkbox
+  // that should have fixed it merged into the array instead. The guard is
+  // `jsonb_typeof(...) = 'object'`, on the block and on the bag around it.
+  describe("a steering write", () => {
+    // Drizzle renders the column fully qualified.
+    const SETTINGS = `"workspace"."workspaces"."settings"`;
+    const settingsSql = async (steering: {
+      autoSync?: boolean;
+      blockStaleRuns?: boolean;
+    }) => {
+      mocks.findFirst
+        .mockResolvedValueOnce(EXISTING)
+        .mockResolvedValueOnce(EXISTING);
+      await workspaceSettingsWriteHandler({ steering }, CTX);
+      const setArg = mocks.set.mock.calls[0]![0] as { settings?: SQL };
+      expect(setArg.settings).toBeDefined();
+      return new PgDialect().sqlToQuery(setArg.settings as SQL).sql;
+    };
+
+    it("normalizes a steering block that is not an object before merging", async () => {
+      const query = await settingsSql({ blockStaleRuns: true });
+      expect(query).toContain(
+        `jsonb_typeof(${SETTINGS} -> 'steering') = 'object'`,
+      );
+      // A COALESCE here would pass JSON null, a string and an array straight
+      // into the merge, which is the stuck state this replaces.
+      expect(query).not.toContain(`COALESCE(${SETTINGS} -> 'steering'`);
+    });
+
+    it("normalizes a settings bag that is not an object either", async () => {
+      const query = await settingsSql({ autoSync: true });
+      expect(query).toContain(`jsonb_typeof(${SETTINGS}) = 'object'`);
+      expect(query).not.toContain(`COALESCE(${SETTINGS},`);
+    });
+
+    it("still merges rather than replaces, so the other gate and the other keys survive", async () => {
+      const query = await settingsSql({ blockStaleRuns: true });
+      // Two concatenations: the bag keeps its other keys, the block keeps the
+      // gate this call did not name.
+      expect(query.match(/\|\|/g)).toHaveLength(2);
+      expect(query).toContain("jsonb_build_object");
+    });
+  });
+
   // ── Slug-history capture ────────────────────────────────────────────────────
   // The handler MUST insert one workspace_slug_history row whenever the
   // workspace slug changes, in the SAME withTenantDb transaction as the

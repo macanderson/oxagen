@@ -57,6 +57,12 @@ import {
   resolveApiUrl,
   resolveCredentials,
 } from "./deps";
+import {
+  brokerCredentials,
+  type CredentialMode,
+  describeHarness,
+  restoreCredentials,
+} from "./credential";
 import { revokeAndMark, stripEnrollmentHooks } from "./unenroll";
 
 export interface EnrollOptions extends CredentialOptions {
@@ -77,6 +83,13 @@ export interface EnrollOptions extends CredentialOptions {
   force?: boolean;
   /** Harnesses to hook (default: `["claude-code"]`). */
   harnesses?: TachoHarness[];
+  /**
+   * How the routed harnesses' model credentials are held (ADR-138).
+   * `brokered` (the default) takes each vendor key into the gateway's
+   * custody and leaves the harness a run token; `passthrough` leaves the
+   * key with the harness and puts back any the gateway holds.
+   */
+  credentials?: CredentialMode;
 }
 
 /**
@@ -1016,14 +1029,18 @@ export async function enrollLocked(
     else deps.out(`      codex ${codex.version ?? "?"} at ${codex.path}`);
   }
   if (harnesses.includes("cursor")) {
+    // Cursor answers two probes and the hooks file governs both, so an
+    // editor with no CLI alias is a covered machine, not a warning.
     const cursorFacts = deps.cursor();
-    if (cursorFacts.path === undefined)
-      warnings.push(
-        "Cursor's `cursor-agent` alias is not on PATH. The hooks still govern the Cursor editor, which reads the same file; no primary source documents where the GUI installs, so this machine cannot be probed for it",
-      );
-    else
+    if (cursorFacts.path !== undefined)
       deps.out(
         `      cursor-agent ${cursorFacts.version ?? "?"} at ${cursorFacts.path}`,
+      );
+    else if (cursorFacts.app?.installed === true)
+      deps.out(`      Cursor editor at ${cursorFacts.app.path ?? "?"}`);
+    else
+      warnings.push(
+        "Cursor's `cursor-agent` alias is not on PATH and the editor was not found on disk. The hooks still govern both, and Cursor's Linux build is an AppImage with no documented location, so this is the probe's limit rather than the machine's",
       );
   }
   if (harnesses.includes("stella")) {
@@ -1086,12 +1103,14 @@ export async function enrollLocked(
             );
           return !linked;
         });
+        let routedOk = false;
         try {
           const state = await deps.modelBaseUrls.apply({
             home: deps.home,
             port: gateway.port,
             harnesses: writable,
           });
+          routedOk = true;
           for (const entry of state.harnesses) {
             deps.out(
               `      ${TACHO_HARNESS_LABELS[entry.harness]} model calls go through 127.0.0.1:${gateway.port} (${entry.key} in ${entry.file})`,
@@ -1109,6 +1128,37 @@ export async function enrollLocked(
           warnings.push(
             `model calls are not routed through Oxagen: ${error instanceof Error ? error.message : String(error)}`,
           );
+        }
+        // The credential seam (ADR-138). Only once the base URL points at a
+        // listening proxy: a harness holding a run token and no route to
+        // the gateway that honours it has no credential at all.
+        if (routedOk && writable.length > 0) {
+          const mode: CredentialMode = options.credentials ?? "brokered";
+          try {
+            if (mode === "brokered") {
+              const outcome = await brokerCredentials(host, writable, deps);
+              for (const entry of outcome.harnesses)
+                deps.out(`      ${describeHarness(entry)}`);
+              for (const provider of outcome.taken)
+                deps.out(
+                  `      ${provider} credential taken into the gateway's custody (${deps.paths.credentials})`,
+                );
+              warnings.push(...outcome.warnings);
+            } else {
+              const outcome = await restoreCredentials(
+                host,
+                deps,
+                "passthrough",
+              );
+              for (const file of outcome.restored)
+                deps.out(`      credential given back to ${file}`);
+              warnings.push(...outcome.failed, ...outcome.warnings);
+            }
+          } catch (error) {
+            warnings.push(
+              `model credentials are not brokered: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
         }
       } else {
         warnings.push(

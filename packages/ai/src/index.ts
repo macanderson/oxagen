@@ -4,10 +4,17 @@ export {
   tierModelId,
   resolvedTierCatalog,
   modelIdOf,
+  modelIdentityFor,
+  resolveModelIdentity,
   embeddingProvider,
   DEFAULT_TIER,
 } from "./models";
-export type { ModelCredential, ModelSelector, OxagenTier } from "./models";
+export type {
+  ModelCredential,
+  ModelIdentity,
+  ModelSelector,
+  OxagenTier,
+} from "./models";
 
 // Who pays the vendor for an organisation's calls (ADR-053). Server-only: the
 // resolver opens the organisation's KMS envelope.

@@ -1262,6 +1262,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .skillSearchPreviewHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "summarize_skill_search",
+    async () =>
+      (await import("./skill.search.summarize"))
+        .skillSearchSummarizeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_skills",
     async () =>
       (await import("./skill.list")).skillListHandler as CapabilityHandlerFn,

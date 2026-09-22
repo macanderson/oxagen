@@ -68,6 +68,12 @@ export interface ToolBeltOptions {
   pinned: readonly string[];
   /** The worker model, whose provider decides the per-request cap. */
   modelId: string;
+  /**
+   * Who serves that model (`ModelIdentity.provider`). On a customer's own
+   * vendor key the id is the vendor's bare spelling and carries no prefix to
+   * read, so without this the cap is not found and the belt loads past it.
+   */
+  provider?: string | null;
 }
 
 export interface ToolBelt {
@@ -138,7 +144,10 @@ export function createToolBelt(options: ToolBeltOptions): ToolBelt {
         const wanted = input.names.filter((name) => name in governed);
         const candidate = new Set([...loaded, ...wanted]);
         try {
-          assertToolListFitsProvider(options.modelId, modelToolsFor(candidate));
+          assertToolListFitsProvider(
+            { modelId: options.modelId, provider: options.provider ?? null },
+            modelToolsFor(candidate),
+          );
         } catch (err) {
           if (err instanceof TooManyToolsForProviderError) {
             return { loaded: [], unknown, refused: "belt_full" };

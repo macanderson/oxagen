@@ -1,12 +1,12 @@
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
-import { skillSearchPreview } from "@oxagen/oxagen/contracts/skill.search.preview";
+import { skillSearchSummarize } from "@oxagen/oxagen/contracts/skill.search.summarize";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
-export const schema = { ...skillSearchPreview.input.shape };
+export const schema = { ...skillSearchSummarize.input.shape };
 export const metadata: ToolMetadata = {
-  name: skillSearchPreview.name,
-  description: skillSearchPreview.description,
+  name: skillSearchSummarize.name,
+  description: skillSearchSummarize.description,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,
@@ -15,10 +15,10 @@ export const metadata: ToolMetadata = {
 };
 export default async function tool(args: InferSchema<typeof schema>) {
   const output = await invoke(
-    skillSearchPreview.name,
+    skillSearchSummarize.name,
     args,
     await buildContext(headers()),
     { surface: "mcp" },
   );
-  return skillSearchPreview.output.parse(output);
+  return skillSearchSummarize.output.parse(output);
 }

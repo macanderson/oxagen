@@ -111,6 +111,26 @@ export const TACHO_METERING_OBSERVED = "observed" as const;
 export const TACHO_MODEL_SESSION_HEADER = "x-oxagen-session" as const;
 
 /**
+ * Which process held the credential a model call was made with (ADR-138),
+ * as `attrs[TACHO_CREDENTIAL_BASIS_ATTR]` on every frame the loopback proxy
+ * seals. `gateway_brokered`: the harness presented a run token and the
+ * gateway attached the vendor credential from its custody. `harness_held`:
+ * the harness's own credential crossed untouched, the way ADR-094 first
+ * built it. A spend number reads the same either way; what differs is
+ * whether the harness could have spent that credential anywhere else.
+ */
+export const TACHO_CREDENTIAL_BASIS_ATTR = "oxagen.credential_basis" as const;
+export const TACHO_CREDENTIAL_GATEWAY_BROKERED = "gateway_brokered" as const;
+export const TACHO_CREDENTIAL_HARNESS_HELD = "harness_held" as const;
+export const TACHO_CREDENTIAL_BASES = [
+  TACHO_CREDENTIAL_GATEWAY_BROKERED,
+  TACHO_CREDENTIAL_HARNESS_HELD,
+] as const;
+export type TachoCredentialBasis = (typeof TACHO_CREDENTIAL_BASES)[number];
+/** The id of the run token a brokered call presented; never the token. */
+export const TACHO_RUN_TOKEN_ATTR = "oxagen.run_token_id" as const;
+
+/**
  * A bundle field this host's parser understands, named on the wire so the
  * control plane can withhold fields the host would choke on.
  *
@@ -151,14 +171,27 @@ export const BUNDLE_FEATURE_MODEL_PRICES = "model_prices" as const;
  * host built before the field would reject the whole mandate rather than the
  * one field it does not know.
  *
- * The gate has a second cost here that the other two do not have, and the
- * surface that sets an allowlist has to state it: a host that has not
- * advertised keeps calling any model it likes, because it is never told the
- * list. `update_tacho_session_policy` returns the count of hosts that did
- * advertise for exactly that reason — a saved allowlist governing no machine
- * must not read as an enforced one.
+ * Nothing emits this field yet. `unsignedBundle` leaves it out of every
+ * bundle it signs, so a host that advertises the feature is told no list and
+ * refuses no model. The workspace's saved lists are stored and read back and
+ * govern no machine until the control plane emits them; the panel that sets
+ * them says so. See `docs/audits/2026-09-21-model-gateway-arming.md`.
  */
 export const BUNDLE_FEATURE_MODEL_ALLOWLIST = "models" as const;
+ * The host can parse `hook_fail_open`: the list of hook paths the local
+ * evaluator answers allow on when a decision cannot be made against the
+ * cached bundle (the daemon unreachable, or the event carrying no tool
+ * identity to evaluate). Gated for the same reason `gateway_tools` is: the
+ * bundle schema is strict, so a host built before the field would reject the
+ * whole mandate.
+ *
+ * The list itself is a static property of `packages/tacho`'s own hook-client
+ * code (`FAIL_OPEN_HOOK_PATHS` in `claude-code/hook-client.ts`), not of any
+ * one mandate, and is signed into every bundle a host that advertises this
+ * feature receives, so the fail-open set an operator relies on is read from
+ * the record rather than from source.
+ */
+export const BUNDLE_FEATURE_HOOK_FAIL_OPEN = "hook_fail_open" as const;
 
 /**
  * Every bundle feature the host in *this* tree can parse, which is what it
@@ -170,6 +203,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_MODEL_PRICES,
   BUNDLE_FEATURE_MODEL_ALLOWLIST,
+  BUNDLE_FEATURE_HOOK_FAIL_OPEN,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -406,6 +440,26 @@ export const deliveredCommandSchema = z
 
 export type DeliveredCommand = z.output<typeof deliveredCommandSchema>;
 
+/**
+ * The same command as a RESPONSE carries it, tolerant of keys this build has
+ * never heard of.
+ *
+ * The schema above stays strict, and the control plane keeps checking what it
+ * is about to send against it: a key it did not mean to send is drift, and
+ * that is the side where drift must be caught. This copy is the one a host
+ * parses. The envelope's own tolerance stopped at the array, so the failure it
+ * closes stayed open one level down: a single optional field added to a
+ * delivered command failed the array, the whole poll and ingest response
+ * failed with it, the host stopped acknowledging batches, and `pause`,
+ * `cancel` and `kill` stopped arriving on a host that reported itself healthy.
+ */
+export const deliveredCommandResponseSchema =
+  deliveredCommandSchema.passthrough();
+
+export type DeliveredCommandResponse = z.output<
+  typeof deliveredCommandResponseSchema
+>;
+
 /** The signed policy bundle a host caches (spec section 7.1). */
 export const policyBundleSchema = z
   .object({
@@ -512,6 +566,21 @@ export const policyBundleSchema = z
      * dead weight before the fleet is there.
      */
     gateway_tools: z.array(z.string().max(256)).max(4096).optional(),
+    /**
+     * The hook paths this host's local evaluator answers allow on when it
+     * cannot reach the daemon and cannot decide from the cached bundle
+     * (§ BUNDLE_FEATURE_HOOK_FAIL_OPEN above). A fixed property of this
+     * tacho release, copied verbatim from `FAIL_OPEN_HOOK_PATHS`
+     * (`claude-code/hook-client.ts`) rather than computed per host, so the
+     * set an operator reads off a signed bundle is the set the code actually
+     * takes, not a description that can drift from the evaluator it
+     * documents without also failing `hook-client.test.ts`.
+     *
+     * Optional, and absent means *this host was not told*, the same reading
+     * `gateway_tools` carries: emitted only once a host advertises
+     * `BUNDLE_FEATURE_HOOK_FAIL_OPEN`, because the schema is `.strict()`.
+     */
+    hook_fail_open: z.array(z.string().max(64)).max(16).optional(),
     /**
      * The price rows the loopback model proxy prices an observed call with, so
      * `budget.session_limit_usd` can be enforced on the machine without the
@@ -685,6 +754,25 @@ export const daemonHealthSchema = z
       )
       .max(8)
       .optional(),
+    /**
+     * Which model providers this host brokers credentials for (ADR-138): the
+     * gateway holds the vendor key and the harness holds a run token. A
+     * provider absent from the list is `harness_held`. Names and a basis,
+     * never a secret or a digest of one. Optional: a daemon that predates
+     * custody reports nothing here, and the control plane reads absent as
+     * `harness_held` for every provider.
+     */
+    credentials: z
+      .array(
+        z
+          .object({
+            provider: z.enum(["anthropic", "openai"]),
+            basis: z.enum(TACHO_CREDENTIAL_BASES),
+          })
+          .strict(),
+      )
+      .max(8)
+      .optional(),
   })
   .strict();
 
@@ -803,7 +891,9 @@ export const controlEnvelopeSchema = z
     host_status: tachoHostStatusSchema,
     deny_generation: denyGenerationSchema,
     bundle_etag: z.string().min(1),
-    commands: z.array(deliveredCommandSchema).max(100),
+    // Tolerant per element as well as per envelope: a strict array inside a
+    // tolerant wrapper is the same outage one level down.
+    commands: z.array(deliveredCommandResponseSchema).max(100),
   })
   .passthrough();
 

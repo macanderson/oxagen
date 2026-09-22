@@ -256,6 +256,14 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
             findMany: async () =>
               db.commands.filter((c) => c["outcome"] === "queued"),
           },
+          // The mandate read (`resolveHostMandate`). These hosts name no
+          // agent and the workspace stores no decision rules, so the bundle
+          // they assert on carries the empty permission set and the observed
+          // budget. `tacho-host-bundle.test.ts` covers a mandate that is not
+          // empty.
+          agents: { findFirst: async () => undefined },
+          agentVersions: { findFirst: async () => undefined },
+          workspaces: { findFirst: async () => undefined },
         },
         // The steering read: the ledger count over `context_promotions`
         // (the bundle cache key) and the records joined to their pinned

@@ -452,13 +452,22 @@ export async function readTachoToolCallObservations(args: {
 
 /**
  * The token classes a model call can actually report today, across both
- * frame stores. `PriceTokenClass` (@oxagen/database/schema) also carries the
- * media and request classes (`image`, `video_second`, `embedding_input`,
- * `rerank`, `server_tool_request`); no observation source in this codebase —
- * the gateway's `token_usage` or a wrapped agent's `tacho_events` model-call
- * row — reports usage in any of them today, so this file does not carry a
- * dependency on @oxagen/database just to spell six of eleven names, and this
- * list has nothing to omit them from: `findUnpricedModels` only ever checks a
+ * frame stores.
+ *
+ * `server_tool_request` is on this list because a wrapped agent's model-call
+ * row DOES report it: `tacho_events.web_search_requests` and
+ * `web_fetch_requests` count the provider-side tool calls the vendor bills
+ * per request, and the book prices them as one class at `request` units
+ * ({@link import("@oxagen/billing").PRICE_UNIT_BY_TOKEN_CLASS}). Leaving it
+ * off meant a model whose search requests nobody had priced was never named
+ * by `list_unpriced_models`, so the one rate that made its runs incomplete
+ * was the one rate the report stayed silent about (#3281).
+ *
+ * `PriceTokenClass` (@oxagen/database/schema) also carries `image`,
+ * `video_second`, `embedding_input` and `rerank`. No observation source in
+ * this codebase reports usage in those four today, so this file does not
+ * carry a dependency on @oxagen/database just to spell them, and this list
+ * has nothing to omit them from: `findUnpricedModels` only ever checks a
  * class an observation actually used, so a class with no observation source
  * yet simply never appears. Adding a source for one of them is a one-line
  * addition here plus one to whichever query below produces it.
@@ -470,6 +479,7 @@ export const OBSERVED_TOKEN_CLASSES = [
   "cache_write_1h",
   "output",
   "reasoning",
+  "server_tool_request",
 ] as const;
 export type ObservedTokenClass = (typeof OBSERVED_TOKEN_CLASSES)[number];
 
@@ -484,6 +494,10 @@ export interface ObservedModelClassRow {
   tokenClass: ObservedTokenClass;
   /** Model calls in this bucket that used this class. */
   calls: number;
+  /**
+   * Units of the class, which is what the book prices a million of: tokens
+   * for every token class, and requests for `server_tool_request`.
+   */
   tokens: number;
   /** RFC 3339. */
   firstSeen: string;
@@ -498,7 +512,13 @@ export interface ObservedModelRow {
   provider: string | null;
   /** Model calls seen in the window. */
   calls: number;
-  /** Total tokens across every class, for ranking by how much the model matters. */
+  /**
+   * Total tokens across every token class, for ranking by how much the model
+   * matters. Server tool requests are left out: they are requests, not
+   * tokens, and adding a handful of them to a token count would rank a model
+   * by a figure that means nothing. They appear in {@link classes}, which is
+   * what the price comparison reads.
+   */
   tokens: number;
   /** RFC 3339. */
   firstSeen: string;
@@ -540,6 +560,18 @@ function classBucketCache1h(rowAlias: string, cacheWriteExpr: string): string {
 }
 
 /**
+ * The provider-side tool calls one wrapped model call made, which the book
+ * prices as `server_tool_request` at one rate per request. The vendors bill a
+ * server-side web search and a server-side fetch the same way and the class is
+ * one class, so the two columns are one figure. No transcript join: both
+ * columns sit on the priced row itself, and the duplicate stamp has already
+ * left exactly one row per call.
+ */
+function classBucketServerToolRequests(rowAlias: string): string {
+  return `toInt64(coalesce(${rowAlias}.web_search_requests, 0) + coalesce(${rowAlias}.web_fetch_requests, 0))`;
+}
+
+/**
  * The distinct models an organization has run since `since`, heaviest first
  * (Mission Control spec §12.2; ADR-060 §1). Both frame stores are read and
  * folded by model id: a model reached through the gateway and the same model
@@ -574,7 +606,10 @@ function classBucketCache1h(rowAlias: string, cacheWriteExpr: string): string {
  * book answer could actually have differed, instead of a fixed class list
  * judged by one snapshot. That read is skipped when the summary is empty,
  * and is scoped to exactly the models the summary named, so a book holding
- * boundaries for unrelated models never widens it.
+ * boundaries for unrelated models never widens it. It reports every class of
+ * {@link OBSERVED_TOKEN_CLASSES}, `server_tool_request` included, so a model
+ * billed per provider-side search or fetch is compared against the rate that
+ * prices those requests and not only against its token rates.
  */
 export async function readObservedModels(args: {
   orgId: string;
@@ -705,6 +740,7 @@ export async function readObservedModels(args: {
   const tachoCache1h = classBucketCache1h("c", tachoCacheWrite);
   const tachoCache5m = `toInt64(greatest(0, ${tachoCacheWrite} - ${tachoCache1h}))`;
   const tachoReasoning = classBucketReasoning("c");
+  const tachoServerToolRequests = classBucketServerToolRequests("c");
 
   // The transcript-split joins below key on `session_uuid`, not on
   // `root_session_uuid`. A recorder's `LlmCallLedger` is its own, and a
@@ -726,6 +762,7 @@ export async function readObservedModels(args: {
           toInt64(0)                                                   AS cache_write_1h,
           toInt64(coalesce(output_tokens, 0))                          AS output,
           toInt64(0)                                                   AS reasoning,
+          toInt64(0)                                                   AS server_tool_request,
           toDateTime64(created_at, 3, 'UTC')                           AS ts
         FROM metered_token_usage
         WHERE org_id = {orgId:UUID}
@@ -745,13 +782,15 @@ export async function readObservedModels(args: {
           ${tachoCache1h}                                               AS cache_write_1h,
           toInt64(greatest(0, toInt64(coalesce(c.output_tokens, 0)) - ${tachoReasoning})) AS output,
           ${tachoReasoning}                                             AS reasoning,
+          ${tachoServerToolRequests}                                    AS server_tool_request,
           c.ts                                                          AS ts
         FROM (
           SELECT
             toString(model) AS model, toString(provider) AS provider,
             toDateTime64(ts, 3, 'UTC') AS ts, input_tokens, output_tokens,
             cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
-            thinking_tokens, request_id, message_id, session_uuid
+            thinking_tokens, web_search_requests, web_fetch_requests,
+            request_id, message_id, session_uuid
           FROM tacho_events FINAL
           WHERE ${tachoWhere}
             AND model IN {models:Array(String)}
@@ -788,9 +827,9 @@ export async function readObservedModels(args: {
         ) AS m ON m.call_key = c.message_id AND m.session_uuid = c.session_uuid
       ),
       unioned AS (
-        SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, ts FROM gw
+        SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, server_tool_request, ts FROM gw
         UNION ALL
-        SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, ts FROM tc
+        SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, server_tool_request, ts FROM tc
       )
       SELECT
         model,
@@ -804,7 +843,8 @@ export async function readObservedModels(args: {
       ARRAY JOIN
         [('input_uncached', input_uncached), ('cache_read', cache_read),
          ('cache_write_5m', cache_write_5m), ('cache_write_1h', cache_write_1h),
-         ('output', output), ('reasoning', reasoning)] AS class_token
+         ('output', output), ('reasoning', reasoning),
+         ('server_tool_request', server_tool_request)] AS class_token
       WHERE tupleElement(class_token, 2) > 0
       GROUP BY model, class, bucket_index
       ORDER BY model, class, bucket_index

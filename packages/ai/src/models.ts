@@ -179,19 +179,105 @@ export function resolvedTierCatalog(): ResolvedTierCatalog {
  * call time — there is no direct-provider fallback.
  */
 export function selectModel(selector: ModelSelector = {}): LanguageModel {
+  return applyDevtools(
+    languageProvider(selector.credential).languageModel(wireModelId(selector)),
+  );
+}
+
+/** The id the selected model is asked for by name, on the key that serves it. */
+function wireModelId(selector: ModelSelector): string {
   const env = requireEnv([
     "OXAGEN_LLM_FAST",
     "OXAGEN_LLM_BALANCED",
     "OXAGEN_LLM_PRECISE",
   ] as const);
   const tier = selector.tier ?? DEFAULT_TIER;
-  const modelId =
-    selector.model === undefined
-      ? tierModelFor(tier, tierFromEnv(env, tier), selector.credential)
-      : explicitModelFor(selector.model, tier, env, selector.credential);
-  return applyDevtools(
-    languageProvider(selector.credential).languageModel(modelId),
-  );
+  return selector.model === undefined
+    ? tierModelFor(tier, tierFromEnv(env, tier), selector.credential)
+    : explicitModelFor(selector.model, tier, env, selector.credential);
+}
+
+/**
+ * What one selected model is called, to each thing that asks.
+ *
+ * A direct-vendor key makes one string mean two things, and it cannot. The
+ * turn sends `api.openai.com` the vendor's own spelling (`gpt-5.2`), because
+ * that is the only id it answers to. Everything that reasons ABOUT the model —
+ * the catalog (`supportsReasoning`), the posture matrix, the provider
+ * tool-count ceilings, the provider column on `token_usage` — is keyed by the
+ * gateway's `creator/model` id, and a bare `gpt-5.2` matches none of them. So
+ * the caller silently gets "unknown model": a requested reasoning effort is
+ * dropped, the 128-tool refusal never fires, and the vendor of the spend is a
+ * guess made from the id's first characters.
+ *
+ * Both ids are therefore carried, with the vendor that serves them, rather
+ * than derived twice from one string. `modelIdOf` still answers the wire id;
+ * nothing that sends a request changes.
+ */
+export interface ModelIdentity {
+  /** The id the endpoint is asked for. What `modelIdOf` returns. */
+  readonly wireId: string;
+  /**
+   * The gateway-shaped id every catalog, matrix and limit table is keyed by.
+   * Equal to `wireId` except on a direct `openai` or `anthropic` key, where
+   * the vendor prefix the key implies is restored.
+   */
+  readonly catalogId: string;
+  /**
+   * Who serves the call: a gateway vendor (`openai`, `anthropic`, …), the
+   * credential's provider on a direct key, or null when the id names nobody.
+   * `openai_compatible` is a provider too — the endpoint is the customer's,
+   * and what it is called is exactly what the id cannot say.
+   */
+  readonly provider: string | null;
+}
+
+/** The `creator` of a gateway id, or null for a bare vendor spelling. */
+function vendorPrefixOf(modelId: string): string | null {
+  const slash = modelId.indexOf("/");
+  return slash <= 0 ? null : modelId.slice(0, slash);
+}
+
+/**
+ * The identity of one wire id on the key that serves it.
+ *
+ * Exported for the callers that hold a model rather than a selector — the
+ * governed turn is handed a `LanguageModel` and the credential beside it.
+ */
+export function modelIdentityFor(
+  wireId: string,
+  credential?: ModelCredential,
+): ModelIdentity {
+  if (!credential || !isDirectVendorKey(credential)) {
+    // The platform key and the two routed keys speak the gateway's catalog,
+    // so the id already carries its vendor.
+    return { wireId, catalogId: wireId, provider: vendorPrefixOf(wireId) };
+  }
+  if (credential.provider === "openai_compatible") {
+    // The customer's server names its own models. A gateway prefix here would
+    // be a claim about a namespace nobody has seen, so the catalog id stays
+    // the bare one and the provider says which kind of endpoint it is.
+    return { wireId, catalogId: wireId, provider: credential.provider };
+  }
+  // A direct vendor key: the model map holds the vendor's spelling, which is
+  // the gateway id without its creator prefix, so the prefix restores it.
+  return {
+    wireId,
+    catalogId: wireId.includes("/")
+      ? wireId
+      : `${credential.provider}/${wireId}`,
+    provider: credential.provider,
+  };
+}
+
+/**
+ * The identity of the model `selectModel` would build for this selector,
+ * resolved from the same inputs so the two can never disagree.
+ */
+export function resolveModelIdentity(
+  selector: ModelSelector = {},
+): ModelIdentity {
+  return modelIdentityFor(wireModelId(selector), selector.credential);
 }
 
 const TIERS: readonly OxagenTier[] = ["fast", "balanced", "precise"];

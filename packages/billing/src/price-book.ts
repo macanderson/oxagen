@@ -504,6 +504,41 @@ export async function loadPriceBook(args: {
 }
 
 /**
+ * The same book as {@link loadPriceBook} — the list rows and the
+ * organization's own, with their whole history — read inside the caller's
+ * tenant scope instead of through the system connection.
+ *
+ * Which one a caller wants is not a style choice. A rollup job runs with no
+ * tenant scope open and has to name the organization itself, so it takes
+ * {@link loadPriceBook}. A handler serving one organization's console read
+ * already has that scope, and reaching for the system connection there marks
+ * an ordinary page view as unscoped access and asks the policy nothing. The
+ * `get_run_transcript` handler prices its blocks through this for that reason
+ * (#3526): every nonempty transcript page was opening the system connection.
+ *
+ * The org predicate is in the query as well as the policy, since a stack with
+ * RLS enforcement off runs the query under `app.rls_bypass`. No `at` filter:
+ * a transcript prices each block at the instant its own frame ran, so the
+ * windows that have since closed are exactly the rows it needs.
+ */
+export async function loadPriceBookInTenantScope(args: {
+  orgId: string;
+}): Promise<PriceBook> {
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select()
+      .from(schema.priceEntries)
+      .where(
+        or(
+          isNull(schema.priceEntries.orgId),
+          eq(schema.priceEntries.orgId, args.orgId),
+        ),
+      ),
+  );
+  return rows.map(rowToEntry);
+}
+
+/**
  * The entries the organization may read — the list and its own negotiated
  * rows, the same set the `org_or_global` policy admits — effective at `at`,
  * ordered for a list: provider, model, class, latest first. The org predicate

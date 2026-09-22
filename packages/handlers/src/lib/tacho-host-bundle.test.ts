@@ -20,8 +20,6 @@ vi.mock("@oxagen/iam/machine-key-scope", () => ({
 }));
 
 const { unsignedBundle } = await import("./tacho-host");
-const { OBSERVED_ONLY } = await import("./tacho-session-policy");
-type TachoSessionPolicy = import("./tacho-session-policy").TachoSessionPolicy;
 const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
 const {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
@@ -48,16 +46,18 @@ function host(
 /** A host new enough to parse every field this control plane emits. */
 const CURRENT = [BUNDLE_FEATURE_GATEWAY_TOOLS];
 
-function bundle(
-  bundleFeatures: string[] = CURRENT,
-  sessionPolicy: TachoSessionPolicy = OBSERVED_ONLY,
-) {
+const NO_MANDATE = {
+  permissions: { allow: [], deny: [], ask: [] },
+  budget: { mode: "observed" as const },
+};
+
+function bundle(bundleFeatures: string[] = CURRENT) {
   return unsignedBundle(
     host(bundleFeatures),
     { org: 1, workspace: 1 },
     { mode: "digest_only", classes: [] },
     null,
-    sessionPolicy,
+    NO_MANDATE,
     NOW,
   );
 }

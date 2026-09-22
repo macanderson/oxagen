@@ -4,7 +4,9 @@
 - **Date:** 2026-09-18
 - **Owners:** platform, evidence
 - **Related:** ADR-043 (Oxagen governs agents, it does not run them), ADR-078
-  (wrapped and connected tiers), `packages/tacho/src/wire.ts`,
+  (wrapped and connected tiers), ADR-141 (what counts as an installed Cursor,
+  where a Cursor steer lands, and how the bridges survive a checkout without
+  POSIX symlinks), `packages/tacho/src/wire.ts`,
   `packages/tacho/src/claude-code/cursor-adapter.ts`,
   `packages/tacho/src/host/cursor-writer.ts`,
   `packages/database/atlas/migrations/20260918210000_tacho_sessions_runtime_cursor.sql`,

@@ -72,6 +72,30 @@ export const ASSISTANT_TURN_ERROR_STATUS: Record<string, 409 | 503> = {
   engine_aborted: 409,
 };
 
+// A store that is up and refusing work it cannot take right now
+// (`StoreOverloadedError`, @oxagen/telemetry): out of memory, at its
+// concurrent-query limit, or behind on its merges. Duck-typed on the stable
+// `code` the way the billing errors above are, so this middleware keeps
+// mapping a refusal it recognises even from a package it does not import.
+//
+// The code exists to be told apart from a fault. Tacho ingest answered 500 when
+// the production ClickHouse refused an insert for memory, so the enrolled host
+// read backpressure as a server fault and shipped the same batch straight back
+// into the same wall (#3662). A 503 with `Retry-After` says the true thing: the
+// request was fine, the store cannot take it yet, ask again in N seconds.
+interface StoreOverloadedError extends Error {
+  readonly code: "store_overloaded";
+  readonly retryAfterSeconds: number;
+}
+
+function isStoreOverloadedError(err: unknown): err is StoreOverloadedError {
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as Record<string, unknown>;
+  return (
+    e.code === "store_overloaded" && typeof e.retryAfterSeconds === "number"
+  );
+}
+
 function assistantTurnFailure(
   err: unknown,
 ): { code: string; status: 409 | 503 } | null {
@@ -233,6 +257,32 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
     );
     return c.json({ error: { code, message: err.message }, requestId }, status);
   }
+  if (isStoreOverloadedError(err)) {
+    // Seconds, whole and at least one, because that is what the header takes
+    // and a `Retry-After: 0` invites the immediate retry this answer exists to
+    // prevent.
+    const retryAfterSeconds = Math.max(1, Math.ceil(err.retryAfterSeconds));
+    logger.warn(
+      { requestId, code: err.code, retryAfterSeconds, message: err.message },
+      "store overloaded",
+    );
+    // Warn, and no captureError: a store asking for room is a condition to
+    // watch, not an unhandled fault to page on. Alerting on it would bury the
+    // faults this stream exists for under the noise of a busy afternoon.
+    return c.json(
+      {
+        error: {
+          code: err.code,
+          message: err.message,
+          retryAfterSeconds,
+        },
+        requestId,
+      },
+      503,
+      { "Retry-After": String(retryAfterSeconds) },
+    );
+  }
+
   // A tenant scope the kernel refused to enter (#3029). The two cases share
   // one code, so the message distinguishes them: a malformed id is a bad
   // request from the surface that built the context, and a missing scope is

@@ -239,6 +239,23 @@ describe("the gateway, model base URLs and tiers", () => {
     ]);
   });
 
+  it("parses the credential basis per harness, with the reason when there is one", () => {
+    const status = parseTachoStatus(
+      JSON.stringify({
+        enrolled: true,
+        modelCredentials: [
+          { harness: "claude-code", brokered: true, file: "/x" },
+          { harness: "codex", brokered: false, reason: "subscription_login" },
+          { notAHarness: true },
+        ],
+      }),
+    );
+    expect(status?.modelCredentials).toEqual([
+      { harness: "claude-code", brokered: true },
+      { harness: "codex", brokered: false, reason: "subscription_login" },
+    ]);
+  });
+
   it("parses only the recognised tier words, keyed by harness", () => {
     const status = parseTachoStatus(
       JSON.stringify({

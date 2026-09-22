@@ -95,8 +95,15 @@ named above ships one.
 Every claim states its scope (ADR-067). Enforcement applies to actions routed through
 Oxagen, and observe mode is recorded, not enforced. The tier ladder has four words,
 computed from what was actually routed: observe, harness, gateway, contained
-(ADR-095). A hook-tier control is delivered, recorded, client-attested and fail-open,
-never enforced. Today agents sit on observe or harness; the gateway tier is in build
+(ADR-095). A hook-tier control decides on governed calls: `PreToolUse` and Claude
+Code's own permission-request event answer from the signed mandate offline, so a
+tool the mandate denies is refused even with the daemon down. It stays
+client-attested, because it runs inside a process Oxagen does not own and sees only
+the calls the harness routes through it (a person can remove the hook entry,
+disable hooks, or run another build of the harness, and none of that is visible to
+Oxagen). It fails open exactly where the mandate names no rule for a tool,
+deferring to the harness's own permission prompt rather than to a silent Oxagen
+allow. Today agents sit on observe or harness; the gateway tier is in build
 and the contained tier is not started. Completion checks are an optional
 control for bounded tasks, and a passing verdict means the specified checks held.
 Cost copy claims attribution, not savings, unless the workload was measured. The

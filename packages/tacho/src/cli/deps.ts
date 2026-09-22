@@ -17,7 +17,12 @@ import {
 import { createRequire } from "node:module";
 import { dirname, posix, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
+import { postUnix } from "../claude-code/hook-client";
 import type { FetchLike } from "../host/control-client";
+import {
+  type CredentialStore,
+  openCredentialStore,
+} from "../host/credential-store";
 import { readJsonFileIfExists } from "../host/fs";
 import { HarnessFiles, type SettleOutcome } from "../host/harness-file";
 import { readHostFile } from "../host/host-file";
@@ -28,6 +33,17 @@ import {
   readModelBaseUrlState,
   restoreModelBaseUrls,
 } from "../host/model-base-url";
+import {
+  applyModelCredentials,
+  helperCommandFor,
+  type ModelCredentialOptions,
+  type ModelCredentialState,
+  peekModelCredentials,
+  readModelCredentialState,
+  type TakenCredential,
+  type RestoreSecrets,
+  restoreModelCredentials,
+} from "../host/model-credential";
 import {
   readStellaHooksFile,
   type StellaHooksFile,
@@ -129,6 +145,14 @@ export function resolveCredentials(
 export interface RuntimeCommands {
   /** Shell command line that runs `tacho-hook`. */
   hookCommand: string;
+  /**
+   * Shell command line that runs `tacho credential issue --harness
+   * claude-code`, which Claude Code runs as its `apiKeyHelper` on a brokered
+   * host (ADR-138). Computed beside the hook command so it names the same
+   * binary layout: a helper that outlives its executable leaves Claude Code
+   * with no credential at all.
+   */
+  credentialHelperCommand: string;
   /** argv that runs `tachod` in the foreground. */
   daemonCommand: string[];
   /**
@@ -243,6 +267,9 @@ export function runtimeCommands(
   if (nativeLayout) {
     return {
       hookCommand: `${shellQuote(nativeTacho, platform)} hook`,
+      credentialHelperCommand: helperCommandFor(
+        shellQuote(nativeTacho, platform),
+      ),
       daemonCommand: [nativeTacho, "daemon"],
       mcpStdioCommand: [nativeTacho, "mcp-stdio"],
       binDir,
@@ -251,6 +278,9 @@ export function runtimeCommands(
   }
   return {
     hookCommand: `${shellQuote(nodePath, platform)} ${shellQuote(P.join(binDir, "tacho-hook.mjs"), platform)}`,
+    credentialHelperCommand: helperCommandFor(
+      `${shellQuote(nodePath, platform)} ${shellQuote(P.join(binDir, "tacho.mjs"), platform)}`,
+    ),
     daemonCommand: [nodePath, P.join(binDir, "tachod.mjs")],
     mcpStdioCommand: [nodePath, P.join(binDir, "tacho.mjs"), "mcp-stdio"],
     binDir,
@@ -354,16 +384,44 @@ export interface CliDeps {
     restore: (options: ModelBaseUrlOptions) => Promise<ModelBaseUrlState>;
     read: (options: ModelBaseUrlOptions) => Promise<ModelBaseUrlState>;
   };
+  /**
+   * The brokered credential contract (`host/model-credential.ts`, ADR-138):
+   * take a harness's vendor key out of its file and point it at the
+   * gateway's run tokens, put it back, or report it. Optional for the same
+   * reason `modelBaseUrls` is, and absent means no credential is ever taken
+   * into custody.
+   */
+  modelCredentials?: {
+    /** The secrets apply would take, without writing; sealed before apply. */
+    peek: (options: ModelCredentialOptions) => Promise<TakenCredential[]>;
+    apply: (options: ModelCredentialOptions) => Promise<ModelCredentialState>;
+    restore: (
+      options: ModelCredentialOptions,
+      restore: RestoreSecrets,
+    ) => Promise<ModelCredentialState>;
+    read: (options: ModelCredentialOptions) => Promise<ModelCredentialState>;
+  };
+  /** The gateway's custody of vendor credentials (`host/credential-store.ts`). */
+  credentialStore?: CredentialStore;
+  /**
+   * POST to the daemon over its socket (loopback TCP on Windows) with the
+   * local bearer, for `tacho credential issue`. Answers undefined when the
+   * host is not enrolled or the daemon does not answer.
+   */
+  daemonPost?: (
+    path: string,
+    body: unknown,
+  ) => Promise<{ status: number; body: string } | undefined>;
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
   /**
-   * Cursor's CLI, `agent`. Cursor also installs it as that generic name;
-   * `cursorFacts` sanity-checks the version string before treating it as
-   * Cursor rather than an unrelated tool. The IDE reads the same hooks file,
-   * so a machine with only the IDE is hooked all the same; this reports the
-   * CLI.
+   * Cursor, found by its `cursor-agent` alias on PATH and by the editor on
+   * disk. Only the alias identifies the executable: a generic `agent` on PATH
+   * belongs to unrelated software as often as not. The editor reads the same
+   * `~/.cursor/hooks.json`, so a machine carrying it alone is wrapped all the
+   * same, and `CursorFacts.app` is how that machine says so.
    */
-  cursor: () => HarnessFacts;
+  cursor: () => CursorFacts;
   stella: () => HarnessFacts;
   /**
    * Whether Claude Desktop is installed. A connected app is a GUI bundle, not
@@ -526,9 +584,63 @@ export function claudeDesktopFacts(
 export const CURSOR_CLI_NAMES = ["cursor-agent"] as const;
 
 /**
- * Probe Cursor's specific CLI alias. A generic `agent` executable can belong
- * to unrelated software, even when its version output contains a semver.
- * GUI-only installations and installs without the alias remain undetected.
+ * What a Cursor probe found. `path` and `version` describe the `cursor-agent`
+ * executable and nothing else, because `enroll` records them as
+ * `cursor_execpath` and `cursor_version` in `host.json`. The editor is a
+ * separate signal under `app`, so an application directory never reaches a
+ * field that means "the binary we would run".
+ */
+export interface CursorFacts extends HarnessFacts {
+  /** The Cursor editor on disk, when this platform documents where it lands. */
+  app?: AppFacts;
+}
+
+/**
+ * Where the Cursor editor installs itself, checked on disk. macOS ships an
+ * application bundle in `/Applications` (or `~/Applications` for a per-user
+ * install). Windows ships a per-user installer under `%LOCALAPPDATA%\Programs`
+ * and a machine-wide one under `%PROGRAMFILES%`.
+ *
+ * Linux answers "not installed" on purpose. Cursor ships there as an AppImage
+ * the person places wherever they like, so every path this could check would
+ * be a guess, and a probe that names the wrong directory is worse than one
+ * that says it does not know. A Linux machine with the editor alone is
+ * covered through `coverableWhenAbsent` on the detect entry instead: the hooks
+ * file governs Cursor whether or not anything was found here.
+ */
+export function cursorAppFacts(
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir(),
+  env: Record<string, string | undefined> = process.env,
+  exists: (candidate: string) => boolean = existsSync,
+): AppFacts {
+  const local = env["LOCALAPPDATA"] ?? `${home}\\AppData\\Local`;
+  const programs = env["PROGRAMFILES"] ?? "C:\\Program Files";
+  const candidates: string[] =
+    platform === "darwin"
+      ? ["/Applications/Cursor.app", `${home}/Applications/Cursor.app`]
+      : platform === "win32"
+        ? [`${local}\\Programs\\cursor`, `${programs}\\Cursor`]
+        : [];
+  for (const candidate of candidates) {
+    if (exists(candidate)) return { installed: true, path: candidate };
+  }
+  return { installed: false };
+}
+
+/**
+ * Probe Cursor two ways: the `cursor-agent` alias on PATH, and the editor on
+ * disk. Both are reported when both answer, because they are different facts
+ * and the caller says which it acted on.
+ *
+ * The alias is the only executable name trusted here. A generic `agent`
+ * executable can belong to unrelated software even when its version output
+ * carries a semver, and treating that as Cursor writes another program's path
+ * into the enrollment record (#3384, finding 18).
+ *
+ * The editor matters because `~/.cursor/hooks.json` governs it and the CLI
+ * alike, so a machine with the editor alone is a supported install that the
+ * alias probe alone reports as absent (#3349).
  */
 export function cursorFacts(
   exec: Exec,
@@ -536,15 +648,20 @@ export function cursorFacts(
   env: Record<string, string | undefined> = process.env,
   home?: string,
   exists?: (candidate: string) => boolean,
-): HarnessFacts {
+): CursorFacts {
+  const app =
+    exists === undefined
+      ? cursorAppFacts(platform, home, env)
+      : cursorAppFacts(platform, home ?? homedir(), env, exists);
+  const found = app.installed ? { app } : {};
   for (const name of CURSOR_CLI_NAMES) {
     const facts =
       exists === undefined
         ? harnessFacts(exec, name, platform, env, home)
         : harnessFacts(exec, name, platform, env, home, exists);
-    if (facts.version !== undefined) return facts;
+    if (facts.version !== undefined) return { ...facts, ...found };
   }
-  return {};
+  return found;
 }
 
 export function claudeFacts(
@@ -671,6 +788,34 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
       apply: (options) => applyModelBaseUrls(options),
       restore: (options) => restoreModelBaseUrls(options),
       read: (options) => readModelBaseUrlState(options),
+    },
+    modelCredentials: {
+      peek: (options) => peekModelCredentials(options),
+      apply: (options) => applyModelCredentials(options),
+      restore: (options, secrets) => restoreModelCredentials(options, secrets),
+      read: (options) => readModelCredentialState(options),
+    },
+    credentialStore: openCredentialStore({
+      file: paths.credentials,
+      key: paths.credentialsKey,
+    }),
+    daemonPost: async (path, body) => {
+      const host = readHostFile(paths.hostFile);
+      if (host === undefined) return undefined;
+      try {
+        return await postUnix({
+          ...(platform === "win32"
+            ? { loopbackPort: host.port }
+            : { socketPath: paths.socket }),
+          path,
+          headers: { Authorization: `Bearer ${host.local_token}` },
+          body: JSON.stringify(body),
+          connectTimeoutMs: 250,
+          responseTimeoutMs: 2_000,
+        });
+      } catch {
+        return undefined;
+      }
     },
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),

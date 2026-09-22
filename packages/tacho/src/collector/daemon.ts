@@ -20,7 +20,7 @@ import { join } from "node:path";
 import { execFile, spawnSync } from "node:child_process";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
-import type { SessionRecorder } from "../claude-code/recorder";
+import type { ChainMark, SessionRecorder } from "../claude-code/recorder";
 import { tachoEventSchema, type TachoEvent } from "../envelope";
 import { type FrameBody, retentionAllows } from "../evidence/frame-body";
 import { verifyBundle } from "../host/bundle";
@@ -31,6 +31,10 @@ import {
   type FetchLike,
   type RateLimitHint,
 } from "../host/control-client";
+import {
+  type CredentialStore,
+  openCredentialStore,
+} from "../host/credential-store";
 import { type DeviceKey, loadOrCreateDeviceKey } from "../host/device-key";
 import {
   ensureDir,
@@ -46,6 +50,19 @@ import {
   modelProxyPortFor,
 } from "../host/host-file";
 import { readModelBaseUrlState } from "../host/model-base-url";
+import {
+  applyModelCredentials,
+  type ModelCredentialHarnessState,
+  readModelCredentialState,
+  staticTokenStillGood,
+} from "../host/model-credential";
+import {
+  loadOrCreateRunTokenKey,
+  readRunTokenKey,
+  RUN_TOKEN_PROVIDERS,
+  type RunTokenKey,
+  verifyRunToken,
+} from "../host/run-token";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
 import type { Exec, ExecAsync, ExecResult } from "../host/service";
@@ -69,6 +86,8 @@ import {
   type DaemonHealth,
   type ModelBaseUrlReport,
   TACHO_BUNDLE_FEATURES,
+  TACHO_CREDENTIAL_GATEWAY_BROKERED,
+  TACHO_CREDENTIAL_HARNESS_HELD,
 } from "../wire";
 import { Detector } from "./detector";
 import {
@@ -91,6 +110,7 @@ import {
   type GatewayCallRecord,
   type GatewayFetch,
 } from "./mcp-gateway";
+import { issueRunToken } from "./credential-issuer";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
 import {
@@ -135,6 +155,23 @@ export const DEFAULT_TIMERS: DaemonTimers = {
   idleSessionMs: 6 * 60 * 60_000,
   walRetainMs: 7 * 24 * 60 * 60_000,
 };
+
+/** How often the daemon looks at Codex's static run token. */
+const STATIC_TOKEN_RENEWAL_CHECK_MS = 60 * 60_000;
+
+/** The `OPENAI_API_KEY` member of `~/.codex/auth.json`, whatever it holds. */
+function codexStaticToken(home: string): string | undefined {
+  try {
+    const raw = readJsonFileIfExists(join(home, ".codex", "auth.json"));
+    const value =
+      typeof raw === "object" && raw !== null
+        ? (raw as { OPENAI_API_KEY?: unknown }).OPENAI_API_KEY
+        : undefined;
+    return typeof value === "string" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export interface DaemonOptions {
   paths: TachoPaths;
@@ -406,6 +443,32 @@ async function initializeDaemon(
   const hostRecord = registry.ensure(bootId, { pid: process.pid }).record;
   const hostRecorder = hostRecord.recorder;
 
+  /**
+   * The credential seam (ADR-138): the vendor credentials this gateway holds
+   * in custody, and the key that signs the run tokens a brokered harness
+   * presents instead. Both are re-read from disk on use rather than cached,
+   * so `tacho enroll` taking a key into custody, or `tacho unenroll` rotating
+   * the signing key, is honoured on the next call without a restart.
+   */
+  const credentialStore: CredentialStore = openCredentialStore({
+    file: paths.credentials,
+    key: paths.credentialsKey,
+  });
+  const runTokenKey = (): RunTokenKey =>
+    readRunTokenKey(paths.runTokenKey) ??
+    loadOrCreateRunTokenKey(paths.runTokenKey).key;
+  runTokenKey();
+  function inCustody(provider: "anthropic" | "openai"): boolean {
+    try {
+      return credentialStore.has(provider);
+    } catch (error) {
+      log(
+        `credential store unreadable: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  }
+
   let bundleVerified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
   /**
    * When the control plane last confirmed the cached mandate, as epoch ms.
@@ -599,6 +662,15 @@ async function initializeDaemon(
       // Omitted until a read succeeds: absent means nothing was said, and a
       // daemon that could not read the files has nothing to say.
       ...(modelBaseUrls.length > 0 ? { model_base_urls: modelBaseUrls } : {}),
+      // Which providers this host brokers (ADR-138): names and a basis,
+      // never a secret. Read from the store each time, so a key `tacho
+      // enroll` just took into custody is reported on the next poll.
+      credentials: RUN_TOKEN_PROVIDERS.map((provider) => ({
+        provider,
+        basis: inCustody(provider)
+          ? TACHO_CREDENTIAL_GATEWAY_BROKERED
+          : TACHO_CREDENTIAL_HARNESS_HELD,
+      })),
     };
   }
 
@@ -1101,6 +1173,15 @@ async function initializeDaemon(
 
   function checkpoint(): void {
     const events: TachoEvent[] = [];
+    // One write covers every session's checkpoint, so a write that throws
+    // leaves none of them on disk. Each chain then goes back to where its
+    // seal found it, rather than standing a sequence number ahead of the WAL
+    // with a checkpoint frame nothing holds.
+    const marks: Array<{
+      session: SessionRecord;
+      mark: ChainMark;
+      lastCheckpointSeq: number;
+    }> = [];
     for (const session of registry.list()) {
       const head = session.recorder.chainCursor;
       const headSeq = head.seq - 1;
@@ -1111,6 +1192,7 @@ async function initializeDaemon(
       )
         continue;
       const message = `${session.recorder.sessionUuid}:${headSeq}:${head.prevHash}`;
+      const mark = session.recorder.markChain();
       const event = session.recorder.sealCollectorEvent("checkpoint", {
         checkpoint_id: ulid(now()),
         checkpoint_event_count: headSeq + 1,
@@ -1118,10 +1200,23 @@ async function initializeDaemon(
         checkpoint_device_signature: deviceKey.sign(message),
         checkpoint_device_key_fingerprint: deviceKey.fingerprint,
       });
+      marks.push({
+        session,
+        mark,
+        lastCheckpointSeq: session.lastCheckpointSeq,
+      });
       session.lastCheckpointSeq = event.seq;
       events.push(event);
     }
-    record(events);
+    try {
+      record(events);
+    } catch (error) {
+      for (const entry of marks.reverse()) {
+        entry.session.recorder.rollbackChain(entry.mark);
+        entry.session.lastCheckpointSeq = entry.lastCheckpointSeq;
+      }
+      throw error;
+    }
   }
 
   const spoolEnvelope = (file: SpoolFile): HookEnvelope => ({
@@ -1282,6 +1377,28 @@ async function initializeDaemon(
   const RECONCILE_MIN_INTERVAL_MS = 15_000;
   const lastReconcileAt = new Map<string, number>();
 
+  /**
+   * When a throttled read may spawn its probes, by session uuid.
+   *
+   * A read the interval above turned down is put back rather than dropped, so
+   * the observation it asked for is still made. Putting it back eligible
+   * immediately meant the next control tick, a second later, ran the HEAD,
+   * branch, status, and remote probes again and turned the reconciliation
+   * down again: a session of short turns spent about sixty git processes on
+   * one reconciliation (#3676). The read now waits here until the interval it
+   * was turned down by has passed, and the tick passes over it until then.
+   *
+   * A session with a pending SessionEnd is never held: its final read is the
+   * one the chain waits on, and the interval does not apply to it.
+   */
+  const gitReadEligibleAt = new Map<string, number>();
+
+  function gitReadDue(sessionUuid: string): boolean {
+    if (pendingSessionEnds.has(sessionUuid)) return true;
+    const eligibleAt = gitReadEligibleAt.get(sessionUuid);
+    return eligibleAt === undefined || now() >= eligibleAt;
+  }
+
   function requestGitRead(
     harnessSessionId: string,
     want: { force: boolean; reconcile: boolean },
@@ -1324,7 +1441,10 @@ async function initializeDaemon(
    */
   async function drainGitReads(): Promise<void> {
     if (gitPending.size === 0) return;
-    const work = [...gitPending.keys()].slice(0, GIT_READS_PER_TICK);
+    const work = [...gitPending.keys()]
+      .filter(gitReadDue)
+      .slice(0, GIT_READS_PER_TICK);
+    if (work.length === 0) return;
     const found: Array<{
       session: SessionRecord;
       /**
@@ -1347,6 +1467,7 @@ async function initializeDaemon(
     for (const harnessSessionId of work) {
       const want = gitPending.get(harnessSessionId);
       gitPending.delete(harnessSessionId);
+      gitReadEligibleAt.delete(harnessSessionId);
       if (want === undefined) continue;
       const session = registry.byUuid(harnessSessionId);
       const ending = pendingSessionEnds.get(harnessSessionId);
@@ -1367,6 +1488,28 @@ async function initializeDaemon(
         }
         continue;
       }
+      const at = now();
+      const last = lastReconcileAt.get(harnessSessionId);
+      const due =
+        want.reconcile &&
+        (ending !== undefined ||
+          last === undefined ||
+          at - last >= RECONCILE_MIN_INTERVAL_MS);
+      // The throttle is read before the probes run, not after. A read whose
+      // reconciliation is not due yet has nothing here worth four git
+      // processes, so it is put back with the time it becomes eligible and
+      // this tick spawns nothing for it. The git context it would also have
+      // refreshed waits with it, inside the thirty seconds `gitFactsFor`
+      // already treats as fresh.
+      if (want.reconcile && !due) {
+        gitReadEligibleAt.set(
+          harnessSessionId,
+          (last ?? at) + RECONCILE_MIN_INTERVAL_MS,
+        );
+        requestGitRead(harnessSessionId, { force: true, reconcile: true });
+        continue;
+      }
+      if (due) lastReconcileAt.set(harnessSessionId, at);
       const facts = await gitFactsFor(cwd, want.force);
       // Undefined means `rev-parse HEAD` did not answer, which covers a
       // directory that is not a repository AND a repository whose first
@@ -1382,16 +1525,6 @@ async function initializeDaemon(
       // captures that tree's HEAD instead of diffing against the old one.
       if (facts !== undefined && session.baselineCommit === undefined)
         session.baselineCommit = facts.head_sha;
-      const at = now();
-      const last = lastReconcileAt.get(harnessSessionId);
-      const due =
-        want.reconcile &&
-        (ending !== undefined ||
-          last === undefined ||
-          at - last >= RECONCILE_MIN_INTERVAL_MS);
-      if (due) lastReconcileAt.set(harnessSessionId, at);
-      else if (want.reconcile)
-        requestGitRead(harnessSessionId, { force: true, reconcile: true });
       if (facts === undefined && !due) continue;
       found.push({
         session,
@@ -1416,7 +1549,6 @@ async function initializeDaemon(
     }
     if (found.length === 0) return;
     await serial.run(async () => {
-      const events: TachoEvent[] = [];
       for (const { session, cwd, facts, changes, ending } of found) {
         if (session.sealed) continue;
         // The session moved while the probe ran, so this answer describes a
@@ -1431,26 +1563,60 @@ async function initializeDaemon(
         }
         if (facts !== undefined)
           session.recorder.noteContext(gitContextOf(facts));
-        if (changes !== undefined)
-          events.push(
-            session.recorder.sealCollectorEvent(
-              "oxagen:worktree_reconciled",
-              worktreeReconciledBody(changes),
-            ),
-          );
+        if (changes !== undefined) recordReconciliation(session, changes);
         if (
           ending !== undefined &&
           pendingSessionEnds.get(session.recorder.sessionUuid) === ending
         ) {
-          record(events.splice(0));
           await recordHookOutcome(ending, session.recorder.sessionUuid);
           persistState();
           pendingSessionEnds.delete(session.recorder.sessionUuid);
           persistPendingEnds();
         }
       }
-      record(events);
     });
+  }
+
+  /**
+   * Seal one session's reconciliation and write it, or leave that session's
+   * chain exactly where the seal found it.
+   *
+   * Both halves matter, and both were wrong. The batch this used to write was
+   * shared: every session the tick had reached handed its events to one
+   * `record` call, so a write that threw for the session being settled took
+   * the others' events with it, and no path retried them. And the seal that
+   * computed them had already moved each chain's cursor, so the next
+   * reconciliation sealed one position further on and the WAL kept a chain
+   * with a hole in it.
+   *
+   * One session, one write, one mark. The mark names this recorder alone, so
+   * the rollback cannot reach a sibling the loop has not settled yet — which
+   * a registry-wide snapshot would, by rebuilding every `SessionRecord` and
+   * detaching the recorders this loop is still holding.
+   */
+  function recordReconciliation(
+    session: SessionRecord,
+    changes: GitWorkingTreeChange[],
+  ): void {
+    const mark = session.recorder.markChain();
+    try {
+      record([
+        session.recorder.sealCollectorEvent(
+          "oxagen:worktree_reconciled",
+          worktreeReconciledBody(changes),
+        ),
+      ]);
+    } catch (error) {
+      session.recorder.rollbackChain(mark);
+      // The lane's own handler requeues the sessions with a pending end. This
+      // one covers a session that is only reconciling, whose read was taken
+      // off `gitPending` before the write was attempted.
+      requestGitRead(session.recorder.sessionUuid, {
+        force: true,
+        reconcile: true,
+      });
+      throw error;
+    }
   }
 
   /** The hook events that open or close a turn, where the worktree may have moved. */
@@ -1501,22 +1667,38 @@ async function initializeDaemon(
         );
     await tailBeforeHook(envelope.payload);
     const endingSession = findSession();
+    // The payload's own working directory is applied before the branch below
+    // decides, not after it. A session first seen from OTel, from a transcript,
+    // or from a start hook that carried no `cwd` has none to test, and its
+    // SessionEnd is the first hook to say where it worked. Reading the stale
+    // value sealed that session on the spot, so the final worktree read never
+    // ran and the chain closed with no reconciliation on it (#3676).
+    //
+    // An inferred Cursor `cwd` is not a report of where the session worked, so
+    // it is not applied and does not make a session eligible for a final read.
+    if (
+      hookName === "SessionEnd" &&
+      endingSession !== undefined &&
+      !endingSession.sealed &&
+      !endingSession.pendingTerminal &&
+      payloadFacts.cwd !== undefined &&
+      !(
+        envelope.harness === "cursor" &&
+        (envelope.payload as Record<string, unknown>)["cursor_cwd_inferred"] ===
+          true
+      )
+    )
+      registry.ensure(payloadFacts.session_id, {
+        harness: envelope.harness,
+        customAgent: envelope.agent,
+        cwd: payloadFacts.cwd,
+      });
     if (
       hookName === "SessionEnd" &&
       endingSession?.cwd !== undefined &&
       !endingSession.sealed &&
       !endingSession.pendingTerminal
     ) {
-      const inferredCursorCwd =
-        envelope.harness === "cursor" &&
-        (envelope.payload as Record<string, unknown>)["cursor_cwd_inferred"] ===
-          true;
-      if (payloadFacts.cwd !== undefined && !inferredCursorCwd)
-        registry.ensure(payloadFacts.session_id, {
-          harness: envelope.harness,
-          customAgent: envelope.agent,
-          cwd: payloadFacts.cwd,
-        });
       const uuid = endingSession.recorder.sessionUuid;
       pendingSessionEnds.set(uuid, envelope);
       requestGitRead(uuid, { force: true, reconcile: true });
@@ -1905,6 +2087,30 @@ async function initializeDaemon(
     ...(options.beforeForward !== undefined
       ? { beforeForward: options.beforeForward }
       : {}),
+    credentials: {
+      brokered: (provider) => inCustody(provider),
+      custody: (provider) => {
+        try {
+          return credentialStore.read(provider);
+        } catch (error) {
+          // An unreadable store is a fault of Oxagen's, and the proxy fails
+          // open on those: the call is treated as `harness_held`. A brokered
+          // harness holds only a run token, so its call is then refused as
+          // `credential_unavailable` with a reason, never forwarded blind.
+          log(
+            `credential store unreadable: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          return undefined;
+        }
+      },
+      verify: (token, provider) =>
+        verifyRunToken(token, {
+          key: runTokenKey(),
+          host: host.host_enrollment_id,
+          provider,
+          now: now(),
+        }),
+    },
     port: () => modelProxyListener.port(),
     log,
     now,
@@ -1999,6 +2205,16 @@ async function initializeDaemon(
     // queue was never protecting the forward; it was only ever costing.
     mcp: (body, context) => gateway.handle(body, context),
     mcpClose: (sessionId) => gateway.forget(sessionId),
+    issueRunToken: (input) =>
+      issueRunToken(input, {
+        key: runTokenKey,
+        store: credentialStore,
+        host: () => host,
+        hostRecorder: () => hostRecorder,
+        record,
+        now,
+        log,
+      }),
     handleHook: (envelope) =>
       serial.run(async () => {
         await drainSpool();
@@ -2082,6 +2298,15 @@ async function initializeDaemon(
       // The loopback model proxy. `calls_observed` counts model calls since
       // the daemon started; a session's own count is on its row below.
       gateway: gatewayStatus(),
+      // What the gateway holds in custody (ADR-138): provider, kind, source
+      // and when it was taken. The secret is not here and has no field.
+      credential_custody: (() => {
+        try {
+          return credentialStore.status();
+        } catch {
+          return [];
+        }
+      })(),
       sessions: registry.list().map((session) => ({
         session_id: session.harnessSessionId,
         session_uuid: session.recorder.sessionUuid,
@@ -2319,8 +2544,63 @@ async function initializeDaemon(
    * means "and the reconciliation it asked for has landed". The interval driver
    * does NOT use it, for the reason {@link startGitReads} gives.
    */
+  /**
+   * Codex reads a static run token from `auth.json` and has no helper to
+   * fetch a fresh one, so the gateway that issued it renews it (ADR-138):
+   * once an hour, when the token in place no longer verifies for this
+   * enrollment or is inside the renewal window, a new one is minted through
+   * the issuer (so the record carries it) and written in place. A host with
+   * no OpenAI key in custody, or a Codex on a ChatGPT login, is left alone.
+   */
+  let lastStaticRenewalAt = 0;
+  async function renewStaticTokens(): Promise<void> {
+    if (!host.harnesses.includes("codex")) return;
+    if (now() - lastStaticRenewalAt < STATIC_TOKEN_RENEWAL_CHECK_MS) return;
+    lastStaticRenewalAt = now();
+    if (host.host_status !== "active" || !inCustody("openai")) return;
+    const home = options.home ?? homedir();
+    let state: ModelCredentialHarnessState | undefined;
+    try {
+      state = (await readModelCredentialState({ home, harnesses: ["codex"] }))
+        .harnesses[0];
+    } catch (error) {
+      log(
+        `static token renewal: cannot read Codex's auth file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    if (state === undefined || !state.brokered) return;
+    const current = codexStaticToken(home);
+    if (staticTokenStillGood(current, host, paths.runTokenKey, now())) return;
+    const issued = api.issueRunToken?.({
+      harness: "codex",
+      placement: "static",
+    });
+    if (issued === undefined || issued.status !== 200) {
+      log(
+        `static token renewal: not issued (${issued?.body.error ?? "no issuer"})`,
+      );
+      return;
+    }
+    try {
+      await applyModelCredentials({
+        home,
+        harnesses: ["codex"],
+        staticTokens: { codex: issued.body.token },
+      });
+      log(
+        `renewed Codex's static run token ${issued.body.token_id}, expires ${issued.body.expires_at}`,
+      );
+    } catch (error) {
+      log(
+        `static token renewal: could not write Codex's auth file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   async function tick(): Promise<void> {
     await controlTick();
+    await renewStaticTokens();
     await gitLane;
   }
 
@@ -2335,6 +2615,7 @@ async function initializeDaemon(
         // control path is done, or a fourteen-minute git drain would drop every
         // poll in between and put the stall straight back.
         controlTick()
+          .then(() => renewStaticTokens())
           .catch((error) => {
             // The code and the first frame name the site. A message alone
             // ("Cannot create a string longer than 0x1fffffe8 characters",

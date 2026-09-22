@@ -63,11 +63,44 @@ function orderedRules(rules: readonly DecisionRule[]): DecisionRule[] {
   });
 }
 
+/**
+ * The two prefixes an externally contributed tool's identity carries. The
+ * mirror of `EXTERNAL_TOOL_PREFIXES` in `@oxagen/run-ledger`'s run-spec schema
+ * and of the external branch of this package's own rule pattern (`schema.ts`).
+ * This package does not depend on `@oxagen/run-ledger`, so the set is restated
+ * rather than imported; the rule schema is the copy an author writes against.
+ */
+const EXTERNAL_IDENTITY = /^(?:mcp|file-mcp)\./i;
+
+/**
+ * The spelling a decision rule is matched under.
+ *
+ * A platform capability's name is already lower case (ADR-025 admits
+ * `[a-z][a-z0-9_]*` and the rule schema's own pattern for one is lower case
+ * too), so this returns a built-in name untouched and changes nothing for it.
+ *
+ * An external tool's identity is a third party's spelling. The materializer
+ * builds `mcp.<server>.<tool>` from the name an MCP server returned
+ * (`materializePinnedMcpTools`), while the tool registry folds that same name
+ * to lower case when it derives the tool's slug (`toolSlugOf`,
+ * packages/handlers/src/lib/tool-registry.ts). One tool, two spellings, and a
+ * rule compared byte for byte binds only the one its author happened to copy.
+ * The other call goes through with a deny rule sitting enabled beside it. The
+ * registry has already decided that an external tool's case is not part of its
+ * identity, because two names differing only in case fold to one row; the gate
+ * agrees with it here (ADR-138).
+ */
+export function canonicalToolIdentity(name: string): string {
+  return EXTERNAL_IDENTITY.test(name) ? name.toLowerCase() : name;
+}
+
 /** Exact name, or a `*`-suffix prefix pattern (`refund_*`); bare `*` is every capability. */
 export function capabilityMatches(pattern: string, name: string): boolean {
   if (pattern === "*") return true;
-  if (pattern.endsWith("*")) return name.startsWith(pattern.slice(0, -1));
-  return pattern === name;
+  const glob = canonicalToolIdentity(pattern);
+  const candidate = canonicalToolIdentity(name);
+  if (glob.endsWith("*")) return candidate.startsWith(glob.slice(0, -1));
+  return glob === candidate;
 }
 
 export function evaluateCondition(

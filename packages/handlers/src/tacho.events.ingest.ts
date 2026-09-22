@@ -53,12 +53,13 @@ import {
 import {
   insertTachoEvents,
   selectTachoEvents,
+  storeOverloadedFrom,
   type TachoEventInsert,
 } from "@oxagen/telemetry";
 import { recordSpend } from "@oxagen/billing";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
-import { type AssemblyTiming, writeAssembly } from "@oxagen/run-ledger";
+import { writeAssembly } from "@oxagen/run-ledger";
 import { machineSnapshotOf } from "./lib/machine-facts";
 import { rollupFiles } from "./lib/file-facts-rollup";
 import { unlockOnboardingGate } from "./lib/onboarding";
@@ -87,20 +88,6 @@ import {
   type VerifiedBody,
 } from "./lib/tacho-replay";
 import { logger } from "./logger";
-
-/**
- * What a frame's own receipt timed. The recorded stream carries no clock, so
- * the time to first token and the call's wall time come from the envelope the
- * host wrote beside it (`ttft_ms`, `api_duration_ms`; tacho spec §6.1).
- */
-function assemblyTimingOf(event: TachoEvent | undefined): AssemblyTiming {
-  const attrs = event as unknown as Record<string, unknown> | undefined;
-  const read = (key: string): number | null => {
-    const value = attrs?.[key];
-    return typeof value === "number" && Number.isFinite(value) ? value : null;
-  };
-  return { ttftMs: read("ttft_ms"), durationMs: read("api_duration_ms") };
-}
 
 type Body = Record<string, unknown>;
 
@@ -928,9 +915,6 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     retained.push(body);
   }
   const bytesRefs = new Map<string, string>();
-  const eventByIdem = new Map(
-    input.events.map((event) => [event.event_id_idem, event]),
-  );
   for (const body of retained) {
     const { ref } = await evidenceStore().put({
       orgId: ctx.orgId,
@@ -945,13 +929,17 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // and stored beside the wire the row references. The bytes above are the
     // record and are untouched; the fold is derived, so a miss is reported
     // and never refuses the frame (spec §14).
+    //
+    // No call timing travels with it. The object is keyed by the body's
+    // digest, so two calls with identical retained bytes share it, and this
+    // frame's `ttft_ms` and `api_duration_ms` are already columns on its own
+    // row — the transcript read lays them over the shared fold.
     const wrote = await writeAssembly(evidenceStore(), {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       runId: body.sessionUuid,
       bodyRef: ref,
       bytes: body.bytes,
-      timing: assemblyTimingOf(eventByIdem.get(body.eventIdIdem)),
     });
     if (wrote === "failed") {
       logger.warn(
@@ -1627,11 +1615,22 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       );
     }
   }
-  const storedRefs = await storedBytesRefs(
-    input.events,
-    result.recordedHeads,
-    bytesRefs,
-  );
+  // This read reaches the same node the append below does, and it is on the
+  // retry path by construction: a batch that failed at the append is re-sent,
+  // and a re-sent event carrying content is exactly what sends this query. A
+  // refusal here has to be answered as a refusal too, or the second attempt
+  // 500s one call earlier than the first (#3662).
+  let storedRefs: Map<string, string>;
+  try {
+    storedRefs = await storedBytesRefs(
+      input.events,
+      result.recordedHeads,
+      bytesRefs,
+    );
+  } catch (err) {
+    refuseIfStoreOverloaded(err, ctx, input.events.length);
+    throw err;
+  }
   // Nothing derived from `event.anthropic` is stored. The producer chooses that
   // block, so any stable value computed from it and readable back would be an
   // oracle: submit the hash of a guessed address, read the result, compare it
@@ -1650,6 +1649,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   try {
     await insertTachoEvents(inserts);
   } catch (err) {
+    // A store refusing this write under pressure is answered as a refusal,
+    // with a wait. Everything else is the fault it looks like (#3662).
+    refuseIfStoreOverloaded(err, ctx, inserts.length);
     logger.error(
       {
         err,
@@ -1687,6 +1689,46 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     control: result.control,
   };
 };
+
+/**
+ * Answer a store that is refusing work as a refusal, or return and let the
+ * caller treat the failure as the fault it is.
+ *
+ * The distinction is the whole of #3662. A ClickHouse node over its memory
+ * limit, at its concurrent-query limit, or behind on its merges is refusing
+ * for a reason this batch had no part in, and it accepts the same bytes once
+ * the pressure passes. Thrown on, `store_overloaded` leaves the route as a 503
+ * with a `Retry-After`; the raw error leaves it as a 500, which the host reads
+ * as a server fault and ships the batch straight back into.
+ *
+ * Nothing is lost on either path. The host's WAL cursor advances only on a
+ * 2xx, so a refused batch stays on disk, and a re-sent batch re-inserts every
+ * event — which is how a ClickHouse failure after the Postgres commit has
+ * always recovered (see `storedBytesRefs`). What the refusal changes is when
+ * the host tries again.
+ */
+function refuseIfStoreOverloaded(
+  err: unknown,
+  ctx: Scope,
+  events: number,
+): void {
+  const overloaded = storeOverloadedFrom(err);
+  if (overloaded === null) return;
+  // Warn, not error: a store asking for room is a condition to wait out, and
+  // logging it as a fault buries the faults this level is read for.
+  logger.warn(
+    {
+      err,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      events,
+      store: overloaded.store,
+      retryAfterSeconds: overloaded.retryAfterSeconds,
+    },
+    "tacho.events.ingest: the store refused this batch under pressure; the host keeps it and ships it again",
+  );
+  throw overloaded;
+}
 
 /**
  * The body references already stored for re-sent events that carry content

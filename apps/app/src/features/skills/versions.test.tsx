@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SkillConfiguration } from "@/data/contracts/skills";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import messages from "../../../messages/skills.json";
 import { configuration } from "./console.builders";
@@ -22,16 +23,19 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
 }));
 const { SkillVersions } = await import("./versions");
-const mount = (canEdit = true, model = configuration) =>
-  render(
-    <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-      <SkillVersions
-        at={{ org: "acme", ws: "core" }}
-        configuration={model}
-        canEdit={canEdit}
-      />
-    </NextIntlClientProvider>,
-  );
+const tree = (model: SkillConfiguration, canEdit: boolean) => (
+  <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+    <SkillVersions
+      at={{ org: "acme", ws: "core" }}
+      configuration={model}
+      canEdit={canEdit}
+    />
+  </NextIntlClientProvider>
+);
+const mount = (canEdit = true, model: SkillConfiguration = configuration) =>
+  render(tree(model, canEdit));
+/** The same mounted component with the props a `router.refresh()` brings back. */
+const refreshed = (model: SkillConfiguration) => tree(model, true);
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
@@ -132,6 +136,45 @@ describe("skill configuration versions", () => {
       screen.getByRole("button", { name: "Publish merged configuration" }),
     ).toBeDisabled();
   });
+});
+
+// A publication refreshes the page under this client component, so the next
+// props carry the version now published and its normalized text (#3666).
+const nextVersion = {
+  id: "skv_456",
+  version: "skl_v2",
+  commitSha: "c".repeat(40),
+  pullRequestNumber: 81,
+  digest: `sha256:${"d".repeat(64)}`,
+  publishedAt: "2026-09-21T10:00:00.000Z",
+};
+const afterPublication: SkillConfiguration = {
+  ...configuration,
+  draftText: "enabled = true\n",
+  current: nextVersion,
+  versions: [nextVersion, ...configuration.versions],
+};
+
+it("adopts the refreshed draft once a publication changes the current version", async () => {
+  const user = userEvent.setup();
+  const view = mount();
+  await user.clear(screen.getByLabelText("Proposed TOML"));
+  await user.type(screen.getByLabelText("Proposed TOML"), "enabled = false\n");
+  view.rerender(refreshed(afterPublication));
+  expect(screen.getByLabelText("Proposed TOML")).toHaveValue(
+    "enabled = true\n",
+  );
+});
+
+it("holds an edited draft while the published version stays put", async () => {
+  const user = userEvent.setup();
+  const view = mount();
+  await user.clear(screen.getByLabelText("Proposed TOML"));
+  await user.type(screen.getByLabelText("Proposed TOML"), "enabled = true\n");
+  view.rerender(refreshed(configuration));
+  expect(screen.getByLabelText("Proposed TOML")).toHaveValue(
+    "enabled = true\n",
+  );
 });
 
 it("keeps the merged-PR input after an unmerged refusal and never refreshes", async () => {

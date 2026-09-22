@@ -1,3 +1,4 @@
+export * from "./credential";
 export * from "./deps";
 export * from "./detect";
 export * from "./enroll";

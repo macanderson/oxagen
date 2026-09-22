@@ -18,6 +18,12 @@ export interface TachoPaths {
   hostFile: string;
   /** Ed25519 device private key, PKCS#8 PEM (0600). */
   deviceKey: string;
+  /** The HMAC key that signs this host's run tokens (0600; `host/run-token.ts`). */
+  runTokenKey: string;
+  /** Vendor credentials in the gateway's custody, sealed (`host/credential-store.ts`). */
+  credentials: string;
+  /** The key that seals `credentials`, in its own file so a copy of one is useless. */
+  credentialsKey: string;
   /** The daemon's Unix socket (unused on Windows, where the hook uses TCP). */
   socket: string;
   /** Per-session append-only event logs and the shipped cursor. */
@@ -28,6 +34,12 @@ export interface TachoPaths {
   quarantine: string;
   /** Recorder state the daemon persists so a restart continues each chain. */
   daemonState: string;
+  /**
+   * Sealed terminal batches the daemon has not yet landed in the WAL. A batch
+   * waits here for the moment between sealing and the WAL append, so the file
+   * can hold a run's content and has to be purged with the WAL (ADR-139).
+   */
+  pendingEnds: string;
   /** Transcript byte cursors, so a restart does not re-read every transcript. */
   transcriptTailState: string;
   /** The daemon's pid file. */
@@ -81,11 +93,15 @@ export function tachoPaths(
     root,
     hostFile: join(root, "host.json"),
     deviceKey: join(root, "device.key"),
+    runTokenKey: join(root, "run-token.key"),
+    credentials: join(root, "credentials.json"),
+    credentialsKey: join(root, "credentials.key"),
     socket: join(root, "tachod.sock"),
     wal: join(root, "wal"),
     spool: join(root, "spool"),
     quarantine: join(root, "quarantine"),
     daemonState: join(root, "daemon.json"),
+    pendingEnds: join(root, "pending-session-ends.json"),
     transcriptTailState: join(root, "transcript-tail.json"),
     pid: join(root, "tachod.pid"),
     log: join(root, "tachod.log"),

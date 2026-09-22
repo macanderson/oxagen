@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   info: vi.fn(),
   warn: vi.fn(),
+  error: vi.fn(),
 }));
 vi.mock("@oxagen/database", () => ({
   withSystemDb: async (
@@ -12,7 +13,7 @@ vi.mock("@oxagen/database", () => ({
   ) => fn({ execute: mocks.execute }),
 }));
 vi.mock("../logger", () => ({
-  logger: { info: mocks.info, warn: mocks.warn },
+  logger: { info: mocks.info, warn: mocks.warn, error: mocks.error },
 }));
 type StepCtx = {
   step: { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
@@ -33,13 +34,25 @@ vi.mock("../create-function", () => ({
     return [{}];
   },
 }));
-await import("./security.audit-partition-rollover");
+const { AuditPartitionMaintenanceError } = await import(
+  "./security.audit-partition-rollover"
+);
 const step = { run: async (_name: string, fn: () => Promise<unknown>) => fn() };
 const result = {
   created: ["security_events_2026_10"],
   dropped: [],
   expiredDefaultRows: 0,
   hasExpiredDefaultRows: false,
+  skipped: [],
+  hasSkippedPartitions: false,
+};
+const skippedMonth = {
+  partition: "security_events_2026_09",
+  phase: "create" as const,
+  sqlstate: "P0001",
+  reason:
+    "Audit partition name security_events_2026_09 belongs to a different table",
+  pendingRows: 2,
 };
 
 describe("audit partition maintenance cron", () => {
@@ -70,6 +83,49 @@ describe("audit partition maintenance cron", () => {
     ]);
     await handler({ step });
     expect(mocks.warn).toHaveBeenCalledTimes(1);
+  });
+  it("keeps the committed months and fails the run when work was skipped", async () => {
+    mocks.execute.mockResolvedValue([
+      {
+        result: {
+          ...result,
+          created: ["security_events_2026_10", "security_events_2026_11"],
+          dropped: ["security_events_2018_09"],
+          skipped: [skippedMonth],
+          hasSkippedPartitions: true,
+        },
+      },
+    ]);
+    await expect(handler({ step })).rejects.toBeInstanceOf(
+      AuditPartitionMaintenanceError,
+    );
+    // The months that succeeded are reported before the run fails.
+    expect(mocks.info).toHaveBeenCalledTimes(1);
+    expect(mocks.info.mock.calls[0]![0]).toMatchObject({
+      created: ["security_events_2026_10", "security_events_2026_11"],
+      dropped: ["security_events_2018_09"],
+    });
+    expect(mocks.error).toHaveBeenCalledTimes(1);
+    expect(mocks.error.mock.calls[0]![0]).toEqual({ skipped: [skippedMonth] });
+  });
+  it("names the skipped work and its stuck rows on the thrown error", () => {
+    const error = new AuditPartitionMaintenanceError([skippedMonth]);
+    expect(error.code).toBe("audit_partition_maintenance_incomplete");
+    expect(error.message).toContain("security_events_2026_09 (create, P0001)");
+    expect(error.skipped[0]?.pendingRows).toBe(2);
+  });
+  it("refuses a maintenance result whose skipped entry is malformed", async () => {
+    mocks.execute.mockResolvedValue([
+      {
+        result: {
+          ...result,
+          skipped: [{ ...skippedMonth, phase: "vacuum" }],
+          hasSkippedPartitions: true,
+        },
+      },
+    ]);
+    await expect(handler({ step })).rejects.toThrow();
+    expect(mocks.info).not.toHaveBeenCalled();
   });
   it("propagates failed maintenance so the durable runner retries", async () => {
     mocks.execute.mockRejectedValue(new Error("partitioning unavailable"));
