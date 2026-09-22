@@ -164,7 +164,8 @@ SCIM 2.0 provisioning and deprovisioning is not part of this change. It needs
 its own endpoints, a bearer token per organization, session and API key
 revocation, and an IdP rig to test Okta and Entra ID pushes against. Until it
 lands, removing someone from the IdP blocks their next SSO sign-in but does not
-end a session they hold or revoke their API keys.
+end a session they hold or revoke their API keys. Issue #3734 carries the
+handoff.
 
 ## Consequences
 
