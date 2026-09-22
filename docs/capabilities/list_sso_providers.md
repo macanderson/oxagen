@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp
 **Sensitivity:** high · **Default effect:** deny · **Roles:** org Owner, Admin
 **Billing gate:** none · **Agent tool:** no (the in-app agent never reads or changes how people sign in)
+**Plan:** any. `entitled` says whether the plan includes SSO.
 
 Contract: `packages/oxagen/src/contracts/org.sso.list.ts`
 Handler: `packages/handlers/src/org.sso.list.ts`
@@ -19,6 +20,9 @@ Show an org admin every SSO identity provider the organisation has
 registered, what to configure in each identity provider, and whether SSO is
 required.
 
+The list reads on every plan, so an organisation that left the Enterprise
+plan can still see its providers and delete them.
+
 ## Input
 
 None. The providers are the caller's organisation's.
@@ -29,6 +33,7 @@ None. The providers are the caller's organisation's.
 | --- | --- |
 | providers | One view per provider, oldest first |
 | policy.ssoRequired | Whether members other than Owners must sign in through SSO |
+| entitled | Whether the organisation's plan includes SSO. Only the Enterprise plan does |
 
 Each provider view carries `providerId`, `displayName`, `protocol` (`oidc` or
 `saml`), `domain`, `domainVerified`, `issuer`, `groupsClaim`, and:

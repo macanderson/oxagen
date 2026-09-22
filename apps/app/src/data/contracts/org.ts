@@ -232,11 +232,14 @@ export const SsoProvider = z.object({
 export type SsoProvider = z.infer<typeof SsoProvider>;
 
 /**
- * The organisation's single sign-on: its providers and whether members other
- * than Owners must sign in through one of them.
+ * The organisation's single sign-on: its providers, whether members other
+ * than Owners must sign in through one of them, and whether the plan includes
+ * SSO. Only the Enterprise plan does; without it the page lists providers so
+ * they can be deleted, and offers nothing that sets SSO up.
  */
 export const SsoSettings = z.object({
   providers: z.array(SsoProvider),
   policy: z.object({ ssoRequired: z.boolean() }),
+  entitled: z.boolean(),
 });
 export type SsoSettings = z.infer<typeof SsoSettings>;

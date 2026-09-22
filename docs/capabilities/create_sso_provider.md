@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp
 **Sensitivity:** high · **Default effect:** deny · **Roles:** org Owner, Admin
 **Billing gate:** none · **Agent tool:** no (the in-app agent never reconfigures sign-in)
+**Plan:** Enterprise. On any other plan the call is refused.
 
 Contract: `packages/oxagen/src/contracts/org.sso.create.ts`
 Handler: `packages/handlers/src/org.sso.create.ts`
@@ -67,6 +68,8 @@ optional `spPrivateKey` (PEM) to sign AuthnRequests.
 
 ## Errors
 
+- `forbidden` / `sso_requires_enterprise`: the organisation is not on the
+  Enterprise plan. The role check runs first.
 - `AUTH_TOKEN_ENCRYPTION_KEY` unset: refused rather than stored in plaintext.
 - `invalid_input`: a malformed field, an issuer on a private address, a
   discovery document that cannot be read, names another issuer, lacks an

@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp
 **Sensitivity:** high · **Default effect:** deny · **Roles:** org Owner, Admin
 **Billing gate:** none · **Agent tool:** no
+**Plan:** Enterprise. On any other plan the call is refused.
 
 Contract: `packages/oxagen/src/contracts/org.sso.update.ts`
 Handler: `packages/handlers/src/org.sso.update.ts`
@@ -52,6 +53,8 @@ protocol cannot change either.
 
 ## Errors
 
+- `forbidden` / `sso_requires_enterprise`: the organisation is not on the
+  Enterprise plan. The role check runs first.
 - `not_found` / `sso_provider_not_found`: no such provider in this
   organisation.
 - `invalid_input`: a protocol that does not match the provider's, an OIDC

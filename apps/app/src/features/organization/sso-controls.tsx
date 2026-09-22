@@ -161,12 +161,15 @@ export function DeleteProvider({
 /**
  * Require SSO for members other than Owners. Off and unusable until a
  * provider's domain is verified, because nobody could meet the requirement.
+ * On a plan without SSO (`lapsed`) the requirement no longer applies, and
+ * the switch can only turn it off.
  */
 export function RequireSso({
   org,
   required,
   canTurnOn,
   canEdit,
+  lapsed = false,
 }: {
   org: string;
   required: boolean;
@@ -174,6 +177,8 @@ export function RequireSso({
   canTurnOn: boolean;
   /** Owners and admins change it; the handler checks the role again. */
   canEdit: boolean;
+  /** The plan no longer includes SSO, so a requirement left on is inert. */
+  lapsed?: boolean;
 }) {
   const t = useTranslations("organization.sso.policy");
   const failureText = useSsoFailure();
@@ -220,7 +225,13 @@ export function RequireSso({
         ) : null}
       </div>
       <p id="sso-required-state" className="text-sm text-muted-foreground">
-        {required ? t("on") : canTurnOn ? t("off") : t("needsVerified")}
+        {required
+          ? lapsed
+            ? t("lapsed")
+            : t("on")
+          : canTurnOn
+            ? t("off")
+            : t("needsVerified")}
       </p>
       <p id="sso-required-owners" className="text-sm text-muted-foreground">
         {t("owners")}

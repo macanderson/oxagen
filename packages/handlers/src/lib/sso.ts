@@ -8,6 +8,7 @@
  * secret-bearing field is one `SSO_SECRET_PATHS` knows how to seal.
  */
 import { resolveTxt } from "node:dns/promises";
+import { canAccessSSO, resolveOrgTier } from "@oxagen/billing";
 import { requireEnv } from "@oxagen/config/env";
 import {
   assertPublicHttpUrl,
@@ -22,6 +23,8 @@ import {
   resolveSsoKms,
   sealSsoConfig,
 } from "@oxagen/database/sso-secrets";
+import type { CapabilityContext } from "@oxagen/oxagen";
+import { HandlerError } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   ssoCallbackPath,
@@ -87,6 +90,39 @@ export function ssoAuthBaseUrl(): string {
 /** The SAML SP entity id: the SP metadata URL, which is unique per provider. */
 export function ssoSpEntityId(baseUrl: string, providerId: string): string {
   return `${baseUrl}${ssoSpMetadataPath(providerId)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Plan
+// ---------------------------------------------------------------------------
+
+/** Whether the organisation's plan includes SSO (the Enterprise plan). */
+export async function ssoEntitled(
+  ctx: Pick<CapabilityContext, "orgId" | "planTier">,
+): Promise<boolean> {
+  return canAccessSSO(ctx.planTier ?? (await resolveOrgTier(ctx.orgId)));
+}
+
+/**
+ * Refuse a write that sets SSO up when the organisation is not on the
+ * Enterprise plan (ADR-142). Call it after the org-role check.
+ *
+ * Only writes that add or strengthen SSO call this. Listing providers,
+ * deleting one and turning Require SSO off stay open, so an organisation
+ * that left the Enterprise plan can still clean up. The refusal is a
+ * HandlerError, which the kernel reports as `forbidden`; `requireTier`'s
+ * TierDeniedError is not classified by the kernel and would surface as a 500.
+ */
+export async function requireSsoEntitlement(
+  ctx: Pick<CapabilityContext, "orgId" | "planTier">,
+): Promise<void> {
+  if (await ssoEntitled(ctx)) return;
+  throw new HandlerError({
+    code: "forbidden",
+    reason: "sso_requires_enterprise",
+    message:
+      "Single sign-on is part of the Enterprise plan. Upgrade the organization to set it up.",
+  });
 }
 
 // ---------------------------------------------------------------------------

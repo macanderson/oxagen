@@ -416,7 +416,11 @@ const storedProvider = {
 describe("org.sso", () => {
   it("reads list_sso_providers for the organization and returns the SSO view model", async () => {
     kernelRead.mockResolvedValue(
-      readOk({ providers: [storedProvider], policy: { ssoRequired: true } }),
+      readOk({
+        providers: [storedProvider],
+        policy: { ssoRequired: true },
+        entitled: true,
+      }),
     );
     expect(await org.sso(ctx)).toEqual(
       readOk({
@@ -442,6 +446,7 @@ describe("org.sso", () => {
           },
         ],
         policy: { ssoRequired: true },
+        entitled: true,
       }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
@@ -450,6 +455,24 @@ describe("org.sso", () => {
       page: "organization",
     });
     expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("carries a plan without SSO through, with the providers still listed", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        providers: [storedProvider],
+        policy: { ssoRequired: false },
+        entitled: false,
+      }),
+    );
+    const read = await org.sso(ctx);
+    expect(read).toMatchObject({
+      ok: true,
+      value: {
+        entitled: false,
+        providers: [expect.objectContaining({ providerRef: "acme-okta" })],
+      },
+    });
   });
 
   it("passes a denied read through (negative)", async () => {
@@ -473,6 +496,7 @@ describe("org.sso", () => {
           },
         ],
         policy: { ssoRequired: false },
+        entitled: true,
       }),
     );
     expect(await org.sso(ctx)).toEqual(readError("record_unmappable", 502));

@@ -27,6 +27,7 @@ import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { CreateRole, DeleteRole, EditRole } from "./role-actions";
+import { SsoPlanNotice } from "./sso";
 import { SsoGroupRoles } from "./sso-group-roles";
 import { OrganizationTabs } from "./tabs";
 
@@ -236,7 +237,10 @@ function Catalogue({ catalog }: { catalog: readonly Permission[] }) {
   );
 }
 
-/** Each SSO provider's table of IdP group to organization role. */
+/**
+ * Each SSO provider's table of IdP group to organization role. On a plan
+ * without SSO the tables are read-only, because saving one sets SSO up.
+ */
 function GroupMappings({
   org,
   canEdit,
@@ -262,30 +266,39 @@ function GroupMappings({
       {!read.ok ? (
         <ReadFailure read={read} section={t("title")} />
       ) : read.value.providers.length === 0 ? (
-        <p className={lead} data-testid="sso-group-mappings-none">
-          {t("noProviders")}{" "}
-          <SafeLink to={routes.sso(org)} className={linkText}>
-            {t("openSso")}
-          </SafeLink>
-        </p>
+        read.value.entitled ? (
+          <p className={lead} data-testid="sso-group-mappings-none">
+            {t("noProviders")}{" "}
+            <SafeLink to={routes.sso(org)} className={linkText}>
+              {t("openSso")}
+            </SafeLink>
+          </p>
+        ) : (
+          <SsoPlanNotice org={org} hasProviders={false} />
+        )
       ) : (
-        read.value.providers.map((provider) => (
-          <div key={provider.providerRef} className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold text-foreground">
-              {t("provider", {
-                name: provider.displayName,
-                domain: provider.domain,
-              })}
-            </h3>
-            <SsoGroupRoles
-              org={org}
-              providerId={provider.providerRef}
-              providerName={provider.displayName}
-              mappings={provider.groupRoles}
-              canEdit={canEdit}
-            />
-          </div>
-        ))
+        <>
+          {read.value.entitled ? null : (
+            <SsoPlanNotice org={org} hasProviders />
+          )}
+          {read.value.providers.map((provider) => (
+            <div key={provider.providerRef} className="flex flex-col gap-2">
+              <h3 className="text-sm font-semibold text-foreground">
+                {t("provider", {
+                  name: provider.displayName,
+                  domain: provider.domain,
+                })}
+              </h3>
+              <SsoGroupRoles
+                org={org}
+                providerId={provider.providerRef}
+                providerName={provider.displayName}
+                mappings={provider.groupRoles}
+                canEdit={canEdit && read.value.entitled}
+              />
+            </div>
+          ))}
+        </>
       )}
     </section>
   );

@@ -21,6 +21,14 @@ vi.mock("./lib/sso-store", () => ({
   readOrgSsoRequired: mocks.readRequired,
 }));
 
+// The plan behind the Enterprise check (ADR-142). Enterprise by default, so
+// each case tests its own behaviour; the refusal case sets another tier.
+const plan = vi.hoisted(() => ({ resolveOrgTier: vi.fn() }));
+vi.mock("@oxagen/billing", () => ({
+  canAccessSSO: (tier: string) => tier === "enterprise",
+  resolveOrgTier: plan.resolveOrgTier,
+}));
+
 // The org-role gate every SSO handler asserts (INV-29). Allows by default, an
 // org Admin, so each case tests its own behaviour; the refusal case sets
 // `roleGate.refuse` and asserts nothing else ran.
@@ -63,6 +71,7 @@ beforeEach(() => {
   for (const m of Object.values(mocks)) m.mockReset();
   roleGate.refuse = false;
   roleGate.assertOrgRole.mockClear();
+  plan.resolveOrgTier.mockReset().mockResolvedValue("enterprise");
   process.env.BETTER_AUTH_URL = SSO_BASE_URL;
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
@@ -80,6 +89,23 @@ describe("org.sso.list handler", () => {
     roleGate.refuse = true;
     await expect(orgSsoListHandler({}, CTX)).rejects.toThrow(/forbidden/);
     expect(mocks.list).not.toHaveBeenCalled();
+  });
+
+  it("reports the organisation as entitled on the Enterprise plan", async () => {
+    const out = await orgSsoListHandler({}, CTX);
+    expect(out.entitled).toBe(true);
+    expect(plan.resolveOrgTier).toHaveBeenCalledWith(CTX.orgId);
+  });
+
+  it("still lists providers for an organisation that left the Enterprise plan, and says so", async () => {
+    plan.resolveOrgTier.mockResolvedValue("scale");
+    const out = await orgSsoListHandler({}, CTX);
+    expect(out.entitled).toBe(false);
+    expect(out.providers.map((p) => p.providerId)).toEqual([
+      "acme",
+      "acme-saml",
+    ]);
+    expect(out.policy).toEqual({ ssoRequired: true });
   });
 
   it("reads only the caller's organisation", async () => {

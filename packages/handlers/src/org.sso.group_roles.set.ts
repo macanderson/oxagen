@@ -4,6 +4,7 @@ import { HandlerError } from "@oxagen/oxagen";
 import { orgSsoGroupRolesSet } from "@oxagen/oxagen/contracts/org.sso.group_roles.set";
 import { withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
+import { requireSsoEntitlement } from "./lib/sso";
 import { findOrgSsoProvider, replaceOrgSsoGroupRoles } from "./lib/sso-store";
 import { logger } from "./logger";
 
@@ -26,6 +27,8 @@ export const orgSsoGroupRolesSetHandler: CapabilityHandler<
     { ...ctx, userId: actorUserId },
     { org: ["Owner", "Admin"] },
   );
+  // Setting SSO up is part of the Enterprise plan (ADR-142).
+  await requireSsoEntitlement(ctx);
 
   // tenancy: the provider lookup, delete and insert are all filtered by
   // orgId = ctx.orgId after the Owner or Admin membership check above.

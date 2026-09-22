@@ -19,6 +19,14 @@ vi.mock("./lib/sso-store", () => ({
   replaceOrgSsoGroupRoles: mocks.replace,
 }));
 
+// The plan behind the Enterprise check (ADR-142). Enterprise by default, so
+// each case tests its own behaviour; the refusal case sets another tier.
+const plan = vi.hoisted(() => ({ resolveOrgTier: vi.fn() }));
+vi.mock("@oxagen/billing", () => ({
+  canAccessSSO: (tier: string) => tier === "enterprise",
+  resolveOrgTier: plan.resolveOrgTier,
+}));
+
 // The org-role gate every SSO handler asserts (INV-29). Allows by default, an
 // org Admin, so each case tests its own behaviour; the refusal case sets
 // `roleGate.refuse` and asserts nothing else ran.
@@ -54,6 +62,7 @@ beforeEach(() => {
   for (const m of Object.values(mocks)) m.mockReset();
   roleGate.refuse = false;
   roleGate.assertOrgRole.mockClear();
+  plan.resolveOrgTier.mockReset().mockResolvedValue("enterprise");
   process.env.BETTER_AUTH_URL = SSO_BASE_URL;
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
@@ -71,6 +80,22 @@ describe("org.sso.group_roles.set handler", () => {
       ),
     ).rejects.toThrow(/forbidden/);
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("refuses an organisation that is not on the Enterprise plan", async () => {
+    plan.resolveOrgTier.mockResolvedValue("scale");
+    await expect(
+      orgSsoGroupRolesSetHandler(
+        { providerId: "acme", mappings: MAPPINGS },
+        CTX,
+      ),
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "sso_requires_enterprise",
+    });
+    expect(mocks.find).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.emit).not.toHaveBeenCalled();
   });
 
   it("replaces the table for a provider of the caller's organisation, in one transaction", async () => {

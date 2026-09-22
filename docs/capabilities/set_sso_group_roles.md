@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp
 **Sensitivity:** high · **Default effect:** deny · **Roles:** org Owner, Admin
 **Billing gate:** none · **Agent tool:** no
+**Plan:** Enterprise. On any other plan the call is refused.
 
 Contract: `packages/oxagen/src/contracts/org.sso.group_roles.set.ts`
 Handler: `packages/handlers/src/org.sso.group_roles.set.ts`
@@ -42,6 +43,8 @@ ownership is transferred by a person, never minted by an identity provider.
 
 ## Errors
 
+- `forbidden` / `sso_requires_enterprise`: the organisation is not on the
+  Enterprise plan. The role check runs first.
 - `not_found` / `sso_provider_not_found`: no such provider in this
   organisation.
 - `invalid_input`: more than 200 rows, a group mapped twice, or a role

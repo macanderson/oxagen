@@ -20,7 +20,11 @@ export function useSsoFailure(): (failure: SsoFailure) => string {
   return (failure) => {
     switch (failure.reason) {
       case "denied":
-        return t("denied");
+        // A forbidden HandlerError arrives as `denied` with its reason in
+        // `code`; the plan refusal is the one with a sentence of its own.
+        return failure.code === "sso_requires_enterprise"
+          ? t("requiresEnterprise")
+          : t("denied");
       case "invalid":
         switch (failure.code) {
           case "provider_id_required":

@@ -7,14 +7,20 @@
 // answered `denied` by the read, and this section says so rather than
 // showing controls every write of which would be refused. A member who can
 // read (the handlers decide) sees the page without its controls.
+//
+// SSO is part of the Enterprise plan. On any other plan the page says so,
+// links to Billing, and offers only what an organisation that left the plan
+// needs to clean up: deleting a provider and turning Require SSO off.
 import { useTranslations } from "next-intl";
 import type { SsoProvider, SsoSettings } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx } from "@/server/viewer";
+import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
-import { mono, panel } from "@/ui/control-styles";
+import { linkText, mono, panel } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
+import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, Table } from "@/ui/table";
 import {
@@ -63,16 +69,24 @@ function SsoSection({
       <p className="max-w-3xl text-sm text-muted-foreground">{t("intro")}</p>
       {read.ok ? (
         <>
+          {read.value.entitled ? null : (
+            <SsoPlanNotice
+              org={org}
+              hasProviders={read.value.providers.length > 0}
+            />
+          )}
           <Providers org={org} canEdit={canEdit} value={read.value} />
           {read.value.providers.map((provider) => (
             <Setup
               key={provider.providerRef}
               org={org}
-              canEdit={canEdit}
+              canSetUp={canEdit && read.value.entitled}
               provider={provider}
             />
           ))}
-          <Policy org={org} canEdit={canEdit} value={read.value} />
+          {read.value.entitled || read.value.policy.ssoRequired ? (
+            <Policy org={org} canEdit={canEdit} value={read.value} />
+          ) : null}
         </>
       ) : read.reason === "denied" ? (
         <OutcomePanel tone="deny" testId="sso-denied" title={t("denied.title")}>
@@ -82,6 +96,29 @@ function SsoSection({
         <ReadFailure read={read} section={t("title")} />
       )}
     </div>
+  );
+}
+
+/**
+ * What a plan without SSO means on this page, with the way to change the
+ * plan. The Roles page shows it above the group mappings too.
+ */
+export function SsoPlanNotice({
+  org,
+  hasProviders,
+}: {
+  org: string;
+  /** Existing providers stop signing people in once the plan lapses. */
+  hasProviders: boolean;
+}) {
+  const t = useTranslations("organization.sso.plan");
+  return (
+    <p className={lead} data-testid="sso-plan-notice">
+      {t("notice")} {hasProviders ? `${t("lapsed")} ` : null}
+      <SafeLink to={routes.billing(org)} className={linkText}>
+        {t("upgrade")}
+      </SafeLink>
+    </p>
   );
 }
 
@@ -108,6 +145,9 @@ function Providers({
   value: SsoSettings;
 }) {
   const t = useTranslations("organization.sso");
+  // Adding or editing a provider sets SSO up, so it needs the plan. Deleting
+  // one does not, so an organisation that left the plan can clean up.
+  const canSetUp = canEdit && value.entitled;
   const columns = [
     { label: t("providers.columns.name") },
     { label: t("providers.columns.protocol") },
@@ -120,11 +160,11 @@ function Providers({
       <h2 id="sso-providers" className={sectionTitle}>
         {t("providers.title")}
       </h2>
-      {canEdit ? (
+      {canSetUp ? (
         <div className="flex flex-wrap gap-2">
           <SsoProviderDialog org={org} />
         </div>
-      ) : (
+      ) : canEdit ? null : (
         <p className={lead}>{t("readOnly")}</p>
       )}
       {value.providers.length === 0 ? (
@@ -151,7 +191,9 @@ function Providers({
               {canEdit ? (
                 <td className={cell}>
                   <div className="flex flex-wrap gap-2">
-                    <SsoProviderDialog org={org} provider={provider} />
+                    {canSetUp ? (
+                      <SsoProviderDialog org={org} provider={provider} />
+                    ) : null}
                     <DeleteProvider org={org} provider={provider} />
                   </div>
                 </td>
@@ -167,11 +209,12 @@ function Providers({
 /** What the admin publishes in DNS and pastes into the identity provider. */
 function Setup({
   org,
-  canEdit,
+  canSetUp,
   provider,
 }: {
   org: string;
-  canEdit: boolean;
+  /** The viewer is an Owner or Admin, and the plan includes SSO. */
+  canSetUp: boolean;
   provider: SsoProvider;
 }) {
   const t = useTranslations("organization.sso.setup");
@@ -206,7 +249,7 @@ function Setup({
           value={provider.verification.recordValue}
           testId={`${id}-record-value`}
         />
-        {canEdit && !provider.domainVerified ? (
+        {canSetUp && !provider.domainVerified ? (
           <VerifyDomain org={org} providerId={provider.providerRef} />
         ) : null}
       </div>
@@ -253,8 +296,11 @@ function Policy({
       <RequireSso
         org={org}
         required={value.policy.ssoRequired}
-        canTurnOn={value.providers.some((p) => p.domainVerified)}
+        canTurnOn={
+          value.entitled && value.providers.some((p) => p.domainVerified)
+        }
         canEdit={canEdit}
+        lapsed={!value.entitled}
       />
     </section>
   );

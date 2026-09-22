@@ -175,5 +175,6 @@ export function toSsoSettings(
       })),
     })),
     policy: { ssoRequired: out.policy.ssoRequired },
+    entitled: out.entitled,
   };
 }

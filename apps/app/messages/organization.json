@@ -458,6 +458,11 @@
         "title": "Owners and Admins only",
         "body": "Single sign-on settings are visible to Owners and Admins. Ask one of them for access."
       },
+      "plan": {
+        "notice": "Single sign-on is part of the Enterprise plan.",
+        "upgrade": "Change the plan on Billing.",
+        "lapsed": "Your providers no longer sign anyone in. You can still delete them."
+      },
       "providers": {
         "title": "Identity providers",
         "tableLabel": "Identity providers",
@@ -503,7 +508,8 @@
         "off": "Members can sign in with a password or through a provider.",
         "owners": "Owners can always sign in with a password, so an identity provider outage cannot lock your organization out.",
         "needsVerified": "Verify a provider's domain before you require SSO.",
-        "saving": "Saving"
+        "saving": "Saving",
+        "lapsed": "Require SSO does not apply on your current plan. Turn it off to clear it."
       },
       "form": {
         "add": "Add provider",
@@ -569,7 +575,8 @@
         "notFound": "This provider no longer exists. Reload the page.",
         "refused": "Oxagen refused the change ({code}).",
         "pendingApproval": "The change is waiting for approval.",
-        "unavailable": "The change could not be saved ({code}). Try again."
+        "unavailable": "The change could not be saved ({code}). Try again.",
+        "requiresEnterprise": "Single sign-on is part of the Enterprise plan. Upgrade the organization to set it up."
       }
     },
     "ssoGroups": {

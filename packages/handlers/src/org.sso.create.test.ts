@@ -33,6 +33,14 @@ vi.mock("./lib/sso-store", () => ({
   accountProviderIdInUse: mocks.inUse,
 }));
 
+// The plan behind the Enterprise check (ADR-142). Enterprise by default, so
+// each case tests its own behaviour; the refusal case sets another tier.
+const plan = vi.hoisted(() => ({ resolveOrgTier: vi.fn() }));
+vi.mock("@oxagen/billing", () => ({
+  canAccessSSO: (tier: string) => tier === "enterprise",
+  resolveOrgTier: plan.resolveOrgTier,
+}));
+
 // The org-role gate every SSO handler asserts (INV-29). Allows by default, an
 // org Admin, so each case tests its own behaviour; the refusal case sets
 // `roleGate.refuse` and asserts nothing else ran.
@@ -106,6 +114,7 @@ beforeEach(() => {
   for (const m of Object.values(mocks)) m.mockReset();
   roleGate.refuse = false;
   roleGate.assertOrgRole.mockClear();
+  plan.resolveOrgTier.mockReset().mockResolvedValue("enterprise");
   process.env.BETTER_AUTH_URL = `${SSO_BASE_URL}/`;
   mocks.resolveKms.mockReturnValue({ adapter: {}, keyId: "sso_v1" });
   mocks.withSystemDb.mockImplementation(
@@ -138,6 +147,26 @@ describe("org.sso.create handler", () => {
     expect(discoveryFetch).not.toHaveBeenCalled();
     expect(mocks.insert).not.toHaveBeenCalled();
     expect(mocks.emit).not.toHaveBeenCalled();
+  });
+
+  it("refuses an organisation that is not on the Enterprise plan, before anything else runs", async () => {
+    plan.resolveOrgTier.mockResolvedValue("scale");
+    await expect(orgSsoCreateHandler(OIDC_INPUT, CTX)).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "sso_requires_enterprise",
+    });
+    expect(plan.resolveOrgTier).toHaveBeenCalledWith(CTX.orgId);
+    expect(discoveryFetch).not.toHaveBeenCalled();
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.emit).not.toHaveBeenCalled();
+  });
+
+  it("checks the role before the plan", async () => {
+    roleGate.refuse = true;
+    await expect(orgSsoCreateHandler(OIDC_INPUT, CTX)).rejects.toThrow(
+      /forbidden/,
+    );
+    expect(plan.resolveOrgTier).not.toHaveBeenCalled();
   });
 
   it("refuses to store a provider when no KMS is configured, before any network read", async () => {

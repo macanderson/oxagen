@@ -340,6 +340,28 @@ describe("IdP group mappings", () => {
     expect(within(section).queryByRole("button")).toBeNull();
   });
 
+  it("shows an owner on a plan without SSO the mappings read-only, with the plan notice (negative)", async () => {
+    await renderRoles(
+      readOk(catalog),
+      "owner",
+      readOk(ssoSettings({ entitled: false })),
+    );
+    const section = screen.getByRole("region", { name: "IdP group mappings" });
+    expect(section).toHaveTextContent("oxagen-admins");
+    expect(within(section).getByTestId("sso-plan-notice")).toHaveTextContent(
+      "Single sign-on is part of the Enterprise plan.",
+    );
+    expect(
+      within(section).getByRole("link", {
+        name: "Change the plan on Billing.",
+      }),
+    ).toHaveAttribute("href", "/acme/billing");
+    expect(within(section).queryByRole("textbox")).toBeNull();
+    expect(
+      within(section).queryByRole("button", { name: "Save mappings" }),
+    ).toBeNull();
+  });
+
   it("says a refused SSO read in its own section and keeps the roles (negative)", async () => {
     await renderRoles(readOk(catalog), "owner", {
       ok: false,

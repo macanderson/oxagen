@@ -8,6 +8,8 @@
 //     provider shows the DNS record and the URLs the admin pastes elsewhere;
 //   - Require SSO is off and unusable until a domain is verified, and the page
 //     says Owners keep password sign-in either way;
+//   - on a plan without SSO the page says so and links to Billing, keeps
+//     Delete, and offers Require SSO only to turn it off;
 //   - a viewer below Owner or Admin sees no control, and a refused read says
 //     so in place of the page's sections, with the tabs kept;
 //   - the forms' lists mirror the contract, so no role or protocol the
@@ -227,6 +229,97 @@ describe("Sso: a verified and a pending provider", () => {
         "acme-okta",
       );
     });
+  });
+});
+
+describe("Sso: a plan without SSO", () => {
+  const LAPSED = ssoSettings({
+    providers: [ssoProvider(), samlProvider()],
+    entitled: false,
+  });
+
+  it("says SSO is part of the Enterprise plan and links to Billing", async () => {
+    const { container } = await renderSection({ ok: true, value: LAPSED });
+    const notice = screen.getByTestId("sso-plan-notice");
+    expect(notice).toHaveTextContent(
+      "Single sign-on is part of the Enterprise plan.",
+    );
+    expect(notice).toHaveTextContent("no longer sign anyone in");
+    expect(
+      within(notice).getByRole("link", { name: "Change the plan on Billing." }),
+    ).toHaveAttribute("href", "/acme/billing");
+    await expectNoAxe(container);
+  });
+
+  it("offers no setup control, and keeps Delete on each provider (negative)", async () => {
+    await renderSection({ ok: true, value: LAPSED });
+    expect(screen.queryByRole("button", { name: "Add provider" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByTestId("sso-verify-acme-entra")).toBeNull();
+    expect(
+      screen.queryByText(
+        "Only an Owner or an Admin can change single sign-on.",
+      ),
+    ).toBeNull();
+    const row = screen
+      .getByRole("table", { name: "Identity providers" })
+      .querySelector('[data-provider="acme-entra"]');
+    expect(
+      within(asElement(row)).getByRole("button", { name: "Delete" }),
+    ).toBeTruthy();
+  });
+
+  it("hides Require SSO while it is off (negative)", async () => {
+    await renderSection({ ok: true, value: LAPSED });
+    expect(
+      screen.queryByRole("switch", { name: "Require SSO for members" }),
+    ).toBeNull();
+  });
+
+  it("lets an Owner turn a leftover Require SSO off, and not back on", async () => {
+    actions.setSsoRequired.mockResolvedValue({
+      ok: true,
+      value: { ssoRequired: false },
+    });
+    await renderSection({
+      ok: true,
+      value: { ...LAPSED, policy: { ssoRequired: true } },
+    });
+    expect(
+      screen.getByText(/Require SSO does not apply on your current plan/),
+    ).toBeTruthy();
+    const toggle = screen.getByRole("switch", {
+      name: "Require SSO for members",
+    });
+    expect(toggle).toBeEnabled();
+    await userEvent.click(toggle);
+    await waitFor(() => {
+      expect(actions.setSsoRequired).toHaveBeenCalledWith("acme", false);
+    });
+  });
+
+  it("says so without a provider list when there is none", async () => {
+    await renderSection({
+      ok: true,
+      value: ssoSettings({ providers: [], entitled: false }),
+    });
+    expect(screen.getByTestId("sso-plan-notice")).not.toHaveTextContent(
+      "no longer sign anyone in",
+    );
+    expect(screen.queryByRole("button", { name: "Add provider" })).toBeNull();
+  });
+
+  it("names the plan when a write is refused for it", async () => {
+    actions.verifySsoDomain.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "sso_requires_enterprise",
+    });
+    await renderSection({ ok: true, value: BOTH });
+    await userEvent.click(screen.getByTestId("sso-verify-acme-entra"));
+    expect(
+      await screen.findByTestId("sso-verify-acme-entra-failure"),
+    ).toHaveTextContent("Single sign-on is part of the Enterprise plan.");
   });
 });
 

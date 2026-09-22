@@ -4,6 +4,8 @@ This guide sets up single sign-on (SSO) for an Oxagen organization. People from 
 
 ## Before you start
 
+Your organization needs the Enterprise plan. On any other plan, Oxagen refuses to add, edit, or verify a provider, to map groups, and to turn on **Require SSO**.
+
 You need the Owner or Admin role in the Oxagen organization.
 
 You need admin access to your IdP, such as Okta, Microsoft Entra ID, or Google Workspace.
@@ -105,6 +107,15 @@ With SSO required, Oxagen refuses password, Google, and GitHub sign-in for an em
 Members other than Owners reach the organization only with a session one of its SSO providers created. Oxagen sends anyone else to `/login?sso=required`.
 
 Owners keep password access, so an IdP outage cannot lock the organization out.
+
+## Leaving the Enterprise plan
+
+When your organization moves off the Enterprise plan:
+
+- Its providers stop signing people in. Oxagen keeps their settings.
+- **Require SSO** stops applying, so password, Google, and GitHub sign-in work again for your domains.
+- Members sign in with a password, or with Google or GitHub. A member who never set a password sets one with **Forgot password** on the login page.
+- An Owner or Admin can still delete providers and turn off **Require SSO**.
 
 ## Sign in
 

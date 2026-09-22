@@ -31,6 +31,18 @@ describe("useSsoFailure", () => {
     );
   });
 
+  it("names the plan when the organization is not on Enterprise", () => {
+    expect(
+      sentence({
+        ok: false,
+        reason: "denied",
+        code: "sso_requires_enterprise",
+      }),
+    ).toBe(
+      "Single sign-on is part of the Enterprise plan. Upgrade the organization to set it up.",
+    );
+  });
+
   it.each([
     ["provider_id_required", "Enter a provider ID."],
     ["display_name_required", "Enter a display name."],

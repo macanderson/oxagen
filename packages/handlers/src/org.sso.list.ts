@@ -2,7 +2,12 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import { withSystemDb } from "@oxagen/database";
-import { ssoAuthBaseUrl, toSsoGroupRoles, toSsoProviderView } from "./lib/sso";
+import {
+  ssoAuthBaseUrl,
+  ssoEntitled,
+  toSsoGroupRoles,
+  toSsoProviderView,
+} from "./lib/sso";
 import {
   listOrgSsoGroupRoles,
   listOrgSsoProviders,
@@ -17,6 +22,10 @@ import {
  *
  * Each view is built from the stored row through `redactSsoConfig`, so a
  * secret is reported as set or not set and never read.
+ *
+ * The list is not gated on the plan. It reports `entitled` instead, so the
+ * page can say SSO is part of the Enterprise plan and an organisation that
+ * left the plan can still see and delete its providers.
  */
 export const orgSsoListHandler: CapabilityHandler<typeof orgSsoList> = async (
   _input,
@@ -31,6 +40,7 @@ export const orgSsoListHandler: CapabilityHandler<typeof orgSsoList> = async (
     { org: ["Owner", "Admin"] },
   );
   const baseUrl = ssoAuthBaseUrl();
+  const entitled = await ssoEntitled(ctx);
 
   // tenancy: every query is filtered by orgId = ctx.orgId after the Owner or
   // Admin membership check above; auth.sso_providers is a shared-plane table
@@ -52,5 +62,6 @@ export const orgSsoListHandler: CapabilityHandler<typeof orgSsoList> = async (
       toSsoProviderView(row, toSsoGroupRoles(roles, row.providerId), baseUrl),
     ),
     policy: { ssoRequired },
+    entitled,
   };
 };

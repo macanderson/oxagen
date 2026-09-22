@@ -12,9 +12,17 @@ vi.mock("@oxagen/database/sso-secrets", async (importOriginal) => {
   };
 });
 
+// The plan behind the Enterprise check (ADR-142).
+const plan = vi.hoisted(() => ({ resolveOrgTier: vi.fn() }));
+vi.mock("@oxagen/billing", () => ({
+  canAccessSSO: (tier: string) => tier === "enterprise",
+  resolveOrgTier: plan.resolveOrgTier,
+}));
+
 import {
   discoverOidc,
   parseStoredSsoConfig,
+  requireSsoEntitlement,
   sameSsoIssuer,
   sealSsoConfigOrRefuse,
   serializeSealedSsoConfig,
@@ -34,6 +42,50 @@ import {
 } from "../test-utils/sso-fixtures";
 
 const KMS = { adapter: {} as never, keyId: "sso_v1" };
+
+describe("requireSsoEntitlement", () => {
+  afterEach(() => {
+    plan.resolveOrgTier.mockReset();
+  });
+
+  it("allows an organisation on the Enterprise plan", async () => {
+    plan.resolveOrgTier.mockResolvedValue("enterprise");
+    await expect(
+      requireSsoEntitlement({ orgId: "org_1" }),
+    ).resolves.toBeUndefined();
+  });
+
+  it.each(["free", "build", "scale"] as const)(
+    "refuses an organisation on the %s plan with the sso_requires_enterprise reason",
+    async (tier) => {
+      plan.resolveOrgTier.mockResolvedValue(tier);
+      await expect(
+        requireSsoEntitlement({ orgId: "org_1" }),
+      ).rejects.toMatchObject({
+        code: "forbidden",
+        reason: "sso_requires_enterprise",
+        message: expect.stringContaining("Enterprise plan"),
+      });
+    },
+  );
+
+  it("reads the tier the kernel already resolved, without a lookup", async () => {
+    plan.resolveOrgTier.mockResolvedValue("free");
+    await expect(
+      requireSsoEntitlement({ orgId: "org_1", planTier: "enterprise" }),
+    ).resolves.toBeUndefined();
+    await expect(
+      requireSsoEntitlement({ orgId: "org_1", planTier: "scale" }),
+    ).rejects.toMatchObject({ reason: "sso_requires_enterprise" });
+    expect(plan.resolveOrgTier).not.toHaveBeenCalled();
+  });
+
+  it("looks the tier up by organisation when the context has none", async () => {
+    plan.resolveOrgTier.mockResolvedValue("enterprise");
+    await requireSsoEntitlement({ orgId: "org_1" });
+    expect(plan.resolveOrgTier).toHaveBeenCalledWith("org_1");
+  });
+});
 
 describe("ssoScopes", () => {
   it("asks for openid, email and profile first, and each scope once", () => {

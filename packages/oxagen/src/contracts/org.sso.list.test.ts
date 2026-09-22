@@ -57,7 +57,24 @@ describe("org.sso.list capability", () => {
         },
       ],
       policy: { ssoRequired: false },
+      entitled: true,
     });
     expect(JSON.stringify(out)).not.toContain("s3cret");
+  });
+
+  it("requires the plan flag, so the page never has to guess it", () => {
+    expect(
+      orgSsoList.output.safeParse({
+        providers: [],
+        policy: { ssoRequired: false },
+      }).success,
+    ).toBe(false);
+    expect(
+      orgSsoList.output.parse({
+        providers: [],
+        policy: { ssoRequired: false },
+        entitled: false,
+      }).entitled,
+    ).toBe(false);
   });
 });

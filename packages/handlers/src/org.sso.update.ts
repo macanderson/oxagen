@@ -12,6 +12,7 @@ import {
   discoverOidc,
   parseStoredSsoConfig,
   refuseSealedSsoInput,
+  requireSsoEntitlement,
   requireSsoKms,
   sameSsoIssuer,
   sealSsoConfigOrRefuse,
@@ -61,6 +62,8 @@ export const orgSsoUpdateHandler: CapabilityHandler<
     { ...ctx, userId: actorUserId },
     { org: ["Owner", "Admin"] },
   );
+  // Setting SSO up is part of the Enterprise plan (ADR-142).
+  await requireSsoEntitlement(ctx);
 
   // tenancy: the provider is read by providerId and filtered by orgId =
   // ctx.orgId after the Owner or Admin membership check above; another

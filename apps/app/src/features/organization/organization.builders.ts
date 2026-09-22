@@ -136,6 +136,7 @@ export function ssoSettings(overrides: Partial<SsoSettings> = {}): SsoSettings {
   return {
     providers: [ssoProvider()],
     policy: { ssoRequired: false },
+    entitled: true,
     ...overrides,
   };
 }

@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp
 **Sensitivity:** high · **Default effect:** deny · **Roles:** org Owner, Admin
 **Billing gate:** none · **Agent tool:** no
+**Plan:** any, so an organisation that left the Enterprise plan can still remove a provider.
 
 Contract: `packages/oxagen/src/contracts/org.sso.delete.ts`
 Handler: `packages/handlers/src/org.sso.delete.ts`

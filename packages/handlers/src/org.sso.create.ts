@@ -10,6 +10,7 @@ import {
   buildSsoSamlConfig,
   discoverOidc,
   refuseSealedSsoInput,
+  requireSsoEntitlement,
   requireSsoKms,
   sealSsoConfigOrRefuse,
   ssoAuthBaseUrl,
@@ -45,6 +46,8 @@ export const orgSsoCreateHandler: CapabilityHandler<
     { ...ctx, userId: actorUserId },
     { org: ["Owner", "Admin"] },
   );
+  // Setting SSO up is part of the Enterprise plan (ADR-142).
+  await requireSsoEntitlement(ctx);
 
   refuseSealedSsoInput(
     orgSsoCreate.name,

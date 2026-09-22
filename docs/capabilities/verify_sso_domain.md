@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp
 **Sensitivity:** high · **Default effect:** deny · **Roles:** org Owner, Admin
 **Billing gate:** none · **Agent tool:** no
+**Plan:** Enterprise. On any other plan the call is refused.
 
 Contract: `packages/oxagen/src/contracts/org.sso.verify_domain.ts`
 Handler: `packages/handlers/src/org.sso.verify_domain.ts`
@@ -44,6 +45,8 @@ _oxagen-sso.acme.com  TXT  "oxagen-sso-verification=<token>"
 
 ## Errors
 
+- `forbidden` / `sso_requires_enterprise`: the organisation is not on the
+  Enterprise plan. The role check runs first.
 - `not_found` / `sso_provider_not_found`: no such provider in this
   organisation.
 - `conflict` / `dns_record_not_found`: no matching TXT record. The message

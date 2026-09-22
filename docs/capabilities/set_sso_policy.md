@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp
 **Sensitivity:** high · **Default effect:** deny · **Roles:** org Owner, Admin
 **Billing gate:** none · **Agent tool:** no
+**Plan:** Enterprise to turn Require SSO on. Turning it off works on any plan.
 
 Contract: `packages/oxagen/src/contracts/org.sso.policy.set.ts`
 Handler: `packages/handlers/src/org.sso.policy.set.ts`
@@ -39,6 +40,8 @@ provider outage cannot lock the organisation out.
 
 ## Errors
 
+- `forbidden` / `sso_requires_enterprise`: `ssoRequired: true` while the
+  organisation is not on the Enterprise plan. The role check runs first.
 - `conflict` / `no_verified_provider`: `ssoRequired: true` while no provider
   in the organisation has a verified domain. The check runs in the same
   transaction as the write.

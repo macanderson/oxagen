@@ -1,7 +1,7 @@
 {
   "name": "list_sso_providers",
   "domain": "org",
-  "description": "List the organisation's SSO identity providers (OIDC or SAML) with their domain verification record, callback URL, group-to-role mappings, and whether SSO is required. Secrets are never returned; the view says only whether one is stored.",
+  "description": "List the organisation's SSO identity providers (OIDC or SAML) with their domain verification record, callback URL, group-to-role mappings, whether SSO is required, and whether the organisation's plan includes SSO (the Enterprise plan). Secrets are never returned; the view says only whether one is stored.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -202,11 +202,16 @@
           "ssoRequired"
         ],
         "additionalProperties": false
+      },
+      "entitled": {
+        "type": "boolean",
+        "description": "Whether the organisation's plan includes SSO. Only the Enterprise plan does."
       }
     },
     "required": [
       "providers",
-      "policy"
+      "policy",
+      "entitled"
     ],
     "additionalProperties": false
   }

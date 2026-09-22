@@ -2781,6 +2781,11 @@ type Messages = {
         title: string;
         body: string;
       };
+      plan: {
+        notice: string;
+        upgrade: string;
+        lapsed: string;
+      };
       providers: {
         title: string;
         tableLabel: string;
@@ -2827,6 +2832,7 @@ type Messages = {
         owners: string;
         needsVerified: string;
         saving: string;
+        lapsed: string;
       };
       form: {
         add: string;
@@ -2893,6 +2899,7 @@ type Messages = {
         refused: string;
         pendingApproval: string;
         unavailable: string;
+        requiresEnterprise: string;
       };
     };
     ssoGroups: {

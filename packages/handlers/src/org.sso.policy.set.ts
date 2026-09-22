@@ -4,6 +4,7 @@ import { HandlerError } from "@oxagen/oxagen";
 import { orgSsoPolicySet } from "@oxagen/oxagen/contracts/org.sso.policy.set";
 import { withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
+import { requireSsoEntitlement } from "./lib/sso";
 import {
   countVerifiedOrgSsoProviders,
   upsertOrgSsoRequired,
@@ -30,6 +31,9 @@ export const orgSsoPolicySetHandler: CapabilityHandler<
     { ...ctx, userId: actorUserId },
     { org: ["Owner", "Admin"] },
   );
+  // Requiring SSO is part of the Enterprise plan (ADR-142). Turning it off
+  // stays open, so an organisation that left the plan is not held to it.
+  if (input.ssoRequired) await requireSsoEntitlement(ctx);
 
   // tenancy: the provider count and the policy upsert are filtered by orgId =
   // ctx.orgId after the Owner or Admin membership check above; they share

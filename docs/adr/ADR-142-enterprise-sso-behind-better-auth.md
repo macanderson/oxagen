@@ -175,6 +175,36 @@ When the provisioner cannot read the mapping or apply the role, it records
 `sso.sign_in` with outcome `error` and throws. The plugin then sets no session
 cookie. A person is never signed in with a role the mapping did not decide.
 
+### SSO is an Enterprise feature
+
+The maintainer decided on 2026-09-22 that SSO is part of the Enterprise plan
+and no other. The plan is read the way the role editor reads it:
+`ctx.planTier` when the kernel resolved it, otherwise `resolveOrgTier`, then
+`canAccessSSO` from `@oxagen/billing`.
+
+- **Writes that set SSO up are refused off Enterprise.** `create_sso_provider`,
+  `update_sso_provider`, `verify_sso_domain`, `set_sso_group_roles`, and
+  `set_sso_policy` turning `ssoRequired` on call `requireSsoEntitlement`
+  (`packages/handlers/src/lib/sso.ts`) right after the org-role check. It
+  throws a `HandlerError` with code `forbidden` and reason
+  `sso_requires_enterprise`, which the kernel reports as a refusal. The
+  handlers do not use `requireTier`, because the kernel does not classify its
+  `TierDeniedError` and the caller would see a 500.
+- **Cleanup stays open on every plan.** `list_sso_providers`,
+  `delete_sso_provider`, and `set_sso_policy` turning `ssoRequired` off run on
+  any plan, so an organization that left Enterprise can remove what it set
+  up. The list reports `entitled`, and the Single sign-on and Roles pages use
+  it to hide the setup controls and link to Billing.
+- **Sign-in follows the plan.** Off Enterprise, sign-in through the
+  organization's providers is refused and Require SSO does not apply
+  (`packages/auth/src/sso/`). Members sign in with a password, which the
+  forgot-password flow sets, or with Google or GitHub. The providers, their
+  sealed settings, and the group mappings stay stored.
+
+**Rejected: delete the providers on a downgrade.** A plan change is
+reversible and a deletion is not. Keeping the rows costs nothing while sign-in
+ignores them.
+
 ### SCIM is deferred
 
 SCIM 2.0 provisioning and deprovisioning is not part of this change. It needs
