@@ -149,12 +149,13 @@ export async function pauseAgent(
   });
   if (!switchResult.ok) return switchResult;
 
+  const agentKey = agent.agentKey;
   const pause: AgentPauseOutcome =
-    agent.agentKey === null
+    agentKey === null
       ? { kind: "no_agent_key" }
       : await (async () => {
           const dispatch = await kernelWrite(ctx, tachoCommandDispatch, {
-            target: { kind: "agent", id: agent.agentKey as string },
+            target: { kind: "agent", id: agentKey },
             command: "pause",
             reason: trimmed,
           });
