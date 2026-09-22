@@ -71,6 +71,30 @@ export const hostSummarySchema = z
      * per host because one machine normally has both.
      */
     tiers: z.record(z.string(), z.enum(["gateway", "harness"])),
+    /**
+     * Whether each routed harness on this machine still points its model calls
+     * at the loopback proxy, as the daemon last reported.
+     *
+     * A tier that stops saying `gateway` is a symptom with several causes — a
+     * closed laptop looks the same as a reverted base URL — so the cause is
+     * carried separately. `ours: false` is a harness whose config file no
+     * longer names the proxy; `shadowedBy` names the managed settings file
+     * that overrides ours when an administrator has set one.
+     *
+     * Empty means *this daemon reported nothing*, which is a daemon older than
+     * the field, never *nothing has drifted*.
+     */
+    modelBaseUrls: z.array(
+      z
+        .object({
+          harness: z.string(),
+          /** The config key, as a person would name it. */
+          key: z.string(),
+          ours: z.boolean(),
+          shadowedBy: z.string().nullable(),
+        })
+        .strict(),
+    ),
     claudeVersionAtEnroll: z.string().nullable(),
     wrapperVersion: z.string().nullable(),
     managed: z.boolean(),

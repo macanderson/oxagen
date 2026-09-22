@@ -1,5 +1,5 @@
 {
-  "generatedCount": 347,
+  "generatedCount": 349,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1613,6 +1613,18 @@
       "domain": "tacho",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_tacho_session_policy",
+      "domain": "tacho",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3872,6 +3884,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "update_tacho_session_policy",
+      "domain": "tacho",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],

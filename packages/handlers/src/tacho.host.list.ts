@@ -52,6 +52,40 @@ export function tiersFor(
   return tiers;
 }
 
+/**
+ * The base-URL report the daemon last sent, normalized for the wire.
+ *
+ * `shadowedBy` is `null` rather than absent because the reader is a surface
+ * rendering a row, and an optional key that is sometimes there is one more
+ * thing for every caller to get right. A row that predates the column, or a
+ * daemon too old to report, gives an empty list — which says nothing was
+ * reported, never that nothing has drifted.
+ */
+function modelBaseUrlsOf(
+  row: HostRow,
+): TachoHostListOutput["hosts"][number]["modelBaseUrls"] {
+  const reported: unknown = row.modelBaseUrls;
+  if (!Array.isArray(reported)) return [];
+  const entries: TachoHostListOutput["hosts"][number]["modelBaseUrls"] = [];
+  for (const entry of reported) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const {
+      harness,
+      key,
+      ours,
+      shadowed_by: shadowedBy,
+    } = entry as Record<string, unknown>;
+    if (typeof harness !== "string" || typeof key !== "string") continue;
+    entries.push({
+      harness,
+      key,
+      ours: ours === true,
+      shadowedBy: typeof shadowedBy === "string" ? shadowedBy : null,
+    });
+  }
+  return entries;
+}
+
 export function hostSummary(
   row: HostRow,
 ): TachoHostListOutput["hosts"][number] {
@@ -68,6 +102,7 @@ export function hostSummary(
     mode: row.mode as "observe" | "enforce",
     harnesses,
     tiers: tiersFor(harnesses),
+    modelBaseUrls: modelBaseUrlsOf(row),
     claudeVersionAtEnroll: row.claudeVersionAtEnroll,
     wrapperVersion: row.wrapperVersion,
     managed: row.managed,

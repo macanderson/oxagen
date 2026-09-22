@@ -72,6 +72,8 @@ import { tachoCommandList } from "./tacho.command.list";
 import { tachoHostList } from "./tacho.host.list";
 import { tachoSessionList } from "./tacho.session.list";
 import { tachoSessionGet } from "./tacho.session.get";
+import { tachoSessionPolicyRead } from "./tacho.session_policy.read";
+import { tachoSessionPolicyWrite } from "./tacho.session_policy.write";
 import { tachoEnrollmentTokenCreate } from "./tacho.enrollment_token.create";
 import { tachoHostEnroll } from "./tacho.host.enroll";
 import { onboardingStateGet } from "./onboarding.state.get";
@@ -637,6 +639,8 @@ export {
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
+  tachoSessionPolicyRead,
+  tachoSessionPolicyWrite,
   tachoEnrollmentTokenCreate,
   tachoHostEnroll,
   onboardingStateGet,
@@ -996,6 +1000,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoHostList,
   tachoSessionList,
   tachoSessionGet,
+  tachoSessionPolicyRead,
+  tachoSessionPolicyWrite,
   tachoEnrollmentTokenCreate,
   tachoHostEnroll,
   onboardingStateGet,

@@ -33,6 +33,19 @@ export type SpendView =
 /** The workspace a link on the page points into. */
 export type SpendAt = { org: string; ws: string };
 
+/**
+ * How many machines a saved gateway policy reaches.
+ *
+ * `hosts` is every machine enrolled in the workspace, and today the answer is
+ * none of them: no bundle carries a `models` clause, so every enrolled host
+ * keeps calling whatever model it likes whatever this policy says.
+ * `hostsEnforcingModels` counts the hosts that advertised they could parse the
+ * clause if one were sent, which is what the count will mean when one is. The
+ * section renders the gap rather than letting a saved list read as an applied
+ * one.
+ */
+export type GatewayReach = { hosts: number; hostsEnforcingModels: number };
+
 /** An operator key is a principal public id; get_spend_drill refuses any other. */
 const PRINCIPAL = /^prn_[0-9a-z]+$/;
 const KEY_MAX = 256;

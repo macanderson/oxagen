@@ -152,6 +152,7 @@ export function fleetSource(reads: FleetReads) {
       fleet: refuse,
       drill: refuse,
       waste: refuse,
+      gatewayPolicy: refuse,
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,

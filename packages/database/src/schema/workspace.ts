@@ -244,6 +244,95 @@ export const workspaceBudgetPolicy = workspaceSchema.table(
   }),
 );
 
+// Per-workspace policy for the sessions Oxagen does not run — a wrapped
+// Claude Code or Codex behind the loopback model proxy (ADR-094). This is the
+// setting `unsignedBundle` signs into the policy bundle's `budget` and
+// `models` clauses, and it is a different thing from workspaceBudgetPolicy
+// above: that one governs an in-app assistant TURN, this one governs a wrapped
+// harness SESSION on somebody's laptop. Absent row ⇒ observed-only, which is
+// what every host had before this table (the bundle carried a hardcoded
+// `budget.mode: "observed"`, so the proxy's refusal branches were unreachable
+// — docs/audits/2026-09-21-model-gateway-arming.md).
+export const tachoSessionPolicy = workspaceSchema.table(
+  "tacho_session_policy",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    orgId: uuid("org_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull().unique(),
+    // "observed" = meter only; "enforced" = the proxy refuses on the clauses.
+    mode: text("mode").notNull().default("observed"),
+    // Per-session ceiling in USD; NULL = no ceiling. numeric, not real: it
+    // feeds a direct comparison against observed spend and float rounding
+    // error is not acceptable for a dollar ceiling (2026-07-11 audit §5).
+    sessionLimitUsd: numeric("session_limit_usd", {
+      precision: 12,
+      scale: 2,
+      mode: "number",
+    }),
+    // NULL = no allowlist stated, so every model is permitted; [] = an
+    // allowlist that permits nothing. The two are different decisions and do
+    // not share an encoding, the same reading `gateway_tools` carries on the
+    // wire. An entry ending in `*` matches by prefix.
+    modelAllow: jsonb("model_allow").$type<string[] | null>(),
+    // Refused whatever the allowlist says; a deny beats an allow.
+    modelDeny: jsonb("model_deny")
+      .notNull()
+      .default(sql`'[]'::jsonb`)
+      .$type<string[]>(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgWorkspaceIdx: index("tacho_session_policy_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    modeCheck: check(
+      "tacho_session_policy_mode_check",
+      sql`${t.mode} IN ('observed', 'enforced')`,
+    ),
+    // "enforced" with nothing to enforce is the defect this table exists to
+    // fix, wearing a switch. A row may not claim enforcement without at least
+    // one clause the proxy can refuse on.
+    enforcedCheck: check(
+      "tacho_session_policy_enforced_check",
+      sql`${t.mode} = 'observed' OR ${t.sessionLimitUsd} IS NOT NULL OR ${t.modelAllow} IS NOT NULL OR jsonb_array_length(${t.modelDeny}) > 0`,
+    ),
+    modelAllowCheck: check(
+      "tacho_session_policy_model_allow_check",
+      sql`${t.modelAllow} IS NULL OR jsonb_typeof(${t.modelAllow}) = 'array'`,
+    ),
+    modelDenyCheck: check(
+      "tacho_session_policy_model_deny_check",
+      sql`jsonb_typeof(${t.modelDeny}) = 'array'`,
+    ),
+  }),
+);
+
+/**
+ * The wrapped-session policy table, for a database that may not have it yet.
+ *
+ * `information_schema.columns` has no row for a column of a table that does
+ * not exist, so one ref answers for the whole table. That matters here for
+ * the reason `GATEWAY_CHAIN_COLUMN` gives: querying an absent TABLE raises
+ * 42P01, which aborts the transaction exactly as 42703 does — and this read
+ * sits on the bundle path, which ingest, control polls and enrollment all
+ * walk. Production applies migrations by hand from the app node while
+ * `deploy-node` ships on merge, so the window is real.
+ *
+ * A pending migration reads as the observed-only policy, which is the
+ * behaviour every host had before the table existed.
+ */
+export const TACHO_SESSION_POLICY_COLUMN = {
+  schema: "workspace",
+  table: "tacho_session_policy",
+  column: "mode",
+} as const;
+
 // Verified-Outcome Market Router GOVERNANCE. An org/workspace admin decides
 // whether model routing is learned+economic (market) or the deterministic
 // default, and the tunables (verified-success bar, min samples, window,

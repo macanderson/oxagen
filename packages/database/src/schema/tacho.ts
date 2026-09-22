@@ -238,6 +238,35 @@ export const tachoHosts = tachoSchema.table(
       .notNull()
       .default(sql`'[]'::jsonb`)
       .$type<string[]>(),
+    /**
+     * What the daemon reports about the model base URL it wrote into each
+     * harness config file: one entry per harness with the file's key, whether
+     * the value still points at the loopback proxy, and the managed settings
+     * file shadowing it when one does.
+     *
+     * A laptop user who edits `env.ANTHROPIC_BASE_URL` or `openai_base_url`
+     * back to the vendor leaves the gateway with one file edit and no restart.
+     * Before this column the control plane saw only the effect — sessions
+     * stopped reaching the `gateway` tier — and had to guess the cause from a
+     * symptom that a machine merely being offline produces too. The daemon
+     * already computes the answer for `tacho status`; this is the same answer
+     * on the health report.
+     *
+     * Empty is the honest default for a row that predates the column and for a
+     * daemon too old to report one: absent means *nothing was said*, never
+     * *nothing has drifted*.
+     */
+    modelBaseUrls: jsonb("model_base_urls")
+      .notNull()
+      .default(sql`'[]'::jsonb`)
+      .$type<
+        {
+          harness: string;
+          key: string;
+          ours: boolean;
+          shadowed_by?: string;
+        }[]
+      >(),
     // Counters
     sessionsCount: integer("sessions_count").notNull().default(0),
     unobservedSessionsCount: integer("unobserved_sessions_count")
@@ -888,6 +917,22 @@ export const HOST_GATEWAY_COLUMN = {
   schema: "tacho",
   table: "hosts",
   column: "gateway_last_seen_at",
+} as const;
+
+/**
+ * The daemon's report on whether each harness still points at the proxy.
+ *
+ * Probed for the reason the gateway column is, and with a wider blast radius
+ * than that one: every `tacho.hosts` relational read selects every declared
+ * column, and `resolveEnrolledHost` is on the path of ingest, control polls
+ * and bundle fetches alike. Naming this column before the migration lands
+ * raises 42703 and takes all three down, over a field that only tells an
+ * operator why a tier dropped.
+ */
+export const HOST_MODEL_BASE_URLS_COLUMN = {
+  schema: "tacho",
+  table: "hosts",
+  column: "model_base_urls",
 } as const;
 
 /** The session's copy: what a risen `gateway` tier is answerable for. */

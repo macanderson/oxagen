@@ -278,6 +278,8 @@ import { repositoryInstallationListRoute } from "./routes/v1/repository.installa
 import { repositoryInstallationCandidatesRoute } from "./routes/v1/repository.installation.candidates";
 import { repositoryInstallationAttachRoute } from "./routes/v1/repository.installation.attach";
 import { tachoHostListRoute } from "./routes/v1/tacho.host.list";
+import { tachoSessionPolicyReadRoute } from "./routes/v1/tacho.session_policy.read";
+import { tachoSessionPolicyWriteRoute } from "./routes/v1/tacho.session_policy.write";
 import { tachoSessionGetRoute } from "./routes/v1/tacho.session.get";
 import { tachoSessionListRoute } from "./routes/v1/tacho.session.list";
 import { runListRoute } from "./routes/v1/run.list";
@@ -652,6 +654,8 @@ orgScoped.route(
 orgScoped.route("/commands", tachoCommandDispatchRoute);
 orgScoped.route("/commands/list", tachoCommandListRoute);
 orgScoped.route("/tacho/hosts", tachoHostListRoute);
+orgScoped.route("/tacho/session-policy", tachoSessionPolicyReadRoute);
+orgScoped.route("/tacho/session-policy", tachoSessionPolicyWriteRoute);
 orgScoped.route("/tacho/sessions", tachoSessionListRoute);
 orgScoped.route("/tacho/sessions/get", tachoSessionGetRoute);
 // Runs across both stores (the evidence ledger and tacho sessions): the

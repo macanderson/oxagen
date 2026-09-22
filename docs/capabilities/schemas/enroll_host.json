@@ -538,6 +538,41 @@
             },
             "maxItems": 1024
           },
+          "models": {
+            "type": "object",
+            "properties": {
+              "allow": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "maxItems": 256
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "deny": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 256
+              }
+            },
+            "required": [
+              "allow",
+              "deny"
+            ],
+            "additionalProperties": false
+          },
           "signature": {
             "type": "object",
             "properties": {

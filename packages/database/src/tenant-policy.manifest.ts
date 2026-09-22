@@ -264,6 +264,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Per-turn budget governance. org_id + workspace_id both NOT NULL
   // → standard tenant_isolation RLS.
   { table: "workspace.workspace_budget_policy", policyClass: "standard" },
+  // Wrapped-harness session governance: what the loopback model gateway
+  // refuses for a Claude Code or Codex session. org_id + workspace_id both
+  // NOT NULL → standard tenant_isolation RLS.
+  { table: "workspace.tacho_session_policy", policyClass: "standard" },
   // Verified-Outcome Market Router governance. org_id NOT NULL + workspace_id
   // NULLABLE → workspace_nullable tenant_isolation RLS.
   { table: "workspace.routing_policy", policyClass: "workspace_nullable" },

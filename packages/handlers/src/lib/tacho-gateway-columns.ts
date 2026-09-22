@@ -1,6 +1,10 @@
 /**
- * tacho-gateway-columns.ts — reading and writing the two columns migration
- * `20260917140000` adds, on a database that may not have them yet.
+ * tacho-gateway-columns.ts — reading and writing Tacho columns and tables on a
+ * database that may not have them yet.
+ *
+ * It began with the two columns migration `20260917140000` adds and now covers
+ * every additive Tacho schema change on a hot path, because the hazard is the
+ * migration window rather than any one column.
  *
  * `tacho.hosts.gateway_last_seen_at` and `tacho.sessions.gateway_observed_at`
  * are what the server-observed enforcement tier stands on. Production applies
@@ -38,10 +42,12 @@ import {
   hasColumn,
   hasColumnFresh,
   HOST_GATEWAY_COLUMN,
+  HOST_MODEL_BASE_URLS_COLUMN,
   SESSION_FILE_OBSERVED_STATUS_COLUMN,
   SESSION_GATEWAY_COLUMN,
   SESSION_PUSHES_COLUMN,
   SESSION_MACHINE_SNAPSHOT_COLUMN,
+  TACHO_SESSION_POLICY_COLUMN,
   type ProbeTx,
 } from "@oxagen/database";
 
@@ -125,8 +131,44 @@ export async function sessionFileObservedStatusColumnReady(
 }
 
 /**
+ * Whether `tacho.hosts.model_base_urls` is present.
+ *
+ * Probed separately from the gateway column, for the reason those two are
+ * probed separately from each other: different migrations add them, and
+ * inferring one from the other would be wrong on exactly the window the
+ * probe exists for.
+ */
+export async function hostModelBaseUrlsColumnReady(
+  tx: ProbeTx,
+  forWrite = false,
+): Promise<boolean> {
+  return (forWrite ? hasColumnFresh : hasColumn)(
+    tx,
+    HOST_MODEL_BASE_URLS_COLUMN,
+    await ambientPlaneKey(),
+  );
+}
+
+/**
+ * Whether `workspace.tacho_session_policy` exists yet.
+ *
+ * A TABLE, asked as one ref, for the reason `gatewayInvocationColumnReady`
+ * gives: `information_schema.columns` has no row for a column of a table that
+ * does not exist, and naming an absent table raises 42P01, which aborts the
+ * transaction exactly as 42703 does. This read sits on the bundle path, which
+ * ingest, control polls and enrollment all walk, so the window would stop
+ * every host rather than degrade one field. Pending reads as observed-only,
+ * which is what every host had before the table.
+ */
+export async function tachoSessionPolicyTableReady(
+  tx: ProbeTx,
+): Promise<boolean> {
+  return hasColumn(tx, TACHO_SESSION_POLICY_COLUMN, await ambientPlaneKey());
+}
+
+/**
  * The `columns` fragment for a `tacho.hosts` read: everything, minus the
- * gateway column while the database lacks it.
+ * columns the database lacks.
  *
  * `undefined` rather than `{}` on the ready path. Drizzle reads an empty
  * `columns` object as "select nothing", so returning `{}` would not be a
@@ -134,10 +176,14 @@ export async function sessionFileObservedStatusColumnReady(
  */
 export async function hostReadColumns(
   tx: ProbeTx,
-): Promise<{ gatewayLastSeenAt: false } | undefined> {
-  return (await hostGatewayColumnReady(tx))
-    ? undefined
-    : { gatewayLastSeenAt: false };
+): Promise<{ gatewayLastSeenAt?: false; modelBaseUrls?: false } | undefined> {
+  const gateway = await hostGatewayColumnReady(tx);
+  const baseUrls = await hostModelBaseUrlsColumnReady(tx);
+  if (gateway && baseUrls) return undefined;
+  return {
+    ...(!gateway ? { gatewayLastSeenAt: false as const } : {}),
+    ...(!baseUrls ? { modelBaseUrls: false as const } : {}),
+  };
 }
 
 /** The same for a `tacho.sessions` read. */

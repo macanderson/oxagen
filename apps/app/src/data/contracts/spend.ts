@@ -224,6 +224,34 @@ export const SpendBudgets = z.array(
 export type SpendBudgets = z.infer<typeof SpendBudgets>;
 
 /**
+ * `get_tacho_session_policy`: what the loopback gateway refuses for a wrapped
+ * Claude Code or Codex session in this workspace.
+ *
+ * A different ceiling from the ones above, and the page says so. Those are
+ * Oxagen's own spend, metered as it bills. This one is somebody's laptop, and
+ * the enforcer is the daemon on it, reading a signed bundle.
+ *
+ * `modelAllow` stays nullable through the view layer. `null` is *no
+ * allowlist*, so every model is permitted; `[]` is an allowlist that permits
+ * nothing. A page that rendered both as "no models listed" would show the
+ * strictest policy the product has and the laxest one the same way.
+ */
+export const GatewayPolicy = z.object({
+  mode: z.enum(["observed", "enforced"]),
+  /**
+   * The ceiling as the page prints it, through <Money> like every other
+   * figure here (INV-09). The contract states it in whole dollars; the mapper
+   * widens it to micros so one component formats every amount on the page.
+   */
+  sessionLimit: Money.nullable(),
+  /** The same ceiling as the dialog's field takes it, in dollars. */
+  sessionLimitUsd: z.number().nonnegative().nullable(),
+  modelAllow: z.array(z.string()).nullable(),
+  modelDeny: z.array(z.string()),
+});
+export type GatewayPolicy = z.infer<typeof GatewayPolicy>;
+
+/**
  * The token classes the price book prices (`list_price_entries`), in the order
  * the page reads them: what a call sends, what it reads back out of the cache,
  * what it wrote into one, what it answered, and the classes that are not

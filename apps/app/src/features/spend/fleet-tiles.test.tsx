@@ -66,6 +66,7 @@ const source: DataSource = {
     fleet,
     drill: refuse,
     waste: refuse,
+    gatewayPolicy: refuse,
     budgets: refuse,
     findings: refuse,
     findingEvidence: refuse,

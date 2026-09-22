@@ -1474,6 +1474,17 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "get_tacho_session_policy",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_usage_breakdown",
       "reads": [],
@@ -3531,6 +3542,17 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "update_tacho_session_policy",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "user",
       "name": "update_user_budget",
       "reads": [],
@@ -3676,7 +3698,7 @@
       "writes": []
     }
   ],
-  "contentHash": "70acc7395855ff6956699343997fa85f25e8c34fa162abeb96ab92678369c411",
+  "contentHash": "08738df2bc043476ed30bc660c29bccad1e14adbc74bd81095006b7fe1dcc12c",
   "domains": [
     {
       "name": "agent",
@@ -4087,6 +4109,7 @@
       "tables": [
         "neo4j:Workspace",
         "postgres:workspace.routing_policy",
+        "postgres:workspace.tacho_session_policy",
         "postgres:workspace.workspace_budget_policy",
         "postgres:workspace.workspace_memory_policy",
         "postgres:workspace.workspace_slug_history",
@@ -4125,7 +4148,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 139
+      "tableCount": 140
     },
     {
       "domains": [
@@ -19670,6 +19693,12 @@
           "type": "jsonb"
         },
         {
+          "name": "model_base_urls",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
           "name": "sessions_count",
           "nullable": false,
           "primaryKey": false,
@@ -21639,6 +21668,70 @@
       "id": "postgres:workspace.routing_policy",
       "name": "routing_policy",
       "rls": "workspace_nullable",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "mode",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "session_limit_usd",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "numeric(12, 2)"
+        },
+        {
+          "name": "model_allow",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "model_deny",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "workspace",
+      "id": "postgres:workspace.tacho_session_policy",
+      "name": "tacho_session_policy",
+      "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
     },

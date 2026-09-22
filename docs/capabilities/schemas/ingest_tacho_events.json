@@ -30211,6 +30211,36 @@
             },
             "maxItems": 32
           },
+          "model_base_urls": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "harness": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "key": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "ours": {
+                  "type": "boolean"
+                },
+                "shadowed_by": {
+                  "type": "string",
+                  "maxLength": 512
+                }
+              },
+              "required": [
+                "harness",
+                "key",
+                "ours"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 8
+          },
           "credentials": {
             "type": "array",
             "items": {

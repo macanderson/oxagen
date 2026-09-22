@@ -102,6 +102,40 @@
                 ]
               }
             },
+            "modelBaseUrls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "harness": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "ours": {
+                    "type": "boolean"
+                  },
+                  "shadowedBy": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "harness",
+                  "key",
+                  "ours",
+                  "shadowedBy"
+                ],
+                "additionalProperties": false
+              }
+            },
             "claudeVersionAtEnroll": {
               "anyOf": [
                 {
@@ -204,6 +238,7 @@
             "mode",
             "harnesses",
             "tiers",
+            "modelBaseUrls",
             "claudeVersionAtEnroll",
             "wrapperVersion",
             "managed",

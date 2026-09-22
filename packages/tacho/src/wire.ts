@@ -165,6 +165,21 @@ export const BUNDLE_FEATURE_GATEWAY_TOOLS = "gateway_tools" as const;
 export const BUNDLE_FEATURE_MODEL_PRICES = "model_prices" as const;
 
 /**
+ * The host can parse `models`, the allow and deny lists the loopback model
+ * proxy refuses a disallowed model against. Gated for the same reason
+ * `gateway_tools` and `model_prices` are: the bundle schema is strict, so a
+ * host built before the field would reject the whole mandate rather than the
+ * one field it does not know.
+ *
+ * Nothing emits this field yet. `unsignedBundle` leaves it out of every
+ * bundle it signs, so a host that advertises the feature is told no list and
+ * refuses no model. The workspace's saved lists are stored and read back and
+ * govern no machine until the control plane emits them; the panel that sets
+ * them says so. See `docs/audits/2026-09-21-model-gateway-arming.md`.
+ */
+export const BUNDLE_FEATURE_MODEL_ALLOWLIST = "models" as const;
+
+/**
  * The host can parse `hook_fail_open`: the list of hook paths the local
  * evaluator answers allow on when a decision cannot be made against the
  * cached bundle (the daemon unreachable, or the event carrying no tool
@@ -189,6 +204,7 @@ export const BUNDLE_FEATURE_HOOK_FAIL_OPEN = "hook_fail_open" as const;
 export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_MODEL_PRICES,
+  BUNDLE_FEATURE_MODEL_ALLOWLIST,
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
 ] as const;
 
@@ -596,6 +612,38 @@ export const policyBundleSchema = z
       )
       .max(1024)
       .optional(),
+    /**
+     * Which models this workspace permits a wrapped harness to call, and which
+     * it refuses outright. Read by `refusalFor` in the loopback model proxy,
+     * which answers `model_not_permitted` before the request is forwarded.
+     *
+     * `allow: null` and `allow: []` are different decisions and do not share
+     * an encoding, the same reading `gateway_tools` carries. `null` is *no
+     * allowlist stated*, so every model passes and only `deny` narrows.
+     * `[]` is an allowlist that permits nothing, and the proxy refuses every
+     * model — a workspace that has turned the gateway off at the model layer,
+     * which is a decision somebody can make.
+     *
+     * The whole object is optional, and absent means *no model policy this
+     * host has been told about*, never *no policy*. Emitted only to a host
+     * that advertised `BUNDLE_FEATURE_MODEL_ALLOWLIST`, because this schema is
+     * `.strict()` and a daemon built before the field would reject the entire
+     * mandate over it. Read the optionality as the rollout constraint it is;
+     * a host that has not advertised calls whatever it likes until it
+     * upgrades, and `update_tacho_session_policy` reports how many hosts are
+     * in that state so nobody mistakes a saved list for an applied one.
+     *
+     * Both lists apply only when `budget.mode` is `enforced`. One word
+     * answers "does this host refuse anything", rather than two clauses that
+     * can disagree.
+     */
+    models: z
+      .object({
+        allow: z.array(z.string().min(1).max(256)).max(256).nullable(),
+        deny: z.array(z.string().min(1).max(256)).max(256),
+      })
+      .strict()
+      .optional(),
     signature: z
       .object({
         key_id: z.string().min(1),
@@ -675,6 +723,40 @@ export const daemonHealthSchema = z
      */
     bundle_features: bundleFeaturesSchema.optional(),
     /**
+     * Whether each routed harness still points at the loopback proxy.
+     *
+     * Enrollment writes the proxy's URL into `~/.claude/settings.json` and
+     * `~/.codex/config.toml`, and one file edit takes it back out, with no
+     * restart and nothing to stop it. Before this field the control plane saw
+     * only the effect — sessions stopped reaching the `gateway` tier — and a
+     * laptop that is merely closed looks the same. The 2026-09-21 gateway
+     * audit called that the pattern across every bypass row: the proxy's own
+     * presence is well defended, and whether the harness was pointed at it is
+     * enforced by nothing and reported by nothing.
+     *
+     * The value the file holds is not sent. `ours` answers the question, and
+     * a URL a person chose for their own machine is theirs. `shadowed_by`
+     * names the managed settings file that overrides ours when one does,
+     * because that is an administrator's doing and not the user's.
+     *
+     * Optional, and absent means *this daemon said nothing*, which is a
+     * daemon that predates the field — never *nothing has drifted*.
+     */
+    model_base_urls: z
+      .array(
+        z
+          .object({
+            harness: z.string().max(64),
+            /** The config key, as a person would name it. */
+            key: z.string().max(128),
+            ours: z.boolean(),
+            shadowed_by: z.string().max(512).optional(),
+          })
+          .strict(),
+      )
+      .max(8)
+      .optional(),
+    /**
      * Which model providers this host brokers credentials for (ADR-138): the
      * gateway holds the vendor key and the harness holds a run token. A
      * provider absent from the list is `harness_held`. Names and a basis,
@@ -697,6 +779,11 @@ export const daemonHealthSchema = z
   .strict();
 
 export type DaemonHealth = z.output<typeof daemonHealthSchema>;
+
+/** One harness's base-URL state, as the health report carries it. */
+export type ModelBaseUrlReport = NonNullable<
+  DaemonHealth["model_base_urls"]
+>[number];
 
 export const TACHO_MAX_BATCH = 200;
 

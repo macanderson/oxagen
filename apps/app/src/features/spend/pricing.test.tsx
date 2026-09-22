@@ -84,6 +84,7 @@ const source: DataSource = {
     drill: vi.fn(),
     waste: vi.fn(),
     budgets: vi.fn(),
+    gatewayPolicy: vi.fn(),
     findings: vi.fn(),
     findingEvidence: vi.fn(),
     priceBook,

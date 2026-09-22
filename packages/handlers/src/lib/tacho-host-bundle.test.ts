@@ -21,8 +21,11 @@ vi.mock("@oxagen/iam/machine-key-scope", () => ({
 
 const { unsignedBundle } = await import("./tacho-host");
 const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
-const { BUNDLE_FEATURE_GATEWAY_TOOLS, BUNDLE_FEATURE_MODEL_PRICES } =
-  await import("@oxagen/tacho");
+const {
+  BUNDLE_FEATURE_GATEWAY_TOOLS,
+  BUNDLE_FEATURE_MODEL_ALLOWLIST,
+  BUNDLE_FEATURE_MODEL_PRICES,
+} = await import("@oxagen/tacho");
 const { PROVIDER_RATE_CARD } = await import("@oxagen/billing");
 
 const NOW = new Date("2026-09-17T09:30:00.000Z");
@@ -249,5 +252,35 @@ describe("the prices the host's model proxy needs (ADR-094)", () => {
     expect(bundle([BUNDLE_FEATURE_MODEL_PRICES]).etag).not.toBe(
       bundle(CURRENT).etag,
     );
+  });
+});
+
+describe("the wrapped-session policy on the bundle", () => {
+  it("signs no clause from the workspace's session policy", () => {
+    // The bundle's budget is the agent's mandate (`deriveBundleBudget`,
+    // #3710), and `models` is not signed at all. The workspace's own policy
+    // is stored and read back by `get_tacho_session_policy` and reaches no
+    // host, which is why the panel that sets it says "Not applied". This is
+    // the assertion that fails first if a clause is wired in without the
+    // decision the audit's §3 is reopened for.
+    expect(bundle(CURRENT)).not.toHaveProperty("models");
+    expect(bundle([BUNDLE_FEATURE_MODEL_ALLOWLIST])).not.toHaveProperty(
+      "models",
+    );
+    expect(bundle(CURRENT).budget).toEqual(NO_MANDATE.budget);
+  });
+
+  it("refuses the field on a host schema that predates it", () => {
+    // The gate still has to work when the clause arrives: the host's bundle
+    // schema is `.strict()`, so an older daemon rejects the whole mandate
+    // over the one field rather than ignoring it.
+    const older = policyBundleSchema.omit({ models: true }).strict();
+    expect(() =>
+      older.parse({
+        ...bundle(CURRENT),
+        models: { allow: null, deny: [] },
+        signature: { key_id: "k", alg: "ed25519", sig: "s" },
+      }),
+    ).toThrow();
   });
 });

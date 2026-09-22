@@ -98,6 +98,7 @@ const byGroup = vi.fn<DataSource["spend"]["byGroup"]>();
 const drill = vi.fn<DataSource["spend"]["drill"]>();
 const waste = vi.fn<DataSource["spend"]["waste"]>();
 const budgets = vi.fn<DataSource["spend"]["budgets"]>();
+const gatewayPolicy = vi.fn<DataSource["spend"]["gatewayPolicy"]>();
 const findings = vi.fn<DataSource["spend"]["findings"]>();
 const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
@@ -134,6 +135,7 @@ const source: DataSource = {
     drill,
     waste,
     budgets,
+    gatewayPolicy,
     findings,
     findingEvidence,
     priceBook,
@@ -181,6 +183,7 @@ beforeEach(() => {
   drill.mockReset();
   waste.mockReset();
   budgets.mockReset();
+  gatewayPolicy.mockReset();
   findings.mockReset();
   findingEvidence.mockReset();
   priceBook.mockReset();
@@ -436,9 +439,19 @@ describe("Spend › Budgets", () => {
     },
   ];
 
+  /** The gateway panel shares the tab; every case here is about the ceilings. */
+  const observedOnly = readOk({
+    mode: "observed" as const,
+    sessionLimit: null,
+    sessionLimitUsd: null,
+    modelAllow: null,
+    modelDeny: [],
+  });
+
   it("prints each ceiling's period, limit, spend and position", async () => {
     byGroup.mockResolvedValue(report([]));
     budgets.mockResolvedValue(readOk(ceilings));
+    gatewayPolicy.mockResolvedValue(observedOnly);
     await renderSpend({ tab: "budgets" });
 
     const org = document.querySelector<HTMLElement>('tr[data-scope="org"]');
@@ -457,6 +470,7 @@ describe("Spend › Budgets", () => {
   it("offers Export report and Set a budget beside the tabs, on a drill too", async () => {
     byGroup.mockResolvedValue(report([]));
     budgets.mockResolvedValue(readOk([]));
+    gatewayPolicy.mockResolvedValue(observedOnly);
     await renderSpend({ tab: "budgets" });
     expect(
       screen.getByRole("button", { name: "Export report" }),
@@ -480,6 +494,7 @@ describe("Spend › Budgets", () => {
   it("says no ceiling is set when there is none", async () => {
     byGroup.mockResolvedValue(report([]));
     budgets.mockResolvedValue(readOk([]));
+    gatewayPolicy.mockResolvedValue(observedOnly);
     await renderSpend({ tab: "budgets" });
     expect(
       screen.getByText(

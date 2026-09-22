@@ -42,6 +42,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       fleet: refuse,
       drill: refuse,
       waste: refuse,
+      gatewayPolicy: refuse,
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,

@@ -83,6 +83,10 @@ function happyDb(clash = false): void {
           },
           authorizationDenyGenerations: { findMany: async () => [] },
           retentionPolicyVersions: { findFirst: async () => undefined },
+          // No row: the observed-only policy every host had before
+          // workspace.tacho_session_policy existed, which is what
+          // these cases assert the bundle carries.
+          tachoSessionPolicy: { findFirst: async () => undefined },
         },
         // The steering read: a workspace with an empty ledger and no records,
         // so the first bundle carries no `context.system`.

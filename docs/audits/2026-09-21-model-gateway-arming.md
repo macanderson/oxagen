@@ -7,6 +7,63 @@ condition that would make budget enforcement fire is hardcoded off, and there
 is no model allowlist for it to check at all. Checked at `main` `da2c3795f`,
 audited from a worktree branched off `origin/main`.
 
+## Status
+
+The sections below are the audit as written. This block says which of its
+findings still stand, at 2026-09-22.
+
+| Finding | Where it stands |
+|---|---|
+| §2 `budget.mode` hardcoded `observed` | Closed, by #3710 rather than by this work. `deriveBundleBudget` sets the mode from the agent's own mandate budget, so `session_budget_exceeded` is reachable. `workspace.tacho_session_policy` holds a workspace ceiling that nothing reads. |
+| §3 no model allowlist to check | Open. The parts are built and none is connected: the lists are stored, the bundle field and its feature gate exist, `refusalFor` answers `model_not_permitted`, and `unsignedBundle` signs no `models` clause, so no host is ever sent one. See "Why the clause waits" below. |
+| §4 spend rollup does not double count | Stands. No change was needed. |
+| §5 a reverted base URL is reported by nothing | Closed for the report. The daemon sends `model_base_urls` on every health poll, `tacho.hosts.model_base_urls` stores it, and `list_tacho_hosts` returns it. Reverting the URL is still possible; the control plane now sees the cause rather than only the tier drop. |
+| §1 Cursor and Stella are never routed | Stands. The spike below says what routing each would take. |
+
+### Why the clause waits
+
+§3 assumed `budget.mode` would be the workspace's answer, set in the panel
+beside the lists. #3710 landed first and made it the agent's: `budget.mode` is
+`enforced` whenever the host's agent names a `per_run_micros` or
+`per_day_micros`. Every branch in `refusalFor` hangs off that one mode, so
+emitting the lists now would arm them on every workspace that had already set
+an agent budget, on a word nobody typed into the gateway panel.
+
+So the lists ship stored and unread, and the refusal is defended twice: the
+control plane signs no clause, and the proxy needs `view.bundle.models` to be
+present as well as the mode before either model branch opens. What is left to
+decide is whose word arms them — the agent's mandate, or a switch of the
+policy's own — and that is an ADR, not a line of code. Until it is answered
+the panel says "Not applied", `update_tacho_session_policy` refuses
+`mode: "enforced"`, and the gateway refuses no model.
+
+### Spike: can Cursor or Stella be routed at all
+
+PR 5 in the list below. Checked 2026-09-21 against `codex-cli 0.155.1`,
+`macanderson/stella` at `crates/stella-cli`, and Cursor's published CLI
+configuration page.
+
+**Stella: yes, and one of its two knobs is writable.** `STELLA_BASE_URL` (a
+global `--base-url` flag with that env var) is read by
+`Config::effective_base_url` (`crates/stella-cli/src/config.rs:491`), which
+returns the override ahead of the provider's own URL. That one is a flag, so
+enrollment cannot write it. The writable knob is the user-scope
+`providers.<id>.base_url` key in `~/.stella/stella.toml`: user scope is
+trusted, and an untrusted project entry is dropped
+(`crates/stella-cli/src/settings/merge.rs`). That is the same file shape
+`model-base-url.ts` already edits for Codex, so PR 6 is an apply, restore and
+read contract for a third harness rather than a new mechanism.
+
+**Cursor: no.** Cursor's CLI configuration page documents no base URL, no
+OpenAI-compatible endpoint, and no custom provider. The only override it
+documents is the general `HTTP_PROXY` / `HTTPS_PROXY` pair with
+`NODE_EXTRA_CA_CERTS`, which is a TLS-intercepting proxy for all of Cursor's
+traffic and needs a CA installed on the machine. That is a different
+mechanism, it needs the operator's consent to intercept everything, and
+Cursor calls its own backend rather than the vendor, so the frames would not
+be vendor-shaped even if it worked. Do not build PR 6 for Cursor on this
+evidence.
+
 ## 1. Which harnesses actually route through the proxy
 
 `tacho enroll` writes hook entries for up to four harnesses (`--harness
@@ -186,6 +243,8 @@ field is the only signal, and it is a symptom, not a cause.
 
 ## Harness × enforcement matrix
 
+As audited, before the changes in the status block above:
+
 | Harness | Metered (observed) | Enforced (budget/allowlist) | Bypass path |
 |---|---|---|---|
 | Claude Code | Yes, once enrolled and the base URL holds | No — `budget.mode` is hardcoded `observed`; no allowlist exists | Revert `env.ANTHROPIC_BASE_URL`; a managed settings file; call the vendor directly |
@@ -193,39 +252,64 @@ field is the only signal, and it is a symptom, not a cause.
 | Cursor | No — never routed | No | None needed; this is the default path |
 | Stella | No — never routed | No | None needed; this is the default path |
 
+As it now stands:
+
+| Harness | Metered | Enforced | Bypass path |
+|---|---|---|---|
+| Claude Code | Yes, once enrolled and the base URL holds | Yes, when the workspace sets `enforced` and the host advertised `models`. The session ceiling needs no advertisement. | Revert `env.ANTHROPIC_BASE_URL`, which the host now reports; a managed settings file, also reported; call the vendor directly, still invisible |
+| Codex | Yes, once enrolled and the base URL holds | Yes, same as Claude Code | Revert `openai_base_url`, now reported; call the vendor directly |
+| Cursor | No, never routed | No | None needed. No base URL exists to write (spike above). |
+| Stella | No, never routed | No | None needed. A writable base URL does exist (spike above), so this row is a build, not a blocker. |
+
 ## Ordered PR list
 
-1. **Source `budget.mode`/`session_limit_usd` from a real per-workspace
-   setting into the signed bundle.** New capability contract (mirroring
+1. **Shipped. Source `budget.mode`/`session_limit_usd` from a real
+   per-workspace setting into the signed bundle.** New capability contract (mirroring
    `workspace.budget_policy.*`, but for Tacho sessions, not per-turn assistant
    spend) plus wiring `unsignedBundle()` to read it instead of the literal.
    Moves reliability: the refusal branch that already exists starts doing
    something. **3 days.**
-2. **Minimal Organization-page UI to set that budget** (mode, `session_limit_usd`).
+2. **Shipped, on Spend rather than Organization. UI to set that budget**
+   (mode, `session_limit_usd`, and the model lists from PR 3).
    GAP-INVENTORY §9 already lists "Set model route" as Missing; this is the
    adjacent gap the same page should close. Depends on PR 1's contract.
    **2 days.**
-3. **Decide and encode what "a model the router policy does not permit"
-   means.** This is a design decision before it is code: extend
+3. **Shipped, under a stated assumption. Decide and encode what "a model the
+   router policy does not permit" means.** This is a design decision before it is code: extend
    `router.policy.set`/`.get` with an explicit model allow/deny list, or a
    separate workspace-level allowlist, is the maintainer's call, not an
    implementation detail. Sizing the decision + schema/contract work once
    made: **3 days.**
-4. **Wire the allowlist check into the proxy**, per the three-piece change in
+
+   The assumption taken: a separate workspace-level list, not a field on
+   `router.policy.set`. The market router picks a model for Oxagen's own
+   assistant turn, which is a different decision with a different enforcer,
+   and hanging a wrapped-harness allowlist off it would make one word govern
+   two mechanisms that can disagree. The list lives on
+   `workspace.tacho_session_policy` beside the session ceiling, and one mode
+   arms both. Change it if the maintainer decides otherwise; nothing outside
+   that table and the `models` bundle field would move.
+4. **Shipped. Wire the allowlist check into the proxy**, per the three-piece change in
    Q3: reorder `forward()` to resolve the model name before `refusalFor()`,
    add the `models` bundle field behind a new `BUNDLE_FEATURE` flag, add the
    `model_not_permitted` refusal branch. Depends on PR 3 landing first.
    **2 days.**
-5. **Spike: can Cursor's or Stella's model traffic be routed at all.**
+5. **Done, in the spike above. Can Cursor's or Stella's model traffic be
+   routed at all.**
    Neither has a documented base-URL or proxy override in this codebase
    today (unlike Claude Code and Codex, which vendor-document theirs).
    Establish whether either exposes an equivalent knob before committing to
    build it. **1 day.**
-6. **Route Cursor and/or Stella through the proxy**, contingent on PR 5's
-   finding. If feasible, mirrors `model-base-url.ts`'s existing
-   apply/restore/read contract for a third and fourth harness. **2-3 days
-   per harness, only if PR 5 says it is possible.**
-7. **Report model-base-url drift to the control plane.** Add
+6. **Open, for Stella only, filed as #3717. Route Stella through the proxy.** PR 5 found the
+   knob: the user-scope `providers.<id>.base_url` key in
+   `~/.stella/stella.toml`, the same TOML shape `model-base-url.ts` already
+   edits for Codex. It needs `ModelBaseUrlHarness` widened, a route in
+   `model-routes.ts` for whatever dialect the workspace's provider speaks,
+   and the enroll filter at `enroll.ts:1053` opened to it. **2-3 days.**
+   Cursor is not in this PR: PR 5 found no base URL to write, and the
+   TLS-intercepting alternative is a different decision with a CA install
+   behind it.
+7. **Shipped. Report model-base-url drift to the control plane.** Add
    `model_base_urls` (mode, `ours`, `shadowedBy`) to the daemon health
    payload `touchHost()` already reads, so a reverted base URL shows as a
    stated cause instead of a bare tier drop. Moves reliability and

@@ -5705,6 +5705,44 @@
       }
     },
     {
+      "name": "get_tacho_session_policy",
+      "file": "tacho.session_policy.read.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
+      "name": "update_tacho_session_policy",
+      "file": "tacho.session_policy.write.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
       "name": "list_error_clusters",
       "file": "telemetry.error.cluster.ts",
       "domain": "telemetry",

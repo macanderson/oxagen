@@ -42,7 +42,10 @@ import {
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
-import { hostReadColumns } from "./tacho-gateway-columns";
+import {
+  hostModelBaseUrlsColumnReady,
+  hostReadColumns,
+} from "./tacho-gateway-columns";
 import {
   type AgentBudgetDoc,
   deriveBundleBudget,
@@ -430,6 +433,23 @@ export async function resolveHostMandate(
 }
 
 /**
+ * The bundle carries no `models` clause today.
+ *
+ * The workspace's allow and deny lists are stored
+ * (`workspace.tacho_session_policy`) and read back by
+ * `get_tacho_session_policy`, and nothing signs them into a bundle. The clause
+ * they would fill fires on `budget.mode === "enforced"`, and that mode is set
+ * from the agent's mandate budget (#3710) — so emitting the lists here would
+ * arm them on every workspace that had already set an agent budget, which is
+ * not a decision a model list's author made. `unsignedBundle` emits the
+ * mandate's budget and nothing else until that ordering is settled.
+ *
+ * `BUNDLE_FEATURE_MODEL_ALLOWLIST` stays declared, and hosts keep advertising
+ * it, so the gate is already in the field when the clause arrives. See
+ * `docs/audits/2026-09-21-model-gateway-arming.md`.
+ */
+
+/**
  * The unsigned bundle for a host at this moment (spec section 7.1).
  *
  * `contextSystem` is the workspace's compiled steering
@@ -675,6 +695,12 @@ export async function touchHost(
         otel_ok?: boolean;
         bundle_etag?: string;
         bundle_features?: string[];
+        model_base_urls?: {
+          harness: string;
+          key: string;
+          ours: boolean;
+          shadowed_by?: string;
+        }[];
       }
     | undefined,
   now: Date,
@@ -704,6 +730,22 @@ export async function touchHost(
     values["bundleFeatures"] = daemon.bundle_features ?? [];
   if (daemon?.bundle_etag !== undefined)
     values["bundleEtagServed"] = daemon.bundle_etag;
+  // Reported health with no base-URL report is a daemon that predates the
+  // field, not a host with nothing to report, so its stored answer is cleared
+  // rather than preserved — the same reading `bundle_features` gets, and for
+  // the same reason: a stale "still ours" outlives the edit that made it
+  // false, and the whole point of this column is not to be reassuring while
+  // the gateway is being walked out of.
+  //
+  // Skipped outright while the column is missing. Naming it in an UPDATE
+  // raises 42703 and takes the whole poll with it, over a field that only
+  // tells an operator why a tier dropped. `forWrite` rechecks a cached miss,
+  // so the first poll after the migration lands records the fact.
+  if (
+    daemon !== undefined &&
+    (await hostModelBaseUrlsColumnReady(tx as never, true))
+  )
+    values["modelBaseUrls"] = daemon.model_base_urls ?? [];
   await tx
     .update(schema.tachoHosts)
     .set(values)

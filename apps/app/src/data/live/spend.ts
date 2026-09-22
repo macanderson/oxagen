@@ -13,10 +13,12 @@ import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
+import { tachoSessionPolicyRead } from "@oxagen/oxagen/contracts/tacho.session_policy.read";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
   FleetSpend,
+  GatewayPolicy,
   PriceBook,
   SpendBudgets,
   SpendDrill,
@@ -31,6 +33,7 @@ import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
   toFleetSpend,
+  toGatewayPolicy,
   toPriceBook,
   toSpendBudgets,
   toSpendDrill,
@@ -113,6 +116,17 @@ export const spend: DataSource["spend"] = {
     return toView(read, SpendBudgets, toSpendBudgets, {
       orgId: ctx.orgId,
       method: "budgets",
+    });
+  },
+  async gatewayPolicy(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: tachoSessionPolicyRead,
+      input: {},
+      page: "spend",
+    });
+    return toView(read, GatewayPolicy, toGatewayPolicy, {
+      orgId: ctx.orgId,
+      method: "gatewayPolicy",
     });
   },
   async findings(ctx) {

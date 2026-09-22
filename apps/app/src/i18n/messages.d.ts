@@ -4613,6 +4613,37 @@ type Messages = {
       cacheHitRate: string;
       cacheHitRateNote: string;
     };
+    gateway: {
+      title: string;
+      note: string;
+      notApplied: string;
+      sessionLimit: string;
+      sessionLimitHint: string;
+      modelAllow: string;
+      modelAllowHint: string;
+      modelDeny: string;
+      modelDenyHint: string;
+      submit: string;
+      pending: string;
+      readOnly: string;
+      noLimit: string;
+      limitLabel: string;
+      noAllowlist: string;
+      allowlist: string;
+      denylist: string;
+      reach: {
+        none: string;
+        stored: string;
+      };
+      errors: {
+        sessionLimitInvalid: string;
+        modelPatternInvalid: string;
+      };
+      alert: {
+        denied: string;
+        failed: string;
+      };
+    };
   };
   steering: {
     tabs: {

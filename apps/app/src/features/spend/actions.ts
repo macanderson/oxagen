@@ -14,12 +14,15 @@ import { costPriceEntrySet } from "@oxagen/oxagen/contracts/cost.price_entry.set
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
+import { tachoSessionPolicyWrite } from "@oxagen/oxagen/contracts/tacho.session_policy.write";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 import {
   BudgetForm,
   type BudgetFormValues,
+  GatewayPolicyForm,
+  type GatewayPolicyFormValues,
   isFindingId,
   isStatementMonth,
   PriceEntryForm,
@@ -27,7 +30,7 @@ import {
   RemovePriceEntryForm,
   type RemovePriceEntryFormValues,
 } from "./forms";
-import type { SpendAt } from "./view";
+import type { GatewayReach, SpendAt } from "./view";
 
 /** A field the form refuses is `invalid` with the field and its catalog key, and no capability runs. */
 export async function setBudgetAction(
@@ -47,6 +50,35 @@ export async function setBudgetAction(
   }
   const result = await kernelWrite(ctx, billingBudgetSet, parsed.data);
   return result.ok ? { ok: true, value: null } : result;
+}
+
+/**
+ * Set what the loopback gateway refuses for a wrapped Claude Code or Codex
+ * session in this workspace (`update_tacho_session_policy`, Owner or Admin in
+ * the handler).
+ *
+ * The reach comes back with the saved policy and the section renders it,
+ * because a model list rides a gated bundle field: a host too old to parse it
+ * is never sent one and keeps calling whatever it likes. Returning only "saved"
+ * would report a policy that governs no machine as a policy in force.
+ */
+export async function setGatewayPolicyAction(
+  at: SpendAt,
+  values: GatewayPolicyFormValues,
+): Promise<ActionResult<GatewayReach>> {
+  const ctx = await requireViewer(at.org, at.ws);
+  const parsed = GatewayPolicyForm.safeParse(values);
+  if (!parsed.success) {
+    const [issue] = parsed.error.issues;
+    return {
+      ok: false,
+      reason: "invalid",
+      code: issue?.message ?? "invalid_input",
+      field: issue?.path.map(String).join(".") ?? "",
+    };
+  }
+  const result = await kernelWrite(ctx, tachoSessionPolicyWrite, parsed.data);
+  return result.ok ? { ok: true, value: result.value.reach } : result;
 }
 
 /**

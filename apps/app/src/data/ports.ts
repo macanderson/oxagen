@@ -59,6 +59,7 @@ import type { SkillInventory, SkillConfiguration } from "./contracts/skills";
 import type {
   DayRange,
   FleetSpend,
+  GatewayPolicy,
   PriceBook,
   SpendBudgets,
   SpendDrill,
@@ -266,6 +267,13 @@ export interface DataSource {
     waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
     /** get_spend_budget */
     budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
+    /**
+     * get_tacho_session_policy: what the loopback gateway refuses for a
+     * wrapped Claude Code or Codex session in this workspace. Read beside the
+     * budgets because both are ceilings, and rendered apart because one is
+     * Oxagen's own spend and the other is somebody's laptop.
+     */
+    gatewayPolicy(ctx: WsCtx): Promise<Read<GatewayPolicy>>;
     /** list_findings over the open findings (#2963): the Findings section's cards and the totals above them */
     findings(ctx: WsCtx): Promise<Read<SpendFindings>>;
     /** get_finding_evidence: the runs, calls and prices one finding cites */

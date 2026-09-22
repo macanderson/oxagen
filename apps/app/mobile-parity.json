@@ -21,7 +21,7 @@
     },
     {
       "file": "apps/app/src/features/shell/topbar.tsx",
-      "match": "hidden rounded border border-app-topbar-border px-1 font-mono text-[11px] sm:inline",
+      "match": "ml-auto hidden rounded border border-border bg-hl px-[5px] font-mono text-[10.5px] text-dim sm:inline",
       "kind": "reflow",
       "equivalent": "The Cmd+K hint inside the command-menu button. It is aria-hidden decoration for a keyboard that a phone does not have; the button it sits in is always tappable, so the capability is unaffected."
     }
