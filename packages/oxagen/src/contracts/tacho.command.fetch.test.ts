@@ -56,6 +56,71 @@ describe("fetch_commands contract", () => {
     ).toBeUndefined();
   });
 
+  it("accepts the base-URL report a drift-reporting daemon sends", () => {
+    // The same `.strict()` trap as the case above, and the one this PR walked
+    // into: `tachod` sends its whole health report on the command poll, so a
+    // daemon that learned to report `model_base_urls` had every poll refused
+    // until this contract named the field. The command poll is the channel
+    // pause, cancel and steer arrive on, so the cost is an operator whose
+    // controls stop working on exactly the hosts that upgraded.
+    const reported = tachoCommandFetch.input.parse({
+      schema: SCHEMA,
+      host_enrollment_id: HOST,
+      daemon: {
+        version: "2.2.0",
+        model_base_urls: [
+          {
+            harness: "claude_code",
+            key: "env.ANTHROPIC_BASE_URL",
+            ours: false,
+            shadowed_by: "/Library/Application Support/ClaudeCode/managed.json",
+          },
+        ],
+      },
+    });
+    expect(reported.daemon?.model_base_urls?.[0]?.ours).toBe(false);
+    expect(
+      tachoCommandFetch.input.parse({
+        schema: SCHEMA,
+        host_enrollment_id: HOST,
+        daemon: { version: "2.1.1" },
+      }).daemon?.model_base_urls,
+    ).toBeUndefined();
+  });
+
+  it("accepts the credential bases a brokering daemon reports, and never a secret", () => {
+    // ADR-138: the daemon says which providers it holds a credential for.
+    // The same strictness argument as `bundle_features`: unnamed here, the
+    // field would refuse the poll of every host that brokers.
+    const parsed = tachoCommandFetch.input.parse({
+      schema: SCHEMA,
+      host_enrollment_id: HOST,
+      daemon: {
+        version: "2.2.0",
+        credentials: [
+          { provider: "anthropic", basis: "gateway_brokered" },
+          { provider: "openai", basis: "harness_held" },
+        ],
+      },
+    });
+    expect(parsed.daemon?.credentials).toHaveLength(2);
+    expect(() =>
+      tachoCommandFetch.input.parse({
+        schema: SCHEMA,
+        host_enrollment_id: HOST,
+        daemon: {
+          credentials: [
+            {
+              provider: "anthropic",
+              basis: "gateway_brokered",
+              secret: "sk-ant-x",
+            },
+          ],
+        },
+      }),
+    ).toThrow();
+  });
+
   it("refuses the v1 body, the statuses Oxagen owns, and an unknown member (negative)", () => {
     const refuse = (input: unknown) =>
       expect(tachoCommandFetch.input.safeParse(input).success).toBe(false);

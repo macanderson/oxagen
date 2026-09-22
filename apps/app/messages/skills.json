@@ -87,6 +87,8 @@
         "refused": "The action did not complete ({code}). Your draft is still here.",
         "invalidConfig": "The TOML does not match the skill configuration format. Check the keys and values before retrying.",
         "notMerged": "The PR has not merged into the approved production branch. Merge it there, then publish again.",
+        "unrelatedPr": "That pull request did not change .oxagen/skills.toml. Publish the pull request that carries the configuration change.",
+        "superseded": "The production configuration changed after that pull request merged. Publish the pull request that carries the current configuration.",
         "repositoryMissing": "Bind a repository in workspace Repositories before configuring skills.",
         "repositoryChanged": "The repository binding changed. Reload the configuration for the current repository.",
         "identityChanged": "The repository identity no longer matches its approved binding. Ask an owner to review the repository connection.",

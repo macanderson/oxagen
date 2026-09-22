@@ -60,6 +60,74 @@ describe("Wal", () => {
     ).toThrow(/WAL recovery conflict/);
     expect(wal.read(terminal.session_uuid)).toEqual(events);
   });
+  it("retries a journaled terminal batch without storing its bodies twice", () => {
+    const paths = scratchPaths();
+    const session = minimalSession();
+    const uuid = session[0]?.session_uuid as string;
+    const terminal = session[session.length - 1] as (typeof session)[number];
+    const body: FrameBody = {
+      event_id_idem: terminal.event_id_idem,
+      session_uuid: uuid,
+      seq: terminal.seq,
+      content_type: "text/plain; charset=utf-8",
+      bytes: new TextEncoder().encode("the sealed turn"),
+      content_class: "model_call",
+    };
+    const wal = new Wal(paths.wal);
+    wal.append(session.slice(0, -1));
+    // The daemon journals the terminal batch and is asked to land it three
+    // times: the first flush, a second SessionEnd on the same chain, and a
+    // restart that read the journal entry before anything cleared it.
+    wal.appendRecovered([terminal], [body]);
+    wal.appendRecovered([terminal], [body]);
+    const restarted = new Wal(paths.wal);
+    restarted.appendRecovered([terminal], [body]);
+
+    expect(restarted.read(uuid)).toEqual(session);
+    const stored = readFileSync(join(paths.wal, `${uuid}.bodies.jsonl`), "utf8")
+      .split("\n")
+      .filter((line) => line.trim().length > 0);
+    expect(stored).toHaveLength(1);
+    expect(restarted.bodiesFor([terminal])).toHaveLength(1);
+  });
+
+  it("reads and sweeps a body file an earlier retry wrote copies into", () => {
+    const paths = scratchPaths();
+    const session = minimalSession();
+    const uuid = session[0]?.session_uuid as string;
+    const terminal = session[session.length - 1] as (typeof session)[number];
+    const body: FrameBody = {
+      event_id_idem: terminal.event_id_idem,
+      session_uuid: uuid,
+      seq: terminal.seq,
+      content_type: "text/plain; charset=utf-8",
+      bytes: new TextEncoder().encode("the sealed turn"),
+      content_class: "model_call",
+    };
+    const wal = new Wal(paths.wal);
+    wal.append(session, [body]);
+    // What a host upgraded from the previous version holds: the same body
+    // line, written again by every retry of the journaled batch.
+    const path = join(paths.wal, `${uuid}.bodies.jsonl`);
+    const line = readFileSync(path, "utf8")
+      .split("\n")
+      .filter((text) => text.trim().length > 0)[0] as string;
+    appendFileSync(path, `\n${line}\n${line}\n`);
+
+    const reopened = new Wal(paths.wal);
+    const read = reopened.bodiesFor([terminal]);
+    expect(read).toHaveLength(1);
+    expect(
+      Buffer.from(read[0]?.bytes_base64 as string, "base64").toString(),
+    ).toBe("the sealed turn");
+    // A journal written before this change still flushes, and adds nothing.
+    reopened.appendRecovered([terminal], [body]);
+    // Every copy is swept, not the one the index answers with.
+    expect(reopened.dropBodies([terminal])).toBe(3);
+    expect(existsSync(path)).toBe(false);
+    expect(reopened.bodiesFor([terminal])).toEqual([]);
+  });
+
   it("collects abandoned rewrites only during the writer's compaction scan", () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);

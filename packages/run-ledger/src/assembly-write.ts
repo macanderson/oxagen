@@ -14,7 +14,6 @@
  */
 import {
   assembleModelStream,
-  type AssemblyTiming,
   encodeAssembly,
   looksLikeModelStream,
 } from "./content-blocks";
@@ -45,11 +44,26 @@ export interface AssemblyWriteInput {
   /** The reference the body landed on; the assembly is keyed from it. */
   bodyRef: string;
   bytes: Uint8Array;
-  /** What the frame's own receipt timed. The bytes carry no clock. */
-  timing?: AssemblyTiming;
 }
 
-/** Fold one recorded model stream and store the result beside its wire. */
+/**
+ * Fold one recorded model stream and store the result beside its wire.
+ *
+ * What is stored is derived from the BYTES and nothing else. The object's key
+ * is the body's own digest (`evidenceAssemblyKey`), so two calls in one
+ * workspace whose retained response bytes are identical share one object by
+ * construction — a title prompt asked twice, a cached reply, a short refusal.
+ * Anything call-specific written into that object is therefore overwritten by
+ * whichever call folded last, and reopening the earlier run would report the
+ * later call's figures.
+ *
+ * The call's own clock is the case in point. Time to first token and wall time
+ * belong to one call, not to the bytes, so they are not stored here at all;
+ * the frame row carries them (`tacho_events.ttft_ms`, `api_duration_ms`) and
+ * the read overlays them on each frame's own assembly (`readAssembly` in
+ * @oxagen/handlers). Keeping the object content-derived is what makes sharing
+ * it safe.
+ */
 export async function writeAssembly(
   store: Pick<RunBodyStore, "putAssembly">,
   input: AssemblyWriteInput,
@@ -63,7 +77,7 @@ export async function writeAssembly(
     return "not_text";
   }
   if (!looksLikeModelStream(wire)) return "not_a_stream";
-  const assembly = assembleModelStream(wire, input.timing ?? {});
+  const assembly = assembleModelStream(wire);
   if (assembly === null) return "not_a_stream";
   try {
     await putAssembly.call(store, {

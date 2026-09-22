@@ -48,9 +48,20 @@ function host(
 /** A host new enough to parse every field this control plane emits. */
 const CURRENT = [BUNDLE_FEATURE_GATEWAY_TOOLS];
 
+/**
+ * A host whose agent states no budget of its own, so the merged bundle budget
+ * is whatever the workspace's session policy says and nothing else. The cases
+ * here are about the session policy; `tacho-mandate` covers the agent half.
+ */
+const NO_MANDATE = {
+  permissions: { allow: [], deny: [], ask: [] },
+  budget: { mode: "observed" as const },
+};
+
 function bundle(
   bundleFeatures: string[] = CURRENT,
   sessionPolicy: TachoSessionPolicy = OBSERVED_ONLY,
+  mandate: Parameters<typeof unsignedBundle>[5] = NO_MANDATE,
 ) {
   return unsignedBundle(
     host(bundleFeatures),
@@ -58,6 +69,7 @@ function bundle(
     { mode: "digest_only", classes: [] },
     null,
     sessionPolicy,
+    mandate,
     NOW,
   );
 }
@@ -337,5 +349,174 @@ describe("the wrapped-session policy on the bundle", () => {
       modelDeny: [],
     });
     expect(enforced.etag).not.toBe(observed.etag);
+  });
+});
+
+/**
+ * The bundle has one `budget`, and two scopes now write it: the workspace's
+ * wrapped-session policy (ADR-094) and the agent's own mandate (#3710). They
+ * arrived on separate branches and met in this merge, so these cases are the
+ * guard that neither side's enforcement was dropped resolving it.
+ */
+describe("the session policy and the agent mandate merged into one budget", () => {
+  const WITH_AGENT_BUDGET = {
+    permissions: { allow: [], deny: [], ask: [] },
+    budget: {
+      mode: "enforced" as const,
+      session_limit_usd: 10,
+      daily_limit_usd: 40,
+    },
+  };
+
+  it("enforces when only the agent's mandate says so", () => {
+    // Taking the workspace's `observed` wholesale is the resolution that
+    // silently disarms the agent budget, and it is what a mechanical
+    // pick-a-side merge would have produced.
+    const merged = bundle(CURRENT, OBSERVED_ONLY, WITH_AGENT_BUDGET);
+    expect(merged.budget).toEqual({
+      mode: "enforced",
+      session_limit_usd: 10,
+      daily_limit_usd: 40,
+    });
+  });
+
+  it("takes the lower session ceiling when both scopes state one", () => {
+    const merged = bundle(
+      CURRENT,
+      {
+        mode: "enforced",
+        sessionLimitUsd: 3,
+        modelAllow: null,
+        modelDeny: [],
+      },
+      WITH_AGENT_BUDGET,
+    );
+    expect(merged.budget).toEqual({
+      mode: "enforced",
+      session_limit_usd: 3,
+      daily_limit_usd: 40,
+    });
+  });
+
+  it("does not arm the model lists off the agent's budget", () => {
+    // The proxy reads one mode for both enforced clauses. A workspace that
+    // saved model lists and left the policy `observed` asked for them to be
+    // recorded, not enforced, and a budget arriving from the other scope must
+    // not turn that into refusals nobody asked for.
+    const merged = bundle(
+      [BUNDLE_FEATURE_MODEL_ALLOWLIST],
+      {
+        mode: "observed",
+        sessionLimitUsd: null,
+        modelAllow: ["claude-opus-*"],
+        modelDeny: [],
+      },
+      WITH_AGENT_BUDGET,
+    );
+    expect(merged.budget.mode).toBe("enforced");
+    expect(merged).not.toHaveProperty("models");
+  });
+});
+
+describe("the two budgets that share one bundle field", () => {
+  /** A workspace policy holding only what each case is about. */
+  const policy = (over: Partial<TachoSessionPolicy>): TachoSessionPolicy => ({
+    ...OBSERVED_ONLY,
+    ...over,
+  });
+  /** An agent mandate naming its own ceiling. */
+  const withMandate = (budget: {
+    mode: "observed" | "enforced";
+    session_limit_usd?: number;
+    daily_limit_usd?: number;
+  }) => ({ permissions: { allow: [], deny: [], ask: [] }, budget });
+
+  it("enforces when either scope says so", () => {
+    // #3710 derives a budget from the agent's own definition and ADR-094
+    // derives one from the workspace. The bundle has one field, so taking
+    // either side alone silently drops the other operator's control. That is
+    // the ADR-110 integration failure, and this is what asserts against it.
+    expect(
+      bundle(
+        CURRENT,
+        policy({ mode: "observed" }),
+        withMandate({ mode: "enforced", session_limit_usd: 9 }),
+      ).budget,
+    ).toMatchObject({ mode: "enforced" });
+    expect(
+      bundle(
+        CURRENT,
+        policy({ mode: "enforced", sessionLimitUsd: 9 }),
+        NO_MANDATE,
+      ).budget,
+    ).toMatchObject({ mode: "enforced" });
+    // Neither: the observed-only answer every host had before both features.
+    expect(bundle(CURRENT, OBSERVED_ONLY, NO_MANDATE).budget).toEqual({
+      mode: "observed",
+    });
+  });
+
+  it("takes the lower ceiling when both name one", () => {
+    // Stricter wins, the way resolveEffectiveTurnBudget already merges a
+    // workspace ceiling with a member's. Asserted both ways round, so the
+    // result cannot be "whichever side the code happens to read last".
+    expect(
+      bundle(
+        CURRENT,
+        policy({ mode: "enforced", sessionLimitUsd: 5 }),
+        withMandate({ mode: "enforced", session_limit_usd: 20 }),
+      ).budget,
+    ).toMatchObject({ session_limit_usd: 5 });
+    expect(
+      bundle(
+        CURRENT,
+        policy({ mode: "enforced", sessionLimitUsd: 20 }),
+        withMandate({ mode: "enforced", session_limit_usd: 5 }),
+      ).budget,
+    ).toMatchObject({ session_limit_usd: 5 });
+  });
+
+  it("carries the mandate's daily ceiling, which the session policy has none of", () => {
+    // The session policy deliberately holds no daily figure: the proxy has no
+    // day counter, so one there would be a number nothing enforces.
+    expect(
+      bundle(
+        CURRENT,
+        policy({ mode: "enforced", sessionLimitUsd: 5 }),
+        withMandate({ mode: "enforced", daily_limit_usd: 50 }),
+      ).budget,
+    ).toMatchObject({
+      mode: "enforced",
+      session_limit_usd: 5,
+      daily_limit_usd: 50,
+    });
+  });
+
+  it("sends the model lists only when the workspace itself enforces", () => {
+    const told = [BUNDLE_FEATURE_MODEL_ALLOWLIST];
+    const lists = policy({
+      mode: "enforced",
+      modelAllow: ["claude-opus-*"],
+      modelDeny: [],
+    });
+    expect(bundle(told, lists, NO_MANDATE).models).toEqual({
+      allow: ["claude-opus-*"],
+      deny: [],
+    });
+    // An operator who saved lists but left the policy observed said record
+    // them and do not refuse on them. An agent budget arriving from the other
+    // scope must not turn that into refusals they never asked for.
+    const saved = policy({
+      mode: "observed",
+      modelAllow: ["claude-opus-*"],
+      modelDeny: [],
+    });
+    expect(
+      bundle(
+        told,
+        saved,
+        withMandate({ mode: "enforced", session_limit_usd: 9 }),
+      ),
+    ).not.toHaveProperty("models");
   });
 });

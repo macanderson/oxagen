@@ -32,6 +32,7 @@ import {
   readHostFileLenient,
   writeHostFile,
 } from "../host/host-file";
+import { restoreCredentials } from "./credential";
 import {
   modelBaseUrlBackupPath,
   hasOrphanedModelBaseUrl,
@@ -403,7 +404,29 @@ async function unenrollLocked(
     incomplete = true;
   }
 
-  // First, and before the daemon is stopped below: a base URL that names a
+  // First of all: each harness gets its vendor key back from custody and
+  // its run token or helper taken out (ADR-138), before the base URL goes
+  // and long before the daemon stops. A harness left with a run token and
+  // no gateway has no credential at all.
+  const credentials = await restoreCredentials(host, deps, "unenroll");
+  for (const file of credentials.restored)
+    deps.out(`      model credential given back to ${file}`);
+  warnings.push(...credentials.warnings);
+  for (const failure of credentials.failed) {
+    incomplete = true;
+    warnings.push(
+      `could not give a model credential back: ${failure}. The gateway remains installed so the agent can still make model calls. Fix the file and run \`tacho unenroll\` again`,
+    );
+  }
+  if (credentials.failed.length > 0) {
+    warnings.push(
+      "Unenrollment stopped before removing the base URL, hooks, service, or credentials. Fix the named config files, then retry.",
+    );
+    for (const warning of warnings) deps.err(`warning: ${warning}`);
+    return { ok: false, settingsChanged: false, revoked: false, warnings };
+  }
+
+  // Then, and before the daemon is stopped below: a base URL that names a
   // port nothing listens on stops the agent making any model call.
   const baseUrls = await restoreModelBaseUrlsFor(host, deps);
   for (const file of baseUrls.restored)
@@ -498,7 +521,22 @@ async function unenrollLocked(
   }
 
   deps.out(`[4/4] Removing host credentials under ${deps.paths.root}`);
+  // Custody is over: every key went back to its file above, so the store and
+  // its key are shredded, and the run token signing key goes with them so a
+  // token still in some process's memory is refused from here on. A store
+  // that could not be opened is the one exception: it is left where it is,
+  // since shredding it would end the one chance a repaired key file gives.
+  if (!credentials.custodyUnreadable) {
+    try {
+      deps.credentialStore?.shred();
+    } catch (error) {
+      warnings.push(
+        `could not shred the credential store: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
   for (const path of [
+    deps.paths.runTokenKey,
     deps.paths.deviceKey,
     deps.paths.socket,
     deps.paths.daemonState,

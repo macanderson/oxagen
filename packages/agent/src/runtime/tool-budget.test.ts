@@ -135,6 +135,73 @@ describe("assertToolListFitsProvider", () => {
     expect(budget.toolCount).toBe(10);
     expect(budget.estimatedTokens).toBeGreaterThan(0);
   });
+
+  describe("a turn on the organisation's own key", () => {
+    // The id a direct vendor key sends is the vendor's own spelling —
+    // `gpt-5.2`, with no `openai/` to match on — so the ceiling has to be
+    // found from the provider that is paying. Without it the guard reads the
+    // turn as an unknown provider and lets OpenAI refuse the request instead
+    // (#3314, finding 1).
+    it("refuses the same turn on a direct openai key, with the same message", () => {
+      let caught: TooManyToolsForProviderError | null = null;
+      try {
+        assertToolListFitsProvider(
+          { modelId: "gpt-5.2", provider: "openai" },
+          toolsNamed(271),
+        );
+      } catch (err) {
+        caught = err as TooManyToolsForProviderError;
+      }
+      expect(caught).toBeInstanceOf(TooManyToolsForProviderError);
+      expect(caught?.modelId).toBe("gpt-5.2");
+      expect(caught?.maxTools).toBe(128);
+      expect(caught?.message).toContain("271 tools");
+      expect(caught?.message).toContain("gpt-5.2");
+      expect(caught?.message).toContain(
+        "OpenAI function-calling limit of 128 tools per request",
+      );
+    });
+
+    it("holds an openai_compatible endpoint to the same ceiling", () => {
+      expect(() =>
+        assertToolListFitsProvider(
+          {
+            modelId: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+            provider: "openai_compatible",
+          },
+          toolsNamed(271),
+        ),
+      ).toThrow(TooManyToolsForProviderError);
+    });
+
+    it("still allows a list at the limit on a direct key", () => {
+      expect(() =>
+        assertToolListFitsProvider(
+          { modelId: "gpt-5.2", provider: "openai" },
+          toolsNamed(128),
+        ),
+      ).not.toThrow();
+    });
+
+    it("leaves a provider with no confirmed ceiling alone", () => {
+      // An anthropic key is direct too, and Anthropic publishes no such cap.
+      expect(() =>
+        assertToolListFitsProvider(
+          { modelId: "claude-sonnet-5", provider: "anthropic" },
+          toolsNamed(271),
+        ),
+      ).not.toThrow();
+    });
+
+    it("reads a target with no provider exactly as it reads a bare id", () => {
+      expect(() =>
+        assertToolListFitsProvider(
+          { modelId: "gpt-5.2", provider: null },
+          toolsNamed(271),
+        ),
+      ).not.toThrow();
+    });
+  });
 });
 
 describe("PROVIDER_TOOL_LIMITS", () => {

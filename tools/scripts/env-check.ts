@@ -89,12 +89,14 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "SHELL",
   "BASH_SOURCE",
   // Windows' equivalents, set by the OS for every process: the home
-  // directory and the two application-data roots tacho's harness lookup
-  // checks for `claude` / `codex` / `cursor-agent`
+  // directory, the two application-data roots, and the machine-wide
+  // program root that tacho's harness lookup checks for `claude` /
+  // `codex` / `cursor-agent` and the Cursor editor
   // (packages/tacho/src/cli/deps.ts).
   "USERPROFILE",
   "APPDATA",
   "LOCALAPPDATA",
+  "PROGRAMFILES",
   // libpq's own variables: psql and atlas read them directly, so a value here
   // configures those tools rather than any Oxagen service.
   "PGHOST",

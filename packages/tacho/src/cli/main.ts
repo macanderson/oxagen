@@ -7,6 +7,11 @@ import { Command } from "commander";
 import { runHookProcess } from "../claude-code/hook-process";
 import { runDaemonProcess } from "../collector/run";
 import { addArpCommands } from "./arp";
+import {
+  credentialIssue,
+  credentialStatus,
+  parseCredentialMode,
+} from "./credential";
 import { defaultCliDeps, isNativeBuild } from "./deps";
 import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
@@ -73,11 +78,18 @@ export function buildTachoProgram(): Command {
       "--harness <list>",
       "Harnesses to hook: claude-code (default on a fresh enrollment), codex, cursor, stella, or a comma list such as claude-code,stella",
     )
+    .option(
+      "--credentials <mode>",
+      "brokered (default): the gateway holds each model vendor key and the harness holds a run token; passthrough: the harness keeps its own key",
+    )
     .option("--verify", "Run a headless Claude Code turn afterwards")
     .action(async (opts: Record<string, unknown>) => {
       const harness = opts["harness"] as string | undefined;
       const result = await enroll(
         {
+          credentials: parseCredentialMode(
+            opts["credentials"] as string | undefined,
+          ),
           token: opts["token"] as string | undefined,
           org: opts["org"] as string | undefined,
           workspace: opts["workspace"] as string | undefined,
@@ -107,6 +119,51 @@ export function buildTachoProgram(): Command {
         );
         if (!verified.ok) process.exitCode = 1;
       }
+    });
+
+  const credential = program
+    .command("credential")
+    .description(
+      "The gateway's custody of model credentials: issue a run token, or say what is held (never the secret)",
+    );
+  credential
+    .command("issue")
+    .description(
+      "Print one run token for a harness (what Claude Code runs as its apiKeyHelper; not meant to be run by hand)",
+    )
+    .requiredOption("--harness <name>", "claude-code | codex")
+    .option(
+      "--static",
+      "A static placement, bounded by the enrollment's expiry",
+    )
+    .action(async (opts: { harness: string; static?: boolean }) => {
+      const result = await credentialIssue(
+        {
+          harness: opts.harness,
+          ...(opts.static === true ? { placement: "static" as const } : {}),
+        },
+        deps,
+      );
+      if (result.ok && result.token !== undefined) {
+        process.stdout.write(`${result.token}\n`);
+        if (!result.detail.startsWith("issued by"))
+          deps.err(`tacho credential: ${result.detail}`);
+        return;
+      }
+      deps.err(`tacho credential: ${result.detail}`);
+      process.exitCode = 1;
+    });
+  credential
+    .command("status")
+    .description(
+      "Which providers the gateway holds, and how each harness gets its credential",
+    )
+    .option("--json", "Machine-readable output")
+    .action(async (opts: { json?: boolean }) => {
+      await credentialStatus(
+        { ...(opts.json !== undefined ? { json: opts.json } : {}) },
+        deps,
+      );
     });
 
   program

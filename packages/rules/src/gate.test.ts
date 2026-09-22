@@ -544,3 +544,56 @@ describe("the auto-approval receipt is written after every later check", () => {
     expect(release).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * An external transport reaches the gate under the name its server returned.
+ * The registry holds the same tool under the lower-cased slug an operator
+ * reads a rule pattern back from, so the gate governs the call whichever of
+ * the two spellings the rule was written in (ADR-138, #3137).
+ */
+describe("external tool identity at the gate", () => {
+  const SERVER = "3f6a1c20-0d8e-4a11-9a77-2b5c0e8a4d31";
+  const EXTERNAL_RULES: RuleSet = {
+    schema: "oxagen.decision-rules.v1",
+    rules: [
+      {
+        id: "external.deny-charges",
+        description: "No agent charges a card through this server",
+        capability: `mcp.${SERVER}.chargecard`,
+        effect: "deny",
+      },
+    ],
+  };
+
+  test("refuses the transport whichever case the server spells the tool in", async () => {
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => EXTERNAL_RULES,
+    });
+    for (const capability of [
+      `mcp.${SERVER}.chargeCard`,
+      `mcp.${SERVER}.chargecard`,
+      `mcp.${SERVER}.CHARGECARD`,
+    ]) {
+      await expect(
+        gate({ capability, input: { amount: 10_000 }, ctx: CTX, external: {} }),
+      ).rejects.toMatchObject({
+        code: "decision_rule_denied",
+        verdict: { ruleId: "external.deny-charges" },
+      });
+    }
+  });
+
+  test("leaves a different tool on the same server alone", async () => {
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => EXTERNAL_RULES,
+    });
+    await expect(
+      gate({
+        capability: `mcp.${SERVER}.listCards`,
+        input: {},
+        ctx: CTX,
+        external: {},
+      }),
+    ).resolves.toBeUndefined();
+  });
+});

@@ -1,5 +1,5 @@
 {
-  "generatedCount": 348,
+  "generatedCount": 349,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2663,8 +2663,7 @@
       "name": "preview_skill_search",
       "domain": "skill",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3627,6 +3626,16 @@
       "domain": "run",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "summarize_skill_search",
+      "domain": "skill",
+      "surfaces": [
+        "mcp"
       ],
       "component": null,
       "produces": [],

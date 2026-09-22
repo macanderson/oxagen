@@ -270,3 +270,90 @@ describe("capabilityMatches", () => {
     expect(capabilityMatches("*", "anything")).toBe(true);
   });
 });
+
+/**
+ * An external tool reaches the gate under the name its server returned, and
+ * reaches the registry under the lower-cased slug `toolSlugOf` derives from
+ * the same name. A rule written against either spelling governs the call
+ * (ADR-138).
+ */
+describe("external tool identity", () => {
+  const SERVER = "3f6a1c20-0d8e-4a11-9a77-2b5c0e8a4d31";
+
+  test("a rule written in the registry's spelling binds the server's", () => {
+    expect(
+      capabilityMatches(`mcp.${SERVER}.chargecard`, `mcp.${SERVER}.chargeCard`),
+    ).toBe(true);
+    expect(
+      capabilityMatches(`mcp.${SERVER}.chargeCard`, `mcp.${SERVER}.chargecard`),
+    ).toBe(true);
+    expect(
+      capabilityMatches(
+        "file-mcp.local_server.writeFile",
+        "file-mcp.Local_Server.writefile",
+      ),
+    ).toBe(true);
+  });
+
+  test("a server prefix pattern binds whatever case the server used", () => {
+    expect(
+      capabilityMatches(`mcp.${SERVER}.charge*`, `mcp.${SERVER}.chargeCard`),
+    ).toBe(true);
+    expect(
+      capabilityMatches(
+        "file-mcp.local_server.*",
+        "file-mcp.Local_Server.writeFile",
+      ),
+    ).toBe(true);
+    expect(capabilityMatches("mcp.*", `MCP.${SERVER}.chargeCard`)).toBe(true);
+  });
+
+  test("case folding does not widen a rule past its own tool", () => {
+    expect(
+      capabilityMatches(`mcp.${SERVER}.chargecard`, `mcp.${SERVER}.refundcard`),
+    ).toBe(false);
+    expect(
+      capabilityMatches(`mcp.${SERVER}.*`, "file-mcp.other.chargeCard"),
+    ).toBe(false);
+    expect(capabilityMatches("issue_refund", "ISSUE_REFUND")).toBe(false);
+  });
+
+  test("a deny rule in the registry's spelling refuses the server's call", () => {
+    const ruleSet = parseRuleSet({
+      schema: "oxagen.decision-rules.v1",
+      rules: [
+        {
+          id: "external.deny-charges",
+          description: "No agent charges a card through this server.",
+          capability: `mcp.${SERVER}.chargecard`,
+          effect: "deny",
+        },
+      ],
+    });
+    expect(
+      evaluateRules(ruleSet, {
+        capability: `mcp.${SERVER}.chargeCard`,
+        input: { amount: 10_000 },
+        facts: {},
+      }),
+    ).toMatchObject({ effect: "deny", ruleId: "external.deny-charges" });
+  });
+
+  test("requiredFactKeys reads the same rules the verdict does", () => {
+    const ruleSet = parseRuleSet({
+      schema: "oxagen.decision-rules.v1",
+      rules: [
+        {
+          id: "external.cost",
+          description: "Refuse a call the cost source cannot price.",
+          capability: `mcp.${SERVER}.chargecard`,
+          effect: "deny",
+          requires_facts: ["cost"],
+        },
+      ],
+    });
+    expect(requiredFactKeys(ruleSet, `mcp.${SERVER}.chargeCard`)).toEqual([
+      "cost",
+    ]);
+  });
+});

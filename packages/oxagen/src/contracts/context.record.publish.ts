@@ -59,7 +59,7 @@ export const contextRecordPublish = registerCapability({
   name: "publish_context_record",
   domain: "context",
   description:
-    "Publish a steering context record into the workspace agent-asset registry — upserts the agent.context_records row by (workspace, record_id) and creates a new immutable version row when the canonical body changed. Idempotent on an unchanged body. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout. Requires the same classification (kind, force, statement) a merged Context PR carries (#3302), because readWorkspaceSteering only ever delivers a must/should record to an agent — a record with no force sits in the registry and never steers anything.",
+    "Publish a steering context record into the workspace agent-asset registry. Upserts the agent.context_records row by (workspace, record_id) and writes a new immutable version row whenever the body checksum or the classification (kind, force, constraintEffect, statement) differs from the latest version. A publish that repeats all five is idempotent and answers published: false. The checksum alone is not the key: a record whose classification was wrong is corrected by republishing the same body under the right kind and force, and that correction has to land as a new version or the record never reaches readWorkspaceSteering. Mirrors Stella's one-record-per-file .stella/rules/*.toml layout. Requires the same classification a merged Context PR carries (#3302), because readWorkspaceSteering only ever delivers a must or should record to an agent: a record with no force sits in the registry and never steers anything.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "docs", "unit"],
@@ -97,7 +97,7 @@ export const contextRecordPublish = registerCapability({
       published: z
         .boolean()
         .describe(
-          "false when the latest version already carries this checksum (idempotent)",
+          "false when the latest version already carries this body checksum AND this classification (kind, force, constraintEffect, statement); true when either changed and a new version was written",
         ),
     })
     .strict(),

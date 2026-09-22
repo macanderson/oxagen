@@ -39,7 +39,7 @@ import {
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import {
-  loadPriceBook,
+  loadPriceBookInTenantScope,
   type PriceBook,
   resolvePriceEntry,
 } from "@oxagen/billing";
@@ -75,6 +75,12 @@ export type RunTranscriptGetDeps = RunReadDeps & {
    * is its share of the message's output tokens at the model's output rate;
    * a model the book prices no output for leaves every block's cost null
    * rather than drawing a zero.
+   *
+   * `get_run_transcript` is a scoped capability serving one organization, so
+   * the default reads the book inside the caller's tenant scope. It used to
+   * take the system connection, which made every nonempty transcript page an
+   * unscoped access in the record for a read that is as ordinary as a page
+   * view (#3526).
    */
   priceBook: (orgId: string) => Promise<PriceBook>;
 };
@@ -432,5 +438,5 @@ export const runTranscriptGetHandler = createRunTranscriptGetHandler({
   get bodies() {
     return evidenceStore();
   },
-  priceBook: (orgId) => loadPriceBook({ orgId }),
+  priceBook: (orgId) => loadPriceBookInTenantScope({ orgId }),
 });

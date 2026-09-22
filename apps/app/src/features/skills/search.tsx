@@ -34,6 +34,16 @@ export function SkillSearch({
   const [failure, setFailure] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // A preview runs against the repository the workspace binds now:
+  // `preview_skill_search` refuses a version published under an earlier
+  // binding. `get_skill_config` picks `current` by the active binding but
+  // returns every historical version, so a workspace with nothing published
+  // for its current binding has no version that can produce a preview, and
+  // this offers none (#3666). Versions of an earlier binding published
+  // alongside a current one are still offered; telling those apart needs the
+  // binding on each version, which the contract does not carry.
+  const choices = configuration.current === null ? [] : configuration.versions;
+
   function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending || !version || !query.trim()) return;
@@ -82,7 +92,7 @@ export function SkillSearch({
             }}
           >
             <option value="">{t("selectVersion")}</option>
-            {configuration.versions.map((row) => (
+            {choices.map((row) => (
               <option key={row.id} value={row.version}>
                 {row.version}
               </option>

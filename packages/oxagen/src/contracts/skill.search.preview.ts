@@ -2,14 +2,22 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 import { skillCandidateSchema } from "../skills";
 
+/**
+ * The person's read of skill resolution. It names every withheld skill, which is
+ * the projection the withholding mechanism exists to keep from an agent, so the
+ * capability declares no MCP surface: the kernel refuses the dispatch before a
+ * handler runs, rather than a branch inside one deciding who sees a name.
+ * `summarize_skill_search` is the agent's counts-only read of the same resolution
+ * (ADR-090, apps/app/ARCHITECTURE.md §1.2 Skills, #3669).
+ */
 export const skillSearchPreview = registerCapability({
   name: "preview_skill_search",
   domain: "skill",
   mode: "sync",
   description:
     "Preview approved skill resolution at a published configuration version. Shows a person withheld names and reasons without loading skills into a run.",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  surfaces: ["api"],
+  layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

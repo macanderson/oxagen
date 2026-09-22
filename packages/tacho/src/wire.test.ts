@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bundleResponseSchema,
   controlEnvelopeSchema,
+  deliveredCommandSchema,
   ingestResponseSchema,
   commandsResponseSchema,
   tachoBatchSchema,
@@ -27,6 +28,20 @@ const CONTROL = {
   deny_generation: { org: 0, workspace: 0 },
   bundle_etag: "etag-1",
   commands: [],
+};
+
+/** One queued command as the control plane delivers it (spec section 7.4). */
+const COMMAND = {
+  id: "cmd_pause",
+  command: "pause",
+  session_uuid: null,
+  payload: { reason: "budget review" },
+  requested_mode: null,
+  delivery_mode: null,
+  degraded_reason: null,
+  reason: "budget review",
+  issued_at: "2026-09-10T10:00:00.000Z",
+  expires_at: null,
 };
 
 describe("responses from the control plane", () => {
@@ -107,6 +122,63 @@ describe("the command-poll response wrapper", () => {
       server_hint: "added later",
     });
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe("a delivered command inside a response", () => {
+  // The tolerance the wrappers gained stopped at the array of commands. Each
+  // element was still checked against the strict schema, so one optional field
+  // added to a command failed the whole response, the host stopped
+  // acknowledging batches, and `pause` and `kill` stopped arriving. That is
+  // the outage the wrappers were made tolerant to prevent.
+  const withExtra = { ...COMMAND, priority: 1 };
+
+  it("parses when a newer control plane adds a field to the command", () => {
+    const parsed = controlEnvelopeSchema.parse({
+      ...CONTROL,
+      commands: [withExtra],
+    });
+    const command = parsed.commands[0];
+    // The fields the host acts on arrive unchanged.
+    expect(command).toMatchObject({
+      id: "cmd_pause",
+      command: "pause",
+      session_uuid: null,
+      payload: { reason: "budget review" },
+      requested_mode: null,
+      delivery_mode: null,
+      degraded_reason: null,
+      reason: "budget review",
+      issued_at: "2026-09-10T10:00:00.000Z",
+      expires_at: null,
+    });
+  });
+
+  it("parses in both responses that carry the command list", () => {
+    const control = { ...CONTROL, commands: [withExtra] };
+    expect(() =>
+      commandsResponseSchema.parse({ acknowledged: 0, control }),
+    ).not.toThrow();
+    expect(() =>
+      ingestResponseSchema.parse({
+        accepted: 1,
+        event_ids: ["evt_1"],
+        chain_breaks: [],
+        control,
+      }),
+    ).not.toThrow();
+  });
+
+  it("still refuses a command missing a field the host reads", () => {
+    const { expires_at: _dropped, ...withoutExpiry } = COMMAND;
+    expect(() =>
+      controlEnvelopeSchema.parse({ ...CONTROL, commands: [withoutExpiry] }),
+    ).toThrow();
+  });
+
+  it("leaves the schema the control plane sends against strict", () => {
+    expect(() => deliveredCommandSchema.parse(COMMAND)).not.toThrow();
+    expect(() => deliveredCommandSchema.parse(withExtra)).toThrow();
   });
 });
 

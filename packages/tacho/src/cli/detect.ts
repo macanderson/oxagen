@@ -24,7 +24,7 @@ import {
   TACHO_TIER_SUMMARY,
   type TachoHarness,
 } from "../wire";
-import type { AppFacts, CliDeps, HarnessFacts } from "./deps";
+import type { AppFacts, CliDeps, CursorFacts, HarnessFacts } from "./deps";
 
 export interface DetectedHarness {
   harness: TachoHarness;
@@ -44,6 +44,22 @@ export interface DetectedHarness {
    * case that exists today.
    */
   unavailableReason?: string;
+  /**
+   * Which probe answered: `cli` for an executable on PATH, `app` for an
+   * application on disk. Absent when neither did. A surface that offers to
+   * cover the app says which one it is acting on rather than implying a CLI
+   * that is not there.
+   */
+  foundVia?: "cli" | "app";
+  /**
+   * Why enrolling this harness covers the machine whether or not a probe
+   * found it, so a surface offers the row instead of disabling it and can say
+   * what it is offering. Cursor is the case: `~/.cursor/hooks.json` governs
+   * the editor and the CLI alike, and Cursor's Linux build is an AppImage
+   * with no documented location, so "not found" there is the probe's limit
+   * rather than the machine's. It is the counterpart of `unavailableReason`.
+   */
+  coverableWhenAbsent?: string;
 }
 
 export interface DetectReport {
@@ -76,8 +92,45 @@ function wrapped(
   return {
     ...base(harness, enrolledList),
     installed: facts.path !== undefined,
-    ...(facts.path !== undefined ? { path: facts.path } : {}),
+    ...(facts.path !== undefined
+      ? { path: facts.path, foundVia: "cli" as const }
+      : {}),
     ...(facts.version !== undefined ? { version: facts.version } : {}),
+  };
+}
+
+/**
+ * What a surface tells the operator about a Cursor it could not find. The
+ * hooks file is what governs Cursor, and enrollment writes it either way.
+ */
+export const CURSOR_COVERAGE_NOTE =
+  "enrollment writes ~/.cursor/hooks.json, which governs the Cursor editor and the cursor-agent CLI alike";
+
+/**
+ * Cursor, which answers two probes rather than one. The alias on PATH is the
+ * stronger signal and reports a version; the editor on disk is the only signal
+ * on a machine that never installed the CLI, and that machine is wrapped all
+ * the same because both read `~/.cursor/hooks.json`. Neither answering is not
+ * evidence of absence, so the entry says the harness is still coverable.
+ */
+function wrappedCursor(
+  facts: CursorFacts,
+  enrolledList: readonly string[],
+): DetectedHarness {
+  const cli = wrapped("cursor", facts, enrolledList);
+  if (cli.installed)
+    return { ...cli, coverableWhenAbsent: CURSOR_COVERAGE_NOTE };
+  const app = facts.app;
+  return {
+    ...cli,
+    coverableWhenAbsent: CURSOR_COVERAGE_NOTE,
+    ...(app?.installed === true
+      ? {
+          installed: true,
+          foundVia: "app" as const,
+          ...(app.path !== undefined ? { path: app.path } : {}),
+        }
+      : {}),
   };
 }
 
@@ -106,13 +159,7 @@ export function detect(
     harnesses: [
       wrapped("claude-code", deps.claude(), enrolledList),
       wrapped("codex", deps.codex(), enrolledList),
-      // Cursor's CLI is `agent`, which is a generic name, so `cursorFacts`
-      // only reports an install when `agent --version` answered with a
-      // version. And no primary source says where Cursor's GUI installs, so a
-      // GUI-only machine reads as "not installed" here while
-      // `~/.cursor/hooks.json` would still govern it. Both caveats are in
-      // `cursorFacts`.
-      wrapped("cursor", deps.cursor(), enrolledList),
+      wrappedCursor(deps.cursor(), enrolledList),
       wrapped("stella", deps.stella(), enrolledList),
       connected(
         "claude-desktop",
@@ -129,14 +176,20 @@ export function detect(
     return report;
   }
   for (const h of report.harnesses) {
+    // An app found on disk answers no `--version`, so the line says where it
+    // is rather than printing a `?` for a number nothing asked it for.
+    const installedState =
+      isConnectedHarness(h.harness) || h.foundVia === "app"
+        ? `installed at ${h.path}`
+        : `${h.version ?? "?"} at ${h.path}`;
     const state =
       h.unavailableReason !== undefined
         ? h.unavailableReason
         : h.installed
-          ? isConnectedHarness(h.harness)
-            ? `installed at ${h.path}`
-            : `${h.version ?? "?"} at ${h.path}`
-          : "not installed";
+          ? installedState
+          : h.coverableWhenAbsent !== undefined
+            ? `not found, and ${h.coverableWhenAbsent}`
+            : "not installed";
     deps.out(
       `${h.label.padEnd(16)} ${state}${h.enrolled ? " · covered" : ""}${
         h.installed

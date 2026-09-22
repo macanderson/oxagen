@@ -200,6 +200,29 @@ describe("probeModelCredential — the key never leaves", () => {
     expect(result.error).toContain("[redacted]");
   });
 
+  it("takes a credential out of the endpoint a transport error echoes", async () => {
+    // What Node actually says when a stored endpoint carries userinfo:
+    // "Request cannot be constructed from a URL that includes credentials:
+    // <the whole URL>". `assertPublicHttpUrl` refuses such an endpoint now, so
+    // this is a row written before that check — and its password would
+    // otherwise be handed back as the verification's `error` and shown on the
+    // settings page (#3314, finding 3).
+    stubFetch(async () => {
+      throw new TypeError(
+        "Request cannot be constructed from a URL that includes credentials: " +
+          "https://acme:hunter2@api.example.com/v1/models",
+      );
+    });
+    const result = await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://acme:hunter2@api.example.com/v1",
+    });
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("hunter2");
+    expect(result.error).toContain("https://***@api.example.com/v1/models");
+  });
+
   it("never carries the key in a successful result either", async () => {
     stubFetch(async () => jsonResponse(200, { data: { key: KEY } }));
     const result = await probeModelCredential({

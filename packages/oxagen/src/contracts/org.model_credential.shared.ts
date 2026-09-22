@@ -100,8 +100,11 @@ export const modelCredentialModelMapSchema = z.object({
  *
  * `baseUrl` and `modelMap` ARE returned in full: neither is a secret, and the
  * settings page cannot show an operator what their endpoint is set to without
- * them. A URL that embeds a credential is refused at set time rather than
- * redacted here, because a redacted URL is not editable.
+ * them. A URL that embeds a credential is refused at set time, which is what
+ * keeps that true. A row written before that guard existed comes back with its
+ * userinfo redacted (`toCredentialView`): the address is then not editable in
+ * place, which is correct, because the stored one cannot serve a request
+ * either and has to be retyped.
  */
 export const modelCredentialViewSchema = z.object({
   configured: z.boolean(),

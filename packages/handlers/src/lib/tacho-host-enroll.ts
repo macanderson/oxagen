@@ -23,9 +23,11 @@ import { signTachoEnrollment } from "./tacho-enrollment-signing";
 import { type BundleSigner } from "./tacho-bundle-signing";
 import {
   type DenyGeneration,
+  type HostMandate,
   readDenyGeneration,
   readWorkspaceRetention,
   requireBundleSigner,
+  resolveHostMandate,
   signBundle,
   type TachoHostRow,
   unsignedBundle,
@@ -163,6 +165,8 @@ interface MintedHostEnrollment {
    * arrives holding it, rather than metering freely until its first refresh.
    */
   sessionPolicy: TachoSessionPolicy;
+  /** The host's mandate, for the initial bundle. Empty until `args.agent` names one. */
+  mandate: HostMandate;
 }
 
 /**
@@ -321,12 +325,17 @@ export async function mintHostEnrollment(
   if (!inserted) {
     throw new Error("Internal error: failed to create the Tacho host");
   }
-  const [denyGeneration, retention, steering, sessionPolicy] =
+  const [denyGeneration, retention, steering, sessionPolicy, mandate] =
     await Promise.all([
       readDenyGeneration(tx as never, args.orgId, args.workspaceId),
       readWorkspaceRetention(tx as never, args.orgId, args.workspaceId),
       readWorkspaceSteering(tx as never, args.orgId, args.workspaceId),
       readTachoSessionPolicyIn(tx as never, args.workspaceId),
+      resolveHostMandate(
+        tx as never,
+        { orgId: args.orgId, workspaceId: args.workspaceId },
+        inserted as TachoHostRow,
+      ),
     ]);
   return {
     host: inserted as TachoHostRow,
@@ -340,6 +349,7 @@ export async function mintHostEnrollment(
     retention,
     steering,
     sessionPolicy,
+    mandate,
   };
 }
 
@@ -357,6 +367,7 @@ export function enrollmentDocument(
       minted.retention,
       minted.steering,
       minted.sessionPolicy,
+      minted.mandate,
       issuedAt,
     ),
   );

@@ -74,6 +74,46 @@ export const tachoCommandFetch = registerCapability({
            * the same shape of break, in the other direction.
            */
           bundle_features: z.array(z.string().max(64)).max(32).optional(),
+          /**
+           * Whether each routed harness still points at the loopback proxy,
+           * mirroring `daemonHealthSchema.model_base_urls`. The daemon sends
+           * its whole health report on this poll, minus the two fields the
+           * ingest path owns, so the same `.strict()` trap applies: a field
+           * the collector learned to send and this object does not name
+           * refuses the command poll of every upgraded host — which is the
+           * channel pause, cancel and steer arrive on.
+           */
+          model_base_urls: z
+            .array(
+              z
+                .object({
+                  harness: z.string().max(64),
+                  key: z.string().max(128),
+                  ours: z.boolean(),
+                  shadowed_by: z.string().max(512).optional(),
+                })
+                .strict(),
+            )
+            .max(8)
+            .optional(),
+          /**
+           * Which model providers the host brokers (ADR-138), mirroring
+           * `daemonHealthSchema.credentials`: a basis per provider, never a
+           * secret. Same reason as `bundle_features`: this object is
+           * `.strict()`, so a field the daemon sends and this contract does
+           * not name refuses every upgraded host's poll.
+           */
+          credentials: z
+            .array(
+              z
+                .object({
+                  provider: z.enum(["anthropic", "openai"]),
+                  basis: z.enum(["gateway_brokered", "harness_held"]),
+                })
+                .strict(),
+            )
+            .max(8)
+            .optional(),
         })
         .strict()
         .optional(),

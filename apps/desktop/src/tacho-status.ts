@@ -73,6 +73,8 @@ export interface TachoStatus {
   gateway?: TachoGateway;
   /** One entry per harness the model base URL contract covers. */
   modelBaseUrls?: TachoModelBaseUrl[];
+  /** One entry per harness the credential seam covers (ADR-138). */
+  modelCredentials?: TachoModelCredential[];
   /** The tier each harness's sessions earned since the collector started. */
   tiers?: Partial<Record<string, TachoTier>>;
 }
@@ -190,6 +192,33 @@ function tiers(value: unknown): Partial<Record<string, TachoTier>> | undefined {
 }
 
 /**
+ * How a harness gets its model credential (ADR-138). `brokered`: it holds a
+ * run token and the gateway supplies the vendor key from custody. Otherwise
+ * its own credential crosses the proxy, and `reason` says why when the file
+ * said so (a ChatGPT login, a symlinked file, no file yet, nothing to take).
+ */
+export interface TachoModelCredential {
+  harness: string;
+  brokered: boolean;
+  reason?: string;
+}
+
+function modelCredentials(value: unknown): TachoModelCredential[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: TachoModelCredential[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry["harness"] !== "string") continue;
+    const reason = entry["reason"];
+    out.push({
+      harness: entry["harness"],
+      brokered: entry["brokered"] === true,
+      ...(typeof reason === "string" ? { reason } : {}),
+    });
+  }
+  return out;
+}
+
+/**
  * The status document, or `null` when stdout is not one: empty (the sidecar
  * failed to start), not JSON (a stray warning), or JSON of another shape.
  * Nothing the CLI prints before or after the document is tolerated — the
@@ -243,6 +272,8 @@ export function parseTachoStatus(stdout: string): TachoStatus | null {
   if (gatewayBlock !== undefined) status.gateway = gatewayBlock;
   const baseUrls = modelBaseUrls(parsed["modelBaseUrls"]);
   if (baseUrls !== undefined) status.modelBaseUrls = baseUrls;
+  const credentials = modelCredentials(parsed["modelCredentials"]);
+  if (credentials !== undefined) status.modelCredentials = credentials;
   const tierMap = tiers(parsed["tiers"]);
   if (tierMap !== undefined) status.tiers = tierMap;
   return status;

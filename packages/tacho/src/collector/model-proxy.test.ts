@@ -4,7 +4,13 @@
  * to the proxy the way Claude Code and Codex do.
  */
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import {
   createServer,
   type IncomingMessage,
@@ -19,8 +25,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
 import type { TachoEvent } from "../envelope";
 import type { FetchLike } from "../host/control-client";
+import { openCredentialStore } from "../host/credential-store";
 import { modelProxyPortFor, writeHostFile } from "../host/host-file";
 import { applyModelBaseUrls } from "../host/model-base-url";
+import {
+  generateRunTokenKey,
+  mintRunToken,
+  peekRunTokenClaims,
+  readRunTokenKey,
+} from "../host/run-token";
 import {
   bundleSigner,
   scratchPaths,
@@ -33,7 +46,9 @@ import {
   type PolicyBundle,
   policyBundleSchema,
   TACHO_BUNDLE_FEATURES,
+  TACHO_CREDENTIAL_BASIS_ATTR,
   TACHO_MAX_BODY_BYTES,
+  TACHO_RUN_TOKEN_ATTR,
 } from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
 import {
@@ -1709,6 +1724,602 @@ describe("the loopback model proxy", () => {
   });
 });
 
+describe("the credential seam (ADR-138)", () => {
+  const cleanups: Array<() => Promise<void>> = [];
+  afterEach(async () => {
+    for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+  });
+  const OPENAI_KEY = "sk-proj-FAKE-OPENAI-IN-CUSTODY-4242";
+
+  /** A daemon whose gateway holds the Anthropic key (and, on request, OpenAI's). */
+  async function bootBrokered(
+    vendorUrl: string,
+    providers: Array<"anthropic" | "openai"> = ["anthropic"],
+    bundleOverrides: Partial<Omit<PolicyBundle, "signature">> = {},
+    hostOverrides: Partial<ReturnType<typeof testHostFile>> = {},
+  ) {
+    const plane = controlPlane();
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const bundle = signer.sign(
+      unsignedBundle({ model_prices: PRICES, ...bundleOverrides }),
+    );
+    const hostFile = testHostFile(signer, bundle, hostOverrides);
+    writeHostFile(paths.hostFile, hostFile);
+    const store = openCredentialStore({
+      file: paths.credentials,
+      key: paths.credentialsKey,
+    });
+    if (providers.includes("anthropic"))
+      store.take(
+        "anthropic",
+        { kind: "api_key", secret: FAKE_KEY },
+        "claude-code:settings.env",
+        Date.now(),
+      );
+    if (providers.includes("openai"))
+      store.take(
+        "openai",
+        { kind: "bearer", secret: OPENAI_KEY },
+        "codex:auth.json",
+        Date.now(),
+      );
+    const log: string[] = [];
+    const handle: DaemonHandle = await startDaemon({
+      paths,
+      fetch: plane.fetch,
+      exec: () => ({ status: 0, stdout: "", stderr: "" }),
+      log: (line) => log.push(line),
+      port: 0,
+      home: join(paths.root, ".."),
+      transcriptRoots: [join(paths.root, "no-transcripts")],
+      timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
+      modelUpstreams: {
+        anthropic: vendorUrl,
+        openai: `${vendorUrl}/v1`,
+        chatgpt: `${vendorUrl}/backend-api/codex`,
+      },
+    });
+    cleanups.push(() => handle.stop());
+    const port = handle.modelProxyPort as number;
+    const issue = (harness: "claude-code" | "codex", placement?: "static") => {
+      const answer = handle.api.issueRunToken!({
+        harness,
+        ...(placement !== undefined ? { placement } : {}),
+      });
+      expect(answer.status).toBe(200);
+      return answer.body as { token: string; token_id: string };
+    };
+    const session = async (id: string, harness?: "codex") => {
+      await handle.api.handleHook({
+        payload: {
+          hook_event_name: "SessionStart",
+          session_id: id,
+          cwd: "/tmp",
+          source: "startup",
+        },
+        ...(harness !== undefined ? { harness } : {}),
+      });
+      return handle.registry.get(id)!.recorder.sessionUuid;
+    };
+    return { handle, plane, paths, log, port, store, hostFile, issue, session };
+  }
+
+  async function vendor(handler: VendorHandler) {
+    const fake = await fakeVendor(handler);
+    cleanups.push(() => fake.close());
+    return fake;
+  }
+
+  const headerOf = (raw: string[], name: string) => {
+    const index = raw.findIndex(
+      (h, i) => i % 2 === 0 && h.toLowerCase() === name,
+    );
+    return index === -1 ? undefined : raw[index + 1];
+  };
+
+  it("swaps a run token for the key in custody, records the basis and the token id, and never the secret or the token", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, plane, paths, port, log, issue, session } =
+      await bootBrokered(fake.url);
+    const uuid = await session("sess-brokered");
+    const { token, token_id } = issue("claude-code");
+    expect(token.startsWith("oxrt_")).toBe(true);
+
+    const answer = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: [
+        "X-Api-Key",
+        token,
+        "X-Claude-Code-Session-Id",
+        "sess-brokered",
+        "anthropic-version",
+        "2023-06-01",
+      ],
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        stream: true,
+        messages: [{ role: "user", content: PROMPT }],
+      }),
+    });
+    expect(answer.status).toBe(200);
+    expect(answer.body.toString()).toContain(COMPLETION);
+
+    // The vendor saw the real key and nothing that looks like a run token.
+    const seen = fake.requests[0]!;
+    expect(headerOf(seen.rawHeaders, "x-api-key")).toBe(FAKE_KEY);
+    expect(headerOf(seen.rawHeaders, "authorization")).toBeUndefined();
+    expect(headerOf(seen.rawHeaders, "anthropic-version")).toBe("2023-06-01");
+    expect(JSON.stringify(seen.rawHeaders)).not.toContain("oxrt_");
+
+    await until(() => handle.wal.read(uuid).some((e) => e.kind === "llm_call"));
+    const frame = handle.wal.read(uuid).find((e) => e.kind === "llm_call")!;
+    expect(frame.attrs[TACHO_CREDENTIAL_BASIS_ATTR]).toBe("gateway_brokered");
+    expect(frame.attrs[TACHO_RUN_TOKEN_ATTR]).toBe(token_id);
+    expect(frame.attrs["oxagen.metering"]).toBe("observed");
+
+    // The issue itself is on the host's chain, by id and expiry only.
+    const issued = handle.wal
+      .read(handle.hostRecorder.sessionUuid)
+      .find((e) => e.kind === "token_issued")!;
+    expect(issued.body).toMatchObject({ token_id });
+    expect(issued.attrs[TACHO_RUN_TOKEN_ATTR]).toBe(token_id);
+    expect(issued.attrs["oxagen.provider"]).toBe("anthropic");
+
+    await handle.tick();
+    const haystacks = [
+      ...walkFiles(paths.root).map((file) => readFileSync(file, "latin1")),
+      JSON.stringify(plane.ingested),
+      log.join("\n"),
+      JSON.stringify(handle.api.status()),
+      JSON.stringify(handle.api.health()),
+    ];
+    for (const needle of [FAKE_KEY, token, PROMPT])
+      for (const haystack of haystacks)
+        expect(haystack.includes(needle)).toBe(false);
+    // The health report says which providers are brokered, and no more.
+    expect(handle.api.health()["credentials"]).toEqual([
+      { provider: "anthropic", basis: "gateway_brokered" },
+      { provider: "openai", basis: "harness_held" },
+    ]);
+    expect(handle.api.status()["credential_custody"]).toEqual([
+      expect.objectContaining({
+        provider: "anthropic",
+        kind: "api_key",
+        source: "claude-code:settings.env",
+      }),
+    ]);
+  });
+
+  it("refuses a call that brings its own vendor key, or none, to a brokered provider", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session } = await bootBrokered(fake.url);
+    const uuid = await session("sess-foreign");
+    const own = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: [
+        "X-Api-Key",
+        LEAKED_KEY,
+        "X-Claude-Code-Session-Id",
+        "sess-foreign",
+      ],
+      body: JSON.stringify({ model: "claude-sonnet-5", messages: [] }),
+    });
+    expect(own.status).toBe(403);
+    expect(own.headers["x-oxagen-refusal"]).toBe("foreign_credential");
+    expect(own.body.toString()).toContain("ANTHROPIC_API_KEY");
+    const none = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Claude-Code-Session-Id", "sess-foreign"],
+      body: JSON.stringify({ model: "claude-sonnet-5", messages: [] }),
+    });
+    expect(none.status).toBe(403);
+    expect(none.headers["x-oxagen-refusal"]).toBe("run_token_required");
+    expect(fake.requests).toHaveLength(0);
+    const refusals = handle.wal
+      .read(uuid)
+      .filter((e) => e.kind === "policy_decision");
+    expect(refusals.map((e) => e.body["policy_reason_code"])).toEqual([
+      "foreign_credential",
+      "run_token_required",
+    ]);
+    expect(refusals[0]!.attrs[TACHO_CREDENTIAL_BASIS_ATTR]).toBe(
+      "gateway_brokered",
+    );
+  });
+
+  it("answers an expired or foreign-signed token with a 401 the harness acts on, and a mismatched one with a 403", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, paths, port, hostFile, issue } = await bootBrokered(
+      fake.url,
+      ["anthropic", "openai"],
+    );
+    const key = readRunTokenKey(paths.runTokenKey)!;
+    const expired = mintRunToken({
+      key,
+      host: hostFile.host_enrollment_id,
+      harness: "claude-code",
+      provider: "anthropic",
+      placement: "helper",
+      now: Date.now() - 20 * 60_000,
+    });
+    const gone = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", expired.token],
+      body: "{}",
+    });
+    expect(gone.status).toBe(401);
+    expect(gone.headers["x-oxagen-refusal"]).toBe("run_token_expired");
+    expect(JSON.parse(gone.body.toString()).error.type).toBe(
+      "authentication_error",
+    );
+    const forged = mintRunToken({
+      key: generateRunTokenKey(),
+      host: hostFile.host_enrollment_id,
+      harness: "claude-code",
+      provider: "anthropic",
+      placement: "helper",
+      now: Date.now(),
+    });
+    const fake401 = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", forged.token],
+      body: "{}",
+    });
+    expect(fake401.status).toBe(401);
+    expect(fake401.headers["x-oxagen-refusal"]).toBe("run_token_invalid");
+    // A Codex token spent at the Anthropic route.
+    const codex = issue("codex", "static");
+    const crossed = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", codex.token],
+      body: "{}",
+    });
+    expect(crossed.status).toBe(403);
+    expect(crossed.headers["x-oxagen-refusal"]).toBe("run_token_mismatch");
+    expect(fake.requests).toHaveLength(0);
+    const refused = handle.wal
+      .read(handle.hostRecorder.sessionUuid)
+      .filter((e) => e.kind === "policy_decision");
+    // Each refusal cites the token it refused, read off the token.
+    expect(refused.map((e) => e.attrs[TACHO_RUN_TOKEN_ATTR])).toEqual([
+      expired.claims.tid,
+      forged.claims.tid,
+      codex.token_id,
+    ]);
+  });
+
+  it("speaks each vendor's 401 shape, and reads a token that only looks like one as malformed", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { paths, port, hostFile } = await bootBrokered(fake.url, [
+      "anthropic",
+      "openai",
+    ]);
+    const junk = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", "oxrt_not-a-token-at-all"],
+      body: "{}",
+    });
+    expect(junk.status).toBe(401);
+    expect(junk.headers["x-oxagen-refusal"]).toBe("run_token_malformed");
+    expect(JSON.parse(junk.body.toString())).toEqual({
+      type: "error",
+      error: {
+        type: "authentication_error",
+        message: expect.stringMatching(
+          /not a run token.*\(run_token_malformed\)$/,
+        ),
+      },
+    });
+    // Codex reads OpenAI's shape: `invalid_api_key` is the code its SDK
+    // surfaces as an authentication failure rather than retrying.
+    const key = readRunTokenKey(paths.runTokenKey)!;
+    const expired = mintRunToken({
+      key,
+      host: hostFile.host_enrollment_id,
+      harness: "codex",
+      provider: "openai",
+      placement: "static",
+      now: Date.now() - 40 * 24 * 60 * 60_000,
+    });
+    const codex = await call(port, {
+      path: "/backend-api/codex/responses",
+      headers: ["Authorization", `Bearer ${expired.token}`],
+      body: "{}",
+    });
+    expect(codex.status).toBe(401);
+    expect(codex.headers["x-oxagen-refusal"]).toBe("run_token_expired");
+    expect(JSON.parse(codex.body.toString())).toEqual({
+      error: {
+        message: expect.stringContaining("expired"),
+        type: "invalid_request_error",
+        param: null,
+        code: "invalid_api_key",
+      },
+    });
+    // A 403 keeps the seam's own code where OpenAI's SDK shows it.
+    const foreign = await call(port, {
+      path: "/backend-api/codex/responses",
+      headers: ["Authorization", "Bearer sk-proj-THEIR-OWN"],
+      body: "{}",
+    });
+    expect(foreign.status).toBe(403);
+    expect(JSON.parse(foreign.body.toString()).error).toMatchObject({
+      type: "invalid_request_error",
+      code: "foreign_credential",
+    });
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it("lets the operator's pause outrank the credential seam", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { port } = await bootBrokered(fake.url, ["anthropic"], {
+      host_status: "paused",
+    });
+    // A foreign key on a brokered provider would be `foreign_credential`;
+    // the person is told the host is paused first, since that is the
+    // decision that stands whatever they present.
+    const answer = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", LEAKED_KEY],
+      body: "{}",
+    });
+    expect(answer.status).toBe(403);
+    expect(answer.headers["x-oxagen-refusal"]).toBe("host_paused");
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it("fails closed for a run token when the store cannot be read, and reports every provider harness held", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, paths, port, log, issue } = await bootBrokered(fake.url);
+    const { token } = issue("claude-code");
+    writeFileSync(paths.credentials, "{ not a store");
+    const answer = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", token],
+      body: "{}",
+    });
+    expect(answer.status).toBe(403);
+    expect(answer.headers["x-oxagen-refusal"]).toBe("credential_unavailable");
+    expect(fake.requests).toHaveLength(0);
+    expect(log.some((l) => l.includes("credential store unreadable"))).toBe(
+      true,
+    );
+    expect(handle.api.health()["credentials"]).toEqual([
+      { provider: "anthropic", basis: "harness_held" },
+      { provider: "openai", basis: "harness_held" },
+    ]);
+    expect(handle.api.status()["credential_custody"]).toEqual([]);
+    // No token is minted over a store nobody can open.
+    expect(handle.api.issueRunToken!({ harness: "claude-code" })).toMatchObject(
+      { status: 403, body: { code: "credential_unavailable" } },
+    );
+  });
+
+  it("brokers Codex with a bearer, and passes a provider with nothing in custody through untouched", async () => {
+    const fake = await vendor((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          id: "resp_1",
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }),
+      );
+    });
+    const { port, issue, handle, store } = await bootBrokered(fake.url, [
+      "openai",
+    ]);
+    const { token } = issue("codex", "static");
+    const brokered = await call(port, {
+      path: "/backend-api/codex/responses",
+      headers: ["Authorization", `Bearer ${token}`],
+      body: JSON.stringify({ model: "gpt-5", input: "hi" }),
+    });
+    expect(brokered.status).toBe(200);
+    const seen = fake.requests[0]!;
+    expect(headerOf(seen.rawHeaders, "authorization")).toBe(
+      `Bearer ${OPENAI_KEY}`,
+    );
+    expect(headerOf(seen.rawHeaders, "x-api-key")).toBeUndefined();
+
+    // Anthropic is not in custody on this host: the harness's own key crosses.
+    const own = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", FAKE_KEY],
+      body: JSON.stringify({ model: "claude-sonnet-5", messages: [] }),
+    });
+    expect(own.status).toBe(200);
+    expect(headerOf(fake.requests[1]!.rawHeaders, "x-api-key")).toBe(FAKE_KEY);
+    await until(
+      () =>
+        handle.wal
+          .read(handle.hostRecorder.sessionUuid)
+          .filter((e) => e.kind === "llm_call").length >= 2,
+    );
+    const bases = handle.wal
+      .read(handle.hostRecorder.sessionUuid)
+      .filter((e) => e.kind === "llm_call")
+      .map((e) => e.attrs[TACHO_CREDENTIAL_BASIS_ATTR]);
+    expect(bases).toEqual(["gateway_brokered", "harness_held"]);
+
+    // A run token spent where nothing is in custody is refused with a reason.
+    store.release("openai");
+    const orphan = await call(port, {
+      path: "/backend-api/codex/responses",
+      headers: ["Authorization", `Bearer ${token}`],
+      body: "{}",
+    });
+    expect(orphan.status).toBe(403);
+    expect(orphan.headers["x-oxagen-refusal"]).toBe("credential_unavailable");
+    // And no token is issued for it any more.
+    expect(handle.api.issueRunToken!({ harness: "codex" })).toMatchObject({
+      status: 403,
+      body: { code: "credential_unavailable" },
+    });
+    expect(handle.api.issueRunToken!({ harness: "stella" })).toMatchObject({
+      status: 400,
+      body: { code: "harness_not_brokered" },
+    });
+  });
+
+  it("lets a ChatGPT login cross as the harness's own even when an OpenAI key is in custody", async () => {
+    const fake = await vendor((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          id: "resp_2",
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }),
+      );
+    });
+    const { port, handle } = await bootBrokered(fake.url, ["openai"]);
+    const answer = await call(port, {
+      path: "/backend-api/codex/responses",
+      headers: [
+        "Authorization",
+        `Bearer ${FAKE_BEARER}`,
+        "ChatGPT-Account-ID",
+        "acct_1",
+      ],
+      body: JSON.stringify({ model: "gpt-5", input: "hi" }),
+    });
+    expect(answer.status).toBe(200);
+    const seen = fake.requests[0]!;
+    // chatgpt.com takes the login, never an API key, so the bearer crossed.
+    expect(seen.url).toBe("/backend-api/codex/responses");
+    expect(headerOf(seen.rawHeaders, "authorization")).toBe(
+      `Bearer ${FAKE_BEARER}`,
+    );
+    await until(() =>
+      handle.wal
+        .read(handle.hostRecorder.sessionUuid)
+        .some((e) => e.kind === "llm_call"),
+    );
+    const frame = handle.wal
+      .read(handle.hostRecorder.sessionUuid)
+      .find((e) => e.kind === "llm_call")!;
+    expect(frame.attrs[TACHO_CREDENTIAL_BASIS_ATTR]).toBe("harness_held");
+  });
+
+  it("prefers a run token over a login sent beside it, and strips both on the way out", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { port, issue } = await bootBrokered(fake.url);
+    const { token } = issue("claude-code");
+    const answer = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["Authorization", `Bearer ${FAKE_BEARER}`, "X-Api-Key", token],
+      body: JSON.stringify({ model: "claude-sonnet-5", messages: [] }),
+    });
+    expect(answer.status).toBe(200);
+    const seen = fake.requests[0]!;
+    expect(headerOf(seen.rawHeaders, "x-api-key")).toBe(FAKE_KEY);
+    expect(headerOf(seen.rawHeaders, "authorization")).toBeUndefined();
+  });
+
+  it("renews Codex's static token on the tick when it nears its expiry, and records the mint", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, paths, hostFile } = await bootBrokered(
+      fake.url,
+      ["openai"],
+      {},
+      { harnesses: ["claude-code", "codex"] },
+    );
+    const home = join(paths.root, "..");
+    const key = readRunTokenKey(paths.runTokenKey)!;
+    const nearlyOver = mintRunToken({
+      key,
+      host: hostFile.host_enrollment_id,
+      harness: "codex",
+      provider: "openai",
+      placement: "static",
+      now: Date.now(),
+      ttlMs: 60 * 60_000,
+    });
+    mkdirSync(join(home, ".codex"), { recursive: true });
+    writeFileSync(
+      join(home, ".codex", "auth.json"),
+      JSON.stringify({ OPENAI_API_KEY: nearlyOver.token, keep: "me" }),
+    );
+    await handle.tick();
+    const written = JSON.parse(
+      readFileSync(join(home, ".codex", "auth.json"), "utf8"),
+    ) as { OPENAI_API_KEY: string; keep: string };
+    expect(written.keep).toBe("me");
+    expect(written.OPENAI_API_KEY).not.toBe(nearlyOver.token);
+    const claims = peekRunTokenClaims(written.OPENAI_API_KEY)!;
+    expect(claims.host).toBe(hostFile.host_enrollment_id);
+    expect(claims.exp - Date.now()).toBeGreaterThan(20 * 24 * 60 * 60_000);
+    expect(
+      handle.wal
+        .read(handle.hostRecorder.sessionUuid)
+        .some(
+          (e) =>
+            e.kind === "token_issued" &&
+            e.attrs["oxagen.run_token_placement"] === "static",
+        ),
+    ).toBe(true);
+    // A second tick inside the hour changes nothing.
+    await handle.tick();
+    expect(
+      (
+        JSON.parse(readFileSync(join(home, ".codex", "auth.json"), "utf8")) as {
+          OPENAI_API_KEY: string;
+        }
+      ).OPENAI_API_KEY,
+    ).toBe(written.OPENAI_API_KEY);
+  });
+
+  it("issues a token over the collector's socket route with the local bearer, and to nobody else", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, hostFile } = await bootBrokered(fake.url);
+    const post = (bearer: string | undefined, body: unknown) =>
+      new Promise<{ status: number; body: string }>((resolve) => {
+        const req = request(
+          {
+            host: "127.0.0.1",
+            port: handle.port,
+            method: "POST",
+            path: "/credential/issue",
+            headers: {
+              "Content-Type": "application/json",
+              ...(bearer !== undefined
+                ? { Authorization: `Bearer ${bearer}` }
+                : {}),
+            },
+          },
+          (res) => {
+            const chunks: Buffer[] = [];
+            res.on("data", (c: Buffer) => chunks.push(c));
+            res.on("end", () =>
+              resolve({
+                status: res.statusCode ?? 0,
+                body: Buffer.concat(chunks).toString("utf8"),
+              }),
+            );
+          },
+        );
+        req.end(JSON.stringify(body));
+      });
+    const denied = await post(undefined, { harness: "claude-code" });
+    expect(denied.status).toBe(401);
+    const wrong = await post(hostFile.local_token, { harness: "stella" });
+    expect(wrong.status).toBe(400);
+    expect(JSON.parse(wrong.body)).toMatchObject({
+      code: "harness_not_brokered",
+    });
+    const issued = await post(hostFile.local_token, { harness: "claude-code" });
+    expect(issued.status).toBe(200);
+    const parsed = JSON.parse(issued.body) as {
+      token: string;
+      expires_at: string;
+    };
+    expect(parsed.token.startsWith("oxrt_")).toBe(true);
+    expect(Date.parse(parsed.expires_at) - Date.now()).toBeLessThanOrEqual(
+      15 * 60_000,
+    );
+  });
+});
+
 describe("the model proxy listener", () => {
   it("rebinds after the port is freed, and says it is not listening until then", async () => {
     const blocker = createServer();
@@ -1750,10 +2361,14 @@ describe("the wire and the host file", () => {
     expect(policyBundleSchema.parse(bundle).model_prices).toEqual(PRICES);
     const bad = { ...bundle, model_prices: [{ ...PRICES[0], surprise: 1 }] };
     expect(policyBundleSchema.safeParse(bad).success).toBe(false);
+    // The whole advertised list, not a subset: a field added to
+    // `policyBundleSchema` without its name here would ship a daemon that
+    // parses it and never says so, and the control plane would keep gating it.
     expect(TACHO_BUNDLE_FEATURES).toEqual([
       "gateway_tools",
       "model_prices",
       "models",
+      "hook_fail_open",
     ]);
   });
 

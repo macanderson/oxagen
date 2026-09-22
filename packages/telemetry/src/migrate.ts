@@ -427,6 +427,145 @@ async function recordApplied(
   });
 }
 
+// ── Ledger repair: a filename is not a table (#3698) ──────────────────────────
+//
+// A row in `_migrations` says a file was RECORDED, not that its statements ever
+// reached the server. The pre-ledger baseline above writes those rows on faith,
+// for every file up to the cutover, and the apply loop below skips a recorded
+// file for ever. So one wrong reading of a database — a deployment classified
+// as pre-ledger whose backlog had in fact never run against THIS store — makes
+// the tables those files create permanently absent, with the ledger reporting
+// the store current and nothing left that would ever run them again.
+//
+// That is #3698 exactly. `error_events` is created only by
+// `0020_error_events.sql`; `schema.sql` does not carry it. Production listed
+// that file as applied and had no table, so every `captureError()` write failed
+// with `Table oxagen.error_events does not exist` — and captureError is the one
+// component whose failure it cannot report, so it went to stderr and nowhere
+// else while `error_events` was the first place anyone looked during an
+// incident.
+//
+// The runner now asks the database instead of trusting the ledger: a recorded
+// file whose tables are missing is replayed. It is self-limiting — once the
+// table exists the file is not selected again — and it is safe by construction,
+// because a file is replayed only when a table it names is ABSENT. That is what
+// keeps `0021`'s `DROP TABLE schema_conformance_events` off a live table: the
+// drop replays only in the state where there is nothing to drop.
+
+/** One table-level DDL statement, reduced to the verb and the table. */
+export interface TableStatement {
+  verb: "create" | "drop" | "alter";
+  table: string;
+}
+
+/** `db`.`name` → name. ClickHouse accepts backticks and a database prefix. */
+function bareTableName(raw: string): string {
+  const last = raw.split(".").at(-1) ?? raw;
+  return last.replace(/`/g, "");
+}
+
+/**
+ * The table-level DDL in one migration file, in statement order.
+ *
+ * Statement order matters: `0021` drops `schema_conformance_events` and
+ * recreates it four lines later, so a file read as a whole would say the table
+ * is dropped. `CREATE VIEW` and `CREATE MATERIALIZED VIEW` are deliberately not
+ * matched — a view is in `system.tables` too, but nothing here has run against
+ * a production store carrying one, and narrower and true beats broad and
+ * guessed (the same call `check-store-drift.sh` makes).
+ *
+ * @internal exported for tests.
+ */
+export function tableStatements(sql: string): TableStatement[] {
+  const found: TableStatement[] = [];
+  for (const statement of splitStatements(sql)) {
+    const create =
+      /^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w`.]+)/i.exec(
+        statement,
+      );
+    if (create?.[1]) {
+      found.push({ verb: "create", table: bareTableName(create[1]) });
+      continue;
+    }
+    const drop = /^\s*DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([\w`.]+)/i.exec(
+      statement,
+    );
+    if (drop?.[1]) {
+      found.push({ verb: "drop", table: bareTableName(drop[1]) });
+      continue;
+    }
+    const alter = /^\s*ALTER\s+TABLE\s+([\w`.]+)/i.exec(statement);
+    if (alter?.[1]) {
+      found.push({ verb: "alter", table: bareTableName(alter[1]) });
+    }
+  }
+  return found;
+}
+
+/**
+ * The tables `migrations/` leaves behind once every file has run, folded in
+ * filename and then statement order so a table created early and dropped later
+ * (`session_recaps`, `agent_executions`) does not count as declared.
+ *
+ * @internal exported for tests.
+ */
+export function declaredMigrationTables(
+  files: readonly { file: string; sql: string }[],
+): Set<string> {
+  const declared = new Set<string>();
+  for (const { sql } of files) {
+    for (const { verb, table } of tableStatements(sql)) {
+      if (verb === "create") declared.add(table);
+      else if (verb === "drop") declared.delete(table);
+    }
+  }
+  return declared;
+}
+
+/**
+ * Which recorded files have to run again, and which tables say so.
+ *
+ * A file is selected when it names a table that `migrations/` declares and the
+ * database does not have. Selecting on the table rather than on the file is
+ * what pulls in a later ALTER: replaying `0020_error_events.sql` alone would
+ * recreate `error_events` without `execution_id`, because `0022` adds that
+ * column and is recorded too — and a column missing from the table is worse
+ * than a missing table, since ClickHouse drops the unknown field and stores the
+ * rest, so the insert succeeds and the column is empty for ever.
+ *
+ * @internal exported for tests.
+ */
+export function filesToReplay(
+  files: readonly { file: string; sql: string }[],
+  recorded: ReadonlySet<string>,
+  existing: ReadonlySet<string>,
+): { files: string[]; missing: string[] } {
+  const declared = declaredMigrationTables(files);
+  const missing = [...declared].filter((t) => !existing.has(t)).sort();
+  if (missing.length === 0) return { files: [], missing };
+  const missingSet = new Set(missing);
+  const selected = files
+    .filter(
+      ({ file, sql }) =>
+        recorded.has(file) &&
+        tableStatements(sql).some(({ table }) => missingSet.has(table)),
+    )
+    .map(({ file }) => file);
+  return { files: selected, missing };
+}
+
+/** Table names currently in the target database. */
+async function existingTableNames(ch: ClickHouseClient): Promise<Set<string>> {
+  const result = await ch.query({
+    query: `SELECT name FROM system.tables WHERE database = currentDatabase()`,
+    format: "JSONEachRow",
+  });
+  const rows = await result.json<{ name?: unknown }>();
+  return new Set(
+    rows.map((r) => r.name).filter((n): n is string => typeof n === "string"),
+  );
+}
+
 // Applies schema.sql on every call (it is fully idempotent — CREATE TABLE /
 // ADD COLUMN IF NOT EXISTS, no DROP), then every NOT-YET-APPLIED file in
 // migrations/ in filename order, recording each one in the `_migrations`
@@ -448,6 +587,14 @@ async function recordApplied(
 // error_events, usage_events, memory_changes, schema_conformance_events,
 // stella_operational_events and the claude_* tables are defined only in
 // migrations/. Treat schema.sql plus migrations/ together as the desired state.
+//
+// That split is why the ledger needs the repair below (#3698). A table
+// schema.sql carries comes back by itself on the next call, because schema.sql
+// runs outside the ledger. A table only migrations/ carries does not: once its
+// filename is recorded, nothing here would ever run that file again, so a
+// filename recorded without being executed makes the table permanently absent.
+// The run therefore ends by asking the database which declared tables it has,
+// and re-runs the recorded files that name a missing one.
 async function migrateOnce(): Promise<void> {
   const here = dirname(fileURLToPath(import.meta.url));
   await ensureDatabase();
@@ -550,6 +697,52 @@ async function migrateOnce(): Promise<void> {
     await ch.command({ query: stmt });
   }
 
+  // Read every file once, here rather than in the loop, because the repair
+  // below has to look at the SQL of files the loop would skip.
+  const bodies = files.map((file) => ({
+    file,
+    sql: readFileSync(join(migrationsDir, file), "utf8"),
+  }));
+
+  // Ask the database what it actually has, AFTER schema.sql, so a table both
+  // files declare is present by the time it is checked. An empty answer is not
+  // taken at face value: a populated ledger and a database with no tables at
+  // all cannot both be true, so a read that returns nothing is a failed or
+  // garbled read, and standing down beats replaying every migration on it.
+  const existing = await existingTableNames(ch);
+  const replayed = new Set<string>();
+  if (existing.size === 0) {
+    if (applied.size > 0) {
+      process.stderr.write(
+        JSON.stringify({
+          level: "warn",
+          msg: "could not read the table list; skipping the ledger-vs-tables check for this run",
+          recordedMigrations: applied.size,
+        }) + "\n",
+      );
+    }
+  } else {
+    const repair = filesToReplay(bodies, applied, existing);
+    if (repair.files.length > 0) {
+      // Said out loud for the reason the baseline notice is: a recorded file
+      // running again is a decision, and the failure this repairs was invisible
+      // for weeks because the only thing that knew about it was a stderr line
+      // inside the error reporter.
+      process.stdout.write(
+        JSON.stringify({
+          level: "warn",
+          msg: "ClickHouse ledger repair: these migrations are recorded as applied but their tables are missing, so they run again",
+          missingTables: repair.missing,
+          replaying: repair.files,
+        }) + "\n",
+      );
+      for (const file of repair.files) {
+        applied.delete(file);
+        replayed.add(file);
+      }
+    }
+  }
+
   // A file is recorded only AFTER all of its statements have returned. A
   // failure part-way through one throws out of this loop and out of
   // migrate(), so the file stays unrecorded and the next run replays it from
@@ -566,13 +759,16 @@ async function migrateOnce(): Promise<void> {
   // error rather than the one that actually stopped the deploy. Closing it
   // properly means per-statement ledger granularity, which ClickHouse's lack
   // of DDL transactions makes its own piece of work; #2972 carries it.
-  for (const file of files) {
+  for (const { file, sql } of bodies) {
     if (applied.has(file)) continue;
-    const body = readFileSync(join(migrationsDir, file), "utf8");
-    for (const stmt of splitStatements(body)) {
+    for (const stmt of splitStatements(sql)) {
       await ch.command({ query: stmt });
     }
-    await recordApplied(ch, [file]);
+    // A replayed file is already in the ledger. `appliedMigrations` reads
+    // `SELECT DISTINCT`, so a second row would be harmless, but a ledger that
+    // grows a row every time a repair runs is a ledger that stops reading as a
+    // list of what has been applied.
+    if (!replayed.has(file)) await recordApplied(ch, [file]);
   }
 }
 

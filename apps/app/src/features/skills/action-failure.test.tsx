@@ -30,4 +30,30 @@ describe("skill action refusal", () => {
     ).toContain("Check the configuration");
     expect(result.current(UNANSWERED)).toContain("action_failed");
   });
+
+  it("names the stale pull request and the way out of a superseded publication", () => {
+    const { result } = renderHook(useSkillFailure, {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <NextIntlClientProvider locale="en" messages={messages}>
+          {children}
+        </NextIntlClientProvider>
+      ),
+    });
+    expect(
+      result.current({
+        ok: false,
+        reason: "conflict",
+        code: "skill_config_superseded",
+      }),
+    ).toBe(
+      "The production configuration changed after that pull request merged. Publish the pull request that carries the current configuration.",
+    );
+    expect(
+      result.current({
+        ok: false,
+        reason: "conflict",
+        code: "skill_config_pr_unrelated",
+      }),
+    ).toContain(".oxagen/skills.toml");
+  });
 });

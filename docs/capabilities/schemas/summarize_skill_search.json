@@ -1,0 +1,141 @@
+{
+  "name": "summarize_skill_search",
+  "domain": "skill",
+  "description": "Summarize approved skill resolution at a published configuration version. Returns the skills an agent may load and counts the withheld ones by reason, never their names.",
+  "mode": "sync",
+  "surfaces": [
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "version": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    },
+    "required": [
+      "version",
+      "query"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "version": {
+        "type": "string"
+      },
+      "repositoryCommitSha": {
+        "type": "string"
+      },
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 48
+            },
+            "version": {
+              "type": "string"
+            },
+            "digest": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 48
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 8000
+            },
+            "tokenCost": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "digest",
+            "source",
+            "description",
+            "tokenCost",
+            "score"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "withheld": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reasons": {
+            "type": "object",
+            "properties": {
+              "out_of_scope": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "unapproved_digest": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "out_of_scope",
+              "unapproved_digest"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "count",
+          "reasons"
+        ],
+        "additionalProperties": false
+      },
+      "tokenCost": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "version",
+      "repositoryCommitSha",
+      "results",
+      "withheld",
+      "tokenCost"
+    ],
+    "additionalProperties": false
+  }
+}

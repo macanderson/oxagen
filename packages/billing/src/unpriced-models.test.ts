@@ -19,6 +19,7 @@ vi.mock("@oxagen/telemetry", () => ({
     "cache_write_1h",
     "output",
     "reasoning",
+    "server_tool_request",
   ],
 }));
 
@@ -197,6 +198,57 @@ describe("findUnpricedModels", () => {
     expect(out).toHaveLength(1);
     expect(out[0]!.missingClasses).toEqual(["reasoning"]);
     expect(out[0]!.fullyUnpriced).toBe(false);
+  });
+
+  it("names a model whose provider-side searches nobody priced, and drops it once a rate covers them", () => {
+    // #3281. A wrapped call records the provider-side tool calls it made
+    // (`web_search_requests`, `web_fetch_requests`) and the book prices them
+    // as `server_tool_request` per request. The observation read used to
+    // report six token classes and stop, so this usage never reached the
+    // comparison: a model billed for every search it ran read as fully
+    // priced, and the report the customer opens to find out why a run has no
+    // cost said nothing about the one rate that was missing.
+    const searching = observed({
+      model: "searching-model",
+      classes: [
+        ...requiredUsage(),
+        usage({ tokenClass: "server_tool_request", calls: 2, tokens: 7 }),
+      ],
+    });
+
+    const unpriced = findUnpricedModels({
+      observed: [searching],
+      book: fullyPriced("searching-model"),
+      orgId: ORG,
+      at: AT,
+    });
+    expect(unpriced).toHaveLength(1);
+    expect(unpriced[0]!.missingClasses).toEqual(["server_tool_request"]);
+    expect(unpriced[0]!.fullyUnpriced).toBe(false);
+    expect(unpriced[0]!.missingClassWindows).toEqual([
+      {
+        tokenClass: "server_tool_request",
+        unpricedFrom: new Date("2026-09-10T00:00:00.000Z"),
+        unpricedTo: new Date("2026-09-13T00:00:00.000Z"),
+      },
+    ]);
+
+    // The rate the report asked for is the rate that silences it.
+    expect(
+      findUnpricedModels({
+        observed: [searching],
+        book: [
+          ...fullyPriced("searching-model"),
+          entry({
+            model: "searching-model",
+            tokenClass: "server_tool_request",
+            unit: "request",
+          }),
+        ],
+        orgId: ORG,
+        at: AT,
+      }),
+    ).toEqual([]);
   });
 
   it("reports a partly-priced model as not fully unpriced, naming only the gaps", () => {

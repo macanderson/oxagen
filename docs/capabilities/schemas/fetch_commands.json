@@ -93,6 +93,34 @@
               "maxLength": 64
             },
             "maxItems": 32
+          },
+          "credentials": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "anthropic",
+                    "openai"
+                  ]
+                },
+                "basis": {
+                  "type": "string",
+                  "enum": [
+                    "gateway_brokered",
+                    "harness_held"
+                  ]
+                }
+              },
+              "required": [
+                "provider",
+                "basis"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 8
           }
         },
         "additionalProperties": false

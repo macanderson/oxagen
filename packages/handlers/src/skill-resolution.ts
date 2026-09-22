@@ -28,28 +28,73 @@ export function parseSkillConfig(text: string | null): {
   }
 }
 
+/** A withheld skill is named to a person and counted to an agent; nothing else about it travels. */
+export type SkillWithheld = { id: string; reason: SkillWithheldReason };
+
+/**
+ * One repository commit's skill catalog, split by what the resolver needed to read.
+ * A skill no pin names can only be withheld, so a reader may report its id from the
+ * tree and leave its bytes on GitHub.
+ */
+export type SkillCatalog = {
+  candidates: readonly SkillCandidate[];
+  unpinned: readonly string[];
+};
+
 export type SkillResolution = {
   results: Array<SkillCandidate & { score: number }>;
-  withheld: Array<SkillCandidate & { reason: SkillWithheldReason }>;
+  withheld: SkillWithheld[];
   tokenCost: number;
 };
+
+/** The skill ids an enabled configuration pins for one source. Nothing else can be eligible. */
+export function pinnedSkillIds(
+  pinnedConfig: SkillConfig,
+  source: string,
+): Set<string> {
+  const config = skillConfigSchema.parse(pinnedConfig);
+  if (!config.enabled) return new Set();
+  return new Set(
+    config.sources
+      .find((entry) => entry.id === source)
+      ?.skills.map((pin) => pin.id) ?? [],
+  );
+}
 
 /** Only approved candidates reach the ranker, including an embedding service. */
 export async function resolveSkills(
   pinnedConfig: SkillConfig,
-  candidates: readonly SkillCandidate[],
+  catalog: SkillCatalog,
   rank: (eligible: readonly SkillCandidate[]) => Promise<readonly number[]>,
 ): Promise<SkillResolution> {
   const config = skillConfigSchema.parse(pinnedConfig);
+  const pinned = new Set(
+    config.enabled
+      ? config.sources.flatMap((source) => source.skills.map((pin) => pin.id))
+      : [],
+  );
   const eligible: SkillCandidate[] = [];
   const withheld: SkillResolution["withheld"] = [];
   const identities = new Set<string>();
-  for (const raw of candidates) {
+  const ids = new Set<string>();
+  // A reader may skip a skill's bytes only when the configuration pins no such id.
+  // Checking that here keeps the decision with the resolver: a reader that skipped
+  // a pinned skill would otherwise turn an eligible skill into a withheld one.
+  for (const id of catalog.unpinned) {
+    if (pinned.has(id))
+      throw new Error("Skill catalog withheld a pinned skill unread");
+    if (ids.has(id))
+      throw new Error("Skill catalog contains a duplicate identity");
+    ids.add(id);
+    withheld.push({ id, reason: "out_of_scope" });
+  }
+  for (const raw of catalog.candidates) {
     const candidate = skillCandidateSchema.parse(raw);
     const identity = `${candidate.source}/${candidate.id}@${candidate.version}`;
-    if (identities.has(identity))
+    if (identities.has(identity) || ids.has(candidate.id))
       throw new Error("Skill catalog contains a duplicate identity");
     identities.add(identity);
+    ids.add(candidate.id);
     const pin = config.enabled
       ? config.sources
           .find((source) => source.id === candidate.source)
@@ -58,11 +103,14 @@ export async function resolveSkills(
               entry.id === candidate.id && entry.version === candidate.version,
           )
       : undefined;
-    if (!pin) withheld.push({ ...candidate, reason: "out_of_scope" });
+    if (!pin) withheld.push({ id: candidate.id, reason: "out_of_scope" });
     else if (pin.digest !== candidate.digest)
-      withheld.push({ ...candidate, reason: "unapproved_digest" });
+      withheld.push({ id: candidate.id, reason: "unapproved_digest" });
     else eligible.push(candidate);
   }
+  // One order whatever the reader read, so a preview does not shuffle when a
+  // skill moves between the read and the unread half of the catalog.
+  withheld.sort((a, b) => a.id.localeCompare(b.id));
   if (!eligible.length) return { results: [], withheld, tokenCost: 0 };
   const scores = await rank(eligible);
   if (
