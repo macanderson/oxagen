@@ -52,11 +52,7 @@ export const costPriceEntrySet = registerCapability({
     "Set this organization's negotiated rate for one model and token class, in USD per one million units, effective from an instant. Optional additionalRates commit other classes of the same model in one transaction. The negotiated row wins over the provider list price from then on; the row it supersedes is closed, never overwritten, so a run priced earlier keeps the entry it was priced with. Owner / Admin / Billing only.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  // No "cli" layer: CapabilityLayer has no such member, and check_manifest
-  // has no candidate path for one, so declaring it would report a permanent
-  // gap. The CLI command is declared on `surfaces` instead, as set_spend_budget
-  // does.
-  layers: ["schema", "api", "mcp", "app", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "cli", "app", "unit", "docs"],
   scoped: true,
   // Setting the rate you are billed at must never be refused for being over
   // budget, and it consumes no AI credits.

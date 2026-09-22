@@ -59,11 +59,7 @@ export const costPriceEntryRemove = registerCapability({
     "End this organization's negotiated rate for one model and token class at an instant, so every frame from then on is priced at the provider list price again. The row is closed, not deleted: a run priced before the instant still names the entry it was priced with. Owner / Admin / Billing only.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  // No "cli" layer: CapabilityLayer has no such member, and check_manifest
-  // has no candidate path for one, so declaring it would report a permanent
-  // gap. The CLI command is declared on `surfaces` instead, as set_spend_budget
-  // does.
-  layers: ["schema", "api", "mcp", "app", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "cli", "app", "unit", "docs"],
   scoped: true,
   // Returning to list pricing must never be refused for being over budget, and
   // it consumes no AI credits.

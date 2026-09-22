@@ -14,7 +14,7 @@
 // off as the file.
 import type { GitHubPathCommit } from "@oxagen/github";
 import { HandlerError } from "@oxagen/oxagen";
-import { proposedRecordSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
+import { lineageIdSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import type { SteeringGitHub } from "./context.steering.github";
 import type { SteeringStore } from "./context.steering.store";
 import {
@@ -123,7 +123,6 @@ export function recordNotFound(id: string): HandlerError {
  * Whether `id` can be a lineage: the file stem under `.oxagen/rules/`, as the
  * proposal contract spells it. A `ctr_` id fails this by construction.
  */
-const lineageIdSchema = proposedRecordSchema.innerType().shape.lineageId;
 function isLineageId(id: string): boolean {
   return lineageIdSchema.safeParse(id).success;
 }
