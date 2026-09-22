@@ -20,7 +20,7 @@ import { join } from "node:path";
 import { execFile, spawnSync } from "node:child_process";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
-import type { SessionRecorder } from "../claude-code/recorder";
+import type { ChainMark, SessionRecorder } from "../claude-code/recorder";
 import { tachoEventSchema, type TachoEvent } from "../envelope";
 import { type FrameBody, retentionAllows } from "../evidence/frame-body";
 import { verifyBundle } from "../host/bundle";
@@ -1081,6 +1081,15 @@ async function initializeDaemon(
 
   function checkpoint(): void {
     const events: TachoEvent[] = [];
+    // One write covers every session's checkpoint, so a write that throws
+    // leaves none of them on disk. Each chain then goes back to where its
+    // seal found it, rather than standing a sequence number ahead of the WAL
+    // with a checkpoint frame nothing holds.
+    const marks: Array<{
+      session: SessionRecord;
+      mark: ChainMark;
+      lastCheckpointSeq: number;
+    }> = [];
     for (const session of registry.list()) {
       const head = session.recorder.chainCursor;
       const headSeq = head.seq - 1;
@@ -1091,6 +1100,7 @@ async function initializeDaemon(
       )
         continue;
       const message = `${session.recorder.sessionUuid}:${headSeq}:${head.prevHash}`;
+      const mark = session.recorder.markChain();
       const event = session.recorder.sealCollectorEvent("checkpoint", {
         checkpoint_id: ulid(now()),
         checkpoint_event_count: headSeq + 1,
@@ -1098,10 +1108,23 @@ async function initializeDaemon(
         checkpoint_device_signature: deviceKey.sign(message),
         checkpoint_device_key_fingerprint: deviceKey.fingerprint,
       });
+      marks.push({
+        session,
+        mark,
+        lastCheckpointSeq: session.lastCheckpointSeq,
+      });
       session.lastCheckpointSeq = event.seq;
       events.push(event);
     }
-    record(events);
+    try {
+      record(events);
+    } catch (error) {
+      for (const entry of marks.reverse()) {
+        entry.session.recorder.rollbackChain(entry.mark);
+        entry.session.lastCheckpointSeq = entry.lastCheckpointSeq;
+      }
+      throw error;
+    }
   }
 
   const spoolEnvelope = (file: SpoolFile): HookEnvelope => ({
@@ -1396,7 +1419,6 @@ async function initializeDaemon(
     }
     if (found.length === 0) return;
     await serial.run(async () => {
-      const events: TachoEvent[] = [];
       for (const { session, cwd, facts, changes, ending } of found) {
         if (session.sealed) continue;
         // The session moved while the probe ran, so this answer describes a
@@ -1411,26 +1433,60 @@ async function initializeDaemon(
         }
         if (facts !== undefined)
           session.recorder.noteContext(gitContextOf(facts));
-        if (changes !== undefined)
-          events.push(
-            session.recorder.sealCollectorEvent(
-              "oxagen:worktree_reconciled",
-              worktreeReconciledBody(changes),
-            ),
-          );
+        if (changes !== undefined) recordReconciliation(session, changes);
         if (
           ending !== undefined &&
           pendingSessionEnds.get(session.recorder.sessionUuid) === ending
         ) {
-          record(events.splice(0));
           await recordHookOutcome(ending, session.recorder.sessionUuid);
           persistState();
           pendingSessionEnds.delete(session.recorder.sessionUuid);
           persistPendingEnds();
         }
       }
-      record(events);
     });
+  }
+
+  /**
+   * Seal one session's reconciliation and write it, or leave that session's
+   * chain exactly where the seal found it.
+   *
+   * Both halves matter, and both were wrong. The batch this used to write was
+   * shared: every session the tick had reached handed its events to one
+   * `record` call, so a write that threw for the session being settled took
+   * the others' events with it, and no path retried them. And the seal that
+   * computed them had already moved each chain's cursor, so the next
+   * reconciliation sealed one position further on and the WAL kept a chain
+   * with a hole in it.
+   *
+   * One session, one write, one mark. The mark names this recorder alone, so
+   * the rollback cannot reach a sibling the loop has not settled yet — which
+   * a registry-wide snapshot would, by rebuilding every `SessionRecord` and
+   * detaching the recorders this loop is still holding.
+   */
+  function recordReconciliation(
+    session: SessionRecord,
+    changes: GitWorkingTreeChange[],
+  ): void {
+    const mark = session.recorder.markChain();
+    try {
+      record([
+        session.recorder.sealCollectorEvent(
+          "oxagen:worktree_reconciled",
+          worktreeReconciledBody(changes),
+        ),
+      ]);
+    } catch (error) {
+      session.recorder.rollbackChain(mark);
+      // The lane's own handler requeues the sessions with a pending end. This
+      // one covers a session that is only reconciling, whose read was taken
+      // off `gitPending` before the write was attempted.
+      requestGitRead(session.recorder.sessionUuid, {
+        force: true,
+        reconcile: true,
+      });
+      throw error;
+    }
   }
 
   /** The hook events that open or close a turn, where the worktree may have moved. */

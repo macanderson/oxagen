@@ -142,6 +142,38 @@ export interface RecorderState {
   >;
 }
 
+/**
+ * Where one chain stands, taken before a caller seals events it may not be
+ * able to write, and handed back to {@link SessionRecorder.rollbackChain} when
+ * the write fails.
+ *
+ * It names one recorder and the subagent chains below it, and nothing else.
+ * A caller holding several sessions' recorders — the daemon's git lane holds
+ * up to four in one tick — rolls one of them back without rebuilding the
+ * others, which a registry-wide snapshot cannot do: that replaces every
+ * `SessionRecord` in the registry and detaches the recorders the caller is
+ * still holding for the sessions it has not settled yet.
+ */
+export interface ChainMark {
+  cursor: ChainCursor;
+  /** Events sealed on this chain when the mark was taken. */
+  events: number;
+  /** Bodies waiting for the caller that takes the events with them. */
+  pendingBodies: number;
+  pendingChildGenesis: number;
+  turnSeq: number;
+  turnOpen: boolean;
+  promptId: string | undefined;
+  started: boolean;
+  stopped: boolean;
+  llmCalls: LlmCallLedgerState;
+  /** One mark per subagent chain open at the time, by subagent id. */
+  children: Map<
+    string,
+    { mark: ChainMark; type: string | undefined; open: boolean }
+  >;
+}
+
 export interface SessionSnapshot {
   sessionUuid: string;
   harnessSessionId: string;
@@ -358,6 +390,81 @@ export class SessionRecorder {
       llmCalls: this.llmCalls.state(),
       children,
     };
+  }
+
+  /**
+   * Where this chain stands now, so a caller can seal events and put the
+   * chain back if the write that had to follow them failed.
+   */
+  markChain(): ChainMark {
+    const children: ChainMark["children"] = new Map();
+    for (const [subagentId, link] of this.children) {
+      children.set(subagentId, {
+        mark: link.recorder.markChain(),
+        type: link.type,
+        open: link.open,
+      });
+    }
+    return {
+      cursor: { ...this.cursor },
+      events: this.events.length,
+      pendingBodies: this.pendingBodies.length,
+      pendingChildGenesis: this.pendingChildGenesis.length,
+      turnSeq: this.turnSeq,
+      turnOpen: this.turnOpen,
+      promptId: this.promptId,
+      started: this.started,
+      stopped: this.stopped,
+      llmCalls: this.llmCalls.state(),
+      children,
+    };
+  }
+
+  /**
+   * Undo every event this chain and its subagent chains sealed since the
+   * mark, so the next attempt seals at the same sequence number the failed
+   * one did.
+   *
+   * A seal moves the chain cursor in memory; the WAL write comes after. When
+   * that write throws, the cursor has already advanced past an event nothing
+   * will ever hold, and the retry seals its replacement one position further
+   * on. What lands on disk then is a chain with a hole in it, whose next hash
+   * commits to an event no verifier can read, and the record is neither
+   * gap-free nor tamper-evident. This puts the cursor, the sealed events, the
+   * bodies waiting to be written beside them, the turn and lifecycle flags a
+   * seal sets, and the model-call ledger back where the mark found them.
+   *
+   * Facts absorbed from a source are not chain positions and are left alone:
+   * the git context, host and `anthropic` blocks, the transcript totals, the
+   * OTel metrics and the environment snapshot. They were observed, the
+   * observation still holds, and the frame the retry seals carries them.
+   */
+  rollbackChain(mark: ChainMark): void {
+    for (const [subagentId, link] of [...this.children]) {
+      const saved = mark.children.get(subagentId);
+      // A subagent chain opened after the mark: its genesis is one of the
+      // events being undone, so the chain goes with it.
+      if (saved === undefined) {
+        this.children.delete(subagentId);
+        continue;
+      }
+      link.recorder.rollbackChain(saved.mark);
+      this.children.set(subagentId, {
+        recorder: link.recorder,
+        ...(saved.type !== undefined ? { type: saved.type } : {}),
+        open: saved.open,
+      });
+    }
+    this.cursor = { ...mark.cursor };
+    this.events.splice(mark.events);
+    this.pendingBodies.splice(mark.pendingBodies);
+    this.pendingChildGenesis.splice(mark.pendingChildGenesis);
+    this.turnSeq = mark.turnSeq;
+    this.turnOpen = mark.turnOpen;
+    this.promptId = mark.promptId;
+    this.started = mark.started;
+    this.stopped = mark.stopped;
+    this.llmCalls = new LlmCallLedger(mark.llmCalls);
   }
 
   /**
