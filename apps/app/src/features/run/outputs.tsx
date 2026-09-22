@@ -301,7 +301,9 @@ function ReadMark({
       <span className="min-w-0 flex-1">
         {t("readMark")}{" "}
         {shown.map((name, i) => (
-          <span key={name}>
+          // Keyed by position: two reads of one path are two reads, and a
+          // key on the name would collapse them into one.
+          <span key={i}>
             {i === 0 ? null : ", "}
             <b className={`${mono} font-medium break-all`}>{name}</b>
           </span>
@@ -349,12 +351,10 @@ function NodeGroup({
   return (
     <li>
       <ol className="flex flex-col">
-        {items.map((node) => (
-          <Node
-            key={`${node.kind}:${node.seq ?? "none"}:${node.name}`}
-            node={node}
-            place={place}
-          />
+        {items.map((node, i) => (
+          // Keyed by position: two changes to one path with no seq are two
+          // rows, and a key on the name would merge them.
+          <Node key={i} node={node} place={place} />
         ))}
         {group.items.length > FOLD_OVER ? (
           <li className="flex items-baseline gap-3 border-l-2 border-dotted border-border py-1.5 pl-3 text-xs text-muted-foreground">

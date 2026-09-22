@@ -82,6 +82,7 @@ import {
   credentialStatus,
   describeHarness,
   parseCredentialMode,
+  parseIssueAnswer,
   restoreCredentials,
 } from "./credential";
 import { detect } from "./detect";
@@ -3680,6 +3681,28 @@ describe("brokered credentials (ADR-138)", () => {
     expect(
       describeHarness({ ...base, harness: "claude-code", brokered: false }),
     ).toContain("holds its own credential");
+    expect(
+      describeHarness({
+        ...base,
+        harness: "claude-code",
+        brokered: false,
+        reason: "two_credentials",
+      }),
+    ).toContain("sets both ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN");
+    // The one parser both `credential issue` and enroll's static mint read.
+    expect(parseIssueAnswer({ status: 200, body: '{"token":"oxrt_x"}' })).toEqual(
+      { token: "oxrt_x", detail: "issued by tachod" },
+    );
+    expect(parseIssueAnswer({ status: 200, body: "{}" }).detail).toBe(
+      "tachod answered without a run token",
+    );
+    expect(
+      parseIssueAnswer({ status: 403, body: '{"error":"host is paused"}' })
+        .detail,
+    ).toBe("host is paused");
+    expect(parseIssueAnswer({ status: 500, body: "nope" }).detail).toBe(
+      "tachod refused to issue a run token (500)",
+    );
 
     // Status on a machine with nothing in custody and no contract wired.
     const d = brokeredDeps();

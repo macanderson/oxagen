@@ -516,7 +516,7 @@ const CREDENTIAL_MESSAGES: Record<CredentialRefusalCode, string> = {
   run_token_required:
     "This machine brokers model credentials through the Oxagen gateway, and this call carried none. Run `tacho enroll` again to point the harness at the gateway's run tokens.",
   foreign_credential:
-    "This machine brokers model credentials through the Oxagen gateway, and this call brought its own. Unset the provider's API key in the shell (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or OPENAI_API_KEY); the gateway supplies the credential.",
+    "This machine brokers model credentials through the Oxagen gateway, and this call brought its own. Unset the provider's API key (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or OPENAI_API_KEY) in the shell and in the env block of any .claude/settings.json or .claude/settings.local.json the harness reads; the gateway supplies the credential.",
   credential_unavailable:
     "The run token is valid, but the Oxagen gateway holds no credential for this model provider. Run `tacho enroll` again, or `tacho credential status` to see what is in custody.",
 };

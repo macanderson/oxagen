@@ -448,6 +448,20 @@ describe("the outputs spine", () => {
     expect(spine.compareDocumentPosition(tabs) & 4).toBe(4);
     await expectNoAxe(container);
   });
+
+  it("folds an outputs read that throws to the run's read error, and the page still renders", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      outputs: () => Promise.reject(new Error("outputs store down")),
+    });
+    expect(screen.getByRole("region", { name: "Transcript" })).toBeTruthy();
+    expect(
+      screen.getByText(
+        /What this run produced could not be loaded.*frame_store_unreachable/,
+      ),
+    ).toBeTruthy();
+  });
 });
 
 describe("tabs", () => {
