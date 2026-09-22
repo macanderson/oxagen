@@ -215,7 +215,7 @@ describe("the Tools page", () => {
       title("tools"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(page).toHaveTextContent("Workspace · Core platform");
+    expect(page).toHaveTextContent("Workspace Core platform");
     expect(Tools).toHaveBeenCalledOnce();
     expect(Tools.mock.calls[0]?.[0]).toEqual({
       ctx: viewer,

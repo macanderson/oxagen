@@ -73,7 +73,7 @@
         "title": "A statement, drafted from what you wrote",
         "body": "Oxagen filled this in from your description, in this tab. No model wrote it and no run was recorded. Every line below is yours to change before anybody reviews it."
       },
-      "path": "{path} · statement",
+      "path": "statement in {path}",
       "tokens": "about {tokens, number} tokens",
       "revert": "Revert",
       "empty": "Write the statement before you run the checks.",

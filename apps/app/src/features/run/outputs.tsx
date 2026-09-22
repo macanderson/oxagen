@@ -409,7 +409,7 @@ export function OutputsSpine({
       <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
         <p className={`${eyebrow} m-0`}>{t("title")}</p>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span data-testid="run-outputs-tally">{counts.join(" · ")}</span>
+          <span data-testid="run-outputs-tally">{counts.join(", ")}</span>
           {tally.reads > 0 ? (
             <SafeLink
               to={href(place, { reads: !view.reads, open: view.open })}
