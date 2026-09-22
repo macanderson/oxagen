@@ -14,7 +14,7 @@
 // `export_run` answers an id, the dialog reads it back (`get_run_export`) on a
 // bounded schedule until the bundle is ready or the job failed, and then
 // offers the download and the command that verifies it offline.
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
   type SyntheticEvent,
@@ -27,6 +27,7 @@ import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
+import { formatByteSize } from "@/ui/money-format";
 import { RunExportDownloadLink, useNavigate } from "@/ui/navigation";
 import { parseRunExportDownloadUrl } from "@/shared/run-export-download-url";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -44,19 +45,6 @@ export const EXPORT_POLL_BACKOFF = 1.5;
 const EXPORT_POLL_MAX_MS = 10_000;
 /** After this much waiting the dialog stops reading and offers "Check again". */
 export const EXPORT_POLL_BUDGET_MS = 120_000;
-
-/** A byte count in the largest decimal unit that keeps it at 1 or more. */
-function sizeParts(bytes: number): {
-  value: number;
-  unit: "byte" | "kilobyte" | "megabyte" | "gigabyte";
-} {
-  if (bytes < 1_000) return { value: bytes, unit: "byte" };
-  if (bytes < 1_000_000) return { value: bytes / 1_000, unit: "kilobyte" };
-  if (bytes < 1_000_000_000) {
-    return { value: bytes / 1_000_000, unit: "megabyte" };
-  }
-  return { value: bytes / 1_000_000_000, unit: "gigabyte" };
-}
 
 /**
  * A digest shown shortened, with a button that copies all of it.
@@ -107,12 +95,15 @@ function CopyDigest({ digest }: { digest: string }) {
 function ReadyExport({ status }: { status: RunExportStatus }) {
   const t = useTranslations("run.record.export");
   const format = useFormatter();
+  const locale = useLocale();
   const target =
     status.download === null
       ? null
       : parseRunExportDownloadUrl(status.download.url);
   const size =
-    status.bundleBytes === null ? null : sizeParts(status.bundleBytes);
+    status.bundleBytes === null
+      ? null
+      : formatByteSize(status.bundleBytes, locale);
   const command = `oxagen verify ${status.runId}-${status.exportId}.zip`;
   return (
     <div data-testid="export-ready" className="flex flex-col gap-3">
@@ -129,14 +120,7 @@ function ReadyExport({ status }: { status: RunExportStatus }) {
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
         <dt className="text-muted-foreground">{t("size")}</dt>
         <dd data-testid="export-size">
-          {size === null
-            ? t("sizeUnknown")
-            : format.number(size.value, {
-                style: "unit",
-                unit: size.unit,
-                unitDisplay: "short",
-                maximumFractionDigits: 1,
-              })}
+          {size === null ? t("sizeUnknown") : size}
         </dd>
         {status.bundleDigest === null ? null : (
           <>

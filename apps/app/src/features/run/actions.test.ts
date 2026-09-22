@@ -291,12 +291,11 @@ describe("readRunExport", () => {
   });
 
   it("answers an export from another workspace as not_found with the handler's reason (negative)", async () => {
-    invoke.mockRejectedValue(
-      Object.assign(new Error("run export not found"), {
-        code: "not_found",
-        reason: "run_export_not_found",
-      }),
-    );
+    invoke.mockRejectedValue({
+      code: "not_found",
+      reason: "run_export_not_found",
+      message: "run export not found",
+    });
     expect(await readRunExport("acme", "core-platform", "rexp_9")).toEqual({
       ok: false,
       reason: "not_found",
