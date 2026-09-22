@@ -12,8 +12,10 @@ function setup(opts: {
     role: "admin" | "compliance" | "billing" | "member";
   }[];
   failApply?: boolean;
+  entitled?: boolean;
 }) {
   const store: SsoProvisioningStore = {
+    entitled: vi.fn(async () => opts.entitled ?? true),
     groupRoles: vi.fn(async () => opts.mappings ?? []),
     currentRole: vi.fn(async () => opts.current ?? null),
     applyRole: vi.fn(async () => {
@@ -25,6 +27,27 @@ function setup(opts: {
 }
 
 describe("createSsoProvisioner", () => {
+  it("refuses a sign-in into an organisation whose plan lacks SSO", async () => {
+    const { store, emit, provision } = setup({
+      entitled: false,
+      current: "admin",
+      mappings: [{ group: "a", role: "admin" }],
+    });
+    await expect(
+      provision({ user, provider, userInfo: { groups: ["a"] } }),
+    ).rejects.toThrow(/Enterprise plan/);
+    expect(store.currentRole).not.toHaveBeenCalled();
+    expect(store.applyRole).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "sso.sign_in",
+        outcome: "deny",
+        detail: expect.objectContaining({ reason: "not_entitled" }),
+      }),
+    );
+  });
+
   it("grants the highest-ranked mapped role", async () => {
     const { store, emit, provision } = setup({
       mappings: [

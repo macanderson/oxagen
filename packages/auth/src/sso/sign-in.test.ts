@@ -227,10 +227,11 @@ async function storedOidcConfig(opts: {
 }
 
 /** An in-memory stand-in for the org_users / IAM write in pg-store.ts. */
-function memoryRoles(mappings: SsoGroupRole[]) {
+function memoryRoles(mappings: SsoGroupRole[], entitled = true) {
   const roles = new Map<string, string>();
   const key = (orgId: string, userId: string) => `${orgId}:${userId}`;
   const store: SsoProvisioningStore = {
+    entitled: async () => entitled,
     groupRoles: async () => mappings,
     currentRole: async (orgId, userId) => roles.get(key(orgId, userId)) ?? null,
     applyRole: async ({ orgId, userId, role }) => {
@@ -247,6 +248,7 @@ async function buildAuth(opts: {
   mappings: SsoGroupRole[];
   userInfo?: boolean;
   clientSecret?: string;
+  entitled?: boolean;
   seed?: (db: Db) => void;
 }) {
   const db: Db = {
@@ -273,7 +275,7 @@ async function buildAuth(opts: {
   };
   opts.seed?.(db);
   const events: SecurityEventInput[] = [];
-  const membership = memoryRoles(opts.mappings);
+  const membership = memoryRoles(opts.mappings, opts.entitled ?? true);
   const guard = createSsoDomainGuard({
     lookupProvider: async (providerId) => {
       const row = db.ssoProvider!.find((p) => p.providerId === providerId);
@@ -624,6 +626,29 @@ describe("SSO sign-in through a mock OIDC provider", () => {
       expect(JSON.stringify(db.ssoProvider)).toBe(before);
     },
   );
+
+  it("signs nobody in when the organisation's plan lacks SSO", async () => {
+    const { auth, events, roles } = await buildAuth({
+      mappings: [{ group: "oxagen-admins", role: "admin" }],
+      entitled: false,
+    });
+
+    const callback = await signInThroughIdp(auth, "ada@acme.com");
+
+    expect(
+      callback.headers
+        .getSetCookie()
+        .some((c) => c.startsWith("oxagen.session_token=")),
+    ).toBe(false);
+    expect(roles.size).toBe(0);
+    expect(events).toEqual([
+      expect.objectContaining({
+        eventType: "sso.sign_in",
+        outcome: "deny",
+        detail: expect.objectContaining({ reason: "not_entitled" }),
+      }),
+    ]);
+  });
 
   it("creates no user when the IdP asserts an email outside the verified domain", async () => {
     // The pre-hijack: an org's own IdP asserts someone else's address.

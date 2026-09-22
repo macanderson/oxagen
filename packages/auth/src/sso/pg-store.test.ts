@@ -48,6 +48,11 @@ vi.mock("@oxagen/database", () => ({
   schema: schemaProxy,
 }));
 
+const { orgHasSso } = vi.hoisted(() => ({
+  orgHasSso: vi.fn(async () => true),
+}));
+vi.mock("./entitlement", () => ({ orgHasSso }));
+
 vi.mock("drizzle-orm", () => ({
   and: (...conds: unknown[]) => ({ and: conds }),
   eq: (a: unknown, b: unknown) => ({ eq: [a, b] }),
@@ -504,6 +509,16 @@ describe("createPgSsoProvisioningStore().applyRole", () => {
       role: "admin",
     });
     expect(withSystemDbMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createPgSsoProvisioningStore().entitled", () => {
+  it("asks the plan whether it includes SSO", async () => {
+    orgHasSso.mockResolvedValueOnce(false);
+    await expect(
+      createPgSsoProvisioningStore().entitled("org_1"),
+    ).resolves.toBe(false);
+    expect(orgHasSso).toHaveBeenCalledWith("org_1");
   });
 });
 

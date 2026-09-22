@@ -21,6 +21,7 @@ import {
   SSO_IAM_ROLE_NAME,
   type SsoMappableRole,
 } from "@oxagen/oxagen/contracts/org.sso.shared";
+import { orgHasSso } from "./entitlement";
 import type { SsoProvisioningStore } from "./provision";
 
 /** Recorded as the actor on rows SSO writes: the person signing in. */
@@ -245,6 +246,8 @@ async function applyRoleInTx(
 
 export function createPgSsoProvisioningStore(): SsoProvisioningStore {
   return {
+    entitled: orgHasSso,
+
     async groupRoles(orgId, providerId) {
       // tenancy: system bypass during SSO sign-in bootstrap, before any session exists; the read is filtered by the provider's orgId and its provider id in the where clause.
       const rows = await withSystemDb((tx) =>

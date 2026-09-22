@@ -35,6 +35,11 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
+const { orgHasSso } = vi.hoisted(() => ({
+  orgHasSso: vi.fn(async () => true),
+}));
+vi.mock("./entitlement", () => ({ orgHasSso }));
+
 vi.mock("drizzle-orm", () => ({
   and: (...conds: unknown[]) => ({ and: conds }),
   eq: (a: unknown, b: unknown) => ({ eq: [a, b] }),
@@ -122,6 +127,15 @@ describe("isNonSsoSignInRefused", () => {
   it("refuses a non-Owner of the SSO-required organisation", async () => {
     answer([{ orgId: "org_1" }], []);
     await expect(isNonSsoSignInRefused("ada@example.com")).resolves.toBe(true);
+  });
+
+  it("stops applying once the organisation's plan lacks SSO", async () => {
+    orgHasSso.mockResolvedValueOnce(false);
+    answer([{ orgId: "org_1" }]);
+    await expect(isNonSsoSignInRefused("ada@example.com")).resolves.toBe(false);
+    expect(orgHasSso).toHaveBeenCalledWith("org_1");
+    // The Owner lookup never runs.
+    expect(withSystemDbMock).toHaveBeenCalledTimes(1);
   });
 
   it("lets an Owner through as the break-glass account", async () => {

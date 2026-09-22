@@ -13,6 +13,7 @@
 // (columns id and two_factor_enabled), security.org_security_policy,
 // auth.sso_providers (provider_id, keyed by organization_id).
 import "server-only";
+import { canAccessSSO, resolveOrgTier } from "@oxagen/billing";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
 import type { MfaPolicy } from "./mfa-gate";
@@ -277,6 +278,12 @@ export const systemLookups: SystemLookups = {
     const policy = rows[0];
     if (!policy) return null;
     if (!policy.ssoRequired) return { ssoRequired: false, providerIds: [] };
+    // Require SSO applies only while the plan includes SSO (ADR-142). After a
+    // downgrade SSO sign-in is refused, so the gate must stop asking for it or
+    // every member but the Owners is locked out.
+    if (!canAccessSSO(await resolveOrgTier(orgId))) {
+      return { ssoRequired: false, providerIds: [] };
+    }
     // Only a provider whose domain the organization proved counts: the SSO
     // plugin refuses to sign anyone in through an unverified one, and a
     // session must not satisfy the gate through one either.

@@ -26,6 +26,14 @@ vi.mock("@oxagen/database", async () => ({
   withSystemDb: withSystemDbMock,
 }));
 
+const { resolveOrgTier } = vi.hoisted(() => ({
+  resolveOrgTier: vi.fn(async () => "enterprise"),
+}));
+vi.mock("@oxagen/billing", () => ({
+  resolveOrgTier,
+  canAccessSSO: (tier: string) => tier === "enterprise",
+}));
+
 import * as schema from "@oxagen/database/schema";
 import { systemLookups as l } from "./tenancy-lookups";
 
@@ -166,6 +174,18 @@ describe("systemLookups", () => {
       schema.users,
       schema.users,
     ]);
+  });
+
+  it("stops asking for SSO once the organization's plan lacks it", async () => {
+    resolveOrgTier.mockResolvedValueOnce("scale");
+    queue.push([{ ssoRequired: true }]);
+    await expect(l.ssoPolicy(orgRow.id)).resolves.toEqual({
+      ssoRequired: false,
+      providerIds: [],
+    });
+    expect(resolveOrgTier).toHaveBeenCalledWith(orgRow.id);
+    // The provider read never runs.
+    expect(tables).toEqual([schema.orgSecurityPolicy]);
   });
 
   it("reads the require-SSO policy, and the verified providers only when it is on", async () => {

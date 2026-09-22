@@ -18,6 +18,7 @@ import { schema, withSystemDb } from "@oxagen/database";
 
 export { authMethodForPath, ssoAuthMethod } from "./auth-method";
 import { emailDomain } from "./email-domain";
+import { orgHasSso } from "./entitlement";
 export { emailDomain };
 
 /** The APIError body code the login form maps to its SSO message. */
@@ -77,6 +78,9 @@ export async function isNonSsoSignInRefused(email: string): Promise<boolean> {
   );
   const orgId = orgs[0]?.orgId;
   if (!orgId) return false;
+  // Require SSO applies only while the plan includes SSO. After a downgrade
+  // SSO sign-in is refused, so enforcing this too would lock everyone out.
+  if (!(await orgHasSso(orgId))) return false;
 
   // tenancy: system bypass during sign-in bootstrap, before any session exists; the lookup is filtered by the email domain and the verified provider's orgId.
   const owners = await withSystemDb((tx) =>

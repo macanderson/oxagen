@@ -70,6 +70,9 @@ vi.mock("./sso/plugin", () => ({
   SSO_DISABLED_PATHS: ["/sso/register", "/sso/verify-domain"],
   buildSsoPlugin: () => ({ id: "sso" }),
 }));
+vi.mock("./sso/entitlement", () => ({
+  orgHasSso: vi.fn(async () => true),
+}));
 vi.mock("./sso/pg-store", () => ({
   createPgSsoProvisioningStore: () => ({}),
 }));

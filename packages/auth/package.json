@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@better-auth/sso": "1.6.11",
+    "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",

@@ -411,7 +411,12 @@ export interface SsoSignInDetail {
   groups: readonly string[];
   grantedRole: string | null;
   previousRole: string | null;
-  reason: "mapped" | "no_mapped_group" | "owner_unmanaged" | "provision_failed";
+  reason:
+    | "mapped"
+    | "no_mapped_group"
+    | "owner_unmanaged"
+    | "not_entitled"
+    | "provision_failed";
 }
 
 /** Evidence recorded on `sso.policy_updated`. */

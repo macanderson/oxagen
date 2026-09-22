@@ -14,6 +14,9 @@
  *      REPLACES their org role. The mapping is authoritative on every sign-in,
  *      so removing someone from an IdP group takes effect at their next
  *      sign-in rather than never.
+ *   0. The organisation's plan must include SSO (Enterprise). A sign-in into
+ *      one that does not is refused and recorded with `outcome: "deny"`, so a
+ *      downgrade turns SSO off rather than leaving it half on.
  *   3. Deny by default. A group with no mapping grants nothing; a person none
  *      of whose groups is mapped is left with no role in the organisation, and
  *      the event is recorded with `outcome: "deny"`.
@@ -36,7 +39,17 @@ import type { SecurityEventInput } from "@oxagen/telemetry";
 /** The IdP groups kept on the audit row, so a hostile token cannot bloat it. */
 const MAX_AUDITED_GROUPS = 50;
 
+/** Thrown when the organisation's plan does not include SSO. */
+export class SsoNotEntitledError extends Error {
+  constructor(readonly orgId: string) {
+    super("Single sign-on is part of the Enterprise plan");
+    this.name = "SsoNotEntitledError";
+  }
+}
+
 export interface SsoProvisioningStore {
+  /** Whether the organisation's plan includes SSO. */
+  entitled(orgId: string): Promise<boolean>;
   /** The group → role rows for one provider of one organisation. */
   groupRoles(orgId: string, providerId: string): Promise<SsoGroupRole[]>;
   /** The person's current org role, lowercase, or null when not a member. */
@@ -94,6 +107,18 @@ export function createSsoProvisioner(deps: SsoProvisionerDeps) {
 
     let previousRole: string | null = null;
     try {
+      if (!(await deps.store.entitled(orgId))) {
+        deps.emit(
+          signInEvent(orgId, user.id, "deny", {
+            providerId: provider.providerId,
+            groups: auditedGroups,
+            grantedRole: null,
+            previousRole: null,
+            reason: "not_entitled",
+          }),
+        );
+        throw new SsoNotEntitledError(orgId);
+      }
       previousRole = await deps.store.currentRole(orgId, user.id);
 
       if (previousRole === "owner") {
@@ -140,6 +165,7 @@ export function createSsoProvisioner(deps: SsoProvisionerDeps) {
       );
       return { grantedRole: granted, previousRole, reason };
     } catch (err) {
+      if (err instanceof SsoNotEntitledError) throw err;
       deps.emit(
         signInEvent(orgId, user.id, "error", {
           providerId: provider.providerId,
@@ -167,6 +193,7 @@ function signInEvent(
       | "mapped"
       | "no_mapped_group"
       | "owner_unmanaged"
+      | "not_entitled"
       | "provision_failed";
   },
 ): SecurityEventInput {
