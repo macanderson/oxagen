@@ -25,10 +25,12 @@ import {
   loadWorkspacePromptConfigSafe,
   modelIdOf,
   resolveModelFundingSource,
+  resolveModelIdentity,
   resolvePrompt,
   selectModel,
   supportsReasoning,
   type ModelFundingSource,
+  type ModelIdentity,
   type ModelMessage,
   type StreamAgentReplyArgs,
 } from "@oxagen/ai";
@@ -84,6 +86,11 @@ import {
   type ApprovalRequiredEvent,
 } from "./materialize-tools";
 import { createToolBelt, LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
+import {
+  checkWorkspaceInstructions,
+  promptConfigWithCheckedInstructions,
+  workspaceInstructionsFrame,
+} from "./workspace-instructions";
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
@@ -250,7 +257,7 @@ export async function prepareAssistantTurn(
       // The system default inside selectModel.
     }
   }
-  const turnModel = selectModel({
+  const selector = {
     ...(resolvedModel
       ? { model: resolvedModel }
       : resolvedTier
@@ -260,15 +267,26 @@ export async function prepareAssistantTurn(
     // carry a key — the one Oxagen minted for this organisation — and a
     // narrowing on `fundedBy` would drop it and spend the shared key instead.
     ...(funding.modelKey ? { credential: funding.modelKey } : {}),
-  });
+  };
+  const turnModel = selectModel(selector);
+  // The same selector, read for what the model is called rather than for the
+  // client: on the organisation's own vendor key the wire id is the vendor's
+  // bare spelling, and the catalog, the posture matrix and the provider
+  // ceilings are all keyed by the gateway id. Asking the catalog about the
+  // wire id answers "unknown model" and silently drops the effort the person
+  // asked for.
+  const identity = resolveModelIdentity(selector);
   const modelId = modelIdOf(turnModel);
   const effort =
-    request.effort && supportsReasoning(modelId) ? request.effort : undefined;
+    request.effort && supportsReasoning(identity.catalogId)
+      ? request.effort
+      : undefined;
   logger.info(
     {
       ...scope,
       requestId: ctx.requestId,
       modelId,
+      provider: identity.provider,
       fundedBy: funding.fundedBy,
       ...(funding.keyHint ? { keyHint: funding.keyHint } : {}),
     },
@@ -283,6 +301,7 @@ export async function prepareAssistantTurn(
         funding,
         turnModel,
         modelId,
+        identity,
         tier: resolvedTier,
         effort,
         hooks,
@@ -296,6 +315,7 @@ interface PreparedInputs {
   funding: ModelFundingSource;
   turnModel: NonNullable<StreamAgentReplyArgs["model"]>;
   modelId: string;
+  identity: ModelIdentity;
   tier: "fast" | "balanced" | "precise" | null;
   effort: "low" | "medium" | "high" | undefined;
   hooks: AssistantTurnHooks;
@@ -376,6 +396,23 @@ async function runPreparedTurn(
   );
   hooks.onTools?.(materialised.nameMap);
   const names = await resolveScopeNames(scope, request);
+  // The workspace's standing instructions, checked before the prompt carries
+  // them (#3303). Over the budget they are refused whole and the prompt
+  // carries none; within it they carry a precedence note saying what they
+  // cannot do. Either way the run's record names them by digest below.
+  const instructions = checkWorkspaceInstructions(promptConfig);
+  if (instructions.outcome === "refused") {
+    logger.warn(
+      {
+        ...scope,
+        requestId: ctx.requestId,
+        chars: instructions.chars,
+        budgetChars: instructions.budgetChars,
+        reasonCode: instructions.reasonCode,
+      },
+      "workspace instructions are past the prompt budget; this turn carries none",
+    );
+  }
 
   const budgetPolicy = await resolveBudgetPolicy(request, capCtx);
   const budgetGuard = createTurnBudgetGuard(budgetPolicy, p.modelId, {
@@ -430,6 +467,7 @@ async function runPreparedTurn(
       .filter(([, real]) => pinnedCapabilities.has(real))
       .map(([alias]) => alias),
     modelId: p.modelId,
+    provider: p.identity.provider,
   });
 
   // The run, before the engine. A refusal here is the turn's answer.
@@ -473,6 +511,12 @@ async function runPreparedTurn(
   // runGovernedTurn cannot reject after a seal.
   let turn: Awaited<ReturnType<typeof runGovernedTurn>>;
   try {
+    // Before the engine, so the record states what the workspace told the
+    // agent even for a turn that then fails. A ledger that will not take this
+    // frame refuses the turn here, the same as any other receipt it will not
+    // take: steering the record cannot account for is what #3303 is about.
+    const instructionsFrame = workspaceInstructionsFrame(instructions);
+    if (instructionsFrame) await run.workspaceInstructions(instructionsFrame);
     turn = await runGovernedTurn({
       telemetry: {
         ...scope,
@@ -494,7 +538,9 @@ async function runPreparedTurn(
           orgName: names.orgName,
           workspaceName: names.workspaceName,
         }),
-        config: promptConfig,
+        // The checked block, never the raw column: a refusal leaves nothing
+        // for `resolvePrompt` to append.
+        config: promptConfigWithCheckedInstructions(promptConfig, instructions),
       }),
       history,
       contextMessages: [

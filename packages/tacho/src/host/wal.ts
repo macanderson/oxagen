@@ -12,8 +12,30 @@
  * megabyte. Reads decode one line at a time; the shipped cursor covers both,
  * since a body only ever ships with its event.
  *
+ * That file is the one store for a run's content on this host (ADR-139). Every
+ * other place content passes through is a hand-off: the spool holds a hook
+ * payload until the daemon drains it, and the daemon's terminal journal holds a
+ * sealed batch until it lands here. A hand-off is retried, so `appendRecovered`
+ * answers a body the store already holds by not writing it again.
+ *
  * NDJSON rather than SQLite keeps the package free of native modules and keeps
  * a read cheap enough to do on every tick.
+ *
+ * Shipping a batch costs the batch, not the session. Two indexes hold that
+ * line, and both are derived from the files and rebuilt whenever they
+ * disagree with them:
+ *
+ * - `BodyIndexStore` (`wal-index.ts`) records the byte offset of every stored
+ *   body, so `bodiesFor` seeks to the batch's bodies instead of reading the
+ *   session's history to find them. `bodiesForAsync` builds that index off the
+ *   synchronous path and hands the shipper the batch in slices, so the daemon
+ *   keeps answering while a long session is read.
+ * - `resume` records, per session, the byte the shipped cursor sits at, so
+ *   `unshipped` and `stats` read the unshipped tail rather than the file.
+ *
+ * Before those, a session with 16,000 model bodies re-read its 7 GB body file
+ * for every 200 events, `health()` parsed every event file on every batch, and
+ * a day of runs never reached the record (issue #3694).
  *
  * These files have exactly one writer, the daemon: `append` is reached only
  * from its recording path, and `tacho-hook` running while the daemon is down
@@ -40,7 +62,6 @@ import {
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { StringDecoder } from "node:string_decoder";
 import type { TachoEvent } from "../envelope";
 import {
   contentClassOf,
@@ -54,39 +75,19 @@ import {
   readJsonFileIfExists,
   writeSensitiveFileAtomic,
 } from "./fs";
+import {
+  BodyIndexStore,
+  parseStoredBody,
+  readLinesFrom,
+  type StoredBody,
+} from "./wal-index";
 
-/** Decode one line at a time, including UTF-8 characters split across reads. */
-function* readLines(path: string): Generator<string> {
-  const fd = openSync(path, "r");
-  const buffer = Buffer.allocUnsafe(64 * 1024);
-  const decoder = new StringDecoder("utf8");
-  let pending = "";
-  try {
-    let size: number;
-    while ((size = readSync(fd, buffer, 0, buffer.length, null)) > 0) {
-      pending += decoder.write(buffer.subarray(0, size));
-      let start = 0;
-      let end: number;
-      while ((end = pending.indexOf("\n", start)) !== -1) {
-        yield pending.slice(start, end);
-        start = end + 1;
-      }
-      pending = pending.slice(start);
-    }
-    pending += decoder.end();
-    if (pending.length > 0) yield pending;
-  } finally {
-    closeSync(fd);
-  }
-}
-
-/** One line of a session's body file. */
-interface StoredBody {
-  event_id_idem: string;
-  seq: number;
-  content_type: string;
-  bytes_base64: string;
-}
+/**
+ * Events handed to `bodiesForAsync` between two turns of the event loop. Small
+ * enough that one slice's reads finish in a few milliseconds, so a control
+ * plane fetch or a `/status` request waits for a slice and not for a batch.
+ */
+const BODY_READ_SLICE = 32;
 
 export interface WalBodyFailure {
   session_uuid: string;
@@ -119,6 +120,18 @@ export class Wal {
    * one read per session per process, and kept current by `append`.
    */
   private readonly lastSeq = new Map<string, number>();
+  /**
+   * Where each session's shipped cursor sits in its event file. `unshipped`
+   * and `stats` resumed from the top of the file, so a session with 20,000
+   * events parsed all of them for every 200 the shipper took, and `health()`
+   * did the same for every session on the host on every batch. The mark moves
+   * forward as events ship and is dropped whenever the file is rewritten.
+   */
+  private readonly resume = new Map<
+    string,
+    { afterSeq: number; offset: number }
+  >();
+  private readonly bodyIndexes: BodyIndexStore;
 
   constructor(
     dir: string,
@@ -128,6 +141,7 @@ export class Wal {
   ) {
     this.dir = dir;
     ensureDir(dir);
+    this.bodyIndexes = new BodyIndexStore(dir);
     this.cursorPath = join(dir, "cursor.json");
     const raw = readJsonFileIfExists(this.cursorPath) as
       | Partial<Cursor>
@@ -150,15 +164,8 @@ export class Wal {
     writeSensitiveFileAtomic(this.cursorPath, JSON.stringify(this.cursor));
   }
 
-  /**
-   * Bodies go first so ordinary writes ship content with its event. A crash
-   * between files can leave an orphan body, which retention sweeps remove.
-   * A failed body write must still permit the sealed event to persist.
-   */
-  append(
-    events: readonly TachoEvent[],
-    bodies: readonly FrameBody[] = [],
-  ): void {
+  /** Write these bodies to their sessions' body files, one line each. */
+  private writeBodies(bodies: readonly FrameBody[]): void {
     const bodyLines = new Map<string, string[]>();
     for (const body of bodies) {
       const lines = bodyLines.get(body.session_uuid) ?? [];
@@ -181,6 +188,43 @@ export class Wal {
         this.bodyFailure(session, "append", error);
       }
     }
+  }
+
+  /**
+   * Bodies this session's body file already stores, by event id.
+   *
+   * Read from the sidecar index, which holds one entry per stored body and is
+   * extended rather than rebuilt as the file grows, so the answer costs the
+   * lines appended since the last read. An index that cannot be built answers
+   * with nothing, which writes a body twice rather than losing it.
+   */
+  private storedBodyIdems(sessionUuid: string): ReadonlySet<string> {
+    const path = this.bodyFileFor(sessionUuid);
+    if (!existsSync(path)) return new Set();
+    try {
+      const index = this.bodyIndexes.ensure(
+        sessionUuid,
+        path,
+        () => this.reportInvalidBody(sessionUuid),
+        (error) => this.bodyFailure(sessionUuid, "read", error),
+      );
+      return new Set(index.entries.keys());
+    } catch (error) {
+      this.bodyFailure(sessionUuid, "read", error);
+      return new Set();
+    }
+  }
+
+  /**
+   * Bodies go first so ordinary writes ship content with its event. A crash
+   * between files can leave an orphan body, which retention sweeps remove.
+   * A failed body write must still permit the sealed event to persist.
+   */
+  append(
+    events: readonly TachoEvent[],
+    bodies: readonly FrameBody[] = [],
+  ): void {
+    this.writeBodies(bodies);
     const bySession = new Map<string, string[]>();
     for (const event of events) {
       const lines = bySession.get(event.session_uuid) ?? [];
@@ -203,7 +247,18 @@ export class Wal {
     }
   }
 
-  /** Retry a journaled terminal batch without duplicating an already durable prefix. */
+  /**
+   * Retry a journaled terminal batch without duplicating what is already
+   * durable, on both files.
+   *
+   * The events were already deduplicated against the session's chain. The
+   * bodies were not, so a batch retried after its first append wrote its
+   * content a second time, and a batch retried on every restart wrote it
+   * again on every restart. The journal is a hand-off and the body file is the
+   * store, so a body the store already holds is not written again. Identity is
+   * the event id, which is what `bodiesFor` reads a body back by and what the
+   * retention sweeps name one by.
+   */
   appendRecovered(
     events: readonly TachoEvent[],
     bodies: readonly FrameBody[] = [],
@@ -244,7 +299,18 @@ export class Wal {
           `WAL recovery conflict at ${event.session_uuid}:${event.seq}`,
         );
     }
-    this.append(missing, bodies);
+    // A recovery can truncate a torn tail, which moves the bytes after it.
+    for (const event of events) this.resume.delete(event.session_uuid);
+    const stored = new Map<string, ReadonlySet<string>>();
+    const fresh = bodies.filter((body) => {
+      let held = stored.get(body.session_uuid);
+      if (held === undefined) {
+        held = this.storedBodyIdems(body.session_uuid);
+        stored.set(body.session_uuid, held);
+      }
+      return !held.has(body.event_id_idem);
+    });
+    this.append(missing, fresh);
     // The event write can succeed before the cursor file fails. Rebuild that
     // metadata on retry even when every event was already durable.
     for (const event of events)
@@ -285,65 +351,109 @@ export class Wal {
     const path = this.fileFor(sessionUuid);
     if (!existsSync(path)) return [];
     const out: TachoEvent[] = [];
-    for (const line of readLines(path)) {
-      if (line.trim().length === 0) continue;
-      out.push(JSON.parse(line) as TachoEvent);
+    for (const line of readLinesFrom(path)) {
+      if (line.text.trim().length === 0) continue;
+      out.push(JSON.parse(line.text) as TachoEvent);
     }
     return out;
   }
 
-  /**
-   * The wire bodies of the given events, in the events' order, at most one
-   * per event. Events of one session are answered from one read of its body
-   * file; a line whose event is not asked for is parsed and dropped, so a
-   * session with a long shipped history costs a scan of its body file per
-   * batch, the same price the event file already pays in `unshipped`.
-   */
-  bodiesFor(events: readonly TachoEvent[]): TachoBody[] {
+  /** The event ids each session in this batch is asked for. */
+  private static idemsBySession(
+    events: readonly TachoEvent[],
+  ): Map<string, Set<string>> {
     const wanted = new Map<string, Set<string>>();
-    let minSeq = Number.POSITIVE_INFINITY;
     for (const event of events) {
       const idems = wanted.get(event.session_uuid) ?? new Set<string>();
       idems.add(event.event_id_idem);
       wanted.set(event.session_uuid, idems);
-      if (event.seq < minSeq) minSeq = event.seq;
     }
-    const found = new Map<string, TachoBody>();
-    for (const [session, idems] of wanted) {
-      const path = this.bodyFileFor(session);
-      if (!existsSync(path)) continue;
-      let reportedInvalid = false;
+    return wanted;
+  }
+
+  private reportInvalidBody(session: string): void {
+    this.bodyFailure(session, "read", { code: "invalid_body_record" });
+  }
+
+  /**
+   * One session's bodies, read at the offsets its index gives.
+   *
+   * An index that does not describe the file it indexes is thrown away and
+   * built again, once. The file is the record and the index is a cache, so a
+   * disagreement between them is answered by trusting the file. A second
+   * disagreement is reported and the bodies are left out: the events still
+   * ship, and the control plane records the frames with a `body_missing` gap,
+   * which is what a lost body has always meant here.
+   */
+  private bodiesOfSession(
+    session: string,
+    path: string,
+    idems: ReadonlySet<string>,
+  ): Map<string, TachoBody> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const index = this.bodyIndexes.ensure(
+        session,
+        path,
+        () => this.reportInvalidBody(session),
+        (error) => this.bodyFailure(session, "read", error),
+      );
+      const found = new Map<string, TachoBody>();
+      let stale = false;
+      const fd = openSync(path, "r");
       try {
-        for (const line of readLines(path)) {
-          if (line.trim().length === 0) continue;
-          let stored: StoredBody;
-          try {
-            stored = JSON.parse(line) as StoredBody;
-            if (
-              !stored ||
-              typeof stored.event_id_idem !== "string" ||
-              !Number.isSafeInteger(stored.seq) ||
-              typeof stored.content_type !== "string" ||
-              typeof stored.bytes_base64 !== "string"
-            )
-              throw new Error("Invalid body record");
-          } catch {
-            if (!reportedInvalid) {
-              this.bodyFailure(session, "read", {
-                code: "invalid_body_record",
-              });
-              reportedInvalid = true;
-            }
-            continue;
+        for (const idem of idems) {
+          const at = index.entries.get(idem);
+          if (at === undefined) continue;
+          const buffer = Buffer.allocUnsafe(at.length);
+          let filled = 0;
+          while (filled < at.length) {
+            const size = readSync(
+              fd,
+              buffer,
+              filled,
+              at.length - filled,
+              at.offset + filled,
+            );
+            if (size <= 0) break;
+            filled += size;
           }
-          if (stored.seq < minSeq || !idems.has(stored.event_id_idem)) continue;
-          if (found.has(stored.event_id_idem)) continue;
-          found.set(stored.event_id_idem, {
+          const stored =
+            filled === at.length
+              ? parseStoredBody(buffer.toString("utf8"))
+              : undefined;
+          if (stored === undefined || stored.event_id_idem !== idem) {
+            stale = true;
+            break;
+          }
+          found.set(idem, {
             event_id_idem: stored.event_id_idem,
             content_type: stored.content_type,
             bytes_base64: stored.bytes_base64,
           });
         }
+      } finally {
+        closeSync(fd);
+      }
+      if (!stale) return found;
+      this.bodyIndexes.invalidate(session);
+    }
+    this.bodyFailure(session, "read", { code: "body_index_unusable" });
+    return new Map();
+  }
+
+  /**
+   * The wire bodies of the given events, in the events' order, at most one
+   * per event. Each session's bodies are read at the offsets its index holds,
+   * so the read costs the batch rather than the session.
+   */
+  bodiesFor(events: readonly TachoEvent[]): TachoBody[] {
+    const found = new Map<string, TachoBody>();
+    for (const [session, idems] of Wal.idemsBySession(events)) {
+      const path = this.bodyFileFor(session);
+      if (!existsSync(path)) continue;
+      try {
+        for (const [idem, body] of this.bodiesOfSession(session, path, idems))
+          found.set(idem, body);
       } catch (error) {
         this.bodyFailure(session, "read", error);
         throw error;
@@ -353,6 +463,42 @@ export class Wal {
     for (const event of events) {
       const body = found.get(event.event_id_idem);
       if (body !== undefined) out.push(body);
+    }
+    return out;
+  }
+
+  /**
+   * The same bodies, read without holding the event loop.
+   *
+   * Two things here are not on the synchronous path. Indexing a body file the
+   * host already had costs one walk of it, and that walk awaits every read.
+   * The batch is then read in slices with a turn of the loop between them, so
+   * a `/status` request or a control-plane fetch waits for one slice.
+   *
+   * The slices go through `bodiesFor`, which is the one place a body is read
+   * and the one place a read failure is reported, so both paths fail the same
+   * way and the shipper has a single error to handle.
+   */
+  async bodiesForAsync(events: readonly TachoEvent[]): Promise<TachoBody[]> {
+    for (const session of Wal.idemsBySession(events).keys()) {
+      const path = this.bodyFileFor(session);
+      if (!existsSync(path)) continue;
+      try {
+        await this.bodyIndexes.ensureAsync(
+          session,
+          path,
+          () => this.reportInvalidBody(session),
+          (error) => this.bodyFailure(session, "read", error),
+        );
+      } catch (error) {
+        this.bodyFailure(session, "read", error);
+        throw error;
+      }
+    }
+    const out: TachoBody[] = [];
+    for (let at = 0; at < events.length; at += BODY_READ_SLICE) {
+      if (at > 0) await new Promise((resolve) => setImmediate(resolve));
+      out.push(...this.bodiesFor(events.slice(at, at + BODY_READ_SLICE)));
     }
     return out;
   }
@@ -430,6 +576,34 @@ export class Wal {
     return this.cursor.shipped[sessionUuid] ?? -1;
   }
 
+  /**
+   * One session's events past its shipped cursor, in seq order.
+   *
+   * The walk starts at the byte the last walk left the cursor on, so it reads
+   * the events that have not shipped rather than the ones that have. The mark
+   * is only ever set on a line a newline closed, because an unterminated tail
+   * is joined by the next append and reading past it would skip the joined
+   * line instead of failing on it.
+   */
+  private *eventsAfterShipped(sessionUuid: string): Generator<TachoEvent> {
+    const path = this.fileFor(sessionUuid);
+    if (!existsSync(path)) return;
+    const through = this.shippedThrough(sessionUuid);
+    const mark = this.resume.get(sessionUuid);
+    const from =
+      mark !== undefined && mark.afterSeq <= through ? mark.offset : 0;
+    for (const line of readLinesFrom(path, from)) {
+      if (line.text.trim().length === 0) continue;
+      const event = JSON.parse(line.text) as TachoEvent;
+      if (event.seq > through) {
+        yield event;
+        continue;
+      }
+      if (line.terminated)
+        this.resume.set(sessionUuid, { afterSeq: event.seq, offset: line.end });
+    }
+  }
+
   /** Up to `limit` unshipped events, grouped by session in seq order. */
   unshipped(
     limit: number,
@@ -439,9 +613,7 @@ export class Wal {
     for (const session of this.sessions()) {
       if (excludedSessions.has(session) || !this.hasUnshipped(session))
         continue;
-      const through = this.shippedThrough(session);
-      for (const event of this.read(session)) {
-        if (event.seq <= through) continue;
+      for (const event of this.eventsAfterShipped(session)) {
         out.push(event);
         if (out.length >= limit) return out;
       }
@@ -461,9 +633,7 @@ export class Wal {
     const sessions = this.sessions();
     for (const session of sessions) {
       if (!this.hasUnshipped(session)) continue;
-      const through = this.shippedThrough(session);
-      for (const event of this.read(session)) {
-        if (event.seq <= through) continue;
+      for (const event of this.eventsAfterShipped(session)) {
         unshipped += 1;
         if (oldest === undefined || event.ts < oldest) oldest = event.ts;
       }
@@ -580,9 +750,11 @@ export class Wal {
    * second writer, a line appended between the read and the rename would be
    * lost, and the module header is where the single writer is established.
    *
-   * A line that does not parse is handed to `keep` as `undefined`, rather than
-   * throwing. A torn line is what a crash mid-append leaves, and a sweep that
-   * threw on one would stop erasing the content around it.
+   * A line that is not a stored body is handed to `keep` as `undefined`,
+   * rather than throwing. A torn line is what a crash mid-append leaves, and a
+   * sweep that threw on one would stop erasing the content around it. A line
+   * that parses as JSON but names no event is the same case and gets the same
+   * answer, because nothing can ever ship it.
    */
   private rewriteBodies(
     sessionUuid: string,
@@ -596,16 +768,11 @@ export class Wal {
     let kept = 0;
     try {
       try {
-        for (const line of readLines(path)) {
-          if (line.trim().length === 0) continue;
-          let stored: StoredBody | undefined;
-          try {
-            stored = JSON.parse(line) as StoredBody;
-          } catch {
-            stored = undefined;
-          }
+        for (const line of readLinesFrom(path)) {
+          if (line.text.trim().length === 0) continue;
+          const stored = parseStoredBody(line.text);
           if (keep(stored)) {
-            const bytes = Buffer.from(`${line}\n`);
+            const bytes = Buffer.from(`${line.text}\n`);
             let offset = 0;
             while (offset < bytes.length) {
               offset += writeSync(fd, bytes, offset, bytes.length - offset);
@@ -620,6 +787,8 @@ export class Wal {
       if (cut === 0) return 0;
       if (kept === 0) unlinkSync(path);
       else renameSync(tmp, path);
+      // Every surviving line moved, so the offsets no longer describe the file.
+      this.bodyIndexes.invalidate(sessionUuid);
       return cut;
     } finally {
       if (existsSync(tmp)) unlinkSync(tmp);
@@ -662,8 +831,10 @@ export class Wal {
       if (age < retainMs) continue;
       unlinkSync(this.fileFor(session));
       this.lastSeq.delete(session);
+      this.resume.delete(session);
       if (existsSync(this.bodyFileFor(session)))
         unlinkSync(this.bodyFileFor(session));
+      this.bodyIndexes.invalidate(session);
       delete this.cursor.shipped[session];
       delete this.cursor.sealed[session];
       removed.push(session);
@@ -679,7 +850,16 @@ export class Wal {
       const path = this.bodyFileFor(session);
       if (now - statSync(path).mtimeMs < retainMs) continue;
       unlinkSync(path);
+      this.bodyIndexes.invalidate(session);
       removed.push(session);
+    }
+    // A sidecar whose body file has gone describes nothing. It is small, but
+    // it is on the same disk the WAL is trying not to fill.
+    for (const name of readdirSync(this.dir)) {
+      if (!BodyIndexStore.isSidecar(name)) continue;
+      const session = name.slice(0, -".bodies.index".length);
+      if (existsSync(this.bodyFileFor(session))) continue;
+      this.bodyIndexes.invalidate(session);
     }
     if (removed.length > 0) this.persistCursor();
     return removed;

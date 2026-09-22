@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   sendEvent: vi.fn(),
   bodyPut: vi.fn(),
   recordProofFrames: vi.fn(),
+  fetchAgentRunAuthz: vi.fn(),
 }));
 
 vi.mock("./lib/proof", () => ({
@@ -57,6 +58,17 @@ vi.mock("./logger", () => ({
 vi.mock("./lib/onboarding", () => ({
   unlockOnboardingGate: mocks.unlockOnboardingGate,
 }));
+
+// The tool-RBAC half of the mandate (`resolveHostMandate`), which runs only
+// for a host that names an agent principal. It reads live authority through
+// its own `withTenantDb`, which this file has already replaced with a fake
+// carrying the ingest tables and not the IAM ones. These cases are about what
+// ingest records, so the snapshot is stubbed empty; the resolution itself is
+// covered in `packages/iam` and the mapping in `lib/tacho-mandate.test.ts`.
+vi.mock("@oxagen/iam", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@oxagen/iam")>();
+  return { ...original, fetchAgentRunAuthz: mocks.fetchAgentRunAuthz };
+});
 
 vi.mock("@oxagen/billing", () => ({ recordSpend: mocks.recordSpend }));
 vi.mock("./event-client", () => ({
@@ -606,6 +618,14 @@ function wire(db: FakeDb): void {
           retentionPolicyVersions: {
             findFirst: async () => db.retentionPolicy,
           },
+          // The mandate read (`resolveHostMandate`), which the control
+          // envelope every ingest answers with is built from. This fixture
+          // publishes no agent version and stores no decision rules, so the
+          // envelope carries the empty permission set and the observed
+          // budget; `tacho-host-bundle.test.ts` covers a mandate that is not.
+          agents: { findFirst: async () => undefined },
+          agentVersions: { findFirst: async () => undefined },
+          workspaces: { findFirst: async () => undefined },
         },
         // Two reads share `select`, told apart by the table. The steering
         // read (`readWorkspaceSteering`) counts `context_promotions` for the
@@ -811,6 +831,12 @@ beforeEach(() => {
   mocks.recordSpend.mockResolvedValue(undefined);
   mocks.sendEvent.mockResolvedValue(undefined);
   mocks.recordProofFrames.mockResolvedValue({ written: 0, witnessRunIds: [] });
+  mocks.fetchAgentRunAuthz.mockResolvedValue({
+    roles: [],
+    roleGrants: [],
+    grants: [],
+    policies: [],
+  });
 });
 
 describe("ingest_tacho_events", () => {
@@ -1704,6 +1730,46 @@ describe("ingest_tacho_events", () => {
     expect(mocks.sendEvent).not.toHaveBeenCalled();
   });
 
+  it("refuses the batch as backpressure when the store is out of memory (#3662)", async () => {
+    const db = fakeDb();
+    wire(db);
+    // The refusal from the 2026-09-21 production logs, in the shape the
+    // ClickHouse client parses one into. Before this, it left the route as a
+    // bare 500, which the host reads as a server fault and retries into
+    // immediately instead of waiting for the read holding the memory to end.
+    // (`storeOverloadedFrom` is proven against the client's own parser in
+    // packages/telemetry/src/clickhouse.test.ts.)
+    mocks.insertTachoEvents.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          "Memory limit (total) exceeded: would use 1.66 GiB (attempt to " +
+            "allocate chunk of 4363399 bytes), maximum: 1.50 GiB. " +
+            "OvercommitTracker decision: Query was selected to stop by " +
+            "OvercommitTracker.",
+        ),
+        { code: "241", type: "MEMORY_LIMIT_EXCEEDED" },
+      ),
+    );
+    const refusal = await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: session(),
+      },
+      CONTEXT,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect((refusal as { code?: string }).code).toBe("store_overloaded");
+    expect(
+      (refusal as { retryAfterSeconds?: number }).retryAfterSeconds,
+    ).toBeGreaterThan(0);
+    // The refusal is a condition to wait out, not a fault to page on.
+    expect(mocks.loggerError).not.toHaveBeenCalled();
+    expect(mocks.sendEvent).not.toHaveBeenCalled();
+  });
+
   it("folds every counted kind into the session delta", () => {
     const delta = {
       numTurns: 0,
@@ -2424,6 +2490,35 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     });
     expect(refOf(1, 1)).toBe(firstRef);
     expect(mocks.bodyPut).toHaveBeenCalledOnce();
+  });
+
+  it("refuses as backpressure when the store is out of memory for the re-send's read (#3662)", async () => {
+    const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+    wire(db);
+    const events = sessionWithContent();
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    // The read that resolves a re-sent frame's stored body reaches the same
+    // node the append does, and only a re-send sends it, so it sits on the
+    // retry path of the very failure this refusal exists for.
+    mocks.selectTachoEvents.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          "Memory limit (total) exceeded: would use 1.66 GiB, maximum: 1.50 GiB.",
+        ),
+        { code: "241", type: "MEMORY_LIMIT_EXCEEDED" },
+      ),
+    );
+    const refusal = await tachoEventsIngestHandler(batch(events), CONTEXT).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect((refusal as { code?: string }).code).toBe("store_overloaded");
+    // The append never ran, so the second batch is still the host's to ship.
+    expect(mocks.insertTachoEvents).toHaveBeenCalledOnce();
   });
 
   it("carries no stored reference onto a re-sent row with another content digest (negative)", async () => {

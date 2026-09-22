@@ -370,6 +370,39 @@ describe("runTachoHook", () => {
     expect(
       decideLocally(paused, parse("PermissionRequest"), now).response,
     ).toMatchObject({ hookSpecificOutput: { decision: { behavior: "deny" } } });
+    // PermissionRequest carries a tool identity exactly like PreToolUse
+    // (data-model.md section 6), so it must consult the cached bundle rather
+    // than answering `{}` (allow) unconditionally: an earlier version did
+    // exactly that, which meant a deny-listed tool bypassed the mandate
+    // whenever the daemon was down and Claude Code happened to route the
+    // call through its own permission-request flow instead of PreToolUse.
+    expect(
+      decideLocally(
+        active,
+        parse("PermissionRequest", {
+          tool_name: "Bash",
+          tool_input: { command: "git push" },
+        }),
+        now,
+      ).response,
+    ).toMatchObject({
+      hookSpecificOutput: {
+        hookEventName: "PermissionRequest",
+        permissionDecision: "deny",
+      },
+    });
+    // A tool the mandate never mentions still fails open, and to Claude
+    // Code's own permission prompt (`{}`), not to a manufactured allow.
+    expect(
+      decideLocally(
+        active,
+        parse("PermissionRequest", {
+          tool_name: "Edit",
+          tool_input: { file_path: "/x" },
+        }),
+        now,
+      ).response,
+    ).toEqual({});
     expect(decideLocally(active, parse("Stop"), now).response).toEqual({});
     // Cursor's subagentStart is a permission event: a paused host must deny,
     // or an empty answer becomes allow and the subagent launches anyway.
@@ -1006,5 +1039,78 @@ describe("runTachoHook for Cursor", () => {
       user_message: "This session was cancelled by its Oxagen operator.",
       agent_message: "This session was cancelled by its Oxagen operator.",
     });
+  });
+});
+
+/**
+ * The compiled mandate actually reaches the hook: enroll a fake harness with
+ * a signed bundle carrying a real deny rule, take the daemon down, and prove
+ * `PreToolUse` denies the call the rule names. The negative control is the
+ * same harness, the same call, and a bundle with no mandate at all: the
+ * shape a freshly enrolled, unmandated host carries (`mode: "observe"`,
+ * every permission array empty, as `tacho-host-enroll.ts` inserts one). It
+ * must allow, so the positive result is the rule's doing and not some
+ * other default this test would not have caught.
+ */
+describe("a mandate that denies git push, end to end", () => {
+  const PUSH = JSON.stringify({
+    session_id: "s",
+    hook_event_name: "PreToolUse",
+    tool_name: "Bash",
+    tool_input: { command: "git push origin main" },
+    cwd: "/repo",
+  });
+  const daemonDown = async (): Promise<never> => {
+    throw new Error("daemon unreachable");
+  };
+
+  function enroll(bundleOverrides: Parameters<typeof unsignedBundle>[0]) {
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle(bundleOverrides))),
+    );
+    return paths;
+  }
+
+  it("denies git push when the mandate carries a deny rule for it", async () => {
+    const paths = enroll({
+      mode: "enforce",
+      permissions: {
+        allow: [],
+        deny: ["Bash(git push*)"],
+        ask: [],
+      },
+    });
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: PUSH,
+      post: daemonDown,
+    });
+    expect(result.path).toBe("local");
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: expect.stringContaining("Bash(git push*)"),
+      },
+    });
+  });
+
+  it("negative control: the same call allows when the host carries no mandate", async () => {
+    const paths = enroll({
+      mode: "observe",
+      permissions: { allow: [], deny: [], ask: [] },
+    });
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: PUSH,
+      post: daemonDown,
+    });
+    expect(result.path).toBe("local");
+    expect(JSON.parse(result.stdout)).toEqual({});
   });
 });

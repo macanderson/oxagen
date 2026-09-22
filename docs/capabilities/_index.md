@@ -606,7 +606,8 @@ after the registered name separately when their contract uses a dotted stem.
 | [update_workspace_settings](workspace.settings.write.md) | [workspace.settings.write.ts](../../packages/oxagen/src/contracts/workspace.settings.write.ts) | api, mcp, agent |
 | [get_skill_config](skill.config.get.md) | [skill.config.get.ts](../../packages/oxagen/src/contracts/skill.config.get.ts) | api, mcp |
 | [update_skill_config](skill.config.update.md) | [skill.config.update.ts](../../packages/oxagen/src/contracts/skill.config.update.ts) | api, mcp |
-| [preview_skill_search](skill.search.preview.md) | [skill.search.preview.ts](../../packages/oxagen/src/contracts/skill.search.preview.ts) | api, mcp |
+| [preview_skill_search](skill.search.preview.md) | [skill.search.preview.ts](../../packages/oxagen/src/contracts/skill.search.preview.ts) | api |
+| [summarize_skill_search](skill.search.summarize.md) | [skill.search.summarize.ts](../../packages/oxagen/src/contracts/skill.search.summarize.ts) | mcp |
 
 - [get_clone_draft](configuration.clone.get.md)
 - [propose_configuration_clone](configuration.clone.propose.md)
@@ -614,4 +615,5 @@ after the registered name separately when their contract uses a dotted stem.
 | [revoke_member_invite](org.member_invite.revoke.md) | [org.member_invite.revoke.ts](../../packages/oxagen/src/contracts/org.member_invite.revoke.ts) | api, mcp |
 | [get_skill_config](skill.config.get.md) | [skill.config.get.ts](../../packages/oxagen/src/contracts/skill.config.get.ts) | api, mcp |
 | [update_skill_config](skill.config.update.md) | [skill.config.update.ts](../../packages/oxagen/src/contracts/skill.config.update.ts) | api, mcp |
-| [preview_skill_search](skill.search.preview.md) | [skill.search.preview.ts](../../packages/oxagen/src/contracts/skill.search.preview.ts) | api, mcp |
+| [preview_skill_search](skill.search.preview.md) | [skill.search.preview.ts](../../packages/oxagen/src/contracts/skill.search.preview.ts) | api |
+| [summarize_skill_search](skill.search.summarize.md) | [skill.search.summarize.ts](../../packages/oxagen/src/contracts/skill.search.summarize.ts) | mcp |

@@ -2415,8 +2415,7 @@
       "name": "preview_skill_search",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
@@ -3296,6 +3295,15 @@
       "writes": []
     },
     {
+      "domain": "skill",
+      "name": "summarize_skill_search",
+      "reads": [],
+      "surfaces": [
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "suspend_agent",
       "reads": [],
@@ -3668,7 +3676,7 @@
       "writes": []
     }
   ],
-  "contentHash": "ec70ab3e1c060a7a712fa0f4565f416472a24aedbb90b704501584c0c8520b38",
+  "contentHash": "70acc7395855ff6956699343997fa85f25e8c34fa162abeb96ab92678369c411",
   "domains": [
     {
       "name": "agent",

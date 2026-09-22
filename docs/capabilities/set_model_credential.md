@@ -86,6 +86,17 @@ in the contract, so a bad endpoint is a 400 on every surface. The database
 additionally holds `base_url` to `https://` and to exactly the
 `openai_compatible` rows.
 
+**An endpoint that carries a credential is refused too.** A URL such as
+`https://user:pass@endpoint.example/v1` is rejected with a message naming what
+to remove, on `set_model_credential` and `verify_model_credential` alike. The
+reason is that `base_url` is stored in the clear and returned by every read:
+this column is one of the few places in the product where nothing is a secret,
+and a password in the address would make that promise false while looking like
+configuration. Send the credential in the request, which is what the `apiKey`
+field is for. Node's `fetch` refuses such a URL as well, so an endpoint like
+this could never have served a turn. A row stored before this check existed is
+returned with its userinfo replaced by `***` and has to be retyped.
+
 Call `verify_model_credential` with the same `provider` and `apiKey` first if
 you want the vendor's answer before anything is stored. Setting does not
 verify on its own.

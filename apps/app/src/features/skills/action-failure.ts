@@ -23,6 +23,10 @@ export function useSkillFailure(): (failure: Failure) => string {
             return t("invalidConfig");
           case "skill_config_not_merged":
             return t("notMerged");
+          case "skill_config_pr_unrelated":
+            return t("unrelatedPr");
+          case "skill_config_superseded":
+            return t("superseded");
           case "skill_repository_unbound":
             return t("repositoryMissing");
           case "skill_repository_changed":

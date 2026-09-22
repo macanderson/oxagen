@@ -6,6 +6,7 @@ import {
   clickhouseClientBreaker,
   guardClickhouseClient,
 } from "./clickhouse-breaker-client";
+import { isCircuitOpenError } from "./circuit-breaker";
 
 // The client guards every remote operation, including streamed response bodies.
 // Callers still own durable delivery. A breaker is not a telemetry outbox.
@@ -51,6 +52,152 @@ export async function closeClickhouse(): Promise<void> {
     await _client.close();
     _client = null;
   }
+}
+
+// ── Store backpressure ───────────────────────────────────────────────────────
+//
+// A ClickHouse refusal is not one kind of thing. "Your row does not parse" is
+// the caller's fault and repeating it changes nothing. "I am over my memory
+// limit" is the store's condition at this instant, and the same request an
+// hour later succeeds. Both arrive as a rejected promise, and a surface that
+// cannot tell them apart answers the second one the way it answers the first:
+// a 500, which every client reads as a server fault and retries into.
+//
+// That is the shape of #3662. Tacho ingest answered 500 when the production
+// node refused the insert for memory ("Memory limit (total) exceeded: would use
+// 1.66 GiB … maximum: 1.50 GiB. OvercommitTracker decision"), so an enrolled
+// host shipped the batch again immediately instead of waiting for the read that
+// took the memory to finish.
+
+/**
+ * The ClickHouse server error codes that mean "not now", with the phrase each
+ * one gets in the refusal a caller is handed.
+ *
+ * Every one is a condition of the node rather than of the request: the same
+ * bytes are accepted once the pressure passes, and nothing the client can
+ * change about them makes a difference in the meantime. Codes outside this set
+ * stay unclassified and keep the answer they have always had, because a wrong
+ * "retry later" is worse than a 500: it turns a permanent failure into an
+ * infinite retry loop, which is exactly the failure this table exists to end.
+ *
+ * Source: ClickHouse `ErrorCodes.cpp`.
+ */
+export const CLICKHOUSE_BACKPRESSURE_REASONS: Readonly<Record<string, string>> =
+  {
+    // MEMORY_LIMIT_EXCEEDED — the one in #3662, raised for a per-query limit and
+    // for the server total, including when the OvercommitTracker picks this query
+    // to stop so another can finish.
+    "241": "it is over its memory limit",
+    // TOO_MANY_SIMULTANEOUS_QUERIES.
+    "202": "it is at its concurrent-query limit",
+    // NO_FREE_CONNECTION.
+    "203": "it has no free connection",
+    // TOO_MANY_PARTS — inserts outran merges. The store is asking for a slower
+    // insert rate in as many words, and an immediate retry is the one response
+    // that makes it worse.
+    "252": "its insert queue is behind",
+  };
+
+/**
+ * What a refused caller is told to wait, in seconds, when the store named no
+ * number of its own.
+ *
+ * Matched to the circuit breaker's default 30s reset window, so the wait a
+ * client is given is the same whether the store refused this request or the
+ * breaker has already opened on the ones before it.
+ */
+export const STORE_OVERLOADED_RETRY_SECONDS = 30;
+
+/**
+ * The store is up and refusing work it cannot take right now.
+ *
+ * Distinct from every other failure by its stable `code`, which is what a
+ * surface maps to a status: this one is backpressure, and the honest answer is
+ * "ask again in `retryAfterSeconds`", never "something broke".
+ */
+export class StoreOverloadedError extends Error {
+  readonly code = "store_overloaded" as const;
+  constructor(
+    /** Which store refused, for the log. Absent from the message on purpose. */
+    readonly store: string,
+    /** Why, as the clause that completes the sentence in the message. */
+    readonly reason: string,
+    readonly retryAfterSeconds: number,
+    options?: { cause?: unknown },
+  ) {
+    super(
+      `The telemetry store cannot take this request now: ${reason}. Retry after ${String(retryAfterSeconds)} seconds.`,
+      options,
+    );
+    this.name = "StoreOverloadedError";
+    Object.setPrototypeOf(this, StoreOverloadedError.prototype);
+  }
+}
+
+export function isStoreOverloadedError(
+  err: unknown,
+): err is StoreOverloadedError {
+  return err instanceof StoreOverloadedError;
+}
+
+/** The ClickHouse client's `code`, which arrives as a string, as one. */
+function errorCodeOf(err: object): string | null {
+  const code = (err as Record<string, unknown>).code;
+  if (typeof code === "string") return code;
+  if (typeof code === "number") return String(code);
+  return null;
+}
+
+/**
+ * The backpressure refusal `err` is, or `null` when it is an ordinary failure.
+ *
+ * Three shapes reach here, and the message test is the one that earns its
+ * keep. `@clickhouse/client` parses a server exception into a `ClickHouseError`
+ * carrying `code` ("241") and `type` ("MEMORY_LIMIT_EXCEEDED") — but only when
+ * the response matches its `Code: <n>. …Exception: … (<TYPE>)` regex. A body
+ * that does not match is handed back as a plain `Error` with the text intact,
+ * so a memory refusal that arrives truncated or through another transport
+ * still has to be recognised by what it says.
+ */
+export function storeOverloadedFrom(
+  err: unknown,
+  store = "clickhouse",
+): StoreOverloadedError | null {
+  if (isStoreOverloadedError(err)) return err;
+  // The breaker has already opened on the refusals before this one. That is
+  // the same condition seen one level up, and it carries its own wait.
+  if (isCircuitOpenError(err)) {
+    return new StoreOverloadedError(
+      store,
+      "recent requests to it failed and it is being given room to recover",
+      Math.max(1, Math.ceil(err.retryAfterMs / 1000)),
+      { cause: err },
+    );
+  }
+  if (typeof err !== "object" || err === null) return null;
+  const code = errorCodeOf(err);
+  const reason =
+    code === null ? undefined : CLICKHOUSE_BACKPRESSURE_REASONS[code];
+  if (reason !== undefined) {
+    return new StoreOverloadedError(
+      store,
+      reason,
+      STORE_OVERLOADED_RETRY_SECONDS,
+      {
+        cause: err,
+      },
+    );
+  }
+  const message = (err as { message?: unknown }).message;
+  if (typeof message === "string" && /memory limit.*exceeded/i.test(message)) {
+    return new StoreOverloadedError(
+      store,
+      CLICKHOUSE_BACKPRESSURE_REASONS["241"] as string,
+      STORE_OVERLOADED_RETRY_SECONDS,
+      { cause: err },
+    );
+  }
+  return null;
 }
 
 export interface TokenUsageRollup {

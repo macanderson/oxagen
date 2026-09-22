@@ -22,6 +22,7 @@
  * on every long turn and its output is read by a model, not a person.
  */
 import {
+  modelIdentityFor,
   modelIdOf,
   selectModel,
   stepCountIs,
@@ -72,6 +73,12 @@ export interface ProviderPortOptions {
 export interface RoleModel {
   model: NonNullable<StreamAgentReplyArgs["model"]>;
   modelId: string;
+  /**
+   * The same model's gateway-shaped id. On a customer's own vendor key the
+   * wire id is the vendor's bare spelling, and the reasoning controls and the
+   * metered provider are both read from the gateway form.
+   */
+  catalogId: string;
 }
 
 /**
@@ -83,13 +90,21 @@ export function modelForRole(
   role: ModelCallRoleWire,
   options: Pick<ProviderPortOptions, "model" | "workerTier" | "credential">,
 ): RoleModel {
-  const pick = (tier: OxagenTier): RoleModel => {
-    const model = selectModel({
-      tier,
-      ...(options.credential ? { credential: options.credential } : {}),
-    });
-    return { model, modelId: modelIdOf(model) };
+  const identify = (model: RoleModel["model"]): RoleModel => {
+    const wireId = modelIdOf(model);
+    return {
+      model,
+      modelId: wireId,
+      catalogId: modelIdentityFor(wireId, options.credential).catalogId,
+    };
   };
+  const pick = (tier: OxagenTier): RoleModel =>
+    identify(
+      selectModel({
+        tier,
+        ...(options.credential ? { credential: options.credential } : {}),
+      }),
+    );
   switch (role) {
     case "verdict":
     case "judge":
@@ -99,7 +114,7 @@ export function modelForRole(
     case "domain_inference":
       return pick("fast");
     default:
-      return { model: options.model, modelId: modelIdOf(options.model) };
+      return identify(options.model);
   }
 }
 
@@ -113,7 +128,7 @@ export function createProviderPort(options: ProviderPortOptions) {
       toModelMessages(request.request.messages),
       options.system,
     );
-    const { model, modelId } = modelForRole(request.role, options);
+    const { model, modelId, catalogId } = modelForRole(request.role, options);
     const effort = options.effort ?? request.request.effort ?? undefined;
 
     // The tenant scope is what lets the chokepoint's onFinish charge credits
@@ -133,6 +148,7 @@ export function createProviderPort(options: ProviderPortOptions) {
               ? options.tools()
               : options.tools,
           model,
+          catalogModelId: catalogId,
           telemetry: options.telemetry,
           fundedBy: options.fundedBy,
           // Always the assistant reason: this port is the in-app agent, and

@@ -227,13 +227,25 @@ hooks for MDM-managed machines; the record is still labelled `client_attested`.
 
 ## What the daemon is today, and what it grows into
 
-What the signed bundle carries today is one thing: the workspace's steering. The
-server compiles its active `must` and `should` context records into
-`context.system` (`packages/handlers/src/lib/tacho-steering.ts`, ADR-091), which
-`SessionStart` delivers. Permissions are empty and `budget.mode = "observed"`
-(`packages/handlers/src/lib/tacho-host.ts`, `unsignedBundle`), so `PreToolUse` can
-deny only on host status or a paused session, and nothing reads
-`session_limit_usd`. Operator steer commands are the only
+The signed bundle carries the workspace's steering and, on governed calls, the
+agent's own mandate. The server compiles its active `must` and `should` context
+records into `context.system` (`packages/handlers/src/lib/tacho-steering.ts`,
+ADR-091), which `SessionStart` delivers. `permissions.{allow,deny,ask}` are
+mapped from the agent's tool RBAC (`packages/iam`'s `resourceScope.mcp` rules)
+and the workspace's external-tool decision rules onto the harness's own
+permission shape (`resolveHostMandate`, `mapMandateToBundlePermissions`,
+`packages/handlers/src/lib/tacho-mandate.ts`), so `PreToolUse` and Claude
+Code's own permission-request event can deny a call the mandate names, not
+only on host status or a paused session. What still reaches no rule here: a
+decision rule that names an internal MCP server id rather than a server:tool
+glob, and any business-capability rule unrelated to a tool call. Both keep
+governing the in-app agent's own calls at `packages/agent/src/runtime/
+mcp-rbac.ts`, just not this second, harness-facing surface (see
+`tacho-mandate.ts`'s `decisionRuleToHarnessRule`). `budget.mode` is
+`"enforced"` only when the agent's own definition names a `per_run_micros` or
+`per_day_micros` figure (`deriveBundleBudget`); otherwise it stays
+`"observed"`, and nothing reads `session_limit_usd` yet: the loopback proxy
+that would enforce it is Phase 4, below. Operator steer commands are the only
 live text channel from the server to a running agent. Token and cost numbers for
 Claude Code are the harness's own telemetry, self-reported. Codex and Stella export
 none. There is no model proxy and no sandbox. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
@@ -277,12 +289,24 @@ The order of build is Phase 0 merged, Phase 4 in build, then Phases 1, 2, 3 and
 branch merges.
 
 The words for the `harness` tier are "delivered", "recorded", "client-attested"
-and "fail-open". Never "enforced". "Fail-open" describes the tier: the person at
-the keyboard can remove the hook entry or disable hooks, and the action proceeds.
-It does not describe the hook process, which fails closed against its cached
-bundle: in enforce mode a stale or unverified bundle denies non-read-only tools.
-Five events run as command hooks (`COMMAND_HOOK_EVENTS`), and four of them can
-refuse. `Stop` is the fifth.
+and "fail-open". Never "enforced" without the qualifier: on a governed call
+(one the hook actually sees), `PreToolUse` and the permission-request event
+deny a tool the mandate names, offline, from the signed bundle, even with the
+daemon down. "Fail-open" describes the tier: the person at the keyboard can
+remove the hook entry, disable hooks, or run another build of the harness, and
+none of that is visible to Oxagen. The hook sees only the calls the harness
+routes through it. It does not describe the hook process, which fails closed
+against its cached bundle for a tool the mandate denies, and fails open only
+for a tool the mandate never mentions (deferring to the harness's own
+permission prompt) or an event that carries no tool identity to evaluate at
+all (`SessionStart`, `UserPromptSubmit`, and the non-blocking record-only
+events). The exact list is `FAIL_OPEN_HOOK_PATHS`
+(`src/claude-code/hook-client.ts`), signed onto a bundle whose host advertises
+it can parse one (`hook_fail_open`), so an operator reads the fail-open set
+from the record rather than from this file. In enforce mode a stale or
+unverified bundle denies non-read-only tools regardless. Five events run as
+command hooks (`COMMAND_HOOK_EVENTS`), and four of them can refuse. `Stop` is
+the fifth.
 
 The tier words are fixed by ADR-095: `observe`, `harness`, `gateway`,
 `contained`, computed from what was actually routed.

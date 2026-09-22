@@ -3,8 +3,15 @@ import { skillConfigSchema, type SkillCandidate } from "@oxagen/oxagen/skills";
 import {
   agentSkillResolution,
   parseSkillConfig,
+  pinnedSkillIds,
   resolveSkills,
 } from "./skill-resolution";
+
+/** Every candidate's bytes were read unless a case says otherwise. */
+const read = (candidates: SkillCandidate[], unpinned: string[] = []) => ({
+  candidates,
+  unpinned,
+});
 
 const digest = `sha256:${"a".repeat(64)}`;
 const candidate = (id: string, tokenCost = 100): SkillCandidate => ({
@@ -51,13 +58,13 @@ describe("skill resolution", () => {
     const rank = vi.fn().mockResolvedValue([0.8]);
     const result = await resolveSkills(
       config([good, changed]),
-      [good, { ...changed, digest: `sha256:${"b".repeat(64)}` }, out],
+      read([good, { ...changed, digest: `sha256:${"b".repeat(64)}` }, out]),
       rank,
     );
     expect(rank).toHaveBeenCalledWith([good]);
-    expect(result.withheld.map((held) => held.reason)).toEqual([
-      "unapproved_digest",
-      "out_of_scope",
+    expect(result.withheld).toEqual([
+      { id: "changed", reason: "unapproved_digest" },
+      { id: "secret-procedure", reason: "out_of_scope" },
     ]);
     const wire = agentSkillResolution(result);
     expect(wire.withheld).toEqual({
@@ -77,7 +84,7 @@ describe("skill resolution", () => {
     ];
     const result = await resolveSkills(
       config(candidates, { budget: 300, cutoff: 0.5, limit: 2 }),
-      candidates,
+      read(candidates),
       async () => [1, 0.9, 0.8, 0.7, 0.2],
     );
     expect(result.results.map((row) => row.id)).toEqual(["first", "second"]);
@@ -88,21 +95,56 @@ describe("skill resolution", () => {
     const old = config([skill]);
     const newer = skillConfigSchema.parse({});
     const rank = vi.fn().mockResolvedValue([1]);
-    expect((await resolveSkills(old, [skill], rank)).results).toHaveLength(1);
+    expect(
+      (await resolveSkills(old, read([skill]), rank)).results,
+    ).toHaveLength(1);
     rank.mockClear();
-    expect((await resolveSkills(newer, [skill], rank)).results).toEqual([]);
+    expect((await resolveSkills(newer, read([skill]), rank)).results).toEqual(
+      [],
+    );
     expect(rank).not.toHaveBeenCalled();
-    expect((await resolveSkills(old, [skill], rank)).results).toHaveLength(1);
+    expect(
+      (await resolveSkills(old, read([skill]), rank)).results,
+    ).toHaveLength(1);
   });
   it("refuses duplicate catalog identities and invalid scores", async () => {
     const skill = candidate("review");
     await expect(
-      resolveSkills(config([skill]), [skill, skill], async () => []),
+      resolveSkills(config([skill]), read([skill, skill]), async () => []),
+    ).rejects.toThrow("duplicate");
+    await expect(
+      resolveSkills(config([skill]), read([skill], ["other"]), async () => [1]),
+    ).resolves.toBeDefined();
+    await expect(
+      resolveSkills(config([skill]), read([], ["other", "other"]), async () => [
+        1,
+      ]),
     ).rejects.toThrow("duplicate");
     for (const scores of [[], [NaN], [Infinity], [-1], [2]]) {
       await expect(
-        resolveSkills(config([skill]), [skill], async () => scores),
+        resolveSkills(config([skill]), read([skill]), async () => scores),
       ).rejects.toThrow("invalid scores");
     }
+  });
+  it("names the skills a reader may leave unread and refuses one skipped in error", async () => {
+    const skill = candidate("review");
+    const pinned = config([skill]);
+    expect([...pinnedSkillIds(pinned, "workspace")]).toEqual(["review"]);
+    expect([...pinnedSkillIds(pinned, "other-source")]).toEqual([]);
+    expect([
+      ...pinnedSkillIds(skillConfigSchema.parse({}), "workspace"),
+    ]).toEqual([]);
+    const result = await resolveSkills(
+      pinned,
+      read([skill], ["unlisted"]),
+      async () => [1],
+    );
+    expect(result.results.map((row) => row.id)).toEqual(["review"]);
+    expect(result.withheld).toEqual([
+      { id: "unlisted", reason: "out_of_scope" },
+    ]);
+    await expect(
+      resolveSkills(pinned, read([], ["review"]), async () => []),
+    ).rejects.toThrow("pinned skill unread");
   });
 });

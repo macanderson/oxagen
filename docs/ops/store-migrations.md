@@ -47,7 +47,7 @@ repository:
 | Store | Declared by | Production asked via |
 |---|---|---|
 | ClickHouse migrations | `packages/telemetry/src/migrations/*.sql` | `SELECT DISTINCT filename FROM <db>._migrations` |
-| ClickHouse tables | `CREATE TABLE` in `packages/telemetry/src/schema.sql` | `SELECT name FROM system.tables` |
+| ClickHouse tables | `CREATE TABLE` in `packages/telemetry/src/schema.sql` and in `migrations/*.sql` | `SELECT name FROM system.tables` |
 | Neo4j | named constraints and indexes in `packages/ontology/src/schema.cypher` | `SHOW CONSTRAINTS` / `SHOW INDEXES` |
 
 ClickHouse is asked **twice** because its schema arrives two ways.
@@ -101,6 +101,34 @@ CI has always run these migrations: the `test` and `e2e` jobs both call
 `db-migrate.ts` with `DB_MIGRATE_STORES=clickhouse,neo4j` against their own
 ephemeral service containers. So the migrations were known to *apply*. Nothing
 established that anyone had applied them to the store the platform uses.
+
+## When the ledger and the tables disagree
+
+A row in `_migrations` is a filename, not a table. `migrate.ts`'s pre-ledger
+baseline writes those rows without executing the files, for every file up to
+`PRE_LEDGER_BASELINE_CUTOVER`, and the apply loop skips a recorded file for
+ever. A store can therefore list `0020_error_events.sql` as applied and have no
+`error_events`, with nothing left that would ever create it. That is #3698: the
+capture sink failed on every write for weeks and the table the incident was read
+from was the empty one.
+
+The runner now asks the database. After `schema.sql` it reads
+`SELECT name FROM system.tables`, and any recorded file that names a declared
+table the store does not have runs again. The selection is on the missing table
+rather than on the file, so `0022`'s `ADD COLUMN execution_id` replays alongside
+the `0020` that recreates the table — a recreated table missing a column is
+worse than a missing table, because ClickHouse discards the unknown field and
+stores the rest, so the insert succeeds and the column is empty for ever.
+
+Two properties make this safe to leave on. It is self-limiting: once the table
+exists the file is no longer selected. And a file replays only when a table it
+names is **absent**, which is what keeps `0021`'s
+`DROP TABLE schema_conformance_events` off a live table — the drop runs only in
+the state where there is nothing to drop. An empty table list is treated as a
+failed read, not an empty store, and the run stands down and says so.
+
+A repair run prints one line naming the missing tables and the files it replays.
+If you see it, the store had lost a table and has just got it back.
 
 ## Adding a migration
 

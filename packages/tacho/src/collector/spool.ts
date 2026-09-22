@@ -115,19 +115,38 @@ export interface ShipResult {
   reachable: boolean;
 }
 
-/**
- * The wait a 429 asked for, in milliseconds, or undefined when the server gave
- * no usable hint. `Retry-After` wins; `X-RateLimit-Reset` is the fallback,
- * since a fixed-window limiter is spent until the window turns over. Capped so
- * a malformed or hostile header cannot park the daemon indefinitely, and
- * floored at a second so a reset already in the past does not spin.
- */
 /** Persisted event time bounds withholding across daemon restarts. */
 export const MAX_BODY_AUTHORITY_WAIT_MS = 24 * 60 * 60_000;
 
+/**
+ * The least time between two "retention: held" lines from one shipper.
+ *
+ * The hold is a zero-progress path: while a mandate is unproven, every drain
+ * withholds the same events and finds the same nothing to ship, and the drain
+ * runs on the default one-second control tick. Logging each one put 86,400
+ * identical lines per host per day into the daemon log during an outage of the
+ * control plane, which is the log growth this path exists to survive. The
+ * ceiling is one line per five minutes, and the mark clears the moment the
+ * mandate proves, so the next hold says so at once.
+ */
+export const RETENTION_HOLD_LOG_INTERVAL_MS = 5 * 60_000;
+
+/**
+ * The wait the server asked for, in milliseconds, or undefined when it gave no
+ * usable hint. `Retry-After` wins; `X-RateLimit-Reset` is the fallback, since a
+ * fixed-window limiter is spent until the window turns over. Capped so a
+ * malformed or hostile header cannot park the daemon indefinitely, and floored
+ * at a second so a reset already in the past does not spin.
+ *
+ * Two statuses name a number. A 429 is the limiter working, and its wait
+ * replaces the backoff outright. A 503 is the store refusing the write under
+ * pressure (`store_overloaded`), and its wait is a floor under the backoff
+ * rather than a replacement: repeated backpressure is a degrading condition,
+ * so the host still escalates, and only stops coming back sooner than asked.
+ */
 const MAX_SERVER_REQUESTED_WAIT_MS = 5 * 60_000;
 function serverRequestedWaitMs(error: ControlError): number | undefined {
-  if (error.status !== 429) return undefined;
+  if (error.status !== 429 && error.status !== 503) return undefined;
   const hint = error.rateLimit;
   if (!hint) return undefined;
   const wait =
@@ -191,14 +210,22 @@ export class Shipper {
     // server telling us the one number that ends the wait.
     const told =
       error instanceof ControlError ? serverRequestedWaitMs(error) : undefined;
-    if (told !== undefined) {
+    if (
+      told !== undefined &&
+      error instanceof ControlError &&
+      error.status === 429
+    ) {
       this.nextAttemptAt = this.options.now() + told;
       // Do NOT escalate backoffMs here. A 429 answered on time is the limiter
       // working as designed, not a degrading control plane, and letting it
       // ratchet the blind backoff would punish a host for obeying the ceiling.
       return;
     }
-    this.nextAttemptAt = this.options.now() + this.backoffMs;
+    // A 503 names a wait too, but backpressure that keeps coming is the store
+    // degrading, so the backoff still escalates and the server's number is
+    // only a floor: never come back sooner than it asked.
+    this.nextAttemptAt =
+      this.options.now() + Math.max(this.backoffMs, told ?? 0);
     this.backoffMs = Math.min(
       this.backoffMs * 2,
       this.options.maxBackoffMs ?? 60_000,
@@ -326,9 +353,12 @@ export class Shipper {
       return { shipped: 0, quarantined: 0, reachable: this.reachable };
     const { own, foreign } = this.partitionByEnrollment(batch);
     // Complete body reads before ingest or quarantine can advance any cursor.
+    // `bodiesForAsync` indexes the body file off the synchronous path and
+    // hands the batch back in slices, so the daemon answers `/status` and its
+    // control-plane fetches while a long session's bodies are read (#3694).
     let batchBodies: TachoBody[];
     try {
-      batchBodies = this.options.wal.bodiesFor(own);
+      batchBodies = await this.options.wal.bodiesForAsync(own);
     } catch (error) {
       this.fail(error);
       this.options.log(`WAL body read failed: ${this.lastError ?? "unknown"}`);
@@ -418,7 +448,8 @@ export class Shipper {
     if (
       held.size > 0 &&
       (this.lastRetentionHoldLogAt === undefined ||
-        this.options.now() - this.lastRetentionHoldLogAt >= 300_000)
+        this.options.now() - this.lastRetentionHoldLogAt >=
+          RETENTION_HOLD_LOG_INTERVAL_MS)
     ) {
       this.lastRetentionHoldLogAt = this.options.now();
       this.options.log(

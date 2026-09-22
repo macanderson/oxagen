@@ -32,6 +32,7 @@
 
 import {
   defaultModel,
+  modelIdentityFor,
   modelIdOf,
   type EffortLevel,
   type ModelCredential,
@@ -474,6 +475,11 @@ export async function runGovernedTurn(
   );
   const model = input.model ?? defaultModel();
   const modelId = modelIdOf(model);
+  // Who is about to serve the turn. On the organisation's own vendor key the
+  // id is the vendor's bare spelling (`gpt-5.2`), so the provider ceilings
+  // below are found from the credential rather than from a prefix that is not
+  // there to read.
+  const identity = modelIdentityFor(modelId, input.credential);
 
   // What the tool list costs this turn, and whether the provider will take it
   // (#2611). Both answers are wanted before the request goes out, not after:
@@ -492,10 +498,14 @@ export async function runGovernedTurn(
   const modelTools = shown
     ? () => schemaOnlyTools(shown())
     : () => schemaOnlyTools(tools);
-  const toolBudget = assertToolListFitsProvider(modelId, modelTools());
+  const toolBudget = assertToolListFitsProvider(
+    { modelId: identity.wireId, provider: identity.provider },
+    modelTools(),
+  );
   logger.info(
     {
       modelId,
+      provider: identity.provider,
       toolCount: toolBudget.toolCount,
       estimatedToolTokens: toolBudget.estimatedTokens,
       largestTool: toolBudget.largestTool,

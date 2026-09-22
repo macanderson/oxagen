@@ -2605,6 +2605,7 @@ describe("stella", () => {
       installed: true,
       path: "/usr/local/bin/stella",
       version: "0.9.423",
+      foundVia: "cli",
       enrolled: true,
       tier: "harness",
       tierSummary: TACHO_TIER_SUMMARY.harness,
@@ -2887,6 +2888,19 @@ describe("cursor", () => {
       ok: false,
       detail: "`cursor-agent` is not on PATH",
     });
+  });
+
+  it("reports the editor rather than warning when only it is installed", async () => {
+    const d = deps({
+      cursor: () => ({
+        app: { installed: true, path: "/Applications/Cursor.app" },
+      }),
+    });
+    const result = await enroll({ ...WHERE, harnesses: ["cursor"] }, d);
+    expect(result.warnings.join("\n")).not.toContain("`cursor-agent` alias");
+    expect(d.lines.join("\n")).toContain(
+      "Cursor editor at /Applications/Cursor.app",
+    );
   });
 
   it("writes hooks, reports them, and unenroll takes them back out", async () => {

@@ -415,13 +415,13 @@ export interface CliDeps {
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
   /**
-   * Cursor's CLI, `agent`. Cursor also installs it as that generic name;
-   * `cursorFacts` sanity-checks the version string before treating it as
-   * Cursor rather than an unrelated tool. The IDE reads the same hooks file,
-   * so a machine with only the IDE is hooked all the same; this reports the
-   * CLI.
+   * Cursor, found by its `cursor-agent` alias on PATH and by the editor on
+   * disk. Only the alias identifies the executable: a generic `agent` on PATH
+   * belongs to unrelated software as often as not. The editor reads the same
+   * `~/.cursor/hooks.json`, so a machine carrying it alone is wrapped all the
+   * same, and `CursorFacts.app` is how that machine says so.
    */
-  cursor: () => HarnessFacts;
+  cursor: () => CursorFacts;
   stella: () => HarnessFacts;
   /**
    * Whether Claude Desktop is installed. A connected app is a GUI bundle, not
@@ -584,9 +584,63 @@ export function claudeDesktopFacts(
 export const CURSOR_CLI_NAMES = ["cursor-agent"] as const;
 
 /**
- * Probe Cursor's specific CLI alias. A generic `agent` executable can belong
- * to unrelated software, even when its version output contains a semver.
- * GUI-only installations and installs without the alias remain undetected.
+ * What a Cursor probe found. `path` and `version` describe the `cursor-agent`
+ * executable and nothing else, because `enroll` records them as
+ * `cursor_execpath` and `cursor_version` in `host.json`. The editor is a
+ * separate signal under `app`, so an application directory never reaches a
+ * field that means "the binary we would run".
+ */
+export interface CursorFacts extends HarnessFacts {
+  /** The Cursor editor on disk, when this platform documents where it lands. */
+  app?: AppFacts;
+}
+
+/**
+ * Where the Cursor editor installs itself, checked on disk. macOS ships an
+ * application bundle in `/Applications` (or `~/Applications` for a per-user
+ * install). Windows ships a per-user installer under `%LOCALAPPDATA%\Programs`
+ * and a machine-wide one under `%PROGRAMFILES%`.
+ *
+ * Linux answers "not installed" on purpose. Cursor ships there as an AppImage
+ * the person places wherever they like, so every path this could check would
+ * be a guess, and a probe that names the wrong directory is worse than one
+ * that says it does not know. A Linux machine with the editor alone is
+ * covered through `coverableWhenAbsent` on the detect entry instead: the hooks
+ * file governs Cursor whether or not anything was found here.
+ */
+export function cursorAppFacts(
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir(),
+  env: Record<string, string | undefined> = process.env,
+  exists: (candidate: string) => boolean = existsSync,
+): AppFacts {
+  const local = env["LOCALAPPDATA"] ?? `${home}\\AppData\\Local`;
+  const programs = env["PROGRAMFILES"] ?? "C:\\Program Files";
+  const candidates: string[] =
+    platform === "darwin"
+      ? ["/Applications/Cursor.app", `${home}/Applications/Cursor.app`]
+      : platform === "win32"
+        ? [`${local}\\Programs\\cursor`, `${programs}\\Cursor`]
+        : [];
+  for (const candidate of candidates) {
+    if (exists(candidate)) return { installed: true, path: candidate };
+  }
+  return { installed: false };
+}
+
+/**
+ * Probe Cursor two ways: the `cursor-agent` alias on PATH, and the editor on
+ * disk. Both are reported when both answer, because they are different facts
+ * and the caller says which it acted on.
+ *
+ * The alias is the only executable name trusted here. A generic `agent`
+ * executable can belong to unrelated software even when its version output
+ * carries a semver, and treating that as Cursor writes another program's path
+ * into the enrollment record (#3384, finding 18).
+ *
+ * The editor matters because `~/.cursor/hooks.json` governs it and the CLI
+ * alike, so a machine with the editor alone is a supported install that the
+ * alias probe alone reports as absent (#3349).
  */
 export function cursorFacts(
   exec: Exec,
@@ -594,15 +648,20 @@ export function cursorFacts(
   env: Record<string, string | undefined> = process.env,
   home?: string,
   exists?: (candidate: string) => boolean,
-): HarnessFacts {
+): CursorFacts {
+  const app =
+    exists === undefined
+      ? cursorAppFacts(platform, home, env)
+      : cursorAppFacts(platform, home ?? homedir(), env, exists);
+  const found = app.installed ? { app } : {};
   for (const name of CURSOR_CLI_NAMES) {
     const facts =
       exists === undefined
         ? harnessFacts(exec, name, platform, env, home)
         : harnessFacts(exec, name, platform, env, home, exists);
-    if (facts.version !== undefined) return facts;
+    if (facts.version !== undefined) return { ...facts, ...found };
   }
-  return {};
+  return found;
 }
 
 export function claudeFacts(

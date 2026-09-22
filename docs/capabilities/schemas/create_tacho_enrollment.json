@@ -470,6 +470,14 @@
             },
             "maxItems": 4096
           },
+          "hook_fail_open": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "maxItems": 16
+          },
           "model_prices": {
             "type": "array",
             "items": {

@@ -2220,7 +2220,14 @@ describe("the wire and the host file", () => {
     expect(policyBundleSchema.parse(bundle).model_prices).toEqual(PRICES);
     const bad = { ...bundle, model_prices: [{ ...PRICES[0], surprise: 1 }] };
     expect(policyBundleSchema.safeParse(bad).success).toBe(false);
-    expect(TACHO_BUNDLE_FEATURES).toEqual(["gateway_tools", "model_prices"]);
+    // The whole advertised list, not a subset: a field added to
+    // `policyBundleSchema` without its name here would ship a daemon that
+    // parses it and never says so, and the control plane would keep gating it.
+    expect(TACHO_BUNDLE_FEATURES).toEqual([
+      "gateway_tools",
+      "model_prices",
+      "hook_fail_open",
+    ]);
   });
 
   it("puts the proxy next to the collector's port unless the host file pins one", () => {

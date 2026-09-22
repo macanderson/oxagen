@@ -25,7 +25,19 @@ import type { TachoEvent } from "../envelope";
 import { type DaemonHandle, startDaemon } from "./daemon";
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
+/** A second live session, for the cases about one tick's batch of sessions. */
+const SIBLING = "99999999-8888-7777-6666-555555555555";
 const CWD = "/repo";
+
+/** The sequence numbers a chain's frames carry, in the order they were read. */
+function seqs(events: readonly TachoEvent[]): number[] {
+  return events.map((event) => event.seq);
+}
+
+/** The sequence numbers a gap-free chain of that length would carry. */
+function positions(events: readonly TachoEvent[]): number[] {
+  return events.map((_, index) => index);
+}
 
 /** A git that answers canned stdout, recording every invocation. */
 function fakeGit(
@@ -547,6 +559,70 @@ describe("the daemon's git seam", () => {
     },
   );
 
+  it("keeps a sibling session's reconciliation when an ending session's write fails", async () => {
+    // Two sessions are reconciled in one tick. The sibling is reached first
+    // and the ending session second, and the write that carries the ending
+    // session's frame throws. The sibling's frame was computed before it, so
+    // a shared batch handed it to the throwing call and lost it with nothing
+    // to retry it; and both chains had already moved their cursors past
+    // events the WAL never received.
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+    );
+    await handle.api.handleHook(hook("SessionStart", { session_id: SIBLING }));
+    await handle.api.handleHook(hook("Stop", { session_id: SIBLING }));
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("SessionEnd"));
+    const sibling = handle.registry.get(SIBLING)!.recorder.sessionUuid;
+    const endingChain = handle.registry.get(SESSION)!.recorder.sessionUuid;
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = false;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        if (
+          !failed &&
+          events.some(
+            (event) =>
+              event.kind === "oxagen:worktree_reconciled" &&
+              event.session_uuid === endingChain,
+          )
+        ) {
+          failed = true;
+          throw Object.assign(new Error("event disk full"), { code: "ENOSPC" });
+        }
+        append(events, bodies);
+      });
+    await handle.tick();
+    expect(failed).toBe(true);
+    // The sibling's frame is on disk: it was written in its own call, before
+    // the session whose write failed was reached.
+    const siblingFrames = handle.wal.read(sibling);
+    expect(
+      siblingFrames.filter(
+        (event) => event.kind === "oxagen:worktree_reconciled",
+      ),
+    ).toHaveLength(1);
+    expect(seqs(siblingFrames)).toEqual(positions(siblingFrames));
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    fault.mockRestore();
+    await handle.tick();
+    // The retry sealed at the sequence number the failed write abandoned, so
+    // the closed chain holds one reconciliation and has no hole in it.
+    const endingFrames = handle.wal.read(endingChain);
+    expect(
+      endingFrames.filter(
+        (event) => event.kind === "oxagen:worktree_reconciled",
+      ),
+    ).toHaveLength(1);
+    expect(seqs(endingFrames)).toEqual(positions(endingFrames));
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+    expect(seqs(handle.wal.read(sibling))).toEqual(
+      positions(handle.wal.read(sibling)),
+    );
+  });
+
   it("refuses a checkpoint for a session whose terminal is stuck behind a WAL failure", async () => {
     // `sealed` reports `false` for the whole pending window (its terminal
     // is not durable yet), but that must not reopen the chain to a
@@ -882,5 +958,60 @@ describe("the daemon's git seam", () => {
     await handle.tick();
     await handle.api.handleHook(hook("UserPromptSubmit", { prompt: "four" }));
     expect(frames(handle).at(-1)?.context?.git_branch).toBe("main");
+  });
+  it("spawns no git for a throttled read until it comes due", async () => {
+    // A `Stop` inside the reconcile interval used to run the HEAD, branch,
+    // status, and remote probes and then requeue itself, so the one-second
+    // control tick repeated all four until the interval expired: about sixty
+    // git processes per session where one reconciliation was due.
+    let time = 1_000;
+    const calls: string[][] = [];
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, calls),
+      () => time,
+    );
+    const spawns = () => calls.filter((call) => call[0] === "git").length;
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    await handle.tick();
+    expect(reconciliations(handle)).toHaveLength(1);
+    const settled = spawns();
+    await handle.api.handleHook(hook("Stop"));
+    await handle.tick();
+    await handle.tick();
+    await handle.tick();
+    expect(spawns()).toBe(settled);
+    expect(reconciliations(handle)).toHaveLength(1);
+    time += 15_000;
+    await handle.tick();
+    expect(spawns()).toBeGreaterThan(settled);
+    expect(reconciliations(handle)).toHaveLength(2);
+  });
+
+  it("reads the worktree when SessionEnd is the first hook to carry cwd", async () => {
+    // A session first seen without a working directory (OTel, a transcript,
+    // or a start hook that carried none) used to seal on SessionEnd before
+    // the payload's own `cwd` was applied, so the final read never ran and
+    // the session closed with no worktree evidence.
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+    );
+    await handle.api.handleHook({
+      payload: { session_id: SESSION, hook_event_name: "SessionStart" },
+      env: {},
+    });
+    expect(handle.registry.get(SESSION)?.cwd).toBeUndefined();
+    await handle.api.handleHook(hook("SessionEnd"));
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+    expect(reconciliations(handle)).toHaveLength(1);
+    const events = frames(handle);
+    const end = events.findIndex((event) => event.kind === "agent_stop");
+    expect(end).toBeGreaterThan(-1);
+    expect(
+      events.findIndex((event) => event.kind === "oxagen:worktree_reconciled"),
+    ).toBeLessThan(end);
   });
 });

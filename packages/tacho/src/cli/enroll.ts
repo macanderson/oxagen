@@ -1029,14 +1029,18 @@ export async function enrollLocked(
     else deps.out(`      codex ${codex.version ?? "?"} at ${codex.path}`);
   }
   if (harnesses.includes("cursor")) {
+    // Cursor answers two probes and the hooks file governs both, so an
+    // editor with no CLI alias is a covered machine, not a warning.
     const cursorFacts = deps.cursor();
-    if (cursorFacts.path === undefined)
-      warnings.push(
-        "Cursor's `cursor-agent` alias is not on PATH. The hooks still govern the Cursor editor, which reads the same file; no primary source documents where the GUI installs, so this machine cannot be probed for it",
-      );
-    else
+    if (cursorFacts.path !== undefined)
       deps.out(
         `      cursor-agent ${cursorFacts.version ?? "?"} at ${cursorFacts.path}`,
+      );
+    else if (cursorFacts.app?.installed === true)
+      deps.out(`      Cursor editor at ${cursorFacts.app.path ?? "?"}`);
+    else
+      warnings.push(
+        "Cursor's `cursor-agent` alias is not on PATH and the editor was not found on disk. The hooks still govern both, and Cursor's Linux build is an AppImage with no documented location, so this is the probe's limit rather than the machine's",
       );
   }
   if (harnesses.includes("stella")) {

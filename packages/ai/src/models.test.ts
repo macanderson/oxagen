@@ -55,8 +55,10 @@ vi.mock("ai", () => ({
 
 import {
   embeddingProvider,
+  modelIdentityFor,
   resetCredentialClientsForTests,
   resolvedTierCatalog,
+  resolveModelIdentity,
   selectModel,
   type ModelCredential,
 } from "./models";
@@ -597,5 +599,119 @@ describe("BYOK beyond the routed vendors (@oxagen/ai)", () => {
     ] as const) {
       expect(embeddingProvider(compat({ provider })).fundedBy).toBe("platform");
     }
+  });
+});
+
+describe("the model's identity on the key that serves it (@oxagen/ai)", () => {
+  // One string cannot mean both "what the endpoint is asked for" and "what the
+  // catalog, the posture matrix and the provider tool ceilings are keyed by".
+  // On a direct-vendor key the two differ, and every lookup made on the wire id
+  // answers "unknown model": the reasoning effort a person asked for is
+  // dropped, and the 128-tool refusal never fires (#3314, findings 1 and 2).
+  beforeEach(() => {
+    resetMocks();
+    envValues = { ...TIER_ENV, OXAGEN_MODEL_PROVIDER: "gateway" };
+  });
+
+  const openaiKey: ModelCredential = {
+    provider: "openai",
+    apiKey: "sk-openai-0123456789",
+    digest: "d-openai",
+    modelMap: { balanced: "gpt-5.2" },
+  };
+
+  it("carries the wire id, the catalog id and the provider for a direct openai key", () => {
+    expect(
+      resolveModelIdentity({ tier: "balanced", credential: openaiKey }),
+    ).toEqual({
+      wireId: "gpt-5.2",
+      catalogId: "openai/gpt-5.2",
+      provider: "openai",
+    });
+  });
+
+  it("restores the vendor prefix on a direct anthropic key", () => {
+    expect(
+      resolveModelIdentity({
+        tier: "balanced",
+        credential: {
+          provider: "anthropic",
+          apiKey: "sk-ant-0123456789",
+          digest: "d-ant",
+          modelMap: { balanced: "claude-sonnet-5" },
+        },
+      }),
+    ).toEqual({
+      wireId: "claude-sonnet-5",
+      catalogId: "anthropic/claude-sonnet-5",
+      provider: "anthropic",
+    });
+  });
+
+  it("sends the wire id selectModel sends, never the catalog id", () => {
+    // The catalog id is for lookups. Sending it would 404: `api.openai.com`
+    // has no model called `openai/gpt-5.2`.
+    const identity = resolveModelIdentity({
+      tier: "balanced",
+      credential: openaiKey,
+    });
+    const model = selectModel({ tier: "balanced", credential: openaiKey });
+    expect((model as unknown as { modelId: string }).modelId).toBe(
+      identity.wireId,
+    );
+  });
+
+  it("leaves a gateway-shaped id alone on the platform key and the routed keys", () => {
+    expect(resolveModelIdentity({ tier: "balanced" })).toEqual({
+      wireId: "anthropic/claude-sonnet-5",
+      catalogId: "anthropic/claude-sonnet-5",
+      provider: "anthropic",
+    });
+    expect(
+      resolveModelIdentity({
+        tier: "balanced",
+        credential: OPENROUTER_CREDENTIAL,
+      }),
+    ).toEqual({
+      wireId: "anthropic/claude-sonnet-5",
+      catalogId: "anthropic/claude-sonnet-5",
+      provider: "anthropic",
+    });
+  });
+
+  it("names openai_compatible as the provider and claims no catalog for its id", () => {
+    // The endpoint is the customer's and so is the namespace: a gateway
+    // prefix here would be a claim about models nobody has seen. What the
+    // provider ceilings need is the KIND of endpoint, which this says.
+    expect(
+      resolveModelIdentity({
+        tier: "balanced",
+        credential: {
+          provider: "openai_compatible",
+          apiKey: "sk-together-0123456789",
+          digest: "d-compat",
+          baseUrl: "https://api.together.xyz/v1",
+          modelMap: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+        },
+      }),
+    ).toEqual({
+      wireId: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+      catalogId: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+      provider: "openai_compatible",
+    });
+  });
+
+  it("does not double a prefix the vendor's own spelling already carries", () => {
+    expect(modelIdentityFor("openai/gpt-5.2", openaiKey).catalogId).toBe(
+      "openai/gpt-5.2",
+    );
+  });
+
+  it("reports no provider for a bare id nothing names", () => {
+    expect(modelIdentityFor("some-local-model")).toEqual({
+      wireId: "some-local-model",
+      catalogId: "some-local-model",
+      provider: null,
+    });
   });
 });

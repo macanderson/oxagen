@@ -7,6 +7,7 @@ import {
   readWorkspaceRetention,
   requireBundleSigner,
   resolveEnrolledHost,
+  resolveHostMandate,
   signBundle,
   unsignedBundle,
 } from "./lib/tacho-host";
@@ -32,16 +33,18 @@ export const tachoBundleGetHandler: CapabilityHandler<
       tx as never,
       input.host_enrollment_id,
     );
-    const [denyGeneration, retention, steering] = await Promise.all([
+    const [denyGeneration, retention, steering, mandate] = await Promise.all([
       readDenyGeneration(tx as never, ctx.orgId, ctx.workspaceId),
       readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
       readWorkspaceSteering(tx as never, ctx.orgId, ctx.workspaceId),
+      resolveHostMandate(tx as never, ctx, host),
     ]);
     const unsigned = unsignedBundle(
       host,
       denyGeneration,
       retention,
       steering,
+      mandate,
       now,
     );
     await tx
