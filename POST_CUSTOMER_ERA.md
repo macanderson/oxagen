@@ -109,7 +109,7 @@ rather than after.
 
 ### 2. A pull request carries more than one change
 
-**In effect:** `docs/scr/SCR-004-residue-becomes-issues.md`, "Scope, and when
+**In effect:** `.oxagen/rules/ctx.scr.004-fix-over-file.toml`, "Scope, and when
 this rule changes". A pull request fixes defects it finds along the way, even
 ones unrelated to its title.
 
@@ -305,7 +305,7 @@ Not every item comes due on the same day, and two of them are the same work.
 
 - #3268: the plan, with the options weighed and a recommendation for each item.
 - `DEREGISTERED.md`: what came off the surfaces, and where the code still is.
-- `docs/scr/SCR-004-residue-becomes-issues.md`: what a pull request defers.
+- `.oxagen/rules/ctx.scr.004-fix-over-file.toml`: what a pull request defers.
 - `docs/ops/stripe-sandbox-mode.md`: the sandbox, and the cutover it needs.
 - `.github/workflows/db-migrate.yml`: the manual migration runner, and its own
   account of why it is manual.

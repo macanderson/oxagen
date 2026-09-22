@@ -1,6 +1,6 @@
 # ADR-038: Adopt org standing decisions as a Steering Context Record corpus
 
-- Status: accepted
+- Status: accepted. The replicated `docs/scr/` corpus was superseded by ADR-137 on 2026-09-22. The standing-decisions block in `AGENTS.md` remains.
 - Date: 2026-08-26
 
 ## Context

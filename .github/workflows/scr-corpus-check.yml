@@ -1,18 +1,11 @@
-# SCR corpus drift check (oxagen #1320), extended to the compiled AGENTS.md
-# summary of that same corpus (oxagen #2684) and to the DoD caller stubs
-# (oxagen #2661) — three things replicated across the same five repos, with
-# one failure mode between them: a change lands in some of them.
+# docs/scr absence check (oxagen #1320, revised by ADR-137), plus the DoD
+# caller stubs (oxagen #2661).
 #
-# ADR-038 replicated docs/scr/ byte-identically across the five org repos and
-# accepted cross-repo drift as a known cost. docs/scr/README.md declares that
-# drift is a bug — this workflow is the thing that notices. oxagen#2684 added
-# the other half of the same drift: each repo's AGENTS.md carries a compiled
-# summary of the corpus under "## Standing decisions", and that summary is
-# what an agent actually loads at session start — the record in docs/scr/ can
-# be perfectly in sync while the summary of it still describes a directive
-# that record no longer states (oxagen#2673). One script now checks both and
-# reports them as one signal; see scr-corpus-check.mjs's header for why a
-# byte comparison of AGENTS.md itself would be wrong.
+# ADR-038 replicated docs/scr/ across five org repos. ADR-137 retired that
+# corpus. Standing decisions are context records in oxagen's .oxagen/rules/,
+# and a connected repository is steered from the workspace. This workflow
+# fails when any of the five repos still has a file under docs/scr/. The DoD
+# caller stubs are a separate replication and stay on the second step.
 #
 # ## Why this lives only in oxagen
 #
@@ -36,21 +29,16 @@
 name: scr-corpus-check
 
 on:
-  # Daily. Drift is introduced by humans landing a corpus edit in one repo and
-  # forgetting the others, so the useful detection latency is "within a day",
-  # not "within a minute" — this does not need to run per-push.
+  # Daily. A reintroduced docs/scr tree should be noticed within a day.
   schedule: [{ cron: "0 8 * * *" }]
   workflow_dispatch: {}
-  # Re-check immediately when the corpus itself changes here, so a same-day
-  # partial rollout is caught while the author still has the context loaded.
-  # AGENTS.md is included because it is now half of what this check compares
-  # (oxagen #2684) — a same-day edit to oxagen's own compiled summary must
-  # re-run this just as reliably as a docs/scr/ edit does.
+  # Re-check when someone adds docs/scr back, or when the check itself changes.
   push:
     branches: [main]
     paths:
       - "docs/scr/**"
-      - "AGENTS.md"
+      - "tools/scripts/scr-corpus-check.mjs"
+      - ".github/workflows/scr-corpus-check.yml"
       # The DoD caller stubs are the other thing replicated across those four
       # repos, and they drift the same way (oxagen#2661). A change to either
       # workflow here is usually the change the callers have to follow.
@@ -81,7 +69,7 @@ jobs:
       # plus fetch). Installing the workspace to run one script would make a
       # five-minute job out of a five-second one, and would couple the health
       # of the process check to the health of the product's dependency tree.
-      - name: Compare docs/scr/ and each AGENTS.md summary across the five org repos
+      - name: Confirm none of the five org repos still carries docs/scr/
         id: check
         continue-on-error: true
         env:
@@ -124,11 +112,9 @@ jobs:
               MARKER,
               '### Context',
               '',
-              'The SCR corpus has drifted between the five org repos. ADR-038 replicates',
-              '`docs/scr/` identically across them and `docs/scr/README.md` declares drift a bug.',
-              'That includes each repo\'s compiled `AGENTS.md` "Standing decisions" summary of the',
-              'same corpus (oxagen#2684) — a bullet\'s title is expected to read the same in every',
-              'repo even where its body legitimately names a repo-specific command.',
+              'A repository still carries `docs/scr/`. ADR-137 retired that corpus.',
+              'Standing decisions are context records in oxagen `.oxagen/rules/`.',
+              'A connected repository is steered from the workspace and does not keep a copy.',
               '',
               process.env.REPORT,
               '',
@@ -136,7 +122,7 @@ jobs:
               '',
               '### Definition of done',
               '',
-              '- [ ] Every divergence above is resolved by a deliberate re-sync of all five copies',
+              '- [ ] Every `docs/scr/` file named above is removed',
               '- [ ] `scr-corpus-check` is green',
               '- [ ] Residue filed as new issues (triage label only)',
             ].join('\n')

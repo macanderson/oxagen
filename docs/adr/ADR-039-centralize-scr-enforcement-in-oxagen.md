@@ -1,6 +1,6 @@
 # ADR-039: Centralize SCR enforcement in oxagen rather than replicating it
 
-- Status: accepted
+- Status: accepted. ADR-137 retired the replicated corpus, so #1320 now checks that `docs/scr/` is absent. The DoD workflows in this record stay centralized here.
 - Date: 2026-08-26
 
 ## Context
