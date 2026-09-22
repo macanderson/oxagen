@@ -12,6 +12,12 @@
  * megabyte. Reads decode one line at a time; the shipped cursor covers both,
  * since a body only ever ships with its event.
  *
+ * That file is the one store for a run's content on this host (ADR-139). Every
+ * other place content passes through is a hand-off: the spool holds a hook
+ * payload until the daemon drains it, and the daemon's terminal journal holds a
+ * sealed batch until it lands here. A hand-off is retried, so `appendRecovered`
+ * answers a body the store already holds by not writing it again.
+ *
  * NDJSON rather than SQLite keeps the package free of native modules and keeps
  * a read cheap enough to do on every tick.
  *
@@ -158,15 +164,8 @@ export class Wal {
     writeSensitiveFileAtomic(this.cursorPath, JSON.stringify(this.cursor));
   }
 
-  /**
-   * Bodies go first so ordinary writes ship content with its event. A crash
-   * between files can leave an orphan body, which retention sweeps remove.
-   * A failed body write must still permit the sealed event to persist.
-   */
-  append(
-    events: readonly TachoEvent[],
-    bodies: readonly FrameBody[] = [],
-  ): void {
+  /** Write these bodies to their sessions' body files, one line each. */
+  private writeBodies(bodies: readonly FrameBody[]): void {
     const bodyLines = new Map<string, string[]>();
     for (const body of bodies) {
       const lines = bodyLines.get(body.session_uuid) ?? [];
@@ -189,6 +188,43 @@ export class Wal {
         this.bodyFailure(session, "append", error);
       }
     }
+  }
+
+  /**
+   * Bodies this session's body file already stores, by event id.
+   *
+   * Read from the sidecar index, which holds one entry per stored body and is
+   * extended rather than rebuilt as the file grows, so the answer costs the
+   * lines appended since the last read. An index that cannot be built answers
+   * with nothing, which writes a body twice rather than losing it.
+   */
+  private storedBodyIdems(sessionUuid: string): ReadonlySet<string> {
+    const path = this.bodyFileFor(sessionUuid);
+    if (!existsSync(path)) return new Set();
+    try {
+      const index = this.bodyIndexes.ensure(
+        sessionUuid,
+        path,
+        () => this.reportInvalidBody(sessionUuid),
+        (error) => this.bodyFailure(sessionUuid, "read", error),
+      );
+      return new Set(index.entries.keys());
+    } catch (error) {
+      this.bodyFailure(sessionUuid, "read", error);
+      return new Set();
+    }
+  }
+
+  /**
+   * Bodies go first so ordinary writes ship content with its event. A crash
+   * between files can leave an orphan body, which retention sweeps remove.
+   * A failed body write must still permit the sealed event to persist.
+   */
+  append(
+    events: readonly TachoEvent[],
+    bodies: readonly FrameBody[] = [],
+  ): void {
+    this.writeBodies(bodies);
     const bySession = new Map<string, string[]>();
     for (const event of events) {
       const lines = bySession.get(event.session_uuid) ?? [];
@@ -211,7 +247,18 @@ export class Wal {
     }
   }
 
-  /** Retry a journaled terminal batch without duplicating an already durable prefix. */
+  /**
+   * Retry a journaled terminal batch without duplicating what is already
+   * durable, on both files.
+   *
+   * The events were already deduplicated against the session's chain. The
+   * bodies were not, so a batch retried after its first append wrote its
+   * content a second time, and a batch retried on every restart wrote it
+   * again on every restart. The journal is a hand-off and the body file is the
+   * store, so a body the store already holds is not written again. Identity is
+   * the event id, which is what `bodiesFor` reads a body back by and what the
+   * retention sweeps name one by.
+   */
   appendRecovered(
     events: readonly TachoEvent[],
     bodies: readonly FrameBody[] = [],
@@ -254,7 +301,16 @@ export class Wal {
     }
     // A recovery can truncate a torn tail, which moves the bytes after it.
     for (const event of events) this.resume.delete(event.session_uuid);
-    this.append(missing, bodies);
+    const stored = new Map<string, ReadonlySet<string>>();
+    const fresh = bodies.filter((body) => {
+      let held = stored.get(body.session_uuid);
+      if (held === undefined) {
+        held = this.storedBodyIdems(body.session_uuid);
+        stored.set(body.session_uuid, held);
+      }
+      return !held.has(body.event_id_idem);
+    });
+    this.append(missing, fresh);
     // The event write can succeed before the cursor file fails. Rebuild that
     // metadata on retry even when every event was already durable.
     for (const event of events)
