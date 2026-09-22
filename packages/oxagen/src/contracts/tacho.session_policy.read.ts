@@ -23,7 +23,7 @@ export const tachoSessionPolicyRead = registerCapability({
   name: "get_tacho_session_policy",
   domain: "tacho",
   description:
-    "Read the workspace's policy for wrapped-harness sessions — the Claude Code and Codex sessions that route their model calls through the loopback gateway. Returns the mode (observed = meter only; enforced = the gateway refuses), the per-session dollar ceiling, and the model allow and deny lists. Readable by every member so a person can see what their own machine will refuse.",
+    "Read the workspace's policy for wrapped-harness sessions — the Claude Code and Codex sessions that route their model calls through the loopback gateway. Returns the mode, the per-session dollar ceiling, and the model allow and deny lists. Nothing reads this policy yet, so it records a decision rather than what a machine refuses. Readable by every member.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
@@ -45,7 +45,11 @@ export const tachoSessionPolicyRead = registerCapability({
   },
   input: z.object({}),
   output: z.object({
-    /** "observed" = meter only; "enforced" = the gateway refuses on the clauses below. */
+    /**
+     * "observed" = meter only, and the only value the write accepts today.
+     * "enforced" stays in the enum for rows written before it was refused,
+     * and for the clause the gateway will read.
+     */
     mode: tachoSessionPolicyMode,
     /** The per-session ceiling in USD; null when no ceiling is set. */
     sessionLimitUsd: z.number().nullable(),

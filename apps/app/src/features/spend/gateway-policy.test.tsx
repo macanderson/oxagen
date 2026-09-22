@@ -75,18 +75,15 @@ afterEach(async () => {
 });
 
 describe("the gateway policy section", () => {
-  it("refuses enforced with nothing to enforce, and calls nothing", async () => {
-    const user = userEvent.setup();
+  it("offers no mode switch and says the policy is not applied", () => {
+    // Nothing reads this policy: no bundle carries a `models` clause and the
+    // handler refuses `enforced`. A select that offered it would be a switch
+    // for an enforcer that is not there.
     renderSection();
-    await user.selectOptions(
-      screen.getByLabelText(spend.spend.gateway.modeLabel),
-      "enforced",
-    );
-    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    expect(screen.queryByLabelText(/^Mode$/)).toBeNull();
     expect(
-      await screen.findByText(spend.spend.gateway.errors.nothingToEnforce),
+      screen.getByText(spend.spend.gateway.mode.notApplied),
     ).toBeTruthy();
-    expect(setGatewayPolicyAction).not.toHaveBeenCalled();
   });
 
   it("refuses a model pattern the host could not apply, on its own field", async () => {
@@ -112,14 +109,10 @@ describe("the gateway policy section", () => {
       screen.getByLabelText(spend.spend.gateway.sessionLimit),
       "25",
     );
-    await user.selectOptions(
-      screen.getByLabelText(spend.spend.gateway.modeLabel),
-      "enforced",
-    );
     await user.click(screen.getByRole("button", { name: /save the policy/i }));
     await waitFor(() => {
       expect(setGatewayPolicyAction).toHaveBeenCalledWith(at, {
-        mode: "enforced",
+        mode: "observed",
         sessionLimit: "25",
         modelAllow: "",
         modelDeny: "",
@@ -127,9 +120,10 @@ describe("the gateway policy section", () => {
     });
   });
 
-  it("says a saved policy no machine can apply is not in force", async () => {
-    // The whole reason the write returns reach: a host too old to parse the
-    // model lists is never sent one and keeps calling any model it likes.
+  it("says a saved list reaches no enrolled machine", async () => {
+    // The whole reason the write returns reach: no bundle carries a `models`
+    // clause, so every enrolled host keeps calling any model it likes. A
+    // footer that reported only the save would read as an applied policy.
     setGatewayPolicyAction.mockResolvedValue({
       ok: true,
       value: { hosts: 3, hostsEnforcingModels: 1 },
@@ -140,14 +134,10 @@ describe("the gateway policy section", () => {
       screen.getByLabelText(spend.spend.gateway.modelDeny),
       "gpt-4o",
     );
-    await user.selectOptions(
-      screen.getByLabelText(spend.spend.gateway.modeLabel),
-      "enforced",
-    );
     await user.click(screen.getByRole("button", { name: /save the policy/i }));
     const reach = await screen.findByTestId("gateway-reach");
-    expect(reach.textContent).toContain("2");
-    expect(reach.textContent).toMatch(/too old/i);
+    expect(reach.textContent).toContain("3");
+    expect(reach.textContent).toMatch(/none of them reads these lists yet/i);
   });
 
   it("reports a refusal without claiming the policy changed", async () => {
@@ -240,9 +230,10 @@ describe("the gateway policy section", () => {
     ).toBeTruthy();
   });
 
-  it("switches back to metered, which needs no clause", async () => {
-    // The mode select's other direction. Going back to observed is always
-    // allowed, because metering never needed a clause to enforce.
+  it("sends observed for a row that still reads enforced", async () => {
+    // A row written before `enforced` was refused still says so. The form
+    // sends `observed` whatever the row holds, so saving an old policy cannot
+    // rewrite the mode nothing reads back into the record.
     const user = userEvent.setup();
     renderSection({
       mode: "enforced",
@@ -251,10 +242,6 @@ describe("the gateway policy section", () => {
       modelAllow: null,
       modelDeny: [],
     });
-    await user.selectOptions(
-      screen.getByLabelText(spend.spend.gateway.modeLabel),
-      "observed",
-    );
     await user.click(screen.getByRole("button", { name: /save the policy/i }));
     await waitFor(() => {
       expect(setGatewayPolicyAction).toHaveBeenCalledWith(

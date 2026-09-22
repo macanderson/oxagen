@@ -20,7 +20,7 @@ None.
 
 | Field | Type | Notes |
 |---|---|---|
-| `mode` | `"observed" \| "enforced"` | `observed` = the gateway meters and refuses nothing. `enforced` = it refuses a call that breaks a clause below. |
+| `mode` | `"observed" \| "enforced"` | `observed` = the gateway meters and refuses nothing, and is the only value the write accepts. `enforced` appears only on a row written before it was refused. |
 | `sessionLimitUsd` | `number \| null` | The per-session ceiling in USD; `null` when no ceiling is set. |
 | `modelAllow` | `string[] \| null` | The only models a wrapped harness may call. `null` = no allowlist, so every model is permitted. `[]` = an allowlist that permits nothing. |
 | `modelDeny` | `string[]` | Models refused whatever the allowlist says. A deny beats an allow. |
@@ -46,5 +46,5 @@ None. `noBillingGate: true`.
 ## Notes
 
 - A workspace with no row reads as observed-only, which is what every host had before the setting existed.
-- `mode` governs both enforced clauses. One word answers "does this host refuse anything", rather than two clauses that can disagree.
+- `mode` governs both enforced clauses, once a bundle carries them. One word answers "does this host refuse anything", rather than two clauses that can disagree. No bundle carries them today, so the answer is no for every host whatever this returns.
 - The ceiling is checked when a call is admitted, not mid-stream, so a session can end one call past its limit. Cutting a response in half to save its last tokens would cost the operator the whole call.

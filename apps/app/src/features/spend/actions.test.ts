@@ -328,21 +328,30 @@ describe("setGatewayPolicyAction", () => {
   // field on that field and an unnamed one in the alert, so an action that
   // dropped the name would turn a typo into a whole-form failure.
   const gateway = {
-    mode: "enforced" as const,
+    mode: "observed" as const,
     sessionLimit: "",
     modelAllow: "",
     modelDeny: "",
   };
 
-  it("refuses enforced with nothing to enforce, naming the mode, and sets nothing (negative)", async () => {
-    expect(await setGatewayPolicyAction(at, gateway)).toEqual({
-      ok: false,
-      reason: "invalid",
-      code: "nothingToEnforce",
-      field: "mode",
+  it("sends observed even when the values say enforced (negative)", async () => {
+    // Nothing reads this policy yet, so the handler refuses `enforced`. The
+    // action states the one value the contract accepts rather than passing a
+    // stale row's mode through to a refusal the person did not ask for.
+    invoke.mockResolvedValue({
+      mode: "observed",
+      sessionLimitUsd: null,
+      modelAllow: null,
+      modelDeny: [],
+      reach: { hosts: 0, hostsEnforcingModels: 0 },
     });
+    await setGatewayPolicyAction(at, { ...gateway, mode: "enforced" });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
-    expect(invoke).not.toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledWith(
+      tachoSessionPolicyWrite.name,
+      expect.objectContaining({ mode: "observed" }),
+      expect.anything(),
+    );
   });
 
   it("refuses a model pattern the host could not apply, naming its list (negative)", async () => {
@@ -373,7 +382,7 @@ describe("setGatewayPolicyAction", () => {
     // wire, and the answer carries reach because a saved list that no machine
     // can read is not a list in force.
     invoke.mockResolvedValue({
-      mode: "enforced",
+      mode: "observed",
       sessionLimitUsd: 10,
       modelAllow: null,
       modelDeny: ["gpt-4o"],
@@ -389,7 +398,7 @@ describe("setGatewayPolicyAction", () => {
     expect(invoke).toHaveBeenCalledWith(
       tachoSessionPolicyWrite.name,
       {
-        mode: "enforced",
+        mode: "observed",
         sessionLimitUsd: 10,
         modelAllow: null,
         modelDeny: ["gpt-4o"],

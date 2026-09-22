@@ -92,30 +92,23 @@ describe("GatewayPolicyForm", () => {
     expect(parsed.modelDeny).toEqual(["gpt-4o", "claude-opus-*", "*"]);
   });
 
-  it("refuses enforced with nothing to enforce, naming the mode", () => {
-    const parsed = GatewayPolicyForm.safeParse({ ...BLANK, mode: "enforced" });
-    expect(parsed.success).toBe(false);
-    expect(!parsed.success && parsed.error.issues[0]?.message).toBe(
-      "nothingToEnforce",
-    );
-    expect(!parsed.success && parsed.error.issues[0]?.path).toEqual([
-      "mode",
-    ]);
+  it("sends observed whatever the values carry, because nothing reads the policy", () => {
+    // The panel offers no mode switch and the handler refuses `enforced`, so
+    // the form is the third place that states the one value the contract
+    // accepts. A form that passed `enforced` through would put a word in the
+    // record that no enforcer reads.
+    expect(GatewayPolicyForm.parse(BLANK).mode).toBe("observed");
+    expect(
+      GatewayPolicyForm.parse({ ...BLANK, mode: "enforced", modelDeny: "*" })
+        .mode,
+    ).toBe("observed");
   });
 
-  it("accepts enforced on any one clause, including an allowlist of nothing", () => {
-    // Three separate reasons a policy has something to enforce. The third is
-    // the one a naive emptiness check gets wrong: an allowlist that permits
-    // nothing is a decision, not an absent clause.
-    expect(refusal({ ...BLANK, mode: "enforced", sessionLimit: "5" })).toBe("");
-    expect(refusal({ ...BLANK, mode: "enforced", modelDeny: "gpt-4o" })).toBe(
-      "",
-    );
-    expect(refusal({ ...BLANK, mode: "enforced", modelAllow: "*" })).toBe("");
-  });
-
-  it("never refuses observed, which needs no clause", () => {
+  it("refuses no combination of clauses", () => {
     expect(refusal(BLANK)).toBe("");
+    expect(refusal({ ...BLANK, sessionLimit: "5" })).toBe("");
+    expect(refusal({ ...BLANK, modelDeny: "gpt-4o" })).toBe("");
+    expect(refusal({ ...BLANK, modelAllow: "*" })).toBe("");
   });
 });
 
@@ -131,7 +124,7 @@ describe("gatewayFieldErrors", () => {
     });
   });
 
-  it("maps each list and the mode to its own key", () => {
+  it("maps each list to its own key, and knows no mode field", () => {
     expect(
       gatewayFieldErrors([
         { path: ["modelAllow"] },
@@ -141,7 +134,6 @@ describe("gatewayFieldErrors", () => {
     ).toEqual({
       modelAllow: "modelPatternInvalid",
       modelDeny: "modelPatternInvalid",
-      mode: "nothingToEnforce",
     });
   });
 

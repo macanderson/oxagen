@@ -7,9 +7,9 @@
  *   1. An omitted field does not change, and `null` is a value rather than an
  *      omission. `modelAllow: null` drops the allowlist; leaving it out keeps
  *      whatever was there.
- *   2. `enforced` with nothing to enforce is refused, with a message that says
- *      what to set. The database rejects it too, and a constraint name is not
- *      an explanation.
+ *   2. `enforced` is refused outright, with a message that says why. Nothing
+ *      reads this policy yet, so accepting the word would put a claim in the
+ *      record that no enforcer answers for.
  *   3. The reach is reported. `models` rides a gated bundle field, so a saved
  *      allowlist can govern no machine, and a surface that showed only the
  *      saved value would report that as success.
@@ -103,21 +103,21 @@ async function run(
 describe("update_tacho_session_policy", () => {
   it("inserts the merged policy when the workspace has none", async () => {
     const stub = tx({});
-    const out = await run({ mode: "enforced", sessionLimitUsd: 25 }, stub);
+    const out = await run({ mode: "observed", sessionLimitUsd: 25 }, stub);
     expect(out).toMatchObject({
-      mode: "enforced",
+      mode: "observed",
       sessionLimitUsd: 25,
       modelAllow: null,
       modelDeny: [],
     });
     expect(mocks.insertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: "enforced", sessionLimitUsd: 25 }),
+      expect.objectContaining({ mode: "observed", sessionLimitUsd: 25 }),
     );
   });
 
   it("changes only what it was given, and reads null as a value", async () => {
     mocks.readPolicy.mockResolvedValue({
-      mode: "enforced",
+      mode: "observed",
       sessionLimitUsd: 25,
       modelAllow: ["claude-opus-*"],
       modelDeny: ["gpt-4o"],
@@ -135,28 +135,31 @@ describe("update_tacho_session_policy", () => {
     expect(dropped.modelDeny).toEqual(["gpt-4o"]);
   });
 
-  it("refuses enforced with nothing to enforce, and says what to set", async () => {
+  it("refuses enforced outright, and says why rather than what to set", async () => {
+    // No bundle carries a `models` clause and `budget.mode` comes from the
+    // agent's mandate, so there is no enforcer to name. Even a policy with
+    // every clause filled in is refused.
     const stub = tx({});
-    await expect(run({ mode: "enforced" }, stub)).rejects.toThrow(
-      /set a session limit, an allowed-model list, or a denied-model list/,
-    );
+    await expect(
+      run({ mode: "enforced", sessionLimitUsd: 25, modelDeny: ["*"] }, stub),
+    ).rejects.toThrow(/Enforced is not available yet/);
     // Nothing was written: the refusal is before the upsert, so a policy that
-    // says it enforces and does not never reaches a bundle.
+    // says it enforces and does not never reaches the record.
     expect(mocks.insertValues).not.toHaveBeenCalled();
     expect(mocks.updateSet).not.toHaveBeenCalled();
   });
 
-  it("accepts enforced with an allowlist that permits nothing", async () => {
-    // The negative control for the rule above. `[]` is a decision — refuse
-    // every model — and must not be mistaken for an absent clause.
-    const out = await run({ mode: "enforced", modelAllow: [] }, tx({}));
-    expect(out.mode).toBe("enforced");
+  it("accepts an allowlist that permits nothing, which is a decision", async () => {
+    // `[]` is a decision — permit no model — and must not be mistaken for an
+    // absent clause. Nothing reads it yet; the record keeps it apart from null.
+    const out = await run({ mode: "observed", modelAllow: [] }, tx({}));
+    expect(out.mode).toBe("observed");
     expect(out.modelAllow).toEqual([]);
   });
 
   it("counts only the live hosts that can parse the model lists", async () => {
     const out = await run(
-      { mode: "enforced", modelDeny: ["gpt-4o"] },
+      { mode: "observed", modelDeny: ["gpt-4o"] },
       tx({
         hosts: [
           { bundleFeatures: ["gateway_tools", "model_prices", "models"] },
@@ -179,7 +182,7 @@ describe("update_tacho_session_policy", () => {
   });
 
   it("asserts the roles the contract declares, as the key's creator", async () => {
-    await run({ mode: "enforced", sessionLimitUsd: 25 }, tx({}));
+    await run({ mode: "observed", sessionLimitUsd: 25 }, tx({}));
     expect(mocks.resolveActingUserId).toHaveBeenCalledWith(TEST_CTX);
     expect(mocks.assertOrgRole).toHaveBeenCalledWith(
       expect.objectContaining({ userId: TEST_CTX.userId }),

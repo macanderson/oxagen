@@ -34,12 +34,15 @@ export type SpendView =
 export type SpendAt = { org: string; ws: string };
 
 /**
- * How many machines a saved gateway policy will actually reach.
+ * How many machines a saved gateway policy reaches.
  *
- * `hostsEnforcingModels` is the count that advertised they can parse the
- * bundle's `models` field. A host that has not is never sent one, so its
- * sessions keep calling whatever model they like. The section renders the
- * gap rather than letting a saved list read as an applied one.
+ * `hosts` is every machine enrolled in the workspace, and today the answer is
+ * none of them: no bundle carries a `models` clause, so every enrolled host
+ * keeps calling whatever model it likes whatever this policy says.
+ * `hostsEnforcingModels` counts the hosts that advertised they could parse the
+ * clause if one were sent, which is what the count will mean when one is. The
+ * section renders the gap rather than letting a saved list read as an applied
+ * one.
  */
 export type GatewayReach = { hosts: number; hostsEnforcingModels: number };
 

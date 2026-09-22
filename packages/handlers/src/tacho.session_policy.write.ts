@@ -6,7 +6,6 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, ne } from "drizzle-orm";
 import {
-  hasEnforceableClause,
   readTachoSessionPolicyIn,
   type SessionPolicyTx,
   type TachoSessionPolicy,
@@ -15,6 +14,14 @@ import { logger } from "./logger";
 
 /**
  * Set the workspace's wrapped-session policy, and say how far it reaches.
+ *
+ * **It reaches no machine today, and `enforced` is refused for that reason.**
+ * No bundle carries a `models` clause, and `budget.mode` is set from the
+ * agent's own mandate budget (#3710), so a policy saved here records a
+ * decision and governs nothing. Accepting `enforced` would put a word in the
+ * record that no enforcer reads, which is the defect the gateway audit found
+ * wearing a switch. The write stays open so the decision can be recorded and
+ * read back before the clause exists.
  *
  * The reach is part of the answer, not a nicety. `models` rides a gated bundle
  * field — a daemon built before the field never receives one, because the
@@ -69,13 +76,15 @@ export const tachoSessionPolicyWriteHandler: CapabilityHandler<
       modelDeny: input.modelDeny ?? current.modelDeny,
     };
 
-    // The database carries this rule too. Refusing it here is what lets the
-    // person read why, instead of a constraint name.
-    if (next.mode === "enforced" && !hasEnforceableClause(next)) {
+    // Nothing enforces this policy yet, so nothing may claim to. The database
+    // carries the weaker rule — enforced with no clause to enforce — and this
+    // is the stronger one: enforced with no reader at all. Refusing it here is
+    // what lets the person read why, instead of a constraint name.
+    if (next.mode === "enforced") {
       throw new CapabilityError(
         "update_tacho_session_policy",
         "invalid_input",
-        "Enforced needs something to enforce: set a session limit, an allowed-model list, or a denied-model list. A policy that enforces nothing meters exactly like observed and would say otherwise.",
+        "Enforced is not available yet. The gateway does not read this policy, so every enrolled machine keeps calling any model whatever it says. Save the lists as metered and they apply when the gateway reads them.",
       );
     }
 

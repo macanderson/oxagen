@@ -4616,10 +4616,9 @@ type Messages = {
     gateway: {
       title: string;
       note: string;
-      modeLabel: string;
       mode: {
         observed: string;
-        enforced: string;
+        notApplied: string;
       };
       sessionLimit: string;
       sessionLimitHint: string;
@@ -4637,13 +4636,11 @@ type Messages = {
       denylist: string;
       reach: {
         none: string;
-        all: string;
-        partial: string;
+        stored: string;
       };
       errors: {
         sessionLimitInvalid: string;
         modelPatternInvalid: string;
-        nothingToEnforce: string;
       };
       alert: {
         denied: string;

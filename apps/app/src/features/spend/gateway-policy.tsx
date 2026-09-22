@@ -1,15 +1,18 @@
 "use client";
-// Spend › Budgets › Gateway sessions: what the loopback model proxy refuses
-// for a wrapped Claude Code or Codex session in this workspace
-// (`update_tacho_session_policy`, ADR-094).
+// Spend › Budgets › Gateway sessions: the models this workspace permits for a
+// wrapped Claude Code or Codex session (`update_tacho_session_policy`,
+// ADR-094).
 //
 // It sits beside the spend ceilings and is deliberately not one of them. Those
-// govern Oxagen's own turns, metered as they bill. This one governs somebody's
-// laptop, and the enforcer is the daemon on it reading a signed bundle — which
-// is why the panel reports reach. A model list rides a gated bundle field, so
-// a host too old to parse it is never sent one and keeps calling whatever
-// model it likes. Saving is not the same as governing, and the panel says
-// which it got.
+// govern Oxagen's own turns, metered as they bill. This one is about somebody's
+// laptop, where the enforcer is the daemon on it reading a signed bundle.
+//
+// **Nothing reads this policy yet.** No bundle carries a `models` clause, and
+// a session's ceiling comes from the agent's own mandate budget (#3710), so
+// the panel records a decision and refuses nothing. That is the whole reason
+// the state badge says "Not applied" and the footer says so again after a
+// save: saving is not governing, and a panel that showed only the saved value
+// would read as an enforced one.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { GatewayPolicy } from "@/data/contracts/spend";
@@ -31,7 +34,10 @@ import type { GatewayReach, SpendAt } from "./view";
 /** The saved policy as the dialog's fields, so Save with no edits is a no-op. */
 function valuesOf(policy: GatewayPolicy): GatewayPolicyFormValues {
   return {
-    mode: policy.mode,
+    // Always `observed`, whatever the row holds. A row written before
+    // `enforced` was refused still says so, and saving from this panel must
+    // not write a mode nothing reads back into the record.
+    mode: "observed",
     sessionLimit:
       policy.sessionLimitUsd === null ? "" : String(policy.sessionLimitUsd),
     // A null allowlist and an empty one both render as an empty box, and both
@@ -156,23 +162,14 @@ export function GatewayPolicySection({
     return key ? t(`errors.${key}`) : undefined;
   };
 
-  // The state word, and what it is answerable for. `enforced` on a workspace
-  // with no host is a policy with nothing to apply it to, and saying
-  // "enforced" alone would be a claim about machines that are not there.
-  const unreached =
-    reach === null ? 0 : reach.hosts - reach.hostsEnforcingModels;
-
   return (
     <Panel
       id="spend-gateway"
       title={t("title")}
       note={t("note")}
       action={
-        <Badge
-          tone={saved.mode === "enforced" ? "allowed" : "quiet"}
-          data-mode={saved.mode}
-        >
-          {t(`mode.${saved.mode}`)}
+        <Badge tone="quiet" data-mode={saved.mode}>
+          {t("mode.notApplied")}
         </Badge>
       }
       footer={
@@ -180,12 +177,7 @@ export function GatewayPolicySection({
           <p data-testid="gateway-reach" className="text-xs">
             {reach.hosts === 0
               ? t("reach.none")
-              : unreached === 0
-                ? t("reach.all", { hosts: reach.hosts })
-                : t("reach.partial", {
-                    hosts: reach.hosts,
-                    unreached,
-                  })}
+              : t("reach.stored", { hosts: reach.hosts })}
           </p>
         )
       }
@@ -199,34 +191,6 @@ export function GatewayPolicySection({
           className="flex flex-col gap-3 px-4 py-3.5"
         >
           {alert ? <FormAlert>{t(`alert.${alert}`)}</FormAlert> : null}
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <label
-              htmlFor="gateway-mode"
-              className="text-sm font-medium text-foreground"
-            >
-              {t("modeLabel")}
-            </label>
-            <select
-              id="gateway-mode"
-              name="gateway-mode"
-              value={values.mode}
-              aria-invalid={errors.mode ? true : undefined}
-              className={inputBase}
-              onChange={(event) => {
-                const mode = event.target.value;
-                setValues((prev) => ({
-                  ...prev,
-                  mode: mode === "enforced" ? "enforced" : "observed",
-                }));
-              }}
-            >
-              <option value="observed">{t("mode.observed")}</option>
-              <option value="enforced">{t("mode.enforced")}</option>
-            </select>
-            {errors.mode ? (
-              <p className="text-xs text-destructive">{message("mode")}</p>
-            ) : null}
-          </div>
           <Field
             id="gateway-session-limit"
             name="sessionLimit"

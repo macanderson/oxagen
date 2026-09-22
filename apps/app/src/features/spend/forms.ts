@@ -86,15 +86,9 @@ export type GatewayPolicyFormValues = {
   modelDeny: string;
 };
 
-type GatewayFormErrorKey =
-  | "sessionLimitInvalid"
-  | "modelPatternInvalid"
-  | "nothingToEnforce";
+type GatewayFormErrorKey = "sessionLimitInvalid" | "modelPatternInvalid";
 export type GatewayFieldErrors = Partial<
-  Record<
-    "sessionLimit" | "modelAllow" | "modelDeny" | "mode",
-    GatewayFormErrorKey
-  >
+  Record<"sessionLimit" | "modelAllow" | "modelDeny", GatewayFormErrorKey>
 >;
 
 /**
@@ -116,15 +110,14 @@ function lines(value: string): string[] {
 /**
  * The gateway dialog's values as `update_tacho_session_policy` takes them.
  *
- * Two rules are enforced here as well as in the handler and the database,
- * because each layer answers a different reader. This one tells the person
- * which field to fix while they are still looking at it.
+ * A model pattern the host could not apply is refused here as well as in the
+ * handler and the database, because each layer answers a different reader.
+ * This one tells the person which field to fix while they are still looking
+ * at it, rather than saving a rule that silently matches nothing.
  *
- *   - A model pattern the host could not apply is refused, rather than saved
- *     as a rule that silently matches nothing.
- *   - `enforced` with no ceiling and no model list is refused. A policy that
- *     says it governs and governs nothing is the defect the gateway audit
- *     found, wearing a switch.
+ * `mode` is always `observed`. Nothing reads this policy yet, so the handler
+ * refuses `enforced` and the panel offers no switch; the field stays on the
+ * form's shape because the contract still carries it.
  *
  * An allowlist box left blank means *no allowlist*, so every model is
  * permitted. To permit nothing, deny `*`.
@@ -169,21 +162,11 @@ export const GatewayPolicyForm = z
     // Blank is no allowlist, which is not the same as one that permits
     // nothing. The two reach the contract as null and [].
     const modelAllow = allow.length > 0 ? allow : null;
-    if (
-      form.mode === "enforced" &&
-      sessionLimitUsd === null &&
-      modelAllow === null &&
-      deny.length === 0
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["mode"],
-        message: "nothingToEnforce",
-      });
-      return z.NEVER;
-    }
     return {
-      mode: form.mode,
+      // Always `observed`. The handler refuses `enforced` while no bundle
+      // carries the clauses it would name, so the panel offers no choice and
+      // the form states the one value the contract accepts.
+      mode: "observed" as const,
       sessionLimitUsd,
       modelAllow,
       modelDeny: deny,
@@ -201,7 +184,6 @@ export function gatewayFieldErrors(
       errors.sessionLimit = "sessionLimitInvalid";
     if (head === "modelAllow") errors.modelAllow = "modelPatternInvalid";
     if (head === "modelDeny") errors.modelDeny = "modelPatternInvalid";
-    if (head === "mode") errors.mode = "nothingToEnforce";
   }
   return errors;
 }

@@ -402,14 +402,13 @@
     },
     "gateway": {
       "title": "Gateway sessions",
-      "note": "What the Oxagen gateway refuses for a wrapped Claude Code or Codex session on an enrolled machine. Cursor and Stella sessions are not routed through it.",
-      "modeLabel": "Mode",
+      "note": "The models this workspace permits for a wrapped Claude Code or Codex session on an enrolled machine. The lists are saved here and no machine reads them yet, so nothing is refused. Cursor and Stella sessions are not routed through the gateway.",
       "mode": {
         "observed": "Metered",
-        "enforced": "Enforced"
+        "notApplied": "Not applied"
       },
       "sessionLimit": "Session limit (USD)",
-      "sessionLimitHint": "Checked when a call is admitted, so a session can end one call past its limit. Leave blank for no limit.",
+      "sessionLimitHint": "Saved with the lists and not yet applied. A session's ceiling comes from the agent's own budget today. Leave blank for no limit.",
       "modelAllow": "Allowed models",
       "modelAllowHint": "One per line. A trailing * matches by prefix, so claude-opus-* covers every dated build. Leave blank to permit every model.",
       "modelDeny": "Denied models",
@@ -423,14 +422,12 @@
       "allowlist": "Allowed models: {models}.",
       "denylist": "Denied models: {models}.",
       "reach": {
-        "none": "Saved. No machine is enrolled in this workspace yet, so nothing applies it.",
-        "all": "Saved, and applied by all {hosts} enrolled machines.",
-        "partial": "Saved. Of {hosts} enrolled machines, {unreached} run a version too old to read the model lists and keep calling any model. They pick it up when they upgrade."
+        "none": "Saved. No machine is enrolled in this workspace yet.",
+        "stored": "Saved. {hosts} enrolled machines, and none of them reads these lists yet, so every model is still permitted."
       },
       "errors": {
         "sessionLimitInvalid": "Enter an amount above zero, or leave it blank for no limit.",
-        "modelPatternInvalid": "Each line is a model id, optionally ending in * to match by prefix. No other wildcard works.",
-        "nothingToEnforce": "Enforced needs something to enforce. Set a session limit, an allowed-model list, or a denied-model list."
+        "modelPatternInvalid": "Each line is a model id, optionally ending in * to match by prefix. No other wildcard works."
       },
       "alert": {
         "denied": "Your role cannot change this policy. An organization or workspace owner or admin sets it.",

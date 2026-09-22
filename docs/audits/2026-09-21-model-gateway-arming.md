@@ -10,15 +10,32 @@ audited from a worktree branched off `origin/main`.
 ## Status
 
 The sections below are the audit as written. This block says which of its
-findings still stand.
+findings still stand, at 2026-09-22.
 
 | Finding | Where it stands |
 |---|---|
-| §2 `budget.mode` hardcoded `observed` | Closed. `workspace.tacho_session_policy` holds the workspace's own mode and ceiling, and `unsignedBundle` signs them in. |
-| §3 no model allowlist to check | Closed. `models.allow` and `models.deny` ride the bundle behind `BUNDLE_FEATURE_MODEL_ALLOWLIST`, and `refusalFor` answers `model_not_permitted`. The model name is now read before the refusal decision, which is the reordering §3 called for. |
+| §2 `budget.mode` hardcoded `observed` | Closed, by #3710 rather than by this work. `deriveBundleBudget` sets the mode from the agent's own mandate budget, so `session_budget_exceeded` is reachable. `workspace.tacho_session_policy` holds a workspace ceiling that nothing reads. |
+| §3 no model allowlist to check | Open. The parts are built and none is connected: the lists are stored, the bundle field and its feature gate exist, `refusalFor` answers `model_not_permitted`, and `unsignedBundle` signs no `models` clause, so no host is ever sent one. See "Why the clause waits" below. |
 | §4 spend rollup does not double count | Stands. No change was needed. |
 | §5 a reverted base URL is reported by nothing | Closed for the report. The daemon sends `model_base_urls` on every health poll, `tacho.hosts.model_base_urls` stores it, and `list_tacho_hosts` returns it. Reverting the URL is still possible; the control plane now sees the cause rather than only the tier drop. |
 | §1 Cursor and Stella are never routed | Stands. The spike below says what routing each would take. |
+
+### Why the clause waits
+
+§3 assumed `budget.mode` would be the workspace's answer, set in the panel
+beside the lists. #3710 landed first and made it the agent's: `budget.mode` is
+`enforced` whenever the host's agent names a `per_run_micros` or
+`per_day_micros`. Every branch in `refusalFor` hangs off that one mode, so
+emitting the lists now would arm them on every workspace that had already set
+an agent budget, on a word nobody typed into the gateway panel.
+
+So the lists ship stored and unread, and the refusal is defended twice: the
+control plane signs no clause, and the proxy needs `view.bundle.models` to be
+present as well as the mode before either model branch opens. What is left to
+decide is whose word arms them — the agent's mandate, or a switch of the
+policy's own — and that is an ADR, not a line of code. Until it is answered
+the panel says "Not applied", `update_tacho_session_policy` refuses
+`mode: "enforced"`, and the gateway refuses no model.
 
 ### Spike: can Cursor or Stella be routed at all
 
