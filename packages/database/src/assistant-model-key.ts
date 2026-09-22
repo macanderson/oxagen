@@ -333,9 +333,9 @@ export async function markAssistantModelKeyDisabled(
   orgId: string,
   reason?: string,
 ): Promise<void> {
-  // tenancy: system bypass via withSystemDb (operator action — the caller is
-  // an operator or an offboarding job, not a request inside the organisation's
-  // scope) (see docs/specs/tenancy-rls/spec.md)
+  // tenancy: system bypass via withSystemDb; the update is filtered by orgId,
+  // and the caller is an operator or an offboarding job, not a request inside
+  // the organisation's scope (see docs/specs/tenancy-rls/spec.md)
   await withSystemDb((tx) =>
     tx
       .update(schema.assistantModelKeys)

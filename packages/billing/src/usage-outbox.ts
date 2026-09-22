@@ -239,7 +239,9 @@ let sweepUnprivilegedNoted = false;
  */
 async function sweepDeliveredUsage(now: Date): Promise<number> {
   const cutoff = new Date(now.getTime() - USAGE_OUTBOX_RETENTION_DAYS * DAY_MS);
-  // tenancy: scheduled cross-tenant retention over delivered shared-plane admissions.
+  // tenancy: scheduled cross-tenant retention sweep over delivered
+  // admissions on the shared plane; the delete is filtered to rows past the
+  // window, and no request scope exists here.
   return withSystemDb(async (tx) => {
     const [privilege] = (await tx.execute(
       sql`select has_table_privilege(current_user, 'billing.usage_outbox', 'DELETE') as ok`,
