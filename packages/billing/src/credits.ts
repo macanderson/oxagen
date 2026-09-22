@@ -1,4 +1,5 @@
 import { withTenantDb, withSystemDb, schema, type Tx } from "@oxagen/database";
+import { inTransaction } from "./internal/in-transaction";
 import { and, asc, eq, isNull, or, sql, gt } from "drizzle-orm";
 import { CREDIT_REASONS } from "./constants";
 import { MICRO_CREDITS_PER_CREDIT } from "./pricing";
@@ -474,5 +475,5 @@ export async function consumeCredits(
       carryMicroCents,
     };
   };
-  return transaction ? run(transaction) : withTenantDb(run);
+  return inTransaction(transaction, run);
 }

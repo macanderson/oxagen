@@ -332,6 +332,51 @@ describe("chargeUsageCredits", () => {
 // margin. Passing `markup` explicitly (as every test above does) always wins
 // by design: these are the only cases that exercise the DEFAULT, the one a
 // real call actually gets, since a real caller never passes `markup`.
+describe("snapshotUsageCharge", () => {
+  it("freezes exactly what settle reads, and nothing live", async () => {
+    const { snapshotUsageCharge } = await import("./metering");
+    const { PROVIDER_RATE_CARD } = await import("./pricing");
+    const snapshot = snapshotUsageCharge({
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      orgId: "org-1",
+      referenceId: "msg-1",
+      cachedTokens: 100,
+      ...sonnetCall,
+      rateCard: PROVIDER_RATE_CARD,
+      // Anything a caller spreads in by accident stays out of the row.
+      ...({ requestId: "req-1" } as object),
+    });
+    expect(snapshot).toEqual({
+      orgId: "org-1",
+      model: "claude-sonnet-5",
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      inputTokens: 10_000,
+      outputTokens: 2_000,
+      cachedTokens: 100,
+      referenceId: "msg-1",
+      costUsd: expect.any(Number),
+      markup: 1,
+    });
+    expect(snapshot).not.toHaveProperty("rateCard");
+    expect(snapshot).not.toHaveProperty("requestId");
+    // Stored as JSON on the admission row: it must survive the round trip.
+    expect(JSON.parse(JSON.stringify(snapshot))).toEqual(snapshot);
+  });
+
+  it("keeps a frozen cost and markup rather than recomputing them", async () => {
+    const { snapshotUsageCharge } = await import("./metering");
+    const snapshot = snapshotUsageCharge({
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      orgId: "org-1",
+      costUsd: 0.5,
+      markup: 3,
+      ...sonnetCall,
+    });
+    expect(snapshot.costUsd).toBe(0.5);
+    expect(snapshot.markup).toBe(3);
+  });
+});
+
 describe("chargeUsageCredits: the default markup, by reason", () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -23,6 +23,7 @@
  */
 import { schema, withSystemDb, type Tx } from "@oxagen/database";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { inTransaction } from "./internal/in-transaction";
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -57,11 +58,8 @@ export async function recordSpend(
         spent_micros = ${schema.spendCounters}.spent_micros + EXCLUDED.spent_micros,
         updated_at = now()
     `);
-  if (transaction) await run(transaction);
-  else {
-    // tenancy: global billing counters use the authenticated ingestion caller's orgId and workspaceId.
-    await withSystemDb(run);
-  }
+  // tenancy: global billing counters use the authenticated ingestion caller's orgId and workspaceId.
+  await inTransaction(transaction, run, withSystemDb);
 }
 
 /**

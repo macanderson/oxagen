@@ -33,6 +33,7 @@ import { PRICE_BOOK_LIST } from "@oxagen/database/schema";
 import type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
 import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { isSameModelIdentity } from "./model-identity";
+import { inTransaction } from "./internal/in-transaction";
 import {
   IMAGE_RATE_CARD,
   PROVIDER_RATE_CARD,
@@ -1794,7 +1795,7 @@ export async function setNegotiatedPriceEntry(
       closed: closed === null ? null : rowToEntry(closed),
     };
   };
-  return transaction ? write(transaction) : withTenantDb(write);
+  return inTransaction(transaction, write);
 }
 
 /** Commit a model's classes together. Readers see the old card or the new card. */
