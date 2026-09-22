@@ -1,0 +1,19 @@
+schema = "context-record/v0.1"
+set_id = "macanderson.oxagen"
+
+[[record]]
+lineage_id = "ctx.scr.006-schema-change-labelled"
+record_id = "rec_scr_006_schema_change_labelled_da3bfcbf894f"
+record_hash = "sha256:57015d3ae61f9190de4e55962daa18ed10f27bf2d1a838497a5268294141e2da"
+kind = "procedure"
+statement = "A pull request that changes a schema carries the label migration-required, and the change is not deployed until the migration has been applied to production. A schema change is any edit that makes production's stored shape differ from the shape the branch assumes: a migration file, a schema definition a migration is generated from, or a store's declared constraints and indexes. Where a repository can read the label from the diff, the repository applies it. Do not remove the label to clean up the pull request. Where automation applies it, removing it puts it back. Sequence the apply against the merge: the migration reaches production before, or together with, the code that assumes it. If the migration cannot be applied yet, say so in the pull request and why. Do not add an automatic apply to a deploy pipeline under this record. A change that touches a schema file without altering the stored shape may have the label removed with a note saying why the diff is inert. A repository with no persistent store has nothing to label."
+origin = "imported"
+sharing_scope = "workspace"
+status = "active"
+
+[record.provenance]
+source_kind = "document"
+source_uri = "docs/scr/SCR-006-schema-changes-are-labelled.md"
+
+[record.steering]
+force = "must"
