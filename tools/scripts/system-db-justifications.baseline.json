@@ -451,7 +451,6 @@
     "227d0d9b070349e49e0cb69c4a9d5b9236ce3751b5b039aa35eda4238eefaa8a"
   ],
   "packages/handlers/src/workspace.list.ts": [
-    "69a7fa711e42fef208ec12ec055377f4c6cb3614888e6e19aff85bfeb753fed3",
     "d7e4566da24d1f9f949416657cfe9ff926a4f31ebbb9af31462e419c7bb79fb5"
   ],
   "packages/iam/src/machine-key-scope.ts": [
