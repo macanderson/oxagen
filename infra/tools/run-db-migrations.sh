@@ -12,9 +12,9 @@
 # Runs the migration from the app node rather than from a laptop or a CI
 # runner because Aurora's security group admits 5432 from the app node's
 # security group and nothing else (stacks-new/oxagen/data-services.tf's
-# aws_security_group.aurora). .github/workflows/db-migrate.yml is the same
-# migration from a hosted runner, which is outside the VPC — it now says so
-# and stops rather than hanging. This script is the path that works.
+# aws_security_group.aurora). This script is the path that works, from a
+# laptop with AWS credentials or from .github/workflows/db-migrate.yml, whose
+# production job runs it under the deploy role.
 #
 # Uses the repository's `ci` Atlas environment, which takes DATABASE_URL and
 # the migration directory and nothing else — no dev database, no drizzle

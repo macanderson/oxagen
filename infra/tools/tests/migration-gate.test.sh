@@ -120,7 +120,11 @@ else
       fail "the gate runs 'migrate apply' — deployment must not apply migrations (CLAUDE.md, #3653)" ;;
     *) pass ;;
   esac
-  case "$GATE" in
+  # Judged on the lines that run something. The blocked-deploy summary the
+  # gate writes names the apply command for the operator to run by hand, and
+  # an `echo` of that command applies nothing.
+  GATE_COMMANDS=$(printf '%s\n' "$GATE" | awk '$1 != "echo"')
+  case "$GATE_COMMANDS" in
     *"--apply"*)
       fail "the gate passes --apply — deployment must not apply migrations (CLAUDE.md, #3653)" ;;
     *) pass ;;
@@ -144,7 +148,9 @@ else
 
   # A blocked deploy has to tell its reader what to do next, or the gate is an
   # obstacle rather than a control.
-  contains "$GATE" "DB Migrate (manual)" "the failure names the workflow that applies Postgres"
+  contains "$GATE" "run-db-migrations.sh packages/database --apply" \
+    "the failure names the script that applies Postgres"
+  contains "$GATE" "DB Migrate (manual)" "the failure names the dispatch that runs the same script"
   contains "$GATE" "Store Migrate (manual)" "the failure names the workflow that applies the stores"
 fi
 

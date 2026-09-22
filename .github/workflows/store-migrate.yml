@@ -2,12 +2,11 @@
 #
 # Why this exists: there was no path at all from a committed migration to the
 # production copies of these two stores. `db-migrate.yml` beside this file is
-# scoped to Postgres and only Postgres — though for `target: production` it
-# only validates and reports status; a hosted runner cannot reach production
-# Aurora at all (its own reachability guard, and #2652), so the path that
-# actually applies production Postgres migrations is
-# `infra/tools/run-db-migrations.sh`, run from the app node (see pipeline.yml
-# and #2542). Every other `DB_MIGRATE_STORES=clickhouse,neo4j` in this
+# scoped to Postgres and only Postgres. A hosted runner cannot reach production
+# Aurora (#2652), so for `target: production` it runs
+# `infra/tools/run-db-migrations.sh`, which sends Atlas to the app node over
+# SSM, the same way a laptop runs it (see pipeline.yml and #2542). Every other
+# `DB_MIGRATE_STORES=clickhouse,neo4j` in this
 # repository — four of them, across pipeline.yml and nightly.yml — runs
 # against an ephemeral CI service container and never touches production.
 #
