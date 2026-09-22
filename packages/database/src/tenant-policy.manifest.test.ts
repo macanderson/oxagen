@@ -246,7 +246,9 @@ describe("tenant policy manifest", () => {
     // said 91, so it had already drifted from the number it was describing — a
     // count nobody can check against its own comment is a pin with no ratchet
     // behind it.
-    expect(POLICY_MANIFEST.length).toBe(116);
+    // 117 as of workspace.tacho_session_policy, the wrapped-harness session
+    // governance the loopback model gateway enforces from the signed bundle.
+    expect(POLICY_MANIFEST.length).toBe(117);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

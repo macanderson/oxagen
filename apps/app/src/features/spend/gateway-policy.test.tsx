@@ -165,6 +165,121 @@ describe("the gateway policy section", () => {
     expect(screen.queryByTestId("gateway-reach")).toBeNull();
   });
 
+  it("reports a saved policy that no machine is enrolled to apply", async () => {
+    // Distinct from the partial case: zero hosts is not "some are too old",
+    // it is a policy with nothing to apply it to, and saying "enforced"
+    // alone would be a claim about machines that are not there.
+    setGatewayPolicyAction.mockResolvedValue({
+      ok: true,
+      value: { hosts: 0, hostsEnforcingModels: 0 },
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await user.type(
+      screen.getByLabelText(spend.spend.gateway.sessionLimit),
+      "10",
+    );
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    const reach = await screen.findByTestId("gateway-reach");
+    expect(reach.textContent).toBe(spend.spend.gateway.reach.none);
+  });
+
+  it("puts a field refusal from the server on that field, not in the alert", async () => {
+    // The contract parses the input again on every invoke, so a value the
+    // form let through can still be refused. It has to land on the field a
+    // person can fix rather than as a whole-form failure.
+    setGatewayPolicyAction.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "modelPatternInvalid",
+      field: "modelDeny",
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await user.type(
+      screen.getByLabelText(spend.spend.gateway.modelDeny),
+      "gpt-4o",
+    );
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    expect(
+      await screen.findByText(spend.spend.gateway.errors.modelPatternInvalid),
+    ).toBeTruthy();
+    expect(screen.queryByText(spend.spend.gateway.alert.failed)).toBeNull();
+  });
+
+  it("reports a thrown action as failed rather than losing it", async () => {
+    // A rejected server action is not a refusal, and swallowing it would
+    // leave the panel looking as though nothing was submitted.
+    setGatewayPolicyAction.mockRejectedValue(new Error("network"));
+    const user = userEvent.setup();
+    renderSection();
+    await user.type(
+      screen.getByLabelText(spend.spend.gateway.sessionLimit),
+      "10",
+    );
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    expect(
+      await screen.findByText(spend.spend.gateway.alert.failed),
+    ).toBeTruthy();
+    expect(screen.queryByTestId("gateway-reach")).toBeNull();
+  });
+
+  it("reports a refusal that names no field and is not a denial", async () => {
+    // Neither `invalid` with a field nor `denied`: an unclassified refusal
+    // still has to say something, and the generic alert is that something.
+    setGatewayPolicyAction.mockResolvedValue({ ok: false, reason: "failed" });
+    const user = userEvent.setup();
+    renderSection();
+    await user.type(
+      screen.getByLabelText(spend.spend.gateway.sessionLimit),
+      "10",
+    );
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    expect(
+      await screen.findByText(spend.spend.gateway.alert.failed),
+    ).toBeTruthy();
+  });
+
+  it("switches back to metered, which needs no clause", async () => {
+    // The mode select's other direction. Going back to observed is always
+    // allowed, because metering never needed a clause to enforce.
+    const user = userEvent.setup();
+    renderSection({
+      mode: "enforced",
+      sessionLimit: { micros: "5000000", currency: "USD" },
+      sessionLimitUsd: 5,
+      modelAllow: null,
+      modelDeny: [],
+    });
+    await user.selectOptions(
+      screen.getByLabelText(spend.spend.gateway.modeLabel),
+      "observed",
+    );
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    await waitFor(() => {
+      expect(setGatewayPolicyAction).toHaveBeenCalledWith(
+        at,
+        expect.objectContaining({ mode: "observed" }),
+      );
+    });
+  });
+
+  it("shows a reader with no deny list only the lines that apply", () => {
+    // The deny paragraph is rendered only when there is something to deny.
+    renderSection(
+      {
+        mode: "enforced",
+        sessionLimit: { micros: "5000000", currency: "USD" },
+        sessionLimitUsd: 5,
+        modelAllow: ["gpt-5"],
+        modelDeny: [],
+      },
+      false,
+    );
+    expect(screen.getByText(/gpt-5/)).toBeTruthy();
+    expect(screen.queryByText(/Denied models/)).toBeNull();
+  });
+
   it("shows a reader the policy and no form", () => {
     renderSection(
       {

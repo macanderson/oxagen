@@ -5,6 +5,7 @@ import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
+import { tachoSessionPolicyWrite } from "@oxagen/oxagen/contracts/tacho.session_policy.write";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
@@ -34,6 +35,7 @@ const {
   exportStatementAction,
   recordFindingFixAction,
   setBudgetAction,
+  setGatewayPolicyAction,
   setPriceEntryAction,
 } = await import("./actions");
 
@@ -317,5 +319,85 @@ describe("atomic price card action", () => {
     ]);
     expect(result.ok).toBe(false);
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("setGatewayPolicyAction", () => {
+  // The form's own refusals reach the person through this action, so each one
+  // has to arrive naming the field that holds it. The dialog puts a named
+  // field on that field and an unnamed one in the alert, so an action that
+  // dropped the name would turn a typo into a whole-form failure.
+  const gateway = {
+    mode: "enforced" as const,
+    sessionLimit: "",
+    modelAllow: "",
+    modelDeny: "",
+  };
+
+  it("refuses enforced with nothing to enforce, naming the mode, and sets nothing (negative)", async () => {
+    expect(await setGatewayPolicyAction(at, gateway)).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "nothingToEnforce",
+      field: "mode",
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a model pattern the host could not apply, naming its list (negative)", async () => {
+    expect(
+      await setGatewayPolicyAction(at, {
+        ...gateway,
+        modelDeny: "gpt-4o\nclaude-*-turbo",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "modelPatternInvalid",
+      field: "modelDeny",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns the handler's role refusal as denied (negative)", async () => {
+    invoke.mockRejectedValue(forbidden());
+    expect(
+      await setGatewayPolicyAction(at, { ...gateway, sessionLimit: "10" }),
+    ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
+  });
+
+  it("sends a blank allowlist as null and answers with the reach, not just saved", async () => {
+    // Blank is *no allowlist*, so every model stays permitted; an empty array
+    // would mean permit nothing. The two must not share an encoding on the
+    // wire, and the answer carries reach because a saved list that no machine
+    // can read is not a list in force.
+    invoke.mockResolvedValue({
+      mode: "enforced",
+      sessionLimitUsd: 10,
+      modelAllow: null,
+      modelDeny: ["gpt-4o"],
+      reach: { hosts: 3, hostsEnforcingModels: 1 },
+    });
+    expect(
+      await setGatewayPolicyAction(at, {
+        ...gateway,
+        sessionLimit: "10",
+        modelDeny: "gpt-4o",
+      }),
+    ).toEqual({ ok: true, value: { hosts: 3, hostsEnforcingModels: 1 } });
+    expect(invoke).toHaveBeenCalledWith(
+      tachoSessionPolicyWrite.name,
+      {
+        mode: "enforced",
+        sessionLimitUsd: 10,
+        modelAllow: null,
+        modelDeny: ["gpt-4o"],
+      },
+      expect.objectContaining({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+      }),
+    );
   });
 });

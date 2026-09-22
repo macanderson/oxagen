@@ -26,6 +26,10 @@ describe("tachoHostList", () => {
           status: "active",
           mode: "observe",
           harnesses: ["claude-code", "claude-desktop"],
+          // What the daemon last reported about the base URL it wrote into
+          // each harness config. Empty is "nothing was reported", which is a
+          // daemon older than the field, never "nothing has drifted".
+          modelBaseUrls: [],
           // ADR-078: which apps a machine has says nothing about what Oxagen
           // records for them, so the tier travels with the listing.
           tiers: { "claude-code": "harness", "claude-desktop": "gateway" },
