@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { type ComponentProps, useMemo } from "react";
 import type { GitHubUrl } from "@/shared/github-url";
 import type { HostedInvoiceUrl } from "@/shared/invoice-url";
+import type { RunExportDownloadUrl } from "@/shared/run-export-download-url";
 import type { PullRequestUrl } from "@/shared/pull-request-url";
 import type { SafePath } from "@/shared/safe-path";
 
@@ -73,6 +74,20 @@ export function DownloadLink({
   to,
   ...props
 }: Omit<ComponentProps<"a">, "href" | "download"> & { to: SafePath }) {
+  return <a href={to} download {...props} />;
+}
+
+/**
+ * A run export bundle on the API's signed download route, fetched when the
+ * person asks for it. It is not a route of this app, so it takes its own brand
+ * rather than a SafePath.
+ */
+export function RunExportDownloadLink({
+  to,
+  ...props
+}: Omit<ComponentProps<"a">, "href" | "download"> & {
+  to: RunExportDownloadUrl;
+}) {
   return <a href={to} download {...props} />;
 }
 

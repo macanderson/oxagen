@@ -94,10 +94,21 @@ credential stays on the machine and is never written to a frame or a log.
 |---|---|---|---|
 | Claude Code | `~/.claude/settings.json`, `env.ANTHROPIC_BASE_URL` | `http://127.0.0.1:<port>/anthropic` | API key (`X-Api-Key`) and claude.ai subscription (`Authorization: Bearer`) |
 | Codex | `~/.codex/config.toml`, top-level `openai_base_url` | `http://127.0.0.1:<port>/backend-api/codex` | API key (forwarded to `api.openai.com/v1`) and ChatGPT login (a request carrying `ChatGPT-Account-ID` is forwarded to `chatgpt.com/backend-api/codex`) |
+| Stella | `$STELLA_HOME/stella.toml` (or the legacy `settings.json` when only that exists), `providers.anthropic.base_url` | `http://127.0.0.1:<port>/stella/anthropic` | Anthropic API key (`x-api-key`), which stays Stella's own: custody is never taken from Stella |
 
-Cursor and Stella get hook entries but no base URL, so their model calls go
-straight to the vendor. Stella has a writable one and Cursor has none;
-`docs/audits/2026-09-21-model-gateway-arming.md` has the evidence for both.
+Stella's URL has a prefix of its own because Stella sends no session header.
+The prefix tells the proxy the call is Stella's, and the one live Stella
+session gets it; with two live Stella sessions the call is filed on the
+daemon's chain. The table goes directly before Tacho's hooks block in
+`stella.toml`, so each enroll's re-append of that block leaves it in place. A
+`providers.anthropic.base_url` you set yourself is left alone, and `tacho
+enroll` and `tacho status` say Stella's calls are not routed. Stella's other
+providers (OpenRouter, Z.ai, xAI, DeepSeek, Gemini and the rest) still go
+straight to the vendor, because the proxy has no upstream for them.
+
+Cursor gets hook entries but no base URL, so its model calls go straight to
+the vendor. It has no setting short of a TLS-intercepting proxy with a CA
+install; `docs/audits/2026-09-21-model-gateway-arming.md` has the evidence.
 
 The daemon reports what each of these files holds now on every health poll
 (`model_base_urls`), and `list_tacho_hosts` returns it. Reverting the key is
@@ -262,16 +273,18 @@ glob, and any business-capability rule unrelated to a tool call. Both keep
 governing the in-app agent's own calls at `packages/agent/src/runtime/
 mcp-rbac.ts`, just not this second, harness-facing surface (see
 `tacho-mandate.ts`'s `decisionRuleToHarnessRule`). `budget.mode` is
-`"enforced"` only when the agent's own definition names a `per_run_micros` or
-`per_day_micros` figure (`deriveBundleBudget`); otherwise it stays
-`"observed"`, and nothing reads `session_limit_usd` yet: the loopback proxy
-that would enforce it is Phase 4, below. The bundle carries no `models` clause
+`"enforced"` only when the agent's own definition names a `per_run_micros`
+figure (`deriveBundleBudget`); otherwise it stays `"observed"`. The loopback
+model proxy refuses a call once the session's observed spend reaches
+`session_limit_usd`, with `session_budget_exceeded`
+(`src/collector/model-proxy.ts`). A `per_day_micros` figure is not signed,
+because nothing on the host keeps a day's spend (#3728). The bundle carries no `models` clause
 at all: a workspace's model allow and deny lists are stored and read back
 (`workspace.tacho_session_policy`, `get_tacho_session_policy`) and signed into
 no bundle, so the proxy refuses no model. Operator steer commands are the only
 live text channel from the server to a running agent. Token and cost numbers for
 Claude Code are the harness's own telemetry, self-reported. Codex and Stella export
-none. There is no model proxy and no sandbox. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
+none. There is no sandbox. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
 and server-enforced, and it is registered only into Claude Desktop. The leaf
 constraint stays through every phase below: the proxy imports no `@oxagen/*`
 runtime package.
@@ -308,8 +321,8 @@ the design is in `docs/specs/mission-control/spec.md` §7 and §10.5, the phases
   observe, harness, gateway, contained (ADR-095).
 
 The order of build is Phase 0 merged, Phase 4 in build, then Phases 1, 2, 3 and
-5. The epic is issue #3295. Only Phase 0 is on `main`; the rest lands when its
-branch merges.
+5. The epic is issue #3295. Phase 0 is on `main`, and so is Phase 4's model
+proxy (`src/collector/model-proxy.ts`). The rest lands when its branch merges.
 
 The words for the `harness` tier are "delivered", "recorded", "client-attested"
 and "fail-open". Never "enforced" without the qualifier: on a governed call

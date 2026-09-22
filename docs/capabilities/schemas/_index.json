@@ -1,5 +1,5 @@
 {
-  "generatedCount": 356,
+  "generatedCount": 357,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1491,6 +1491,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run_export",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

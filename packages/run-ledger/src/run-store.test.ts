@@ -91,6 +91,7 @@ import {
 import {
   EMPTY_EVENT_STREAM_DIGEST,
   EVENT_SCHEMA_VERSION,
+  computeEventDigest,
   MAX_INLINE_PAYLOAD_BYTES,
   advanceEventStreamDigest,
 } from "./event-payload-registry";
@@ -755,6 +756,35 @@ describe("prepareAttemptEvent", () => {
     })();
     expect(isRunStoreStateError(err)).toBe(true);
     expect(err).toBeInstanceOf(RunStoreStateError);
+  });
+
+  it("digests observedAt in the form the archive segment writes back, so an export can recompute event_digest", () => {
+    const utc = prepareAttemptEvent({
+      ...toolEvent(1),
+      observedAt: "2026-07-21T12:00:00.000Z",
+    });
+    const offset = prepareAttemptEvent({
+      ...toolEvent(1),
+      observedAt: "2026-07-21T14:00:00+02:00",
+    });
+    expect(offset.observedAt).toBe("2026-07-21T12:00:00.000Z");
+    expect(offset.eventDigest).toBe(utc.eventDigest);
+    expect(offset.eventDigest).toBe(
+      computeEventDigest({
+        attemptSeq: 1,
+        eventSchemaVersion: EVENT_SCHEMA_VERSION,
+        eventType: offset.eventType,
+        stage: offset.stage,
+        payloadDigest: offset.payloadDigest,
+        observedAt: new Date("2026-07-21T12:00:00Z").toISOString(),
+      }),
+    );
+  });
+
+  it("refuses an observedAt that is not an instant (negative)", () => {
+    expect(() =>
+      prepareAttemptEvent({ ...toolEvent(1), observedAt: "not a time" }),
+    ).toThrow(RunStoreStateError);
   });
 
   it("refuses neither", () => {
@@ -2783,6 +2813,18 @@ describe("the archive envelope", () => {
     };
     const back = readArchiveFrame(archiveFrameOf(row).envelope);
     expect(back).toEqual({ ...row, observed_at: row.observed_at });
+  });
+
+  it("writes an instant the driver returned as Postgres text in the toISOString form event_digest was taken over", () => {
+    const prepared = prepareAttemptEvent(toolEvent(1));
+    const row = {
+      ...durableRow(prepared, "0192d4a8-7c1e-7a00-8000-0000000000e1", "7"),
+      observed_at: prepared.observedAt.replace("T", " ").replace("Z", "+00"),
+      created_at: "2026-09-11 12:00:00.5+02",
+    };
+    const envelope = archiveFrameOf(row).envelope as Record<string, unknown>;
+    expect(envelope["observed_at"]).toBe(prepared.observedAt);
+    expect(envelope["recorded_at"]).toBe("2026-09-11T10:00:00.500Z");
   });
 
   it("refuses a line that is not a frame (negative)", () => {

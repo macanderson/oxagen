@@ -50,7 +50,7 @@ Feature: `apps/app/src/features/run/`. Tabs in code: `transcript` \| `frames` \|
 | Header: status, replay grade, sealed | **Built** | `header.tsx` |
 | Pause / resume / steer / cancel | **Partial** | Live tacho only; ledger controls disabled (no revocable run token) |
 | Summarize | **Built** | Sealed runs via `summarize_run` |
-| Export | **Partial** | UI calls `export_run` and shows an export id; the job writes `bundleRef` to `evidence.run_exports`, but nothing in the app or API lets you check status or download the bundle |
+| Export | **Built** | `export_run` queues the bundle. `get_run_export` (API, MCP, CLI, Run page) reads its status and mints a 15-minute download URL that needs no session. `oxagen verify <bundle>` checks it offline, held or broken per frame. Guide: `docs/guides/export-and-verify.md` |
 | Approve / deny on this run | **Built** | #3516; `run.tsx` renders the same `ApprovalsPanel` as Fleet plus `ResolvedApprovalsPanel` for decided ones |
 | Policy on this run (rules, versions) | **Missing** | Deferred (#3286) |
 | Proof / witness | **Missing** | #2955 |

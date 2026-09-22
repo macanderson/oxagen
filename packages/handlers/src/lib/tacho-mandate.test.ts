@@ -114,20 +114,20 @@ describe("deriveBundleBudget", () => {
     });
   });
 
-  it("enforces a daily limit from per_day_micros, converted to USD", () => {
+  // #3728: no proxy reads daily_limit_usd, so the bundle must not carry it,
+  // and a mandate whose only ceiling is per-day must not read "enforced".
+  it("stays observed and signs no daily limit when only per_day_micros is set", () => {
     expect(deriveBundleBudget({ perDayMicros: 20_000_000 })).toEqual({
-      mode: "enforced",
-      daily_limit_usd: 20,
+      mode: "observed",
     });
   });
 
-  it("carries both limits when the agent's config declares both", () => {
+  it("signs only the session limit when the agent's config declares both", () => {
     expect(
       deriveBundleBudget({ perRunMicros: 2_500_000, perDayMicros: 20_000_000 }),
     ).toEqual({
       mode: "enforced",
       session_limit_usd: 2.5,
-      daily_limit_usd: 20,
     });
   });
 

@@ -331,7 +331,32 @@
         "confirm": "Queue the bundle",
         "pending": "Queueing",
         "queued": "The bundle is queued.",
-        "needsRole": "Exporting a signed bundle needs an organization Owner or Admin role."
+        "needsRole": "Exporting a signed bundle needs an organization Owner or Admin role.",
+        "status": {
+          "queued": "Waiting for the job to start.",
+          "building": "Oxagen is building the bundle."
+        },
+        "checking": "Reading the export",
+        "stalled": "The bundle is not ready yet. Check again in a minute.",
+        "checkAgain": "Check again",
+        "ready": "The bundle is ready.",
+        "download": "Download the bundle",
+        "size": "Size",
+        "sizeUnknown": "Not recorded",
+        "digest": "Digest",
+        "expires": "Link expires",
+        "expiresHint": "Check again for a new link after it expires.",
+        "verify": "Verify the bundle offline",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyFailed": "This browser refused the clipboard. Select the digest and copy it.",
+        "failed": "The export failed: {error}",
+        "failedUnrecorded": "The export failed, and the job recorded no error.",
+        "readFailure": {
+          "notFound": "This export is not in this workspace.",
+          "denied": "Reading an export needs an organization Owner or Admin role.",
+          "other": "Oxagen answered {code} when asked for this export."
+        }
       }
     },
     "gaps": "The seal recorded these gaps in the record:",

@@ -8,7 +8,7 @@ Related: ADR-006, ADR-042, ADR-101, `packages/auth/src/sso/`,
 `packages/auth/src/auth.ts`, `packages/database/src/sso-secrets.ts`,
 `packages/oxagen/src/contracts/org.sso.shared.ts`,
 `packages/handlers/src/lib/sso.ts`, `apps/app/src/server/sso-gate.ts`,
-`packages/database/atlas/migrations/20260922150000_enterprise_sso.sql`,
+`packages/database/atlas/migrations/20260922220000_enterprise_sso.sql`,
 `docs/guides/sso.md`
 
 ## Context

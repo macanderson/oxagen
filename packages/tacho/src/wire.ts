@@ -493,6 +493,12 @@ export const policyBundleSchema = z
     budget: z
       .object({
         session_limit_usd: z.number().nonnegative().optional(),
+        /**
+         * Declared, and read by nothing on the host. The control plane stopped
+         * signing it (#3728) because the model proxy refuses against the
+         * session limit only. It stays in this `.strict()` schema so a host
+         * still parses a bundle from a control plane that signs it.
+         */
         daily_limit_usd: z.number().nonnegative().optional(),
         mode: z.enum(["observed", "enforced"]),
       })

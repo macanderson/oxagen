@@ -6,3 +6,4 @@ export * from "./replay-grade";
 export * from "./transcript-kinds";
 export * from "./attestation";
 export * from "./frame-body";
+export * from "./run-export";

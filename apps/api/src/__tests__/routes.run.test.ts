@@ -1,7 +1,7 @@
 /**
  * Unit tests for the run recorder routes (#2952, ADR-058):
  *   run.frame_body.get, run.transcript.get, run.bisect, run.fork,
- *   run.export, run.summarize
+ *   run.export, run.export.get, run.summarize
  *
  * Pattern: mock at the adapter seam (@oxagen/auth, @oxagen/oxagen/kernel,
  * @oxagen/billing, @oxagen/handlers, middleware/logger); assert the happy
@@ -201,6 +201,31 @@ const CASES: RouteCase[] = [
     refused: {
       "run id of neither store": { runId: "arun-1" },
       "unknown field": { runId: LEDGER_ID, format: "zip" },
+    },
+  },
+  {
+    path: "/runs/export-status",
+    contract: "get_run_export",
+    input: { exportId: "rexp_0123456789abcdefghjkmn" },
+    output: {
+      exportId: "rexp_0123456789abcdefghjkmn",
+      runId: LEDGER_ID,
+      status: "building",
+      createdAt: "2026-09-22T11:58:00.000Z",
+      completedAt: null,
+      bundleDigest: null,
+      bundleBytes: null,
+      merkleRoot: null,
+      frameCount: null,
+      error: null,
+      download: null,
+    },
+    refused: {
+      "a run id in place of an export id": { exportId: LEDGER_ID },
+      "unknown field": {
+        exportId: "rexp_0123456789abcdefghjkmn",
+        runId: LEDGER_ID,
+      },
     },
   },
   {

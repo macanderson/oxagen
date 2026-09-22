@@ -3,6 +3,7 @@
  * event, bundle version and age, last ingest, spool depth, unobserved
  * sessions since boot (spec section 5.1).
  */
+import { dirname } from "node:path";
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
 import { codexHookPresence } from "../host/codex-writer";
 import { cursorHookPresence } from "../host/cursor-writer";
@@ -237,17 +238,23 @@ export async function status(
   const walStats = new Wal(deps.paths.wal).stats();
   const gateway = gatewayOf(daemon);
   const routedHarnesses = host.harnesses.filter(
-    (harness): harness is ModelBaseUrlHarness =>
+    (harness): harness is "claude-code" | "codex" =>
       harness === "claude-code" || harness === "codex",
   );
+  // Stella's base URL is written too; its credential is never brokered.
+  const baseUrlHarnesses = host.harnesses.filter(
+    (harness): harness is ModelBaseUrlHarness =>
+      harness === "claude-code" || harness === "codex" || harness === "stella",
+  );
   let modelBaseUrls: ModelBaseUrlHarnessState[] | undefined;
-  if (deps.modelBaseUrls !== undefined && routedHarnesses.length > 0) {
+  if (deps.modelBaseUrls !== undefined && baseUrlHarnesses.length > 0) {
     try {
       modelBaseUrls = (
         await deps.modelBaseUrls.read({
           home: deps.home,
+          stellaHome: dirname(deps.paths.stellaToml),
           port: gateway?.port ?? modelProxyPortFor(host),
-          harnesses: routedHarnesses,
+          harnesses: baseUrlHarnesses,
         })
       ).harnesses;
     } catch (error) {
@@ -360,7 +367,7 @@ export async function status(
     );
   for (const entry of modelBaseUrls ?? []) {
     deps.out(
-      `            ${entry.harness}: ${entry.ours ? (entry.shadowedBy !== undefined ? `base URL set, but ${entry.shadowedBy.file} overrides it, so calls are not routed` : "model calls are pointed at the proxy") : "model calls are not pointed at the proxy (run `tacho enroll` to set the base URL)"}`,
+      `            ${entry.harness}: ${entry.ours ? (entry.shadowedBy !== undefined ? `base URL set, but ${entry.shadowedBy.file} overrides it, so calls are not routed` : "model calls are pointed at the proxy") : (entry.leftAlone ?? "model calls are not pointed at the proxy (run `tacho enroll` to set the base URL)")}`,
     );
     // Behind a non-Anthropic base URL Claude Code inlines its whole MCP tool
     // catalog unless this key keeps tool search on; a big catalog then
