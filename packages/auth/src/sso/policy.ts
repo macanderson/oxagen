@@ -100,14 +100,11 @@ export async function isNonSsoSignInRefused(email: string): Promise<boolean> {
  * An SSO provider's domain and whether it is verified, or null when
  * `providerId` names no SSO provider (a social provider, the credential
  * account). The domain guard's lookup (./domain-guard.ts).
- *
- * tenancy: system bypass during sign-in bootstrap, before any session exists;
- * the lookup is filtered by the provider id the verified callback route names
- * and returns only the domain and its verified flag.
  */
 export async function lookupSsoProviderDomain(
   providerId: string,
 ): Promise<{ domain: string; domainVerified: boolean } | null> {
+  // tenancy: system bypass during sign-in bootstrap, before any session exists; the lookup is filtered by the provider id the callback route names and returns only its domain and verified flag.
   const rows = await withSystemDb((tx) =>
     tx
       .select({
