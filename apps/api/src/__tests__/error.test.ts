@@ -100,6 +100,53 @@ async function triggerError(
   return { status: res.status, body, headers: res.headers };
 }
 
+// ── A body that is not JSON ───────────────────────────────────────────────────
+
+describe("malformed JSON body", () => {
+  it("maps JSON.parse's SyntaxError to 400 bad_request", async () => {
+    const { status, body } = await triggerError(
+      new SyntaxError("Unexpected token b in JSON at position 1"),
+    );
+    expect(status).toBe(400);
+    expect(body).toMatchObject({
+      error: {
+        code: "bad_request",
+        message: "Request body is not valid JSON",
+      },
+    });
+  });
+
+  it("answers 400 on the real path, a route awaiting c.req.json() on `{bad`", async () => {
+    const { Hono } = await import("hono");
+    const { errorMiddleware } = await import("../middleware/error");
+    const testApp = new Hono<AppEnv>();
+    testApp.onError(errorMiddleware);
+    testApp.post("/echo", async (c) => c.json(await c.req.json()));
+
+    const res = await testApp.fetch(
+      makeRequest("/echo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{bad",
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: { code: "bad_request" },
+    });
+  });
+
+  it("leaves a SyntaxError that does not name JSON as a 500", async () => {
+    const { status, body } = await triggerError(
+      new SyntaxError("Invalid regular expression: /(/: Unterminated group"),
+    );
+    expect(status).toBe(500);
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "internal_error",
+    );
+  });
+});
+
 // ── errorCode() via HTTPException status codes ────────────────────────────────
 
 describe("errorCode() via HTTPException", () => {
