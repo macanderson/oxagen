@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Snapshot |
-| **Date** | 2026-09-19 |
+| **Date** | 2026-09-19, Fleet and Agents rows re-verified 2026-09-21 against `origin/main` after #3516, #3705 and #3708 |
 | **Spec** | Canonical: `docs/mission-control-spec.md` in https://github.com/macanderson/roadmap (§14, after the 2026-09-14 scope review and the 2026-09-18 steering review). Local copy `docs/specs/mission-control/spec.md` still diverges on page count and is not the source of truth here. |
 | **Code** | `apps/app` on oxagen `main` as of this document's commit |
 | **Method** | Spec §14 primary actions and tabs, checked against routes under `apps/app/src/app/[org]/`, feature modules under `apps/app/src/features/`, and `src/data/unrecorded.ts` |
@@ -28,14 +28,12 @@ Feature: `apps/app/src/features/fleet/`. Reads: `list_runs`, `list_approvals`, `
 |---|---|---|
 | Live and recent runs table | **Built** | `runs-table.tsx`; open links to Run |
 | Replay grade, cost, frames | **Partial** | Columns present; values often "not recorded" |
-| Enforcement tier | **Missing** | Not on the run row |
+| Enforcement tier | **Built** | #3705; `EnforcementTierBadge` column between Status and Cost |
 | Verdict / definition-of-done state | **Missing** | No DoD column or held tile |
-| Pending approvals queue | **Partial** | `approvals-panel.tsx` is read-only |
+| Pending approvals queue | **Built** | #3516; `approval-decision.tsx` dialog calls `resolveApprovalAction` |
 | Spend today and cache hit tiles | **Built** | `features/spend/fleet-tiles.tsx` |
-| Pause / resume / cancel from Fleet | **Missing** | Controls live only on Run for tacho runs |
-| Approve / deny from the queue | **Missing** | No `resolve_approval` UI under `apps/app/src` |
-
-**Hole:** the panel says decisions arrive with "the approval dialog," and the assistant flyout sends people to Fleet to approve, but no approve or deny control exists.
+| Pause / resume / cancel from Fleet | **Built** | #3516; `run-row-controls.tsx` calls `dispatch_command` per row |
+| Approve / deny from the queue | **Built** | #3516; a denial requires a non-empty note, enforced server-side |
 
 ---
 
@@ -53,13 +51,13 @@ Feature: `apps/app/src/features/run/`. Tabs in code: `transcript` \| `frames` \|
 | Pause / resume / steer / cancel | **Partial** | Live tacho only; ledger controls disabled (no revocable run token) |
 | Summarize | **Built** | Sealed runs via `summarize_run` |
 | Export | **Partial** | UI calls `export_run` and shows an export id; the job writes `bundleRef` to `evidence.run_exports`, but nothing in the app or API lets you check status or download the bundle |
-| Policy / approvals on this run | **Missing** | Deferred (#3286) |
+| Approve / deny on this run | **Built** | #3516; `run.tsx` renders the same `ApprovalsPanel` as Fleet plus `ResolvedApprovalsPanel` for decided ones |
+| Policy on this run (rules, versions) | **Missing** | Deferred (#3286) |
 | Proof / witness | **Missing** | #2955 |
 | Chain / seal tab | **Missing** | Replay grade stays in the header |
 | Definition of done (verdict, certificate, checks, Stops) | **Missing** | |
 | Sign a human check | **Missing** | |
 | Fork replay / bisect | **Missing** | |
-| Approve on Run | **Missing** | |
 
 ---
 
@@ -67,11 +65,11 @@ Feature: `apps/app/src/features/run/`. Tabs in code: `transcript` \| `frames` \|
 
 | Spec item | Status | Evidence |
 |---|---|---|
-| Queue on Fleet | **Partial** | Cards only |
-| Strip or panel on Run | **Missing** | #3286 |
+| Queue on Fleet | **Built** | #3516; the decision dialog, not cards alone |
+| Strip or panel on Run | **Built** | #3516; the same `ApprovalsPanel`, `on="run"` |
 | Four-hop chain UI | **Missing** | Contract chain is thin; UI shows agent key |
-| Approve / deny with reason | **Missing** | `resolve_approval` unwired in the app |
-| Auto-approval eligibility line | **Missing** | #2970 |
+| Approve / deny with reason | **Built** | #3516; a denial's note is required server-side, not only by the form |
+| Auto-approval eligibility line | **Built** | #3516; `Eligibility` reads `get_auto_eligibility` and re-checks on open |
 
 ---
 
@@ -91,6 +89,7 @@ Detail tabs today: identity \| toolbelt \| enrollment \| incidents \| definition
 | Tamper / incidents | **Built** | |
 | Register flow | **Built** | name → wrap → run |
 | Definition source editor | **Built** | TOML + `commit_agent_definition` |
+| Kill switch (stop this agent) | **Built** | #3708; `set_kill_switch` on the agent plus a `dispatch_command` pause broadcast to its live runs |
 | Mandate detail `…/mandates/{mandate}` | **Missing** | #2957; no route under `src/app` |
 | Grant role / grant mandate UI | **Missing** | Request only |
 | Set budget on the agent | **Missing** | Budgets live on Spend |
@@ -240,7 +239,7 @@ Feature: `apps/app/src/features/audit/`. Export at `/{org}/audit/export`.
 
 **P0 (spec says ship; UI empty or misleading)**
 
-1. Approve and deny (`resolve_approval`) on Fleet, and on Run once the run link works.
+1. Approve and deny (`resolve_approval`) on Fleet, and on Run once the run link works. Built, #3516.
 2. Run Proof and definition of done (#2955).
 3. Ledger halt token (WL-61) so Run controls are not disabled without a path to enable them.
 
@@ -248,7 +247,7 @@ Feature: `apps/app/src/features/audit/`. Export at `/{org}/audit/export`.
 
 4. Tools Auto-approvals (#2970), grant mandate, connections owners.
 5. Skills resolution surface (#3098), or bring `ARCHITECTURE.md` down to inventory-only.
-6. Fleet enforcement tier and DoD columns; Run Policy strip (#3286).
+6. Fleet DoD column; Run Policy strip (#3286). Fleet's enforcement tier column is built, #3705.
 7. Mandate detail route (#2957); Organization send-invite.
 
 **P2 (Phase 2 and the refactor path)**
@@ -270,14 +269,14 @@ Ontology engine, SSO/SCIM, policy simulation, assurance suite, two-person mandat
 | Billing | ~95% | Two meters and the purchase path are live |
 | Spend | ~85% | Findings, rollups, waste, budgets, export; no provider-key or task dims |
 | Organization | ~80% | Send-invite and model route missing |
-| Agents | ~70% | Detail and register work; grant and mandate detail thin |
-| Fleet | ~55% | Runs and tiles work; approve and DoD missing |
+| Agents | ~75% | Detail, register and the kill switch work; grant and mandate detail thin |
+| Fleet | ~70% | Runs, tiles, approve/deny, run controls and tier work; DoD missing |
 | Tools | ~50% | Four of six tabs; no policy or auto-approvals |
-| Run | ~45% | Player and cost work; export has no download; proof, DoD, policy, bisect missing |
+| Run | ~55% | Player, cost and approve/deny work; export has no download; proof, DoD, policy, bisect missing |
 | Audit | ~40% | Events and export only |
 | Steering | ~35% of today / ~15% of Phase 2 hub | Three tabs of seven |
 | Skills | ~15% of ADR-090 | Inventory only; extra nav vs the nine-page target |
-| Approvals | ~20% | Read-only queue |
+| Approvals | ~80% | Decision dialog on Fleet and Run, with a required denial reason and the eligibility line; the four-hop chain stays thin |
 
 ---
 

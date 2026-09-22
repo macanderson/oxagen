@@ -150,6 +150,56 @@ else
   pass
 fi
 
+# --- writer host, without calling AWS -------------------------------------
+#
+# The deploy role cannot call rds:DescribeDBClusters. The first migration
+# gate on main reported Postgres unknown because the status script used that
+# call and nothing else. The host has to come from the parameter first.
+
+HOST=$(postgres_host_from_url \
+  "postgres://oxagen:s3cret@oxagen-postgres.cluster-abc.us-east-1.rds.amazonaws.com:5432/oxagen?sslmode=require")
+contains "$HOST" "oxagen-postgres.cluster-abc.us-east-1.rds.amazonaws.com 5432" \
+  "url: host and explicit port"
+lacks "$HOST" "s3cret" "url: password stays out of the host line"
+
+DEFAULT_PORT=$(postgres_host_from_url "postgresql://oxagen:s3cret@writer.example/oxagen")
+contains "$DEFAULT_PORT" "writer.example 5432" "url: missing port is 5432"
+
+AT_IN_PASSWORD=$(postgres_host_from_url "postgres://oxagen:p%40ss@writer.example:5432/oxagen")
+contains "$AT_IN_PASSWORD" "writer.example 5432" "url: an encoded @ stays in the userinfo"
+
+REFUSED=$(postgres_host_from_url "mysql://user:supersecret@writer.example/oxagen" 2>&1 >/dev/null || true)
+contains "$REFUSED" "expected a postgres URL" "url: a non-postgres scheme is refused"
+lacks "$REFUSED" "supersecret" "url: a refusal does not repeat the password"
+
+NO_DB=$(postgres_host_from_url "postgres://oxagen:s3cret@writer.example" 2>&1 >/dev/null || true)
+contains "$NO_DB" "no database name" "url: a URL with no database is refused"
+
+ENV_WINS=$(writer_from_sources "from-env.example" "5433" \
+  "postgres://oxagen:s3cret@from-param.example/oxagen" "from-describe.example 5432")
+contains "$ENV_WINS" "env from-env.example 5433" "sources: AURORA_ENDPOINT wins"
+lacks "$ENV_WINS" "s3cret" "sources: the unused URL's password is not printed"
+lacks "$ENV_WINS" "from-param" "sources: a set endpoint ignores the parameter"
+
+PARAM_WINS=$(writer_from_sources "" "" \
+  "postgres://oxagen:s3cret@from-param.example:5432/oxagen" "from-describe.example 5432")
+contains "$PARAM_WINS" "parameter from-param.example 5432" "sources: the parameter beats describe"
+lacks "$PARAM_WINS" "from-describe" "sources: describe is not used when the URL parses"
+lacks "$PARAM_WINS" "s3cret" "sources: the parameter password is not printed"
+
+BAD_URL=$(writer_from_sources "" "" "not a url" "from-describe.example 5432" 2>/dev/null)
+contains "$BAD_URL" "describe from-describe.example 5432" \
+  "sources: an unusable parameter falls through to describe"
+
+NONE_FIELD=$(writer_from_sources "" "" "" "None None" 2>&1 || true)
+contains "$NONE_FIELD" "no writer endpoint" "sources: AWS's None is not a host"
+
+if writer_from_sources "" "" "" "" >/dev/null 2>&1; then
+  fail "sources: nothing at all should be refused"
+else
+  pass
+fi
+
 # --- the shipped outer script ---------------------------------------------
 
 SCRIPT=$(cat "$TOOLS/run-db-migrations.sh")
@@ -161,6 +211,17 @@ lacks "$SCRIPT" "i-094fcb34c7e715cf8" "script: pins no instance id"
 contains "$SCRIPT" "tag:Name,Values=" "script: resolves the app node by tag"
 contains "$SCRIPT" "oxagen-deploy-916294258235" "script: targets the current deploy bucket"
 contains "$SCRIPT" "oxagen-postgres" "script: names the Aurora cluster"
+contains "$SCRIPT" 'AURORA_URL_PARAMETER:-/oxagen/production/DATABASE_URL' \
+  "script: reads the writer host from the parameter the deploy role can get"
+param_line=$(grep -n 'AURORA_URL_PARAMETER:-/oxagen/production/DATABASE_URL' \
+  "$TOOLS/run-db-migrations.sh" | head -1 | cut -d: -f1)
+desc_line=$(grep -n 'aws rds describe-db-clusters' \
+  "$TOOLS/run-db-migrations.sh" | head -1 | cut -d: -f1)
+if [[ -n $param_line && -n $desc_line && $param_line -lt $desc_line ]]; then
+  pass
+else
+  fail "script: the parameter read must come before describe-db-clusters (param=$param_line describe=$desc_line)"
+fi
 
 # --- how the SSM invocation is judged --------------------------------------
 #
@@ -202,6 +263,33 @@ contains "$STILL" "Do NOT re-run" "still-running: forbids the dangerous next ste
 contains "$STILL" "cmd-1" "still-running: names the command to watch"
 contains "$STILL" "i-abc" "still-running: names the instance"
 lacks "$STILL" "FAILED" "still-running: does not call itself a failure"
+
+# --- whether the node is managed ------------------------------------------
+#
+# describe-instance-information is not granted to gha-deploy-oxagen-platform.
+# Collapsing a non-zero exit into a count of zero made every migration gate
+# say the node was unregistered (run 35674893025) and skip Atlas status.
+
+expect_word() {
+  local want=$1 got=$2 label=$3
+  if [[ $want == "$got" ]]; then pass; else fail "$label: wanted '$want', got '$got'"; fi
+}
+
+expect_word online "$(classify_ssm_online 0 1)" \
+  "one managed instance is online"
+expect_word absent "$(classify_ssm_online 0 0)" \
+  "a successful empty list is absent"
+expect_word absent "$(classify_ssm_online 0 2)" \
+  "more than one managed instance is not the node we asked for"
+expect_word unreadable "$(classify_ssm_online 254 0)" \
+  "AccessDenied is unreadable, not absent"
+expect_word unreadable "$(classify_ssm_online 255 "")" \
+  "a failed call with no count is unreadable"
+
+contains "$RUNNER" "classify_ssm_online" \
+  "runner: classifies the SSM lookup before deciding the node is dead"
+lacks "$RUNNER" '|| echo 0' \
+  "runner: a denied SSM read is not rewritten as a count of zero"
 
 FAILED_MSG=$(verdict_stderr Failed 0 cmd-2 i-abc us-east-1 600)
 contains "$FAILED_MSG" "FAILED" "failed: says so"

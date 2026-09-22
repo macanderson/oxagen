@@ -110,7 +110,13 @@ describe("Agent header and tabs", () => {
       within(header)
         .getAllByRole("button")
         .map((b) => b.textContent),
-    ).toEqual(["Clone", "Rotate credential", "Suspend", "Deregister"]);
+    ).toEqual([
+      "Clone",
+      "Kill switch",
+      "Rotate credential",
+      "Suspend",
+      "Deregister",
+    ]);
     // The Toolbelt tab is the one way to the belt; the header carries no second link to it.
     expect(within(header).queryByRole("link")).toBeNull();
   });
@@ -192,7 +198,13 @@ describe("Agent header and tabs", () => {
       within(region("Agent identity"))
         .getAllByRole("button")
         .map((b) => b.textContent),
-    ).toEqual(["Clone", "Rotate credential", "Resume", "Deregister"]);
+    ).toEqual([
+      "Clone",
+      "Kill switch",
+      "Rotate credential",
+      "Resume",
+      "Deregister",
+    ]);
     cleanup();
 
     await renderAgent({

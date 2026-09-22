@@ -444,6 +444,23 @@
         "confirm": "Deregister",
         "pending": "Deregistering"
       },
+      "killSwitch": {
+        "open": "Kill switch",
+        "title": "Stop {name} now",
+        "body": "An emergency deny against every tool call this agent makes, and a pause for every run of it still live.",
+        "blastTitle": "This stops the agent, not one run",
+        "blastBody": "Every tool call this agent makes is denied from its next call boundary. A run of it already open is paused now, not cancelled: an operator can resume it once the switch is off.",
+        "reason": "Reason",
+        "confirm": "Stop this agent",
+        "pending": "Stopping",
+        "unchanged": "This agent's kill switch was already on. The pause below still ran.",
+        "outcome": {
+          "paused": "{count, plural, one {One live run paused.} other {# live runs paused.}} Every new tool call is denied.",
+          "noLiveRuns": "No run of this agent was live. Every new tool call is denied.",
+          "noAgentKey": "This agent has never had a live run, so none needed pausing. Every new tool call is denied.",
+          "failed": "The switch is on and every new tool call is denied, but pausing its live runs failed. Pause them from Fleet."
+        }
+      },
       "failure": {
         "orgRoleRequired": "Your organization role does not allow this change. Nothing was changed.",
         "noPrincipal": "The request carried no signed-in user. Sign in and try again.",

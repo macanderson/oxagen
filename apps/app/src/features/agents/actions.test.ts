@@ -42,6 +42,7 @@ const {
   assignAgentRole,
   commitAgentDefinition,
   issueAgentEnrollmentToken,
+  pauseAgent,
   readAssignableRoles,
   requestMandate,
   retireAgent,
@@ -314,6 +315,132 @@ describe("retireAgent", () => {
     expect(
       await retireAgent("acme", "core-platform", "agt_releasebot"),
     ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+describe("pauseAgent", () => {
+  const agent = {
+    agentId: "agt_releasebot",
+    agentKey: "acme.core.release-bot",
+  };
+  const DENY_GENERATION = { org: 4, workspace: 9 };
+
+  it("flips the switch, then broadcasts a pause to the agent's live runs", async () => {
+    invoke
+      .mockResolvedValueOnce({
+        switchId: "emd_1",
+        on: true,
+        changed: true,
+        denyGeneration: DENY_GENERATION,
+        grantsRevoked: 0,
+      })
+      .mockResolvedValueOnce({ commandIds: ["tcm_1", "tcm_2"] });
+    expect(
+      await pauseAgent("acme", "core-platform", agent, "Credential leaked"),
+    ).toEqual({
+      ok: true,
+      value: {
+        switchId: "emd_1",
+        changed: true,
+        denyGeneration: DENY_GENERATION,
+        pause: { kind: "paused", commandIds: ["tcm_1", "tcm_2"] },
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(
+      1,
+      "set_kill_switch",
+      {
+        target: { kind: "agent", id: "agt_releasebot" },
+        on: true,
+        reason: "Credential leaked",
+      },
+      expect.objectContaining(TENANT),
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      2,
+      "dispatch_command",
+      {
+        target: { kind: "agent", id: "acme.core.release-bot" },
+        command: "pause",
+        reason: "Credential leaked",
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("reports no live run to pause rather than a paused count of zero", async () => {
+    invoke
+      .mockResolvedValueOnce({
+        switchId: "emd_1",
+        on: true,
+        changed: true,
+        denyGeneration: DENY_GENERATION,
+        grantsRevoked: 0,
+      })
+      .mockResolvedValueOnce({ commandIds: [] });
+    const result = await pauseAgent("acme", "core-platform", agent, "Testing");
+    expect(result).toMatchObject({
+      ok: true,
+      value: { pause: { kind: "no_live_runs" } },
+    });
+  });
+
+  it("refuses an empty reason before the kernel runs, and never dispatches a pause (negative)", async () => {
+    expect(await pauseAgent("acme", "core-platform", agent, "")).toMatchObject({
+      ok: false,
+      reason: "invalid",
+      field: "reason",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("stops at the switch refusal and never attempts the broadcast (negative)", async () => {
+    invoke.mockRejectedValueOnce(denied("set_kill_switch"));
+    expect(
+      await pauseAgent("acme", "core-platform", agent, "Testing"),
+    ).toMatchObject({ ok: false, reason: "denied" });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the broadcast for an agent with no key, without calling dispatch_command (negative)", async () => {
+    invoke.mockResolvedValueOnce({
+      switchId: "emd_2",
+      on: true,
+      changed: true,
+      denyGeneration: DENY_GENERATION,
+      grantsRevoked: 0,
+    });
+    const result = await pauseAgent(
+      "acme",
+      "core-platform",
+      { agentId: "agt_releasebot", agentKey: null },
+      "Testing",
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      value: { pause: { kind: "no_agent_key" } },
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the switch's effect when the broadcast itself is refused, and names the refusal (negative)", async () => {
+    invoke
+      .mockResolvedValueOnce({
+        switchId: "emd_3",
+        on: true,
+        changed: true,
+        denyGeneration: DENY_GENERATION,
+        grantsRevoked: 0,
+      })
+      .mockRejectedValueOnce(denied("dispatch_command"));
+    const result = await pauseAgent("acme", "core-platform", agent, "Testing");
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        switchId: "emd_3",
+        pause: { kind: "failed", failure: { ok: false, reason: "denied" } },
+      },
+    });
   });
 });
 

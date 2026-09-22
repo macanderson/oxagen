@@ -15,6 +15,7 @@ import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
+import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { GeneratedSummary } from "@/ui/generated-summary";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, numericCell, Table } from "@/ui/table";
@@ -66,6 +67,7 @@ function RunsPageView({
     { label: t("columns.agent") },
     { label: t("columns.operator") },
     { label: t("columns.status") },
+    { label: t("columns.tier") },
     { label: t("columns.cost"), numeric: true },
     { label: t("columns.frames"), numeric: true },
     { label: t("columns.started") },
@@ -127,6 +129,9 @@ function RunsPageView({
             </td>
             <td className={cell}>
               <StatusBadge status={run.status} outcome={run.outcome} />
+            </td>
+            <td className={cell}>
+              <EnforcementTierBadge tier={run.enforcementTier} />
             </td>
             <td className={`${numericCell} whitespace-nowrap`}>
               {run.cost === null ? (
