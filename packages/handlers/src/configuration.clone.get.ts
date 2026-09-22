@@ -4,14 +4,20 @@ import { configurationCloneGet } from "@oxagen/oxagen/contracts/configuration.cl
 import { configurationCloneName } from "@oxagen/oxagen/configuration-clone";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import {
-  configurationNameTaken,
+  configurationBranchTaken,
+  configurationFilePath,
   configurationSourceDigest,
   readConfigurationSource,
+  readTakenConfigurationNames,
 } from "./configuration-clone-source";
 import { clonedConfigurationText } from "./configuration-clone-draft";
 
 export function createConfigurationCloneGetHandler(
-  deps = { source: readConfigurationSource, taken: configurationNameTaken },
+  deps = {
+    source: readConfigurationSource,
+    taken: readTakenConfigurationNames,
+    branchTaken: configurationBranchTaken,
+  },
 ): CapabilityHandler<typeof configurationCloneGet> {
   return async (input, ctx) => {
     await assertOrgRole(
@@ -21,6 +27,11 @@ export function createConfigurationCloneGetHandler(
     const original = await deps.source(ctx, input.kind, input.sourceId);
     const maximum =
       input.kind === "agent" ? 18 : input.kind === "skill" ? 48 : 200;
+    // The workspace's names and the production tree are read once, and
+    // the one GitHub call per candidate (its proposal branch) is made only
+    // for a candidate the local reads did not rule out. The old loop asked
+    // one query and two GitHub calls per ordinal, up to 1,000 times.
+    const taken = await deps.taken(ctx, original);
     for (let ordinal = 0; ordinal < 1000; ordinal++) {
       const candidate = configurationCloneName(
         original.slug,
@@ -29,8 +40,13 @@ export function createConfigurationCloneGetHandler(
         maximum,
       );
       if (input.kind === "skill") candidate.name = candidate.slug;
-      if (await deps.taken(ctx, original, candidate.slug, candidate.name))
+      if (
+        taken.slugs.has(candidate.slug) ||
+        taken.names.has(candidate.name) ||
+        taken.files.has(configurationFilePath(input.kind, candidate.slug))
+      )
         continue;
+      if (await deps.branchTaken(original, candidate.slug)) continue;
       return {
         kind: input.kind,
         sourceId: input.sourceId,

@@ -126,12 +126,7 @@ export async function readConfigurationSource(
       code: "not_found",
       reason: "skill_production_branch_missing",
     });
-  const path =
-    kind === "agent"
-      ? agentDefinitionPath(slug)
-      : kind === "skill"
-        ? skillPath(slug)
-        : recordFilePath(slug);
+  const path = configurationFilePath(kind, slug);
   const source = await github.getFileContent({
     owner,
     repo,
@@ -192,6 +187,105 @@ export async function readConfigurationSource(
   };
 }
 
+/** The repository file a configuration of `kind` publishes to. */
+export function configurationFilePath(kind: ConfigurationKind, slug: string) {
+  return kind === "agent"
+    ? agentDefinitionPath(slug)
+    : kind === "skill"
+      ? skillPath(slug)
+      : recordFilePath(slug);
+}
+
+/** The proposal branch a configuration of `kind` is proposed on. */
+export function configurationBranchName(kind: ConfigurationKind, slug: string) {
+  const prefix =
+    kind === "agent" ? "agents" : kind === "skill" ? "skills" : "context";
+  return `${prefix}/${slug}`;
+}
+
+/**
+ * Every name a clone of `original` cannot take, read once: the slugs and
+ * display names this workspace already holds for the kind, and every file
+ * on the production branch. A candidate that clears these still has to
+ * clear `configurationBranchTaken`, which is one GitHub call per candidate
+ * and so is asked only of the survivors.
+ */
+export interface TakenConfigurationNames {
+  slugs: Set<string>;
+  names: Set<string>;
+  /** Blob paths at the production branch's head, repository-relative. */
+  files: Set<string>;
+}
+
+export async function readTakenConfigurationNames(
+  scope: SkillScope,
+  original: ConfigurationSource,
+): Promise<TakenConfigurationNames> {
+  const { kind, repository } = original;
+  const slugs = new Set<string>();
+  const names = new Set<string>();
+  await withTenantDb(async (tx) => {
+    if (kind === "agent") {
+      const rows = await tx
+        .select({ slug: schema.agents.slug, name: schema.agents.name })
+        .from(schema.agents)
+        .where(
+          and(
+            eq(schema.agents.orgId, scope.orgId),
+            eq(schema.agents.workspaceId, scope.workspaceId),
+          ),
+        );
+      for (const row of rows) {
+        slugs.add(row.slug);
+        names.add(row.name);
+      }
+    }
+    if (kind === "record") {
+      const records = await tx
+        .select({
+          slug: schema.contextRecords.slug,
+          title: schema.contextRecords.title,
+        })
+        .from(schema.contextRecords)
+        .where(
+          and(
+            eq(schema.contextRecords.orgId, scope.orgId),
+            eq(schema.contextRecords.workspaceId, scope.workspaceId),
+          ),
+        );
+      for (const row of records) {
+        slugs.add(row.slug);
+        names.add(row.title);
+      }
+      const proposals = await tx
+        .select({ lineageId: schema.contextProposals.lineageId })
+        .from(schema.contextProposals)
+        .where(
+          and(
+            eq(schema.contextProposals.orgId, scope.orgId),
+            eq(schema.contextProposals.workspaceId, scope.workspaceId),
+          ),
+        );
+      for (const row of proposals) slugs.add(row.lineageId);
+    }
+  });
+  const { github, owner, repo } = repository;
+  const files = new Set(
+    await github.getTree({ owner, repo, ref: repository.productionBranch }),
+  );
+  return { slugs, names, files };
+}
+
+/** Whether the proposal branch for `slug` already exists. */
+export async function configurationBranchTaken(
+  original: ConfigurationSource,
+  slug: string,
+): Promise<boolean> {
+  const { github, owner, repo } = original.repository;
+  const branch = configurationBranchName(original.kind, slug);
+  return (await github.getBranch({ owner, repo, branch })) !== null;
+}
+
 export async function configurationNameTaken(
   scope: SkillScope,
   original: ConfigurationSource,
@@ -244,21 +338,14 @@ export async function configurationNameTaken(
   });
   if (rows.length) return true;
   const { github, owner, repo } = repository;
-  const path =
-    kind === "agent"
-      ? agentDefinitionPath(slug)
-      : kind === "skill"
-        ? skillPath(slug)
-        : recordFilePath(slug);
   if (
     (await github.getFileContent({
       owner,
       repo,
-      path,
+      path: configurationFilePath(kind, slug),
       ref: repository.productionBranch,
     })) !== null
   )
     return true;
-  const branch = `${kind === "agent" ? "agents" : kind === "skill" ? "skills" : "context"}/${slug}`;
-  return (await github.getBranch({ owner, repo, branch })) !== null;
+  return configurationBranchTaken(original, slug);
 }
