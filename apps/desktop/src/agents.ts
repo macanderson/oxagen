@@ -56,7 +56,11 @@ import {
   TIER_OMITS,
   TIER_RECORDS,
 } from "./commands";
-import type { TachoHookPresence, TachoStatus } from "./tacho-status";
+import type {
+  TachoHookPresence,
+  TachoModelCredential,
+  TachoStatus,
+} from "./tacho-status";
 
 export type AgentHealth =
   | "healthy"
@@ -253,6 +257,26 @@ function tierFields(
   };
 }
 
+/**
+ * One line on how the harness gets its model credential (ADR-138). Brokered
+ * means the harness holds a run token and the gateway supplies the key from
+ * its custody; otherwise the harness's own credential crosses the proxy, and
+ * the line says why when the status did.
+ */
+export function credentialDetail(credential: TachoModelCredential): string {
+  if (credential.brokered) return "credential brokered by the gateway";
+  switch (credential.reason) {
+    case "subscription_login":
+      return "own login crosses the proxy (subscription, nothing to broker)";
+    case "symlink":
+      return "own credential crosses the proxy (settings file is a symlink)";
+    case "no_file":
+      return "own credential crosses the proxy (no settings file yet)";
+    default:
+      return "own credential crosses the proxy";
+  }
+}
+
 /** One row per known harness, enrolled or not. */
 function harnessRow(
   h: Harness,
@@ -274,6 +298,8 @@ function harnessRow(
         : `hooks missing: ${presence.missing.join(", ")}`,
     );
   }
+  const credential = tacho?.modelCredentials?.find((c) => c.harness === h);
+  if (credential) details.push(credentialDetail(credential));
 
   if (!wrapped) {
     return {

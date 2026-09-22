@@ -74,6 +74,24 @@ export const tachoCommandFetch = registerCapability({
            * the same shape of break, in the other direction.
            */
           bundle_features: z.array(z.string().max(64)).max(32).optional(),
+          /**
+           * Which model providers the host brokers (ADR-138), mirroring
+           * `daemonHealthSchema.credentials`: a basis per provider, never a
+           * secret. Same reason as `bundle_features`: this object is
+           * `.strict()`, so a field the daemon sends and this contract does
+           * not name refuses every upgraded host's poll.
+           */
+          credentials: z
+            .array(
+              z
+                .object({
+                  provider: z.enum(["anthropic", "openai"]),
+                  basis: z.enum(["gateway_brokered", "harness_held"]),
+                })
+                .strict(),
+            )
+            .max(8)
+            .optional(),
         })
         .strict()
         .optional(),
