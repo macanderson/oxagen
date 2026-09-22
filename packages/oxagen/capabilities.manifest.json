@@ -5380,16 +5380,28 @@
       "domain": "skill",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": false,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "summarize_skill_search",
+      "file": "skill.search.summarize.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "mcp": true,
+        "docs": true
       }
     },
     {

@@ -19,6 +19,7 @@ export type PublishedSkillConfig = {
   publishedAt: string;
 };
 export type NewSkillConfig = Omit<PublishedSkillConfig, "id" | "version">;
+type SkillConfigRow = typeof schema.skillConfigVersions.$inferSelect;
 export interface SkillConfigStore {
   list(scope: SkillScope): Promise<PublishedSkillConfig[]>;
   publish(
@@ -26,9 +27,70 @@ export interface SkillConfigStore {
     snapshot: NewSkillConfig,
   ): Promise<PublishedSkillConfig>;
 }
-function view(
-  row: typeof schema.skillConfigVersions.$inferSelect,
-): PublishedSkillConfig {
+/** The newest version a binding holds, by publication time then by insertion. */
+function headOf(rows: SkillConfigRow[]): SkillConfigRow | undefined {
+  return [...rows].sort(
+    (a, b) =>
+      b.publishedAt.getTime() - a.publishedAt.getTime() ||
+      b.createdAt.getTime() - a.createdAt.getTime(),
+  )[0];
+}
+/**
+ * Decide what a publication does to a binding's history: reuse a recorded
+ * version, or append one when the return is null. The rules are pure over the
+ * rows a workspace holds, so a test can prove them without a database.
+ *
+ * A commit already on record is a retry and reuses its row, and the same
+ * commit carrying different bytes is a conflict. Identical bytes at a new
+ * commit are a new publication, because the pull request that merged them is
+ * the authority the record names, and reusing the earlier row would credit a
+ * review that did not carry this change.
+ *
+ * A publication the binding's head already outranks is refused, whether it
+ * names a commit the record superseded or merged before the head merged. The
+ * head is the version in force, so an earlier pull request is not the current
+ * authority even when a later revert restored its bytes, and accepting it
+ * would report a stale configuration as the one the workspace now runs.
+ */
+export function resolvePublication(
+  rows: SkillConfigRow[],
+  snapshot: NewSkillConfig,
+): SkillConfigRow | null {
+  const binding = rows.filter(
+    (row) => row.repositoryBindingId === snapshot.repositoryBindingId,
+  );
+  const superseded = () =>
+    new HandlerError({
+      code: "conflict",
+      reason: "skill_config_superseded",
+      message:
+        "A later configuration version is already published for this repository. Publish the pull request that carries the current configuration.",
+    });
+  const head = headOf(binding);
+  const existing = binding.find((row) => row.commitSha === snapshot.commitSha);
+  if (existing) {
+    if (existing.configDigest !== snapshot.digest)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "skill_config_digest_changed",
+        message:
+          "The published commit no longer matches its recorded configuration",
+      });
+    if (existing.id !== head?.id) throw superseded();
+    return existing;
+  }
+  if (snapshot.pullRequestNumber === null && binding.length > 0)
+    throw new HandlerError({
+      code: "conflict",
+      reason: "skill_config_already_imported",
+      message:
+        "Later configuration versions must name the pull request that published them",
+    });
+  if (head && Date.parse(snapshot.publishedAt) < head.publishedAt.getTime())
+    throw superseded();
+  return null;
+}
+function view(row: SkillConfigRow): PublishedSkillConfig {
   return {
     id: row.publicId,
     version: row.versionLabel,
@@ -97,40 +159,8 @@ export const postgresSkillConfigStore: SkillConfigStore = {
         .where(
           and(eq(t.orgId, scope.orgId), eq(t.workspaceId, scope.workspaceId)),
         );
-      const existing = rows.find(
-        (row) =>
-          row.repositoryBindingId === snapshot.repositoryBindingId &&
-          row.commitSha === snapshot.commitSha,
-      );
-      if (existing) {
-        if (existing.configDigest !== snapshot.digest)
-          throw new HandlerError({
-            code: "conflict",
-            reason: "skill_config_digest_changed",
-            message:
-              "The published commit no longer matches its recorded configuration",
-          });
-        return view(existing);
-      }
-      if (
-        snapshot.pullRequestNumber === null &&
-        rows.some(
-          (row) => row.repositoryBindingId === snapshot.repositoryBindingId,
-        )
-      ) {
-        throw new HandlerError({
-          code: "conflict",
-          reason: "skill_config_already_imported",
-          message:
-            "Later configuration versions must name the pull request that published them",
-        });
-      }
-      const previous = rows
-        .filter(
-          (row) => row.repositoryBindingId === snapshot.repositoryBindingId,
-        )
-        .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())[0];
-      if (previous?.configDigest === snapshot.digest) return view(previous);
+      const reused = resolvePublication(rows, snapshot);
+      if (reused) return view(reused);
       const [row] = await tx
         .insert(t)
         .values({

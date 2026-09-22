@@ -32,6 +32,31 @@ export class UnsafeOutboundUrlError extends Error {
   }
 }
 
+/**
+ * Replace the userinfo of every address in `text`, so a password somebody
+ * typed into a URL does not travel on into a log line, an error message, or a
+ * settings page.
+ *
+ * `assertPublicHttpUrl` refuses such an address, which is the real fix, and
+ * this is the belt to that braces: the refusal itself quotes what it refused,
+ * the vendor probe reports a transport error whose text is Node's ("Request
+ * cannot be constructed from a URL that includes credentials: …", with the
+ * whole URL in it), and an address stored before that guard existed is still
+ * read back by every surface. Each of those is a place a secret can arrive
+ * with no one having decided to print it.
+ *
+ * Works on a string rather than on a parsed URL because the strings it has to
+ * clean are not always parseable — the guard's own "invalid URL" refusal is
+ * the case in point. The whole userinfo goes, not just the password: a bare
+ * `https://sk-live-…@host/v1` is a key in the username field.
+ */
+export function redactUrlCredentials(text: string): string {
+  return text.replace(
+    /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/?#\s]*@/g,
+    (_match, scheme: string) => `${scheme}***@`,
+  );
+}
+
 export interface AssertPublicHttpUrlOptions {
   /**
    * Prefixed to every refusal so the message names the thing being refused —
@@ -65,7 +90,11 @@ export function assertPublicHttpUrl(
   try {
     parsed = new URL(raw);
   } catch {
-    return refuse(`invalid URL "${raw}"`);
+    // Quoted so the operator can see what was read, redacted because an
+    // address that fails to parse can still carry a password —
+    // `https://user:pass@exa mple.com/v1` throws here — and this message is
+    // returned as the field's `invalid_input` reason and logged with it.
+    return refuse(`invalid URL "${redactUrlCredentials(raw)}"`);
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
@@ -132,10 +161,14 @@ export function fetchWithoutRedirects(
   return async (input, init) => {
     const response = await fetch(input, { ...init, redirect: "manual" });
     if (response.status >= 300 && response.status < 400) {
+      // The `Location` is written by the endpoint, not by us, so it is
+      // redacted like any other address this process prints: a redirect to
+      // `https://user:pass@…` would otherwise put someone's credential in the
+      // refusal an operator reads and a log keeps.
       const location = response.headers.get("location");
       throw new UnsafeOutboundUrlError(
         `${options.refusing}: the endpoint answered ${response.status}${
-          location ? ` redirecting to "${location}"` : ""
+          location ? ` redirecting to "${redactUrlCredentials(location)}"` : ""
         }; redirects are not followed, give the final URL instead`,
       );
     }

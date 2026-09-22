@@ -245,6 +245,30 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     expect(arg.temperature).toBe(0.7);
   });
 
+  it("reads the vendor from the catalog id when the request carries a bare one", () => {
+    // A turn on the organisation's own Anthropic key sends `claude-sonnet-5`,
+    // the only id that endpoint answers to. Without the catalog id the bare
+    // spelling lands in the back-compat OpenAI branch above, so the effort
+    // reaches OpenAI's fields on an Anthropic request and controls nothing
+    // (#3314, finding 2).
+    streamAgentReply({
+      fundedBy: "org" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+      model: { modelId: "claude-sonnet-5" } as never,
+      catalogModelId: "anthropic/claude-sonnet-5",
+      effort: "high",
+    });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.providerOptions).toEqual({
+      anthropic: {
+        thinking: { type: "adaptive" },
+        outputConfig: { effort: "high" },
+      },
+    });
+  });
+
   it("uses defaultModel() when no model arg is given", () => {
     const before = mocks.defaultModel.mock.calls.length;
     streamAgentReply({

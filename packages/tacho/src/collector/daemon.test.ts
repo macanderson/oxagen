@@ -48,6 +48,19 @@ import { type DaemonHandle, startDaemon } from "./daemon";
 const DAEMON_CONNECT_MS = 5_000;
 
 /**
+ * The deadline every test that spends the budget above runs under.
+ *
+ * Vitest's own default is 5,000ms and its clock starts before the daemon
+ * boots, so a connect budget of the same size can never expire inside it. The
+ * runner stops the test first, `runTachoHook` never returns, and the reason it
+ * would have carried is thrown away with it, so CI shows the bare timeout that
+ * #3203 was written to replace. The deadline has to clear the budget and the
+ * boot ahead of it. Stating it here keeps the two figures in one place, and
+ * the test below spends a whole budget, so it fails if they ever cross again.
+ */
+const DAEMON_TEST_TIMEOUT_MS = 30_000;
+
+/**
  * Assert the hook reached the daemon, and say WHY when it did not.
  *
  * `runTachoHook` turns every failure — connect timeout, response timeout, a
@@ -418,144 +431,191 @@ describe("tachod", () => {
     expect((await forward).status).toBe(200);
   });
 
-  it("records a full session over http hooks and the socket, ships it, and the chains verify", async () => {
-    const plane = fakeControlPlane("etag-3");
-    const { handle, paths, host } = await boot(plane);
-    const port = handle.port as number;
-    for (const fixture of fixtures()) {
-      const isCommand = [
-        "SessionStart",
-        "UserPromptSubmit",
-        "PreToolUse",
-        "PermissionRequest",
-        "Stop",
-      ].includes(String(fixture.stdin["hook_event_name"]));
-      if (isCommand) {
-        const result = await runTachoHook({
-          paths,
-          env: fixture.env,
-          stdin: JSON.stringify(fixture.stdin),
-          connectTimeoutMs: DAEMON_CONNECT_MS,
-        });
-        expectReachedDaemon(result);
-        expect(result.exitCode).toBe(0);
-        if (fixture.name === "09-PreToolUse.json") {
-          expect(JSON.parse(result.stdout)).toMatchObject({
-            hookSpecificOutput: { permissionDecision: "deny" },
+  it(
+    "reports the reason when the connect budget runs out instead of being stopped by the runner",
+    async () => {
+      // The pair this pins: a hook that spends the whole connect budget must
+      // still return inside the test's own deadline, or the fallback and the
+      // reason it carries never reach an assertion. Under Vitest's default
+      // 5,000ms deadline this test is killed mid-hook and reports a bare
+      // timeout, which is the failure #3203 set out to make self-describing.
+      //
+      // A connect that stays pending cannot be staged against a real socket:
+      // one with a listener connects at once and one without is refused at
+      // once. So the post here answers the way `postUnix` answers a connect
+      // still pending when its timer fires, and spends the same budget doing
+      // it.
+      const plane = fakeControlPlane("etag-3");
+      const { paths } = await boot(plane);
+      const start = fixtures()[0] as Fixture;
+      const startedAt = Date.now();
+      const result = await runTachoHook({
+        paths,
+        env: start.env,
+        stdin: JSON.stringify(start.stdin),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+        post: async (options) => {
+          await new Promise((resolve) =>
+            setTimeout(resolve, options.connectTimeoutMs),
+          );
+          throw new Error("connect timeout");
+        },
+      });
+
+      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(DAEMON_CONNECT_MS);
+      expect(result.path).toBe("local");
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toContain("connect timeout");
+      // And the helper every other case here goes through says why, rather
+      // than reporting only that "local" is not "daemon".
+      expect(() => expectReachedDaemon(result)).toThrow(/connect timeout/);
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "records a full session over http hooks and the socket, ships it, and the chains verify",
+    async () => {
+      const plane = fakeControlPlane("etag-3");
+      const { handle, paths, host } = await boot(plane);
+      const port = handle.port as number;
+      for (const fixture of fixtures()) {
+        const isCommand = [
+          "SessionStart",
+          "UserPromptSubmit",
+          "PreToolUse",
+          "PermissionRequest",
+          "Stop",
+        ].includes(String(fixture.stdin["hook_event_name"]));
+        if (isCommand) {
+          const result = await runTachoHook({
+            paths,
+            env: fixture.env,
+            stdin: JSON.stringify(fixture.stdin),
+            connectTimeoutMs: DAEMON_CONNECT_MS,
           });
+          expectReachedDaemon(result);
+          expect(result.exitCode).toBe(0);
+          if (fixture.name === "09-PreToolUse.json") {
+            expect(JSON.parse(result.stdout)).toMatchObject({
+              hookSpecificOutput: { permissionDecision: "deny" },
+            });
+          }
+        } else {
+          const res = await postHttp(
+            port,
+            host.local_token,
+            `/hook/${TEST_ENROLLMENT}`,
+            fixture.stdin,
+          );
+          expect(res.status).toBe(200);
+          expect(JSON.parse(res.body)).toEqual({});
         }
-      } else {
+      }
+      // Unauthorized and foreign-enrollment posts are refused.
+      expect(
+        (await postHttp(port, "wrong", `/hook/${TEST_ENROLLMENT}`, {})).status,
+      ).toBe(401);
+      expect(
+        (
+          await postHttp(
+            port,
+            host.local_token,
+            "/hook/tch_zzzzzzzzzzzzzzzzzzzzzz",
+            {},
+          )
+        ).status,
+      ).toBe(403);
+      expect((await postHttp(port, host.local_token, "/nope", {})).status).toBe(
+        404,
+      );
+      // OTLP is accepted and attributed by session id.
+      const otlpDir = join(
+        __dirname,
+        "..",
+        "..",
+        "fixtures",
+        "claude-code",
+        "otlp",
+      );
+      for (const name of readdirSync(otlpDir).sort()) {
+        const signal = name.includes("logs")
+          ? "logs"
+          : name.includes("metrics")
+            ? "metrics"
+            : "traces";
         const res = await postHttp(
           port,
           host.local_token,
-          `/hook/${TEST_ENROLLMENT}`,
-          fixture.stdin,
+          `/v1/${signal}`,
+          JSON.parse(readFileSync(join(otlpDir, name), "utf8")),
         );
         expect(res.status).toBe(200);
-        expect(JSON.parse(res.body)).toEqual({});
       }
-    }
-    // Unauthorized and foreign-enrollment posts are refused.
-    expect(
-      (await postHttp(port, "wrong", `/hook/${TEST_ENROLLMENT}`, {})).status,
-    ).toBe(401);
-    expect(
-      (
-        await postHttp(
-          port,
-          host.local_token,
-          "/hook/tch_zzzzzzzzzzzzzzzzzzzzzz",
-          {},
-        )
-      ).status,
-    ).toBe(403);
-    expect((await postHttp(port, host.local_token, "/nope", {})).status).toBe(
-      404,
-    );
-    // OTLP is accepted and attributed by session id.
-    const otlpDir = join(
-      __dirname,
-      "..",
-      "..",
-      "fixtures",
-      "claude-code",
-      "otlp",
-    );
-    for (const name of readdirSync(otlpDir).sort()) {
-      const signal = name.includes("logs")
-        ? "logs"
-        : name.includes("metrics")
-          ? "metrics"
-          : "traces";
-      const res = await postHttp(
+      expect(
+        (await postHttp(port, host.local_token, "/v1/traces", {})).status,
+      ).toBe(200);
+
+      await handle.tick();
+      // The final Git read seals after shipping. Its terminal frames ship next tick.
+      await handle.tick();
+      expect(plane.ingested.length).toBeGreaterThan(20);
+      const bySession = new Map<string, TachoEvent[]>();
+      for (const event of plane.ingested)
+        bySession.set(event.session_uuid, [
+          ...(bySession.get(event.session_uuid) ?? []),
+          event,
+        ]);
+      expect(bySession.size).toBe(3); // parent, subagent child, and the daemon's own chain
+      for (const events of bySession.values()) {
+        expect(verifyChain(events, { expectGenesis: true }).violations).toEqual(
+          [],
+        );
+      }
+      expect(
+        plane.ingested.some(
+          (e) =>
+            e.kind === "checkpoint" &&
+            (e.body as { checkpoint_device_signature?: string })
+              .checkpoint_device_signature !== undefined,
+        ),
+      ).toBe(true);
+      expect(plane.ingested.some((e) => e.kind === "llm_call")).toBe(true);
+      const status = JSON.parse(
+        (await getHttp(port, host.local_token, "/status")).body,
+      ) as {
+        sessions: Array<{ sealed: boolean; session_id: string }>;
+        hooks: { complete: boolean };
+      };
+      expect(
+        status.sessions.find((s) => !s.session_id.startsWith("tachod-"))
+          ?.sealed,
+      ).toBe(true);
+      expect(status.hooks.complete).toBe(true);
+      const health = JSON.parse(
+        (await getHttp(port, host.local_token, "/health")).body,
+      ) as { ok: boolean; spool_depth: number };
+      expect(health.ok).toBe(true);
+      expect(health.spool_depth).toBe(0);
+      const listing = JSON.parse(
+        (await getHttp(port, host.local_token, "/sessions")).body,
+      ) as { sessions: Array<{ session_id: string }> };
+      const sessionId = listing.sessions.find(
+        (s) => !s.session_id.startsWith("tachod-"),
+      )?.session_id as string;
+      const exported = await getHttp(
         port,
         host.local_token,
-        `/v1/${signal}`,
-        JSON.parse(readFileSync(join(otlpDir, name), "utf8")),
+        `/sessions/${sessionId}/export?format=trace`,
       );
-      expect(res.status).toBe(200);
-    }
-    expect(
-      (await postHttp(port, host.local_token, "/v1/traces", {})).status,
-    ).toBe(200);
-
-    await handle.tick();
-    // The final Git read seals after shipping. Its terminal frames ship next tick.
-    await handle.tick();
-    expect(plane.ingested.length).toBeGreaterThan(20);
-    const bySession = new Map<string, TachoEvent[]>();
-    for (const event of plane.ingested)
-      bySession.set(event.session_uuid, [
-        ...(bySession.get(event.session_uuid) ?? []),
-        event,
-      ]);
-    expect(bySession.size).toBe(3); // parent, subagent child, and the daemon's own chain
-    for (const events of bySession.values()) {
-      expect(verifyChain(events, { expectGenesis: true }).violations).toEqual(
-        [],
-      );
-    }
-    expect(
-      plane.ingested.some(
-        (e) =>
-          e.kind === "checkpoint" &&
-          (e.body as { checkpoint_device_signature?: string })
-            .checkpoint_device_signature !== undefined,
-      ),
-    ).toBe(true);
-    expect(plane.ingested.some((e) => e.kind === "llm_call")).toBe(true);
-    const status = JSON.parse(
-      (await getHttp(port, host.local_token, "/status")).body,
-    ) as {
-      sessions: Array<{ sealed: boolean; session_id: string }>;
-      hooks: { complete: boolean };
-    };
-    expect(
-      status.sessions.find((s) => !s.session_id.startsWith("tachod-"))?.sealed,
-    ).toBe(true);
-    expect(status.hooks.complete).toBe(true);
-    const health = JSON.parse(
-      (await getHttp(port, host.local_token, "/health")).body,
-    ) as { ok: boolean; spool_depth: number };
-    expect(health.ok).toBe(true);
-    expect(health.spool_depth).toBe(0);
-    const listing = JSON.parse(
-      (await getHttp(port, host.local_token, "/sessions")).body,
-    ) as { sessions: Array<{ session_id: string }> };
-    const sessionId = listing.sessions.find(
-      (s) => !s.session_id.startsWith("tachod-"),
-    )?.session_id as string;
-    const exported = await getHttp(
-      port,
-      host.local_token,
-      `/sessions/${sessionId}/export?format=trace`,
-    );
-    expect(exported.status).toBe(200);
-    expect(exported.body).toContain("session_start");
-    expect(
-      (await getHttp(port, host.local_token, "/sessions/nope/export")).status,
-    ).toBe(404);
-  });
+      expect(exported.status).toBe(200);
+      expect(exported.body).toContain("session_start");
+      expect(
+        (await getHttp(port, host.local_token, "/sessions/nope/export")).status,
+      ).toBe(404);
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
 
   it("sends pending command acknowledgements when a queued body cannot be read", async () => {
     const plane = fakeControlPlane("etag-3");
@@ -598,293 +658,309 @@ describe("tachod", () => {
     read.mockRestore();
   });
 
-  it("applies pause, message, cancel, and revoke commands from the ingest response", async () => {
-    const plane = fakeControlPlane("etag-3");
-    const killed: Array<[number, string]> = [];
-    const { handle, paths } = await boot(plane, scratchPaths(), {
-      kill: (pid, signal) => {
-        killed.push([pid, signal]);
-        return true;
-      },
-    });
-    const [start, , prompt, read] = fixtures() as [
-      Fixture,
-      Fixture,
-      Fixture,
-      Fixture,
-    ];
-    await runTachoHook({
-      paths,
-      env: start.env,
-      stdin: JSON.stringify(start.stdin),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    const sessionUuid = handle.registry.get(String(start.stdin["session_id"]))
-      ?.recorder.sessionUuid as string;
-    plane.queue({
-      id: "cmd_pause",
-      command: "pause",
-      session_uuid: sessionUuid,
-      payload: { reason: "budget review" },
-      issued_at: "2026-09-10T10:00:00.000Z",
-      expires_at: null,
-    });
-    plane.queue({
-      id: "cmd_msg",
-      command: "message",
-      session_uuid: sessionUuid,
-      payload: { text: "Finish the current file only." },
-      issued_at: "2026-09-10T10:00:00.000Z",
-      expires_at: null,
-    });
-    plane.queue({
-      id: "cmd_old",
-      command: "resume",
-      session_uuid: sessionUuid,
-      payload: {},
-      issued_at: "2026-09-10T10:00:00.000Z",
-      expires_at: "2020-01-01T00:00:00.000Z",
-    });
-    plane.queue({
-      id: "cmd_lost",
-      command: "pause",
-      session_uuid: "00000000-0000-4000-8000-000000000009",
-      payload: {},
-      issued_at: "2026-09-10T10:00:00.000Z",
-      expires_at: null,
-    });
-    await handle.tick();
-    const blocked = await runTachoHook({
-      paths,
-      env: prompt.env,
-      stdin: JSON.stringify(prompt.stdin),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    expect(JSON.parse(blocked.stdout)).toMatchObject({
-      decision: "block",
-      reason: expect.stringContaining("budget review"),
-    });
-    plane.queue({
-      id: "cmd_resume",
-      command: "resume",
-      session_uuid: sessionUuid,
-      payload: {},
-      issued_at: "2026-09-10T10:00:00.000Z",
-      expires_at: null,
-    });
-    await handle.tick();
-    const resumed = await runTachoHook({
-      paths,
-      env: prompt.env,
-      stdin: JSON.stringify(prompt.stdin),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    expect(JSON.parse(resumed.stdout)).toMatchObject({
-      hookSpecificOutput: {
-        additionalContext: "Finish the current file only.",
-      },
-    });
-    await handle.tick();
-    const ackIds = (
-      plane.acks as Array<{ command_id: string; status: string }>
-    ).map((a) => `${a.command_id}:${a.status}`);
-    expect(ackIds).toEqual(
-      expect.arrayContaining([
-        "cmd_pause:applied",
-        "cmd_msg:received",
-        "cmd_msg:applied",
-        "cmd_old:expired",
-        "cmd_lost:failed",
-        "cmd_resume:applied",
-      ]),
-    );
-    // cancel: the tool boundary denies and a kill is attempted at the recorded pid.
-    plane.queue({
-      id: "cmd_cancel",
-      command: "cancel",
-      session_uuid: sessionUuid,
-      payload: { reason: "runaway" },
-      issued_at: "2026-09-10T10:00:00.000Z",
-      expires_at: null,
-    });
-    await handle.tick();
-    const denied = await runTachoHook({
-      paths,
-      env: read.env,
-      stdin: JSON.stringify(read.stdin),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    expect(JSON.parse(denied.stdout)).toMatchObject({
-      hookSpecificOutput: {
-        permissionDecision: "deny",
-        permissionDecisionReason: expect.stringContaining("runaway"),
-      },
-    });
-    await handle.tick();
-    const kill = plane.ingested.find((e) => e.kind === "oxagen:kill_attempted");
-    expect(kill?.body).toMatchObject({
-      kill_signal: "SIGTERM",
-      kill_outcome: "sent",
-    });
-    expect(killed).toEqual([[59942, "SIGTERM"]]);
-    // revoke at host level: status suspended, sessions refused, persisted to host.json.
-    plane.queue({
-      id: "cmd_revoke",
-      command: "revoke",
-      session_uuid: null,
-      payload: { reason: "offboarded" },
-      issued_at: "2026-09-10T10:00:00.000Z",
-      expires_at: null,
-    });
-    await handle.tick();
-    expect(handle.host().host_status).toBe("suspended");
-    expect(readHostFile(paths.hostFile)?.host_status).toBe("suspended");
-    const refused = await runTachoHook({
-      paths,
-      env: start.env,
-      stdin: JSON.stringify(start.stdin),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    expect(JSON.parse(refused.stdout)).toMatchObject({ continue: false });
-  });
+  it(
+    "applies pause, message, cancel, and revoke commands from the ingest response",
+    async () => {
+      const plane = fakeControlPlane("etag-3");
+      const killed: Array<[number, string]> = [];
+      const { handle, paths } = await boot(plane, scratchPaths(), {
+        kill: (pid, signal) => {
+          killed.push([pid, signal]);
+          return true;
+        },
+      });
+      const [start, , prompt, read] = fixtures() as [
+        Fixture,
+        Fixture,
+        Fixture,
+        Fixture,
+      ];
+      await runTachoHook({
+        paths,
+        env: start.env,
+        stdin: JSON.stringify(start.stdin),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      const sessionUuid = handle.registry.get(String(start.stdin["session_id"]))
+        ?.recorder.sessionUuid as string;
+      plane.queue({
+        id: "cmd_pause",
+        command: "pause",
+        session_uuid: sessionUuid,
+        payload: { reason: "budget review" },
+        issued_at: "2026-09-10T10:00:00.000Z",
+        expires_at: null,
+      });
+      plane.queue({
+        id: "cmd_msg",
+        command: "message",
+        session_uuid: sessionUuid,
+        payload: { text: "Finish the current file only." },
+        issued_at: "2026-09-10T10:00:00.000Z",
+        expires_at: null,
+      });
+      plane.queue({
+        id: "cmd_old",
+        command: "resume",
+        session_uuid: sessionUuid,
+        payload: {},
+        issued_at: "2026-09-10T10:00:00.000Z",
+        expires_at: "2020-01-01T00:00:00.000Z",
+      });
+      plane.queue({
+        id: "cmd_lost",
+        command: "pause",
+        session_uuid: "00000000-0000-4000-8000-000000000009",
+        payload: {},
+        issued_at: "2026-09-10T10:00:00.000Z",
+        expires_at: null,
+      });
+      await handle.tick();
+      const blocked = await runTachoHook({
+        paths,
+        env: prompt.env,
+        stdin: JSON.stringify(prompt.stdin),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      expect(JSON.parse(blocked.stdout)).toMatchObject({
+        decision: "block",
+        reason: expect.stringContaining("budget review"),
+      });
+      plane.queue({
+        id: "cmd_resume",
+        command: "resume",
+        session_uuid: sessionUuid,
+        payload: {},
+        issued_at: "2026-09-10T10:00:00.000Z",
+        expires_at: null,
+      });
+      await handle.tick();
+      const resumed = await runTachoHook({
+        paths,
+        env: prompt.env,
+        stdin: JSON.stringify(prompt.stdin),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      expect(JSON.parse(resumed.stdout)).toMatchObject({
+        hookSpecificOutput: {
+          additionalContext: "Finish the current file only.",
+        },
+      });
+      await handle.tick();
+      const ackIds = (
+        plane.acks as Array<{ command_id: string; status: string }>
+      ).map((a) => `${a.command_id}:${a.status}`);
+      expect(ackIds).toEqual(
+        expect.arrayContaining([
+          "cmd_pause:applied",
+          "cmd_msg:received",
+          "cmd_msg:applied",
+          "cmd_old:expired",
+          "cmd_lost:failed",
+          "cmd_resume:applied",
+        ]),
+      );
+      // cancel: the tool boundary denies and a kill is attempted at the recorded pid.
+      plane.queue({
+        id: "cmd_cancel",
+        command: "cancel",
+        session_uuid: sessionUuid,
+        payload: { reason: "runaway" },
+        issued_at: "2026-09-10T10:00:00.000Z",
+        expires_at: null,
+      });
+      await handle.tick();
+      const denied = await runTachoHook({
+        paths,
+        env: read.env,
+        stdin: JSON.stringify(read.stdin),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      expect(JSON.parse(denied.stdout)).toMatchObject({
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason: expect.stringContaining("runaway"),
+        },
+      });
+      await handle.tick();
+      const kill = plane.ingested.find(
+        (e) => e.kind === "oxagen:kill_attempted",
+      );
+      expect(kill?.body).toMatchObject({
+        kill_signal: "SIGTERM",
+        kill_outcome: "sent",
+      });
+      expect(killed).toEqual([[59942, "SIGTERM"]]);
+      // revoke at host level: status suspended, sessions refused, persisted to host.json.
+      plane.queue({
+        id: "cmd_revoke",
+        command: "revoke",
+        session_uuid: null,
+        payload: { reason: "offboarded" },
+        issued_at: "2026-09-10T10:00:00.000Z",
+        expires_at: null,
+      });
+      await handle.tick();
+      expect(handle.host().host_status).toBe("suspended");
+      expect(readHostFile(paths.hostFile)?.host_status).toBe("suspended");
+      const refused = await runTachoHook({
+        paths,
+        env: start.env,
+        stdin: JSON.stringify(start.stdin),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      expect(JSON.parse(refused.stdout)).toMatchObject({ continue: false });
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
 
-  it("keeps enforcing and spools while the daemon is down, then replays with a telemetry gap", async () => {
-    const plane = fakeControlPlane("etag-3");
-    const { handle, paths } = await boot(plane);
-    const all = fixtures();
-    const start = all[0] as Fixture;
-    const write = all[8] as Fixture;
-    const read = all[3] as Fixture;
-    const post = all[9] as Fixture;
-    await runTachoHook({
-      paths,
-      env: start.env,
-      stdin: JSON.stringify(start.stdin),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    await handle.stop();
-    handles.splice(handles.indexOf(handle), 1);
-    // Daemon down: the hook decides from the cached bundle and spools.
-    const denied = await runTachoHook({
-      paths,
-      env: write.env,
-      stdin: JSON.stringify(write.stdin),
-      connectTimeoutMs: 50,
-    });
-    expect(denied.path).toBe("local");
-    expect(JSON.parse(denied.stdout)).toMatchObject({
-      hookSpecificOutput: {
-        permissionDecision: "deny",
-        permissionDecisionReason:
-          "Denied by Oxagen policy rule Write(**/probe.txt).",
-      },
-    });
-    const allowed = await runTachoHook({
-      paths,
-      env: read.env,
-      stdin: JSON.stringify(read.stdin),
-      connectTimeoutMs: 50,
-    });
-    expect(allowed.path).toBe("local");
-    expect(JSON.parse(allowed.stdout)).toMatchObject({
-      hookSpecificOutput: { permissionDecision: "allow" },
-    });
-    expect(
-      readdirSync(paths.spool).filter((n) => n.endsWith(".json")),
-    ).toHaveLength(2);
-    // Restart: the chain continues from the persisted cursor, spool replays first.
-    const { handle: again } = await boot(plane, paths);
-    const port = again.port as number;
-    const token = readHostFile(paths.hostFile)?.local_token as string;
-    await postHttp(port, token, `/hook/${TEST_ENROLLMENT}`, post.stdin);
-    await again.tick();
-    expect(
-      readdirSync(paths.spool).filter((n) => n.endsWith(".json")),
-    ).toHaveLength(0);
-    const sessionUuid = again.registry.get(String(start.stdin["session_id"]))
-      ?.recorder.sessionUuid as string;
-    const chain = plane.ingested.filter((e) => e.session_uuid === sessionUuid);
-    expect(verifyChain(chain, { expectGenesis: true }).ok).toBe(true);
-    const kinds = chain.map((e) => e.kind);
-    expect(kinds.slice(0, 1)).toEqual(["agent_start"]);
-    expect(kinds).toEqual(
-      expect.arrayContaining([
-        "policy_decision",
-        "token_denied",
-        "tool_requested",
-        "telemetry_gap",
-        "tool_call",
-      ]),
-    );
-    const replayed = chain.filter((e) => e.attrs?.["hook.replayed"] === "1");
-    expect(replayed.length).toBeGreaterThanOrEqual(4);
-    const gap = chain.find((e) => e.kind === "telemetry_gap");
-    expect(gap?.body).toMatchObject({
-      gap_cause: "daemon_down",
-      incident_kind: "telemetry_gap",
-    });
-  });
+  it(
+    "keeps enforcing and spools while the daemon is down, then replays with a telemetry gap",
+    async () => {
+      const plane = fakeControlPlane("etag-3");
+      const { handle, paths } = await boot(plane);
+      const all = fixtures();
+      const start = all[0] as Fixture;
+      const write = all[8] as Fixture;
+      const read = all[3] as Fixture;
+      const post = all[9] as Fixture;
+      await runTachoHook({
+        paths,
+        env: start.env,
+        stdin: JSON.stringify(start.stdin),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      await handle.stop();
+      handles.splice(handles.indexOf(handle), 1);
+      // Daemon down: the hook decides from the cached bundle and spools.
+      const denied = await runTachoHook({
+        paths,
+        env: write.env,
+        stdin: JSON.stringify(write.stdin),
+        connectTimeoutMs: 50,
+      });
+      expect(denied.path).toBe("local");
+      expect(JSON.parse(denied.stdout)).toMatchObject({
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason:
+            "Denied by Oxagen policy rule Write(**/probe.txt).",
+        },
+      });
+      const allowed = await runTachoHook({
+        paths,
+        env: read.env,
+        stdin: JSON.stringify(read.stdin),
+        connectTimeoutMs: 50,
+      });
+      expect(allowed.path).toBe("local");
+      expect(JSON.parse(allowed.stdout)).toMatchObject({
+        hookSpecificOutput: { permissionDecision: "allow" },
+      });
+      expect(
+        readdirSync(paths.spool).filter((n) => n.endsWith(".json")),
+      ).toHaveLength(2);
+      // Restart: the chain continues from the persisted cursor, spool replays first.
+      const { handle: again } = await boot(plane, paths);
+      const port = again.port as number;
+      const token = readHostFile(paths.hostFile)?.local_token as string;
+      await postHttp(port, token, `/hook/${TEST_ENROLLMENT}`, post.stdin);
+      await again.tick();
+      expect(
+        readdirSync(paths.spool).filter((n) => n.endsWith(".json")),
+      ).toHaveLength(0);
+      const sessionUuid = again.registry.get(String(start.stdin["session_id"]))
+        ?.recorder.sessionUuid as string;
+      const chain = plane.ingested.filter(
+        (e) => e.session_uuid === sessionUuid,
+      );
+      expect(verifyChain(chain, { expectGenesis: true }).ok).toBe(true);
+      const kinds = chain.map((e) => e.kind);
+      expect(kinds.slice(0, 1)).toEqual(["agent_start"]);
+      expect(kinds).toEqual(
+        expect.arrayContaining([
+          "policy_decision",
+          "token_denied",
+          "tool_requested",
+          "telemetry_gap",
+          "tool_call",
+        ]),
+      );
+      const replayed = chain.filter((e) => e.attrs?.["hook.replayed"] === "1");
+      expect(replayed.length).toBeGreaterThanOrEqual(4);
+      const gap = chain.find((e) => e.kind === "telemetry_gap");
+      expect(gap?.body).toMatchObject({
+        gap_cause: "daemon_down",
+        incident_kind: "telemetry_gap",
+      });
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
 
-  it("refreshes a changed bundle, tracks deny generations, bisects a refused batch, and survives an outage", async () => {
-    const plane = fakeControlPlane("etag-4");
-    const { handle, paths, signer, log } = await boot(plane);
-    const next = signer.sign(
-      unsignedBundle({
-        version: 4,
-        etag: "etag-4",
-        mode: "observe",
-        context: { system: null },
-      }),
-    );
-    plane.setBundle(next);
-    plane.setDenyGeneration({ org: 2, workspace: 1 });
-    await handle.tick();
-    // Every poll tells the plane which bundle fields this build can parse, so
-    // a gated field reaches a host that upgraded in place. `host.json`'s
-    // `wrapper_version` cannot answer that: `enroll` writes it once.
-    expect(plane.reported.at(-1)).toMatchObject({
-      bundle_features: [...TACHO_BUNDLE_FEATURES],
-    });
-    expect(handle.host().bundle.version).toBe(4);
-    expect(handle.host().deny_generation).toEqual({ org: 2, workspace: 1 });
-    expect(readHostFile(paths.hostFile)?.bundle.etag).toBe("etag-4");
-    // A bundle from the wrong key is refused.
-    const rogue = bundleSigner().sign(
-      unsignedBundle({ version: 9, etag: "etag-9" }),
-    );
-    plane.setBundle(rogue);
-    expect(await handle.refreshBundle()).toBe(false);
-    expect(handle.host().bundle.version).toBe(4);
-    expect(log.some((l) => l.includes("does not verify"))).toBe(true);
-    // A refused batch bisects to the offending event and quarantines it.
-    const start = fixtures()[0] as Fixture;
-    await runTachoHook({
-      paths,
-      env: start.env,
-      stdin: JSON.stringify(start.stdin),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    plane.refuseNextIngest(400);
-    await handle.tick();
-    await handle.tick();
-    expect(
-      readdirSync(paths.quarantine).length + plane.ingested.length,
-    ).toBeGreaterThan(0);
-    // An outage backs off and reports unreachable; recovery ships the backlog.
-    plane.setDown(true);
-    const prompt = fixtures()[2] as Fixture;
-    await runTachoHook({
-      paths,
-      env: prompt.env,
-      stdin: JSON.stringify(prompt.stdin),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    await handle.tick();
-    expect(handle.shipper.reachable).toBe(false);
-    expect(handle.shipper.lastError).toContain("unreachable");
-    plane.setDown(false);
-    expect(handle.shipper.ready()).toBe(false);
-  });
+  it(
+    "refreshes a changed bundle, tracks deny generations, bisects a refused batch, and survives an outage",
+    async () => {
+      const plane = fakeControlPlane("etag-4");
+      const { handle, paths, signer, log } = await boot(plane);
+      const next = signer.sign(
+        unsignedBundle({
+          version: 4,
+          etag: "etag-4",
+          mode: "observe",
+          context: { system: null },
+        }),
+      );
+      plane.setBundle(next);
+      plane.setDenyGeneration({ org: 2, workspace: 1 });
+      await handle.tick();
+      // Every poll tells the plane which bundle fields this build can parse, so
+      // a gated field reaches a host that upgraded in place. `host.json`'s
+      // `wrapper_version` cannot answer that: `enroll` writes it once.
+      expect(plane.reported.at(-1)).toMatchObject({
+        bundle_features: [...TACHO_BUNDLE_FEATURES],
+      });
+      expect(handle.host().bundle.version).toBe(4);
+      expect(handle.host().deny_generation).toEqual({ org: 2, workspace: 1 });
+      expect(readHostFile(paths.hostFile)?.bundle.etag).toBe("etag-4");
+      // A bundle from the wrong key is refused.
+      const rogue = bundleSigner().sign(
+        unsignedBundle({ version: 9, etag: "etag-9" }),
+      );
+      plane.setBundle(rogue);
+      expect(await handle.refreshBundle()).toBe(false);
+      expect(handle.host().bundle.version).toBe(4);
+      expect(log.some((l) => l.includes("does not verify"))).toBe(true);
+      // A refused batch bisects to the offending event and quarantines it.
+      const start = fixtures()[0] as Fixture;
+      await runTachoHook({
+        paths,
+        env: start.env,
+        stdin: JSON.stringify(start.stdin),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      plane.refuseNextIngest(400);
+      await handle.tick();
+      await handle.tick();
+      expect(
+        readdirSync(paths.quarantine).length + plane.ingested.length,
+      ).toBeGreaterThan(0);
+      // An outage backs off and reports unreachable; recovery ships the backlog.
+      plane.setDown(true);
+      const prompt = fixtures()[2] as Fixture;
+      await runTachoHook({
+        paths,
+        env: prompt.env,
+        stdin: JSON.stringify(prompt.stdin),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      await handle.tick();
+      expect(handle.shipper.reachable).toBe(false);
+      expect(handle.shipper.lastError).toContain("unreachable");
+      plane.setDown(false);
+      expect(handle.shipper.ready()).toBe(false);
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
 
   it.each([
     ["content_exact", ["model_call"], 1],
@@ -935,180 +1011,46 @@ describe("tachod", () => {
         walBodyTexts(paths.wal).filter((t) => t === "deploy the fix"),
       ).toHaveLength(expected);
     },
+    DAEMON_TEST_TIMEOUT_MS,
   );
 
-  it("does not take a freshness window from a future-dated host file", async () => {
-    // `bundle_fetched_at` is unsigned and sits in a file on the operator's
-    // machine, while the signature covers the bundle alone, so nothing reads
-    // it for freshness. Clamping it to startup was not enough: a restart is
-    // free, so dating the field forward and restarting would take a fresh
-    // window every time and keep an expired grant in force for ever. Both
-    // readers fall back to the bundle's signed `issued_at` instead, so the
-    // mandate here has outlived its own signed window and is lapsed however
-    // the file is dated.
-    const plane = fakeControlPlane("etag-fresh");
-    const paths = scratchPaths();
-    const signer = bundleSigner();
-    const bundle = signer.sign(
-      unsignedBundle({
-        retention: { mode: "content_exact", classes: ["model_call"] },
-      }),
-    );
-    const window = Date.parse(bundle.expires_at) - Date.parse(bundle.issued_at);
-    // Start the clock past the bundle's own signed window, which is the
-    // state a restart-loop tries to paper over.
-    const clock = Date.parse(bundle.issued_at) + window + 1;
-    writeHostFile(
-      paths.hostFile,
-      testHostFile(signer, bundle, {
-        // A century out, so no elapsed time could ever overtake it.
-        bundle_fetched_at: "2126-09-10T00:00:00.000Z",
-      }),
-    );
-    const { handle } = await boot(plane, paths, { now: () => clock });
-    const result = await runTachoHook({
-      paths,
-      env: {},
-      stdin: JSON.stringify({
-        session_id: "11111111-1111-4111-8111-11111111cccc",
-        hook_event_name: "UserPromptSubmit",
-        cwd: "/home/dev/proj",
-        transcript_path: "/t.jsonl",
-        prompt: "deploy the fix",
-      }),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    expect(result.exitCode).toBe(0);
-    await handle.stop();
-
-    expect(plane.ingestedBodies).toEqual([]);
-    expect(walBodyTexts(paths.wal)).toEqual([]);
-  });
-
-  it("does not renew the mandate on a bundle that fails to verify", async () => {
-    // A response carrying a changed bundle is a confirmation only once that
-    // bundle verifies. Renewing first would let a control plane extend the
-    // very mandate its response was sent to replace, and keep extending it
-    // for as long as it kept answering that way.
-    const plane = fakeControlPlane("etag-old");
-    const paths = scratchPaths();
-    const signer = bundleSigner();
-    const bundle = signer.sign(
-      unsignedBundle({
-        retention: { mode: "content_exact", classes: ["model_call"] },
-      }),
-    );
-    const window = Date.parse(bundle.expires_at) - Date.parse(bundle.issued_at);
-    let clock = Date.parse("2026-09-11T00:00:00.000Z");
-    writeHostFile(paths.hostFile, testHostFile(signer, bundle));
-    const { handle } = await boot(plane, paths, { now: () => clock });
-
-    // A changed bundle carrying someone else's signature.
-    plane.setBundle({
-      ...signer.sign(unsignedBundle({ version: 99 })),
-      retention: {
-        mode: "content_exact",
-        classes: ["model_call", "tool_call"],
-      },
-    });
-    // Just inside the window, where a renewal would still have something to
-    // extend, then just outside the original one.
-    clock += window - 1;
-    await handle.refreshBundle();
-    clock += 2;
-
-    const result = await runTachoHook({
-      paths,
-      env: {},
-      stdin: JSON.stringify({
-        session_id: "11111111-1111-4111-8111-11111111dddd",
-        hook_event_name: "UserPromptSubmit",
-        cwd: "/home/dev/proj",
-        transcript_path: "/t.jsonl",
-        prompt: "deploy the fix",
-      }),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    expect(result.exitCode).toBe(0);
-    await handle.stop();
-
-    expect(plane.ingestedBodies).toEqual([]);
-    expect(walBodyTexts(paths.wal)).toEqual([]);
-  });
-
-  it("retains nothing when the cached mandate does not verify", async () => {
-    // `host.json` is a file on the operator's machine. Without checking the
-    // signature, editing `digest_only` to `content_exact` in it would send
-    // prompt bodies until the first refresh replaced the bundle, which is
-    // the one thing signing the mandate is there to prevent.
-    const plane = fakeControlPlane("etag-3");
-    const paths = scratchPaths();
-    const signer = bundleSigner();
-    const signed = signer.sign(
-      unsignedBundle({ retention: { mode: "content_exact", classes: [] } }),
-    );
-    // A bundle that claims the broadest retention, with the signature of one
-    // that claimed none.
-    const tampered = {
-      ...signed,
-      retention: { mode: "content_exact" as const, classes: ["model_call"] },
-    };
-    writeHostFile(paths.hostFile, testHostFile(signer, tampered));
-    const { handle } = await boot(plane, paths);
-
-    const result = await runTachoHook({
-      paths,
-      env: {},
-      stdin: JSON.stringify({
-        session_id: "11111111-1111-4111-8111-11111111bbbb",
-        hook_event_name: "UserPromptSubmit",
-        cwd: "/home/dev/proj",
-        transcript_path: "/t.jsonl",
-        prompt: "deploy the fix",
-      }),
-      connectTimeoutMs: DAEMON_CONNECT_MS,
-    });
-    expect(result.exitCode).toBe(0);
-    await handle.stop();
-
-    expect(plane.ingestedBodies).toEqual([]);
-    expect(walBodyTexts(paths.wal)).toEqual([]);
-  });
-
-  it("writes no body once a signed mandate has lapsed, refreshing before it drains", async () => {
-    // The regression this guards: a correctly signed bundle kept granting
-    // `content_exact` after its window closed, and the tick drained before
-    // it refreshed, so a body could leave the machine under a mandate the
-    // control plane had not confirmed. The tick now refreshes first, and a
-    // lapsed mandate authorises nothing further to be written.
-    //
-    // What this does not cover, because main's design has no place to put
-    // it: a body already in the WAL when the mandate lapses still ships on
-    // the next drain. Bodies live beside their events there and leave with
-    // the session file at compaction, so purging them mid-session would be
-    // a new `Wal` affordance rather than a smaller one.
-    //
-    // The fixture's signed window runs 2026-09-10 to 2027-09-10. The clock
-    // starts on real time because the tick's hourly compaction reads file
-    // mtimes, and a fake clock months ahead would sweep the session first.
-    const plane = fakeControlPlane("etag-3");
-    const paths = scratchPaths();
-    const signer = bundleSigner();
-    const bundle = signer.sign(
-      unsignedBundle({
-        retention: { mode: "content_exact", classes: ["model_call"] },
-      }),
-    );
-    writeHostFile(paths.hostFile, testHostFile(signer, bundle));
-    plane.setDown(true);
-    let clock = Date.now();
-    const { handle } = await boot(plane, paths, { now: () => clock });
-    const prompt = (sessionId: string) =>
-      runTachoHook({
+  it(
+    "does not take a freshness window from a future-dated host file",
+    async () => {
+      // `bundle_fetched_at` is unsigned and sits in a file on the operator's
+      // machine, while the signature covers the bundle alone, so nothing reads
+      // it for freshness. Clamping it to startup was not enough: a restart is
+      // free, so dating the field forward and restarting would take a fresh
+      // window every time and keep an expired grant in force for ever. Both
+      // readers fall back to the bundle's signed `issued_at` instead, so the
+      // mandate here has outlived its own signed window and is lapsed however
+      // the file is dated.
+      const plane = fakeControlPlane("etag-fresh");
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      const bundle = signer.sign(
+        unsignedBundle({
+          retention: { mode: "content_exact", classes: ["model_call"] },
+        }),
+      );
+      const window =
+        Date.parse(bundle.expires_at) - Date.parse(bundle.issued_at);
+      // Start the clock past the bundle's own signed window, which is the
+      // state a restart-loop tries to paper over.
+      const clock = Date.parse(bundle.issued_at) + window + 1;
+      writeHostFile(
+        paths.hostFile,
+        testHostFile(signer, bundle, {
+          // A century out, so no elapsed time could ever overtake it.
+          bundle_fetched_at: "2126-09-10T00:00:00.000Z",
+        }),
+      );
+      const { handle } = await boot(plane, paths, { now: () => clock });
+      const result = await runTachoHook({
         paths,
         env: {},
         stdin: JSON.stringify({
-          session_id: sessionId,
+          session_id: "11111111-1111-4111-8111-11111111cccc",
           hook_event_name: "UserPromptSubmit",
           cwd: "/home/dev/proj",
           transcript_path: "/t.jsonl",
@@ -1116,22 +1058,175 @@ describe("tachod", () => {
         }),
         connectTimeoutMs: DAEMON_CONNECT_MS,
       });
+      expect(result.exitCode).toBe(0);
+      await handle.stop();
 
-    expect(
-      (await prompt("11111111-1111-4111-8111-11111111cccc")).exitCode,
-    ).toBe(0);
-    await handle.tick();
-    expect(walBodyTexts(paths.wal)).toEqual(["deploy the fix"]);
+      expect(plane.ingestedBodies).toEqual([]);
+      expect(walBodyTexts(paths.wal)).toEqual([]);
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
 
-    // Past the signed window, with no confirmation from the control plane
-    // in between: the mandate has lapsed and authorises nothing.
-    clock = Date.parse("2027-10-01T00:00:00.000Z");
-    await prompt("11111111-1111-4111-8111-11111111dddd");
-    await handle.tick();
-    expect(walBodyTexts(paths.wal)).toEqual(["deploy the fix"]);
+  it(
+    "does not renew the mandate on a bundle that fails to verify",
+    async () => {
+      // A response carrying a changed bundle is a confirmation only once that
+      // bundle verifies. Renewing first would let a control plane extend the
+      // very mandate its response was sent to replace, and keep extending it
+      // for as long as it kept answering that way.
+      const plane = fakeControlPlane("etag-old");
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      const bundle = signer.sign(
+        unsignedBundle({
+          retention: { mode: "content_exact", classes: ["model_call"] },
+        }),
+      );
+      const window =
+        Date.parse(bundle.expires_at) - Date.parse(bundle.issued_at);
+      let clock = Date.parse("2026-09-11T00:00:00.000Z");
+      writeHostFile(paths.hostFile, testHostFile(signer, bundle));
+      const { handle } = await boot(plane, paths, { now: () => clock });
 
-    await handle.stop();
-  });
+      // A changed bundle carrying someone else's signature.
+      plane.setBundle({
+        ...signer.sign(unsignedBundle({ version: 99 })),
+        retention: {
+          mode: "content_exact",
+          classes: ["model_call", "tool_call"],
+        },
+      });
+      // Just inside the window, where a renewal would still have something to
+      // extend, then just outside the original one.
+      clock += window - 1;
+      await handle.refreshBundle();
+      clock += 2;
+
+      const result = await runTachoHook({
+        paths,
+        env: {},
+        stdin: JSON.stringify({
+          session_id: "11111111-1111-4111-8111-11111111dddd",
+          hook_event_name: "UserPromptSubmit",
+          cwd: "/home/dev/proj",
+          transcript_path: "/t.jsonl",
+          prompt: "deploy the fix",
+        }),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      expect(result.exitCode).toBe(0);
+      await handle.stop();
+
+      expect(plane.ingestedBodies).toEqual([]);
+      expect(walBodyTexts(paths.wal)).toEqual([]);
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "retains nothing when the cached mandate does not verify",
+    async () => {
+      // `host.json` is a file on the operator's machine. Without checking the
+      // signature, editing `digest_only` to `content_exact` in it would send
+      // prompt bodies until the first refresh replaced the bundle, which is
+      // the one thing signing the mandate is there to prevent.
+      const plane = fakeControlPlane("etag-3");
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      const signed = signer.sign(
+        unsignedBundle({ retention: { mode: "content_exact", classes: [] } }),
+      );
+      // A bundle that claims the broadest retention, with the signature of one
+      // that claimed none.
+      const tampered = {
+        ...signed,
+        retention: { mode: "content_exact" as const, classes: ["model_call"] },
+      };
+      writeHostFile(paths.hostFile, testHostFile(signer, tampered));
+      const { handle } = await boot(plane, paths);
+
+      const result = await runTachoHook({
+        paths,
+        env: {},
+        stdin: JSON.stringify({
+          session_id: "11111111-1111-4111-8111-11111111bbbb",
+          hook_event_name: "UserPromptSubmit",
+          cwd: "/home/dev/proj",
+          transcript_path: "/t.jsonl",
+          prompt: "deploy the fix",
+        }),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      expect(result.exitCode).toBe(0);
+      await handle.stop();
+
+      expect(plane.ingestedBodies).toEqual([]);
+      expect(walBodyTexts(paths.wal)).toEqual([]);
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "writes no body once a signed mandate has lapsed, refreshing before it drains",
+    async () => {
+      // The regression this guards: a correctly signed bundle kept granting
+      // `content_exact` after its window closed, and the tick drained before
+      // it refreshed, so a body could leave the machine under a mandate the
+      // control plane had not confirmed. The tick now refreshes first, and a
+      // lapsed mandate authorises nothing further to be written.
+      //
+      // What this does not cover, because main's design has no place to put
+      // it: a body already in the WAL when the mandate lapses still ships on
+      // the next drain. Bodies live beside their events there and leave with
+      // the session file at compaction, so purging them mid-session would be
+      // a new `Wal` affordance rather than a smaller one.
+      //
+      // The fixture's signed window runs 2026-09-10 to 2027-09-10. The clock
+      // starts on real time because the tick's hourly compaction reads file
+      // mtimes, and a fake clock months ahead would sweep the session first.
+      const plane = fakeControlPlane("etag-3");
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      const bundle = signer.sign(
+        unsignedBundle({
+          retention: { mode: "content_exact", classes: ["model_call"] },
+        }),
+      );
+      writeHostFile(paths.hostFile, testHostFile(signer, bundle));
+      plane.setDown(true);
+      let clock = Date.now();
+      const { handle } = await boot(plane, paths, { now: () => clock });
+      const prompt = (sessionId: string) =>
+        runTachoHook({
+          paths,
+          env: {},
+          stdin: JSON.stringify({
+            session_id: sessionId,
+            hook_event_name: "UserPromptSubmit",
+            cwd: "/home/dev/proj",
+            transcript_path: "/t.jsonl",
+            prompt: "deploy the fix",
+          }),
+          connectTimeoutMs: DAEMON_CONNECT_MS,
+        });
+
+      expect(
+        (await prompt("11111111-1111-4111-8111-11111111cccc")).exitCode,
+      ).toBe(0);
+      await handle.tick();
+      expect(walBodyTexts(paths.wal)).toEqual(["deploy the fix"]);
+
+      // Past the signed window, with no confirmation from the control plane
+      // in between: the mandate has lapsed and authorises nothing.
+      clock = Date.parse("2027-10-01T00:00:00.000Z");
+      await prompt("11111111-1111-4111-8111-11111111dddd");
+      await handle.tick();
+      expect(walBodyTexts(paths.wal)).toEqual(["deploy the fix"]);
+
+      await handle.stop();
+    },
+    DAEMON_TEST_TIMEOUT_MS,
+  );
 
   it("backs off the command poll instead of retrying it every tick", async () => {
     // The regression this guards: `sendAcks` had no gate of its own. Its only

@@ -49,6 +49,7 @@ import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import pino from "pino";
+import type { WorkspaceInstructionsFrame } from "./workspace-instructions";
 import type {
   TurnLedger,
   TurnLedgerModelCall,
@@ -190,6 +191,9 @@ export type AssistantRunReceipt =
   | ({ kind: "model" } & TurnLedgerModelCall)
   | ({ kind: "tool" } & TurnLedgerToolCall);
 
+/** Where the checked instructions came from, as the frame's payload names it. */
+export const WORKSPACE_INSTRUCTIONS_PROVIDER = "workspace_prompt_config";
+
 /** A recorded assistant run: the ledger hook the turn writes through, plus its ids. */
 export interface AssistantRunRecorder extends TurnLedger {
   readonly runId: string;
@@ -207,6 +211,12 @@ export interface AssistantRunRecorder extends TurnLedger {
    * asked. Read once, after the turn, to build the execution's steps.
    */
   readonly receipts: readonly AssistantRunReceipt[];
+  /**
+   * The workspace instructions this turn's prompt carried, or the ones it
+   * refused (#3303). Written before the engine is asked anything, so the
+   * record states what the model was told even when the turn then fails.
+   */
+  workspaceInstructions(frame: WorkspaceInstructionsFrame): Promise<void>;
 }
 
 /** What admission resolved about who acts and under which retention policy. */
@@ -746,6 +756,29 @@ class Recorder implements AssistantRunRecorder {
     // going so the seal can still be attempted with what was recorded.
     this.chain = write.catch(() => undefined);
     return write;
+  }
+
+  /**
+   * The workspace's standing instructions as a context frame: the digest of
+   * the exact text, its length against the budget it was checked under, and
+   * whether the prompt carried it. The text itself is the frame's body, so a
+   * reader of the run can see what the workspace told the agent without the
+   * payload carrying content.
+   */
+  workspaceInstructions(frame: WorkspaceInstructionsFrame): Promise<void> {
+    const eventType = "context.instructions_applied";
+    return this.append({
+      eventType,
+      payload: {
+        provider: WORKSPACE_INSTRUCTIONS_PROVIDER,
+        outcome: frame.outcome,
+        instructions_digest: frame.digest,
+        instructions_chars: frame.chars,
+        budget_chars: frame.budgetChars,
+        ...(frame.reasonCode ? { reason_code: frame.reasonCode } : {}),
+      },
+      body: jsonBody(eventType, frame.text),
+    });
   }
 
   /**

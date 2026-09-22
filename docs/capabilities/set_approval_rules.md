@@ -86,4 +86,6 @@ or switching on reruns the authoring checks and clears it. The security event
 
 Auto-approval is unavailable for external MCP tools because they have no trusted cost or consequence measures. Saving an auto-approval rule for one returns `external_auto_approval_unsupported`.
 
-Use the workspace decision-rules document for `deny` or `require_approval` rules instead. These match `mcp.<serverId>.<tool>` and `file-mcp.<serverName>.<tool>`, including server-prefix patterns such as `mcp.<serverId>.*`. Human approval applies to one exact call. A changed input or rule document requires a new decision. External calls by an agent principal remain refused until their mandate measures can be established. See ADR-122.
+Use the workspace decision-rules document for `deny` or `require_approval` rules instead. These match `mcp.<serverId>.<tool>` and `file-mcp.<serverName>.<tool>`, including server-prefix patterns such as `mcp.<serverId>.*`. An external identity is matched without regard to case, because the registry folds the case of the same name when it derives a tool's slug, so a rule in either spelling governs the call (ADR-138). Human approval applies to one exact call. A changed input or rule document requires a new decision. External calls by an agent principal remain refused until their mandate measures can be established. See ADR-122.
+
+An auto-approval rule's tool pattern is matched against the registry slug, which is already lower case, so a pattern written in the server's own spelling is refused as `no_tool_matches` rather than folded.

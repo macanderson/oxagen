@@ -1704,6 +1704,46 @@ describe("ingest_tacho_events", () => {
     expect(mocks.sendEvent).not.toHaveBeenCalled();
   });
 
+  it("refuses the batch as backpressure when the store is out of memory (#3662)", async () => {
+    const db = fakeDb();
+    wire(db);
+    // The refusal from the 2026-09-21 production logs, in the shape the
+    // ClickHouse client parses one into. Before this, it left the route as a
+    // bare 500, which the host reads as a server fault and retries into
+    // immediately instead of waiting for the read holding the memory to end.
+    // (`storeOverloadedFrom` is proven against the client's own parser in
+    // packages/telemetry/src/clickhouse.test.ts.)
+    mocks.insertTachoEvents.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          "Memory limit (total) exceeded: would use 1.66 GiB (attempt to " +
+            "allocate chunk of 4363399 bytes), maximum: 1.50 GiB. " +
+            "OvercommitTracker decision: Query was selected to stop by " +
+            "OvercommitTracker.",
+        ),
+        { code: "241", type: "MEMORY_LIMIT_EXCEEDED" },
+      ),
+    );
+    const refusal = await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events: session(),
+      },
+      CONTEXT,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect((refusal as { code?: string }).code).toBe("store_overloaded");
+    expect(
+      (refusal as { retryAfterSeconds?: number }).retryAfterSeconds,
+    ).toBeGreaterThan(0);
+    // The refusal is a condition to wait out, not a fault to page on.
+    expect(mocks.loggerError).not.toHaveBeenCalled();
+    expect(mocks.sendEvent).not.toHaveBeenCalled();
+  });
+
   it("folds every counted kind into the session delta", () => {
     const delta = {
       numTurns: 0,
@@ -2424,6 +2464,35 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     });
     expect(refOf(1, 1)).toBe(firstRef);
     expect(mocks.bodyPut).toHaveBeenCalledOnce();
+  });
+
+  it("refuses as backpressure when the store is out of memory for the re-send's read (#3662)", async () => {
+    const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+    wire(db);
+    const events = sessionWithContent();
+    await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    // The read that resolves a re-sent frame's stored body reaches the same
+    // node the append does, and only a re-send sends it, so it sits on the
+    // retry path of the very failure this refusal exists for.
+    mocks.selectTachoEvents.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          "Memory limit (total) exceeded: would use 1.66 GiB, maximum: 1.50 GiB.",
+        ),
+        { code: "241", type: "MEMORY_LIMIT_EXCEEDED" },
+      ),
+    );
+    const refusal = await tachoEventsIngestHandler(batch(events), CONTEXT).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect((refusal as { code?: string }).code).toBe("store_overloaded");
+    // The append never ran, so the second batch is still the host's to ship.
+    expect(mocks.insertTachoEvents).toHaveBeenCalledOnce();
   });
 
   it("carries no stored reference onto a re-sent row with another content digest (negative)", async () => {

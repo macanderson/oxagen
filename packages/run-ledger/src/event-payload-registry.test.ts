@@ -297,6 +297,45 @@ describe("validateInlineEventPayload", () => {
     ).toThrow(RunSpecValidationError);
   });
 
+  // #3303: standing instructions a producer applied to a turn's prompt. The
+  // digest is the identity of the exact text; the text itself is the frame's
+  // body, so the payload stays a receipt.
+  it("accepts an instructions receipt, applied or refused", () => {
+    const applied = validateInlineEventPayload("context.instructions_applied", {
+      provider: "workspace_prompt_config",
+      outcome: "applied",
+      instructions_digest: DIGEST_A,
+      instructions_chars: 46,
+      budget_chars: 8000,
+    });
+    expect(applied.stage).toBe("context");
+    expect(retentionContentClassOf("context.instructions_applied")).toBe(
+      "context_selection",
+    );
+    const refused = validateInlineEventPayload("context.instructions_applied", {
+      provider: "workspace_prompt_config",
+      outcome: "refused",
+      instructions_digest: DIGEST_B,
+      instructions_chars: 8001,
+      budget_chars: 8000,
+      reason_code: "over_budget",
+    });
+    expect(refused.eventType).toBe("context.instructions_applied");
+  });
+
+  it("rejects an instructions receipt that carries the text rather than its digest", () => {
+    expect(() =>
+      validateInlineEventPayload("context.instructions_applied", {
+        provider: "workspace_prompt_config",
+        outcome: "applied",
+        instructions_digest: DIGEST_A,
+        instructions_chars: 46,
+        budget_chars: 8000,
+        text: "Answer in British English.",
+      }),
+    ).toThrow(ForbiddenEventPayloadFieldError);
+  });
+
   it("accepts the in-app agent's engine receipts, keyed by the engine frame seq", () => {
     const model = validateInlineEventPayload("model.engine_call_completed", {
       engine_seq: 7,

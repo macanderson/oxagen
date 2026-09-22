@@ -130,6 +130,86 @@ describe("audit partition maintenance", () => {
     ).rejects.toBe(rollback);
   });
 
+  it("isolates a month it cannot prepare and finishes the rest of maintenance", async () => {
+    const org = randomUUID();
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
+        const children = await tx`
+          SELECT c.oid::regclass::text AS name FROM pg_catalog.pg_inherits i
+          JOIN pg_catalog.pg_class c ON c.oid = i.inhrelid
+          WHERE i.inhparent = 'security.security_events'::regclass
+            AND pg_get_expr(c.relpartbound, c.oid) <> 'DEFAULT'
+        `;
+        for (const child of children) {
+          await tx.unsafe(
+            `ALTER TABLE security.security_events DETACH PARTITION ${child.name}`,
+          );
+          await tx.unsafe(
+            `ALTER TABLE ${child.name} RENAME TO audit_fixture_${randomUUID().replaceAll("-", "")}`,
+          );
+        }
+        await tx`INSERT INTO security.security_events(org_id, occurred_at, event_type, outcome) VALUES
+          (${org}, CURRENT_TIMESTAMP, 'capability.invoke_allowed', 'allow'),
+          (${org}, CURRENT_TIMESTAMP, 'capability.invoke_allowed', 'allow'),
+          (${org}, ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - interval '7 years 1 day') AT TIME ZONE 'UTC', 'capability.invoke_allowed', 'allow')`;
+        const [calendar] = await tx`
+          SELECT 'security_events_' || to_char(date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC'), 'YYYY_MM') AS current_child,
+            'security_events_' || to_char(date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - interval '8 years', 'YYYY_MM') AS expired_child,
+            ((date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - interval '8 years') AT TIME ZONE 'UTC')::text AS expired_lower,
+            ((date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - interval '8 years' + interval '1 month') AT TIME ZONE 'UTC')::text AS expired_upper
+        `;
+        await tx.unsafe(
+          `CREATE TABLE security.${calendar!.expired_child} PARTITION OF security.security_events FOR VALUES FROM ('${calendar!.expired_lower}') TO ('${calendar!.expired_upper}')`,
+        );
+        // A stray relation holds the current month's partition name. Before this
+        // fix it raised out of the whole function and nothing else ran.
+        await tx.unsafe(
+          `CREATE TABLE security.${calendar!.current_child} (id integer)`,
+        );
+        // Every row the blocked month would have moved, this fixture's and any
+        // the shared database already held.
+        const [pending] = await tx`
+          SELECT count(*)::int AS rows FROM security.security_events
+          WHERE occurred_at >= (date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC')) AT TIME ZONE 'UTC'
+            AND occurred_at < (date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + interval '1 month') AT TIME ZONE 'UTC'
+        `;
+        expect(pending?.rows).toBeGreaterThanOrEqual(2);
+        await tx`SET LOCAL ROLE oxagen_app`;
+        const [maintenance] =
+          await tx`SELECT security.maintain_audit_partitions() AS result`;
+        expect(maintenance?.result.hasSkippedPartitions).toBe(true);
+        expect(maintenance?.result.skipped).toEqual([
+          {
+            partition: calendar!.current_child,
+            phase: "create",
+            sqlstate: "P0001",
+            reason: `Audit partition name ${calendar!.current_child} belongs to a different table`,
+            pendingRows: pending!.rows,
+          },
+        ]);
+        // The other two months, retention, and the DEFAULT drain still ran.
+        expect(maintenance?.result.created).toHaveLength(2);
+        expect(maintenance?.result.created).not.toContain(
+          calendar!.current_child,
+        );
+        expect(maintenance?.result.dropped).toContain(calendar!.expired_child);
+        expect(maintenance?.result.expiredDefaultRows).toBeGreaterThanOrEqual(
+          1,
+        );
+        // The blocked month's rows stay readable in DEFAULT rather than vanishing.
+        const rows = await tx`
+          SELECT tableoid::regclass::text AS partition
+          FROM security.security_events WHERE org_id = ${org}
+        `;
+        expect(rows).toHaveLength(2);
+        for (const row of rows)
+          expect(row.partition).toBe("security.security_events_default");
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+  });
+
   it("preserves current DEFAULT rows, expires calendar-old rows, and holds the cross-process lock", async () => {
     const org = randomUUID();
     const currentId = randomUUID();

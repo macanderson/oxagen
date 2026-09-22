@@ -84,7 +84,7 @@ import { ZodError, z } from "zod";
  */
 async function triggerError(
   err: unknown,
-): Promise<{ status: number; body: unknown }> {
+): Promise<{ status: number; body: unknown; headers: Headers }> {
   // Build a minimal Hono app with just error middleware for isolation
   const { Hono } = await import("hono");
   const { errorMiddleware } = await import("../middleware/error");
@@ -97,7 +97,7 @@ async function triggerError(
 
   const res = await testApp.fetch(makeRequest("/boom"));
   const body: unknown = await res.json();
-  return { status: res.status, body };
+  return { status: res.status, body, headers: res.headers };
 }
 
 // ── errorCode() via HTTPException status codes ────────────────────────────────
@@ -318,6 +318,51 @@ describe("errorMiddleware unknown error", () => {
     const { body } = await triggerError(new Error("boom"));
     expect(typeof (body as { requestId: string }).requestId).toBe("string");
     expect((body as { requestId: string }).requestId.length).toBeGreaterThan(0);
+  });
+});
+
+// ── Store backpressure → 503 + Retry-After (#3662) ───────────────────────────
+
+describe("errorMiddleware store backpressure", () => {
+  /** What @oxagen/telemetry's StoreOverloadedError puts on the wire. */
+  function overloaded(retryAfterSeconds: number): Error {
+    return Object.assign(
+      new Error(
+        `The telemetry store cannot take this request now: it is over its memory limit. Retry after ${String(retryAfterSeconds)} seconds.`,
+      ),
+      { code: "store_overloaded" as const, retryAfterSeconds },
+    );
+  }
+
+  it("answers 503 with the store's own code, never a 500", async () => {
+    const { status, body } = await triggerError(overloaded(30));
+    expect(status).toBe(503);
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "store_overloaded",
+    );
+  });
+
+  it("tells the caller when to come back, in the header and the body", async () => {
+    const { body, headers } = await triggerError(overloaded(30));
+    expect(headers.get("Retry-After")).toBe("30");
+    expect(
+      (body as { error: { retryAfterSeconds: number } }).error
+        .retryAfterSeconds,
+    ).toBe(30);
+  });
+
+  it("never asks for an immediate retry", async () => {
+    // A sub-second wait rounds to a whole second rather than to zero: a
+    // `Retry-After: 0` invites the retry storm this answer exists to prevent.
+    const { headers } = await triggerError(overloaded(0.2));
+    expect(headers.get("Retry-After")).toBe("1");
+  });
+
+  it("keeps an error that only looks like one on the 500 path", async () => {
+    const { status } = await triggerError(
+      Object.assign(new Error("not a refusal"), { code: "store_overloaded" }),
+    );
+    expect(status).toBe(500);
   });
 });
 

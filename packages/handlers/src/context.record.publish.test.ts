@@ -374,6 +374,124 @@ describe("context.record.publish handler", () => {
     });
   });
 
+  // #3511: the latest-version read and the version insert are two separate
+  // transactions, so two publishes of the same correction both read version N
+  // and both insert version N+1. The loser hit
+  // `context_record_versions_record_version_idx` (or the partial
+  // `record_latest_idx`) and Postgres 23505 reached the caller as an
+  // unhandled error, on a request that had asked for a change another request
+  // had just made.
+  describe("two matching publish requests at once", () => {
+    const CONFLICT = { code: "23505" };
+
+    it("reports the change as already published rather than a database error", async () => {
+      queueSelects(
+        [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+        // First read: the record still carries the wrong classification, so
+        // this call takes the publish path.
+        [{ ...LATEST_MATCHING, versionNumber: 2, kind: "memory" }],
+        // Second read, after the winner committed: the latest version now
+        // carries exactly what this call was asking for.
+        [{ ...LATEST_MATCHING, versionNumber: 3 }],
+      );
+      mocks.insertReturning.push(() => Promise.reject(CONFLICT));
+
+      const out = await contextRecordPublishHandler(INPUT, CTX);
+
+      expect(out).toEqual({
+        publicId: "ctr_1",
+        recordId: "no-bare-unwrap",
+        version: 3,
+        checksum: BODY_CHECKSUM,
+        published: false,
+      });
+    });
+
+    it("publishes onto the winner's version when the two requests differ", async () => {
+      queueSelects(
+        [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+        [{ ...LATEST_MATCHING, versionNumber: 2, kind: "memory" }],
+        // The winner published a different statement, so this call's
+        // correction is still outstanding and lands as version 4.
+        [
+          {
+            ...LATEST_MATCHING,
+            versionNumber: 3,
+            id: "v3-uuid",
+            statement: "Something else entirely.",
+          },
+        ],
+      );
+      mocks.insertReturning.push(
+        () => Promise.reject(CONFLICT),
+        () => Promise.resolve([{ id: "v4-uuid" }]),
+      );
+
+      const out = await contextRecordPublishHandler(INPUT, CTX);
+
+      expect(out).toMatchObject({ version: 4, published: true });
+      expect(mocks.insertedValues.at(-1)).toMatchObject({
+        versionNumber: 4,
+        parentVersionId: "v3-uuid",
+        statement: INPUT.statement,
+      });
+    });
+
+    // The retry re-enters the same closure, so the ROW EXCLUSIVE lock and the
+    // `hasColumnFresh` probe it guards run again inside the new transaction.
+    // A retry that reused the first attempt's answer would be separable from
+    // the migration's ALTER TABLE, which is the window those two lines close.
+    it("re-probes the classification columns on the retry", async () => {
+      mocks.classificationColumns = false;
+      queueSelects(
+        [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+        [{ id: "v1-uuid", versionNumber: 2, checksum: BODY_CHECKSUM }],
+        [{ id: "v2-uuid", versionNumber: 3, checksum: "0".repeat(64) }],
+      );
+      mocks.insertReturning.push(
+        () => Promise.reject(CONFLICT),
+        () => Promise.resolve([{ id: "v4-uuid" }]),
+      );
+
+      const out = await contextRecordPublishHandler(INPUT, CTX);
+
+      expect(out).toMatchObject({ version: 4, published: true });
+      expect(mocks.insertedValues).toHaveLength(2);
+      for (const values of mocks.insertedValues) {
+        expect(values).not.toHaveProperty("kind");
+        expect(values).not.toHaveProperty("force");
+      }
+      // The record row's columns predate the migration, so they are written
+      // on the attempt that lands.
+      expect(mocks.updateSets.at(-1)).toMatchObject({
+        activeVersionId: "v4-uuid",
+        kind: "rule",
+        force: "must",
+      });
+    });
+
+    it("gives up with a conflict rather than leaking the unique violation", async () => {
+      queueSelects([
+        { id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" },
+      ]);
+      // Every read answers with a version this call still has to correct, and
+      // every insert loses: sustained contention, not a race that settles.
+      for (let i = 0; i < 8; i++) {
+        mocks.selectResults.push(() =>
+          Promise.resolve([{ ...LATEST_MATCHING, kind: "memory" }]),
+        );
+        mocks.insertReturning.push(() => Promise.reject(CONFLICT));
+      }
+
+      await expect(contextRecordPublishHandler(INPUT, CTX)).rejects.toSatisfy(
+        (e: unknown) =>
+          isHandlerError(e) &&
+          e.code === "conflict" &&
+          e.reason === "concurrent_publish",
+      );
+    });
+  });
+
   it("requires a constraint effect on a constraint kind and rejects one on any other kind", async () => {
     const { contextRecordPublish } = await import(
       "@oxagen/oxagen/contracts/context.record.publish"

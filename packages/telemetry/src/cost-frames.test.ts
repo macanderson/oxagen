@@ -17,6 +17,7 @@ vi.mock("./clickhouse", async (importOriginal) => {
 });
 
 import {
+  OBSERVED_TOKEN_CLASSES,
   readModelCallFrames,
   readObservedModels,
   readTachoToolCallFrames,
@@ -685,6 +686,71 @@ describe("readObservedModels", () => {
       "m.call_key = c.message_id AND m.session_uuid = c.session_uuid",
     );
     expect(classCall.query).not.toContain("root_session_uuid");
+  });
+
+  it("counts a wrapped call's provider-side searches and fetches as server_tool_request usage", async () => {
+    // #3281. `tacho_events` records the provider-side tool calls a model made
+    // (`web_search_requests`, `web_fetch_requests`) and the book prices them
+    // as `server_tool_request` at one rate per request. The class-bucket read
+    // used to report six token classes and nothing else, so this usage was
+    // observed by the recorder, stored in ClickHouse, and then dropped on the
+    // floor: a model whose search rate nobody had stated was never named by
+    // `list_unpriced_models`, and the one missing rate that made its runs
+    // incomplete was the one the report stayed silent about.
+    expect(OBSERVED_TOKEN_CLASSES).toContain("server_tool_request");
+
+    answerBoth(
+      [
+        {
+          model: "claude-sonnet-5",
+          provider: "anthropic",
+          calls: "1",
+          tokens: "1200",
+          first_seen: "2026-09-10T00:00:00.000Z",
+          last_seen: "2026-09-10T00:00:00.000Z",
+        },
+      ],
+      [
+        {
+          model: "claude-sonnet-5",
+          class: "server_tool_request",
+          bucket_index: "0",
+          calls: "1",
+          tokens: "3",
+          first_seen: "2026-09-10T00:00:00.000Z",
+          last_seen: "2026-09-10T00:00:00.000Z",
+        },
+      ],
+    );
+    const rows = await readObservedModels({ orgId: ORG, since: SINCE });
+    const classCall = queryMock.mock.calls[1]![0];
+
+    // Both columns are one class: the vendors bill a server-side search and a
+    // server-side fetch at the same per-request rate.
+    expect(classCall.query).toContain(
+      "toInt64(coalesce(c.web_search_requests, 0) + coalesce(c.web_fetch_requests, 0))",
+    );
+    expect(classCall.query).toContain(
+      "('server_tool_request', server_tool_request)",
+    );
+    // The gateway store has no such column, so its half of the union
+    // contributes zero rather than leaving the two halves mismatched.
+    expect(classCall.query).toMatch(/toInt64\(0\)\s+AS server_tool_request/);
+    expect(classCall.query).toContain("server_tool_request, ts FROM gw");
+    expect(classCall.query).toContain("server_tool_request, ts FROM tc");
+
+    // Requests are not tokens: they reach the caller as a class of their own
+    // and never inflate the ranking total the summary read produces.
+    expect(rows[0]?.tokens).toBe(1200);
+    expect(rows[0]?.classes).toEqual([
+      {
+        tokenClass: "server_tool_request",
+        calls: 1,
+        tokens: 3,
+        firstSeen: "2026-09-10T00:00:00.000Z",
+        lastSeen: "2026-09-10T00:00:00.000Z",
+      },
+    ]);
   });
 
   it("skips the class-bucket read entirely when nothing was observed", async () => {

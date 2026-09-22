@@ -190,6 +190,10 @@ describe("Skills › loaded", () => {
       ];
       read.mockResolvedValue(readOk(model));
       await renderSkills();
+      // The chips and the omitted count add up to the row's harness total, so
+      // a capped list never reads as the whole of what the sessions reported.
+      const chips = document.querySelectorAll("[data-harness]");
+      expect(chips).toHaveLength(20);
       if (count > 20) expect(screen.getByText("+3 more")).toBeVisible();
       else expect(document.querySelector("[data-harness-omitted]")).toBeNull();
     },

@@ -31,12 +31,20 @@ import type { ToolSet } from "ai";
 
 /**
  * Tool-count ceilings a provider is known to enforce, keyed by the prefix its
- * model ids carry.
+ * model ids carry and by the credential providers that reach the same API.
  *
  * Keyed by prefix rather than by exact model id because the cap belongs to the
  * API, not to a model: a new model on the same provider inherits it, and a map
  * of exact ids would silently stop covering the newest one — the model most
  * likely to be adopted before anybody re-reads this file.
+ *
+ * `providers` is the second key, and it exists because the prefix is not
+ * always there to read. An organisation on its own OpenAI key asks
+ * `api.openai.com` for `gpt-5.2`, the vendor's own spelling, with no `openai/`
+ * in front of it — the same request, to the same API, under the same ceiling,
+ * matching nothing here. The names are the model credential's providers
+ * (`ModelIdentity.provider`), so the identity that knows which key is paying
+ * is what answers the question the id cannot.
  *
  * A provider absent from this map is **not** asserted to be unlimited. It is
  * asserted to have no ceiling this codebase has confirmed, which is why an
@@ -45,16 +53,25 @@ import type { ToolSet } from "ai";
  */
 export const PROVIDER_TOOL_LIMITS: ReadonlyArray<{
   readonly prefix: string;
+  readonly providers: readonly string[];
   readonly maxTools: number;
   readonly source: string;
 }> = [
   {
     prefix: "openai/",
+    // `openai_compatible` is an endpoint speaking OpenAI's chat-completions
+    // API, so it is held to OpenAI's documented ceiling. A host that would
+    // have taken more is bounded rather than refused: the searchable belt
+    // reads this cap to decide what it may load next (`tool-belt`), so the
+    // effect of being wrong in this direction is a smaller belt, not a
+    // failed turn.
+    providers: ["openai", "openai_compatible"],
     maxTools: 128,
     source: "OpenAI function-calling limit of 128 tools per request",
   },
   {
     prefix: "azure/",
+    providers: [],
     maxTools: 128,
     source: "Azure OpenAI mirrors the OpenAI per-request tool limit",
   },
@@ -151,21 +168,41 @@ export class TooManyToolsForProviderError extends Error {
 }
 
 /**
+ * Which model this turn is for, and who serves it.
+ *
+ * A bare string is still accepted and still means the model id alone, which is
+ * every caller on the platform key: the gateway id carries its vendor. A
+ * caller holding a customer's key passes the resolved identity instead, so the
+ * ceiling is found from the provider when the id has no prefix to read
+ * (`ModelIdentity` in `@oxagen/ai`).
+ */
+export interface ToolLimitTarget {
+  /** The id the request will carry. Named in the refusal. */
+  readonly modelId: string;
+  /** The vendor or endpoint kind serving it, when something knows it. */
+  readonly provider?: string | null;
+}
+
+/**
  * Refuse a turn whose tool list the provider will not accept.
  *
  * Returns the budget so a caller that has already paid to measure the list does
  * not measure it twice.
  *
- * A model id matching no known provider passes. See `PROVIDER_TOOL_LIMITS` for
+ * A target matching no known provider passes. See `PROVIDER_TOOL_LIMITS` for
  * why silence there is deliberate rather than an oversight.
  */
 export function assertToolListFitsProvider(
-  modelId: string,
+  target: string | ToolLimitTarget,
   tools: ToolSet,
 ): ToolBudget {
+  const { modelId, provider } =
+    typeof target === "string" ? { modelId: target, provider: null } : target;
   const budget = describeToolBudget(tools);
-  const limit = PROVIDER_TOOL_LIMITS.find((entry) =>
-    modelId.startsWith(entry.prefix),
+  const limit = PROVIDER_TOOL_LIMITS.find(
+    (entry) =>
+      modelId.startsWith(entry.prefix) ||
+      (provider != null && entry.providers.includes(provider)),
   );
   if (limit !== undefined && budget.toolCount > limit.maxTools) {
     throw new TooManyToolsForProviderError(
