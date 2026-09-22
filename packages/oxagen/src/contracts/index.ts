@@ -101,6 +101,7 @@ import { spendWasteList } from "./spend.waste";
 import { skillConfigGet } from "./skill.config.get";
 import { skillConfigUpdate } from "./skill.config.update";
 import { skillSearchPreview } from "./skill.search.preview";
+import { skillSearchSummarize } from "./skill.search.summarize";
 import { skillList } from "./skill.list";
 import { skillPropose } from "./skill.propose";
 import { spendStatementExport } from "./spend.statement.export";
@@ -683,6 +684,7 @@ export {
   skillConfigGet,
   skillConfigUpdate,
   skillSearchPreview,
+  skillSearchSummarize,
   skillList,
   skillPropose,
   spendStatementExport,
@@ -1041,6 +1043,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   skillConfigGet,
   skillConfigUpdate,
   skillSearchPreview,
+  skillSearchSummarize,
   skillList,
   skillPropose,
   spendStatementExport,

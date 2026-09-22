@@ -1,10 +1,10 @@
 {
-  "name": "preview_skill_search",
+  "name": "summarize_skill_search",
   "domain": "skill",
-  "description": "Preview approved skill resolution at a published configuration version. Shows a person withheld names and reasons without loading skills into a run.",
+  "description": "Summarize approved skill resolution at a published configuration version. Returns the skills an agent may load and counts the withheld ones by reason, never their names.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "mcp"
   ],
   "sensitivity": "medium",
   "agent": null,
@@ -93,28 +93,36 @@
         }
       },
       "withheld": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "maxLength": 48
-            },
-            "reason": {
-              "type": "string",
-              "enum": [
-                "out_of_scope",
-                "unapproved_digest"
-              ]
-            }
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0
           },
-          "required": [
-            "id",
-            "reason"
-          ],
-          "additionalProperties": false
-        }
+          "reasons": {
+            "type": "object",
+            "properties": {
+              "out_of_scope": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "unapproved_digest": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "out_of_scope",
+              "unapproved_digest"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "count",
+          "reasons"
+        ],
+        "additionalProperties": false
       },
       "tokenCost": {
         "type": "integer",

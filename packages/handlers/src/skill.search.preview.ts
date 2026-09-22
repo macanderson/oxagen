@@ -16,7 +16,12 @@ import {
   type SkillRepository,
 } from "./skill-config.repository";
 import { readSkillFrontmatter } from "./skill-validation";
-import { resolveSkills } from "./skill-resolution";
+import {
+  pinnedSkillIds,
+  resolveSkills,
+  type SkillCatalog,
+  type SkillResolution,
+} from "./skill-resolution";
 import { sha256Hex } from "./registry-digest";
 
 /** Token overlap is deterministic and makes no model call during configuration inspection. */
@@ -38,11 +43,20 @@ export function rankSkillDescriptions(
       : 0;
   });
 }
+/**
+ * One tree request, then one content request per pinned skill the tree carries.
+ * A skill the configuration does not pin can only be withheld, so its bytes are
+ * never fetched: its id comes from the path and its reason from the resolver.
+ * The request count therefore follows the approved set, not the catalog, and a
+ * repository of a thousand skills under a ten-skill configuration costs eleven
+ * requests rather than a thousand and one (#3668).
+ */
 async function loadSkillCatalog(
   repository: SkillRepository,
   commitSha: string,
   source: string,
-): Promise<SkillCandidate[]> {
+  pinned: ReadonlySet<string>,
+): Promise<SkillCatalog> {
   const { github, owner, repo } = repository;
   const paths = (await github.getTree({ owner, repo, ref: commitSha })).filter(
     (path) =>
@@ -54,11 +68,18 @@ async function loadSkillCatalog(
       reason: "skill_catalog_too_large",
       message: "The repository skill catalog exceeds 1,000 files",
     });
-  const rows: SkillCandidate[] = [];
-  for (let index = 0; index < paths.length; index += 8) {
-    rows.push(
+  const unpinned: string[] = [];
+  const read: string[] = [];
+  for (const path of paths) {
+    const id = path.split("/")[2]!;
+    if (pinned.has(id)) read.push(path);
+    else unpinned.push(id);
+  }
+  const candidates: SkillCandidate[] = [];
+  for (let index = 0; index < read.length; index += 8) {
+    candidates.push(
       ...(await Promise.all(
-        paths.slice(index, index + 8).map(async (path) => {
+        read.slice(index, index + 8).map(async (path) => {
           const file = await github.getFileContent({
             owner,
             repo,
@@ -85,43 +106,70 @@ async function loadSkillCatalog(
       )),
     );
   }
-  return rows;
+  return { candidates, unpinned };
 }
 // Immutable commits need one catalog read per process. Bound the retained metadata
-// and coalesce concurrent requests; failed reads are never cached.
-const catalogCache = new Map<string, Promise<SkillCandidate[]>>();
+// and coalesce concurrent requests; failed reads are never cached. The pinned set
+// is part of the key because it decides which files the read fetched.
+const catalogCache = new Map<string, Promise<SkillCatalog>>();
 const MAX_CACHED_CATALOGS = 8;
 export async function readSkillCatalog(
   repository: SkillRepository,
   commitSha: string,
   source: string,
-): Promise<SkillCandidate[]> {
+  pinned: ReadonlySet<string>,
+): Promise<SkillCatalog> {
   const key = JSON.stringify([
     repository.bindingId,
     repository.owner,
     repository.repo,
     commitSha,
     source,
+    sha256Hex([...pinned].sort().join("\n")),
   ]);
   let promise = catalogCache.get(key);
   if (!promise) {
     while (catalogCache.size >= MAX_CACHED_CATALOGS)
       catalogCache.delete(catalogCache.keys().next().value!);
-    promise = loadSkillCatalog(repository, commitSha, source);
+    promise = loadSkillCatalog(repository, commitSha, source, pinned);
     catalogCache.set(key, promise);
     const pending = promise;
     void pending.catch(() => {
       if (catalogCache.get(key) === pending) catalogCache.delete(key);
     });
   }
-  return (await promise).map((row) => ({ ...row }));
+  const catalog = await promise;
+  return {
+    candidates: catalog.candidates.map((row) => ({ ...row })),
+    unpinned: [...catalog.unpinned],
+  };
 }
-export function createSkillSearchPreviewHandler(deps: {
+export type SkillSearchDeps = {
   store: SkillConfigStore;
   repository: typeof resolveSkillRepository;
   catalog: typeof readSkillCatalog;
-}): CapabilityHandler<typeof skillSearchPreview> {
-  return async (input, ctx) => {
+};
+
+export const skillSearchDeps: SkillSearchDeps = {
+  store: postgresSkillConfigStore,
+  repository: resolveSkillRepository,
+  catalog: readSkillCatalog,
+};
+
+/**
+ * The resolution both skill-search capabilities read: one role gate, one snapshot,
+ * one catalog read and one resolver. The capability that called it decides how much
+ * of the answer its caller may see.
+ */
+export function createSkillSearchResolver(deps: SkillSearchDeps) {
+  return async (
+    input: { version: string; query: string },
+    ctx: Parameters<CapabilityHandler<typeof skillSearchPreview>>[1],
+  ): Promise<{
+    version: string;
+    repositoryCommitSha: string;
+    resolution: SkillResolution;
+  }> => {
     await assertOrgRole(
       { ...ctx, userId: await resolveActingUserId(ctx) },
       { org: ["Owner", "Admin", "Member"], workspace: ["Owner", "Member"] },
@@ -154,26 +202,44 @@ export function createSkillSearchPreviewHandler(deps: {
         reason: "skill_production_branch_missing",
         message: "The approved production branch no longer exists",
       });
-    const candidates = await deps.catalog(
+    const source = snapshot.config.sources[0]?.id ?? "workspace";
+    const catalog = await deps.catalog(
       repository,
       head.sha,
-      snapshot.config.sources[0]?.id ?? "workspace",
+      source,
+      pinnedSkillIds(snapshot.config, source),
     );
-    const result = await resolveSkills(
+    const resolution = await resolveSkills(
       snapshot.config,
-      candidates,
+      catalog,
       async (eligible) => rankSkillDescriptions(input.query, eligible),
     );
     return {
       version: snapshot.version,
       repositoryCommitSha: head.sha,
-      ...result,
-      withheld: result.withheld.map(({ id, reason }) => ({ id, reason })),
+      resolution,
     };
   };
 }
-export const skillSearchPreviewHandler = createSkillSearchPreviewHandler({
-  store: postgresSkillConfigStore,
-  repository: resolveSkillRepository,
-  catalog: readSkillCatalog,
-});
+
+/** The person's projection: every withheld skill by name and reason. */
+export function createSkillSearchPreviewHandler(
+  deps: SkillSearchDeps,
+): CapabilityHandler<typeof skillSearchPreview> {
+  const resolve = createSkillSearchResolver(deps);
+  return async (input, ctx) => {
+    const { version, repositoryCommitSha, resolution } = await resolve(
+      input,
+      ctx,
+    );
+    return {
+      version,
+      repositoryCommitSha,
+      results: resolution.results,
+      withheld: resolution.withheld,
+      tokenCost: resolution.tokenCost,
+    };
+  };
+}
+export const skillSearchPreviewHandler =
+  createSkillSearchPreviewHandler(skillSearchDeps);
