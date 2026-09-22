@@ -20,6 +20,7 @@ export {
   type Verdict,
 } from "./types";
 export {
+  canonicalToolIdentity,
   capabilityMatches,
   evaluateCondition,
   evaluateRules,
