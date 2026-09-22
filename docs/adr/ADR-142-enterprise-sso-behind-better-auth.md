@@ -83,6 +83,13 @@ someone debugging a sign-in needs them and none of them is secret. A read
 capability returns only whether each secret is set. A write refuses to store a
 provider when the encryption key is not configured.
 
+A secret that arrives already shaped like a token (`enc:…`) is refused, by the
+contract and again by the handler. The sealer keeps a sealed value as it is and
+the sign-in path opens it, so accepting one would let an admin make the server
+decrypt a secret sealed for another organization and send it to an endpoint
+that admin controls. Binding each token to its provider with AAD is the durable
+fix, and #3740 carries it.
+
 **Rejected: encrypt the whole config column.** The plugin reads the column
 directly, so a whole-column cipher needs the same adapter wrapper and hides
 the non-secret fields an operator needs.
@@ -109,6 +116,16 @@ by a unique index. Verification is what stops an organization claiming a
 domain it does not control. It is also what the plugin treats as a trusted
 provider for linking, so a person who already has a password account links it
 on their first SSO sign-in rather than being refused.
+
+Verification alone does not stop an IdP asserting an address outside the
+domain. The plugin's just-in-time path creates a user for whatever email the
+IdP sends, and checks the domain only to decide whether linking is trusted. A
+guard on Better Auth's `user.create` and `account.create` hooks
+(`packages/auth/src/sso/domain-guard.ts`) therefore refuses both writes on
+every SSO callback unless the email is in the provider's verified domain or a
+subdomain of it. Without it, an organization running its own IdP could create
+a user row for someone else's address, and the real owner's later Google
+sign-in would link into that row.
 
 ### The mapping replaces the organization role on every sign-in
 
