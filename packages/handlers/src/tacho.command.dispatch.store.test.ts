@@ -83,9 +83,9 @@ describe("cancelLedgerRun", () => {
     });
     const { tx, inserted } = fakeTx([{ publicId: "tcm_first_cancel" }]);
 
-    await expect(
-      postgresCommandStore(tx).cancelLedgerRun(control),
-    ).resolves.toBe("tcm_first_cancel");
+    await expect(postgresCommandStore(tx).cancelLedgerRun(control)).resolves.toBe(
+      "tcm_first_cancel",
+    );
     expect(mocks.cancelRunInTransaction).not.toHaveBeenCalled();
     expect(mocks.revokeRunTokens).not.toHaveBeenCalled();
     expect(inserted).toEqual([]);
@@ -118,9 +118,9 @@ describe("cancelLedgerRun", () => {
     });
     const { tx, inserted } = fakeTx([]);
 
-    await expect(
-      postgresCommandStore(tx).cancelLedgerRun(control),
-    ).resolves.toBe("tcm_new");
+    await expect(postgresCommandStore(tx).cancelLedgerRun(control)).resolves.toBe(
+      "tcm_new",
+    );
     expect(mocks.cancelRunInTransaction).toHaveBeenCalledWith(
       tx,
       "run-uuid",
