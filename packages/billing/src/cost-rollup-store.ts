@@ -116,6 +116,9 @@ function grade(value: string | null): RunMeta["replayGrade"] {
  */
 async function loadRunSource(publicId: string): Promise<RunSource | null> {
   if (publicId.startsWith("arun_")) {
+    // tenancy: the scheduled rollup job runs outside a tenant scope and finds
+    // the run by its globally unique public id; the orgId it answers comes
+    // from the run row, and the cost-center subquery is filtered by that orgId.
     const rows = await withSystemDb((tx) =>
       tx
         .select({
@@ -199,6 +202,9 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
   }
 
   if (publicId.startsWith("tse_")) {
+    // tenancy: the scheduled rollup job runs outside a tenant scope and finds
+    // the session by its globally unique public id; the agent join and the
+    // cost-center subquery are filtered by the session's own orgId.
     const rows = await withSystemDb((tx) =>
       tx
         .select({
