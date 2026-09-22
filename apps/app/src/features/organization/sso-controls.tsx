@@ -147,8 +147,8 @@ export function DeleteProvider({
         confirm: t("confirm"),
         pending: t("pending"),
       }}
-      testId={`sso-delete-${provider.providerId}`}
-      submit={() => deleteSsoProvider(org, provider.providerId)}
+      testId={`sso-delete-${provider.providerRef}`}
+      submit={() => deleteSsoProvider(org, provider.providerRef)}
       onDone={() => {
         navigate.refresh();
       }}

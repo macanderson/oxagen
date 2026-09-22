@@ -199,7 +199,9 @@ export type SsoGroupRole = z.infer<typeof SsoGroupRole>;
  * what it is, and this view model has no field that could carry one.
  */
 export const SsoProvider = z.object({
-  providerId: z.string().min(1),
+  // The provider's slug, which Oxagen's admin chose and the callback URL
+  // carries. A `…Ref`, not an `…Id`: it is not an Oxagen row id (INV-11).
+  providerRef: z.string().min(1),
   displayName: z.string(),
   protocol: SsoProtocol,
   domain: z.string().min(1),
@@ -214,7 +216,8 @@ export const SsoProvider = z.object({
   spMetadataUrl: z.string().nullable(),
   oidc: z
     .object({
-      clientId: z.string(),
+      // The IdP's client id, which Oxagen neither mints nor validates.
+      clientRef: z.string(),
       clientSecretSet: z.boolean(),
     })
     .nullable(),

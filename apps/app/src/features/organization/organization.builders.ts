@@ -84,7 +84,7 @@ export function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
 /** An OIDC provider whose domain is proven, with one group mapped to admin. */
 export function ssoProvider(overrides: Partial<SsoProvider> = {}): SsoProvider {
   return {
-    providerId: "acme-okta",
+    providerRef: "acme-okta",
     displayName: "Acme Okta",
     protocol: "oidc",
     domain: "acme.com",
@@ -97,7 +97,7 @@ export function ssoProvider(overrides: Partial<SsoProvider> = {}): SsoProvider {
     },
     callbackUrl: "https://app.oxagen.sh/api/auth/sso/callback/acme-okta",
     spMetadataUrl: null,
-    oidc: { clientId: "0oa1b2c3d4", clientSecretSet: true },
+    oidc: { clientRef: "0oa1b2c3d4", clientSecretSet: true },
     saml: null,
     groupRoles: [{ group: "oxagen-admins", role: "admin" }],
     ...overrides,
@@ -109,7 +109,7 @@ export function samlProvider(
   overrides: Partial<SsoProvider> = {},
 ): SsoProvider {
   return ssoProvider({
-    providerId: "acme-entra",
+    providerRef: "acme-entra",
     displayName: "Acme Entra",
     protocol: "saml",
     domain: "acme.io",

@@ -98,12 +98,12 @@ function emptyDraft(): SsoProviderDraft {
 function draftOf(provider: SsoProvider): SsoProviderDraft {
   return {
     protocol: provider.protocol,
-    providerId: provider.providerId,
+    providerId: provider.providerRef,
     displayName: provider.displayName,
     domain: provider.domain,
     groupsClaim: provider.groupsClaim,
     issuer: provider.issuer,
-    clientId: provider.oidc?.clientId ?? "",
+    clientId: provider.oidc?.clientRef ?? "",
     clientSecret: "",
     entryPoint: provider.saml?.entryPoint ?? "",
     cert: "",
@@ -169,7 +169,7 @@ export function SsoProviderDialog({
             ...draft,
             stored: {
               issuer: provider.issuer,
-              clientId: provider.oidc?.clientId ?? "",
+              clientId: provider.oidc?.clientRef ?? "",
               entryPoint: provider.saml?.entryPoint ?? "",
             },
           })
@@ -189,7 +189,7 @@ export function SsoProviderDialog({
     }
   }
 
-  const idBase = editing ? `sso-edit-${provider.providerId}` : "sso-add";
+  const idBase = editing ? `sso-edit-${provider.providerRef}` : "sso-add";
   const protocol: SsoProtocol = draft.protocol;
 
   return (

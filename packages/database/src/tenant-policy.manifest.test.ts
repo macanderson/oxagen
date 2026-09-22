@@ -249,7 +249,9 @@ describe("tenant policy manifest", () => {
     // 117 as of workspace.tacho_session_policy, the workspace's wrapped-harness
     // session policy. The gateway does not read it yet; the table is in the
     // manifest because it carries org_id, not because anything enforces it.
-    expect(POLICY_MANIFEST.length).toBe(117);
+    // 118 as of org.sso_group_roles, the IdP group → org role table
+    // (ADR-142).
+    expect(POLICY_MANIFEST.length).toBe(118);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

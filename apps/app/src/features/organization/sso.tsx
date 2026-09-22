@@ -66,7 +66,7 @@ function SsoSection({
           <Providers org={org} canEdit={canEdit} value={read.value} />
           {read.value.providers.map((provider) => (
             <Setup
-              key={provider.providerId}
+              key={provider.providerRef}
               org={org}
               canEdit={canEdit}
               provider={provider}
@@ -134,13 +134,13 @@ function Providers({
       ) : (
         <Table label={t("providers.tableLabel")} columns={columns}>
           {value.providers.map((provider) => (
-            <tr key={provider.providerId} data-provider={provider.providerId}>
+            <tr key={provider.providerRef} data-provider={provider.providerRef}>
               <td className={cell}>
                 <div className="font-medium text-foreground">
                   {provider.displayName}
                 </div>
                 <div className={`${mono} text-muted-foreground`}>
-                  {provider.providerId}
+                  {provider.providerRef}
                 </div>
               </td>
               <td className={cell}>{t(`protocols.${provider.protocol}`)}</td>
@@ -175,7 +175,7 @@ function Setup({
   provider: SsoProvider;
 }) {
   const t = useTranslations("organization.sso.setup");
-  const id = `sso-setup-${provider.providerId}`;
+  const id = `sso-setup-${provider.providerRef}`;
   return (
     <section
       aria-labelledby={id}
@@ -207,7 +207,7 @@ function Setup({
           testId={`${id}-record-value`}
         />
         {canEdit && !provider.domainVerified ? (
-          <VerifyDomain org={org} providerId={provider.providerId} />
+          <VerifyDomain org={org} providerId={provider.providerRef} />
         ) : null}
       </div>
       <div className="flex flex-col gap-3">

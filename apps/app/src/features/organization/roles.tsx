@@ -270,7 +270,7 @@ function GroupMappings({
         </p>
       ) : (
         read.value.providers.map((provider) => (
-          <div key={provider.providerId} className="flex flex-col gap-2">
+          <div key={provider.providerRef} className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold text-foreground">
               {t("provider", {
                 name: provider.displayName,
@@ -279,7 +279,7 @@ function GroupMappings({
             </h3>
             <SsoGroupRoles
               org={org}
-              providerId={provider.providerId}
+              providerId={provider.providerRef}
               providerName={provider.displayName}
               mappings={provider.groupRoles}
               canEdit={canEdit}

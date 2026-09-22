@@ -142,7 +142,7 @@ export function toSsoSettings(
 ): z.input<typeof SsoSettings> {
   return {
     providers: out.providers.map((provider) => ({
-      providerId: provider.providerId,
+      providerRef: provider.providerId,
       displayName: provider.displayName,
       protocol: provider.protocol,
       domain: provider.domain,
@@ -159,7 +159,7 @@ export function toSsoSettings(
         provider.oidc === null
           ? null
           : {
-              clientId: provider.oidc.clientId,
+              clientRef: provider.oidc.clientId,
               clientSecretSet: provider.oidc.clientSecretSet,
             },
       saml:

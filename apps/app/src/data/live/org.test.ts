@@ -422,7 +422,7 @@ describe("org.sso", () => {
       readOk({
         providers: [
           {
-            providerId: "acme-okta",
+            providerRef: "acme-okta",
             displayName: "Acme Okta",
             protocol: "oidc",
             domain: "acme.com",
@@ -436,7 +436,7 @@ describe("org.sso", () => {
             callbackUrl:
               "https://app.oxagen.sh/api/auth/sso/callback/acme-okta",
             spMetadataUrl: null,
-            oidc: { clientId: "0oa1b2c3d4", clientSecretSet: true },
+            oidc: { clientRef: "0oa1b2c3d4", clientSecretSet: true },
             saml: null,
             groupRoles: [{ group: "oxagen-admins", role: "admin" }],
           },
