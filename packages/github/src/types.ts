@@ -232,7 +232,12 @@ export interface GitHubClient {
     body?: string;
     draft?: boolean;
     labels?: readonly string[];
-  }): Promise<{ number: number; htmlUrl: string }>;
+  }): Promise<{
+    number: number;
+    htmlUrl: string;
+    /** Set when the pull request opened but the labels call failed. */
+    labelError?: string;
+  }>;
 
   /** Refresh submission metadata without changing the pull request identity or branches. */
   updatePullRequest(args: {

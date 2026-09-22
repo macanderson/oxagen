@@ -750,6 +750,32 @@ describe("openPullRequest", () => {
     });
   });
 
+  it("returns the label failure instead of throwing once the pull request exists", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({
+          number: 9,
+          html_url: "https://github.com/acme/my-repo/pull/9",
+        }),
+      )
+      .mockResolvedValueOnce(makeResponse({ message: "Forbidden" }, 403));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const result = await client.openPullRequest({
+      owner: "acme",
+      repo: "my-repo",
+      title: "Labelled PR",
+      head: "feature-x",
+      base: "main",
+      labels: ["no-issue"],
+    });
+
+    expect(result.number).toBe(9);
+    expect(result.labelError).toContain("403");
+  });
+
   it("skips the labels call when none are given", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       makeResponse({

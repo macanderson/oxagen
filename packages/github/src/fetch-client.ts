@@ -656,17 +656,30 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       reqBody,
     );
 
-    // A pull request is an issue to the labels endpoint. Adding is additive
-    // and idempotent, so a retry after a failed label call is safe.
+    // A pull request is an issue to the labels endpoint, and the call needs
+    // only the pull-request write the create already needed. The pull
+    // request exists by now, so a label failure must not throw: a caller
+    // with no adoption path would record nothing and open a second one on
+    // retry. The failure is returned instead, and the missing label is
+    // visible on the pull request itself.
+    let labelError: string | undefined;
     if (args.labels !== undefined && args.labels.length > 0) {
-      await request<unknown>(
-        "POST",
-        `/repos/${seg(args.owner)}/${seg(args.repo)}/issues/${data.number}/labels`,
-        { labels: [...args.labels] },
-      );
+      try {
+        await request<unknown>(
+          "POST",
+          `/repos/${seg(args.owner)}/${seg(args.repo)}/issues/${data.number}/labels`,
+          { labels: [...args.labels] },
+        );
+      } catch (err) {
+        labelError = err instanceof Error ? err.message : String(err);
+      }
     }
 
-    return { number: data.number, htmlUrl: data.html_url };
+    return {
+      number: data.number,
+      htmlUrl: data.html_url,
+      ...(labelError !== undefined ? { labelError } : {}),
+    };
   }
 
   async function updatePullRequest(args: {
