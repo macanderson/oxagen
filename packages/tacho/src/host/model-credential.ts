@@ -539,9 +539,14 @@ function restoreClaude(
     else delete settings[HELPER_KEY];
     touched = true;
   }
-  if (released !== undefined && sidecar !== undefined) {
+  // A released secret goes back whether or not the receipt survived: the
+  // receipt names the member it came out of, and without one the kind says
+  // which member Claude Code reads that kind from. A lost receipt must not
+  // lose the key, because the caller releases it from custody once this
+  // returns.
+  if (released !== undefined) {
     const member =
-      sidecar.taken.find((t) => t.kind === released.kind)?.member ??
+      sidecar?.taken.find((t) => t.kind === released.kind)?.member ??
       (released.kind === "bearer" ? CLAUDE_AUTH_TOKEN : CLAUDE_API_KEY);
     const env = { ...(envOf(settings) ?? {}) };
     env[member] = released.secret;

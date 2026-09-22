@@ -125,6 +125,71 @@ describe("the custody store", () => {
     expect(() => store.read("anthropic")).toThrow();
   });
 
+  it("refuses a key file that is not a key rather than minting a new one over sealed data", () => {
+    store.take(
+      "anthropic",
+      { kind: "api_key", secret: SECRET },
+      "enroll:env",
+      NOW,
+    );
+    writeFileSync(join(dir, "credentials.key"), "not a key\n");
+    expect(() => store.read("anthropic")).toThrow(/32-byte key/);
+    expect(() =>
+      store.take(
+        "openai",
+        { kind: "bearer", secret: "sk-proj-FAKE" },
+        "enroll:env",
+        NOW,
+      ),
+    ).toThrow(/32-byte key/);
+    // Nothing was overwritten: the damaged key and the sealed file both
+    // stand for a person to look at, and the metadata still reads.
+    expect(readFileSync(join(dir, "credentials.key"), "utf8")).toBe(
+      "not a key\n",
+    );
+    expect(store.status().map((c) => c.provider)).toEqual(["anthropic"]);
+  });
+
+  it("does not open an entry relabelled for another provider", () => {
+    store.take(
+      "anthropic",
+      { kind: "api_key", secret: SECRET },
+      "enroll:env",
+      NOW,
+    );
+    const file = join(dir, "credentials.json");
+    const edited = JSON.parse(readFileSync(file, "utf8")) as {
+      entries: Array<{ provider: string }>;
+    };
+    edited.entries[0]!.provider = "openai";
+    writeFileSync(file, JSON.stringify(edited));
+    // The seal binds the provider: a key taken for Anthropic cannot be made
+    // to answer an OpenAI run token by editing one word in the file.
+    expect(() => store.read("openai")).toThrow();
+    expect(store.read("anthropic")).toBeUndefined();
+    expect(store.status().map((c) => c.provider)).toEqual(["openai"]);
+  });
+
+  it("releases one provider and keeps the other", () => {
+    store.take(
+      "anthropic",
+      { kind: "api_key", secret: SECRET },
+      "claude-code:settings.env",
+      NOW,
+    );
+    store.take(
+      "openai",
+      { kind: "bearer", secret: "sk-proj-FAKE" },
+      "codex:auth.json",
+      NOW,
+    );
+    expect(store.release("anthropic")?.secret).toBe(SECRET);
+    expect(existsSync(join(dir, "credentials.json"))).toBe(true);
+    expect(store.status().map((c) => c.provider)).toEqual(["openai"]);
+    expect(store.read("openai")?.secret).toBe("sk-proj-FAKE");
+    expect(store.read("anthropic")).toBeUndefined();
+  });
+
   it("shreds: the key is overwritten and both files are gone, so custody is over", () => {
     store.take(
       "anthropic",
@@ -149,6 +214,11 @@ describe("the custody store", () => {
   it("refuses a file it cannot read as a store rather than guessing", () => {
     writeFileSync(join(dir, "credentials.json"), '{"schema":"something.else"}');
     expect(() => store.status()).toThrow(/not a credential store/);
+    expect(() => store.read("anthropic")).toThrow(/not a credential store/);
+    // A file that is not JSON at all throws too; every reader of the store
+    // treats that as a fault, never as an empty store.
+    writeFileSync(join(dir, "credentials.json"), "{ not json");
+    expect(() => store.status()).toThrow();
   });
 
   it("shows a key the way a console does", () => {

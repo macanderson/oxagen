@@ -500,9 +500,14 @@ export async function restoreCredentials(
       try {
         released = store?.read(provider);
       } catch (error) {
+        // The file keeps its run token or helper: the gateway is still
+        // installed and still honours them, and stripping them here would
+        // leave the harness with no credential at all while the key sits
+        // in a store nobody can open. The caller stops and says so.
         failed.push(
-          `the ${provider} credential in custody cannot be read (${error instanceof Error ? error.message : String(error)}); ${TACHO_HARNESS_LABELS[harness]} needs its key set by hand`,
+          `the ${provider} credential in custody cannot be read (${error instanceof Error ? error.message : String(error)}); ${TACHO_HARNESS_LABELS[harness]} keeps its run token until the store is fixed`,
         );
+        continue;
       }
       const state = await contract.restore(
         {
