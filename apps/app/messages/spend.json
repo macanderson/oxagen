@@ -15,6 +15,8 @@
       "operator": "By operator",
       "agent": "By agent",
       "tool": "By tool",
+      "task": "By task",
+      "cost_center": "By cost center",
       "waste": "Wasted spend",
       "budgets": "Budgets",
       "pricing": "Pricing"
@@ -136,7 +138,8 @@
       "provider": "Provider",
       "runs": "Runs",
       "calls": "Calls",
-      "spend": "Spend"
+      "spend": "Spend",
+      "share": "Share of spend"
     },
     "groups": {
       "operator": {
@@ -159,6 +162,19 @@
         "title": "By tool",
         "key": "Tool",
         "empty": "No tool call in this period has been rolled up."
+      },
+      "task": {
+        "title": "By task",
+        "key": "Task",
+        "empty": "No run in this period names a task."
+      },
+      "cost_center": {
+        "title": "By cost center",
+        "key": "Cost center",
+        "note": "Each run is charged to its agent's cost center, or its workspace's when the agent names none.",
+        "unassigned": "No cost center",
+        "shareBasis": "Share is the row's spend divided by the month's spend in the strip above, both on the basis beside each figure.",
+        "empty": "No run in this period has been rolled up."
       }
     },
     "waste": {
@@ -381,8 +397,19 @@
     },
     "exportDialog": {
       "title": "Export a spend report",
+      "kind": "Statement",
+      "kinds": {
+        "workspace": {
+          "label": "This workspace",
+          "hint": "One line per operator, agent, model, tool, task and cost center, each with its basis."
+        },
+        "cost_center": {
+          "label": "Organization by cost center",
+          "hint": "One line per cost center across every workspace, with the run ids behind each line and the total they sum to."
+        }
+      },
       "month": "Month",
-      "monthHint": "A calendar month, as YYYY-MM. The report is a CSV with one line per operator, agent, model, tool and task, and every line names its basis.",
+      "monthHint": "A calendar month, as YYYY-MM.",
       "submit": "Download the CSV",
       "pending": "Building the report",
       "errors": {
@@ -390,6 +417,7 @@
       },
       "alert": {
         "denied": "Your roles on this organization do not let you export this workspace’s spend.",
+        "deniedCostCenter": "Only an organization Owner, Admin or Billing member can export the chargeback statement.",
         "failed": "The report could not be built. Nothing was changed; try again."
       }
     },

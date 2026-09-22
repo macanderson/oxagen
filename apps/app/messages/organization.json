@@ -447,6 +447,49 @@
         "pendingApproval": "This change is waiting for approval.",
         "unavailable": "Oxagen could not reach the key service ({code}). Try again."
       }
+    },
+    "costCenters": {
+      "title": "Cost centers",
+      "lead": "Spend is charged to the agent's cost center, or to its workspace's when the agent names none. Spend with neither is shown on Spend as its own row.",
+      "empty": "This organization has no cost centers.",
+      "labelsTable": "Cost centers",
+      "workspacesTable": "Workspace cost centers",
+      "noDescription": "No description",
+      "none": "None",
+      "columns": {
+        "label": "Label",
+        "description": "Description",
+        "agents": "Agents",
+        "workspaces": "Workspaces",
+        "workspace": "Workspace",
+        "costCenter": "Cost center",
+        "actions": "Actions"
+      },
+      "add": {
+        "open": "Add a cost center",
+        "title": "Add a cost center",
+        "confirm": "Add",
+        "pending": "Adding",
+        "label": "Label",
+        "labelHint": "Up to 64 letters, digits, dots, underscores or hyphens, such as ENG-1001.",
+        "description": "Description"
+      },
+      "delete": {
+        "open": "Delete",
+        "title": "Delete {label}",
+        "confirm": "Delete",
+        "pending": "Deleting",
+        "body": "Runs already rolled up keep this label. New runs from an agent or workspace that names it fall back to the workspace's cost center, or to none."
+      },
+      "charge": {
+        "open": "Change",
+        "title": "Cost center for {name}",
+        "confirm": "Save",
+        "pending": "Saving",
+        "label": "Cost center",
+        "none": "None",
+        "hint": "Runs rolled up after this change are charged to the new label."
+      }
     }
   }
 }

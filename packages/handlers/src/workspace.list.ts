@@ -96,6 +96,7 @@ export const workspaceListHandler: CapabilityHandler<
         name: schema.workspaces.name,
         role: schema.workspaceUsers.role,
         archivedAt: schema.workspaces.archivedAt,
+        costCenter: schema.workspaces.costCenter,
       })
       .from(schema.workspaces)
       .leftJoin(
@@ -130,6 +131,7 @@ export const workspaceListHandler: CapabilityHandler<
         name: r.name,
         role: r.role ?? null,
         archivedAt: r.archivedAt ? r.archivedAt.toISOString() : null,
+        costCenter: r.costCenter ?? null,
       })),
     };
   });

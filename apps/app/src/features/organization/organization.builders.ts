@@ -7,6 +7,7 @@
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
 import type {
   ApiKey,
+  CostCenterList,
   ModelCredential,
   MemberList,
   Permission,
@@ -61,6 +62,7 @@ export function workspaceRow(overrides: Partial<Workspace> = {}): Workspace {
     name: "Core platform",
     role: "Owner",
     archivedAt: null,
+    costCenter: null,
     ...overrides,
   };
 }
@@ -85,6 +87,7 @@ type OrgReads = {
   workspaces?: Read<WorkspaceList>;
   apiKeys?: Read<ApiKey[]>;
   modelCredential?: Read<ModelCredential>;
+  costCenters?: Read<CostCenterList>;
 };
 
 export function orgSource(reads: OrgReads): {
@@ -97,6 +100,7 @@ export function orgSource(reads: OrgReads): {
     workspaces: [],
     apiKeys: [],
     modelCredential: [],
+    costCenters: [],
   };
   const refuse = () => Promise.reject(new Error("not an Organization read"));
   const answer =
@@ -151,6 +155,7 @@ export function orgSource(reads: OrgReads): {
       roles: answer(reads.roles, "roles"),
       workspaces: answer(reads.workspaces, "workspaces"),
       apiKeys: answer(reads.apiKeys, "apiKeys"),
+      costCenters: answer(reads.costCenters, "costCenters"),
       modelCredential: answer(reads.modelCredential, "modelCredential"),
     },
     mandates: { list: refuse, get: refuse },
