@@ -24,12 +24,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
 }));
 
-const {
-  RecordActions,
-  EXPORT_POLL_BACKOFF,
-  EXPORT_POLL_BUDGET_MS,
-  EXPORT_POLL_FIRST_MS,
-} = await import("./record-actions");
+const { RecordActions } = await import("./record-actions");
+
+// The dialog's poll timing, mirrored from record-actions.tsx: the first read
+// at 2s, each wait 1.5 times the last, and reading stops after 120s.
+const EXPORT_POLL_FIRST_MS = 2_000;
+const EXPORT_POLL_BACKOFF = 1.5;
+const EXPORT_POLL_BUDGET_MS = 120_000;
 
 const RUN = "tse_7k2m9q";
 const EXPORT = "rexp_1";

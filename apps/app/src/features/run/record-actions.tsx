@@ -39,12 +39,12 @@ import {
 } from "./actions";
 
 /** The first read waits this long after `export_run` answers; later ones back off. */
-export const EXPORT_POLL_FIRST_MS = 2_000;
+const EXPORT_POLL_FIRST_MS = 2_000;
 /** Each wait is this much longer than the one before it, up to the ceiling. */
-export const EXPORT_POLL_BACKOFF = 1.5;
+const EXPORT_POLL_BACKOFF = 1.5;
 const EXPORT_POLL_MAX_MS = 10_000;
 /** After this much waiting the dialog stops reading and offers "Check again". */
-export const EXPORT_POLL_BUDGET_MS = 120_000;
+const EXPORT_POLL_BUDGET_MS = 120_000;
 
 /**
  * A digest shown shortened, with a button that copies all of it.

@@ -11,7 +11,7 @@ export type RunExportDownloadUrl = string & {
 };
 
 /** `RUN_EXPORT_DOWNLOAD_PATH` in packages/handlers/src/lib/run-export-download.ts. */
-export const RUN_EXPORT_DOWNLOAD_PATH = "/v1/run-exports/download";
+const RUN_EXPORT_DOWNLOAD_PATH = "/v1/run-exports/download";
 
 function isRunExportDownloadUrl(
   raw: string,
