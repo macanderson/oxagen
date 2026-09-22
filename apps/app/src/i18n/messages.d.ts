@@ -1873,6 +1873,7 @@ type Messages = {
         agent: string;
         operator: string;
         status: string;
+        tier: string;
         cost: string;
         frames: string;
         started: string;
