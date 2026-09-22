@@ -17,6 +17,7 @@ vi.mock("./clickhouse", async (importOriginal) => {
 });
 
 import {
+  OBSERVED_MODEL_READ_BOUND,
   OBSERVED_TOKEN_CLASSES,
   readModelCallFrames,
   readObservedModels,
@@ -495,23 +496,74 @@ describe("readObservedModels", () => {
     answer(classes);
   }
 
-  it("keeps low-volume models beyond 5000 for the price comparison", async () => {
-    const summary = Array.from({ length: 5001 }, (_, index) => ({
+  /** One summary row per model, heaviest first. */
+  function summaryOf(count: number) {
+    return Array.from({ length: count }, (_, index) => ({
       model: `model-${index}`,
       provider: "vendor",
       calls: "1",
-      tokens: String(5001 - index),
+      tokens: String(count - index),
       first_seen: "2026-09-02T09:00:00.000Z",
       last_seen: "2026-09-02T09:00:00.000Z",
     }));
-    answerBoth(summary);
+  }
+
+  it("keeps low-volume models beyond 5000 for the price comparison", async () => {
+    // #3629: a bound at 5000 let a low-volume unpriced model be outranked by
+    // priced ones and never reach the comparison. The bound that replaced
+    // the unbounded read sits well above that and above billing's 500 cap.
+    answerBoth(summaryOf(5001));
     const rows = await readObservedModels({ orgId: ORG, since: SINCE });
     expect(rows).toHaveLength(5001);
     expect(rows.at(-1)?.model).toBe("model-5000");
-    expect(queryMock.mock.calls[0]![0].query).not.toMatch(/\bLIMIT\b/);
+    expect(OBSERVED_MODEL_READ_BOUND).toBeGreaterThan(5000);
     expect(queryMock.mock.calls[1]![0].query_params.models).toContain(
       "model-5000",
     );
+  });
+
+  it("bounds the summary read in SQL and says so when the bound is filled", async () => {
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    try {
+      answerBoth(summaryOf(OBSERVED_MODEL_READ_BOUND));
+      await readObservedModels({ orgId: ORG, since: SINCE, workspaceId: WS });
+      const summary = queryMock.mock.calls[0]![0];
+      expect(summary.query).toMatch(/LIMIT \{limit:UInt32\}/);
+      expect(summary.query_params.limit).toBe(OBSERVED_MODEL_READ_BOUND);
+      const lines = stderr.mock.calls.map((call) => String(call[0]));
+      const note = lines.find((line) =>
+        line.includes("observed_model_read_bound"),
+      );
+      expect(note).toBeDefined();
+      expect(JSON.parse(note!)).toMatchObject({
+        level: "warn",
+        alert: "observed_model_read_bound",
+        bound: OBSERVED_MODEL_READ_BOUND,
+        orgId: ORG,
+        workspaceId: WS,
+      });
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
+  it("says nothing about the bound when the read sits under it", async () => {
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    try {
+      answerBoth(summaryOf(3));
+      await readObservedModels({ orgId: ORG, since: SINCE });
+      expect(
+        stderr.mock.calls.some((call) =>
+          String(call[0]).includes("observed_model_read_bound"),
+        ),
+      ).toBe(false);
+    } finally {
+      stderr.mockRestore();
+    }
   });
 
   it("folds both frame stores by model id, heaviest first, and reads a per-class breakdown for what it found", async () => {
@@ -581,7 +633,9 @@ describe("readObservedModels", () => {
     expect(summaryCall.query).not.toContain("turn_seq");
     expect(summaryCall.query).toContain("GROUP BY model");
     expect(summaryCall.query).toContain("ORDER BY tokens DESC, model");
-    expect(summaryCall.query).not.toMatch(/\bLIMIT\b/);
+    // Bounded, and the bound is a parameter rather than a literal, so the
+    // test above can read what was asked for.
+    expect(summaryCall.query).toMatch(/LIMIT \{limit:UInt32\}\s*$/);
     // A gateway row's input_tokens is the inclusive input total, so adding it
     // to cache reads and writes again would double-count them.
     expect(summaryCall.query).toContain(
@@ -592,6 +646,7 @@ describe("readObservedModels", () => {
       since: "2026-08-15 00:00:00.000",
       sources: ["otel_log", "collector", "hook", "transcript"],
       duplicateAttr: "oxagen.llm_call_duplicate_of",
+      limit: OBSERVED_MODEL_READ_BOUND,
     });
 
     // The class-bucket read is scoped to exactly the models the summary
