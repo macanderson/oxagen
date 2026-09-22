@@ -606,6 +606,9 @@ function wire(db: FakeDb): void {
           retentionPolicyVersions: {
             findFirst: async () => db.retentionPolicy,
           },
+          // No row: the observed-only policy every host had before
+          // workspace.tacho_session_policy existed.
+          tachoSessionPolicy: { findFirst: async () => undefined },
         },
         // Two reads share `select`, told apart by the table. The steering
         // read (`readWorkspaceSteering`) counts `context_promotions` for the

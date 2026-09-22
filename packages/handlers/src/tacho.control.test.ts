@@ -248,6 +248,10 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
             findMany: async () => [{ workspaceId: null, generation: 1 }],
           },
           retentionPolicyVersions: { findFirst: async () => undefined },
+          // No row: the observed-only policy every host had before
+          // workspace.tacho_session_policy existed, which is what
+          // these cases assert the bundle carries.
+          tachoSessionPolicy: { findFirst: async () => undefined },
           tachoControlCommands: {
             findMany: async () =>
               db.commands.filter((c) => c["outcome"] === "queued"),
