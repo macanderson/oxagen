@@ -14,6 +14,10 @@
  *      allowlist can govern no machine, and a surface that showed only the
  *      saved value would report that as success.
  *   4. A revoked host is not counted. It receives no bundle.
+ *   5. The org role is asserted in the handler, before anything is read or
+ *      written. The kernel fast-paths a non-enterprise principal, so this call
+ *      is the only thing standing between a workspace Member and disarming the
+ *      gateway.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -22,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   readPolicy: vi.fn(),
   insertValues: vi.fn(),
   updateSet: vi.fn(),
+  assertOrgRole: vi.fn(),
+  resolveActingUserId: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -38,6 +44,14 @@ vi.mock("./lib/tacho-session-policy", async (importOriginal) => {
 
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
+}));
+
+// The real gate reads org and workspace membership from Postgres. What matters
+// here is that the handler calls it, with the roles the contract declares, and
+// that a refusal stops the write.
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: mocks.resolveActingUserId,
+  assertOrgRole: mocks.assertOrgRole,
 }));
 
 import { tachoSessionPolicyWriteHandler } from "./tacho.session_policy.write";
@@ -71,6 +85,8 @@ function tx({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.readPolicy.mockResolvedValue(OBSERVED_ONLY);
+  mocks.assertOrgRole.mockResolvedValue(undefined);
+  mocks.resolveActingUserId.mockResolvedValue(TEST_CTX.userId);
 });
 
 /** Run the handler against one transaction stub. */
@@ -161,4 +177,29 @@ describe("update_tacho_session_policy", () => {
     ).rejects.toThrow(/workspace context/);
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
+
+  it("asserts the roles the contract declares, as the key's creator", async () => {
+    await run({ mode: "enforced", sessionLimitUsd: 25 }, tx({}));
+    expect(mocks.resolveActingUserId).toHaveBeenCalledWith(TEST_CTX);
+    expect(mocks.assertOrgRole).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: TEST_CTX.userId }),
+      { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] },
+    );
+  });
+
+  it("writes nothing when the role gate refuses (negative)", async () => {
+    // The gate runs before the transaction, so a Member cannot set the mode to
+    // observed, clear the ceiling, or null the allowlist. Disarming the
+    // gateway is the write this capability must not take from a non-admin.
+    mocks.assertOrgRole.mockRejectedValue(
+      new Error("Requires one of the org roles Owner, Admin"),
+    );
+    await expect(
+      run({ mode: "observed", modelAllow: null }, tx({ existing: { id: "p1" } })),
+    ).rejects.toThrow(/Owner, Admin/);
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.insertValues).not.toHaveBeenCalled();
+    expect(mocks.updateSet).not.toHaveBeenCalled();
+  });
+
 });

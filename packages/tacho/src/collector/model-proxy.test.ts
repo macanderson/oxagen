@@ -1070,6 +1070,66 @@ describe("the loopback model proxy", () => {
     await first.handle.stop();
   });
 
+  it("refuses a body that names two models rather than checking one and forwarding the other", async () => {
+    // The bypass this closes: `leadingModel` reads the first `"model"` member
+    // and `JSON.parse` keeps the last, so a body with two of them could pass
+    // the allowlist on the first and reach the vendor asking for the second.
+    // The proxy forwards the original bytes, so whatever it checked, the vendor
+    // would run the duplicate. No single string describes such a request, so it
+    // is refused rather than guessed at.
+    const fake = await vendor(streamingAnthropic(1));
+    const paths = scratchPaths();
+    const first = await boot(fake.url, {
+      paths,
+      bundle: {
+        budget: { mode: "enforced" as const },
+        models: { allow: ["claude-opus-*"], deny: [] },
+      },
+    });
+    const uuid = await first.session("sess-dup");
+    const ask = (body: string) =>
+      call(first.port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-dup",
+        ],
+        body,
+      });
+
+    // The first member is on the allowlist, the second is not.
+    const smuggled = await ask(
+      '{"model":"claude-opus-5-20260101","model":"claude-sonnet-5","stream":true}',
+    );
+    expect(smuggled.status).toBe(403);
+    expect(smuggled.headers["x-oxagen-refusal"]).toBe("model_ambiguous");
+    // Nothing reached the vendor, so the denied model never ran.
+    expect(fake.requests).toHaveLength(0);
+
+    // The same body with one model goes through, so the refusal is about the
+    // duplicate and not about the allowlist.
+    expect(
+      (await ask('{"model":"claude-opus-5-20260101","stream":true}')).status,
+    ).toBe(200);
+    expect(fake.requests).toHaveLength(1);
+
+    const decisions = first.frames(uuid, "policy_decision");
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0]!.body).toMatchObject({
+      policy_decision: "deny",
+      policy_source: "bundle",
+      policy_reason_code: "model_ambiguous",
+    });
+    // The frame names the model a JSON parser would hand the vendor, which is
+    // the last duplicate, not the first one the old read returned.
+    expect(decisions[0]!.attrs).toMatchObject({
+      "oxagen.model": "claude-sonnet-5",
+    });
+    await first.handle.stop();
+  });
+
   it("does not refuse on models while the budget mode is observed", async () => {
     // The negative control for the test above. One mode governs both enforced
     // clauses; a list that refused under `observed` would arm a gateway the

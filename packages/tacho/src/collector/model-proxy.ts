@@ -170,6 +170,7 @@ export type BeforeForward = (
 export type ModelRefusalCode =
   | "session_budget_exceeded"
   | "model_not_permitted"
+  | "model_ambiguous"
   | "session_paused"
   | "session_cancelled"
   | "host_paused"
@@ -354,19 +355,38 @@ function leadingModel(bytes: Buffer | undefined): string | undefined {
 }
 
 /**
- * The model a request asks for: the cheap leading-bytes read first, the parsed
- * body second. One function because two places need the same answer — the
- * mandate check before the call is admitted, and the frame after it is
- * forwarded — and two copies of a regex are two things to keep in step.
+ * The model a request asks for, and whether the request states it only once.
+ *
+ * The parsed body is the authority, not the leading bytes. `leadingModel`
+ * matches the first `"model"` member and `JSON.parse` keeps the last
+ * duplicate, so a body carrying two `model` members can read as one model here
+ * and as another to the vendor, which receives the original bytes. Checking
+ * the first member and forwarding a body whose last member names a denied
+ * model is an allowlist that admits exactly what it exists to refuse, and the
+ * frame would then record the model that was checked rather than the one that
+ * ran.
+ *
+ * So the leading read survives only as the fallback for a body that does not
+ * parse, which the vendor rejects anyway, and a disagreement between the two is
+ * reported as `ambiguous` for the caller to refuse on. Parsing costs one pass
+ * over a body the proxy is about to spend a network round trip on, and the
+ * Anthropic path already parses it to correlate the session.
+ *
+ * One function because two places need the same answer: the mandate check
+ * before the call is admitted, and the frame after it is forwarded.
  */
 function modelOf(
   readable: () => Buffer | undefined,
   json: () => Record<string, unknown> | undefined,
-): string | undefined {
+): { model: string | undefined; ambiguous: boolean } {
+  const parsed = json()?.["model"];
+  const fromBody = typeof parsed === "string" ? parsed : undefined;
   const leading = leadingModel(readable());
-  if (leading !== undefined) return leading;
-  const value = json()?.["model"];
-  return typeof value === "string" ? value : undefined;
+  return {
+    model: fromBody ?? leading,
+    ambiguous:
+      leading !== undefined && fromBody !== undefined && leading !== fromBody,
+  };
 }
 
 /**
@@ -477,10 +497,17 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
    * 2026-09-21 gateway audit found when it looked for one. `undefined` means
    * the proxy could not read a model from the request, and the model branch
    * then permits the call rather than refusing on an absence.
+   *
+   * `modelAmbiguous` says the request named more than one model, so no single
+   * string describes what the vendor will run. That is refused under an
+   * enforced mandate whatever the clauses say, because a model the proxy
+   * cannot pin is one it can neither check against the lists nor price against
+   * the ceiling. Absence permits, ambiguity does not.
    */
   function refusalFor(
     record: SessionRecord | undefined,
     model: string | undefined,
+    modelAmbiguous: boolean,
   ):
     | { code: ModelRefusalCode; message: string; source: "human" | "bundle" }
     | undefined {
@@ -513,6 +540,14 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // workspace forbids is forbidden at any spend, and naming the budget for a
     // call that was never allowed would send the operator to the wrong
     // setting.
+    if (budget.mode === "enforced" && modelAmbiguous) {
+      return {
+        code: "model_ambiguous",
+        message:
+          "This request names more than one model, so Oxagen cannot say which one would run. Send one model per request.",
+        source: "bundle",
+      };
+    }
     if (budget.mode === "enforced") {
       const verdict = modelVerdict(view.bundle.models, model);
       if (verdict !== undefined) {
@@ -661,9 +696,12 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // `models` clause has a string to check. It used to be read after
     // `refusalFor` had already returned, which is why an allowlist bolted onto
     // the old shape would have refused nothing.
-    const askedModel = modelOf(readable, json);
+    const { model: askedModel, ambiguous: modelAmbiguous } = modelOf(
+      readable,
+      json,
+    );
 
-    const refusal = refusalFor(record, askedModel);
+    const refusal = refusalFor(record, askedModel, modelAmbiguous);
     if (refusal !== undefined) {
       refused += 1;
       const view = deps.policy();

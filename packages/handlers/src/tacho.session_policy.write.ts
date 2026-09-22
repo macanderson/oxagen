@@ -3,6 +3,7 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { tachoSessionPolicyWrite } from "@oxagen/oxagen/contracts/tacho.session_policy.write";
 import { BUNDLE_FEATURE_MODEL_ALLOWLIST } from "@oxagen/tacho";
 import { schema, withTenantDb } from "@oxagen/database";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, ne } from "drizzle-orm";
 import {
   hasEnforceableClause,
@@ -21,6 +22,15 @@ import { logger } from "./logger";
  * saved allowlist can be a correct record of a decision and still govern no
  * machine, and a settings page that showed only the saved value would report
  * that as success. The counts here are what lets the surface say which it is.
+ *
+ * The role gate runs here, not in the kernel. `check-iam.ts` fast-paths a
+ * non-enterprise human principal (INV-29), so on a Free, Build or Scale org
+ * the contract's `defaultRoles` is documentation and the kernel admits every
+ * role. `set_spend_budget` and the enrollment-token writes gate in the handler
+ * for the same reason. Without this call a workspace Member, a Viewer, or a
+ * personal API key could set `mode` to `observed`, clear the session ceiling,
+ * or null the allowlist, which disarms the gateway this capability exists to
+ * arm. Hiding the panel in the app is not a gate; the API is the surface.
  */
 export const tachoSessionPolicyWriteHandler: CapabilityHandler<
   typeof tachoSessionPolicyWrite
@@ -34,6 +44,14 @@ export const tachoSessionPolicyWriteHandler: CapabilityHandler<
   }
   const workspaceId = ctx.workspaceId;
   const orgId = ctx.orgId;
+
+  // Matches the contract's defaultRoles. An API-key call acts as the key's
+  // creator, which is what resolveActingUserId answers.
+  const actingUserId = await resolveActingUserId(ctx);
+  await assertOrgRole(
+    { ...ctx, userId: actingUserId },
+    { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] },
+  );
 
   return withTenantDb(async (tx) => {
     const current = await readTachoSessionPolicyIn(
