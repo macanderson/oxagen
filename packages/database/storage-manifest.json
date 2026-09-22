@@ -3698,7 +3698,7 @@
       "writes": []
     }
   ],
-  "contentHash": "08738df2bc043476ed30bc660c29bccad1e14adbc74bd81095006b7fe1dcc12c",
+  "contentHash": "3b0410cbbd8b98d73afce94b128fb7fe736d68984719ffcb55218bf92f8bbe7f",
   "domains": [
     {
       "name": "agent",
@@ -13492,6 +13492,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "bundle_bytes",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
         },
         {
           "name": "merkle_root",
