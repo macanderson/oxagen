@@ -1808,11 +1808,6 @@ type Messages = {
         more: string;
         moreBasis: string;
       };
-      spend: {
-        title: string;
-        unavailable: string;
-        coverage: string;
-      };
     };
     approvals: {
       title: string;

@@ -16,11 +16,6 @@
         "none": "nothing is parked",
         "more": "{count}+",
         "moreBasis": "more are parked than this page read"
-      },
-      "spend": {
-        "title": "Spend, runs shown",
-        "unavailable": "Not recorded",
-        "coverage": "Cost recorded for {priced} of {count} runs. Missing costs are excluded."
       }
     },
     "approvals": {
