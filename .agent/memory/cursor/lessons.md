@@ -1,0 +1,1 @@
+- [2026-09-22] When a stored file identity changes key scheme, index the old relative key onto the new qualified identity and persist the qualified path. The file-rollup clear pass skips relative paths, so an observation written onto the old path never clears. (source: reflections/2026-09-22-legacy-file-identity.md, agent: cursor)
