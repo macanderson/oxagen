@@ -165,6 +165,12 @@ says so. A key the customer brought is unaffected, because it names its own
 provider and the customer chose it. `packages/ai/src/platform-provider.ts`
 is the one place both sites ask.
 
+The guard changes nothing for production as configured on 2026-09-22:
+`OXAGEN_MODEL_PROVIDER` is `openrouter` there, and no
+`OPENROUTER_MANAGEMENT_KEY` is set, so no key is minted and every
+organisation serves on the shared key. What the guard prevents is a silent
+move off the gateway on a deployment that is on the gateway.
+
 A key that reaches its daily ceiling (§3) is refused by the vendor with a 402.
 `selectModelForOrg` wraps a model built on a minted key so that refusal
 reaches the caller as `AssistantModelKeyLimitError`, whose message the
