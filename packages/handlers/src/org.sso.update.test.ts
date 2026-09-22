@@ -199,6 +199,25 @@ describe("org.sso.update handler", () => {
     expect(config.mapping.extraFields.groups).toBe("groups");
   });
 
+  it("keeps stored extra scopes when the update leaves scopes out", async () => {
+    const stored = ssoRow();
+    const config0 = JSON.parse(stored.oidcConfig as string);
+    config0.scopes = ["openid", "email", "profile", "groups"];
+    mocks.find.mockResolvedValue({
+      ...stored,
+      oidcConfig: JSON.stringify(config0),
+    });
+    await orgSsoUpdateHandler(
+      {
+        providerId: "acme",
+        config: { protocol: "oidc", issuer: ISSUER, clientId: "client-2" },
+      },
+      CTX,
+    );
+    const config = JSON.parse(patch()["oidcConfig"] as string);
+    expect(config.scopes).toEqual(["openid", "email", "profile", "groups"]);
+  });
+
   it("seals a new secret and runs discovery again when the issuer changes", async () => {
     await orgSsoUpdateHandler(
       {

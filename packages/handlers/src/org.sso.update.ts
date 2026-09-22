@@ -123,7 +123,16 @@ export const orgSsoUpdateHandler: CapabilityHandler<
         buildSsoOidcConfig({
           clientId: config.clientId,
           clientSecret,
-          scopes: config.scopes,
+          // An update that leaves `scopes` out keeps the stored ones. The
+          // settings form has no scopes field, so without this an edit made
+          // there would drop extra scopes set through the API or MCP.
+          scopes:
+            config.scopes ??
+            (Array.isArray(stored["scopes"])
+              ? (stored["scopes"] as unknown[]).filter(
+                  (s): s is string => typeof s === "string",
+                )
+              : undefined),
           discovery,
           groupsClaim,
         }),
