@@ -284,6 +284,16 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "create_cost_center",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tacho",
       "name": "create_enrollment_token",
       "reads": [],
@@ -436,6 +446,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "delete_cost_center",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -680,6 +700,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "export_cost_center_statement",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1798,6 +1828,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "list_cost_centers",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -3032,6 +3072,16 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "set_cost_center",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "set_data_plane",
       "reads": [],
@@ -3698,7 +3748,7 @@
       "writes": []
     }
   ],
-  "contentHash": "08738df2bc043476ed30bc660c29bccad1e14adbc74bd81095006b7fe1dcc12c",
+  "contentHash": "7dd0b54198d0ffeaf25ed4fc3672b5bc6fef4f47810f6dcd88c5448c8ab31760",
   "domains": [
     {
       "name": "agent",
@@ -3848,6 +3898,7 @@
         "postgres"
       ],
       "tables": [
+        "postgres:cost.cost_centers",
         "postgres:cost.daily_totals",
         "postgres:cost.findings",
         "postgres:cost.price_book_initializations",
@@ -4148,7 +4199,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 140
+      "tableCount": 141
     },
     {
       "domains": [
@@ -7630,6 +7681,12 @@
         {
           "name": "registered_via",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cost_center",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         }
@@ -12204,6 +12261,83 @@
           "type": "uuid"
         },
         {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "deleted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "deleted_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "label",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "description",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.cost_centers",
+      "name": "cost_centers",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
           "name": "org_id",
           "nullable": false,
           "primaryKey": false,
@@ -12683,6 +12817,12 @@
         },
         {
           "name": "task_ref",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cost_center",
           "nullable": true,
           "primaryKey": false,
           "type": "text"
@@ -22118,6 +22258,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "cost_center",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "workspace",
