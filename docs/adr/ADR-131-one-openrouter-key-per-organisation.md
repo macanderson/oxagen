@@ -4,7 +4,8 @@
 - **Date:** 2026-09-20
 - **Owners:** Mac (funding policy), platform
 - **Numbering:** 131. ADR-114 through ADR-130 were taken while this work was in progress, so an earlier draft's ADR-114 references were renumbered.
-- **Related:** ADR-053 (model funding and BYOK), ADR-055 (the two meters), ADR-042 (data planes), `docs/specs/tenancy-rls/spec.md`, `packages/ai/src/funding-source.ts`, `packages/database/src/assistant-model-key.ts`
+- **Related:** ADR-053 (model funding and BYOK), ADR-055 (the two meters), ADR-042 (data planes), `docs/specs/tenancy-rls/spec.md`, `packages/ai/src/funding-source.ts`, `packages/ai/src/platform-provider.ts`, `packages/database/src/assistant-model-key.ts`
+- **Amended:** 2026-09-22, §9 added (the platform-provider gate and the ceiling refusal).
 
 ## Context
 
@@ -145,6 +146,34 @@ key that does not exist, which fails every turn for that organisation.
 Switching an organisation's key off sets `status = 'disabled'` and a timestamp.
 The row stays. A deleted row takes its usage history with it, and the invoice for
 the month it was deleted in stops reconciling.
+
+### 9. A minted key serves only where the platform routes through OpenRouter
+
+A minted key is an OpenRouter key, and `selectModel` builds any credential it
+is handed into that credential's own client. On a deployment whose platform
+provider is the gateway (`OXAGEN_MODEL_PROVIDER=gateway`, the default), a
+minted key would therefore move the organisation's turns off the gateway and
+out of its metering the moment `OPENROUTER_MANAGEMENT_KEY` was set. The env
+registry says the provider switch is never an automatic fallback, and this
+would have been one.
+
+So the platform provider gates both halves. `ensureAssistantModelKey` returns
+`provisioned: false, reason: "disabled"` on a gateway deployment before it
+reads the management key, and `resolveModelFundingSource` does not read the
+minted-key row there: the shared key answers, and one log line per process
+says so. A key the customer brought is unaffected, because it names its own
+provider and the customer chose it. `packages/ai/src/platform-provider.ts`
+is the one place both sites ask.
+
+A key that reaches its daily ceiling (§3) is refused by the vendor with a 402.
+`selectModelForOrg` wraps a model built on a minted key so that refusal
+reaches the caller as `AssistantModelKeyLimitError`, whose message the
+assistant can show and whose `code` a surface can branch on. The call path
+does not fall back to the shared key. The ceiling bounds what one
+organisation can spend on the account every other organisation depends on,
+and a retry on the shared key would spend past it the moment it was reached.
+§6's fallback is for a key that cannot be read, not for a key that has
+spent its ceiling.
 
 ## Consequences
 

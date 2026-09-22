@@ -26,7 +26,8 @@
  * Server-only, and must be called inside a tenant scope — it reads through
  * `resolveModelFundingSource`, which opens a KMS envelope.
  */
-import type { LanguageModel } from "ai";
+import { wrapLanguageModel, type LanguageModel } from "ai";
+import { mintedKeyLimitMiddleware } from "./assistant-model-key-limit";
 import { resolveModelFundingSource, type TurnFunding } from "./funding-source";
 import { selectModel, type ModelSelector } from "./models";
 
@@ -44,17 +45,33 @@ export interface OrgModelSelection {
  * Spread the result into a `generateObjectFor` / `streamAgentReply` argument
  * object. Never destructure only `fundedBy` — that is the bug this exists to
  * remove.
+ *
+ * A model built on a minted key (platform-funded, with a key) is wrapped so
+ * the vendor's spend refusal reaches the caller as
+ * `AssistantModelKeyLimitError` rather than a bare 402. A key the customer
+ * brought is not wrapped: its refusal is the customer's own account to read.
  */
 export async function selectModelForOrg(
   orgId: string,
   selector: Omit<ModelSelector, "credential"> = {},
 ): Promise<OrgModelSelection> {
   const funding = await resolveModelFundingSource(orgId);
+  const model = selectModel({
+    ...selector,
+    ...(funding.modelKey ? { credential: funding.modelKey } : {}),
+  });
+  const minted = funding.fundedBy === "platform" && funding.modelKey;
   return {
-    model: selectModel({
-      ...selector,
-      ...(funding.modelKey ? { credential: funding.modelKey } : {}),
-    }),
+    model:
+      minted && typeof model !== "string"
+        ? wrapLanguageModel({
+            model,
+            middleware: mintedKeyLimitMiddleware({
+              orgId,
+              keyHint: funding.keyHint,
+            }),
+          })
+        : model,
     fundedBy: funding.fundedBy,
   };
 }
