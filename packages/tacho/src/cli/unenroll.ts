@@ -523,13 +523,17 @@ async function unenrollLocked(
   deps.out(`[4/4] Removing host credentials under ${deps.paths.root}`);
   // Custody is over: every key went back to its file above, so the store and
   // its key are shredded, and the run token signing key goes with them so a
-  // token still in some process's memory is refused from here on.
-  try {
-    deps.credentialStore?.shred();
-  } catch (error) {
-    warnings.push(
-      `could not shred the credential store: ${error instanceof Error ? error.message : String(error)}`,
-    );
+  // token still in some process's memory is refused from here on. A store
+  // that could not be opened is the one exception: it is left where it is,
+  // since shredding it would end the one chance a repaired key file gives.
+  if (!credentials.custodyUnreadable) {
+    try {
+      deps.credentialStore?.shred();
+    } catch (error) {
+      warnings.push(
+        `could not shred the credential store: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
   for (const path of [
     deps.paths.runTokenKey,

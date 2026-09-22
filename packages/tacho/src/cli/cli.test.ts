@@ -3315,7 +3315,9 @@ describe("brokered credentials (ADR-138)", () => {
       expect(issued.ok).toBe(false);
       expect(issued.token).toBeUndefined();
       expect(issued.detail).toBe(
-        `tachod refused to issue a run token (${answer.status})`,
+        answer.status === 200
+          ? "tachod answered without a run token"
+          : `tachod refused to issue a run token (${answer.status})`,
       );
     }
     d.daemonPost = async () => undefined;
@@ -3467,7 +3469,12 @@ describe("brokered credentials (ADR-138)", () => {
     ).toEqual({ harnesses: [], taken: [], warnings: [] });
     expect(
       await restoreCredentials(host, { ...d, modelCredentials: undefined }),
-    ).toEqual({ restored: [], failed: [], warnings: [] });
+    ).toEqual({
+      restored: [],
+      failed: [],
+      warnings: [],
+      custodyUnreadable: false,
+    });
     expect([settingsOf(d.home), authOf(d.home)]).toEqual(before);
   });
   it("restores every harness when host.json is lost, and sweeps one dropped from it only when its file is ours", async () => {
@@ -3537,8 +3544,11 @@ describe("brokered credentials (ADR-138)", () => {
     expect(settingsOf(d.home).apiKeyHelper).toBeUndefined();
     expect(settingsOf(d.home).env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(authOf(d.home).OPENAI_API_KEY).toBeUndefined();
-    expect(existsSync(d.paths.credentials)).toBe(false);
-    expect(existsSync(d.paths.credentialsKey)).toBe(false);
+    // The sealed files stay for a person to attempt a recovery; shredding
+    // them would end that chance. The signing key still goes.
+    expect(text).toContain("sealed store is left at");
+    expect(readFileSync(d.paths.credentials, "utf8")).toBe("{ not a store");
+    expect(existsSync(d.paths.runTokenKey)).toBe(false);
   });
 
   it("keeps the run tokens on --credentials passthrough when custody cannot be read, since the gateway stays", async () => {

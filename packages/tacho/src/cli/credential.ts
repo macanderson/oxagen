@@ -143,7 +143,9 @@ export async function credentialIssue(
     detail:
       typeof parsed.error === "string"
         ? parsed.error
-        : `tachod refused to issue a run token (${answer.status})`,
+        : answer.status === 200
+          ? "tachod answered without a run token"
+          : `tachod refused to issue a run token (${answer.status})`,
   };
 }
 
@@ -445,6 +447,12 @@ export interface RestoreOutcome {
   restored: string[];
   failed: string[];
   warnings: string[];
+  /**
+   * The store could not be opened for at least one provider. On unenroll the
+   * caller then leaves the sealed files where they are instead of shredding
+   * them, so a person who repairs the key file can still recover the key.
+   */
+  custodyUnreadable: boolean;
 }
 
 /**
@@ -472,9 +480,11 @@ export async function restoreCredentials(
   const restored: string[] = [];
   const failed: string[] = [];
   const warnings: string[] = [];
+  let custodyUnreadable = false;
   const contract = deps.modelCredentials;
   const store = deps.credentialStore;
-  if (contract === undefined) return { restored, failed, warnings };
+  if (contract === undefined)
+    return { restored, failed, warnings, custodyUnreadable };
   const helperCommand = deps.runtime.credentialHelperCommand;
   for (const harness of MODEL_CREDENTIAL_HARNESSES) {
     try {
@@ -495,6 +505,7 @@ export async function restoreCredentials(
         unreadable = error instanceof Error ? error.message : String(error);
       }
       if (unreadable !== undefined) {
+        custodyUnreadable = true;
         if (mode === "passthrough") {
           failed.push(
             `the ${provider} credential in custody cannot be read (${unreadable}); ${label} keeps its run token until the store is fixed`,
@@ -502,7 +513,7 @@ export async function restoreCredentials(
           continue;
         }
         warnings.push(
-          `the ${provider} credential in custody cannot be read (${unreadable}). ${label}'s run token was taken out anyway, since the gateway it worked at is being removed; set the ${provider} key in ${label} by hand`,
+          `the ${provider} credential in custody cannot be read (${unreadable}). ${label}'s run token was taken out anyway, since the gateway it worked at is being removed; set the ${provider} key in ${label} by hand. The sealed store is left at ${deps.paths.credentials} in case the key file can be repaired`,
         );
       }
       const state = await contract.restore(
@@ -531,5 +542,5 @@ export async function restoreCredentials(
       failed.push(error instanceof Error ? error.message : String(error));
     }
   }
-  return { restored, failed, warnings };
+  return { restored, failed, warnings, custodyUnreadable };
 }
