@@ -28,21 +28,53 @@
 # (infra/modules/app-node/main.tf). The password is read the other way round —
 # on the node, inside a tracing-off window — so it never reaches this machine.
 
-# render_remote_migration BUCKET HOST PORT DATABASE USER APPLY ALLOW_DIRTY [NON_LINEAR]
+# migration_object_key
+#
+# Sixteen hex characters. Each invocation uploads its own object. Two
+# migration gates on main can overlap, and a shared `atlas-migrations.tgz`
+# lets a newer commit classify status taken against an older directory.
+migration_object_key() {
+  od -An -N8 -tx1 /dev/urandom | tr -d ' \n'
+}
+
+# visible_stream CONTENT
+#
+# The last 20 lines of an SSM stream, then the Atlas status block again.
+# Atlas prints `Migration Status:` before the pending-file list, and a list
+# longer than the tail drops that line. The classifier must still see it.
+visible_stream() {
+  local content=$1
+  printf '%s\n' "$content" | tail -20
+  # Repeated after the tail. `head -1` in the classifier keeps the first
+  # copy when the tail still holds it, and this copy when the tail dropped it.
+  printf '%s\n' "$content" | grep -E \
+    '^[[:space:]]*(Migration Status:|--[[:space:]]*(Executed Files|Pending Files):)' || true
+}
+
+# render_remote_migration BUCKET HOST PORT DATABASE USER APPLY ALLOW_DIRTY [NON_LINEAR] [OBJECT]
 #
 # APPLY is "1" to apply, anything else for a status-only dry run.
 # ALLOW_DIRTY is "1" to pass --allow-dirty to `atlas migrate apply`.
 # NON_LINEAR is "1" to pass --exec-order non-linear; it defaults to "0".
+# OBJECT is the tarball name under `_deploy/`. It defaults to the historical
+# shared name so a caller that has not been updated still renders. The runner
+# below always passes a per-invocation name from `migration_object_key`.
 # Writes the rendered script to stdout. Fails if any placeholder survives.
 render_remote_migration() {
-  if [[ $# -ne 7 && $# -ne 8 ]]; then
-    echo "render_remote_migration: expected 7 or 8 arguments, got $#" >&2
+  if [[ $# -ne 7 && $# -ne 8 && $# -ne 9 ]]; then
+    echo "render_remote_migration: expected 7, 8, or 9 arguments, got $#" >&2
     return 2
   fi
 
   local bucket=$1 host=$2 port=$3 database=$4 user=$5 apply=$6 allow_dirty=$7
   local non_linear=${8:-0}
+  local object=${9:-atlas-migrations.tgz}
   local arg name
+
+  if [[ $object != "atlas-migrations.tgz" && ! $object =~ ^atlas-migrations-[0-9a-f]+[.]tgz$ ]]; then
+    echo "render_remote_migration: object must be atlas-migrations.tgz or atlas-migrations-<hex>.tgz" >&2
+    return 2
+  fi
 
   # An empty value renders a script that fails somewhere further in, on a
   # message about the wrong thing — `s3://` with no bucket reads as a broken
@@ -82,7 +114,7 @@ atlas version
 
 mkdir -p /opt/oxagen/db
 cd /opt/oxagen/db
-aws s3 cp "s3://__BUCKET__/_deploy/atlas-migrations.tgz" /tmp/atlas.tgz --region us-east-1
+aws s3 cp "s3://__BUCKET__/_deploy/__OBJECT__" /tmp/atlas.tgz --region us-east-1
 rm -rf atlas atlas.hcl src seed-assets
 tar -xzf /tmp/atlas.tgz -C /opt/oxagen/db
 
@@ -183,6 +215,7 @@ atlas migrate status --env ci"
   rendered=${rendered//__TAIL__/$tail}
 
   rendered=${rendered//__BUCKET__/$bucket}
+  rendered=${rendered//__OBJECT__/$object}
   rendered=${rendered//__PGHOST__/$host}
   rendered=${rendered//__PGPORT__/$port}
   rendered=${rendered//__PGDB__/$database}
@@ -423,15 +456,27 @@ else
 fi
 echo "==> packaged $(find "$DB_DIR/atlas/migrations" -name '*.sql' | wc -l | tr -d ' ') migrations"
 
-aws s3 cp "$TARBALL" "s3://$BUCKET/_deploy/atlas-migrations.tgz" --only-show-errors
-echo "==> uploaded to s3://$BUCKET/_deploy/"
-
+# One object per run. A fixed key lets a later gate download an earlier
+# commit's directory and read Atlas OK as "this commit is deployed".
+OBJECT_NAME="atlas-migrations-$(migration_object_key).tgz"
+UPLOADED=0
 REMOTE_FILE=$(mktemp "${TMPDIR:-/tmp}/mig-remote-XXXXXX")
 PARAMS_FILE=$(mktemp "${TMPDIR:-/tmp}/mig-params-XXXXXX")
-trap 'rm -f "$REMOTE_FILE" "$PARAMS_FILE"' EXIT
+cleanup_migration_object() {
+  rm -f "${REMOTE_FILE:-}" "${PARAMS_FILE:-}" "${TARBALL:-}"
+  if [[ ${UPLOADED:-0} == 1 && -n ${BUCKET:-} && -n ${OBJECT_NAME:-} ]]; then
+    aws s3 rm "s3://$BUCKET/_deploy/$OBJECT_NAME" --only-show-errors || true
+  fi
+}
+trap cleanup_migration_object EXIT
+
+aws s3 cp "$TARBALL" "s3://$BUCKET/_deploy/$OBJECT_NAME" --only-show-errors
+UPLOADED=1
+echo "==> uploaded to s3://$BUCKET/_deploy/$OBJECT_NAME"
 
 render_remote_migration \
   "$BUCKET" "$PGHOST" "$PGPORT" "$PGDB" "$PGUSER" "$APPLY" "$ALLOW_DIRTY" "$NON_LINEAR" \
+  "$OBJECT_NAME" \
   > "$REMOTE_FILE"
 
 if [[ $APPLY == "1" ]]; then
@@ -475,7 +520,7 @@ for stream in StandardOutputContent StandardErrorContent; do
   label=stdout
   [[ $stream == StandardErrorContent ]] && label=stderr
   echo "--- $label ---"
-  printf '%s\n' "$content" | tail -20
+  visible_stream "$content"
   truncation_note "$label" "${#content}"
 done
 

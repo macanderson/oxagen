@@ -134,6 +134,19 @@ classify_atlas_status() {
         echo "::error::Postgres: Atlas reports OK and $pending pending files at once, which cannot both be true."
         return 2
       fi
+      # OK describes the directory Atlas read, not this repository. A short
+      # executed count with nothing pending means that directory is fully
+      # applied and is older than the files this commit declares.
+      if [[ $declared -gt 0 && -n $executed && $executed -lt $declared ]]; then
+        echo "::error::Postgres: Atlas reports OK with $executed executed files, and this repository declares $declared."
+        echo "::error::Postgres: the status was not taken against this commit's migrations. The store is behind."
+        return 1
+      fi
+      if [[ $declared -gt 0 && -n $executed && $executed -gt $declared ]]; then
+        echo "::error::Postgres: Atlas reports OK with $executed executed files, and this repository declares $declared."
+        echo "::error::Postgres: the counts disagree, so the store's state is unknown."
+        return 2
+      fi
       echo "Postgres: current — ${executed:-?} migrations executed, none pending."
       return 0
       ;;
