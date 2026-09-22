@@ -291,6 +291,8 @@ import { runStreamRoute } from "./routes/v1/run.stream";
 import { runBisectRoute } from "./routes/v1/run.bisect";
 import { runForkRoute } from "./routes/v1/run.fork";
 import { runExportRoute } from "./routes/v1/run.export";
+import { runExportGetRoute } from "./routes/v1/run.export.get";
+import { runExportDownloadRoute } from "./routes/v1/run.export.download";
 import { runSummarizeRoute } from "./routes/v1/run.summarize";
 import { agentListRoute } from "./routes/v1/agent.list";
 import { agentGetRoute } from "./routes/v1/agent.get";
@@ -381,6 +383,12 @@ app.route("/v1/telemetry", telemetryUsageRoute);
 // boundary. Mounted before the auth-gated /v1 groups so a visitor never
 // gets a 401 Missing credentials.
 app.route("/v1/cms", cmsRoute);
+
+// Public run export download (get_run_export's URL). No session: an outside
+// auditor fetches the bundle with the link alone. The signed, expiring token
+// in the query is the boundary. Mounted before the auth-gated /v1 groups for
+// the same reason as /v1/auth/cli above.
+app.route("/v1/run-exports/download", runExportDownloadRoute);
 
 // Shared pre-authentication ceilings for credential stuffing on Stella intake.
 // Register both on the concrete root path before the auth-gated subrouter:
@@ -676,6 +684,7 @@ orgScoped.route("/runs/:run_id/stream", runStreamRoute);
 orgScoped.route("/runs/bisect", runBisectRoute);
 orgScoped.route("/runs/fork", runForkRoute);
 orgScoped.route("/runs/export", runExportRoute);
+orgScoped.route("/runs/export-status", runExportGetRoute);
 orgScoped.route("/runs/summarize", runSummarizeRoute);
 // Spend (ADR-060): the rollup by level, the drill, waste, the statement, one
 // run's cost and the price book. All noBillingGate reads of Postgres rollups.

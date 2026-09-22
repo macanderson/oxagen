@@ -589,6 +589,9 @@ importers:
       commander:
         specifier: 12.1.0
         version: 12.1.0
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
     devDependencies:
       '@oxagen/telemetry':
         specifier: workspace:*

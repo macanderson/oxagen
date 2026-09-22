@@ -242,10 +242,12 @@ export const runExports = evidenceSchema.table(
     // The signed-in user who asked; the attestation names them.
     requestedByUserId: uuid("requested_by_user_id").notNull(),
     status: text("status").notNull().default("queued"),
-    // Set together when the bundle is ready: where it is, its digest, and the
-    // Merkle root and frame count the attestation commits to.
+    // Set together when the bundle is ready: where it is, its digest, its size,
+    // and the Merkle root and frame count the attestation commits to.
     bundleRef: text("bundle_ref"),
     bundleDigest: text("bundle_digest"),
+    // Null on a bundle built before the size was recorded (20260922150000).
+    bundleBytes: integer("bundle_bytes"),
     merkleRoot: text("merkle_root"),
     frameCount: integer("frame_count"),
     completedAt: timestamp("completed_at", {
@@ -276,7 +278,7 @@ export const runExports = evidenceSchema.table(
     ),
     digestCheck: check(
       "run_exports_digest_check",
-      sql`(${t.bundleDigest} IS NULL OR ${t.bundleDigest} ~ '^sha256:[0-9a-f]{64}$') AND (${t.merkleRoot} IS NULL OR ${t.merkleRoot} ~ '^sha256:[0-9a-f]{64}$') AND (${t.frameCount} IS NULL OR ${t.frameCount} >= 0)`,
+      sql`(${t.bundleDigest} IS NULL OR ${t.bundleDigest} ~ '^sha256:[0-9a-f]{64}$') AND (${t.merkleRoot} IS NULL OR ${t.merkleRoot} ~ '^sha256:[0-9a-f]{64}$') AND (${t.frameCount} IS NULL OR ${t.frameCount} >= 0) AND (${t.bundleBytes} IS NULL OR ${t.bundleBytes} >= 0)`,
     ),
   }),
 );

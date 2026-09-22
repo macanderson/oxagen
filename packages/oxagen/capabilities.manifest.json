@@ -4613,6 +4613,25 @@
       }
     },
     {
+      "name": "get_run_export",
+      "file": "run.export.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "export_run",
       "file": "run.export.ts",
       "domain": "run",

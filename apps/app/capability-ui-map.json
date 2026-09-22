@@ -251,6 +251,14 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-c2f283fb-3282-review"
     },
+    "get_run_export": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — after Export queues a bundle, the dialog reads get_run_export on a bounded poll and offers the download once it is ready, for an org Owner or Admin (features/run/actions.ts, features/run/record-actions.tsx)",
+      "proof": "apps/app/src/features/run/record-actions.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-ddcac89d-run-export-verify"
+    },
     "export_statement": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",

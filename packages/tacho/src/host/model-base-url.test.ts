@@ -20,6 +20,7 @@ import {
   modelBaseUrlFor,
   readModelBaseUrlState,
   restoreModelBaseUrls,
+  stellaManagedSettingsPath,
 } from "./model-base-url";
 
 let home: string;
@@ -29,9 +30,10 @@ const both = () => ({
   port: PORT,
   harnesses: ["claude-code" as const, "codex" as const],
 });
-// A managed file that does not exist, so the machine's own never leaks in.
+// Managed files that do not exist, so the machine's own never leak in.
 const internals = () => ({
   managedSettingsFile: join(home, "no-managed-settings.json"),
+  stellaManagedSettingsFile: join(home, "no-managed-stella.toml"),
 });
 
 const settingsPath = () => join(home, ".claude", "settings.json");
@@ -511,5 +513,207 @@ describe("edges", () => {
     seed(settingsPath(), SETTINGS);
     await restoreModelBaseUrls(both(), internals());
     expect(readFileSync(settingsPath(), "utf8")).toBe(SETTINGS);
+  });
+});
+
+describe("Stella: providers.anthropic.base_url", () => {
+  const STELLA_URL = `http://127.0.0.1:${PORT}/stella/anthropic`;
+  const stella = () => ({ home, port: PORT, harnesses: ["stella" as const] });
+  const stellaToml = () => join(home, ".stella", "stella.toml");
+  const stellaJson = () => join(home, ".stella", "settings.json");
+  // What Tacho's hooks writer leaves: the user's file, one line break, the block.
+  const BLOCK = [
+    "# >>> tacho enrollment tch_test (managed by tacho; do not edit) >>>",
+    "[[hooks.Stop]]",
+    "[[hooks.Stop.hooks]]",
+    'type = "command"',
+    'command = "tacho-hook"',
+    "",
+    "# <<< tacho enrollment tch_test <<<",
+    "",
+  ].join("\n");
+  const USER = `# stella, hand-edited
+[model]
+name = "fable-5"   # keep
+
+[providers.openrouter]
+api_key_env = "OPENROUTER_KEY"`;
+
+  it("gives Stella a prefix of its own, so its calls are never filed under Claude Code", () => {
+    expect(modelBaseUrlFor("stella", 4319)).toBe(
+      "http://127.0.0.1:4319/stella/anthropic",
+    );
+    expect(
+      isModelProxyBaseUrl("stella", "http://127.0.0.1:4319/anthropic"),
+    ).toBe(false);
+    expect(stellaManagedSettingsPath("linux", {})).toBe(
+      "/etc/stella/stella.toml",
+    );
+    expect(
+      stellaManagedSettingsPath("darwin", {
+        STELLA_MANAGED_SETTINGS: "/x.toml",
+      }),
+    ).toBe("/x.toml");
+  });
+
+  it("puts the table before the hooks block, is idempotent, and round trips byte for byte", async () => {
+    const enrolled = `${USER}\n${BLOCK}`;
+    seed(stellaToml(), enrolled, 0o600);
+    const applied = await applyModelBaseUrls(stella(), internals());
+    expect(applied.harnesses[0]).toMatchObject({
+      harness: "stella",
+      key: "providers.anthropic.base_url",
+      current: STELLA_URL,
+      ours: true,
+      changed: true,
+      file: stellaToml(),
+    });
+    const text = readFileSync(stellaToml(), "utf8");
+    expect(text).toBe(
+      `${USER}\n\n[providers.anthropic]\nbase_url = "${STELLA_URL}"\n${BLOCK}`,
+    );
+    // The hooks writer strips the block with the one line break before it
+    // and appends it again: the same bytes come back.
+    const stripped = text.replace(/\n# >>> tacho enrollment[\s\S]*$/, "");
+    expect(`${stripped}\n${BLOCK}`).toBe(text);
+
+    const again = await applyModelBaseUrls(stella(), internals());
+    expect(again.harnesses[0]!.changed).toBe(false);
+    expect(readFileSync(stellaToml(), "utf8")).toBe(text);
+
+    await restoreModelBaseUrls(stella(), internals());
+    expect(readFileSync(stellaToml(), "utf8")).toBe(enrolled);
+    expect(statSync(stellaToml()).mode & 0o777).toBe(0o600);
+    expect(readdirSync(join(home, ".stella"))).toEqual(["stella.toml"]);
+  });
+
+  it("adds the key to a [providers.anthropic] table the user already has", async () => {
+    const own = `[providers.anthropic]\napi_key_env = "MY_KEY"\n`;
+    seed(stellaToml(), own);
+    await applyModelBaseUrls(stella(), internals());
+    expect(readFileSync(stellaToml(), "utf8")).toBe(
+      `[providers.anthropic]\nbase_url = "${STELLA_URL}"\napi_key_env = "MY_KEY"\n`,
+    );
+    // Somebody else edits the file: restore takes out only our line and
+    // leaves the user's table, which apply did not create.
+    writeFileSync(
+      stellaToml(),
+      `${readFileSync(stellaToml(), "utf8")}# later\n`,
+    );
+    await restoreModelBaseUrls(stella(), internals());
+    expect(readFileSync(stellaToml(), "utf8")).toBe(`${own}# later\n`);
+  });
+
+  it("takes out the table it created when the file was edited since", async () => {
+    seed(stellaToml(), `${USER}\n`);
+    await applyModelBaseUrls(stella(), internals());
+    writeFileSync(
+      stellaToml(),
+      readFileSync(stellaToml(), "utf8").replace("fable-5", "fable-6"),
+    );
+    await restoreModelBaseUrls(stella(), internals());
+    expect(readFileSync(stellaToml(), "utf8")).toBe(
+      `${USER.replace("fable-5", "fable-6")}\n`,
+    );
+  });
+
+  it("leaves a base_url the user set, and says so, writing nothing", async () => {
+    const own = `[providers.anthropic]\nbase_url = "https://corp-proxy.example"\n`;
+    seed(stellaToml(), own);
+    const state = await applyModelBaseUrls(stella(), internals());
+    expect(state.harnesses[0]).toMatchObject({
+      ours: false,
+      changed: false,
+      current: "https://corp-proxy.example",
+    });
+    expect(state.harnesses[0]!.leftAlone).toContain("already sets");
+    expect(readFileSync(stellaToml(), "utf8")).toBe(own);
+    expect(readdirSync(join(home, ".stella"))).toEqual(["stella.toml"]);
+  });
+
+  it.each([
+    ["a dotted key", 'providers.anthropic.api_key_env = "K"\n'],
+    [
+      "an inline providers table",
+      'providers = { anthropic = { api_key_env = "K" } }\n',
+    ],
+    [
+      "an inline anthropic table",
+      '[providers]\nanthropic = { api_key_env = "K" }\n',
+    ],
+  ])(
+    "refuses rather than corrupts a file that defines the table as %s",
+    async (_shape, own) => {
+      seed(stellaToml(), own);
+      const state = await applyModelBaseUrls(stella(), internals());
+      expect(state.harnesses[0]!.ours).toBe(false);
+      expect(state.harnesses[0]!.leftAlone).toContain(
+        "line edit cannot extend",
+      );
+      expect(readFileSync(stellaToml(), "utf8")).toBe(own);
+    },
+  );
+
+  it("does not read a table name inside a multi-line string", async () => {
+    const own = `notes = """\n[providers.anthropic]\nbase_url = "x"\n"""\n`;
+    seed(stellaToml(), own);
+    await applyModelBaseUrls(stella(), internals());
+    expect(readFileSync(stellaToml(), "utf8")).toBe(
+      `${own}\n[providers.anthropic]\nbase_url = "${STELLA_URL}"\n`,
+    );
+  });
+
+  it("writes the legacy settings.json when that is the file Stella reads, and never creates a TOML beside it", async () => {
+    const own = `{\n  "model": "anthropic/claude-sonnet-5"\n}\n`;
+    seed(stellaJson(), own);
+    const state = await applyModelBaseUrls(stella(), internals());
+    expect(state.harnesses[0]!.file).toBe(stellaJson());
+    expect(existsSync(stellaToml())).toBe(false);
+    expect(JSON.parse(readFileSync(stellaJson(), "utf8"))).toEqual({
+      model: "anthropic/claude-sonnet-5",
+      providers: { anthropic: { base_url: STELLA_URL } },
+    });
+    // Edited since: the objects apply created go with our value.
+    const edited = JSON.parse(readFileSync(stellaJson(), "utf8"));
+    edited.theme = "dark";
+    writeFileSync(stellaJson(), `${JSON.stringify(edited, null, 2)}\n`);
+    await restoreModelBaseUrls(stella(), internals());
+    expect(JSON.parse(readFileSync(stellaJson(), "utf8"))).toEqual({
+      model: "anthropic/claude-sonnet-5",
+      theme: "dark",
+    });
+  });
+
+  it("creates stella.toml when Stella has no config, and removes it again", async () => {
+    await applyModelBaseUrls(stella(), internals());
+    expect(readFileSync(stellaToml(), "utf8")).toBe(
+      `[providers.anthropic]\nbase_url = "${STELLA_URL}"\n`,
+    );
+    await restoreModelBaseUrls(stella(), internals());
+    expect(existsSync(stellaToml())).toBe(false);
+  });
+
+  it("honours STELLA_HOME", async () => {
+    const stellaHome = join(home, "elsewhere");
+    await applyModelBaseUrls({ ...stella(), stellaHome }, internals());
+    expect(existsSync(join(stellaHome, "stella.toml"))).toBe(true);
+    expect(existsSync(stellaToml())).toBe(false);
+  });
+
+  it("reports a managed Stella setting that shadows ours", async () => {
+    const managed = join(home, "managed-stella.toml");
+    writeFileSync(
+      managed,
+      '[providers.anthropic]\nbase_url = "https://pinned.example"\n',
+    );
+    const state = await applyModelBaseUrls(stella(), {
+      ...internals(),
+      stellaManagedSettingsFile: managed,
+    });
+    expect(state.harnesses[0]!.ours).toBe(true);
+    expect(state.harnesses[0]!.shadowedBy).toEqual({
+      file: managed,
+      value: "https://pinned.example",
+    });
   });
 });

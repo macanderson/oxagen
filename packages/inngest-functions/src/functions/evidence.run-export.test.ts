@@ -196,6 +196,7 @@ describe("evidence.run-export", () => {
       status: "ready",
       bundleRef: "blob://exports/exp_abc",
       bundleDigest: "sha256:bundle",
+      bundleBytes: 3,
       merkleRoot: "sha256:root",
       frameCount: 7,
     });

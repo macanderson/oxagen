@@ -25,6 +25,7 @@ import {
   type GradeEnforcementTier,
   type ReplayGrade,
   digestBytes,
+  normalizeInstant,
   redactBytes,
 } from "@oxagen/tacho";
 import {
@@ -346,8 +347,12 @@ export function gradeSealedAttempt(
   });
 }
 
+// drizzle's postgres-js driver returns `timestamptz` as Postgres text, not a
+// Date, and `event_digest` was taken over the `toISOString()` form. Writing
+// the text through would give every archived frame an `observed_at` no
+// verifier can recompute the digest from.
 const iso = (value: string | Date): string =>
-  value instanceof Date ? value.toISOString() : value;
+  value instanceof Date ? value.toISOString() : normalizeInstant(value);
 
 /**
  * One durable row as the archive segment writes it: everything but bytes.

@@ -852,13 +852,26 @@ export function prepareAttemptEvent(
     encryptedPayloadRef = event.encryptedPayloadRef as string;
   }
 
+  // The archive segment writes `observed_at` back as the stored instant's
+  // `toISOString()`, and a run export recomputes `event_digest` from that
+  // string. A producer may send any RFC 3339 form (`+02:00`, microseconds), so
+  // the digest is taken over the same normal form the archive will hold, or
+  // an exported frame could never be verified.
+  const observedInstant = new Date(event.observedAt);
+  if (Number.isNaN(observedInstant.getTime())) {
+    throw new RunStoreStateError(
+      `event ${event.eventType} seq ${event.attemptSeq} has an observedAt ` +
+        `that is not an instant: ${event.observedAt}`,
+    );
+  }
+  const observedAt = observedInstant.toISOString();
   const eventDigest = computeEventDigest({
     attemptSeq: event.attemptSeq,
     eventSchemaVersion: EVENT_SCHEMA_VERSION,
     eventType: event.eventType,
     stage,
     payloadDigest,
-    observedAt: event.observedAt,
+    observedAt,
   });
 
   return {
@@ -870,7 +883,7 @@ export function prepareAttemptEvent(
     eventDigest,
     payload,
     encryptedPayloadRef,
-    observedAt: event.observedAt,
+    observedAt,
     body: event.body === undefined ? null : prepareFrameBody(event.body),
   };
 }

@@ -259,7 +259,7 @@ As it now stands:
 | Claude Code | Yes, once enrolled and the base URL holds | Yes, when the workspace sets `enforced` and the host advertised `models`. The session ceiling needs no advertisement. | Revert `env.ANTHROPIC_BASE_URL`, which the host now reports; a managed settings file, also reported; call the vendor directly, still invisible |
 | Codex | Yes, once enrolled and the base URL holds | Yes, same as Claude Code | Revert `openai_base_url`, now reported; call the vendor directly |
 | Cursor | No, never routed | No | None needed. No base URL exists to write (spike above). |
-| Stella | No, never routed | No | None needed. A writable base URL does exist (spike above), so this row is a build, not a blocker. |
+| Stella | Anthropic provider: yes, once enrolled and the base URL holds (PR #3730, 2026-09-22). Other providers: no, never routed. | Anthropic provider: the session ceiling, as for Claude Code. Other providers: no. | Revert `providers.anthropic.base_url`, now reported; set it before enrolling, which enroll leaves alone and reports; use a provider the proxy has no upstream for; call the vendor directly |
 
 ## Ordered PR list
 
@@ -300,7 +300,7 @@ As it now stands:
    today (unlike Claude Code and Codex, which vendor-document theirs).
    Establish whether either exposes an equivalent knob before committing to
    build it. **1 day.**
-6. **Open, for Stella only, filed as #3717. Route Stella through the proxy.** PR 5 found the
+6. **Built for Stella's Anthropic provider in PR #3730 (2026-09-22); the live-session check in #3717 is still open.** Stella gets its own `/stella/anthropic` prefix, because it sends no session header. Its OpenAI-compatible providers stay direct, because the proxy has no upstream for them. Route Stella through the proxy. PR 5 found the
    knob: the user-scope `providers.<id>.base_url` key in
    `~/.stella/stella.toml`, the same TOML shape `model-base-url.ts` already
    edits for Codex. It needs `ModelBaseUrlHarness` widened, a route in

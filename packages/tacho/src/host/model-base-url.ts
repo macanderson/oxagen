@@ -2,8 +2,8 @@
  * The enrollment contract for the loopback model proxy (story sheet item 10:
  * "enrollment writes the base URL").
  *
- * Two harnesses can be pointed at the proxy, each through the one setting its
- * vendor documents for it, and both login kinds ride the same setting:
+ * Three harnesses can be pointed at the proxy, each through the one setting
+ * its vendor documents for it, and every login kind rides the same setting:
  *
  *   - Claude Code reads `env.ANTHROPIC_BASE_URL` from `~/.claude/settings.json`
  *     and copies it into its own environment before it builds the API client.
@@ -33,6 +33,21 @@
  *     `/backend-api/codex`, which is the suffix Codex requires before it keeps
  *     using its backend-only routes. The proxy then picks the vendor host from
  *     the credential the request carries.
+ *   - Stella reads `providers.anthropic.base_url` from its user-scope config,
+ *     `$STELLA_HOME/stella.toml` (`~/.stella` by default), or from the legacy
+ *     `settings.json` beside it when no TOML exists. A TOML file wins whole,
+ *     so the key goes into whichever file Stella is reading, and a new file is
+ *     always a TOML one. Our URL is `/stella/anthropic`, a prefix of its own,
+ *     because Stella sends no session header and the proxy would otherwise
+ *     file its calls under a live Claude Code session. Only the Anthropic
+ *     provider is routed: the proxy has no upstream for Stella's
+ *     OpenAI-compatible providers (OpenRouter, Z.ai and the rest).
+ *
+ *     Stella differs in one rule. A `base_url` the user already set for
+ *     Anthropic is theirs, and Stella has no second setting the proxy could
+ *     learn its upstream from, so apply leaves it in place and reports the
+ *     harness as not routed rather than displacing it. The same holds when
+ *     the table is defined in a shape a line edit cannot extend safely.
  *
  * The contract is the MCP config writer's: idempotent, a colliding value is
  * displaced and remembered, and restore removes only what apply added. What
@@ -63,12 +78,23 @@ import {
   writeSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import {
+  findStellaBaseUrl,
+  joinLines,
+  splitLines,
+  stellaBaseUrlLine,
+  stellaTableIsEmpty,
+  type TomlLine,
+  tomlStringValue,
+} from "./model-base-url-toml";
 
-export type ModelBaseUrlHarness = "claude-code" | "codex";
+export type ModelBaseUrlHarness = "claude-code" | "codex" | "stella";
 
 export interface ModelBaseUrlOptions {
   /** The user's home directory; `~/.claude` and `~/.codex` are read under it. */
   home: string;
+  /** Stella's home, `$STELLA_HOME`; `~/.stella` when absent. */
+  stellaHome?: string;
   /** The loopback port the daemon's model proxy listens on. */
   port: number;
   harnesses: ModelBaseUrlHarness[];
@@ -104,6 +130,11 @@ export interface ModelBaseUrlHarnessState {
    * tool catalog, which is the shape that thrashed autocompact.
    */
   toolSearch?: { current: string | null; enabled: boolean };
+  /**
+   * Why apply left the file as it was and the harness is not routed: a value
+   * the user set, or a table shape a line edit cannot extend. Stella only.
+   */
+  leftAlone?: string;
 }
 
 export interface ModelBaseUrlState {
@@ -116,6 +147,9 @@ const CLAUDE_KEY = "ANTHROPIC_BASE_URL";
 export const CLAUDE_TOOL_SEARCH_KEY = "ENABLE_TOOL_SEARCH";
 const CLAUDE_TOOL_SEARCH_VALUE = "true";
 const CODEX_KEY = "openai_base_url";
+const STELLA_KEY = "providers.anthropic.base_url";
+/** The first line of Tacho's managed hooks block in `stella.toml`. */
+const STELLA_BLOCK_MARKER = /^# >>> tacho enrollment /;
 
 /**
  * Whether a `ENABLE_TOOL_SEARCH` value keeps the search on. Claude Code reads
@@ -133,14 +167,15 @@ export function modelBaseUrlFor(
   harness: ModelBaseUrlHarness,
   port: number,
 ): string {
-  return harness === "claude-code"
-    ? `http://127.0.0.1:${port}/anthropic`
-    : `http://127.0.0.1:${port}/backend-api/codex`;
+  if (harness === "claude-code") return `http://127.0.0.1:${port}/anthropic`;
+  if (harness === "stella") return `http://127.0.0.1:${port}/stella/anthropic`;
+  return `http://127.0.0.1:${port}/backend-api/codex`;
 }
 
 const OURS: Record<ModelBaseUrlHarness, RegExp> = {
   "claude-code": /^http:\/\/127\.0\.0\.1:\d{2,5}\/anthropic$/,
   codex: /^http:\/\/127\.0\.0\.1:\d{2,5}\/backend-api\/codex$/,
+  stella: /^http:\/\/127\.0\.0\.1:\d{2,5}\/stella\/anthropic$/,
 };
 
 /** Whether a value is one this contract writes, for any port. */
@@ -151,14 +186,40 @@ export function isModelProxyBaseUrl(
   return typeof value === "string" && OURS[harness].test(value);
 }
 
-function fileFor(harness: ModelBaseUrlHarness, home: string): string {
-  return harness === "claude-code"
-    ? join(home, ".claude", "settings.json")
-    : join(home, ".codex", "config.toml");
+/** Where a harness's files live: the home directory, and Stella's own. */
+export interface ModelBaseUrlHomes {
+  home: string;
+  stellaHome?: string;
 }
 
+/**
+ * The file this contract edits for a harness. For Stella it is the file
+ * Stella reads: `stella.toml` when it exists, the legacy `settings.json` when
+ * only that exists, and a new `stella.toml` when neither does. Writing a new
+ * TOML beside a JSON would make Stella ignore the JSON, hooks and all.
+ */
+export function modelBaseUrlFile(
+  harness: ModelBaseUrlHarness,
+  homes: ModelBaseUrlHomes,
+): string {
+  if (harness === "claude-code")
+    return join(homes.home, ".claude", "settings.json");
+  if (harness === "codex") return join(homes.home, ".codex", "config.toml");
+  const stellaHome = homes.stellaHome ?? join(homes.home, ".stella");
+  const toml = join(stellaHome, "stella.toml");
+  const json = join(stellaHome, "settings.json");
+  return !existsSync(toml) && existsSync(json) ? json : toml;
+}
+
+const fileFor = modelBaseUrlFile;
+
 function keyLabel(harness: ModelBaseUrlHarness): string {
-  return harness === "claude-code" ? `env.${CLAUDE_KEY}` : CODEX_KEY;
+  if (harness === "claude-code") return `env.${CLAUDE_KEY}`;
+  return harness === "stella" ? STELLA_KEY : CODEX_KEY;
+}
+
+function isJsonFile(file: string): boolean {
+  return file.endsWith(".json");
 }
 
 function sidecarFor(file: string): string {
@@ -169,8 +230,16 @@ function sidecarFor(file: string): string {
 export function modelBaseUrlBackupPath(
   harness: ModelBaseUrlHarness,
   home: string,
+  stellaHome?: string,
 ): string {
-  return sidecarFor(fileFor(harness, home));
+  return sidecarFor(fileFor(harness, homesOf(home, stellaHome)));
+}
+
+function homesOf(
+  home: string,
+  stellaHome: string | undefined,
+): ModelBaseUrlHomes {
+  return stellaHome !== undefined ? { home, stellaHome } : { home };
 }
 
 function sha256(text: string): string {
@@ -193,6 +262,17 @@ interface Sidecar {
   /** Claude Code only: whether apply had to create the `env` object. */
   created_env: boolean;
   /**
+   * Stella only: what apply created around the key, so a restore after other
+   * edits removes the scaffolding with it. In `stella.toml` that is the
+   * `[providers.anthropic]` header; in `settings.json` the `providers` object,
+   * the `anthropic` object, or both.
+   */
+  created_table?: boolean;
+  /** Stella only: apply put a blank line before the header it created. */
+  created_blank?: boolean;
+  created_providers?: boolean;
+  created_provider?: boolean;
+  /**
    * Claude Code only: the `ENABLE_TOOL_SEARCH` value apply displaced, or null
    * when the key was absent. Absent from the sidecar when apply never wrote
    * the key, either because the user's own value already enabled the search
@@ -209,7 +289,10 @@ function readSidecar(path: string): Sidecar | undefined {
     if (typeof parsed.written_sha256 !== "string") return undefined;
     return {
       schema: SIDECAR_SCHEMA,
-      harness: parsed.harness === "codex" ? "codex" : "claude-code",
+      harness:
+        parsed.harness === "codex" || parsed.harness === "stella"
+          ? parsed.harness
+          : "claude-code",
       existed: parsed.existed === true,
       original_base64:
         typeof parsed.original_base64 === "string"
@@ -220,6 +303,10 @@ function readSidecar(path: string): Sidecar | undefined {
       previous_line:
         typeof parsed.previous_line === "string" ? parsed.previous_line : null,
       created_env: parsed.created_env === true,
+      ...(parsed.created_table === true ? { created_table: true } : {}),
+      ...(parsed.created_blank === true ? { created_blank: true } : {}),
+      ...(parsed.created_providers === true ? { created_providers: true } : {}),
+      ...(parsed.created_provider === true ? { created_provider: true } : {}),
       ...("previous_tool_search" in parsed
         ? {
             previous_tool_search:
@@ -344,43 +431,8 @@ function serializeLike(text: string | undefined, settings: JsonObject): string {
 // so every comment, blank line and key order survives.
 // ---------------------------------------------------------------------------
 
-interface TomlLine {
-  /** The line without its line ending. */
-  text: string;
-  /** The line ending that followed it; empty on a final unterminated line. */
-  eol: string;
-}
-
-function splitLines(text: string): TomlLine[] {
-  const lines: TomlLine[] = [];
-  const pattern = /([^\r\n]*)(\r\n|\n|\r|$)/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(text)) !== null) {
-    if (match[0].length === 0) break;
-    lines.push({ text: match[1] ?? "", eol: match[2] ?? "" });
-  }
-  return lines;
-}
-
-function joinLines(lines: readonly TomlLine[]): string {
-  return lines.map((line) => `${line.text}${line.eol}`).join("");
-}
-
 const TOML_KEY_LINE =
   /^\s*(?:openai_base_url|"openai_base_url"|'openai_base_url')\s*=\s*(.*)$/;
-
-function tomlStringValue(rest: string): string | null {
-  const basic = /^"((?:[^"\\]|\\.)*)"/.exec(rest);
-  if (basic !== null) {
-    try {
-      return JSON.parse(`"${basic[1] ?? ""}"`) as string;
-    } catch {
-      return basic[1] ?? "";
-    }
-  }
-  const literal = /^'([^']*)'/.exec(rest);
-  return literal !== null ? (literal[1] ?? "") : null;
-}
 
 /**
  * The index of the top-level `openai_base_url` line, or -1. Top level ends at
@@ -417,7 +469,36 @@ function tomlLineFor(url: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Managed settings (Claude Code only)
+// Stella: `providers.anthropic.base_url`, in `stella.toml` as text or in the
+// legacy `settings.json` as a document.
+// ---------------------------------------------------------------------------
+
+function objectAt(
+  parent: JsonObject | undefined,
+  key: string,
+): JsonObject | undefined {
+  const value = parent?.[key];
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as JsonObject)
+    : undefined;
+}
+
+function stellaJsonValue(settings: JsonObject): string | null {
+  const value = objectAt(objectAt(settings, "providers"), "anthropic")?.[
+    "base_url"
+  ];
+  return typeof value === "string" ? value : null;
+}
+
+/** Stella's value, whichever file carries it; null when the key is absent. */
+function stellaValue(file: string, text: string): string | null {
+  if (isJsonFile(file)) return stellaJsonValue(parseSettings(text, file));
+  const found = findStellaBaseUrl(splitLines(text));
+  return found.kind === "table" ? found.value : null;
+}
+
+// ---------------------------------------------------------------------------
+// Managed settings
 // ---------------------------------------------------------------------------
 
 /** Where Claude Code reads managed settings, which win over user settings. */
@@ -431,14 +512,38 @@ export function claudeManagedSettingsPath(
   return "/etc/claude-code/managed-settings.json";
 }
 
+/**
+ * Where Stella reads managed settings, which are merged after user settings
+ * and win. `STELLA_MANAGED_SETTINGS` names the file outright; otherwise the
+ * TOML is read when it exists and the JSON when only that does.
+ */
+export function stellaManagedSettingsPath(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const named = env["STELLA_MANAGED_SETTINGS"];
+  if (named !== undefined && named.length > 0) return named;
+  const dir =
+    platform === "darwin"
+      ? "/Library/Application Support/stella"
+      : "/etc/stella";
+  const toml = join(dir, "stella.toml");
+  const json = join(dir, "settings.json");
+  return !existsSync(toml) && existsSync(json) ? json : toml;
+}
+
 function managedShadow(
+  harness: ModelBaseUrlHarness,
   managedFile: string,
   expected: string,
 ): { file: string; value: string } | undefined {
   try {
     const text = readTextIfExists(managedFile);
     if (text === undefined) return undefined;
-    const value = claudeValue(parseSettings(text, managedFile));
+    const value =
+      harness === "stella"
+        ? stellaValue(managedFile, text)
+        : claudeValue(parseSettings(text, managedFile));
     return value !== null && value !== expected
       ? { file: managedFile, value }
       : undefined;
@@ -454,6 +559,8 @@ function managedShadow(
 export interface ModelBaseUrlInternals {
   /** Overrides the managed settings path; tests point it at a scratch file. */
   managedSettingsFile?: string;
+  /** The same for Stella's managed settings. */
+  stellaManagedSettingsFile?: string;
 }
 
 function currentValue(
@@ -463,6 +570,7 @@ function currentValue(
 ): string | null {
   if (text === undefined) return null;
   if (harness === "claude-code") return claudeValue(parseSettings(text, file));
+  if (harness === "stella") return stellaValue(file, text);
   const lines = splitLines(text);
   return tomlValueAt(lines, findTomlKey(lines));
 }
@@ -471,8 +579,9 @@ function currentValue(
 export function hasOrphanedModelBaseUrl(
   harness: ModelBaseUrlHarness,
   home: string,
+  stellaHome?: string,
 ): boolean {
-  const file = fileFor(harness, home);
+  const file = fileFor(harness, homesOf(home, stellaHome));
   const text = readTextIfExists(file);
   try {
     return isModelProxyBaseUrl(harness, currentValue(harness, file, text));
@@ -484,13 +593,189 @@ export function hasOrphanedModelBaseUrl(
   }
 }
 
+/** Why Stella's file was left alone, or undefined when apply may edit it. */
+function stellaLeftAlone(
+  file: string,
+  text: string | undefined,
+): string | undefined {
+  if (text === undefined) return undefined;
+  if (isJsonFile(file)) {
+    const settings = parseSettings(text, file);
+    const providers = settings["providers"];
+    const provider = objectAt(settings, "providers")?.["anthropic"];
+    if (
+      (providers !== undefined &&
+        objectAt(settings, "providers") === undefined) ||
+      (provider !== undefined &&
+        objectAt(objectAt(settings, "providers"), "anthropic") === undefined)
+    )
+      return `${file} defines providers.anthropic as something other than an object, so it was left untouched and Stella's Anthropic calls are not routed through Oxagen`;
+    const value = objectAt(objectAt(settings, "providers"), "anthropic")?.[
+      "base_url"
+    ];
+    if (
+      value !== undefined &&
+      !isModelProxyBaseUrl("stella", typeof value === "string" ? value : null)
+    )
+      return `${file} already sets ${STELLA_KEY}, so it was left in place and Stella's Anthropic calls are not routed through Oxagen`;
+    return undefined;
+  }
+  const found = findStellaBaseUrl(splitLines(text));
+  if (found.kind === "conflict")
+    return `${file} defines [providers.anthropic] in a shape a line edit cannot extend safely (a dotted key or an inline table), so it was left untouched and Stella's Anthropic calls are not routed through Oxagen`;
+  if (
+    found.kind === "table" &&
+    found.key >= 0 &&
+    !isModelProxyBaseUrl("stella", found.value)
+  )
+    return `${file} already sets ${STELLA_KEY}, so it was left in place and Stella's Anthropic calls are not routed through Oxagen`;
+  return undefined;
+}
+
+interface StellaPlan {
+  next: string;
+  current: string | null;
+  createdTable: boolean;
+  createdBlank: boolean;
+  createdProviders: boolean;
+  createdProvider: boolean;
+}
+
+/** The file with our URL in it. Call only once `stellaLeftAlone` is clear. */
+function planStella(
+  file: string,
+  text: string | undefined,
+  url: string,
+): StellaPlan {
+  if (isJsonFile(file)) {
+    const settings = parseSettings(text, file);
+    const providers = objectAt(settings, "providers");
+    const provider = objectAt(providers, "anthropic");
+    const current = stellaJsonValue(settings);
+    settings["providers"] = {
+      ...(providers ?? {}),
+      anthropic: { ...(provider ?? {}), base_url: url },
+    };
+    return {
+      next: serializeLike(text, settings),
+      current,
+      createdTable: false,
+      createdBlank: false,
+      createdProviders: providers === undefined,
+      createdProvider: provider === undefined,
+    };
+  }
+  const lines = splitLines(text ?? "");
+  const eol = (text ?? "").includes("\r\n") ? "\r\n" : "\n";
+  const found = findStellaBaseUrl(lines);
+  let current: string | null = null;
+  let createdTable = false;
+  let createdBlank = false;
+  if (found.kind === "table" && found.key >= 0) {
+    current = found.value;
+    const line = lines[found.key] as TomlLine;
+    lines[found.key] = { text: stellaBaseUrlLine(url), eol: line.eol };
+  } else if (found.kind === "table") {
+    const header = lines[found.header] as TomlLine;
+    const after = header.eol === "" ? "" : header.eol;
+    if (header.eol === "") header.eol = eol;
+    lines.splice(found.header + 1, 0, {
+      text: stellaBaseUrlLine(url),
+      eol: after,
+    });
+  } else {
+    // A header of its own, always, placed before Tacho's hooks block rather
+    // than after it. A bare key after the block would land inside its last
+    // `[[hooks.…]]` table, and every enroll strips the block and appends it
+    // again at the end, so a table after it would move on each enroll. The
+    // strip takes the one line break before the block with it, which is the
+    // key line's own, so the bytes come back the same.
+    const marker = lines.findIndex((line) =>
+      STELLA_BLOCK_MARKER.test(line.text),
+    );
+    const at = marker >= 0 ? marker : lines.length;
+    const before = lines[at - 1];
+    const added: TomlLine[] = [];
+    if (before !== undefined) {
+      if (before.eol === "") before.eol = eol;
+      if (before.text.trim().length > 0) {
+        added.push({ text: "", eol });
+        createdBlank = true;
+      }
+    }
+    added.push({ text: "[providers.anthropic]", eol });
+    added.push({ text: stellaBaseUrlLine(url), eol });
+    lines.splice(at, 0, ...added);
+    createdTable = true;
+  }
+  return {
+    next: joinLines(lines),
+    current,
+    createdTable,
+    createdBlank,
+    createdProviders: false,
+    createdProvider: false,
+  };
+}
+
+/** Our value out of Stella's file, and what apply built around it. */
+function unplanStella(
+  file: string,
+  text: string,
+  sidecar: Sidecar | undefined,
+): string | undefined {
+  if (isJsonFile(file)) {
+    const settings = parseSettings(text, file);
+    const providers = objectAt(settings, "providers");
+    const provider = objectAt(providers, "anthropic");
+    if (provider === undefined || providers === undefined) return undefined;
+    const value = provider["base_url"];
+    if (
+      !isModelProxyBaseUrl("stella", typeof value === "string" ? value : null)
+    )
+      return undefined;
+    delete provider["base_url"];
+    if (
+      sidecar?.created_provider === true &&
+      Object.keys(provider).length === 0
+    )
+      delete providers["anthropic"];
+    if (
+      sidecar?.created_providers === true &&
+      Object.keys(providers).length === 0
+    )
+      delete settings["providers"];
+    return serializeLike(text, settings);
+  }
+  const lines = splitLines(text);
+  const found = findStellaBaseUrl(lines);
+  if (found.kind !== "table" || found.key < 0) return undefined;
+  if (!isModelProxyBaseUrl("stella", found.value)) return undefined;
+  lines.splice(found.key, 1);
+  if (
+    sidecar?.created_table === true &&
+    stellaTableIsEmpty(lines, found.header)
+  ) {
+    lines.splice(found.header, 1);
+    // The blank line apply put before the header goes with it.
+    const before = lines[found.header - 1];
+    if (
+      sidecar.created_blank === true &&
+      before !== undefined &&
+      before.text.trim().length === 0
+    )
+      lines.splice(found.header - 1, 1);
+  }
+  return joinLines(lines);
+}
+
 function describe(
   harness: ModelBaseUrlHarness,
   options: ModelBaseUrlOptions,
   changed: boolean,
   internals: ModelBaseUrlInternals,
 ): ModelBaseUrlHarnessState {
-  const file = fileFor(harness, options.home);
+  const file = fileFor(harness, options);
   const backup = sidecarFor(file);
   const expected = modelBaseUrlFor(harness, options.port);
   const text = readTextIfExists(file);
@@ -499,10 +784,19 @@ function describe(
   const shadow =
     harness === "claude-code"
       ? managedShadow(
+          harness,
           internals.managedSettingsFile ?? claudeManagedSettingsPath(),
           expected,
         )
-      : undefined;
+      : harness === "stella"
+        ? managedShadow(
+            harness,
+            internals.stellaManagedSettingsFile ?? stellaManagedSettingsPath(),
+            expected,
+          )
+        : undefined;
+  const leftAlone =
+    harness === "stella" ? stellaLeftAlone(file, text) : undefined;
   const toolSearch =
     harness === "claude-code"
       ? claudeToolSearchValue(
@@ -520,6 +814,7 @@ function describe(
     backup,
     changed,
     ...(shadow !== undefined ? { shadowedBy: shadow } : {}),
+    ...(leftAlone !== undefined ? { leftAlone } : {}),
     ...(harness === "claude-code"
       ? {
           toolSearch: {
@@ -535,7 +830,7 @@ function applyOne(
   harness: ModelBaseUrlHarness,
   options: ModelBaseUrlOptions,
 ): boolean {
-  const file = fileFor(harness, options.home);
+  const file = fileFor(harness, options);
   const backup = sidecarFor(file);
   const url = modelBaseUrlFor(harness, options.port);
   const text = readTextIfExists(file);
@@ -544,6 +839,10 @@ function applyOne(
   let previous: string | null = null;
   let previousLine: string | null = null;
   let createdEnv = false;
+  let stellaCreated: Pick<
+    Sidecar,
+    "created_table" | "created_blank" | "created_providers" | "created_provider"
+  > = {};
   // Set only when this apply writes `ENABLE_TOOL_SEARCH`; a value the user
   // already had that enables the search is not ours to displace or restore.
   let previousToolSearch: string | null | undefined;
@@ -576,6 +875,21 @@ function applyOne(
         : {}),
     };
     next = serializeLike(text, settings);
+  } else if (harness === "stella") {
+    // A value the user set, or a shape a line edit cannot extend, is left as
+    // it is: nothing is written and nothing is remembered.
+    if (stellaLeftAlone(file, text) !== undefined) return false;
+    const plan = planStella(file, text, url);
+    if (plan.current === url && existing !== undefined) return false;
+    orphan =
+      existing === undefined && isModelProxyBaseUrl(harness, plan.current);
+    stellaCreated = {
+      ...(plan.createdTable ? { created_table: true } : {}),
+      ...(plan.createdBlank ? { created_blank: true } : {}),
+      ...(plan.createdProviders ? { created_providers: true } : {}),
+      ...(plan.createdProvider ? { created_provider: true } : {}),
+    };
+    next = plan.next;
   } else {
     const lines = splitLines(text ?? "");
     const index = findTomlKey(lines);
@@ -625,6 +939,7 @@ function applyOne(
         previous,
         previous_line: previousLine,
         created_env: createdEnv,
+        ...stellaCreated,
         ...(previousToolSearch !== undefined
           ? { previous_tool_search: previousToolSearch }
           : {}),
@@ -641,7 +956,7 @@ function restoreOne(
   harness: ModelBaseUrlHarness,
   options: ModelBaseUrlOptions,
 ): boolean {
-  const file = fileFor(harness, options.home);
+  const file = fileFor(harness, options);
   const backup = sidecarFor(file);
   const sidecar = readSidecar(backup);
   const text = readTextIfExists(file);
@@ -698,6 +1013,8 @@ function restoreOne(
         next = serializeLike(text, settings);
       }
     }
+  } else if (harness === "stella") {
+    next = unplanStella(file, text, sidecar);
   } else {
     const lines = splitLines(text);
     const index = findTomlKey(lines);

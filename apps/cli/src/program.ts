@@ -629,7 +629,7 @@ export function buildProgram(): Command {
       },
     );
 
-  // ── run: the recorded run (export_run) ──────────────────────────────────────
+  // ── run: the recorded run (export_run, get_run_export) ────────────────────
 
   const runCmd = program
     .command("run")
@@ -657,6 +657,54 @@ export function buildProgram(): Command {
     .action(async (runId: string, opts: { json?: boolean }) => {
       const { runExport } = await import("./commands/run.js");
       await runExport(runId, opts);
+    });
+  runCmd
+    .command("export-status")
+    .description(
+      "Show where a run export stands and, once it is ready, its download link",
+    )
+    .argument(
+      "<export-id>",
+      "The export id `oxagen run export` printed (rexp_…)",
+    )
+    .option("--json", "Output JSON")
+    .action(async (exportId: string, opts: { json?: boolean }) => {
+      const { runExportStatus } = await import("./commands/run.js");
+      await runExportStatus(exportId, opts);
+    });
+  runCmd
+    .command("download")
+    .description(
+      "Download a ready run export and check its sha256 against the recorded digest",
+    )
+    .argument(
+      "<export-id>",
+      "The export id `oxagen run export` printed (rexp_…)",
+    )
+    .option(
+      "--out <file>",
+      "Where to write the zip (default: <run-id>-<export-id>.zip here)",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      async (exportId: string, opts: { json?: boolean; out?: string }) => {
+        const { runDownload } = await import("./commands/run.js");
+        await runDownload(exportId, opts);
+      },
+    );
+
+  // ── verify: check a run export offline ──────────────────────────────────────
+
+  program
+    .command("verify")
+    .description(
+      "Check a run export bundle offline: each frame's digest and link, the Merkle root, and each signature",
+    )
+    .argument("<bundle>", "The bundle's .zip file or its extracted directory")
+    .option("--json", "Output the verification as JSON")
+    .action(async (bundle: string, opts: { json?: boolean }) => {
+      const { verifyBundle } = await import("./commands/verify.js");
+      await verifyBundle(bundle, opts);
     });
 
   // ── trace: one agent run as a span tree ─────────────────────────────────────

@@ -1374,6 +1374,17 @@
     },
     {
       "domain": "run",
+      "name": "get_run_export",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
       "name": "get_run_frame_body",
       "reads": [],
       "surfaces": [
@@ -3748,7 +3759,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7dd0b54198d0ffeaf25ed4fc3672b5bc6fef4f47810f6dcd88c5448c8ab31760",
+  "contentHash": "4c3b1ee210ab7d1d01f1ea5f3fd3f750b5068bc7f25f9dcb0b0b0fb3b366b274",
   "domains": [
     {
       "name": "agent",
@@ -13632,6 +13643,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "bundle_bytes",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
         },
         {
           "name": "merkle_root",
