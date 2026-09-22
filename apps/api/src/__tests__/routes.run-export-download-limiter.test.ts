@@ -74,9 +74,7 @@ function countAs(count: number): string[] {
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         execute: vi.fn().mockImplementation(async (query: unknown) => {
-          const key = (query as { queryChunks?: unknown[] }).queryChunks?.at(
-            1,
-          );
+          const key = (query as { queryChunks?: unknown[] }).queryChunks?.at(1);
           if (typeof key === "string") keys.push(key);
           return [{ count }];
         }),
@@ -90,8 +88,8 @@ function countAs(count: number): string[] {
  * of its window in-process, so a second case on the same address would read
  * the first case's 429 rather than its own counter.
  */
-function get(clientIp: string): Promise<Response> {
-  return app.fetch(
+async function get(clientIp: string): Promise<Response> {
+  return await app.fetch(
     new Request(`http://localhost${PATH}`, {
       // Vercel's own header is the one an attributable caller carries there;
       // an unattributable request skips the pre-auth counter by design.

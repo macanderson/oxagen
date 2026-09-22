@@ -140,10 +140,10 @@ export async function credentialIssue(
 }
 
 /** The daemon's answer to `/credential/issue`: the token, or why there is none. */
-export function parseIssueAnswer(answer: {
-  status: number;
-  body: string;
-}): { token?: string; detail: string } {
+export function parseIssueAnswer(answer: { status: number; body: string }): {
+  token?: string;
+  detail: string;
+} {
   let parsed: { token?: unknown; error?: unknown } = {};
   try {
     parsed = JSON.parse(answer.body) as typeof parsed;

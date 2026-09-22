@@ -712,16 +712,15 @@ export type ExternalRefusalCode =
   | "consent_denied"
   | "consent_unavailable";
 
-const EXTERNAL_REFUSAL_CODES: ReadonlySet<string> = new Set<
-  ExternalRefusalCode
->([
-  "authz_check_error",
-  "authz_decision_not_persisted",
-  "kill_switch_denied",
-  "agent_rule_denied",
-  "consent_denied",
-  "consent_unavailable",
-]);
+const EXTERNAL_REFUSAL_CODES: ReadonlySet<string> =
+  new Set<ExternalRefusalCode>([
+    "authz_check_error",
+    "authz_decision_not_persisted",
+    "kill_switch_denied",
+    "agent_rule_denied",
+    "consent_denied",
+    "consent_unavailable",
+  ]);
 
 /** True for a code an external tool gate refuses with (`ExternalRefusalCode`). */
 export function isExternalRefusalCode(

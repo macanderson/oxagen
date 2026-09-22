@@ -461,7 +461,9 @@ describe("the daemon's git seam", () => {
     time = 5_000 + 8 * 60 * 60_000;
     await handle.tick();
     expect(handle.registry.get(SESSION)?.sealed).toBe(true);
-    const terminal = frames(handle).find((event) => event.kind === "agent_stop");
+    const terminal = frames(handle).find(
+      (event) => event.kind === "agent_stop",
+    );
     expect(terminal?.ts).toBe(new Date(5_000).toISOString());
     expect(terminal?.attrs["hook.received_at"]).toBe(
       new Date(5_000).toISOString(),

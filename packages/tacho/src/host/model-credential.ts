@@ -60,8 +60,10 @@ import {
 export type ModelCredentialHarness = BrokerableHarness;
 
 /** The provider each harness's credential is for, read off the route table. */
-export const HARNESS_PROVIDER: Record<ModelCredentialHarness, RunTokenProvider> =
-  BROKERABLE_HARNESS_PROVIDER;
+export const HARNESS_PROVIDER: Record<
+  ModelCredentialHarness,
+  RunTokenProvider
+> = BROKERABLE_HARNESS_PROVIDER;
 
 export interface ModelCredentialOptions {
   /** The user's home directory; `~/.claude` and `~/.codex` are read under it. */
@@ -895,8 +897,7 @@ export function staticTokenStillGood(
     now,
   });
   return (
-    verdict.ok &&
-    verdict.claims.exp - now > staticTokenRenewWindowMs(host, now)
+    verdict.ok && verdict.claims.exp - now > staticTokenRenewWindowMs(host, now)
   );
 }
 

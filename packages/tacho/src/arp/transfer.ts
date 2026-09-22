@@ -519,7 +519,10 @@ export function prepareCheckpoint(options: PrepareCheckpointOptions): {
       { binary: string; args: string[] }
     > = {
       codex: { binary: HARNESS_BINARY.codex, args: [instruction] },
-      "claude-code": { binary: HARNESS_BINARY["claude-code"], args: [instruction] },
+      "claude-code": {
+        binary: HARNESS_BINARY["claude-code"],
+        args: [instruction],
+      },
       cursor: { binary: HARNESS_BINARY.cursor, args: [instruction] },
       stella: { binary: HARNESS_BINARY.stella, args: ["run", instruction] },
     };

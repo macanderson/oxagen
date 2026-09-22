@@ -378,9 +378,9 @@ export const MODEL_ROUTED_HARNESSES: readonly ModelRoutedHarness[] =
   MODEL_HARNESS_ROUTES.map((row) => row.harness);
 
 export const BROKERABLE_HARNESSES: readonly BrokerableHarness[] =
-  MODEL_HARNESS_ROUTES.filter((row): row is BrokerableRow => row.brokerable).map(
-    (row) => row.harness,
-  );
+  MODEL_HARNESS_ROUTES.filter(
+    (row): row is BrokerableRow => row.brokerable,
+  ).map((row) => row.harness);
 
 export function isModelRoutedHarness(
   harness: string,

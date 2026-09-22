@@ -61,7 +61,10 @@ describe("readMainTip", () => {
 
   it("passes an abort signal so a hung API call cannot hold the job", async () => {
     let seen: unknown;
-    const fetchImpl = async (_url: string | URL | Request, init?: RequestInit) => {
+    const fetchImpl = async (
+      _url: string | URL | Request,
+      init?: RequestInit,
+    ) => {
       seen = init?.signal;
       return {
         ok: true,

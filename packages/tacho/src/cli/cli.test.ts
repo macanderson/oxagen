@@ -3695,9 +3695,9 @@ describe("brokered credentials (ADR-138)", () => {
       }),
     ).toContain("sets both ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN");
     // The one parser both `credential issue` and enroll's static mint read.
-    expect(parseIssueAnswer({ status: 200, body: '{"token":"oxrt_x"}' })).toEqual(
-      { token: "oxrt_x", detail: "issued by tachod" },
-    );
+    expect(
+      parseIssueAnswer({ status: 200, body: '{"token":"oxrt_x"}' }),
+    ).toEqual({ token: "oxrt_x", detail: "issued by tachod" });
     expect(parseIssueAnswer({ status: 200, body: "{}" }).detail).toBe(
       "tachod answered without a run token",
     );

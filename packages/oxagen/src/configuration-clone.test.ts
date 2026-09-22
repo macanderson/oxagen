@@ -9,8 +9,8 @@ describe("clone harness", () => {
   it("accepts every wrapped harness and the two connected shapes", () => {
     // A harness added to WRAPPED_HARNESSES (ADR-101) is one a clone can
     // carry without a second list to update.
-    const options = configurationCloneDraftSchema.shape.harness.unwrap()
-      .options;
+    const options =
+      configurationCloneDraftSchema.shape.harness.unwrap().options;
     expect(options).toEqual([
       ...WRAPPED_HARNESSES,
       "claude-agent-sdk",

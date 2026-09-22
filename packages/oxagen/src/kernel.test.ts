@@ -640,9 +640,7 @@ describe("emitExternalCapabilityOutcome", () => {
         message: `blocked: ${code}`,
       });
     expect(events.map((e) => e.errorCode)).toEqual([...refusals]);
-    expect(new Set(events.map((e) => e.errorCode)).size).toBe(
-      refusals.length,
-    );
+    expect(new Set(events.map((e) => e.errorCode)).size).toBe(refusals.length);
   });
 
   it("keeps a bare policy deny as authz_denied", () => {
