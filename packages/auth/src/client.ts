@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import { twoFactorClient } from "better-auth/client/plugins";
+import { ssoClient } from "@better-auth/sso/client";
 import { loadEnv } from "@oxagen/config/env";
 
 // Explicit return-type cast to a structural shape silences TS's "inferred
@@ -66,30 +67,52 @@ export interface TwoFactorClientActions {
   }>;
 }
 
+/**
+ * The subset of the ssoClient plugin surface the app consumes, hand-typed for
+ * the same reason as TwoFactorClientActions. `signIn.sso` posts to
+ * /api/auth/sign-in/sso, which finds the provider by the email's domain and
+ * answers `{ url, redirect: true }`; the client's redirect plugin then sends
+ * the browser to the identity provider.
+ */
+export interface SsoClientActions {
+  sso: (args: {
+    email: string;
+    callbackURL: string;
+    errorCallbackURL?: string;
+  }) => AuthResult<{ url?: string; redirect?: boolean }>;
+}
+
+/** The typed slices re-attached to the capped client type. */
+type PluginActions = {
+  twoFactor: TwoFactorClientActions;
+  signIn: ReturnType<typeof createAuthClient>["signIn"] & SsoClientActions;
+};
+
 // The explicit annotation caps the client to a nameable, serializable type:
 // the fully-inferred type (especially with the twoFactor plugin's zod schemas)
 // trips TS2883/TS7056 across the package boundary. We intersect the hand-typed
-// twoFactor slice back on so plugin methods stay typed for consumers.
+// twoFactor and signIn.sso slices back on so plugin methods stay typed for
+// consumers.
 // `as unknown as` bypasses the structural friction of the huge inferred type.
-export const authClient: ReturnType<typeof createAuthClient> & {
-  twoFactor: TwoFactorClientActions;
-} = createAuthClient({
-  baseURL: resolveBaseURL(),
-  // twoFactorClient exposes authClient.twoFactor.{enable,verifyTotp,disable,
-  // generateBackupCodes,verifyBackupCode}. onTwoFactorRedirect fires when a
-  // sign-in needs a second factor — route the user to the verification page.
-  plugins: [
-    twoFactorClient({
-      onTwoFactorRedirect() {
-        const browser = (
-          globalThis as { window?: { location?: { href: string } } }
-        ).window;
-        if (browser?.location) browser.location.href = "/two-factor";
-      },
-    }),
-  ],
-}) as unknown as ReturnType<typeof createAuthClient> & {
-  twoFactor: TwoFactorClientActions;
-};
+export const authClient: ReturnType<typeof createAuthClient> & PluginActions =
+  createAuthClient({
+    baseURL: resolveBaseURL(),
+    // twoFactorClient exposes authClient.twoFactor.{enable,verifyTotp,disable,
+    // generateBackupCodes,verifyBackupCode}. onTwoFactorRedirect fires when a
+    // sign-in needs a second factor — route the user to the verification page.
+    plugins: [
+      twoFactorClient({
+        onTwoFactorRedirect() {
+          const browser = (
+            globalThis as { window?: { location?: { href: string } } }
+          ).window;
+          if (browser?.location) browser.location.href = "/two-factor";
+        },
+      }),
+      // ssoClient exposes authClient.signIn.sso for enterprise single sign-on
+      // (the server plugin is registered in auth.ts, ADR-142).
+      ssoClient(),
+    ],
+  }) as unknown as ReturnType<typeof createAuthClient> & PluginActions;
 
 export const { signIn, signOut, signUp, useSession, getSession } = authClient;

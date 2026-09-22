@@ -1,11 +1,14 @@
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { deleteSessionCookie } from "better-auth/cookies";
 import { twoFactor } from "better-auth/plugins";
 import { buildOAuthProxyPlugins } from "./oauth-proxy-config";
 import { eq } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
 import { schema, withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
+import { resolveSsoKms } from "@oxagen/database/sso-secrets";
 import { captureError } from "@oxagen/telemetry";
 import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
@@ -16,6 +19,16 @@ import {
 } from "./token-encryption";
 import { withTrustedLinkHardening } from "./account-linking";
 import { resolveIsLocalEnv } from "./local-env";
+import { withSsoSecrets } from "./sso/adapter";
+import { SSO_DISABLED_PATHS, buildSsoPlugin } from "./sso/plugin";
+import { createSsoProvisioner } from "./sso/provision";
+import { createPgSsoProvisioningStore } from "./sso/pg-store";
+import {
+  SSO_REQUIRED_CODE,
+  SSO_REQUIRED_MESSAGE,
+  authMethodForPath,
+  isNonSsoSignInRefused,
+} from "./sso/policy";
 import {
   sendEmailFireAndForget,
   resetPasswordEmailTemplate,
@@ -223,6 +236,22 @@ const trustedOrigins: string[] = [
 // callback, and proxying localhost through production would break local sign-in.
 // The pure, unit-tested implementation lives in ./oauth-proxy-config.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Enterprise SSO (ADR-142) — @better-auth/sso over OIDC and SAML.
+//
+// Providers are registered per organisation through the org.sso.* capabilities
+// (IAM-gated, audited, secrets sealed with the KMS envelope); the plugin's own
+// registration and domain endpoints are disabled below. On every SSO sign-in
+// the provisioner maps the IdP's groups to the person's org role through
+// org.sso_group_roles, deny by default, and emits sso.sign_in.
+// ---------------------------------------------------------------------------
+const ssoPlugin = buildSsoPlugin({
+  provisionUser: createSsoProvisioner({
+    store: createPgSsoProvisioningStore(),
+    emit: emitSecurityEvent,
+  }),
+});
+
 const oauthProxyPlugins = buildOAuthProxyPlugins({
   isLocalEnv,
   productionUrlEnv: process.env.OAUTH_PROXY_PRODUCTION_URL,
@@ -237,33 +266,42 @@ export const auth = betterAuth({
   // auth.verifications tables. These are global identity tables (no RLS) and
   // this db() call is the bootstrap point for all session/user resolution —
   // no tenant scope exists at this layer.
-  database: drizzleAdapter(db(), {
-    provider: "pg",
-    // Better Auth resolves models by name; with usePlural=true EVERY model name
-    // is pluralized for schema-key lookup — user→users, session→sessions, and
-    // critically the rate-limiter's internal model rateLimit→rateLimits. The key
-    // here must therefore be the PLURAL "rateLimits" (not "rateLimit"), or the
-    // Drizzle adapter throws `model "rateLimits" was not found` on EVERY auth
-    // request. storage:"database" rate limiting is enabled in every environment
-    // except the E2E harness (`enabled: !isE2E` below), so this mapping — and a
-    // reachable Postgres — is exercised on every sign-in/sign-up in LOCAL DEV too,
-    // not just production. A DB outage therefore 500s auth in dev as well (it
-    // surfaces as ECONNREFUSED on the auth.rate_limit query). Maps to the
-    // auth.rate_limit table (migration 0009).
-    schema: {
-      users: schema.users,
-      sessions: schema.sessions,
-      accounts: schema.accounts,
-      verifications: schema.verifications,
-      rateLimits: schema.rateLimitTable,
-      // usePlural pluralizes the twoFactor model → "twoFactors". The physical
-      // table is auth.two_factor; this key MUST be the plural form or the
-      // adapter throws `model "twoFactors" was not found` on every 2FA call
-      // (same class of bug as rateLimit→rateLimits).
-      twoFactors: schema.twoFactorTable,
-    },
-    usePlural: true,
-  }),
+  //
+  // withSsoSecrets opens the envelope-sealed secrets inside auth.sso_providers
+  // rows when the SSO plugin reads them, and refuses provider writes through
+  // the adapter (see ./sso/adapter.ts).
+  database: withSsoSecrets(
+    drizzleAdapter(db(), {
+      provider: "pg",
+      // Better Auth resolves models by name; with usePlural=true EVERY model name
+      // is pluralized for schema-key lookup — user→users, session→sessions, and
+      // critically the rate-limiter's internal model rateLimit→rateLimits. The key
+      // here must therefore be the PLURAL "rateLimits" (not "rateLimit"), or the
+      // Drizzle adapter throws `model "rateLimits" was not found` on EVERY auth
+      // request. storage:"database" rate limiting is enabled in every environment
+      // except the E2E harness (`enabled: !isE2E` below), so this mapping — and a
+      // reachable Postgres — is exercised on every sign-in/sign-up in LOCAL DEV too,
+      // not just production. A DB outage therefore 500s auth in dev as well (it
+      // surfaces as ECONNREFUSED on the auth.rate_limit query). Maps to the
+      // auth.rate_limit table (migration 0009).
+      schema: {
+        users: schema.users,
+        sessions: schema.sessions,
+        accounts: schema.accounts,
+        verifications: schema.verifications,
+        rateLimits: schema.rateLimitTable,
+        // usePlural pluralizes the twoFactor model → "twoFactors". The physical
+        // table is auth.two_factor; this key MUST be the plural form or the
+        // adapter throws `model "twoFactors" was not found` on every 2FA call
+        // (same class of bug as rateLimit→rateLimits).
+        twoFactors: schema.twoFactorTable,
+        // The SSO plugin's "ssoProvider" model, pluralised by usePlural.
+        ssoProviders: schema.ssoProviderTable,
+      },
+      usePlural: true,
+    }),
+    resolveSsoKms,
+  ),
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
   // CSRF / redirect validation. The baseURL origin is automatically
@@ -287,7 +325,11 @@ export const auth = betterAuth({
   plugins: [
     ...oauthProxyPlugins,
     twoFactor({ issuer: "Oxagen" }) as BetterAuthPlugin,
+    ssoPlugin,
   ],
+  // The SSO plugin's provider-management endpoints; the org.sso.* capabilities
+  // replace them (./sso/plugin.ts).
+  disabledPaths: [...SSO_DISABLED_PATHS],
   user: {
     fields: {
       name: "displayName",
@@ -380,6 +422,9 @@ export const auth = betterAuth({
     customRules: {
       "/sign-in/email": { window: 60, max: 5 },
       "/sign-up/email": { window: 60, max: 10 },
+      // SSO sign-in starts an IdP redirect; it is limited like a password
+      // attempt so it cannot be used to enumerate which domains have SSO.
+      "/sign-in/sso": { window: 60, max: 5 },
     },
   },
   socialProviders: {
@@ -430,6 +475,13 @@ export const auth = betterAuth({
     },
   },
   session: {
+    // How the session was established ("sso:<providerId>", "password",
+    // "social:<provider>", "other"). Set by session.create.before below and
+    // never by a client. The app's org gate reads it to enforce an
+    // organisation's "require SSO" policy (ADR-142).
+    additionalFields: {
+      authMethod: { type: "string", required: false, input: false },
+    },
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
     // cookieCache intentionally omitted — Better Auth defaults to disabled.
@@ -483,6 +535,36 @@ export const auth = betterAuth({
   //   (3) Failed sign-in: no databaseHooks seam for failed attempts; emit
   //       from the API/MCP sign-in route handler instead.
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // "Require SSO" at sign-in (ADR-142). A password sign-in, or a Google/GitHub
+  // sign-in, for an email whose domain belongs to an organisation that
+  // requires SSO is refused, unless the person is an Owner of that
+  // organisation (break-glass, see ./sso/policy.ts). The org gate in the app
+  // enforces the same policy on sessions that already exist.
+  // ---------------------------------------------------------------------------
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-in/email") return;
+      const email = (ctx.body as { email?: unknown } | undefined)?.email;
+      if (typeof email !== "string") return;
+      if (await isNonSsoSignInRefused(email)) {
+        throw new APIError("FORBIDDEN", {
+          code: SSO_REQUIRED_CODE,
+          message: SSO_REQUIRED_MESSAGE,
+        });
+      }
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      if (!ctx.path?.startsWith("/callback/")) return;
+      const created = ctx.context.newSession;
+      if (!created?.user?.email) return;
+      if (!(await isNonSsoSignInRefused(created.user.email))) return;
+      await ctx.context.internalAdapter.deleteSession(created.session.token);
+      deleteSessionCookie(ctx);
+      throw ctx.redirect("/login?sso=required");
+    }),
+  },
+
   databaseHooks: {
     // The account hook ALWAYS runs: it must strip the plaintext
     // access_token / refresh_token / id_token fields on every write. With the
@@ -506,6 +588,17 @@ export const auth = betterAuth({
     ),
     session: {
       create: {
+        before: async (session, ctx) => {
+          return {
+            data: {
+              ...session,
+              authMethod: authMethodForPath(
+                ctx?.path,
+                ctx?.params as Record<string, unknown> | undefined,
+              ),
+            },
+          };
+        },
         after: async (session) => {
           // better-auth's Session type uses camelCase property names.
           const s = session as {

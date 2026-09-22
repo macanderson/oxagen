@@ -51,6 +51,8 @@ describe("drizzleAdapter schema map", () => {
     // and both 500 every auth request when they do.
     ["rateLimits", "schema.rateLimitTable"],
     ["twoFactors", "schema.twoFactorTable"],
+    // The SSO plugin's "ssoProvider" model (ADR-142).
+    ["ssoProviders", "schema.ssoProviderTable"],
   ])("maps the plural model key %s → %s", (modelKey, table) => {
     expect(
       adapterBlock,
@@ -58,7 +60,7 @@ describe("drizzleAdapter schema map", () => {
     ).toMatch(new RegExp(`\\b${modelKey}:\\s*${table.replace(".", "\\.")}\\b`));
   });
 
-  it.each(["rateLimit", "twoFactor"])(
+  it.each(["rateLimit", "twoFactor", "ssoProvider"])(
     "never uses the singular model key %s",
     (singular) => {
       expect(
