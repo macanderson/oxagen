@@ -107,6 +107,11 @@ import { skillSearchSummarize } from "./skill.search.summarize";
 import { skillList } from "./skill.list";
 import { skillPropose } from "./skill.propose";
 import { spendStatementExport } from "./spend.statement.export";
+import { spendCostCenterStatementExport } from "./spend.cost_center_statement.export";
+import { costCenterList } from "./cost_center.list";
+import { costCenterCreate } from "./cost_center.create";
+import { costCenterDelete } from "./cost_center.delete";
+import { costCenterSet } from "./cost_center.set";
 import { costPriceEntryList } from "./cost.price_entry.list";
 import { costUnpricedModelList } from "./cost.unpriced_model.list";
 import { costPriceEntrySet } from "./cost.price_entry.set";
@@ -392,7 +397,12 @@ export {
   moneySchema,
   spendFigureSchema,
   tokenCountsSchema,
+  UNASSIGNED_COST_CENTER_KEY,
 } from "./spend.shared";
+// Cost-center vocabulary (ADR-142). Not a capability, so exported here to
+// satisfy the file-coverage guard.
+export { costCenterLabelSchema, costCenterSchema } from "./cost_center.shared";
+export type { CostCenter } from "./cost_center.shared";
 export type {
   Cost,
   CostBasis,
@@ -692,6 +702,11 @@ export {
   skillList,
   skillPropose,
   spendStatementExport,
+  spendCostCenterStatementExport,
+  costCenterList,
+  costCenterCreate,
+  costCenterDelete,
+  costCenterSet,
   costPriceEntryList,
   costUnpricedModelList,
   costPriceEntrySet,
@@ -1053,6 +1068,11 @@ export const contracts: readonly CapabilityDeclaration[] = [
   skillList,
   skillPropose,
   spendStatementExport,
+  spendCostCenterStatementExport,
+  costCenterList,
+  costCenterCreate,
+  costCenterDelete,
+  costCenterSet,
   costPriceEntryList,
   costUnpricedModelList,
   costPriceEntrySet,

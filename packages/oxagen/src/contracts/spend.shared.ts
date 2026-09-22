@@ -116,15 +116,28 @@ export const tokenCountsSchema = z
   .strict();
 export type TokenCounts = z.output<typeof tokenCountsSchema>;
 
-/** The levels spend is attributed to (spec §12.7). */
+/**
+ * The levels spend is attributed to (spec §12.7), plus the cost center the
+ * run is charged back to (ADR-142). A `cost_center` row's key is the label,
+ * or {@link UNASSIGNED_COST_CENTER_KEY} for the spend no center claims.
+ */
 export const spendGroupKindSchema = z.enum([
   "operator",
   "agent",
   "model",
   "tool",
   "task",
+  "cost_center",
 ]);
 export type SpendGroupKind = z.output<typeof spendGroupKindSchema>;
+
+/**
+ * The `cost_center` group key of spend no cost center claims. Mirrors
+ * `UNASSIGNED_COST_CENTER_KEY` in `@oxagen/database/schema` (the contracts
+ * carry no database dependency); the label pattern refuses `~`, so no label
+ * collides with it.
+ */
+export const UNASSIGNED_COST_CENTER_KEY = "~none";
 
 /** A 0..1 ratio; null when nothing measured it. */
 export const ratioSchema = z.number().min(0).max(1);
