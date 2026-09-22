@@ -178,6 +178,8 @@ export const BUNDLE_FEATURE_MODEL_PRICES = "model_prices" as const;
  * them says so. See `docs/audits/2026-09-21-model-gateway-arming.md`.
  */
 export const BUNDLE_FEATURE_MODEL_ALLOWLIST = "models" as const;
+
+/**
  * The host can parse `hook_fail_open`: the list of hook paths the local
  * evaluator answers allow on when a decision cannot be made against the
  * cached bundle (the daemon unreachable, or the event carrying no tool
