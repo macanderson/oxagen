@@ -1070,8 +1070,15 @@ function toEffectiveScope(
  * evaluateConditions/checkIAM for the grant's allow/deny effect; here we are
  * only extracting the ceiling, so an unparsable payload contributes no
  * further restriction rather than crashing resolution).
+ *
+ * Exported (beyond `resolveAgentEffectivePermissions`'s own use) for a caller
+ * that has only ONE principal to ceiling and no delegating human to
+ * intersect against. A Tacho host wrapping a harness on a machine acts as
+ * its agent identity alone, with no live human co-principal for that call.
+ * Calling this directly for just that principal's id is the correct reading
+ * of "this agent's own ceiling", not a workaround.
  */
-function collectResourceScope(
+export function collectResourceScope(
   principalId: string,
   grants: readonly Grant[],
   roles: readonly Role[],

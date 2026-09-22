@@ -43,12 +43,18 @@ function host(
 /** A host new enough to parse every field this control plane emits. */
 const CURRENT = [BUNDLE_FEATURE_GATEWAY_TOOLS];
 
+const NO_MANDATE = {
+  permissions: { allow: [], deny: [], ask: [] },
+  budget: { mode: "observed" as const },
+};
+
 function bundle(bundleFeatures: string[] = CURRENT) {
   return unsignedBundle(
     host(bundleFeatures),
     { org: 1, workspace: 1 },
     { mode: "digest_only", classes: [] },
     null,
+    NO_MANDATE,
     NOW,
   );
 }

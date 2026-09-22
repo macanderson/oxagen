@@ -563,6 +563,10 @@ describe("the bundle", () => {
     bundleFeatures: [],
   } as unknown as Parameters<typeof unsignedBundle>[0];
   const retention = { mode: "digest_only" as const, classes: [] };
+  const noMandate = {
+    permissions: { allow: [], deny: [], ask: [] },
+    budget: { mode: "observed" as const },
+  };
 
   it("carries the compiled text in context.system, parses on the host, and moves the etag", () => {
     const system = compileSteering([rec({})]);
@@ -571,12 +575,14 @@ describe("the bundle", () => {
       { org: 0, workspace: 0 },
       retention,
       system,
+      noMandate,
     );
     const plain = unsignedBundle(
       host,
       { org: 0, workspace: 0 },
       retention,
       null,
+      noMandate,
     );
     expect(steered.context.system).toBe(system);
     expect(plain.context.system).toBeNull();
