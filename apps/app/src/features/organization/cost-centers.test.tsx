@@ -23,7 +23,9 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 const { readError, readOk } = await import("@/data/read");
 const { workspaceRow } = await import("./organization.builders");
-const { CostCentersView } = await import("./cost-centers");
+const { CostCenters, CostCentersView } = await import("./cost-centers");
+const { OrgCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
 
 afterEach(() => {
   cleanup();
@@ -143,4 +145,36 @@ describe("Cost centers", () => {
     ).toBeDefined();
     expect(screen.queryByRole("table", { name: "Cost centers" })).toBeNull();
   });
+});
+
+describe("Cost centers section", () => {
+  it.each([
+    ["billing", true],
+    ["member", false],
+  ] as const)(
+    "reads both lists for a %s and offers writes: %s",
+    async (orgRole, writes) => {
+      const ctx = unsafeMint(OrgCtx, {
+        userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        orgId: "7a000000-0000-4000-8000-0000000000a1",
+        orgSlug: "acme",
+        orgName: "Acme Robotics",
+        orgRole,
+      });
+      const costCenters = vi.fn().mockResolvedValue(readOk(centers));
+      const workspacesRead = vi.fn().mockResolvedValue(readOk(workspaces));
+      const source = {
+        org: { costCenters, workspaces: workspacesRead },
+      } as unknown as Parameters<typeof CostCenters>[0]["source"];
+      const view = render(
+        <IntlProvider>{await CostCenters({ ctx, source })}</IntlProvider>,
+      );
+      expect(costCenters).toHaveBeenCalledWith(ctx);
+      expect(workspacesRead).toHaveBeenCalledWith(ctx);
+      expect(
+        screen.queryByRole("button", { name: "Add a cost center" }) !== null,
+      ).toBe(writes);
+      await expectNoAxe(view.container);
+    },
+  );
 });
