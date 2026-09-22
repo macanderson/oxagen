@@ -3,8 +3,8 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.scr.003-dod-verified-close"
-record_id = "rec_scr_003_dod_verified_close_ccf2405bf555"
-record_hash = "sha256:84c84b2abd4bec85e135d8104bd792f058c9012af530c9dca3fb7eab5b7b8de3"
+record_id = "rec_scr_003_dod_verified_close_2110ac63134f"
+record_hash = "sha256:74a2b14ad2a8e730ebb52cc73d0990cd4d2a4ae940df092dc3b186e538f73ca2"
 kind = "rule"
 statement = "An issue closes only when every item in its definition of done is satisfied and verified. Verification is evidence: test output, a doc diff, or a CI link. A sentence of assertion is not evidence. Reference-grade covers the implementation, tests, code comments, docs, and CI config. Before closing, re-read the definition of done, sweep for residue and file each item as its own issue with only the triage label, confirm every architectural choice has an ADR, and report what shipped, where it lives, and which issues were filed. A pull request that advances an issue without finishing it links that issue with Refs #N. Refs does not close, so the merge gate does not hold that pull request against the issue's definition of done. A pull request may carry both Closes and Refs, and is gated only on what it closes. A pull request that closes no issue is waived by a label: no-issue for a trivial change, closes-nothing for a substantial change that closes no issue by design. Issues closed as not planned state the reason in a closing comment. The close guard verifies a completed close, and leaves a not-planned close alone. Issues that predate the task template and have no definition of done stay closed. The merge gate still refuses a pull request that claims to close one."
 origin = "imported"
@@ -12,8 +12,8 @@ sharing_scope = "workspace"
 status = "active"
 
 [record.provenance]
-source_kind = "record"
-source_uri = ".oxagen/rules/ctx.scr.003-dod-verified-close.toml"
+source_kind = "document"
+source_uri = "docs/scr/SCR-003-dod-verified-close.md"
 
 [record.steering]
 force = "must"
