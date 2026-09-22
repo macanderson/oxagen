@@ -42,7 +42,9 @@ describe("get_clone_draft", () => {
     // out by the single tree read, the second by the per-candidate branch
     // check, which is asked only of the candidates the reads let through.
     const taken = vi.fn().mockResolvedValue(
-      takenNames({ files: new Set([".oxagen/skills/review-cloned/SKILL.md"]) }),
+      takenNames({
+        files: new Set([".oxagen/skills/review-cloned/SKILL.md"]),
+      }),
     );
     const branchTaken = vi
       .fn()
@@ -86,10 +88,16 @@ describe("get_clone_draft", () => {
       taken,
       branchTaken,
     })({ kind: "agent", sourceId: "review" }, makeCTX());
-    expect(out).toMatchObject({ slug: "review-cloned-2", name: "Review-cloned-2" });
+    expect(out).toMatchObject({
+      slug: "review-cloned-2",
+      name: "Review-cloned-2",
+    });
     expect(taken).toHaveBeenCalledTimes(1);
     expect(branchTaken).toHaveBeenCalledTimes(1);
-    expect(branchTaken).toHaveBeenCalledWith(expect.anything(), "review-cloned-2");
+    expect(branchTaken).toHaveBeenCalledWith(
+      expect.anything(),
+      "review-cloned-2",
+    );
   });
   it("refuses denied users before reading a source", async () => {
     gate.assertOrgRole.mockRejectedValue(new Error("denied"));
