@@ -10,6 +10,7 @@ import {
   assertHandlersComplete,
   authorizeExternalCapability,
   capabilitiesForSurface,
+  emitExternalCapabilityOutcome,
   clearBillingAdmissionGate,
   clearBudgetAdmissionGate,
   clearHandlersForTests,
@@ -571,9 +572,11 @@ describe("authorizeExternalCapability", () => {
       reason: "iam_check_error",
       decision: null,
     });
+    // A resolver that threw is not a policy verdict, and the audit row says
+    // so under its own code.
     expect(events[0]).toMatchObject({
       outcome: "deny",
-      errorCode: "authz_denied",
+      errorCode: "authz_check_error",
     });
   });
 
@@ -600,10 +603,80 @@ describe("authorizeExternalCapability", () => {
       reason: "iam_check_error",
       decision: null,
     });
+    // A resolver that threw is not a policy verdict, and the audit row says
+    // so under its own code.
     expect(events[0]).toMatchObject({
       outcome: "deny",
-      errorCode: "authz_denied",
+      errorCode: "authz_check_error",
     });
+  });
+});
+
+// ── emitExternalCapabilityOutcome ─────────────────────────────────────────────
+// The one audit row an external tool call writes. Every gate that refused
+// with text instead of a throw hands its code here, and the row has to keep
+// them apart.
+describe("emitExternalCapabilityOutcome", () => {
+  const extCtx: CapabilityContext = { ...ctx, surface: "mcp" };
+
+  afterEach(() => {
+    clearSecurityEventEmitter();
+  });
+
+  it("records each gate's refusal under its own code", () => {
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+    const refusals = [
+      "authz_check_error",
+      "authz_decision_not_persisted",
+      "kill_switch_denied",
+      "agent_rule_denied",
+      "consent_denied",
+      "consent_unavailable",
+    ] as const;
+    for (const code of refusals)
+      emitExternalCapabilityOutcome("mcp.github.list", extCtx, "deny", 1, {
+        code,
+        message: `blocked: ${code}`,
+      });
+    expect(events.map((e) => e.errorCode)).toEqual([...refusals]);
+    expect(new Set(events.map((e) => e.errorCode)).size).toBe(
+      refusals.length,
+    );
+  });
+
+  it("keeps a bare policy deny as authz_denied", () => {
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+    emitExternalCapabilityOutcome("mcp.github.list", extCtx, "deny", 1);
+    emitExternalCapabilityOutcome("mcp.github.list", extCtx, "deny", 1, {
+      code: "something_else",
+    });
+    expect(events.map((e) => e.errorCode)).toEqual([
+      "authz_denied",
+      "authz_denied",
+    ]);
+  });
+
+  it("names a decision-rule refusal and an unnamed error", () => {
+    const events: KernelSecurityEvent[] = [];
+    setSecurityEventEmitter((e) => events.push(e));
+    emitExternalCapabilityOutcome("mcp.github.list", extCtx, "deny", 1, {
+      code: "decision_rule_denied",
+    });
+    emitExternalCapabilityOutcome(
+      "mcp.github.list",
+      extCtx,
+      "error",
+      1,
+      new Error("transport"),
+    );
+    emitExternalCapabilityOutcome("mcp.github.list", extCtx, "allow", 1);
+    expect(events.map((e) => e.errorCode)).toEqual([
+      "decision_rule_denied",
+      "external_decision_refused",
+      null,
+    ]);
   });
 });
 

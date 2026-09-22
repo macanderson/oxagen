@@ -686,11 +686,49 @@ export type KernelFailureCode =
   | "decision_rule_approval_required"
   | "external_tool_authority_unavailable"
   | "external_decision_refused"
+  | ExternalRefusalCode
   | CapabilityErrorCode
   | "no_tenant_scope"
   | "invalid_tenant_scope"
   | "budget_exceeded"
   | HandlerErrorCode;
+
+/**
+ * The codes an external tool call's own gates refuse with. Each is a
+ * different gate answering a different question, and the audit row has to
+ * say which one said no: a kill switch an operator threw is not a policy
+ * deny, and a person withholding consent is neither.
+ *
+ * `authz_check_error` and `authz_decision_not_persisted` are the two
+ * denials `authorizeExternalCapability` makes on its own, without a policy
+ * verdict: the resolver threw, or an agent run's decision row was never
+ * written. `authz_denied` is the policy verdict itself.
+ */
+export type ExternalRefusalCode =
+  | "authz_check_error"
+  | "authz_decision_not_persisted"
+  | "kill_switch_denied"
+  | "agent_rule_denied"
+  | "consent_denied"
+  | "consent_unavailable";
+
+const EXTERNAL_REFUSAL_CODES: ReadonlySet<string> = new Set<
+  ExternalRefusalCode
+>([
+  "authz_check_error",
+  "authz_decision_not_persisted",
+  "kill_switch_denied",
+  "agent_rule_denied",
+  "consent_denied",
+  "consent_unavailable",
+]);
+
+/** True for a code an external tool gate refuses with (`ExternalRefusalCode`). */
+export function isExternalRefusalCode(
+  code: unknown,
+): code is ExternalRefusalCode {
+  return typeof code === "string" && EXTERNAL_REFUSAL_CODES.has(code);
+}
 
 export interface KernelSecurityEvent {
   capability: string;
@@ -1902,7 +1940,7 @@ export async function authorizeExternalCapability(
       workspaceId: ctx.workspaceId,
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
-      errorCode: "authz_denied",
+      errorCode: "authz_check_error",
       durationMs: Date.now() - startMs,
     });
     return {
@@ -1927,7 +1965,7 @@ export async function authorizeExternalCapability(
       workspaceId: ctx.workspaceId,
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
-      errorCode: "authz_denied",
+      errorCode: "authz_decision_not_persisted",
       durationMs: Date.now() - startMs,
     });
     return {
@@ -2029,7 +2067,16 @@ export async function enforceExternalDecisionRules(
   // The external invocation boundary, not each preflight, owns the audit event.
 }
 
-/** Record the final external invocation outcome after all preflights settle. */
+/**
+ * Record the final external invocation outcome after all preflights settle.
+ *
+ * `error` is whatever the boundary caught or refused with. A thrown
+ * CapabilityError or decision-rule error names its own code. A gate that
+ * answered the model with text instead of throwing passes an object whose
+ * `code` is an `ExternalRefusalCode`, so a kill switch, a withheld consent
+ * and an agent rule each reach the audit row under their own name. A deny
+ * that names nothing is a policy deny, `authz_denied`.
+ */
 export function emitExternalCapabilityOutcome(
   name: string,
   ctx: CapabilityContext,
@@ -2048,7 +2095,8 @@ export function emitExternalCapabilityOutcome(
         ? error.code
         : reported === "decision_rule_denied" ||
             reported === "decision_rule_approval_required" ||
-            reported === "external_tool_authority_unavailable"
+            reported === "external_tool_authority_unavailable" ||
+            isExternalRefusalCode(reported)
           ? reported
           : outcome === "deny"
             ? "authz_denied"
