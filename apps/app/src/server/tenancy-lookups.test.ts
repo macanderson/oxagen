@@ -27,7 +27,7 @@ vi.mock("@oxagen/database", async () => ({
 }));
 
 const { resolveOrgTier } = vi.hoisted(() => ({
-  resolveOrgTier: vi.fn(async () => "enterprise"),
+  resolveOrgTier: vi.fn(() => Promise.resolve("enterprise")),
 }));
 vi.mock("@oxagen/billing", () => ({
   resolveOrgTier,
