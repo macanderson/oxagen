@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { COST_CENTER_LABEL_PATTERN } from "./cost";
 import { agentSchema } from "./_schemas";
 import {
   appendOnlyAuditMixin,
@@ -76,6 +77,10 @@ export const agents = agentSchema.table(
     // onboarding gate, stamped by ingest_tacho_events at the unlock. CHECK
     // enforced below.
     registeredVia: text("registered_via").notNull().default("ui"),
+    // The cost center this agent's spend is charged back to: a label from the
+    // organization's `cost.cost_centers`, checked by the write handler (no
+    // cross-schema FK). Wins over the workspace's label in the rollup.
+    costCenter: text("cost_center"),
   },
   (t) => ({
     // NON-partial on purpose: covers soft-deleted rows too, so a slug a
@@ -113,6 +118,10 @@ export const agents = agentSchema.table(
     registeredViaCheck: check(
       "agents_registered_via_check",
       sql`${t.registeredVia} IN ('ui', 'cli', 'onboarding')`,
+    ),
+    costCenterCheck: check(
+      "agents_cost_center_check",
+      sql`${t.costCenter} IS NULL OR ${t.costCenter} ~ '${sql.raw(COST_CENTER_LABEL_PATTERN)}'`,
     ),
   }),
 );
