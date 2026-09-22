@@ -1,7 +1,5 @@
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { deleteSessionCookie } from "better-auth/cookies";
 import { twoFactor } from "better-auth/plugins";
 import { buildOAuthProxyPlugins } from "./oauth-proxy-config";
 import { eq } from "drizzle-orm";
@@ -23,12 +21,8 @@ import { withSsoSecrets } from "./sso/adapter";
 import { SSO_DISABLED_PATHS, buildSsoPlugin } from "./sso/plugin";
 import { createSsoProvisioner } from "./sso/provision";
 import { createPgSsoProvisioningStore } from "./sso/pg-store";
-import {
-  SSO_REQUIRED_CODE,
-  SSO_REQUIRED_MESSAGE,
-  authMethodForPath,
-  isNonSsoSignInRefused,
-} from "./sso/policy";
+import { authMethodForPath } from "./sso/policy";
+import { requireSsoPlugin } from "./sso/require-sso-plugin";
 import {
   sendEmailFireAndForget,
   resetPasswordEmailTemplate,
@@ -326,6 +320,8 @@ export const auth = betterAuth({
     ...oauthProxyPlugins,
     twoFactor({ issuer: "Oxagen" }) as BetterAuthPlugin,
     ssoPlugin,
+    // "Require SSO" at password and social sign-in (./sso/require-sso-plugin.ts).
+    requireSsoPlugin(),
   ],
   // The SSO plugin's provider-management endpoints; the org.sso.* capabilities
   // replace them (./sso/plugin.ts).
@@ -535,36 +531,6 @@ export const auth = betterAuth({
   //   (3) Failed sign-in: no databaseHooks seam for failed attempts; emit
   //       from the API/MCP sign-in route handler instead.
   // ---------------------------------------------------------------------------
-  // ---------------------------------------------------------------------------
-  // "Require SSO" at sign-in (ADR-142). A password sign-in, or a Google/GitHub
-  // sign-in, for an email whose domain belongs to an organisation that
-  // requires SSO is refused, unless the person is an Owner of that
-  // organisation (break-glass, see ./sso/policy.ts). The org gate in the app
-  // enforces the same policy on sessions that already exist.
-  // ---------------------------------------------------------------------------
-  hooks: {
-    before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path !== "/sign-in/email") return;
-      const email = (ctx.body as { email?: unknown } | undefined)?.email;
-      if (typeof email !== "string") return;
-      if (await isNonSsoSignInRefused(email)) {
-        throw new APIError("FORBIDDEN", {
-          code: SSO_REQUIRED_CODE,
-          message: SSO_REQUIRED_MESSAGE,
-        });
-      }
-    }),
-    after: createAuthMiddleware(async (ctx) => {
-      if (!ctx.path?.startsWith("/callback/")) return;
-      const created = ctx.context.newSession;
-      if (!created?.user?.email) return;
-      if (!(await isNonSsoSignInRefused(created.user.email))) return;
-      await ctx.context.internalAdapter.deleteSession(created.session.token);
-      deleteSessionCookie(ctx);
-      throw ctx.redirect("/login?sso=required");
-    }),
-  },
-
   databaseHooks: {
     // The account hook ALWAYS runs: it must strip the plaintext
     // access_token / refresh_token / id_token fields on every write. With the
