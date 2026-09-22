@@ -217,5 +217,302 @@ describe.skipIf(!process.env.DATABASE_URL)(
         linesRemoved: 0,
       });
     });
+
+    it("enriches a stored relative path when a later absolute observation names the same file", async () => {
+      await scoped(() =>
+        withTenantDb((tx) =>
+          tx.insert(schema.tachoSessionFiles).values({
+            orgId: scope.orgId,
+            workspaceId: scope.workspaceId,
+            sessionId,
+            path: "src/a.ts",
+            repoRelativePath: "src/a.ts",
+            writes: 3,
+            bytesWritten: 12,
+            firstSeq: 1,
+            lastSeq: 1,
+            createdAt: now,
+            updatedAt: now,
+          }),
+        ),
+      );
+      await write([observed("/repo", ["src/a.ts"])]);
+      const stored = await rows();
+      expect(stored).toHaveLength(1);
+      expect(stored[0]).toMatchObject({
+        path: "/repo/src/a.ts",
+        repoRelativePath: "src/a.ts",
+        writes: 3,
+        bytesWritten: 12,
+        observedStatus: "modified",
+        linesAdded: 9,
+        linesRemoved: 2,
+      });
+      await write([observed("/repo", [])]);
+      const cleared = await rows();
+      expect(cleared).toHaveLength(1);
+      expect(cleared[0]).toMatchObject({
+        path: "/repo/src/a.ts",
+        writes: 3,
+        bytesWritten: 12,
+        observedStatus: null,
+        linesAdded: 0,
+        linesRemoved: 0,
+      });
+    });
   },
 );
+
+describe("legacy relative file identity", () => {
+  const scope = {
+    orgId: "00000000-0000-4000-8000-000000000001",
+    workspaceId: "00000000-0000-4000-8000-000000000002",
+  };
+  const sessionId = "00000000-0000-4000-8000-000000000003";
+  const now = new Date("2026-09-20T00:00:00Z");
+
+  function seal(
+    kind: UnsealedTachoEvent["kind"],
+    source: UnsealedTachoEvent["source"],
+    root: string,
+    body: Record<string, unknown>,
+  ): TachoEvent {
+    return sealEvent(
+      {
+        v: "tacho/1.0",
+        event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        session_id: "files",
+        session_uuid: sessionId,
+        root_session_uuid: sessionId,
+        ts: now.toISOString(),
+        fidelity: "sdk",
+        source,
+        agent: {
+          agent_key: "test.files.host",
+          fleet_id: "wrk_files",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+        },
+        kind,
+        body,
+        context: { worktree_path: root },
+      } as UnsealedTachoEvent,
+      { ...GENESIS_CURSOR, seq: 3 },
+    ).event;
+  }
+  function reconciled(
+    root: string,
+    relative: string,
+    changePath = `${root}/${relative}`,
+  ): TachoEvent {
+    return seal("oxagen:worktree_reconciled", "collector", root, {
+      observed_changes: [
+        {
+          path: changePath,
+          repo_relative_path: relative,
+          status: "modified",
+          lines_added: 9,
+          lines_removed: 2,
+        },
+      ],
+      observed_changes_total: 1,
+      observed_changes_truncated: false,
+    });
+  }
+  const attested = (root: string, target: string) =>
+    seal("file_io", "hook", root, {
+      effect_kind: "file_write",
+      tool_target: target,
+      tool_input_bytes: 4,
+    });
+
+  function storedRow(path: string, repoRelativePath: string | null) {
+    return {
+      path,
+      repoRelativePath,
+      linesAdded: 0,
+      linesRemoved: 0,
+      observedStatus: null,
+    };
+  }
+
+  async function rollup(
+    rows: ReturnType<typeof storedRow>[],
+    events: TachoEvent[],
+  ) {
+    const inserted: Array<Record<string, unknown>> = [];
+    const conflictSets: Array<Record<string, unknown>> = [];
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: () => rows,
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => undefined,
+        }),
+      }),
+      insert: () => ({
+        values: (row: Record<string, unknown>) => {
+          inserted.push(row);
+          return {
+            onConflictDoUpdate: (args: { set: Record<string, unknown> }) => {
+              conflictSets.push(args.set);
+              return undefined;
+            },
+          };
+        },
+      }),
+    };
+    await rollupFiles(
+      tx as unknown as Parameters<typeof rollupFiles>[0],
+      scope,
+      sessionId,
+      events,
+      now,
+      true,
+    );
+    return { inserted, conflictSets };
+  }
+
+  it("reuses a relative row when a later absolute observation names it", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("src/a.ts", "src/a.ts")],
+      [reconciled("/repo", "src/a.ts")],
+    );
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({
+      path: "src/a.ts",
+      writes: 0,
+      observedStatus: "modified",
+      linesAdded: 9,
+      linesRemoved: 2,
+    });
+    expect(conflictSets[0]?.path).toBe("/repo/src/a.ts");
+  });
+
+  it("does not attach a different file to a relative row", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("src/a.ts", "src/a.ts")],
+      [reconciled("/repo", "src/b.ts")],
+    );
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]?.path).toBe("/repo/src/b.ts");
+    expect(conflictSets[0]?.path).toBeUndefined();
+  });
+
+  it("keeps an absolute row when a legacy relative row shares its name", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [
+        storedRow("/one/src/a.ts", "src/a.ts"),
+        storedRow("src/a.ts", "src/a.ts"),
+      ],
+      [reconciled("/one", "src/a.ts")],
+    );
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]?.path).toBe("/one/src/a.ts");
+    expect(conflictSets[0]?.path).toBeUndefined();
+  });
+
+  it("uses the stored path when repoRelativePath is absent", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("src/a.ts", null)],
+      [reconciled("/repo", "src/a.ts")],
+    );
+    expect(inserted[0]?.path).toBe("src/a.ts");
+    expect(conflictSets[0]?.path).toBe("/repo/src/a.ts");
+  });
+
+  it("binds one relative row to one worktree when two name the same file", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("src/a.ts", "src/a.ts")],
+      [reconciled("/one", "src/a.ts"), reconciled("/two", "src/a.ts")],
+    );
+    expect(inserted.map((row) => row.path)).toEqual([
+      "src/a.ts",
+      "/two/src/a.ts",
+    ]);
+    expect(conflictSets.map((set) => set.path)).toEqual([
+      "/one/src/a.ts",
+      undefined,
+    ]);
+  });
+
+  it("does not treat a drive-letter path as an unqualified relative row", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("C:/repo/src/a.ts", "src/a.ts")],
+      [reconciled("/other", "src/a.ts")],
+    );
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]?.path).toBe("/other/src/a.ts");
+    expect(conflictSets[0]?.path).toBeUndefined();
+  });
+
+  it("reuses a relative row for an attested write that carries no repo-relative path", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("src/a.ts", "src/a.ts")],
+      [attested("/repo", "src/a.ts")],
+    );
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ path: "src/a.ts", writes: 1 });
+    expect(conflictSets[0]?.path).toBe("/repo/src/a.ts");
+  });
+
+  it("indexes repoRelativePath when it differs from the stored path", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("./src/a.ts", "src/a.ts")],
+      [reconciled("/repo", "src/a.ts")],
+    );
+    expect(inserted[0]?.path).toBe("./src/a.ts");
+    expect(conflictSets[0]?.path).toBe("/repo/src/a.ts");
+  });
+
+  it("falls back to the stored path when repoRelativePath is empty", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("src/a.ts", "")],
+      [reconciled("/repo", "src/a.ts")],
+    );
+    expect(inserted[0]?.path).toBe("src/a.ts");
+    expect(conflictSets[0]?.path).toBe("/repo/src/a.ts");
+  });
+
+  it("keeps the first relative row when two share one repo-relative path", async () => {
+    const { inserted } = await rollup(
+      [
+        storedRow("first/src/a.ts", "src/a.ts"),
+        storedRow("second/src/a.ts", "src/a.ts"),
+      ],
+      [reconciled("/repo", "src/a.ts")],
+    );
+    expect(inserted[0]?.path).toBe("first/src/a.ts");
+  });
+
+  it("does not treat a UNC path as an unqualified relative row", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("\\\\server\\share\\src\\a.ts", "src/a.ts")],
+      [reconciled("/other", "src/a.ts")],
+    );
+    expect(inserted[0]?.path).toBe("/other/src/a.ts");
+    expect(conflictSets[0]?.path).toBeUndefined();
+  });
+
+  it("does not rename an absolute stored path onto the batch spelling", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("/repo/./src/a.ts", "src/a.ts")],
+      [reconciled("/repo", "src/a.ts")],
+    );
+    expect(inserted[0]?.path).toBe("/repo/./src/a.ts");
+    expect(conflictSets[0]?.path).toBeUndefined();
+  });
+
+  it("does not index an absolute repoRelativePath as a legacy key", async () => {
+    const { inserted, conflictSets } = await rollup(
+      [storedRow("src/a.ts", "/repo/src/a.ts")],
+      [reconciled("/repo", "/repo/src/a.ts", "/repo/src/a.ts")],
+    );
+    expect(inserted[0]?.path).toBe("/repo/src/a.ts");
+    expect(conflictSets[0]?.path).toBeUndefined();
+  });
+});
