@@ -564,6 +564,7 @@
         "dnsRecordNotFound": "The TXT record was not found. DNS changes can take a few minutes to reach Oxagen. Check the name and value, then try again.",
         "noVerifiedProvider": "Verify a provider's domain before you require SSO.",
         "providerIdTaken": "A provider with this ID already exists. Choose another ID.",
+        "providerIdReserved": "This ID belongs to another sign-in method. Choose another ID.",
         "domainTaken": "Another provider already uses this email domain.",
         "notFound": "This provider no longer exists. Reload the page.",
         "refused": "Oxagen refused the change ({code}).",

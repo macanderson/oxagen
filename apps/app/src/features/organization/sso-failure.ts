@@ -61,8 +61,9 @@ export function useSsoFailure(): (failure: SsoFailure) => string {
           case "no_verified_provider":
             return t("noVerifiedProvider");
           case "provider_id_taken":
-          case "provider_id_reserved":
             return t("providerIdTaken");
+          case "provider_id_reserved":
+            return t("providerIdReserved");
           case "domain_taken":
             return t("domainTaken");
           case "sso_provider_not_found":

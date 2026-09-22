@@ -2887,6 +2887,7 @@ type Messages = {
         dnsRecordNotFound: string;
         noVerifiedProvider: string;
         providerIdTaken: string;
+        providerIdReserved: string;
         domainTaken: string;
         notFound: string;
         refused: string;
