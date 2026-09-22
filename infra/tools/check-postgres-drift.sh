@@ -6,10 +6,10 @@
 #
 # Exits 0 when Aurora is at the head of `packages/database/atlas/migrations`,
 # 1 when it is behind, 2 when the check could not be made. Reads only — it
-# never applies anything. Applying stays manual, through the `DB Migrate
-# (manual)` workflow or `infra/tools/run-db-migrations.sh --apply`, with a
-# human reading the pending list first (CLAUDE.md, "Apply production
-# migrations through the manual workflows. Deployment does not apply them.").
+# never applies anything. Applying stays manual, through
+# `infra/tools/run-db-migrations.sh --apply`, with a human reading the
+# pending list first. `DB Migrate (manual)` cannot reach Aurora from a
+# hosted runner. Deployment does not apply migrations (CLAUDE.md).
 #
 # WHY THIS EXISTS (#1275)
 #
@@ -170,7 +170,8 @@ classify_atlas_status() {
 
   echo "::error::Postgres is behind this repository: ${pending:-some} of $declared migrations pending."
   atlas_pending_files "$file" | sed 's/^/::error::  pending: /'
-  echo "::error::Postgres: apply with the DB Migrate (manual) workflow — read its pending list first."
+  echo "::error::Postgres: apply with infra/tools/run-db-migrations.sh. It runs on the app node over SSM. Read the pending list first."
+  echo "::error::Postgres: the DB Migrate (manual) workflow cannot reach Aurora from a hosted runner."
   return 1
 }
 

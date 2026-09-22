@@ -178,8 +178,10 @@ jobs:
 
             let body = behind
               ? 'A committed migration has not reached production.\n\n'
-                + 'Apply it with the **Store Migrate (manual)** workflow for ClickHouse and Neo4j, or the **DB Migrate (manual)** '
-                + 'workflow for Postgres, and read the pending list before setting `apply`: a store whose ledger was lost reports '
+                + 'Apply ClickHouse and Neo4j with the **Store Migrate (manual)** workflow. '
+                + 'Apply Postgres with `infra/tools/run-db-migrations.sh`, which runs on the app node over SSM. '
+                + 'The DB Migrate (manual) workflow cannot reach Aurora from a hosted runner. '
+                + 'Read the pending list before applying: a store whose ledger was lost reports '
                 + 'its whole history as pending, and applying from there is not what you want.\n\n'
                 + 'Until it is applied, `migration-gate` in pipeline.yml blocks every deploy of api and app.\n'
               : 'The check did not complete, so nothing here says the stores are current — this is not a drift report.\n\n'

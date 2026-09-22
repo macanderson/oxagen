@@ -149,20 +149,25 @@ export async function pauseAgent(
   });
   if (!switchResult.ok) return switchResult;
 
-  const pause: AgentPauseOutcome =
-    agent.agentKey === null
-      ? { kind: "no_agent_key" }
-      : await (async () => {
-          const dispatch = await kernelWrite(ctx, tachoCommandDispatch, {
-            target: { kind: "agent", id: agent.agentKey as string },
-            command: "pause",
-            reason: trimmed,
-          });
-          if (!dispatch.ok) return { kind: "failed", failure: dispatch };
-          return dispatch.value.commandIds.length === 0
-            ? { kind: "no_live_runs" }
-            : { kind: "paused", commandIds: dispatch.value.commandIds };
-        })();
+  // The key is narrowed in this else. A nested function would not keep that
+  // narrowing, and a type assertion is refused under src/ (INV-02).
+  let pause: AgentPauseOutcome;
+  if (agent.agentKey === null) {
+    pause = { kind: "no_agent_key" };
+  } else {
+    const dispatch = await kernelWrite(ctx, tachoCommandDispatch, {
+      target: { kind: "agent", id: agent.agentKey },
+      command: "pause",
+      reason: trimmed,
+    });
+    if (!dispatch.ok) {
+      pause = { kind: "failed", failure: dispatch };
+    } else if (dispatch.value.commandIds.length === 0) {
+      pause = { kind: "no_live_runs" };
+    } else {
+      pause = { kind: "paused", commandIds: dispatch.value.commandIds };
+    }
+  }
 
   return {
     ok: true,

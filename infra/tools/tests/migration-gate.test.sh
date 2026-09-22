@@ -88,10 +88,9 @@ done
 
 # --- the gate never applies ------------------------------------------------
 #
-# The rule it must not break, stated in CLAUDE.md: "Apply production migrations
-# through the manual db-migrate.yml and store-migrate.yml workflows. Deployment
-# does not apply them." #3653 is the issue filed when a generated workflow broke
-# that rule. A gate that grew an apply would be the same mistake wearing a name
+# The rule it must not break, stated in CLAUDE.md: deployment does not apply
+# migrations. #3653 is the issue filed when a generated workflow broke that
+# rule. A gate that grew an apply would be the same mistake wearing a name
 # nobody would think to check.
 #
 # Scoped to the gate's own YAML block, because the file's prose discusses
@@ -144,7 +143,8 @@ else
 
   # A blocked deploy has to tell its reader what to do next, or the gate is an
   # obstacle rather than a control.
-  contains "$GATE" "DB Migrate (manual)" "the failure names the workflow that applies Postgres"
+  contains "$GATE" "run-db-migrations.sh" "the failure names the script that applies Postgres"
+  contains "$GATE" "cannot reach Aurora" "the failure says the hosted Postgres workflow is not the path"
   contains "$GATE" "Store Migrate (manual)" "the failure names the workflow that applies the stores"
 fi
 

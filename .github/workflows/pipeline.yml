@@ -40,9 +40,11 @@ concurrency:
   # the prod migrate job, and cancelling the whole run mid-`atlas migrate apply`
   # would strand prod behind the committed migrations. That job is retired
   # (#1341), so nothing in a main run is mid-flight against a real database
-  # today. Production applies are dispatched by hand through `db-migrate.yml`;
-  # the migrate job's retirement comment below has the detail, including which
-  # of the two named routes is the stale one (#2542, #2652). It stays
+  # today. Production Postgres is applied by hand with
+  # `infra/tools/run-db-migrations.sh`. ClickHouse and Neo4j go through
+  # `store-migrate.yml`. The migrate job's retirement comment below has the
+  # detail, including why `db-migrate.yml` is not the production path
+  # (#2542, #2652). It stays
   # off for main anyway, because the deploy jobs are, and half a deploy is worse
   # than a slow one.
   #
@@ -866,12 +868,15 @@ jobs:
   #
   # It asks all three stores whether they carry what this repository declares,
   # read-only, and fails the deploy when any of them does not. It applies
-  # nothing. Applying production migrations stays manual, through `DB Migrate
-  # (manual)` and `Store Migrate (manual)`, with a human reading the pending
-  # list first — CLAUDE.md states that rule and #3653 is the issue filed when a
-  # generated workflow broke it. A gate that applied would be that same mistake
-  # wearing this job's name, and `check-postgres-drift.sh`'s tests assert it
-  # cannot grow one.
+# nothing. Applying production migrations stays manual. Postgres goes through
+# `infra/tools/run-db-migrations.sh`, which runs on the app node over SSM.
+# ClickHouse and Neo4j go through `Store Migrate (manual)`. A human reads the
+# pending list first. CLAUDE.md states that rule, and #3653 is the issue filed
+# when a generated workflow broke it. `DB Migrate (manual)` is not the Postgres
+# path: a hosted runner is outside the VPC, and its reachability guard fails
+# on every production dispatch (#2652, run 35674827817). A gate that applied
+# would be that same mistake wearing this job's name, and
+# `check-postgres-drift.sh`'s tests assert it cannot grow one.
   #
   # So this does not fix drift. It makes drift STOP THE DEPLOY instead of
   # reaching production inside it. The human step is unchanged; what changes is
@@ -1002,13 +1007,13 @@ jobs:
               echo
               echo "Apply it, then re-run this job:"
               echo
-              # Each store gets exactly one named path, and it is the manual
-              # workflow. The underlying scripts can be run by hand from the app
-              # node, and deliberately are not offered here: the workflow is the
-              # one route that leaves a run record of who applied what and when,
-              # which is the whole reason CLAUDE.md sends applies through it.
-              echo "- Postgres — the **DB Migrate (manual)** workflow"
-              echo "- ClickHouse / Neo4j — the **Store Migrate (manual)** workflow"
+              # Each store gets exactly one named path. Postgres is the script
+              # that SSMs onto the app node. ClickHouse and Neo4j are the
+              # Store Migrate workflow, which leaves a run record. DB Migrate
+              # (manual) is not named as the Postgres path: its reachability
+              # guard fails on every production dispatch from a hosted runner.
+              echo "- Postgres: \`infra/tools/run-db-migrations.sh\`, on the app node over SSM. The DB Migrate (manual) workflow cannot reach Aurora from a hosted runner."
+              echo "- ClickHouse and Neo4j: the **Store Migrate (manual)** workflow"
               echo
               echo "Read the pending list before applying. A store whose ledger was lost reports its"
               echo "whole history as pending, and applying from there is not what you want."

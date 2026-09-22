@@ -19,8 +19,9 @@
 # WHAT IT DOES NOT DO
 #
 # It applies no migration and blocks no merge. CLAUDE.md sends production
-# applies through the manual `db-migrate.yml` and `store-migrate.yml`
-# workflows, and #3653 leaves "may CI apply migrations" a maintainer decision.
+# Postgres through `infra/tools/run-db-migrations.sh` and ClickHouse and Neo4j
+# through `store-migrate.yml`. `db-migrate.yml` cannot reach Aurora from a
+# hosted runner. #3653 leaves "may CI apply migrations" a maintainer decision.
 # A label is a statement about the diff, which is exactly as much as this can
 # know: whether the migration SHOULD be applied before this deploy is a
 # judgement about production, and `migration-gate` is where that is made,
@@ -142,8 +143,9 @@ jobs:
               body:
                 `Labelled \`${LABEL}\`: this branch changes a schema.\n\n${list}\n\n` +
                 'Production must carry the migration **before or with** the deploy of this change. ' +
-                'Apply it with the **DB Migrate (manual)** workflow for Postgres, or ' +
-                '**Store Migrate (manual)** for ClickHouse and Neo4j.\n\n' +
+                'Apply Postgres with `infra/tools/run-db-migrations.sh`. It runs on the app node over SSM. ' +
+                'The DB Migrate (manual) workflow cannot reach Aurora from a hosted runner. ' +
+                'Apply ClickHouse and Neo4j with **Store Migrate (manual)**.\n\n' +
                 'Merging is not blocked. `migration-gate` in `pipeline.yml` holds the deploy ' +
                 'until the stores actually carry the schema, so an unapplied migration stops ' +
                 'the rollout rather than breaking production — but it stops it after merge, ' +
