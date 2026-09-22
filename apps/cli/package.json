@@ -43,7 +43,8 @@
     "@oxagen/billing": "workspace:*",
     "@oxagen/steering-freshness": "workspace:*",
     "@oxagen/tacho": "workspace:*",
-    "commander": "12.1.0"
+    "commander": "12.1.0",
+    "fflate": "0.8.3"
   },
   "devDependencies": {
     "@oxagen/telemetry": "workspace:*",
