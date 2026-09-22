@@ -51,10 +51,12 @@ function Header({
   identity,
   org,
   ws,
+  orgRole,
 }: {
   identity: AgentDetail["identity"];
   org: string;
   ws: string;
+  orgRole: WsCtx["orgRole"];
 }) {
   const t = useTranslations("agents");
   return (
@@ -89,6 +91,7 @@ function Header({
               agentId={identity.id}
               agentKey={identity.agentKey}
               name={identity.name}
+              orgRole={orgRole}
             />
             <AgentActions
               org={org}
@@ -261,7 +264,12 @@ export async function Agent({
   }
   return (
     <div className="flex flex-col gap-6">
-      <Header identity={identity} org={place.org} ws={place.ws} />
+      <Header
+        identity={identity}
+        org={place.org}
+        ws={place.ws}
+        orgRole={ctx.orgRole}
+      />
       <Tabs selected={selected} {...place} />
       {body}
     </div>

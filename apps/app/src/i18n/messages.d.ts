@@ -508,6 +508,8 @@ type Messages = {
         reason: string;
         confirm: string;
         pending: string;
+        needsRole: string;
+        reread: string;
         unchanged: string;
         outcome: {
           paused: string;

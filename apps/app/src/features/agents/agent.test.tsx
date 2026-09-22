@@ -121,6 +121,22 @@ describe("Agent header and tabs", () => {
     expect(within(header).queryByRole("link")).toBeNull();
   });
 
+  it("draws the kill switch disabled with its reason for an organization Member (negative)", async () => {
+    await renderAgent(
+      { get: readOk(agentDetail()) },
+      null,
+      null,
+      unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: "member" }),
+    );
+    const header = region("Agent identity");
+    expect(
+      within(header).getByRole("button", { name: "Kill switch" }),
+    ).toBeDisabled();
+    expect(
+      within(header).getByTestId("agent-kill-switch-no-role"),
+    ).toHaveTextContent("Owner or Admin");
+  });
+
   it("links the seven sections a store backs, and no Runs tab (negative)", async () => {
     await renderAgent({ get: readOk(agentDetail()) });
     const links = within(

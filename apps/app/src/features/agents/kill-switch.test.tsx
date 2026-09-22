@@ -9,12 +9,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { pauseAgent } = vi.hoisted(() => ({ pauseAgent: vi.fn() }));
+const { pauseAgent, refresh } = vi.hoisted(() => ({
+  pauseAgent: vi.fn(),
+  refresh: vi.fn(),
+}));
 vi.mock("./actions", () => ({ pauseAgent }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
+}));
 
 const { AgentKillSwitch } = await import("./kill-switch");
 
-function renderSwitch(agentKey: string | null = "acme.core.release-bot") {
+function renderSwitch(
+  agentKey: string | null = "acme.core.release-bot",
+  orgRole: "owner" | "admin" | "member" | "viewer" = "owner",
+) {
   render(
     <IntlProvider>
       <AgentKillSwitch
@@ -23,6 +32,7 @@ function renderSwitch(agentKey: string | null = "acme.core.release-bot") {
         agentId="agt_releasebot"
         agentKey={agentKey}
         name="Release bot"
+        orgRole={orgRole}
       />
     </IntlProvider>,
   );
@@ -35,6 +45,7 @@ async function open() {
 
 beforeEach(() => {
   pauseAgent.mockReset();
+  refresh.mockReset();
 });
 
 afterEach(async () => {
@@ -82,6 +93,43 @@ describe("AgentKillSwitch", () => {
       "2 live runs paused. Every new tool call is denied.",
     );
     expect(screen.queryByTestId("agent-kill-switch-unchanged")).toBeNull();
+  });
+
+  it("offers to re-read the agent once the switch took effect, and refreshes in place", async () => {
+    pauseAgent.mockResolvedValue({
+      ok: true,
+      value: {
+        switchId: "emd_1",
+        changed: true,
+        denyGeneration: { org: 4, workspace: 9 },
+        pause: { kind: "paused", commandIds: ["tcm_1"] },
+      },
+    });
+    renderSwitch();
+    const dialog = await open();
+    await userEvent.type(within(dialog).getByLabelText("Reason"), "Leak");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Stop this agent" }),
+    );
+    await screen.findByTestId("kill-switch-outcome");
+    await userEvent.click(screen.getByTestId("agent-kill-switch-reread"));
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId("agent-kill-switch-dialog")).toBeNull();
+  });
+
+  it("draws the switch disabled with the reason for a viewer below Owner or Admin (negative)", async () => {
+    renderSwitch("acme.core.release-bot", "member");
+    expect(screen.getByRole("button", { name: "Kill switch" })).toBeDisabled();
+    expect(screen.getByTestId("agent-kill-switch-no-role")).toHaveTextContent(
+      "needs an organization Owner or Admin role",
+    );
+    expect(pauseAgent).not.toHaveBeenCalled();
+  });
+
+  it("offers the switch to an Admin", async () => {
+    renderSwitch("acme.core.release-bot", "admin");
+    expect(screen.getByRole("button", { name: "Kill switch" })).toBeEnabled();
+    expect(screen.queryByTestId("agent-kill-switch-no-role")).toBeNull();
   });
 
   it("says the switch was already on when a second flip changes nothing, and still reports the pause", async () => {
