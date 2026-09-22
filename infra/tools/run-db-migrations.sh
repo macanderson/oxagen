@@ -114,11 +114,19 @@ if ! command -v atlas >/dev/null 2>&1; then
 fi
 atlas version
 
-mkdir -p /opt/oxagen/db
-cd /opt/oxagen/db
-aws s3 cp "s3://__BUCKET__/_deploy/__OBJECT__" /tmp/atlas.tgz --region us-east-1
-rm -rf atlas atlas.hcl src seed-assets
-tar -xzf /tmp/atlas.tgz -C /opt/oxagen/db
+# One directory per invocation, named after the object this run uploaded.
+# The gate on main runs this script on every push, and an apply can be in
+# flight while it does. With one shared directory the gate's `rm -rf` took
+# the seed out from under a running apply's bind mount. The directory is
+# removed when the script ends, whatever it ends as; the node keeps nothing
+# from a run.
+run_dir=__RUNDIR__
+rm -rf "$run_dir" "$run_dir.tgz"
+mkdir -p "$run_dir"
+trap 'rm -rf "$run_dir" "$run_dir.tgz"' EXIT
+cd "$run_dir"
+aws s3 cp "s3://__BUCKET__/_deploy/__OBJECT__" "$run_dir.tgz" --region us-east-1
+tar -xzf "$run_dir.tgz" -C "$run_dir"
 
 # Tracing OFF before the secret is read, and back on after it is used.
 #
@@ -206,7 +214,7 @@ REMOTE
 # Seed only after a successful migration. Pass the credential by environment
 # name so shell tracing never expands it into SSM output.
 docker run --rm --network host --read-only \
-  --mount type=bind,src=/opt/oxagen/db,dst=/seed,readonly \
+  --mount type=bind,src=__RUNDIR__,dst=/seed,readonly \
   --env DATABASE_URL --env NODE_ENV=production \
   node:24.21.0-alpine node /seed/src/platform-seed.mjs
 echo \"--- applied; status after apply (expect no pending) ---\"
@@ -216,8 +224,14 @@ atlas migrate status --env ci"
   fi
   rendered=${rendered//__TAIL__/$tail}
 
+  # The run directory is the object's stem under /opt/oxagen/db, so a
+  # per-invocation object gets a per-invocation directory and the legacy
+  # shared name still renders.
+  local run_dir="/opt/oxagen/db/${object%.tgz}"
+
   rendered=${rendered//__BUCKET__/$bucket}
   rendered=${rendered//__OBJECT__/$object}
+  rendered=${rendered//__RUNDIR__/$run_dir}
   rendered=${rendered//__PGHOST__/$host}
   rendered=${rendered//__PGPORT__/$port}
   rendered=${rendered//__PGDB__/$database}
@@ -430,6 +444,38 @@ classify_ssm_online() {
     return 0
   fi
   echo absent
+  return 0
+}
+
+# classify_invocation_poll EXIT_CODE STATUS STDERR
+#
+# Turns one `get-command-invocation` poll into done, pending, or unreadable.
+#
+# done: the API answered with a status that is not InProgress, Pending, or
+#   Delayed. The caller reads the streams and judges it.
+# pending: the API answered with a running status, or it failed with
+#   InvocationDoesNotExist, which SSM returns for a few seconds after
+#   send-command before the invocation is visible. Keep polling.
+# unreadable: the API call failed for any other reason. That is not a status
+#   of the command, which may still be applying on the node. The poll used to
+#   discard stderr and rewrite every failure as Pending, so a denied read
+#   spent the whole poll budget and then reported STILL RUNNING about a
+#   command it had never once observed. Same distinction classify_ssm_online
+#   draws for describe-instance-information.
+classify_invocation_poll() {
+  local exit_code=$1 status=${2:-} stderr=${3:-}
+  if [[ $exit_code -ne 0 ]]; then
+    if [[ $stderr == *InvocationDoesNotExist* ]]; then
+      echo pending
+    else
+      echo unreadable
+    fi
+    return 0
+  fi
+  case $status in
+    InProgress|Pending|Delayed) echo pending ;;
+    *) echo done ;;
+  esac
   return 0
 }
 
@@ -687,14 +733,40 @@ echo "==> ssm command $CMD"
 # to be long; each poll is ten seconds.
 POLLS=${POLLS:-60}
 st=Pending
+poll_err=$(mktemp)
 for _ in $(seq 1 "$POLLS"); do
-  st=$(aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" --query Status --output text 2>/dev/null || echo Pending)
-  if [[ $st != InProgress && $st != Pending ]]; then
-    TIMED_OUT=0
-    break
-  fi
+  set +e
+  polled=$(aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" \
+    --instance-id "$INSTANCE" --query Status --output text 2>"$poll_err")
+  poll_exit=$?
+  set -e
+  case $(classify_invocation_poll "$poll_exit" "$polled" "$(cat "$poll_err")") in
+    done)
+      st=$polled
+      TIMED_OUT=0
+      break
+      ;;
+    pending)
+      [[ $poll_exit -eq 0 ]] && st=$polled
+      ;;
+    unreadable)
+      # Not a verdict. TIMED_OUT stays 1 so the archive stays for a command
+      # that may still be downloading it, and the exit code is the same one
+      # a run that gave up waiting returns.
+      echo "==> could not read the status of ssm command $CMD:" >&2
+      sed 's/^/    /' "$poll_err" >&2
+      rm -f "$poll_err"
+      echo "==> This says nothing about the migration. The command may still be" >&2
+      echo "==> running on $INSTANCE, and an apply may be mid-flight." >&2
+      echo "==> Do NOT re-run this script. Watch the command instead:" >&2
+      echo "==>   aws ssm get-command-invocation --region $REGION \\" >&2
+      echo "==>     --command-id $CMD --instance-id $INSTANCE" >&2
+      exit 2
+      ;;
+  esac
   sleep 10
 done
+rm -f "$poll_err"
 echo "==> $st"
 
 # Captured rather than piped straight to `tail` so its length can be measured:
