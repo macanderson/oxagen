@@ -3,8 +3,8 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.scr.005-triage-separation"
-record_id = "rec_scr_005_triage_separation_291a84f0285e"
-record_hash = "sha256:ac48c338ff00912a35f16660b24f1e48cd9b3cf1790f933d8e262334923db6fe"
+record_id = "rec_scr_005_triage_separation_979921ea2c4b"
+record_hash = "sha256:0ab460cb90799e8bb674ad1283928f5d2bbb45f843707923d7543f352b9f40e2"
 kind = "rule"
 statement = "Issue creators, human or agent, apply exactly one label: triage. Do not apply priority, size, or any other label. The triage identity assigns one priority, optionally a size, removes triage, and comments a one-line rationale. Priorities are P0 drop everything, P1 this cycle, P2 next cycle, P3 backlog, and P4 someday. Every open issue carries either a priority label or triage, never neither and never both. Do not add, remove, or change P0 through P4 or size labels. Until a dedicated triage identity exists, the maintainer acts as the interim triage authority and is allowlisted in the guard workflow."
 origin = "imported"
@@ -12,8 +12,8 @@ sharing_scope = "workspace"
 status = "active"
 
 [record.provenance]
-source_kind = "document"
-source_uri = "docs/scr/SCR-005-triage-separation-of-duties.md"
+source_kind = "record"
+source_uri = ".oxagen/rules/ctx.scr.005-triage-separation.toml"
 
 [record.steering]
 force = "must"

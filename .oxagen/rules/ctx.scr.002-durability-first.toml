@@ -3,8 +3,8 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.scr.002-durability-first"
-record_id = "rec_scr_002_durability_first_9af9f19591d4"
-record_hash = "sha256:a12c678c0d7d8d437307c67fd0e54a4e9c1b896fe90d482dfb0f36bc120825c9"
+record_id = "rec_scr_002_durability_first_8675ea36bf76"
+record_hash = "sha256:ddec160c60195f6cb6a0cdcaf225373ce679cd65b213ad3d130274114ba37326"
 kind = "rule"
 statement = "Do not ask the maintainer to choose an architecture. Choose the most durable option, the one that still reads as the right move in ten years. A cheap option wins only when it is also the durable one. Record the decision as an ADR in docs/adr/. The ADR replaces the question. Prefer fewest future regrets, standard over clever, boring technology, and explicit over implicit. Keep moving. Review of the ADR happens asynchronously. A decision that changes an externally observable contract, or that spends real money, still goes to the maintainer."
 origin = "imported"
@@ -12,8 +12,8 @@ sharing_scope = "workspace"
 status = "active"
 
 [record.provenance]
-source_kind = "document"
-source_uri = "docs/scr/SCR-002-durability-first-architecture.md"
+source_kind = "record"
+source_uri = ".oxagen/rules/ctx.scr.002-durability-first.toml"
 
 [record.steering]
 force = "must"

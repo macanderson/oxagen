@@ -3,8 +3,8 @@ set_id = "macanderson.oxagen"
 
 [[record]]
 lineage_id = "ctx.scr.004-fix-over-file"
-record_id = "rec_scr_004_fix_over_file_3191e4be4d04"
-record_hash = "sha256:1da0425c0c758ba83c79430ea16309fb28c156db155632dbebcf388df21538e3"
+record_id = "rec_scr_004_fix_over_file_715c0cb26660"
+record_hash = "sha256:6be9c8fe7a10746cd870741e8862e5d77b40a44de0586ef99feba6456cfbca4b"
 kind = "rule"
 statement = "A defect noticed while doing a task is fixed in that task's pull request. Two unrelated fixes in one pull request is fine. Name each extra fix in the description. File a GitHub issue only when the fix cannot ride the pull request because it needs a maintainer decision, a rig, a credential, or real spend, or because it is larger than the session, and only when fixing it would move stability, reliability, maintainability, innovation, efficiency, or performance. Apply only the triage label. One issue carries one full change as a definition of done. Do not file an open design question, a record of a choice already in effect, a measurement that cannot change a decision, a test for a path nothing reaches, tracker bookkeeping, or a follow-up the change has made moot. This rule is written for the period with zero customers. Once customers exist, a pull request goes back to carrying one change. A task with nothing deferred says so."
 origin = "imported"
@@ -12,8 +12,8 @@ sharing_scope = "workspace"
 status = "active"
 
 [record.provenance]
-source_kind = "document"
-source_uri = "docs/scr/SCR-004-residue-becomes-issues.md"
+source_kind = "record"
+source_uri = ".oxagen/rules/ctx.scr.004-fix-over-file.toml"
 
 [record.steering]
 force = "must"
