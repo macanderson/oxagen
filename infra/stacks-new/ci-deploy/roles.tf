@@ -302,6 +302,19 @@ data "aws_iam_policy_document" "oxagen_platform" {
     resources = ["*"]
   }
 
+  # infra/tools/run-db-migrations.sh polls the node's registration before
+  # sending it a command, so a dead or unregistered instance fails fast
+  # instead of a ten-minute send-command timeout. DescribeInstanceInformation
+  # takes no resource-level permissions (AWS always evaluates it against
+  # "*"), so it cannot be scoped by the node's tag the way the statements
+  # above are. Without it, the poll's AccessDenied reads as "not registered"
+  # (oxagen#2652's migration-gate job, `check-postgres-drift.sh`).
+  statement {
+    sid       = "CheckNodeRegistration"
+    actions   = ["ssm:DescribeInstanceInformation"]
+    resources = ["*"]
+  }
+
   # Resolving the node by tag needs this. DescribeInstances takes no
   # resource-level scope, so `*` here is the only spelling AWS accepts; it
   # reads instance metadata and mutates nothing.

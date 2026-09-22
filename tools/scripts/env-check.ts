@@ -47,6 +47,8 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "NEXT_PHASE",
   // Standard CI signal
   "CI",
+  // Set by the GitHub Actions runner itself, not by operators or env-manager
+  "GITHUB_ACTIONS",
   // Process-placement knobs for the self-hosted API (apps/api/src/index.ts):
   // supplied by whatever runs the process — Caddy/systemd on the shared
   // instance — never configured through env-manager. HOSTNAME doubles as the
