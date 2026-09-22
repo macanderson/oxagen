@@ -129,6 +129,7 @@ export function onboardingSource(reads: Reads): {
       fleet: refuse("spend.fleet"),
       drill: refuse("spend.drill"),
       waste: refuse("spend.waste"),
+      gatewayPolicy: refuse("spend.budgets"),
       budgets: refuse("spend.budgets"),
       findings: refuse("spend.findings"),
       findingEvidence: refuse("spend.findingEvidence"),

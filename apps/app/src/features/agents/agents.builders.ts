@@ -298,6 +298,7 @@ export function agentsSource(reads: AgentReads) {
       fleet: refuse,
       drill: refuse,
       waste: refuse,
+      gatewayPolicy: refuse,
       budgets: answer(reads.budgets, "budgets"),
       findings: refuse,
       findingEvidence: refuse,

@@ -335,6 +335,8 @@ import "./contracts/tacho.host.list";
 import "./contracts/tacho.incident.list";
 import "./contracts/tacho.session.get";
 import "./contracts/tacho.session.list";
+import "./contracts/tacho.session_policy.read";
+import "./contracts/tacho.session_policy.write";
 import "./contracts/telemetry.error.cluster";
 import "./contracts/telemetry.stella.enroll";
 import "./contracts/telemetry.stella.ingest";

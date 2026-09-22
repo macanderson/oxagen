@@ -44,6 +44,14 @@
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session-7172f7a7-in-app-assistant"
     },
+    "assign_agent_role": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent]?tab=identity — Assign a role on the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
+      "proof": "apps/app/src/features/agents/role-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-mc-3-roles"
+    },
     "attach_github_installation": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
@@ -67,6 +75,14 @@
       "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
+    },
+    "bisect_runs": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Bisect compares this run with another and names the first frame at which they diverge (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "proof": "apps/app/src/features/run/replay.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
     },
     "change_member_role": {
       "route": "/[org]",
@@ -243,13 +259,13 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
-    "assign_agent_role": {
-      "route": "/[org]/[ws]/agents/[agent]",
-      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent]?tab=identity — Assign a role on the Roles panel (features/agents/identity.tsx, role-controls.tsx, actions.ts)",
-      "proof": "apps/app/src/features/agents/role-controls.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-mc-3-roles"
+    "fork_run": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Fork replay on a sealed ledger run graded fork calls fork_run from the dialog; a wrapped session or a weaker grade draws the control disabled with the reason (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "proof": "apps/app/src/features/run/replay.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
     },
     "get_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
@@ -266,6 +282,35 @@
       "proof": "apps/app/src/features/agents/toolbelt.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-mc-3-schemas"
+    },
+    "get_auto_eligibility": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/page.tsx",
+      "entry": "/[org]/[ws] — opening the decision dialog reads get_auto_eligibility, so the eligibility line and who has already resolved the call are current at the moment of the decision rather than as old as the page render (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
+      "testid": "eligibility",
+      "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-018UrgFq-mc-1-approve",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runs/[run]?tab=approvals",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "/[org]/[ws]/runs/[run]?tab=approvals — the card on the Approvals tab draws the recorded eligibility line, and opening its dialog reads get_auto_eligibility again (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
+          "testid": "eligibility",
+          "proof": "apps/app/src/features/run/run.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "session-018UrgFq-mc1-review"
+        }
+      ]
+    },
+    "get_clone_draft": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Clone on a published record opens the manual editor in the workspace creation host.",
+      "testid": "configuration-clone",
+      "proof": "apps/app/src/features/create/clone-editor.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "skills-lifecycle-ci-witness"
     },
     "get_connection": {
       "route": "/[org]/[ws]/tools?tab=connections",
@@ -357,38 +402,21 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
-    "get_run_chain": {
-      "route": "/[org]/[ws]/runs/[run]",
-      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=chain — the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/chain.tsx)",
-      "proof": "apps/app/src/features/run/chain.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-ui"
+    "get_record": {
+      "route": "/[org]/[ws]/steering/records/[lineage]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
+      "entry": "/[org]/[ws]/steering/records/[lineage] — the page for one published record, which reads it through get_record (data/live/steering.ts, features/record/record.tsx)",
+      "proof": "apps/app/src/features/record/record.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
     },
-    "get_run_outputs": {
-      "route": "/[org]/[ws]/runs/[run]",
-      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the outputs spine between the run header and the tabs reads get_run_outputs and draws what the run produced in the order it produced it, with `?reads=hide` folding the read marks and `?spine=` opening a folded group (data/live/runs.ts, features/run/outputs.tsx). It is not a tab: the spine renders on every tab.",
-      "testid": "run-outputs",
-      "proof": "apps/app/src/features/run/outputs.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "d19046fa"
-    },
-    "fork_run": {
-      "route": "/[org]/[ws]/runs/[run]",
-      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Fork replay on a sealed ledger run graded fork calls fork_run from the dialog; a wrapped session or a weaker grade draws the control disabled with the reason (features/run/actions.ts, features/run/replay-actions.tsx)",
-      "proof": "apps/app/src/features/run/replay.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-ui"
-    },
-    "bisect_runs": {
-      "route": "/[org]/[ws]/runs/[run]",
-      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Bisect compares this run with another and names the first frame at which they diverge (features/run/actions.ts, features/run/replay-actions.tsx)",
-      "proof": "apps/app/src/features/run/replay.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-ui"
+    "get_repository_tree": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › the .oxagen/ column, the repository dialog opened by “Details”, and the Configuration tab (features/repositories/repositories.tsx, features/repositories/repository-dialog.tsx, features/repositories/configuration.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "get_run": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -397,6 +425,14 @@
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-c2f283fb-3282-review"
+    },
+    "get_run_chain": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=chain — the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/chain.tsx)",
+      "proof": "apps/app/src/features/run/chain.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
     },
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -414,6 +450,15 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-c2f283fb-3282-review"
     },
+    "get_run_outputs": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — the outputs spine between the run header and the tabs reads get_run_outputs and draws what the run produced in the order it produced it, with `?reads=hide` folding the read marks and `?spine=` opening a folded group (data/live/runs.ts, features/run/outputs.tsx). It is not a tab: the spine renders on every tab.",
+      "testid": "run-outputs",
+      "proof": "apps/app/src/features/run/outputs.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "d19046fa"
+    },
     "get_run_transcript": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
@@ -421,6 +466,14 @@
       "proof": "apps/app/src/features/run/transcript.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-replay-ui"
+    },
+    "get_skill_config": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering Skills Versions reads the published configuration and history",
+      "proof": "apps/app/src/features/skills/versions.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "skills-console-ci"
     },
     "get_spend": {
       "route": "/[org]/[ws]/spend",
@@ -464,6 +517,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_tacho_session_policy": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend?tab=budgets — Gateway sessions, the panel that reads get_tacho_session_policy (data/live/spend.ts, data/live/mappers/spend.ts)",
+      "proof": "apps/app/src/features/spend/gateway-policy.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "session-model-gateway-arming"
+    },
     "get_user_preferences": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",
@@ -472,6 +533,14 @@
       "entry": "Preferences in the user menu on every organization page opens the Account dialog's Preferences tab, which reads get_user_preferences on open (features/shell/account-dialog.tsx, features/shell/account-actions.ts); every organization and workspace page also reads it through the shell port so <ViewerClock> and the chrome hand the stored zone to next-intl, and each date on the page renders in it (features/shell/viewer-clock.tsx, features/shell/shell-chrome.tsx)",
       "testid": "open-preferences",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
+    },
+    "grant_mandate": {
+      "route": "/[org]/[ws]/tools?tab=mandates",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "/[org]/[ws]/tools?tab=mandates — Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx → features/tools/grant-actions.ts)",
+      "proof": "apps/app/src/features/tools/grant-mandate.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-tools-gaps"
     },
     "import_tools": {
       "route": "/[org]/[ws]/tools",
@@ -649,21 +718,13 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
-    "get_record": {
-      "route": "/[org]/[ws]/steering/records/[lineage]",
-      "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
-      "entry": "/[org]/[ws]/steering/records/[lineage] — the page for one published record, which reads it through get_record (data/live/steering.ts, features/record/record.tsx)",
-      "proof": "apps/app/src/features/record/record.test.tsx",
-      "verifiedAt": "2026-09-21",
-      "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
-    },
-    "revise_context_record": {
-      "route": "/[org]/[ws]/steering/records/[lineage]",
-      "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
-      "entry": "Record › Revise this statement — the statement editor raises a revision proposal through revise_context_record (features/record/statement-editor.tsx, features/record/actions.ts)",
-      "proof": "apps/app/src/features/record/record.test.tsx",
-      "verifiedAt": "2026-09-21",
-      "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
+    "list_repositories": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › the repository table every visit reads, main first, with role, production branch, .oxagen/, events and symbols (features/repositories/repositories.tsx, features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
     },
     "list_resolved_approvals": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -672,14 +733,6 @@
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT"
-    },
-    "list_repositories": {
-      "route": "/[org]/[ws]/repositories",
-      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › the repository table every visit reads, main first, with role, production branch, .oxagen/, events and symbols (features/repositories/repositories.tsx, features/repositories/bound-repositories.tsx, features/repositories/actions.ts)",
-      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
     },
     "list_runs": {
       "route": "/[org]/[ws]",
@@ -744,6 +797,55 @@
       "proof": "apps/app/src/features/steering/context-pr-panel.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "open_init_pr": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › “Add Oxagen to a repository” › the five-step init wizard › “Open pull request” (features/repositories/init-wizard.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
+    },
+    "preview_skill_search": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering Skills Search previews descriptions and withheld reasons at a selected immutable version",
+      "proof": "apps/app/src/features/skills/search.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "skills-console-ci"
+    },
+    "propose_agent": {
+      "route": "/[org]/[ws]/agents",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agent IAM › New agent, and ⌘K Create › Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts)",
+      "proof": "apps/app/src/features/create/agent-wizard.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-wizard-agent"
+    },
+    "propose_configuration_clone": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Clone on a published record opens the manual editor in the workspace creation host.",
+      "testid": "configuration-clone",
+      "proof": "apps/app/src/features/create/clone-editor.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "skills-lifecycle-ci-witness"
+    },
+    "propose_record": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering › Write a context record (every tab but Skills), and ⌘K Create › Context record: the context-record wizard's pull request step, which proposes the record and opens its Context PR (features/create/record-wizard.tsx, features/create/actions.ts)",
+      "proof": "apps/app/src/features/create/record-wizard.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-wizard-record"
+    },
+    "propose_skill": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering › Skills › Add a skill, and ⌘K Create › Skill: the skill wizard's pull request step (features/create/skill-wizard.tsx, features/create/actions.ts)",
+      "proof": "apps/app/src/features/create/skill-wizard.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-creation-wizards"
     },
     "purchase_credits": {
       "route": "/[org]/billing",
@@ -819,6 +921,35 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "resend_member_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "People pending invitations: resend",
+      "testid": "invitation-controls",
+      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "assigned-issue-batch; CI pending"
+    },
+    "resolve_approval": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/page.tsx",
+      "entry": "/[org]/[ws] — Decide on a parked approval card opens the approve or deny dialog, which invokes resolve_approval through the kernel seam; the same card and dialog are drawn on /[org]/[ws]/runs/[run]?tab=approvals (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx)",
+      "testid": "decide",
+      "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "session-018UrgFq-mc-1-approve",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runs/[run]?tab=approvals",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "/[org]/[ws]/runs/[run]?tab=approvals — the Approvals tab draws the same card and the same Decide dialog Fleet's panel draws, over the same kernel seam (features/fleet/approvals-panel.tsx, features/fleet/approval-decision.tsx, features/run/run.tsx)",
+          "testid": "decide",
+          "proof": "apps/app/src/features/run/run.test.tsx",
+          "verifiedAt": "2026-09-20",
+          "verifiedBy": "session-018UrgFq-mc1-review"
+        }
+      ]
+    },
     "retire_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
@@ -826,6 +957,14 @@
       "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "revise_context_record": {
+      "route": "/[org]/[ws]/steering/records/[lineage]",
+      "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
+      "entry": "Record › Revise this statement — the statement editor raises a revision proposal through revise_context_record (features/record/statement-editor.tsx, features/record/actions.ts)",
+      "proof": "apps/app/src/features/record/record.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
     },
     "revoke_agent_role": {
       "route": "/[org]/[ws]/agents/[agent]",
@@ -843,14 +982,6 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
-    "grant_mandate": {
-      "route": "/[org]/[ws]/tools?tab=mandates",
-      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
-      "entry": "/[org]/[ws]/tools?tab=mandates — Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx → features/tools/grant-actions.ts)",
-      "proof": "apps/app/src/features/tools/grant-mandate.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-tools-gaps"
-    },
     "revoke_mandate": {
       "route": "/[org]/[ws]/mandates/[mandate]",
       "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
@@ -858,6 +989,15 @@
       "proof": "apps/app/src/features/mandate/actions.test.ts",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
+    },
+    "revoke_member_invite": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "People pending invitations: revoke",
+      "testid": "invitation-controls",
+      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "assigned-issue-batch; CI pending"
     },
     "revoke_tacho_enrollment": {
       "route": "/[org]/[ws]/agents/[agent]",
@@ -960,6 +1100,14 @@
       "verifiedAt": "2026-09-21",
       "verifiedBy": "kernel-fixes-atomic-price-card"
     },
+    "set_production_branch": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › “Details” › Production branch — “Make <branch> the production branch” or “Set production branch” (features/repositories/repository-dialog.tsx, features/repositories/actions.ts)",
+      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-mc-repositories-page"
+    },
     "set_role_grants": {
       "route": "/[org]/roles",
       "page": "apps/app/src/app/[org]/roles/page.tsx",
@@ -1033,6 +1181,22 @@
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-514c860f-account-dialog-w11"
     },
+    "update_skill_config": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering Skills Versions opens a configuration PR, imports repository settings, or publishes a verified merged PR",
+      "proof": "apps/app/src/features/skills/versions.test.tsx",
+      "verifiedAt": "2026-09-20",
+      "verifiedBy": "skills-console-ci"
+    },
+    "update_tacho_session_policy": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend?tab=budgets — Gateway sessions › Save the policy, which invokes update_tacho_session_policy (features/spend/actions.ts)",
+      "proof": "apps/app/src/features/spend/gateway-policy.test.tsx",
+      "verifiedAt": "2026-09-21",
+      "verifiedBy": "session-model-gateway-arming"
+    },
     "update_workspace_settings": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
@@ -1048,154 +1212,6 @@
       "proof": "apps/app/src/features/organization/model-funding-form.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-343b879e-byok"
-    },
-    "get_repository_tree": {
-      "route": "/[org]/[ws]/repositories",
-      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › the .oxagen/ column, the repository dialog opened by “Details”, and the Configuration tab (features/repositories/repositories.tsx, features/repositories/repository-dialog.tsx, features/repositories/configuration.tsx, features/repositories/actions.ts)",
-      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
-    },
-    "open_init_pr": {
-      "route": "/[org]/[ws]/repositories",
-      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › “Add Oxagen to a repository” › the five-step init wizard › “Open pull request” (features/repositories/init-wizard.tsx, features/repositories/actions.ts)",
-      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
-    },
-    "set_production_branch": {
-      "route": "/[org]/[ws]/repositories",
-      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › “Details” › Production branch — “Make <branch> the production branch” or “Set production branch” (features/repositories/repository-dialog.tsx, features/repositories/actions.ts)",
-      "proof": "apps/app/src/features/repositories/repositories.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
-    },
-    "propose_agent": {
-      "route": "/[org]/[ws]/agents",
-      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agent IAM › New agent, and ⌘K Create › Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts)",
-      "proof": "apps/app/src/features/create/agent-wizard.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-wizard-agent"
-    },
-    "propose_record": {
-      "route": "/[org]/[ws]/steering",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering › Write a context record (every tab but Skills), and ⌘K Create › Context record: the context-record wizard's pull request step, which proposes the record and opens its Context PR (features/create/record-wizard.tsx, features/create/actions.ts)",
-      "proof": "apps/app/src/features/create/record-wizard.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-wizard-record"
-    },
-    "propose_skill": {
-      "route": "/[org]/[ws]/steering?tab=skills",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering › Skills › Add a skill, and ⌘K Create › Skill: the skill wizard's pull request step (features/create/skill-wizard.tsx, features/create/actions.ts)",
-      "proof": "apps/app/src/features/create/skill-wizard.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-creation-wizards"
-    },
-    "resolve_approval": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/[ws]/page.tsx",
-      "entry": "/[org]/[ws] — Decide on a parked approval card opens the approve or deny dialog, which invokes resolve_approval through the kernel seam; the same card and dialog are drawn on /[org]/[ws]/runs/[run]?tab=approvals (features/fleet/approval-decision.tsx, features/fleet/actions.ts, features/fleet/approvals-panel.tsx)",
-      "testid": "decide",
-      "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-018UrgFq-mc-1-approve",
-      "also": [
-        {
-          "route": "/[org]/[ws]/runs/[run]?tab=approvals",
-          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-          "entry": "/[org]/[ws]/runs/[run]?tab=approvals — the Approvals tab draws the same card and the same Decide dialog Fleet's panel draws, over the same kernel seam (features/fleet/approvals-panel.tsx, features/fleet/approval-decision.tsx, features/run/run.tsx)",
-          "testid": "decide",
-          "proof": "apps/app/src/features/run/run.test.tsx",
-          "verifiedAt": "2026-09-20",
-          "verifiedBy": "session-018UrgFq-mc1-review"
-        }
-      ]
-    },
-    "get_auto_eligibility": {
-      "route": "/[org]/[ws]",
-      "page": "apps/app/src/app/[org]/[ws]/page.tsx",
-      "entry": "/[org]/[ws] — opening the decision dialog reads get_auto_eligibility, so the eligibility line and who has already resolved the call are current at the moment of the decision rather than as old as the page render (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
-      "testid": "eligibility",
-      "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "session-018UrgFq-mc-1-approve",
-      "also": [
-        {
-          "route": "/[org]/[ws]/runs/[run]?tab=approvals",
-          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-          "entry": "/[org]/[ws]/runs/[run]?tab=approvals — the card on the Approvals tab draws the recorded eligibility line, and opening its dialog reads get_auto_eligibility again (features/fleet/approval-decision.tsx, features/fleet/actions.ts)",
-          "testid": "eligibility",
-          "proof": "apps/app/src/features/run/run.test.tsx",
-          "verifiedAt": "2026-09-20",
-          "verifiedBy": "session-018UrgFq-mc1-review"
-        }
-      ]
-    },
-    "get_clone_draft": {
-      "route": "/[org]/[ws]/steering",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Clone on a published record opens the manual editor in the workspace creation host.",
-      "testid": "configuration-clone",
-      "proof": "apps/app/src/features/create/clone-editor.test.tsx",
-      "verifiedAt": "2026-09-21",
-      "verifiedBy": "skills-lifecycle-ci-witness"
-    },
-    "propose_configuration_clone": {
-      "route": "/[org]/[ws]/steering",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Clone on a published record opens the manual editor in the workspace creation host.",
-      "testid": "configuration-clone",
-      "proof": "apps/app/src/features/create/clone-editor.test.tsx",
-      "verifiedAt": "2026-09-21",
-      "verifiedBy": "skills-lifecycle-ci-witness"
-    },
-    "resend_member_invite": {
-      "route": "/[org]",
-      "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "People pending invitations: resend",
-      "testid": "invitation-controls",
-      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "assigned-issue-batch; CI pending"
-    },
-    "revoke_member_invite": {
-      "route": "/[org]",
-      "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "People pending invitations: revoke",
-      "testid": "invitation-controls",
-      "proof": "apps/app/src/features/organization/invitation-controls.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "assigned-issue-batch; CI pending"
-    },
-    "get_skill_config": {
-      "route": "/[org]/[ws]/steering?tab=skills",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering Skills Versions reads the published configuration and history",
-      "proof": "apps/app/src/features/skills/versions.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "skills-console-ci"
-    },
-    "update_skill_config": {
-      "route": "/[org]/[ws]/steering?tab=skills",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering Skills Versions opens a configuration PR, imports repository settings, or publishes a verified merged PR",
-      "proof": "apps/app/src/features/skills/versions.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "skills-console-ci"
-    },
-    "preview_skill_search": {
-      "route": "/[org]/[ws]/steering?tab=skills",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering Skills Search previews descriptions and withheld reasons at a selected immutable version",
-      "proof": "apps/app/src/features/skills/search.test.tsx",
-      "verifiedAt": "2026-09-20",
-      "verifiedBy": "skills-console-ci"
     }
   }
 }

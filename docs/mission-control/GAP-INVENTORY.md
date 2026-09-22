@@ -161,7 +161,7 @@ Feature: `apps/app/src/features/spend/`. Tabs: findings \| operator \| agent \| 
 | Cost by operator / agent / model / tool | **Built** | |
 | Proven vs unproven, productive ratio | **Built** | Strip |
 | Wasted spend | **Built** | |
-| Budgets and set | **Built** | `set_spend_budget` |
+| Budgets and set | **Built** | `set_spend_budget`, plus the wrapped-session ceiling and model lists (`update_tacho_session_policy`) |
 | Export statement | **Built** | CSV via `export_statement` |
 | Cache hit rate | **Partial** | On Fleet tiles, not on Spend |
 | Provider key / task as first-class dims | **Missing** | `SpendGroupKind` is only operator, agent, model, and tool. `SpendRow.provider` is the model vendor, not a provider key, and there is no task grouping |
@@ -183,7 +183,7 @@ Feature: `apps/app/src/features/organization/`.
 | Roles and grants | **Built** | |
 | API keys create / rotate / revoke | **Built** | |
 | Model funding (BYOK) | **Built** | Test / save / remove |
-| Set model route | **Missing** | |
+| Set model route | **Partial** | The wrapped-harness allowlist is on Spend › Budgets (`update_tacho_session_policy`). Routing for the in-app assistant is still unbuilt. |
 | Data plane UI | **Missing** | Effectively cut for rev1 |
 | SSO / SCIM | **Cut** | |
 
@@ -228,7 +228,7 @@ Feature: `apps/app/src/features/audit/`. Export at `/{org}/audit/export`.
 |---|---|---|
 | Published records reach a wrapped agent | Phase 0+ | Steering pages write ceremony that may not change Claude Code or Codex until delivery holds |
 | `assembleSteering` and Preview | Phases 1-2 | Steering hub incomplete |
-| Loopback model proxy and MCP aggregator | Phase 4 | No gateway-tier halt, budget, or injection |
+| Loopback model proxy and MCP aggregator | Phase 4 | Budget and model allowlist now enforce (`update_tacho_session_policy`). No gateway-tier halt or injection yet. |
 | Contained tier | Phase 5 | No "enforced" tier |
 | Witness runner and DoD settle | Prove / §8.6 | Fleet and Run lack verdict and certificate |
 | Ledger run token | WL-61 | Halt and cancel stay disabled on ledger runs |

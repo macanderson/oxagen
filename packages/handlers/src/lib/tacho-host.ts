@@ -16,6 +16,7 @@ import { gatewayMandateTools } from "@oxagen/iam/machine-key-scope";
 import { PROVIDER_RATE_CARD, usdPerMillionToMicros } from "@oxagen/billing";
 import {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
+  BUNDLE_FEATURE_MODEL_ALLOWLIST,
   BUNDLE_FEATURE_MODEL_PRICES,
   digestJcs,
   type JsonValue,
@@ -37,7 +38,15 @@ import {
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
-import { hostReadColumns } from "./tacho-gateway-columns";
+import {
+  hostModelBaseUrlsColumnReady,
+  hostReadColumns,
+} from "./tacho-gateway-columns";
+import {
+  readTachoSessionPolicyIn,
+  type SessionPolicyTx,
+  type TachoSessionPolicy,
+} from "./tacho-session-policy";
 import { readWorkspaceSteering, type SteeringTx } from "./tacho-steering";
 
 export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
@@ -53,6 +62,7 @@ interface TachoTx {
     };
     tachoControlCommands: { findMany: (args: unknown) => Promise<unknown> };
     retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
+    tachoSessionPolicy: { findFirst: (args: unknown) => Promise<unknown> };
   };
   // The steering read (`readWorkspaceSteering`): the ledger count and the
   // records joined to their pinned versions.
@@ -306,18 +316,72 @@ function modelPrices(host: TachoHostRow): {
 }
 
 /**
+ * The workspace's wrapped-session policy, as the two bundle clauses that carry
+ * it (ADR-094; docs/audits/2026-09-21-model-gateway-arming.md).
+ *
+ * `budget.mode` used to be the literal `"observed"` here, which made the
+ * `session_budget_exceeded` branch in `model-proxy.ts` unreachable in
+ * production: the gateway metered every call and refused none. The mode is now
+ * the workspace's own answer, and the one mode governs both enforced clauses,
+ * so a host either applies its mandate or it does not.
+ *
+ * `models` is gated on `BUNDLE_FEATURE_MODEL_ALLOWLIST` for the reason
+ * `gatewayTools` gives: `policyBundleSchema` is `.strict()` on the host, so a
+ * daemon built before this field rejects the *whole* mandate the moment a
+ * bundle carries one. A host that has not advertised keeps calling any model
+ * it likes until it upgrades. That cost is real, which is why
+ * `update_tacho_session_policy` returns how many hosts are in that state —
+ * a saved allowlist governing no machine must not read as an enforced one.
+ *
+ * `allow: null` and `allow: []` stay apart on the wire. `null` is *no
+ * allowlist stated*; `[]` is an allowlist that permits nothing. Collapsing
+ * them would make "permit nothing" mean "permit everything", which is the
+ * fail-open the `gateway_tools` note describes.
+ */
+function budgetAndModels(
+  host: TachoHostRow,
+  policy: TachoSessionPolicy,
+): {
+  budget: PolicyBundle["budget"];
+  models?: PolicyBundle["models"];
+} {
+  const budget: PolicyBundle["budget"] = {
+    mode: policy.mode,
+    ...(policy.sessionLimitUsd !== null
+      ? { session_limit_usd: policy.sessionLimitUsd }
+      : {}),
+  };
+  const advertised: unknown = host.bundleFeatures;
+  const parsesModels =
+    Array.isArray(advertised) &&
+    advertised.includes(BUNDLE_FEATURE_MODEL_ALLOWLIST);
+  if (!parsesModels) return { budget };
+  return {
+    budget,
+    models: { allow: policy.modelAllow, deny: policy.modelDeny },
+  };
+}
+
+/**
  * The unsigned bundle for a host at this moment (spec section 7.1).
  *
  * `contextSystem` is the workspace's compiled steering
  * (`readWorkspaceSteering`), or `null` when nothing steers. It is required so
  * that a caller cannot build a bundle and forget it: a record that silently
  * failed to reach the agent is the defect #2592 was filed about.
+ *
+ * `sessionPolicy` is the workspace's wrapped-session policy
+ * (`readTachoSessionPolicyIn`). It is required for the same reason: it was a
+ * literal here for the whole of Phase 4, and nothing about the bundle said so.
+ * `OBSERVED_ONLY` is the honest value for a caller that has no workspace to
+ * read one from, and it is the only shape that reproduces the old behaviour.
  */
 export function unsignedBundle(
   host: TachoHostRow,
   denyGeneration: DenyGeneration,
   retention: BundleRetention,
   contextSystem: string | null,
+  sessionPolicy: TachoSessionPolicy,
   now: Date = new Date(),
 ): Omit<PolicyBundle, "signature"> {
   const status = tachoHostStatusSchema.parse(host.status);
@@ -334,7 +398,7 @@ export function unsignedBundle(
       ask: [] as string[],
     },
     tools: {} as PolicyBundle["tools"],
-    budget: { mode: "observed" as const },
+    ...budgetAndModels(host, sessionPolicy),
     context: { system: contextSystem },
     retention,
     mode,
@@ -479,12 +543,21 @@ export async function controlEnvelope(
   host: TachoHostRow,
   now: Date = new Date(),
 ): Promise<ControlEnvelope> {
-  const [denyGeneration, retention, steering] = await Promise.all([
-    readDenyGeneration(tx, ctx.orgId, ctx.workspaceId),
-    readWorkspaceRetention(tx, ctx.orgId, ctx.workspaceId),
-    readWorkspaceSteering(tx, ctx.orgId, ctx.workspaceId),
-  ]);
-  const bundle = unsignedBundle(host, denyGeneration, retention, steering, now);
+  const [denyGeneration, retention, steering, sessionPolicy] =
+    await Promise.all([
+      readDenyGeneration(tx, ctx.orgId, ctx.workspaceId),
+      readWorkspaceRetention(tx, ctx.orgId, ctx.workspaceId),
+      readWorkspaceSteering(tx, ctx.orgId, ctx.workspaceId),
+      readTachoSessionPolicyIn(tx as SessionPolicyTx, ctx.workspaceId),
+    ]);
+  const bundle = unsignedBundle(
+    host,
+    denyGeneration,
+    retention,
+    steering,
+    sessionPolicy,
+    now,
+  );
   const commands = await drainCommands(tx, host, now);
   return controlEnvelopeSchema.parse({
     host_status: tachoHostStatusSchema.parse(host.status),
@@ -541,6 +614,12 @@ export async function touchHost(
         otel_ok?: boolean;
         bundle_etag?: string;
         bundle_features?: string[];
+        model_base_urls?: {
+          harness: string;
+          key: string;
+          ours: boolean;
+          shadowed_by?: string;
+        }[];
       }
     | undefined,
   now: Date,
@@ -570,6 +649,22 @@ export async function touchHost(
     values["bundleFeatures"] = daemon.bundle_features ?? [];
   if (daemon?.bundle_etag !== undefined)
     values["bundleEtagServed"] = daemon.bundle_etag;
+  // Reported health with no base-URL report is a daemon that predates the
+  // field, not a host with nothing to report, so its stored answer is cleared
+  // rather than preserved — the same reading `bundle_features` gets, and for
+  // the same reason: a stale "still ours" outlives the edit that made it
+  // false, and the whole point of this column is not to be reassuring while
+  // the gateway is being walked out of.
+  //
+  // Skipped outright while the column is missing. Naming it in an UPDATE
+  // raises 42703 and takes the whole poll with it, over a field that only
+  // tells an operator why a tier dropped. `forWrite` rechecks a cached miss,
+  // so the first poll after the migration lands records the fact.
+  if (
+    daemon !== undefined &&
+    (await hostModelBaseUrlsColumnReady(tx as never, true))
+  )
+    values["modelBaseUrls"] = daemon.model_base_urls ?? [];
   await tx
     .update(schema.tachoHosts)
     .set(values)

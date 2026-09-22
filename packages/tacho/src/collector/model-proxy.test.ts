@@ -1017,6 +1017,87 @@ describe("the loopback model proxy", () => {
     expect(verifyChain(second.handle.wal.read(uuid)).ok).toBe(true);
   });
 
+  it("refuses a model the mandate does not permit, names it on the frame, and forwards a permitted one", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const paths = scratchPaths();
+    const first = await boot(fake.url, {
+      paths,
+      bundle: {
+        budget: { mode: "enforced" as const },
+        models: { allow: ["claude-opus-*"], deny: ["claude-opus-5-legacy"] },
+      },
+    });
+    const uuid = await first.session("sess-models");
+    const ask = (model: string) =>
+      call(first.port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-models",
+        ],
+        body: JSON.stringify({ model, stream: true }),
+      });
+
+    // Off the allowlist.
+    const off = await ask("claude-sonnet-5");
+    expect(off.status).toBe(403);
+    expect(off.headers["x-oxagen-refusal"]).toBe("model_not_permitted");
+    expect(off.body.toString()).toContain("claude-sonnet-5");
+    // A deny beats the allow it also matches.
+    const denied = await ask("claude-opus-5-legacy");
+    expect(denied.status).toBe(403);
+    expect(denied.headers["x-oxagen-refusal"]).toBe("model_not_permitted");
+    // Nothing reached the vendor yet: the refusal is before the forward.
+    expect(fake.requests).toHaveLength(0);
+    // On the allowlist, so it goes.
+    expect((await ask("claude-opus-5-20260101")).status).toBe(200);
+    expect(fake.requests).toHaveLength(1);
+
+    const decisions = first.frames(uuid, "policy_decision");
+    expect(decisions).toHaveLength(2);
+    expect(decisions[0]!.body).toMatchObject({
+      policy_decision: "deny",
+      policy_source: "bundle",
+      policy_reason_code: "model_not_permitted",
+    });
+    // The frame names the model, so an operator knows which entry to add.
+    expect(decisions[0]!.attrs).toMatchObject({
+      "oxagen.refused": "model_call",
+      "oxagen.model": "claude-sonnet-5",
+    });
+    await first.handle.stop();
+  });
+
+  it("does not refuse on models while the budget mode is observed", async () => {
+    // The negative control for the test above. One mode governs both enforced
+    // clauses; a list that refused under `observed` would arm a gateway the
+    // operator never armed.
+    const fake = await vendor(streamingAnthropic(1));
+    const host = await boot(fake.url, {
+      paths: scratchPaths(),
+      bundle: {
+        budget: { mode: "observed" as const },
+        models: { allow: [], deny: ["*"] },
+      },
+    });
+    await host.session("sess-observed");
+    const answer = await call(host.port, {
+      path: "/anthropic/v1/messages",
+      headers: [
+        "X-Api-Key",
+        FAKE_KEY,
+        "X-Claude-Code-Session-Id",
+        "sess-observed",
+      ],
+      body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+    });
+    expect(answer.status).toBe(200);
+    expect(fake.requests).toHaveLength(1);
+    await host.handle.stop();
+  });
+
   it("fails open: an observed budget, an unpriced model and an uncorrelated call all go through", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const { handle, port, session, frames } = await boot(fake.url, {
@@ -1609,7 +1690,31 @@ describe("the wire and the host file", () => {
     expect(policyBundleSchema.parse(bundle).model_prices).toEqual(PRICES);
     const bad = { ...bundle, model_prices: [{ ...PRICES[0], surprise: 1 }] };
     expect(policyBundleSchema.safeParse(bad).success).toBe(false);
-    expect(TACHO_BUNDLE_FEATURES).toEqual(["gateway_tools", "model_prices"]);
+    expect(TACHO_BUNDLE_FEATURES).toEqual([
+      "gateway_tools",
+      "model_prices",
+      "models",
+    ]);
+  });
+
+  it("parses models, keeps a null allowlist apart from an empty one, and refuses a stray key", () => {
+    const signer = bundleSigner();
+    // `null` (no allowlist) and `[]` (permit nothing) are different decisions,
+    // and the wire has to carry both or "permit nothing" becomes "permit
+    // everything" on the host.
+    const none = policyBundleSchema.parse(
+      signer.sign(unsignedBundle({ models: { allow: null, deny: [] } })),
+    );
+    expect(none.models).toEqual({ allow: null, deny: [] });
+    const nothing = policyBundleSchema.parse(
+      signer.sign(unsignedBundle({ models: { allow: [], deny: [] } })),
+    );
+    expect(nothing.models).toEqual({ allow: [], deny: [] });
+    const bad = {
+      ...signer.sign(unsignedBundle({})),
+      models: { allow: null, deny: [], surprise: 1 },
+    };
+    expect(policyBundleSchema.safeParse(bad).success).toBe(false);
   });
 
   it("puts the proxy next to the collector's port unless the host file pins one", () => {

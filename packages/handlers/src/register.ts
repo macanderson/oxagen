@@ -1339,6 +1339,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoHostListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_tacho_session_policy",
+    async () =>
+      (await import("./tacho.session_policy.read"))
+        .tachoSessionPolicyReadHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "update_tacho_session_policy",
+    async () =>
+      (await import("./tacho.session_policy.write"))
+        .tachoSessionPolicyWriteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_tacho_sessions",
     async () =>
       (await import("./tacho.session.list"))

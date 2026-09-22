@@ -10,6 +10,7 @@ import {
   signBundle,
   unsignedBundle,
 } from "./lib/tacho-host";
+import { readTachoSessionPolicyIn } from "./lib/tacho-session-policy";
 import { readWorkspaceSteering } from "./lib/tacho-steering";
 
 /**
@@ -32,16 +33,19 @@ export const tachoBundleGetHandler: CapabilityHandler<
       tx as never,
       input.host_enrollment_id,
     );
-    const [denyGeneration, retention, steering] = await Promise.all([
-      readDenyGeneration(tx as never, ctx.orgId, ctx.workspaceId),
-      readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
-      readWorkspaceSteering(tx as never, ctx.orgId, ctx.workspaceId),
-    ]);
+    const [denyGeneration, retention, steering, sessionPolicy] =
+      await Promise.all([
+        readDenyGeneration(tx as never, ctx.orgId, ctx.workspaceId),
+        readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
+        readWorkspaceSteering(tx as never, ctx.orgId, ctx.workspaceId),
+        readTachoSessionPolicyIn(tx as never, ctx.workspaceId),
+      ]);
     const unsigned = unsignedBundle(
       host,
       denyGeneration,
       retention,
       steering,
+      sessionPolicy,
       now,
     );
     await tx

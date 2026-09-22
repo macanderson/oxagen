@@ -5,6 +5,7 @@
 // rounds or fills a figure the contract did not carry. The one derived figure
 // is Fleet's cache hit rate, a ratio of the token counts the rows carry.
 import type { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import type { tachoSessionPolicyRead } from "@oxagen/oxagen/contracts/tacho.session_policy.read";
 import type { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
 import type { costUnpricedModelList } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
 import type { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
@@ -15,6 +16,7 @@ import type { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import type { z } from "zod";
 import type {
   FleetSpend,
+  GatewayPolicy,
   PriceBook,
   SpendBudgets,
   SpendDrill,
@@ -195,6 +197,33 @@ export function toSpendBudgets(
     ratio: budget.ratio,
     state: budget.state,
   }));
+}
+
+/**
+ * The wrapped-session policy as the page reads it: the contract's own shape,
+ * unchanged. There is nothing to derive, and `modelAllow` keeps its null —
+ * flattening it to `[]` here would turn "permit every model" into "permit
+ * none" on the way to the page.
+ */
+export function toGatewayPolicy(
+  out: ContractOutput<typeof tachoSessionPolicyRead>,
+): z.input<typeof GatewayPolicy> {
+  return {
+    mode: out.mode,
+    // The contract states the ceiling in whole dollars; the page prints every
+    // figure through <Money>, which reads micros. Both are carried so the
+    // dialog's field and the printed amount come from one read.
+    sessionLimit:
+      out.sessionLimitUsd === null
+        ? null
+        : {
+            micros: String(Math.round(out.sessionLimitUsd * 1_000_000)),
+            currency: "USD",
+          },
+    sessionLimitUsd: out.sessionLimitUsd,
+    modelAllow: out.modelAllow,
+    modelDeny: out.modelDeny,
+  };
 }
 
 /**

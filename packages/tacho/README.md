@@ -95,6 +95,14 @@ vendor credential crosses in memory and is never written or logged.
 | Claude Code | `~/.claude/settings.json`, `env.ANTHROPIC_BASE_URL` | `http://127.0.0.1:<port>/anthropic` | API key (`X-Api-Key`) and claude.ai subscription (`Authorization: Bearer`) |
 | Codex | `~/.codex/config.toml`, top-level `openai_base_url` | `http://127.0.0.1:<port>/backend-api/codex` | API key (forwarded to `api.openai.com/v1`) and ChatGPT login (a request carrying `ChatGPT-Account-ID` is forwarded to `chatgpt.com/backend-api/codex`) |
 
+Cursor and Stella get hook entries but no base URL, so their model calls go
+straight to the vendor. Stella has a writable one and Cursor has none;
+`docs/audits/2026-09-21-model-gateway-arming.md` has the evidence for both.
+
+The daemon reports what each of these files holds now on every health poll
+(`model_base_urls`), and `list_tacho_hosts` returns it. Reverting the key is
+still one edit; it is no longer a silent one.
+
 `src/host/model-base-url.ts` writes and restores both, and is the contract the
 CLI and the desktop app call:
 
@@ -130,7 +138,16 @@ What standing in the path gives you:
 - **An enforced session budget.** With `budget.mode: enforced`, a session whose
   observed spend reached `budget.session_limit_usd` has its next call refused
   with a 403 in the vendor's error shape, and the refusal is sealed as a
-  `policy_decision`. Prices arrive in the signed bundle as `model_prices`.
+  `policy_decision`. Prices arrive in the signed bundle as `model_prices`. The
+  mode and the ceiling come from the workspace's own
+  `update_tacho_session_policy`, not from a literal.
+- **A model allowlist.** With the same `budget.mode: enforced`, a call for a
+  model outside `models.allow`, or inside `models.deny`, is refused with
+  `model_not_permitted` before it is forwarded. A pattern ending in `*`
+  matches by prefix. `models` is sent only to a host that advertised
+  `BUNDLE_FEATURE_MODEL_ALLOWLIST`, so a host that has not upgraded keeps
+  calling any model; `update_tacho_session_policy` returns how many hosts are
+  in that state.
 - **A real interrupt.** `pause`, `cancel`, `kill` and a steer delivered as
   `interrupt` abort the session's in-flight model calls. A paused session's new
   calls are refused until `resume`.
@@ -182,10 +199,11 @@ hooks for MDM-managed machines; the record is still labelled `client_attested`.
 What the signed bundle carries today is one thing: the workspace's steering. The
 server compiles its active `must` and `should` context records into
 `context.system` (`packages/handlers/src/lib/tacho-steering.ts`, ADR-091), which
-`SessionStart` delivers. Permissions are empty and `budget.mode = "observed"`
-(`packages/handlers/src/lib/tacho-host.ts`, `unsignedBundle`), so `PreToolUse` can
-deny only on host status or a paused session, and nothing reads
-`session_limit_usd`. Operator steer commands are the only
+`SessionStart` delivers. Permissions are empty, and `budget.mode` is the
+workspace's own answer (`packages/handlers/src/lib/tacho-host.ts`,
+`unsignedBundle`, reading `workspace.tacho_session_policy`); a workspace that
+has set nothing gets `observed`, so `PreToolUse` there can deny only on host
+status or a paused session. Operator steer commands are the only
 live text channel from the server to a running agent. Token and cost numbers for
 Claude Code are the harness's own telemetry, self-reported. Codex and Stella export
 none. There is no model proxy and no sandbox. The MCP gateway (`src/collector/mcp-gateway.ts`) is real

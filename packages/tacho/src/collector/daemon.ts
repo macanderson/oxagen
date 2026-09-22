@@ -67,6 +67,7 @@ import {
   type CommandAcknowledgement,
   type ControlEnvelope,
   type DaemonHealth,
+  type ModelBaseUrlReport,
   TACHO_BUNDLE_FEATURES,
 } from "../wire";
 import { Detector } from "./detector";
@@ -557,6 +558,22 @@ async function initializeDaemon(
     stateDirty = true;
   }
 
+  /**
+   * Whether each routed harness still points at the proxy, for the health
+   * report. Written by `refreshUpstreams` below, which already reads the
+   * state for the displaced upstreams.
+   *
+   * Reverting `env.ANTHROPIC_BASE_URL` or `openai_base_url` takes one file
+   * edit and no restart, and left the gateway nothing to say about it: the
+   * control plane saw only that sessions stopped reaching the `gateway` tier,
+   * which is also what a laptop that is merely closed looks like.
+   *
+   * Empty until the first read succeeds, and empty when the read throws. The
+   * wire contract makes absence mean *nothing was said*, never *nothing has
+   * drifted*, so a failed read reports no claim rather than a false clean one.
+   */
+  let modelBaseUrls: ModelBaseUrlReport[] = [];
+
   function health(): DaemonHealth {
     const stats = wal.stats();
     const spoolFiles = readdirSync(paths.spool).filter((f) =>
@@ -579,6 +596,9 @@ async function initializeDaemon(
       // Reported from the running code rather than from `host.json`, which
       // `enroll` writes once and no upgrade rewrites.
       bundle_features: [...TACHO_BUNDLE_FEATURES],
+      // Omitted until a read succeeds: absent means nothing was said, and a
+      // daemon that could not read the files has nothing to say.
+      ...(modelBaseUrls.length > 0 ? { model_base_urls: modelBaseUrls } : {}),
     };
   }
 
@@ -1840,6 +1860,16 @@ async function initializeDaemon(
         }
       }
       displacedUpstreams = next;
+      modelBaseUrls = state.harnesses.map((entry) => ({
+        harness: entry.harness,
+        key: entry.key,
+        ours: entry.ours,
+        // The value itself is not sent. Whether ours is in force is the whole
+        // question, and a URL a user chose is theirs.
+        ...(entry.shadowedBy !== undefined
+          ? { shadowed_by: entry.shadowedBy.file }
+          : {}),
+      }));
     } catch (error) {
       log(
         `model proxy: could not read the displaced base URLs: ${error instanceof Error ? error.message : String(error)}`,

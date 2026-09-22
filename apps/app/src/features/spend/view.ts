@@ -33,6 +33,16 @@ export type SpendView =
 /** The workspace a link on the page points into. */
 export type SpendAt = { org: string; ws: string };
 
+/**
+ * How many machines a saved gateway policy will actually reach.
+ *
+ * `hostsEnforcingModels` is the count that advertised they can parse the
+ * bundle's `models` field. A host that has not is never sent one, so its
+ * sessions keep calling whatever model they like. The section renders the
+ * gap rather than letting a saved list read as an applied one.
+ */
+export type GatewayReach = { hosts: number; hostsEnforcingModels: number };
+
 /** An operator key is a principal public id; get_spend_drill refuses any other. */
 const PRINCIPAL = /^prn_[0-9a-z]+$/;
 const KEY_MAX = 256;

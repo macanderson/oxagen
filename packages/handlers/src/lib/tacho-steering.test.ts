@@ -21,6 +21,7 @@ import {
   type SteeringTx,
 } from "./tacho-steering";
 import { unsignedBundle } from "./tacho-host";
+import { OBSERVED_ONLY } from "./tacho-session-policy";
 
 function rec(overrides: Partial<SteeringRecord>): SteeringRecord {
   return {
@@ -571,12 +572,14 @@ describe("the bundle", () => {
       { org: 0, workspace: 0 },
       retention,
       system,
+      OBSERVED_ONLY,
     );
     const plain = unsignedBundle(
       host,
       { org: 0, workspace: 0 },
       retention,
       null,
+      OBSERVED_ONLY,
     );
     expect(steered.context.system).toBe(system);
     expect(plain.context.system).toBeNull();

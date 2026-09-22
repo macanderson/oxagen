@@ -26,7 +26,7 @@
  *     enforces it again on ingest, so a workspace on `digest_only` gets
  *     exactly what this proxy produced before: digests, counts and timings.
  *
- * Standing in the path is what makes four things possible, and each is here:
+ * Standing in the path is what makes five things possible, and each is here:
  *
  *   1. **Observed metering.** Every model call seals one `llm_call` frame with
  *      the vendor's own usage, a digest of the request and of the response,
@@ -35,7 +35,9 @@
  *      with the session's observed spend before a call is forwarded.
  *   3. **A real interrupt.** A paused or cancelled session has its in-flight
  *      calls aborted and its new ones refused until it is resumed.
- *   4. **The injection seam.** `beforeForward` sees each request before it
+ *   4. **A model allowlist.** `models.allow` and `models.deny` are checked
+ *      against the model the request asks for, before it is forwarded.
+ *   5. **The injection seam.** `beforeForward` sees each request before it
  *      leaves and may return a changed one. It is a no-op until the Phase 1
  *      assembler exists.
  *
@@ -50,9 +52,15 @@
  * no session can be found for (forwarded, recorded on the daemon's chain), and
  * a `beforeForward` that throws or stalls (the original request is sent).
  *
- * Closed: a session at its limit under an `enforced` budget, a paused or
+ * Closed: a session at its limit under an `enforced` budget, a model the
+ * workspace's `models` policy refuses under that same mode, a paused or
  * cancelled session, and a suspended or revoked host. Those are refused with
  * an error in the vendor's own shape and recorded as a `policy_decision`.
+ *
+ * The model check reads the model the request asks for, and a request whose
+ * model this proxy cannot read is forwarded. An unreadable body is not
+ * evidence of a forbidden model, and refusing on one would take out every
+ * non-JSON call the proxy passes through untouched.
  *
  * The budget is checked when a call is admitted, so calls already in flight
  * finish and a session can end one turn past its limit. It is never checked
@@ -104,6 +112,7 @@ import {
   type TachoHarness,
 } from "../wire";
 import { GUARD_MESSAGES, guardLoopbackRequest } from "./loopback-guard";
+import { modelVerdict } from "./model-allowlist";
 import { priceObservedUsage, usdToMicros } from "./model-pricing";
 import { RequestPrefixMemory } from "./request-prefix";
 import {
@@ -160,6 +169,7 @@ export type BeforeForward = (
 /** Why a call was refused, as the frame and the `x-oxagen-refusal` header say it. */
 export type ModelRefusalCode =
   | "session_budget_exceeded"
+  | "model_not_permitted"
   | "session_paused"
   | "session_cancelled"
   | "host_paused"
@@ -344,6 +354,22 @@ function leadingModel(bytes: Buffer | undefined): string | undefined {
 }
 
 /**
+ * The model a request asks for: the cheap leading-bytes read first, the parsed
+ * body second. One function because two places need the same answer — the
+ * mandate check before the call is admitted, and the frame after it is
+ * forwarded — and two copies of a regex are two things to keep in step.
+ */
+function modelOf(
+  readable: () => Buffer | undefined,
+  json: () => Record<string, unknown> | undefined,
+): string | undefined {
+  const leading = leadingModel(readable());
+  if (leading !== undefined) return leading;
+  const value = json()?.["model"];
+  return typeof value === "string" ? value : undefined;
+}
+
+/**
  * The session id inside an Anthropic `metadata.user_id`. Current Claude Code
  * sends a JSON string with a `session_id` member. Older builds sent
  * `user_<hash>_account_<uuid>_session_<uuid>`.
@@ -441,8 +467,20 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     return { how: "unattributed" };
   }
 
+  /**
+   * Whether this call is refused, and why.
+   *
+   * `model` is the model id the request asks for, resolved by the caller
+   * before this runs. It has to be: the model branch below cannot check a
+   * string that does not exist yet, and reading it after the refusal decision
+   * would leave an allowlist that silently never fires — which is what the
+   * 2026-09-21 gateway audit found when it looked for one. `undefined` means
+   * the proxy could not read a model from the request, and the model branch
+   * then permits the call rather than refusing on an absence.
+   */
   function refusalFor(
     record: SessionRecord | undefined,
+    model: string | undefined,
   ):
     | { code: ModelRefusalCode; message: string; source: "human" | "bundle" }
     | undefined {
@@ -470,6 +508,25 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       };
     }
     const budget = view.bundle.budget;
+    // Both enforced clauses hang off the one mode, so a host either refuses on
+    // its mandate or it does not. The model check runs first: a model the
+    // workspace forbids is forbidden at any spend, and naming the budget for a
+    // call that was never allowed would send the operator to the wrong
+    // setting.
+    if (budget.mode === "enforced") {
+      const verdict = modelVerdict(view.bundle.models, model);
+      if (verdict !== undefined) {
+        const named = model ?? "the requested model";
+        return {
+          code: "model_not_permitted",
+          message:
+            verdict === "denied"
+              ? `This workspace's Oxagen mandate refuses ${named}. Ask the workspace's operator to allow it, or use a model the mandate permits.`
+              : `This workspace's Oxagen mandate permits only its allowed models, and ${named} is not one of them. Ask the workspace's operator to add it.`,
+          source: "bundle",
+        };
+      }
+    }
     if (budget.mode === "enforced" && budget.session_limit_usd !== undefined) {
       const limit = usdToMicros(budget.session_limit_usd);
       const used = spendFor(record.recorder.sessionUuid);
@@ -600,7 +657,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const attrs = attrsFor(route, how);
     const metered = route.api !== "other";
 
-    const refusal = refusalFor(record);
+    // The model the harness asked for, read before the refusal decision so the
+    // `models` clause has a string to check. It used to be read after
+    // `refusalFor` had already returned, which is why an allowlist bolted onto
+    // the old shape would have refused nothing.
+    const askedModel = modelOf(readable, json);
+
+    const refusal = refusalFor(record, askedModel);
     if (refusal !== undefined) {
       refused += 1;
       const view = deps.policy();
@@ -622,6 +685,12 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
               "oxagen.refused": "model_call",
               "oxagen.provider": route.provider,
               "oxagen.request_digest": digestBytes(body),
+              // The model the refusal was about, when the proxy could read
+              // one. A `model_not_permitted` frame that does not name the
+              // model leaves the operator guessing which entry to add.
+              ...(askedModel !== undefined
+                ? { "oxagen.model": askedModel }
+                : {}),
               ...(record !== undefined
                 ? {
                     "oxagen.session_spend_usd_micros": String(
@@ -671,11 +740,11 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         path = result.path;
     }
 
-    const requestModel =
-      leadingModel(readable()) ??
-      (typeof json()?.["model"] === "string"
-        ? (json()?.["model"] as string)
-        : undefined);
+    // The same read the mandate was answered against. `readable` and `json`
+    // memoize the body as it arrived, so this was never the injected model
+    // even before the read moved above `refusalFor` — the two sites always
+    // agreed, and now they cannot drift apart.
+    const requestModel = askedModel;
     // The request half of the exchange, decoded: the bytes the vendor is about
     // to read, not the gzip or zstd the harness wrapped them in, and the
     // injected body when `beforeForward` changed one, because the request that

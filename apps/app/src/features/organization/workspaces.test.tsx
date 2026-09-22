@@ -77,6 +77,7 @@ async function renderWorkspaces(
       fleet: vi.fn(),
       drill: vi.fn(),
       waste: vi.fn(),
+      gatewayPolicy: vi.fn(),
       budgets: vi.fn(),
       findings: vi.fn(),
       findingEvidence: vi.fn(),

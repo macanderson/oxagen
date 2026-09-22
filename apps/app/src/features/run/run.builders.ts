@@ -614,6 +614,7 @@ export function runSource(reads: RunReads) {
       fleet: refuse,
       drill: refuse,
       waste: refuse,
+      gatewayPolicy: refuse,
       budgets: refuse,
       findings: refuse,
       findingEvidence: refuse,

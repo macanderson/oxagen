@@ -1,0 +1,145 @@
+{
+  "name": "update_tacho_session_policy",
+  "domain": "tacho",
+  "description": "Set the workspace's policy for wrapped-harness sessions — the Claude Code and Codex sessions that route their model calls through the loopback gateway. Partial update: an omitted field does not change. Choose the mode (observed = meter only; enforced = the gateway refuses a call that breaks a clause), the per-session dollar ceiling, and the model allow and deny lists. Enforced is refused unless the policy carries at least one clause to enforce. Owner/Admin only.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "workspace"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "observed",
+          "enforced"
+        ]
+      },
+      "sessionLimitUsd": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "modelAllow": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "maxItems": 256
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "modelDeny": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "maxItems": 256
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "observed",
+          "enforced"
+        ]
+      },
+      "sessionLimitUsd": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "modelAllow": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "modelDeny": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "reach": {
+        "type": "object",
+        "properties": {
+          "hosts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hostsEnforcingModels": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "hosts",
+          "hostsEnforcingModels"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "mode",
+      "sessionLimitUsd",
+      "modelAllow",
+      "modelDeny",
+      "reach"
+    ],
+    "additionalProperties": false
+  }
+}

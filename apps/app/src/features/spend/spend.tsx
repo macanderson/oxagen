@@ -16,6 +16,7 @@ import { BudgetDialog } from "./budget-dialog";
 import { DrillSection } from "./drill";
 import { ExportDialog } from "./export-dialog";
 import { SpendStrip } from "./figures";
+import { GatewayPolicySection } from "./gateway-policy";
 import { FindingEvidenceSection, FindingsSection } from "./findings";
 import { PricingSection } from "./pricing";
 import { ReadFailure, SpendEmpty } from "./states";
@@ -152,9 +153,10 @@ async function body(
       );
     }
     case "budgets": {
-      const [report, budgets] = await Promise.all([
+      const [report, budgets, gateway] = await Promise.all([
         source.spend.byGroup(ctx, "operator", period),
         source.spend.budgets(ctx),
+        source.spend.gatewayPolicy(ctx),
       ]);
       if (!report.ok) return <ReadFailure read={report} />;
       if (!budgets.ok) return <ReadFailure read={budgets} />;
@@ -162,6 +164,18 @@ async function body(
         <>
           <SpendStrip total={report.value.total} period={period} />
           <BudgetsTable budgets={budgets.value} />
+          {/* The gateway policy renders its own refusal rather than blanking
+              the tab: the spend ceilings above are a separate question and a
+              person is still owed them when this read is down. */}
+          {gateway.ok ? (
+            <GatewayPolicySection
+              at={at}
+              policy={gateway.value}
+              canEdit={ctx.wsRole === "owner" || ctx.wsRole === "admin"}
+            />
+          ) : (
+            <ReadFailure read={gateway} />
+          )}
         </>
       );
     }

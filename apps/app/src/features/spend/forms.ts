@@ -74,6 +74,138 @@ export function budgetFieldErrors(
   return errors;
 }
 
+// ── The wrapped-session policy ───────────────────────────────────────────────
+
+/** What the gateway dialog collects, as typed. */
+export type GatewayPolicyFormValues = {
+  mode: "observed" | "enforced";
+  /** The per-session ceiling in US dollars, as typed; blank clears it. */
+  sessionLimit: string;
+  /** One model pattern per line; blank means no allowlist at all. */
+  modelAllow: string;
+  modelDeny: string;
+};
+
+type GatewayFormErrorKey =
+  | "sessionLimitInvalid"
+  | "modelPatternInvalid"
+  | "nothingToEnforce";
+export type GatewayFieldErrors = Partial<
+  Record<
+    "sessionLimit" | "modelAllow" | "modelDeny" | "mode",
+    GatewayFormErrorKey
+  >
+>;
+
+/**
+ * What the host can actually apply: an exact model id, or one ending in `*`
+ * to match by prefix. The contract carries the same rule. Refusing here is
+ * what lets the field name the line that is wrong, rather than the dialog
+ * reporting a whole-form refusal for one typo.
+ */
+const MODEL_PATTERN = /^(?:[A-Za-z0-9._:/-]+\*?|\*)$/;
+
+/** A textarea's lines as a model list, blanks dropped. */
+function lines(value: string): string[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+/**
+ * The gateway dialog's values as `update_tacho_session_policy` takes them.
+ *
+ * Two rules are enforced here as well as in the handler and the database,
+ * because each layer answers a different reader. This one tells the person
+ * which field to fix while they are still looking at it.
+ *
+ *   - A model pattern the host could not apply is refused, rather than saved
+ *     as a rule that silently matches nothing.
+ *   - `enforced` with no ceiling and no model list is refused. A policy that
+ *     says it governs and governs nothing is the defect the gateway audit
+ *     found, wearing a switch.
+ *
+ * An allowlist box left blank means *no allowlist*, so every model is
+ * permitted. To permit nothing, deny `*`.
+ */
+export const GatewayPolicyForm = z
+  .object({
+    mode: z.enum(["observed", "enforced"]),
+    sessionLimit: z.string(),
+    modelAllow: z.string(),
+    modelDeny: z.string(),
+  })
+  .transform((form, ctx) => {
+    const typed = form.sessionLimit.trim();
+    let sessionLimitUsd: number | null = null;
+    if (typed.length > 0) {
+      const parsed = Number(typed);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["sessionLimit"],
+          message: "sessionLimitInvalid",
+        });
+        return z.NEVER;
+      }
+      sessionLimitUsd = parsed;
+    }
+    const allow = lines(form.modelAllow);
+    const deny = lines(form.modelDeny);
+    for (const [field, list] of [
+      ["modelAllow", allow],
+      ["modelDeny", deny],
+    ] as const) {
+      if (list.some((pattern) => !MODEL_PATTERN.test(pattern))) {
+        ctx.addIssue({
+          code: "custom",
+          path: [field],
+          message: "modelPatternInvalid",
+        });
+        return z.NEVER;
+      }
+    }
+    // Blank is no allowlist, which is not the same as one that permits
+    // nothing. The two reach the contract as null and [].
+    const modelAllow = allow.length > 0 ? allow : null;
+    if (
+      form.mode === "enforced" &&
+      sessionLimitUsd === null &&
+      modelAllow === null &&
+      deny.length === 0
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mode"],
+        message: "nothingToEnforce",
+      });
+      return z.NEVER;
+    }
+    return {
+      mode: form.mode,
+      sessionLimitUsd,
+      modelAllow,
+      modelDeny: deny,
+    };
+  });
+
+/** The field a refusal names, by the head of its path: the form's or the contract's. */
+export function gatewayFieldErrors(
+  issues: readonly { readonly path: readonly PropertyKey[] }[],
+): GatewayFieldErrors {
+  const errors: GatewayFieldErrors = {};
+  for (const issue of issues) {
+    const head = String(issue.path[0] ?? "");
+    if (head === "sessionLimit" || head === "sessionLimitUsd")
+      errors.sessionLimit = "sessionLimitInvalid";
+    if (head === "modelAllow") errors.modelAllow = "modelPatternInvalid";
+    if (head === "modelDeny") errors.modelDeny = "modelPatternInvalid";
+    if (head === "mode") errors.mode = "nothingToEnforce";
+  }
+  return errors;
+}
+
 /** A calendar month as export_statement takes it. */
 export function isStatementMonth(value: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);

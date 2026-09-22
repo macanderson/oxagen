@@ -31,6 +31,10 @@ import {
   unsignedBundle,
 } from "./tacho-host";
 import { hostGatewayColumnReady } from "./tacho-gateway-columns";
+import {
+  readTachoSessionPolicyIn,
+  type TachoSessionPolicy,
+} from "./tacho-session-policy";
 import { readWorkspaceSteering } from "./tacho-steering";
 import { logger } from "../logger";
 
@@ -153,6 +157,12 @@ interface MintedHostEnrollment {
   retention: Awaited<ReturnType<typeof readWorkspaceRetention>>;
   /** The workspace's compiled steering, for the initial bundle (ADR-091). */
   steering: string | null;
+  /**
+   * The workspace's wrapped-session policy, for the initial bundle (ADR-094).
+   * A host that enrols into a workspace already running an enforced budget
+   * arrives holding it, rather than metering freely until its first refresh.
+   */
+  sessionPolicy: TachoSessionPolicy;
 }
 
 /**
@@ -311,11 +321,13 @@ export async function mintHostEnrollment(
   if (!inserted) {
     throw new Error("Internal error: failed to create the Tacho host");
   }
-  const [denyGeneration, retention, steering] = await Promise.all([
-    readDenyGeneration(tx as never, args.orgId, args.workspaceId),
-    readWorkspaceRetention(tx as never, args.orgId, args.workspaceId),
-    readWorkspaceSteering(tx as never, args.orgId, args.workspaceId),
-  ]);
+  const [denyGeneration, retention, steering, sessionPolicy] =
+    await Promise.all([
+      readDenyGeneration(tx as never, args.orgId, args.workspaceId),
+      readWorkspaceRetention(tx as never, args.orgId, args.workspaceId),
+      readWorkspaceSteering(tx as never, args.orgId, args.workspaceId),
+      readTachoSessionPolicyIn(tx as never, args.workspaceId),
+    ]);
   return {
     host: inserted as TachoHostRow,
     hostEnrollmentId,
@@ -327,6 +339,7 @@ export async function mintHostEnrollment(
     denyGeneration,
     retention,
     steering,
+    sessionPolicy,
   };
 }
 
@@ -343,6 +356,7 @@ export function enrollmentDocument(
       minted.denyGeneration,
       minted.retention,
       minted.steering,
+      minted.sessionPolicy,
       issuedAt,
     ),
   );
