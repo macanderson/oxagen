@@ -333,7 +333,7 @@ describe("legacy relative file identity", () => {
       repoRelativePath,
       linesAdded: 0,
       linesRemoved: 0,
-      observedStatus: null,
+      observedStatus: null as string | null,
     };
   }
 
@@ -343,6 +343,8 @@ describe("legacy relative file identity", () => {
   ) {
     const inserted: Array<Record<string, unknown>> = [];
     const conflictSets: Array<Record<string, unknown>> = [];
+    /** What the clear pass wrote, one entry per UPDATE. */
+    const cleared: Array<Record<string, unknown>> = [];
     const tx = {
       select: () => ({
         from: () => ({
@@ -350,9 +352,10 @@ describe("legacy relative file identity", () => {
         }),
       }),
       update: () => ({
-        set: () => ({
-          where: () => undefined,
-        }),
+        set: (values: Record<string, unknown>) => {
+          cleared.push(values);
+          return { where: () => undefined };
+        },
       }),
       insert: () => ({
         values: (row: Record<string, unknown>) => {
@@ -374,8 +377,51 @@ describe("legacy relative file identity", () => {
       now,
       true,
     );
-    return { inserted, conflictSets };
+    return { inserted, conflictSets, cleared };
   }
+
+  /** A complete snapshot of `root` that reports no change at all. */
+  const emptySnapshot = (root: string) =>
+    seal("oxagen:worktree_reconciled", "collector", root, {
+      observed_changes: [],
+      observed_changes_total: 0,
+      observed_changes_truncated: false,
+    });
+
+  it("clears a UNC-rooted row when a complete snapshot no longer reports it", async () => {
+    // `isAbsoluteStoredPath` is what decides an absolute row; a copy of the
+    // test without its `\\\\` branch left every UNC row's status and line
+    // counts stale after a clean reconciliation.
+    const { cleared } = await rollup(
+      [
+        {
+          ...storedRow("\\\\server\\share\\src\\a.ts", "src/a.ts"),
+          observedStatus: "modified",
+          linesAdded: 9,
+          linesRemoved: 2,
+        },
+      ],
+      [emptySnapshot("\\\\server\\share")],
+    );
+    expect(cleared).toEqual([
+      { observedStatus: null, linesAdded: 0, linesRemoved: 0, updatedAt: now },
+    ]);
+  });
+
+  it("keeps a UNC-rooted row a complete snapshot still reports", async () => {
+    const { cleared } = await rollup(
+      [
+        {
+          ...storedRow("\\\\server\\share\\src\\a.ts", "src/a.ts"),
+          observedStatus: "modified",
+          linesAdded: 9,
+          linesRemoved: 2,
+        },
+      ],
+      [reconciled("\\\\server\\share", "src/a.ts")],
+    );
+    expect(cleared).toEqual([]);
+  });
 
   it("reuses a relative row when a later absolute observation names it", async () => {
     const { inserted, conflictSets } = await rollup(
