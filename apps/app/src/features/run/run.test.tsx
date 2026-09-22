@@ -329,6 +329,41 @@ describe("header", () => {
     expect(facts.getByText("not recorded")).toBeTruthy();
   });
 
+  it("reads the operator id when the record holds neither a name nor a kind, on the fact and under the agent", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            operatorId: "prn_unknown_kind",
+            operatorKind: null,
+            operatorName: null,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const facts = within(screen.getByTestId("run-facts"));
+    expect(facts.getByTestId("operator")).toHaveTextContent(
+      /^prn_unknown_kind$/,
+    );
+    expect(facts.queryByText("not recorded")).toBeNull();
+    // The agent card's line under the key is the same operator element, so
+    // its hover card and its id travel with it.
+    expect(screen.getByTestId("run-agent-operator")).toHaveTextContent(
+      /^prn_unknown_kind$/,
+    );
+  });
+
+  it("names the operator under the agent's key with the same element as the fact", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    const under = screen.getByTestId("run-agent-operator");
+    expect(under).toHaveTextContent(/^Marcus Bell$/);
+    expect(under.getAttribute("data-operator-id")).toBe("prn_marcusbell");
+  });
+
   it("omits witness details from the operator view", async () => {
     await renderRun({
       detail: ok(runDetail({ witnessed: true })),

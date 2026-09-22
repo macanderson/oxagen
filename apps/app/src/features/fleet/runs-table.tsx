@@ -121,9 +121,13 @@ function RunsPageView({
                   }}
                 >
                   {run.operatorName ??
-                    (run.operatorKind === null
-                      ? notRecorded
-                      : t(`operatorKind.${run.operatorKind}`))}
+                    (run.operatorKind === null ? (
+                      // An id with no name and no kind is still a recorded
+                      // operator: the id is the label, never "not recorded".
+                      <span className={mono}>{run.operatorId}</span>
+                    ) : (
+                      t(`operatorKind.${run.operatorKind}`)
+                    ))}
                 </OperatorName>
               )}
             </td>

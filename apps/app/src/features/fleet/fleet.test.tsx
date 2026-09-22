@@ -426,6 +426,24 @@ describe("runs table", () => {
     expect(runsSection()).not.toHaveTextContent(/trust/i);
   });
 
+  it("reads the operator id when the record holds neither a name nor a kind for it", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          operatorName: null,
+          operatorKind: null,
+          operatorId: "prn_unknown_kind",
+        }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const [row] = within(runsSection()).getAllByTestId("run-row");
+    const cell = within(row ?? runsSection()).getAllByRole("cell")[2];
+    // An id is a recorded operator. "not recorded" is for a run with none.
+    expect(cell).toHaveTextContent(/^prn_unknown_kind$/);
+    expect(cell).not.toHaveTextContent("not recorded");
+  });
+
   it("keeps unnamed operators apart by id without printing the id as a label", async () => {
     await renderFleet({
       runs: runPage([
