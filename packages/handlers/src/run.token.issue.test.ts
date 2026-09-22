@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   attempt: vi.fn(),
   seal: vi.fn(),
   insert: vi.fn(),
+  orgRoles: vi.fn(),
+  /** `agent_runs` principal columns for the locked run. */
+  runPrincipals: vi.fn(),
+  /** The caller's active `iam.principals` rows in the org. */
+  ownPrincipals: vi.fn(),
 }));
 vi.mock("@oxagen/database", async (original) => ({
   ...(await original<typeof import("@oxagen/database")>()),
@@ -21,7 +26,9 @@ vi.mock("@oxagen/run-ledger", async (original) => ({
 vi.mock("@oxagen/iam/org-role", () => ({
   assertOrgRole: mocks.role,
   resolveActingUserId: mocks.actor,
+  resolveActorOrgRoles: mocks.orgRoles,
 }));
+import { schema } from "@oxagen/database";
 import { runTokenIssueHandler } from "./run.token.issue";
 import { clearDataPlaneResolver, setDataPlaneResolver } from "@oxagen/tenancy";
 import { afterEach } from "vitest";
@@ -33,8 +40,18 @@ const tx = {
     agentRunAttempts: { findFirst: mocks.attempt },
     agentRunAttemptSeals: { findFirst: mocks.seal },
   },
+  select: () => ({
+    from: (table: unknown) => ({
+      where: () =>
+        table === schema.agentRuns
+          ? mocks.runPrincipals()
+          : mocks.ownPrincipals(),
+    }),
+  }),
   insert: () => ({ values: mocks.insert }),
 };
+const INITIATOR = "00000000-0000-4000-8000-00000000c0de";
+const AGENT = "00000000-0000-4000-8000-0000000000a6";
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.actor.mockResolvedValue(ctx.userId);
@@ -48,6 +65,10 @@ beforeEach(() => {
   mocks.attempt.mockResolvedValue({ id: "attempt-uuid" });
   mocks.seal.mockResolvedValue(undefined);
   mocks.insert.mockResolvedValue(undefined);
+  // A V1 row: no principal on the run, so the role gate is the boundary.
+  mocks.runPrincipals.mockResolvedValue([{ initiating: null, agent: null }]);
+  mocks.ownPrincipals.mockResolvedValue([{ id: "caller-principal" }]);
+  mocks.orgRoles.mockResolvedValue([]);
 });
 afterEach(clearDataPlaneResolver);
 describe("run credential issuance", () => {
@@ -138,5 +159,53 @@ describe("run credential issuance", () => {
     mocks.role.mockRejectedValue(new Error("Viewer"));
     await expect(runTokenIssueHandler(input, ctx)).rejects.toThrow("Viewer");
     expect(mocks.tenant).not.toHaveBeenCalled();
+  });
+});
+
+describe("run credential issuance — the run's principals", () => {
+  it("keeps the role gate as the whole boundary for a run with no principal", async () => {
+    await runTokenIssueHandler(input, ctx);
+    expect(mocks.ownPrincipals).not.toHaveBeenCalled();
+    expect(mocks.orgRoles).not.toHaveBeenCalled();
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+  });
+  it("issues to the initiating principal", async () => {
+    mocks.runPrincipals.mockResolvedValue([
+      { initiating: INITIATOR, agent: AGENT },
+    ]);
+    mocks.ownPrincipals.mockResolvedValue([{ id: INITIATOR }]);
+    await runTokenIssueHandler(input, ctx);
+    expect(mocks.orgRoles).not.toHaveBeenCalled();
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+  });
+  it("issues to the run's agent principal", async () => {
+    mocks.runPrincipals.mockResolvedValue([
+      { initiating: INITIATOR, agent: AGENT },
+    ]);
+    mocks.ownPrincipals.mockResolvedValue([{ id: AGENT }]);
+    await runTokenIssueHandler(input, ctx);
+    expect(mocks.orgRoles).not.toHaveBeenCalled();
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+  });
+  it("issues to an org Owner or Admin who is neither, read through the same transaction", async () => {
+    mocks.runPrincipals.mockResolvedValue([
+      { initiating: INITIATOR, agent: null },
+    ]);
+    mocks.orgRoles.mockResolvedValue(["Admin"]);
+    await runTokenIssueHandler(input, ctx);
+    expect(mocks.orgRoles).toHaveBeenCalledWith(ctx.orgId, ctx.userId, tx);
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+  });
+  it("refuses a workspace Member with no part in the run before reading the attempt", async () => {
+    mocks.runPrincipals.mockResolvedValue([
+      { initiating: INITIATOR, agent: AGENT },
+    ]);
+    mocks.orgRoles.mockResolvedValue(["Billing"]);
+    await expect(runTokenIssueHandler(input, ctx)).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "not_run_principal",
+    });
+    expect(mocks.attempt).not.toHaveBeenCalled();
+    expect(mocks.insert).not.toHaveBeenCalled();
   });
 });
