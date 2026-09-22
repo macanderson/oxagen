@@ -58,7 +58,7 @@ import {
 import { recordSpend } from "@oxagen/billing";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
-import { type AssemblyTiming, writeAssembly } from "@oxagen/run-ledger";
+import { writeAssembly } from "@oxagen/run-ledger";
 import { machineSnapshotOf } from "./lib/machine-facts";
 import { rollupFiles } from "./lib/file-facts-rollup";
 import { unlockOnboardingGate } from "./lib/onboarding";
@@ -87,20 +87,6 @@ import {
   type VerifiedBody,
 } from "./lib/tacho-replay";
 import { logger } from "./logger";
-
-/**
- * What a frame's own receipt timed. The recorded stream carries no clock, so
- * the time to first token and the call's wall time come from the envelope the
- * host wrote beside it (`ttft_ms`, `api_duration_ms`; tacho spec §6.1).
- */
-function assemblyTimingOf(event: TachoEvent | undefined): AssemblyTiming {
-  const attrs = event as unknown as Record<string, unknown> | undefined;
-  const read = (key: string): number | null => {
-    const value = attrs?.[key];
-    return typeof value === "number" && Number.isFinite(value) ? value : null;
-  };
-  return { ttftMs: read("ttft_ms"), durationMs: read("api_duration_ms") };
-}
 
 type Body = Record<string, unknown>;
 
@@ -928,9 +914,6 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     retained.push(body);
   }
   const bytesRefs = new Map<string, string>();
-  const eventByIdem = new Map(
-    input.events.map((event) => [event.event_id_idem, event]),
-  );
   for (const body of retained) {
     const { ref } = await evidenceStore().put({
       orgId: ctx.orgId,
@@ -945,13 +928,17 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // and stored beside the wire the row references. The bytes above are the
     // record and are untouched; the fold is derived, so a miss is reported
     // and never refuses the frame (spec §14).
+    //
+    // No call timing travels with it. The object is keyed by the body's
+    // digest, so two calls with identical retained bytes share it, and this
+    // frame's `ttft_ms` and `api_duration_ms` are already columns on its own
+    // row — the transcript read lays them over the shared fold.
     const wrote = await writeAssembly(evidenceStore(), {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       runId: body.sessionUuid,
       bodyRef: ref,
       bytes: body.bytes,
-      timing: assemblyTimingOf(eventByIdem.get(body.eventIdIdem)),
     });
     if (wrote === "failed") {
       logger.warn(

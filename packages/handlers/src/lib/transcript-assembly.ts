@@ -43,14 +43,18 @@ import {
  * wrote. Cutting at the last newline that fits leaves a message that is short
  * and true, and the reader is told how much was left.
  */
-export function clampOnLine(text: string, max: number): {
+export function clampOnLine(
+  text: string,
+  max: number,
+): {
   text: string;
   truncated: boolean;
 } {
   if (text.length <= max) return { text, truncated: false };
   const head = text.slice(0, max);
   const newline = head.lastIndexOf("\n");
-  if (newline > max / 4) return { text: head.slice(0, newline), truncated: true };
+  if (newline > max / 4)
+    return { text: head.slice(0, newline), truncated: true };
   const space = head.lastIndexOf(" ");
   return {
     text: space > max / 4 ? head.slice(0, space) : head,
@@ -93,11 +97,20 @@ function costOf(micros: number | null): TranscriptContentBlock["cost"] {
 }
 
 /**
- * The stored fold for this body, or the wire folded here when there is none.
+ * The stored fold for this body, or the wire folded here when there is none,
+ * timed from THIS frame either way.
  *
  * `getAssembly` answering null is not an error and never an empty transcript:
  * it means this frame predates the ingest-time fold, so the read pays for one
  * fold and the page reads exactly the same.
+ *
+ * The stored object is keyed by the body's digest, so two calls whose retained
+ * bytes are identical share one object (`writeAssembly` in @oxagen/run-ledger
+ * states why). Its content is the same for both by definition; their clocks
+ * are not. So the frame's own `ttftMs` and `durationMs` are laid over whatever
+ * the object carries, rather than read out of it. Without that, the second
+ * call's fold overwrote the first's and reopening the earlier run reported the
+ * later call's time to first token, wall time and token rate.
  */
 export async function readAssembly(
   store: { getAssembly(scope: Scope, ref: string): Promise<Uint8Array | null> },
@@ -106,15 +119,16 @@ export async function readAssembly(
   wire: string,
   frame: RunFrame,
 ): Promise<MessageAssembly | null> {
+  const timing = {
+    ttftMs: frame.timing.ttftMs,
+    durationMs: frame.timing.durationMs,
+  };
   const stored = await store.getAssembly(scope, bodyRef);
   if (stored !== null) {
     const decoded = decodeAssembly(stored);
-    if (decoded !== null) return decoded;
+    if (decoded !== null) return { ...decoded, ...timing };
   }
-  return assembleModelStream(wire, {
-    ttftMs: frame.timing.ttftMs,
-    durationMs: frame.timing.durationMs,
-  });
+  return assembleModelStream(wire, timing);
 }
 
 interface Scope {

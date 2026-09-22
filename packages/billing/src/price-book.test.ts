@@ -5,7 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // conditions the mocked `eq`/`and`/`or`/`isNull` build and interprets the raw
 // upsert. `sql` stays real: the INSERT's casts and its ON CONFLICT arbiter are
 // what the fake reads, and a mocked template would prove nothing about them.
-const store = vi.hoisted(() => ({ tx: null as unknown }));
+// `seams` records which connection each read opened, in order. The fake tx is
+// the same either way, so it is the only way a test can tell a tenant-scoped
+// read from one that took the system escape hatch.
+const store = vi.hoisted(() => ({
+  tx: null as unknown,
+  seams: [] as string[],
+}));
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const real = await importOriginal<typeof import("drizzle-orm")>();
@@ -19,8 +25,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const dbMock = {
     ...real,
-    withTenantDb: async (fn: (tx: unknown) => unknown) => fn(store.tx),
-    withSystemDb: async (fn: (tx: unknown) => unknown) => fn(store.tx),
+    withTenantDb: async (fn: (tx: unknown) => unknown) => {
+      store.seams.push("tenant");
+      return fn(store.tx);
+    },
+    withSystemDb: async (fn: (tx: unknown) => unknown) => {
+      store.seams.push("system");
+      return fn(store.tx);
+    },
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
@@ -28,6 +40,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 import {
   closeNegotiatedPriceEntry,
   listPriceEntries,
+  loadPriceBook,
+  loadPriceBookInTenantScope,
   BOUNDARY_MARGIN_MS,
   COLD_BOOK_EFFECTIVE_FROM,
   nextPriceBookBoundary,
@@ -56,6 +70,7 @@ import {
 } from "./pricing";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
+const OTHER = "00000000-0000-4000-8000-000000000002";
 const FROM = new Date("2026-09-01T00:00:00.000Z");
 
 function entry(
@@ -392,6 +407,75 @@ const syncPriceBook: typeof syncPriceBookLive = (args) => {
   fakeClock.now = now;
   return syncPriceBookLive({ now, ...args });
 };
+
+describe("loading the whole book", () => {
+  let fake: FakePriceStore;
+
+  beforeEach(() => {
+    fake = makeFakePriceStore();
+    fakeClock.now = null;
+    store.tx = makeFakePriceTx(fake);
+    store.seams = [];
+    fake.rows.push(
+      priceRow({ id: "list-row", model: "claude-sonnet-5", orgId: null }),
+      priceRow({
+        id: "own-row",
+        model: "claude-sonnet-5",
+        orgId: ORG,
+        source: "negotiated",
+      }),
+      priceRow({
+        id: "other-org-row",
+        model: "claude-sonnet-5",
+        orgId: OTHER,
+        source: "negotiated",
+      }),
+    );
+  });
+
+  /** The list rows and this organization's own, whichever seam is used. */
+  const ids = (rows: readonly PriceEntry[]) => rows.map((r) => r.id).sort();
+
+  it("reads one organization's book inside its own tenant scope", async () => {
+    // #3526. `get_run_transcript` is a scoped capability serving one
+    // organization, and it priced every nonempty page through the system
+    // connection: an ordinary console read registered as unscoped access and
+    // asked the policy nothing.
+    const rows = await loadPriceBookInTenantScope({ orgId: ORG });
+
+    expect(store.seams).toEqual(["tenant"]);
+    expect(ids(rows)).toEqual(["list-row", "own-row"]);
+  });
+
+  it("keeps the system read for the jobs that have no tenant scope to run in", async () => {
+    // The rollup runs outside any scope and names the organization itself, so
+    // it must stay on the system connection with its explicit predicate.
+    const rows = await loadPriceBook({ orgId: ORG });
+
+    expect(store.seams).toEqual(["system"]);
+    expect(ids(rows)).toEqual(["list-row", "own-row"]);
+  });
+
+  it("carries the whole history, not one instant's rows", async () => {
+    // A transcript prices each block at the instant its own frame ran, so a
+    // window that has since closed is exactly the row it needs. An `at`
+    // filter here would silently price older blocks at today's rate.
+    fake.rows.push(
+      priceRow({
+        id: "closed-row",
+        model: "claude-sonnet-5",
+        orgId: ORG,
+        source: "negotiated",
+        effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+        effectiveTo: new Date("2026-02-01T00:00:00.000Z"),
+      }),
+    );
+
+    expect(ids(await loadPriceBookInTenantScope({ orgId: ORG }))).toContain(
+      "closed-row",
+    );
+  });
+});
 
 describe("the negotiated write path", () => {
   let fake: FakePriceStore;
