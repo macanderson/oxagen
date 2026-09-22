@@ -138,6 +138,8 @@ export async function seedAgent(
     operatorUserId?: string | null;
     deletedAt?: Date | null;
     workspaceId?: string;
+    /** A cost-center label as set_cost_center stores it (ADR-142). */
+    costCenter?: string | null;
   },
 ): Promise<SeededAgent> {
   const workspaceId = over.workspaceId ?? tenant.workspaceId;
@@ -175,6 +177,7 @@ export async function seedAgent(
         status: over.status ?? "draft",
         deploymentStatus: "inactive",
         principalId: principal?.id ?? null,
+        costCenter: over.costCenter ?? null,
         deletedAt: over.deletedAt ?? null,
         createdById: tenant.userId,
         updatedById: tenant.userId,

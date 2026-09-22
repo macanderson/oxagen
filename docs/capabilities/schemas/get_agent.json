@@ -125,6 +125,16 @@
                 "type": "null"
               }
             ]
+          },
+          "costCenter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -138,7 +148,8 @@
           "operatorId",
           "status",
           "registeredAt",
-          "firstFrameAt"
+          "firstFrameAt",
+          "costCenter"
         ],
         "additionalProperties": false
       },

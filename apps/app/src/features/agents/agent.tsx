@@ -188,6 +188,23 @@ export async function Agent({
                 }
               : null
           }
+          // set_cost_center admits an org Owner, Admin or Billing member
+          // (ADR-142), a wider set than the role writes, so the gate is its
+          // own. A retired agent's label is left as the record holds it.
+          charge={
+            (ctx.orgRole === "owner" ||
+              ctx.orgRole === "admin" ||
+              ctx.orgRole === "billing") &&
+            identity.status !== "retired"
+              ? {
+                  org: place.org,
+                  ws: place.ws,
+                  agentSlug: identity.slug,
+                  agentName: identity.name,
+                  costCenter: identity.costCenter,
+                }
+              : null
+          }
         />
       );
       break;
