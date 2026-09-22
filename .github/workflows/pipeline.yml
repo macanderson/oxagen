@@ -124,7 +124,11 @@ jobs:
     outputs:
       proceed: ${{ steps.preflight-tip.outputs.proceed }}
     steps:
+      # The script reads nothing but its own directory and the environment,
+      # so the checkout carries tools/scripts and the root files only.
       - uses: actions/checkout@v5
+        with:
+          sparse-checkout: tools/scripts
       - name: Decide whether this commit still needs the full gate
         id: preflight-tip
         env:

@@ -17,10 +17,12 @@ import {
   GATED_JOBS,
   guardProblems,
   PREFLIGHT_GATE,
+  readCompare,
 } from "./check-main-preflight.mjs";
 
 const OLDER = "9fa5382000000000000000000000000000000000";
 const NEWER = "ebcbcb8000000000000000000000000000000000";
+const ON_MAIN = { eventName: "push", ref: "refs/heads/main" };
 
 describe("decidePreflight", () => {
   it("always proceeds for a pull request — the race only exists between pushes to main", () => {
@@ -45,16 +47,51 @@ describe("decidePreflight", () => {
     ).toMatchObject({ proceed: true });
   });
 
-  it("skips the full gate for a push already superseded by a later push to main", () => {
+  it("skips the full gate when a later push to main descends from this commit", () => {
     const verdict = decidePreflight({
-      eventName: "push",
-      ref: "refs/heads/main",
+      ...ON_MAIN,
       sha: OLDER,
       tip: NEWER,
+      compare: { status: "ahead" },
     });
     expect(verdict.proceed).toBe(false);
     expect(verdict.reason).toMatch(/no longer the tip/);
+    expect(verdict.reason).toMatch(/descends from it/);
   });
+
+  it("runs the full gate when the tip is another commit and nothing says it descends from this one", () => {
+    // The stale-tip case: main moved, and the compare call gave no answer.
+    // Skipping here would trust a tip whose relationship to this commit is
+    // unknown, so the gate runs and the warning names the missing answer.
+    const verdict = decidePreflight({
+      ...ON_MAIN,
+      sha: OLDER,
+      tip: NEWER,
+      compare: { status: null, error: "HTTP 502" },
+    });
+    expect(verdict.proceed).toBe(true);
+    expect(verdict.warning).toMatch(/could not compare/);
+    expect(verdict.warning).toMatch(/HTTP 502/);
+    expect(
+      decidePreflight({ ...ON_MAIN, sha: OLDER, tip: NEWER }).proceed,
+    ).toBe(true);
+  });
+
+  it.each(["behind", "diverged", "identical"])(
+    "runs the full gate when compare says the tip is %s",
+    (status) => {
+      // A reset or a force-push: the tip's run does not check this commit.
+      const verdict = decidePreflight({
+        ...ON_MAIN,
+        sha: OLDER,
+        tip: NEWER,
+        compare: { status },
+      });
+      expect(verdict.proceed).toBe(true);
+      expect(verdict.warning).toBeUndefined();
+      expect(verdict.reason).toMatch(new RegExp(`compare says ${status}`));
+    },
+  );
 
   it("proceeds when the push to main is still the tip", () => {
     expect(
@@ -77,6 +114,68 @@ describe("decidePreflight", () => {
     });
     expect(verdict.proceed).toBe(true);
     expect(verdict.warning).toMatch(/HTTP 503/);
+  });
+});
+
+describe("readCompare", () => {
+  it("returns the compare status between the commit and the tip", async () => {
+    let url = "";
+    const fetchImpl = async (u: string | URL | Request, init?: RequestInit) => {
+      url = String(u);
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      return { ok: true, json: async () => ({ status: "ahead" }) } as never;
+    };
+    await expect(
+      readCompare({
+        repository: "o/r",
+        token: "t",
+        sha: OLDER,
+        tip: NEWER,
+        fetchImpl,
+      }),
+    ).resolves.toEqual({ status: "ahead" });
+    expect(url).toBe(
+      `https://api.github.com/repos/o/r/compare/${OLDER}...${NEWER}`,
+    );
+  });
+
+  it("never throws: a non-2xx, an empty body or a timeout becomes status: null", async () => {
+    const rejected = async () => ({ ok: false, status: 404 }) as never;
+    await expect(
+      readCompare({
+        repository: "o/r",
+        token: "t",
+        sha: OLDER,
+        tip: NEWER,
+        fetchImpl: rejected,
+      }),
+    ).resolves.toEqual({ status: null, error: "HTTP 404" });
+    const empty = async () => ({ ok: true, json: async () => ({}) }) as never;
+    await expect(
+      readCompare({
+        repository: "o/r",
+        token: "t",
+        sha: OLDER,
+        tip: NEWER,
+        fetchImpl: empty,
+      }),
+    ).resolves.toMatchObject({ status: null });
+    const hang = (_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<never>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(init.signal?.reason),
+        );
+      });
+    const timedOut = await readCompare({
+      repository: "o/r",
+      token: "t",
+      sha: OLDER,
+      tip: NEWER,
+      fetchImpl: hang as never,
+      timeoutMs: 5,
+    });
+    expect(timedOut.status).toBeNull();
+    expect(timedOut.error).toMatch(/timeout|abort/i);
   });
 });
 

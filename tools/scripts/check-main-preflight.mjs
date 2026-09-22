@@ -28,8 +28,12 @@
  *    dispatch) writes `proceed=true` immediately with no API call — the race
  *    this guards against exists only between pushes to main. For a push to
  *    main, it asks the API for the tip at that moment, the same call
- *    check-deploy-tip.mjs makes, and writes `proceed=true` only when this
- *    commit still is that tip.
+ *    check-deploy-tip.mjs makes. When this commit is that tip it proceeds.
+ *    When it is not, it asks `compare/{sha}...{tip}` whether the tip
+ *    descends from this commit, and skips only on the answer `ahead`. Any
+ *    other answer runs the gate: `behind` and `diverged` mean main was reset
+ *    or force-pushed and this commit's checks are not implied by the tip's,
+ *    and no answer at all is no evidence either way.
  *
  *    `preflight` itself always succeeds (a branch of its one step, never a
  *    skip), so `checks` / `test` / `e2e` / `rls-integration` /
@@ -50,7 +54,7 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { decide, readMainTip } from "./check-deploy-tip.mjs";
+import { API_TIMEOUT_MS, readMainTip } from "./check-deploy-tip.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const pipelinePath = join(repoRoot, ".github", "workflows", "pipeline.yml");
@@ -68,22 +72,90 @@ export const GATED_JOBS = [
 /**
  * The preflight decision, separated from I/O so the race case is testable.
  *
- * @param {{ eventName: string, ref: string | undefined, sha: string, tip: string | null, error?: string }} input
+ * `compare` is the API's answer to `compare/{sha}...{tip}`, read only when
+ * the tip is another commit: `ahead` says the tip descends from this commit.
+ * That is the one answer that lets the gate skip, because it is the one case
+ * where the tip's own run checks everything this commit's would have.
+ *
+ * @param {{ eventName: string, ref: string | undefined, sha: string, tip: string | null, error?: string, compare?: { status: string | null, error?: string } }} input
  * @returns {{ proceed: boolean, reason: string, warning?: string }}
  */
-export function decidePreflight({ eventName, ref, sha, tip, error }) {
+export function decidePreflight({ eventName, ref, sha, tip, error, compare }) {
   if (!(eventName === "push" && ref === "refs/heads/main")) {
     return {
       proceed: true,
       reason: `${eventName} does not race another run on main; running the full gate`,
     };
   }
-  const verdict = decide({ sha, tip, error });
+  const short = sha.slice(0, 9);
+  if (tip === null || tip === undefined) {
+    return {
+      proceed: true,
+      reason: `could not read the tip of main (${error ?? "no answer"}); running the full gate for ${short} rather than blocking on the API`,
+      warning: `check-main-preflight could not read the tip of main: ${error ?? "no answer"}`,
+    };
+  }
+  if (tip === sha) {
+    return { proceed: true, reason: `${short} is the tip of main` };
+  }
+  const tipShort = tip.slice(0, 9);
+  const status = compare?.status ?? null;
+  if (status === "ahead") {
+    return {
+      proceed: false,
+      reason: `${short} is no longer the tip of main (${tipShort} is) and the tip descends from it; the tip's run covers this commit, so this one skips`,
+    };
+  }
+  if (status === null) {
+    return {
+      proceed: true,
+      reason: `${short} is not the tip of main (${tipShort} is), and whether the tip descends from it could not be read (${compare?.error ?? "no answer"}); running the full gate`,
+      warning: `check-main-preflight could not compare ${short} with the tip ${tipShort}: ${compare?.error ?? "no answer"}`,
+    };
+  }
   return {
-    proceed: verdict.deploy,
-    reason: verdict.reason,
-    warning: verdict.warning,
+    proceed: true,
+    reason: `${short} is not the tip of main (${tipShort} is) and the tip does not descend from it (compare says ${status}); the tip's run does not cover this commit, so this one runs the full gate`,
   };
+}
+
+/**
+ * Ask the GitHub API how `tip` relates to `sha`: `ahead` when `tip` descends
+ * from `sha`, `behind` when main was reset to an ancestor, `diverged` after a
+ * force-push, `identical` when they are one commit. Never throws.
+ */
+export async function readCompare({
+  repository,
+  token,
+  sha,
+  tip,
+  fetchImpl = fetch,
+  timeoutMs = API_TIMEOUT_MS,
+}) {
+  try {
+    const res = await fetchImpl(
+      `https://api.github.com/repos/${repository}/compare/${sha}...${tip}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+    );
+    if (!res.ok) return { status: null, error: `HTTP ${res.status}` };
+    const body = await res.json();
+    const status = body?.status;
+    if (typeof status !== "string" || status.length === 0)
+      return { status: null, error: "response carried no status" };
+    return { status };
+  } catch (err) {
+    return {
+      status: null,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 /**
@@ -163,10 +235,21 @@ if (isEntrypoint) {
     }
     let tip = null;
     let error;
+    let compare;
     if (eventName === "push" && ref === "refs/heads/main") {
       ({ tip, error } = await readMainTip({ repository, token }));
+      if (tip !== null && tip !== sha) {
+        compare = await readCompare({ repository, token, sha, tip });
+      }
     }
-    const verdict = decidePreflight({ eventName, ref, sha, tip, error });
+    const verdict = decidePreflight({
+      eventName,
+      ref,
+      sha,
+      tip,
+      error,
+      compare,
+    });
     if (verdict.warning) console.log(`::warning::${verdict.warning}`);
     console.log(
       `${verdict.proceed ? "running the full gate" : "::notice::skipping the full gate"}: ${verdict.reason}`,
