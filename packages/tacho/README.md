@@ -147,7 +147,11 @@ What standing in the path gives you:
   matches by prefix. `models` is sent only to a host that advertised
   `BUNDLE_FEATURE_MODEL_ALLOWLIST`, so a host that has not upgraded keeps
   calling any model; `update_tacho_session_policy` returns how many hosts are
-  in that state.
+  in that state. A request that names more than one model is refused with
+  `model_ambiguous`, because the proxy forwards the original bytes and vendor
+  parsers disagree on which duplicate survives, so no single string says what
+  would run. A request that names no model is forwarded: absence states nothing
+  to refuse, ambiguity states two things.
 - **A real interrupt.** `pause`, `cancel`, `kill` and a steer delivered as
   `interrupt` abort the session's in-flight model calls. A paused session's new
   calls are refused until `resume`.
