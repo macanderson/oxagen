@@ -23,10 +23,12 @@
 # The app node needs Docker, but no workspace or Node installation.
 #
 # The cluster endpoint is resolved HERE and substituted into the remote
-# script, not looked up on the node: the node's role grants ssm:GetParameter
-# on its own /oxagen-app/* prefix and no RDS permissions at all
-# (infra/modules/app-node/main.tf). The password is read the other way round —
-# on the node, inside a tracing-off window — so it never reaches this machine.
+# script, not looked up on the node. The node's role has no RDS permissions
+# (infra/modules/app-node/main.tf). The deploy role has no rds:Describe*
+# either, so the host comes from /oxagen/production/DATABASE_URL, which that
+# role can already read. describe-db-clusters is the fallback. The password
+# is read on the node, inside a tracing-off window, so it never reaches this
+# machine.
 
 # migration_object_key
 #
@@ -313,6 +315,97 @@ invocation_verdict() {
   return 0
 }
 
+# postgres_host_from_url URL
+#
+# Prints "host port" for a postgres or postgresql URL. The port defaults to
+# 5432. A refusal does not repeat the URL: the production value is a
+# connection string, and the password is in it.
+postgres_host_from_url() {
+  local url=$1
+  local scheme rest hostport host port path database
+
+  if [[ -z $url || $url == "None" ]]; then
+    echo "error: postgres URL is empty" >&2
+    return 1
+  fi
+
+  scheme=${url%%://*}
+  case $scheme in
+    postgres|postgresql) ;;
+    *)
+      echo "error: expected a postgres URL" >&2
+      return 1
+      ;;
+  esac
+
+  rest=${url#*://}
+  # Userinfo ends at the last @. An unencoded @ inside a password is not legal
+  # in a URL, and taking the first one would treat the rest of the password as
+  # the host.
+  if [[ $rest == *@* ]]; then
+    rest=${rest##*@}
+  fi
+  hostport=${rest%%[/?]*}
+  path=${rest#"$hostport"}
+  database=${path#/}
+  database=${database%%[/?]*}
+  if [[ -z $database ]]; then
+    echo "error: postgres URL has no database name" >&2
+    return 1
+  fi
+
+  if [[ $hostport == *:* ]]; then
+    host=${hostport%%:*}
+    port=${hostport#*:}
+  else
+    host=$hostport
+    port=5432
+  fi
+
+  if [[ ! $host =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; then
+    echo "error: postgres URL host is not a DNS name" >&2
+    return 1
+  fi
+  if [[ ! $port =~ ^[0-9]+$ ]]; then
+    echo "error: postgres URL port is not a number" >&2
+    return 1
+  fi
+  printf '%s %s\n' "$host" "$port"
+}
+
+# writer_from_sources ENDPOINT ENDPOINT_PORT URL DESCRIBED
+#
+# Picks the writer host. ENDPOINT wins, then a usable URL, then the
+# "host port" text from describe-db-clusters. Prints "source host port".
+# The URL's password never appears in the output.
+writer_from_sources() {
+  local endpoint=${1:-} endpoint_port=${2:-} url=${3:-} described=${4:-}
+  local host port
+
+  if [[ -n $endpoint ]]; then
+    printf 'env %s %s\n' "$endpoint" "${endpoint_port:-5432}"
+    return 0
+  fi
+  if [[ -n $url && $url != "None" ]]; then
+    if read -r host port < <(postgres_host_from_url "$url"); then
+      printf 'parameter %s %s\n' "$host" "$port"
+      return 0
+    fi
+  fi
+  read -r host port <<<"$described"
+  # `None` is what --output text prints for a null field. It matches a DNS
+  # name, and accepting it would send Atlas at a host that does not exist.
+  if [[ $port == "None" ]]; then
+    port=""
+  fi
+  if [[ -n $host && $host != "None" && $host =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; then
+    printf 'describe %s %s\n' "$host" "${port:-5432}"
+    return 0
+  fi
+  echo "error: no writer endpoint from the environment, the parameter, or describe-db-clusters" >&2
+  return 1
+}
+
 # ---------------------------------------------------------------------------
 # Everything above is definitions; everything below runs.
 #
@@ -401,27 +494,59 @@ NON_LINEAR=${NON_LINEAR:-0}
 
 assert_atlas_project "$DB_DIR" || exit 1
 
-# Resolving the endpoint here is also the cheapest proof that the caller's
-# credentials reach the right account: the cluster is only in 916294258235.
-if [[ -n ${AURORA_ENDPOINT:-} ]]; then
-  PGHOST=$AURORA_ENDPOINT
-  PGPORT=${AURORA_PORT:-5432}
-  echo "==> using AURORA_ENDPOINT from the environment"
-else
-  echo "==> resolving the $CLUSTER writer endpoint"
-  read -r PGHOST PGPORT < <(
-    aws rds describe-db-clusters --region "$REGION" \
+# The deploy role has no rds:DescribeDBClusters. The first migration gate on
+# main (run 35670778610) died on that call with AccessDenied and reported
+# Postgres unknown, which blocks deploy-node even when Aurora is current.
+# /oxagen/production/DATABASE_URL is the parameter the same role already reads
+# for the ClickHouse coordinator lock. Its host is the writer. describe stays
+# as the fallback for a laptop whose credentials can see the cluster and
+# whose parameter is absent.
+AURORA_URL_PARAMETER=${AURORA_URL_PARAMETER:-/oxagen/production/DATABASE_URL}
+url=""
+described=""
+if [[ -z ${AURORA_ENDPOINT:-} ]]; then
+  echo "==> reading the writer host from $AURORA_URL_PARAMETER"
+  errf=$(mktemp)
+  if url=$(aws ssm get-parameter --region "$REGION" \
+    --name "$AURORA_URL_PARAMETER" --with-decryption \
+    --query Parameter.Value --output text 2>"$errf"); then
+    if [[ -n ${GITHUB_ACTIONS:-} && -n $url && $url != "None" ]]; then
+      echo "::add-mask::$url"
+    fi
+  else
+    echo "==> could not read $AURORA_URL_PARAMETER" >&2
+    sed 's/^/    /' "$errf" >&2
+    url=""
+  fi
+  rm -f "$errf"
+  if [[ -z $url || $url == "None" ]] || ! postgres_host_from_url "$url" >/dev/null; then
+    echo "==> resolving the $CLUSTER writer endpoint"
+    errf=$(mktemp)
+    described=$(aws rds describe-db-clusters --region "$REGION" \
       --db-cluster-identifier "$CLUSTER" \
-      --query 'DBClusters[0].[Endpoint,Port]' --output text
-  ) || true
+      --query 'DBClusters[0].[Endpoint,Port]' --output text 2>"$errf") || described=""
+    if [[ -z $described || $described == "None" ]]; then
+      sed 's/^/    /' "$errf" >&2
+    fi
+    rm -f "$errf"
+  fi
 fi
 
-if [[ -z ${PGHOST:-} || $PGHOST == "None" ]]; then
+if ! read -r SOURCE PGHOST PGPORT < <(writer_from_sources \
+  "${AURORA_ENDPOINT:-}" "${AURORA_PORT:-}" "$url" "$described"); then
   echo "error: could not resolve the writer endpoint for cluster '$CLUSTER' in $REGION." >&2
-  echo "error: the cluster lives in account 916294258235 — check which account these credentials reach." >&2
-  echo "error: set AURORA_ENDPOINT to skip this lookup." >&2
+  echo "error: tried $AURORA_URL_PARAMETER, then rds:DescribeDBClusters." >&2
+  echo "error: the cluster lives in account 916294258235. Check which account these credentials reach." >&2
+  echo "error: set AURORA_ENDPOINT to skip both lookups." >&2
+  unset url described
   exit 1
 fi
+unset url described
+case $SOURCE in
+  env) echo "==> using AURORA_ENDPOINT from the environment" ;;
+  parameter) echo "==> using the host from $AURORA_URL_PARAMETER" ;;
+  describe) echo "==> using describe-db-clusters" ;;
+esac
 PGPORT=${PGPORT:-5432}
 echo "==> cluster $CLUSTER on port $PGPORT"
 
