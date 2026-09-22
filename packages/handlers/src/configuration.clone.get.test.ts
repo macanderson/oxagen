@@ -41,11 +41,10 @@ describe("get_clone_draft", () => {
     // One is a published file, one is a proposal branch: the first is ruled
     // out by the single tree read, the second by the per-candidate branch
     // check, which is asked only of the candidates the reads let through.
-    const taken = vi.fn().mockResolvedValue(
-      takenNames({
-        files: new Set([".oxagen/skills/review-cloned/SKILL.md"]),
-      }),
-    );
+    const published = takenNames({
+      files: new Set([".oxagen/skills/review-cloned/SKILL.md"]),
+    });
+    const taken = vi.fn().mockResolvedValue(published);
     const branchTaken = vi
       .fn()
       .mockResolvedValueOnce(true)
