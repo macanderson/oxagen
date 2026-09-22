@@ -499,6 +499,23 @@ type Messages = {
         confirm: string;
         pending: string;
       };
+      killSwitch: {
+        open: string;
+        title: string;
+        body: string;
+        blastTitle: string;
+        blastBody: string;
+        reason: string;
+        confirm: string;
+        pending: string;
+        unchanged: string;
+        outcome: {
+          paused: string;
+          noLiveRuns: string;
+          noAgentKey: string;
+          failed: string;
+        };
+      };
       failure: {
         orgRoleRequired: string;
         noPrincipal: string;
@@ -1873,6 +1890,7 @@ type Messages = {
         agent: string;
         operator: string;
         status: string;
+        tier: string;
         cost: string;
         frames: string;
         started: string;

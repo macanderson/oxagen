@@ -15,7 +15,9 @@ import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
+import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { tachoEnrollmentRevoke } from "@oxagen/oxagen/contracts/tacho.enrollment.revoke";
 import { tachoEnrollmentTokenCreate } from "@oxagen/oxagen/contracts/tacho.enrollment_token.create";
 import {
@@ -27,6 +29,7 @@ import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer, viewerTimeZone } from "@/server/viewer";
 import { endOfZonedDay, startOfZonedDay } from "@/shared/calendar-day";
+import type { ActionFailure } from "./action-failure";
 
 /** A refusal the action makes itself, before the kernel, naming the field at fault. */
 function refuseField(field: string): ActionResult<never> {
@@ -77,6 +80,99 @@ export async function retireAgent(
   return result.ok
     ? { ok: true, value: { retiredAt: result.value.retiredAt } }
     : result;
+}
+
+/**
+ * What the pause half of the kill switch answered, once the switch itself is
+ * on. The two writes are not one transaction — `set_kill_switch` and
+ * `dispatch_command` are separate contracts on separate stores — so a caller
+ * that only checked `switchId` would believe every run stopped when the
+ * broadcast half never ran.
+ */
+export type AgentPauseOutcome =
+  /** A live run of this agent paused. */
+  | { kind: "paused"; commandIds: string[] }
+  /** The switch is on and every call is denied at the next boundary; no run was live to pause now. */
+  | { kind: "no_live_runs" }
+  /**
+   * The agent carries no key (`org_ns.ws_ns.slug`, ADR-024), so `dispatch_command`
+   * has nothing to address. The switch still stops every future tool call.
+   */
+  | { kind: "no_agent_key" }
+  /** The switch flipped; the broadcast itself was refused or threw. */
+  | { kind: "failed"; failure: ActionFailure };
+
+/** The kill switch flip on an agent, and what it did to the agent's live runs. */
+export type AgentKillSwitchOutcome = {
+  switchId: string;
+  /** False when the switch was already on and nothing changed. */
+  changed: boolean;
+  denyGeneration: { org: number; workspace: number };
+  pause: AgentPauseOutcome;
+};
+
+/**
+ * Stops one agent now: an emergency deny against every tool call it makes
+ * (`kill_switch.ts`, ADR-072, #2958) and, in the same click, a pause queued
+ * for every run of it still live (spec §7.6's agent broadcast).
+ *
+ * **The two are not redundant.** `set_kill_switch` denies at the *next call
+ * boundary* through the deny generation (spec §6.11): a run mid-turn, between
+ * calls, keeps running until it reaches one. `dispatch_command` reaches it
+ * now, queued for the harness to take at its own next boundary. Flipping the
+ * switch alone leaves an in-flight run's current turn to finish on its own;
+ * broadcasting the pause alone leaves the agent free to start a new run the
+ * moment this one stops. Both together is what "kill switch" means on this
+ * page: nothing this agent starts is allowed, and nothing it has started
+ * keeps going.
+ *
+ * The broadcast is skipped, not refused, when the identity carries no agent
+ * key (`no_agent_key`): an unenrolled agent has never had a live run, and
+ * `dispatch_command`'s agent target needs the key `list_runs` reports, not
+ * the identity's public id. The switch write always runs first and its
+ * result is never lost to a broadcast failure: `pause.kind: "failed"` still
+ * reports `switchId` and `denyGeneration`, because the switch took effect
+ * regardless of what the broadcast did.
+ */
+export async function pauseAgent(
+  org: string,
+  ws: string,
+  agent: { agentId: string; agentKey: string | null },
+  reason: string,
+): Promise<ActionResult<AgentKillSwitchOutcome>> {
+  const ctx = await requireViewer(org, ws);
+  const trimmed = reason.trim();
+  const switchResult = await kernelWrite(ctx, killSwitchSet, {
+    target: { kind: "agent", id: agent.agentId },
+    on: true,
+    reason: trimmed,
+  });
+  if (!switchResult.ok) return switchResult;
+
+  const pause: AgentPauseOutcome =
+    agent.agentKey === null
+      ? { kind: "no_agent_key" }
+      : await (async () => {
+          const dispatch = await kernelWrite(ctx, tachoCommandDispatch, {
+            target: { kind: "agent", id: agent.agentKey as string },
+            command: "pause",
+            reason: trimmed,
+          });
+          if (!dispatch.ok) return { kind: "failed", failure: dispatch };
+          return dispatch.value.commandIds.length === 0
+            ? { kind: "no_live_runs" }
+            : { kind: "paused", commandIds: dispatch.value.commandIds };
+        })();
+
+  return {
+    ok: true,
+    value: {
+      switchId: switchResult.value.switchId,
+      changed: switchResult.value.changed,
+      denyGeneration: switchResult.value.denyGeneration,
+      pause,
+    },
+  };
 }
 
 // ── Roles ────────────────────────────────────────────────────────────────────
