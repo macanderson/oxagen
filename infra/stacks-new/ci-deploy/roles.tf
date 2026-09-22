@@ -302,6 +302,17 @@ data "aws_iam_policy_document" "oxagen_platform" {
     resources = ["*"]
   }
 
+  # The migration script asks whether the node is managed before it sends
+  # Atlas status. This action takes no resource type, so `*` is the only
+  # expressible scope, same as ReadCommandResult. The script still continues
+  # when the call is denied, because this grant is not live until the stack
+  # is applied, and a denied read must not be reported as an unregistered node.
+  statement {
+    sid       = "SeeWhetherTheNodeIsManaged"
+    actions   = ["ssm:DescribeInstanceInformation"]
+    resources = ["*"]
+  }
+
   # Resolving the node by tag needs this. DescribeInstances takes no
   # resource-level scope, so `*` here is the only spelling AWS accepts; it
   # reads instance metadata and mutates nothing.

@@ -406,6 +406,33 @@ writer_from_sources() {
   return 1
 }
 
+# classify_ssm_online EXIT_CODE COUNT
+#
+# Turns one `describe-instance-information` result into online, absent, or
+# unreadable.
+#
+# online: the API returned exactly one managed instance.
+# absent: the API succeeded and that instance is not in the managed list.
+#   SendCommand would then poll until timeout, so the caller stops.
+# unreadable: the API call failed. That is not evidence the instance is
+#   absent. gha-deploy-oxagen-platform can SendCommand and StartSession and
+#   cannot DescribeInstanceInformation, so AccessDenied used to be rewritten
+#   as a count of zero and reported as an unregistered node (run
+#   35674893025) while the store tunnels on that same node were already open.
+classify_ssm_online() {
+  local exit_code=$1 count=${2:-}
+  if [[ $exit_code -ne 0 ]]; then
+    echo unreadable
+    return 0
+  fi
+  if [[ $count == "1" ]]; then
+    echo online
+    return 0
+  fi
+  echo absent
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # Everything above is definitions; everything below runs.
 #
@@ -552,14 +579,37 @@ echo "==> cluster $CLUSTER on port $PGPORT"
 
 # A dead or unregistered instance otherwise costs ten minutes of polling and
 # then reports "InProgress", which reads as slow rather than as wrong.
+# A failed lookup is not that case: classify_ssm_online keeps a denial from
+# reading as "not registered".
+ssm_err=$(mktemp)
+set +e
 ONLINE=$(aws ssm describe-instance-information --region "$REGION" \
   --filters "Key=InstanceIds,Values=$INSTANCE" \
-  --query 'length(InstanceInformationList)' --output text 2>/dev/null || echo 0)
-if [[ $ONLINE != "1" ]]; then
-  echo "error: instance $INSTANCE is not registered with SSM in $REGION." >&2
-  echo "error: nothing can run on it, so this would poll and then time out." >&2
-  exit 1
-fi
+  --query 'length(InstanceInformationList)' --output text 2>"$ssm_err")
+ssm_exit=$?
+set -e
+case $(classify_ssm_online "$ssm_exit" "$ONLINE") in
+  online)
+    rm -f "$ssm_err"
+    ;;
+  absent)
+    rm -f "$ssm_err"
+    echo "error: instance $INSTANCE is not registered with SSM in $REGION." >&2
+    echo "error: nothing can run on it, so this would poll and then time out." >&2
+    exit 1
+    ;;
+  unreadable)
+    echo "==> could not ask SSM whether $INSTANCE is online. Continuing." >&2
+    echo "==> SendCommand is the check this role can make. A denial here is not an unregistered node." >&2
+    sed 's/^/    /' "$ssm_err" >&2
+    rm -f "$ssm_err"
+    ;;
+  *)
+    rm -f "$ssm_err"
+    echo "error: unexpected SSM online verdict for $INSTANCE." >&2
+    exit 1
+    ;;
+esac
 
 TARBALL="${TMPDIR:-/tmp}/atlas-migrations.tgz"
 rm -f "$TARBALL"
