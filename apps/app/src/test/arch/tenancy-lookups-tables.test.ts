@@ -24,6 +24,9 @@ const TABLES: Readonly<Record<string, readonly string[] | null>> = {
   orgSecurityPolicy: null,
   users: ["id", "twoFactorEnabled"],
   invitations: null,
+  // The require-SSO gate needs an organization's verified provider ids and
+  // nothing else; oidcConfig and samlConfig hold sealed secrets (ADR-142).
+  ssoProviderTable: ["providerId", "organizationId", "domainVerified"],
 };
 
 const DATABASE_EXPORTS: readonly string[] = ["schema", "withSystemDb"];

@@ -47,6 +47,7 @@ export async function isNonSsoSignInRefused(email: string): Promise<boolean> {
   const domain = emailDomain(email);
   if (!domain) return false;
 
+  // tenancy: system bypass during sign-in bootstrap, before any session exists; the lookup is filtered by the email domain and the verified provider's orgId.
   const orgs = await withSystemDb((tx) =>
     tx
       .select({ orgId: schema.ssoProviderTable.organizationId })
@@ -70,6 +71,7 @@ export async function isNonSsoSignInRefused(email: string): Promise<boolean> {
   const orgId = orgs[0]?.orgId;
   if (!orgId) return false;
 
+  // tenancy: system bypass during sign-in bootstrap, before any session exists; the lookup is filtered by the email domain and the verified provider's orgId.
   const owners = await withSystemDb((tx) =>
     tx
       .select({ role: schema.orgUsers.role })

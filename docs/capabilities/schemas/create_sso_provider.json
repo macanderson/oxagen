@@ -1,0 +1,302 @@
+{
+  "name": "create_sso_provider",
+  "domain": "org",
+  "description": "Register an SSO identity provider (OIDC or SAML) for one email domain. OIDC settings are checked against the issuer's discovery document. Secrets are envelope-encrypted and never readable back. The provider signs nobody in until the domain is verified with verify_sso_domain. Returns the provider view with the DNS record to publish.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "providerId": {
+        "type": "string"
+      },
+      "displayName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "domain": {
+        "type": "string"
+      },
+      "groupsClaim": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "config": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "protocol": {
+                "const": "oidc"
+              },
+              "issuer": {
+                "type": "string",
+                "format": "uri",
+                "x-server-validated": true,
+                "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+              },
+              "clientId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "clientSecret": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "maxItems": 20
+              }
+            },
+            "required": [
+              "protocol",
+              "issuer",
+              "clientId",
+              "clientSecret"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "protocol": {
+                "const": "saml"
+              },
+              "issuer": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "entryPoint": {
+                "type": "string",
+                "format": "uri",
+                "x-server-validated": true,
+                "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+              },
+              "cert": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16384
+              },
+              "spPrivateKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16384
+              }
+            },
+            "required": [
+              "protocol",
+              "issuer",
+              "entryPoint",
+              "cert"
+            ],
+            "additionalProperties": false
+          }
+        ],
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "required": [
+      "providerId",
+      "displayName",
+      "domain",
+      "config"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "oidc",
+              "saml"
+            ]
+          },
+          "domain": {
+            "type": "string"
+          },
+          "domainVerified": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "groupsClaim": {
+            "type": "string"
+          },
+          "domainVerification": {
+            "type": "object",
+            "properties": {
+              "recordName": {
+                "type": "string"
+              },
+              "recordValue": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "recordName",
+              "recordValue"
+            ],
+            "additionalProperties": false
+          },
+          "callbackUrl": {
+            "type": "string"
+          },
+          "spMetadataUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oidc": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "clientId": {
+                    "type": "string"
+                  },
+                  "clientSecretSet": {
+                    "type": "boolean"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "clientId",
+                  "clientSecretSet",
+                  "scopes"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "saml": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "entryPoint": {
+                    "type": "string"
+                  },
+                  "spPrivateKeySet": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "entryPoint",
+                  "spPrivateKeySet"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "groupRoles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "group": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "admin",
+                    "compliance",
+                    "billing",
+                    "member"
+                  ]
+                }
+              },
+              "required": [
+                "group",
+                "role"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "providerId",
+          "displayName",
+          "protocol",
+          "domain",
+          "domainVerified",
+          "issuer",
+          "groupsClaim",
+          "domainVerification",
+          "callbackUrl",
+          "spMetadataUrl",
+          "oidc",
+          "saml",
+          "groupRoles",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "provider"
+    ],
+    "additionalProperties": false
+  }
+}

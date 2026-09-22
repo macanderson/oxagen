@@ -3606,6 +3606,132 @@
       }
     },
     {
+      "name": "create_sso_provider",
+      "file": "org.sso.create.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "delete_sso_provider",
+      "file": "org.sso.delete.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "set_sso_group_roles",
+      "file": "org.sso.group_roles.set.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "list_sso_providers",
+      "file": "org.sso.list.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "set_sso_policy",
+      "file": "org.sso.policy.set.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "update_sso_provider",
+      "file": "org.sso.update.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "verify_sso_domain",
+      "file": "org.sso.verify_domain.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "browse_plugin_catalog",
       "file": "plugin.catalog.browse.ts",
       "domain": "plugin",

@@ -116,6 +116,7 @@ const source: DataSource = {
     workspaces: refuse,
     apiKeys: refuse,
     modelCredential: refuse,
+    sso: refuse,
   },
   audit: { events, exportEvents },
   onboarding: { state: refuse, firstFrame: refuse },

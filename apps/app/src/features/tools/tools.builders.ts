@@ -216,6 +216,7 @@ export function toolsSource(reads: ToolsReads) {
       workspaces: refuse,
       apiKeys: refuse,
       modelCredential: refuse,
+      sso: refuse,
     },
     skills: { inventory: refuse, configuration: refuse },
     audit: { events: refuse, exportEvents: refuse },

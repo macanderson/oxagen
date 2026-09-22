@@ -168,3 +168,72 @@ export const GrantableOrgRole = z.enum([
   "compliance",
 ]);
 export type GrantableOrgRole = z.infer<typeof GrantableOrgRole>;
+
+/** The two protocols an organisation's identity provider can speak (ADR-142). */
+export const SsoProtocol = z.enum(["oidc", "saml"]);
+export type SsoProtocol = z.infer<typeof SsoProtocol>;
+
+/**
+ * The roles an IdP group may grant. No `owner`: ownership is transferred by a
+ * person, never minted by an identity provider (ADR-142).
+ */
+export const SsoMappableRole = z.enum([
+  "admin",
+  "compliance",
+  "billing",
+  "member",
+]);
+export type SsoMappableRole = z.infer<typeof SsoMappableRole>;
+
+export const SsoGroupRole = z.object({
+  group: z.string().min(1),
+  role: SsoMappableRole,
+});
+export type SsoGroupRole = z.infer<typeof SsoGroupRole>;
+
+/**
+ * One identity provider as `list_sso_providers` reports it: what it is, the
+ * email domain it signs in and whether that domain is proven, the DNS record
+ * that proves it, the URLs the IdP needs, and the group mappings. No secret:
+ * `clientSecretSet` and `spPrivateKeySet` say whether one is stored, never
+ * what it is, and this view model has no field that could carry one.
+ */
+export const SsoProvider = z.object({
+  providerId: z.string().min(1),
+  displayName: z.string(),
+  protocol: SsoProtocol,
+  domain: z.string().min(1),
+  domainVerified: z.boolean(),
+  issuer: z.string(),
+  groupsClaim: z.string(),
+  verification: z.object({
+    recordName: z.string().min(1),
+    recordValue: z.string().min(1),
+  }),
+  callbackUrl: z.string().min(1),
+  spMetadataUrl: z.string().nullable(),
+  oidc: z
+    .object({
+      clientId: z.string(),
+      clientSecretSet: z.boolean(),
+    })
+    .nullable(),
+  saml: z
+    .object({
+      entryPoint: z.string(),
+      spPrivateKeySet: z.boolean(),
+    })
+    .nullable(),
+  groupRoles: z.array(SsoGroupRole),
+});
+export type SsoProvider = z.infer<typeof SsoProvider>;
+
+/**
+ * The organisation's single sign-on: its providers and whether members other
+ * than Owners must sign in through one of them.
+ */
+export const SsoSettings = z.object({
+  providers: z.array(SsoProvider),
+  policy: z.object({ ssoRequired: z.boolean() }),
+});
+export type SsoSettings = z.infer<typeof SsoSettings>;

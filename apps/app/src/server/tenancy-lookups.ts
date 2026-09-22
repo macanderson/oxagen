@@ -10,11 +10,13 @@
 // deliberately. Tables read (INV-05): org.organizations, org.org_slug_history,
 // org.org_users, org.invitations, workspace.workspaces,
 // workspace.workspace_slug_history, workspace.workspace_users, auth.users
-// (columns id and two_factor_enabled), security.org_security_policy.
+// (columns id and two_factor_enabled), security.org_security_policy,
+// auth.sso_providers (provider_id, keyed by organization_id).
 import "server-only";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
 import type { MfaPolicy } from "./mfa-gate";
+import type { SsoPolicy } from "./sso-gate";
 
 type OrgRecord = {
   id: string;
@@ -78,6 +80,12 @@ export type SystemLookups = {
   /** The organization's MFA policy, or null when it has none. */
   readonly mfaPolicy: (orgId: string) => Promise<MfaPolicy | null>;
   readonly twoFactorEnabled: (userId: string) => Promise<boolean>;
+  /**
+   * The organization's require-SSO policy with its verified provider ids, or
+   * null when it has no policy row. The providers are read only when SSO is
+   * required.
+   */
+  readonly ssoPolicy: (orgId: string) => Promise<SsoPolicy | null>;
   /** The invitation behind `token` (`invitations.public_id`), or null when none or its organization is gone. */
   readonly invitationByToken: (
     token: string,
@@ -110,6 +118,12 @@ async function orgById(orgId: string): Promise<OrgRecord | null> {
   );
   return rows[0] ? toOrg(rows[0]) : null;
 }
+
+/**
+ * A ceiling on one organization's SSO providers read per request. One domain
+ * belongs to one organization, so this is far above any real count.
+ */
+const MAX_SSO_PROVIDERS = 100;
 
 export const systemLookups: SystemLookups = {
   async orgBySlug(slug) {
@@ -249,6 +263,40 @@ export const systemLookups: SystemLookups = {
         .limit(1),
     );
     return rows[0] ?? null;
+  },
+
+  async ssoPolicy(orgId) {
+    // tenancy: system bypass for the org gate; the SSO policy read is filtered by the authenticated viewer's orgId, verified by membership first.
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({ ssoRequired: schema.orgSecurityPolicy.ssoRequired })
+        .from(schema.orgSecurityPolicy)
+        .where(eq(schema.orgSecurityPolicy.orgId, orgId))
+        .limit(1),
+    );
+    const policy = rows[0];
+    if (!policy) return null;
+    if (!policy.ssoRequired) return { ssoRequired: false, providerIds: [] };
+    // Only a provider whose domain the organization proved counts: the SSO
+    // plugin refuses to sign anyone in through an unverified one, and a
+    // session must not satisfy the gate through one either.
+    // tenancy: system bypass for the org gate; the SSO policy read is filtered by the authenticated viewer's orgId, verified by membership first.
+    const providers = await withSystemDb((tx) =>
+      tx
+        .select({ providerId: schema.ssoProviderTable.providerId })
+        .from(schema.ssoProviderTable)
+        .where(
+          and(
+            eq(schema.ssoProviderTable.organizationId, orgId),
+            eq(schema.ssoProviderTable.domainVerified, true),
+          ),
+        )
+        .limit(MAX_SSO_PROVIDERS),
+    );
+    return {
+      ssoRequired: true,
+      providerIds: providers.map((p) => p.providerId),
+    };
   },
 
   async twoFactorEnabled(userId) {

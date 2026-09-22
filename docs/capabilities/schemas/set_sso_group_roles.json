@@ -1,0 +1,103 @@
+{
+  "name": "set_sso_group_roles",
+  "domain": "org",
+  "description": "Replace an SSO provider's mappings from identity-provider group to organisation role (admin, compliance, billing, or member). At sign-in the highest mapped role wins; unmapped groups grant nothing. Returns the mappings as stored.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "providerId": {
+        "type": "string"
+      },
+      "mappings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "compliance",
+                "billing",
+                "member"
+              ]
+            }
+          },
+          "required": [
+            "group",
+            "role"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 200,
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "required": [
+      "providerId",
+      "mappings"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "providerId": {
+        "type": "string"
+      },
+      "mappings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "admin",
+                "compliance",
+                "billing",
+                "member"
+              ]
+            }
+          },
+          "required": [
+            "group",
+            "role"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "providerId",
+      "mappings"
+    ],
+    "additionalProperties": false
+  }
+}

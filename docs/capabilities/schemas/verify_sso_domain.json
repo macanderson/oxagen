@@ -1,0 +1,204 @@
+{
+  "name": "verify_sso_domain",
+  "domain": "org",
+  "description": "Check the DNS TXT record that proves the organisation owns an SSO provider's email domain, and mark the domain verified when the record matches. Returns the provider view.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "providerId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "providerId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "oidc",
+              "saml"
+            ]
+          },
+          "domain": {
+            "type": "string"
+          },
+          "domainVerified": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "groupsClaim": {
+            "type": "string"
+          },
+          "domainVerification": {
+            "type": "object",
+            "properties": {
+              "recordName": {
+                "type": "string"
+              },
+              "recordValue": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "recordName",
+              "recordValue"
+            ],
+            "additionalProperties": false
+          },
+          "callbackUrl": {
+            "type": "string"
+          },
+          "spMetadataUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oidc": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "clientId": {
+                    "type": "string"
+                  },
+                  "clientSecretSet": {
+                    "type": "boolean"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "clientId",
+                  "clientSecretSet",
+                  "scopes"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "saml": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "entryPoint": {
+                    "type": "string"
+                  },
+                  "spPrivateKeySet": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "entryPoint",
+                  "spPrivateKeySet"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "groupRoles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "group": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "admin",
+                    "compliance",
+                    "billing",
+                    "member"
+                  ]
+                }
+              },
+              "required": [
+                "group",
+                "role"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "providerId",
+          "displayName",
+          "protocol",
+          "domain",
+          "domainVerified",
+          "issuer",
+          "groupsClaim",
+          "domainVerification",
+          "callbackUrl",
+          "spMetadataUrl",
+          "oidc",
+          "saml",
+          "groupRoles",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "provider"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -242,3 +242,26 @@ export function ssoCallbackPath(
 export function ssoSpMetadataPath(providerId: string): string {
   return `/api/auth/sso/saml2/sp/metadata?providerId=${encodeURIComponent(providerId)}`;
 }
+
+/**
+ * OIDC settings on an update. The client secret is optional: leaving it out
+ * keeps the sealed secret already stored, so an admin who fixes a scope does
+ * not have to paste the secret again.
+ */
+export const ssoOidcUpdateInputSchema = ssoOidcInputSchema.extend({
+  clientSecret: ssoOidcInputSchema.shape.clientSecret.optional(),
+});
+
+/**
+ * SAML settings on an update. Leaving `spPrivateKey` out keeps the sealed key
+ * already stored.
+ */
+export const ssoSamlUpdateInputSchema = ssoSamlInputSchema;
+
+export const ssoProtocolUpdateInputSchema = z.discriminatedUnion("protocol", [
+  ssoOidcUpdateInputSchema,
+  ssoSamlUpdateInputSchema,
+]);
+export type SsoProtocolUpdateInput = z.infer<
+  typeof ssoProtocolUpdateInputSchema
+>;

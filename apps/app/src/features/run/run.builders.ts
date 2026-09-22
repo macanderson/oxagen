@@ -628,6 +628,7 @@ export function runSource(reads: RunReads) {
       workspaces: refuse,
       apiKeys: refuse,
       modelCredential: refuse,
+      sso: refuse,
     },
     mandates: { list: answer("mandates", reads.mandates), get: refuse },
     audit: { events: refuse, exportEvents: refuse },

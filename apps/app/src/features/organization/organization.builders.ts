@@ -1,7 +1,7 @@
 // Typed Organization values for the Organization component tests
 // (ARCHITECTURE.md §5): a role row, a catalogue entry, the roles read, a
-// workspace row, one API key, and a DataSource that answers the four
-// organization reads with what a test hands it while recording the arguments
+// workspace row, one API key, an identity provider and the SSO read, and a
+// DataSource that answers the organization reads with what a test hands it while recording the arguments
 // it was called with. Every other port refuses, so a section that reads
 // outside its own port fails the test rather than passing on a stub.
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
@@ -12,6 +12,8 @@ import type {
   Permission,
   Role,
   RoleCatalog,
+  SsoProvider,
+  SsoSettings,
   Workspace,
   WorkspaceList,
 } from "@/data/contracts/org";
@@ -79,12 +81,72 @@ export function apiKey(overrides: Partial<ApiKey> = {}): ApiKey {
   };
 }
 
+/** An OIDC provider whose domain is proven, with one group mapped to admin. */
+export function ssoProvider(overrides: Partial<SsoProvider> = {}): SsoProvider {
+  return {
+    providerId: "acme-okta",
+    displayName: "Acme Okta",
+    protocol: "oidc",
+    domain: "acme.com",
+    domainVerified: true,
+    issuer: "https://acme.okta.com",
+    groupsClaim: "groups",
+    verification: {
+      recordName: "_oxagen-sso.acme.com",
+      recordValue: "oxagen-sso-verification=4f9d2c7a",
+    },
+    callbackUrl: "https://app.oxagen.sh/api/auth/sso/callback/acme-okta",
+    spMetadataUrl: null,
+    oidc: { clientId: "0oa1b2c3d4", clientSecretSet: true },
+    saml: null,
+    groupRoles: [{ group: "oxagen-admins", role: "admin" }],
+    ...overrides,
+  };
+}
+
+/** A SAML provider whose domain is not proven yet, with no mappings. */
+export function samlProvider(
+  overrides: Partial<SsoProvider> = {},
+): SsoProvider {
+  return ssoProvider({
+    providerId: "acme-entra",
+    displayName: "Acme Entra",
+    protocol: "saml",
+    domain: "acme.io",
+    domainVerified: false,
+    issuer: "https://sts.windows.net/acme/",
+    verification: {
+      recordName: "_oxagen-sso.acme.io",
+      recordValue: "oxagen-sso-verification=8b1e5f30",
+    },
+    callbackUrl: "https://app.oxagen.sh/api/auth/sso/saml2/sp/acs/acme-entra",
+    spMetadataUrl:
+      "https://app.oxagen.sh/api/auth/sso/saml2/sp/metadata?providerId=acme-entra",
+    oidc: null,
+    saml: {
+      entryPoint: "https://login.microsoftonline.com/acme/saml2",
+      spPrivateKeySet: false,
+    },
+    groupRoles: [],
+    ...overrides,
+  });
+}
+
+export function ssoSettings(overrides: Partial<SsoSettings> = {}): SsoSettings {
+  return {
+    providers: [ssoProvider()],
+    policy: { ssoRequired: false },
+    ...overrides,
+  };
+}
+
 type OrgReads = {
   members?: Read<MemberList>;
   roles?: Read<RoleCatalog>;
   workspaces?: Read<WorkspaceList>;
   apiKeys?: Read<ApiKey[]>;
   modelCredential?: Read<ModelCredential>;
+  sso?: Read<SsoSettings>;
 };
 
 export function orgSource(reads: OrgReads): {
@@ -97,6 +159,7 @@ export function orgSource(reads: OrgReads): {
     workspaces: [],
     apiKeys: [],
     modelCredential: [],
+    sso: [],
   };
   const refuse = () => Promise.reject(new Error("not an Organization read"));
   const answer =
@@ -152,6 +215,7 @@ export function orgSource(reads: OrgReads): {
       workspaces: answer(reads.workspaces, "workspaces"),
       apiKeys: answer(reads.apiKeys, "apiKeys"),
       modelCredential: answer(reads.modelCredential, "modelCredential"),
+      sso: answer(reads.sso, "sso"),
     },
     mandates: { list: refuse, get: refuse },
     audit: { events: refuse, exportEvents: refuse },

@@ -312,6 +312,7 @@ export function agentsSource(reads: AgentReads) {
       workspaces: refuse,
       apiKeys: refuse,
       modelCredential: refuse,
+      sso: refuse,
     },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse, configuration: refuse },

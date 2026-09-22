@@ -51,6 +51,7 @@ vi.mock("@/server/tenancy-lookups", () => ({
     orgBySlugHistory: () => Promise.resolve(null),
     orgRole,
     mfaPolicy: () => Promise.resolve(null),
+    ssoPolicy: () => Promise.resolve(null),
     twoFactorEnabled: () => Promise.resolve(false),
   },
 }));

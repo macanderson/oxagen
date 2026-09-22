@@ -3,8 +3,18 @@
 // it. list_api_keys returns no secret and no hash today; these tests hold the
 // view model to that whatever the contract grows, by naming every field it
 // carries and by proving an unrecognised field does not survive the parse.
+import {
+  SSO_MAPPABLE_ROLES,
+  ssoProtocolSchema,
+} from "@oxagen/oxagen/contracts/org.sso.shared";
 import { describe, expect, it } from "vitest";
-import { ApiKey, ApiKeyList } from "./org";
+import {
+  ApiKey,
+  ApiKeyList,
+  SsoMappableRole,
+  SsoProtocol,
+  SsoProvider,
+} from "./org";
 
 const SECRET_SHAPED = /secret|hash|token|key$/i;
 
@@ -59,5 +69,55 @@ describe("ApiKey", () => {
     expect(
       ApiKeyList.safeParse([{ ...stored, createdAt: "yesterday" }]).success,
     ).toBe(false);
+  });
+});
+
+// The SSO view model holds to the same rule: a stored client secret or SP key
+// is reported as set, and a secret the contract might grow does not survive
+// the parse. Its role and protocol sets mirror the shared contract, so the
+// group-mapping editor can offer no role the contract refuses.
+describe("SsoProvider", () => {
+  const provider = {
+    providerId: "acme-okta",
+    displayName: "Acme Okta",
+    protocol: "oidc",
+    domain: "acme.com",
+    domainVerified: true,
+    issuer: "https://acme.okta.com",
+    groupsClaim: "groups",
+    verification: {
+      recordName: "_oxagen-sso.acme.com",
+      recordValue: "oxagen-sso-verification=4f9d2c7a",
+    },
+    callbackUrl: "https://app.oxagen.sh/api/auth/sso/callback/acme-okta",
+    spMetadataUrl: null,
+    oidc: { clientId: "0oa1b2c3d4", clientSecretSet: true },
+    saml: null,
+    groupRoles: [],
+  };
+
+  it("drops a secret the contract might grow (negative)", () => {
+    const parsed = SsoProvider.parse({
+      ...provider,
+      clientSecret: "shh",
+      oidc: { ...provider.oidc, clientSecret: "shh" },
+    });
+    expect(JSON.stringify(parsed)).not.toContain("shh");
+  });
+
+  it("refuses a group mapped to owner (negative)", () => {
+    expect(
+      SsoProvider.safeParse({
+        ...provider,
+        groupRoles: [{ group: "admins", role: "owner" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("mirrors the contract's mappable roles and protocols", () => {
+    expect([...SsoMappableRole.options]).toEqual([...SSO_MAPPABLE_ROLES]);
+    expect([...SsoProtocol.options].sort()).toEqual(
+      [...ssoProtocolSchema.options].sort(),
+    );
   });
 });

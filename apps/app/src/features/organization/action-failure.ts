@@ -52,6 +52,9 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("mainRepoClaimed");
           case "repository_linked_elsewhere":
             return t("repositoryLinkedElsewhere");
+          // Deleting a provider another admin already removed (ADR-142).
+          case "sso_provider_not_found":
+            return t("ssoProviderNotFound");
           default:
             return t("refused", { code: failure.code });
         }

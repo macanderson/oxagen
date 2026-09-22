@@ -6,6 +6,7 @@
 // through a WsCtx: a key names a workspace (ADR-073).
 import { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -386,6 +387,95 @@ describe("org.apiKeys", () => {
     expect(await org.apiKeys(wsCtx)).toEqual(
       readError("record_unmappable", 502),
     );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+/** A provider as list_sso_providers returns it, timestamps and scopes included. */
+const storedProvider = {
+  providerId: "acme-okta",
+  displayName: "Acme Okta",
+  protocol: "oidc",
+  domain: "acme.com",
+  domainVerified: false,
+  issuer: "https://acme.okta.com",
+  groupsClaim: "groups",
+  domainVerification: {
+    recordName: "_oxagen-sso.acme.com",
+    recordValue: "oxagen-sso-verification=4f9d2c7a",
+  },
+  callbackUrl: "https://app.oxagen.sh/api/auth/sso/callback/acme-okta",
+  spMetadataUrl: null,
+  oidc: { clientId: "0oa1b2c3d4", clientSecretSet: true, scopes: [] },
+  saml: null,
+  groupRoles: [{ group: "oxagen-admins", role: "admin" }],
+  createdAt: "2026-09-20T10:00:00.000Z",
+  updatedAt: "2026-09-21T10:00:00.000Z",
+};
+
+describe("org.sso", () => {
+  it("reads list_sso_providers for the organization and returns the SSO view model", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ providers: [storedProvider], policy: { ssoRequired: true } }),
+    );
+    expect(await org.sso(ctx)).toEqual(
+      readOk({
+        providers: [
+          {
+            providerId: "acme-okta",
+            displayName: "Acme Okta",
+            protocol: "oidc",
+            domain: "acme.com",
+            domainVerified: false,
+            issuer: "https://acme.okta.com",
+            groupsClaim: "groups",
+            verification: {
+              recordName: "_oxagen-sso.acme.com",
+              recordValue: "oxagen-sso-verification=4f9d2c7a",
+            },
+            callbackUrl:
+              "https://app.oxagen.sh/api/auth/sso/callback/acme-okta",
+            spMetadataUrl: null,
+            oidc: { clientId: "0oa1b2c3d4", clientSecretSet: true },
+            saml: null,
+            groupRoles: [{ group: "oxagen-admins", role: "admin" }],
+          },
+        ],
+        policy: { ssoRequired: true },
+      }),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: orgSsoList,
+      input: {},
+      page: "organization",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("passes a denied read through (negative)", async () => {
+    const denied = {
+      ok: false,
+      reason: "denied",
+      permission: "list_sso_providers",
+    };
+    kernelRead.mockResolvedValue(denied);
+    expect(await org.sso(ctx)).toEqual(denied);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("answers record_unmappable and reports once for a mapping to owner (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        providers: [
+          {
+            ...storedProvider,
+            groupRoles: [{ group: "oxagen-admins", role: "owner" }],
+          },
+        ],
+        policy: { ssoRequired: false },
+      }),
+    );
+    expect(await org.sso(ctx)).toEqual(readError("record_unmappable", 502));
     expect(captureError).toHaveBeenCalledOnce();
   });
 });

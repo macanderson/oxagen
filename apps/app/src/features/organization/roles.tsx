@@ -5,16 +5,29 @@
 // and the section says so either way rather than implying an enforcement the
 // record does not carry. A refused or failed read replaces the sections; the
 // tabs stay.
+//
+// Beside the catalogue sit the IdP group mappings (ADR-142): for each single
+// sign-on provider, which organization role each identity provider group
+// grants. They come from the SSO read, so a refused or failed SSO read says so
+// in that section alone and leaves the roles in place.
 import { useLocale, useTranslations } from "next-intl";
-import type { Permission, Role, RoleCatalog } from "@/data/contracts/org";
+import type {
+  Permission,
+  Role,
+  RoleCatalog,
+  SsoSettings,
+} from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx } from "@/server/viewer";
-import { mono, panel } from "@/ui/control-styles";
+import { routes } from "@/shared/safe-path";
+import { linkText, mono, panel } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
+import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { CreateRole, DeleteRole, EditRole } from "./role-actions";
+import { SsoGroupRoles } from "./sso-group-roles";
 import { OrganizationTabs } from "./tabs";
 
 export async function Roles({
@@ -24,12 +37,16 @@ export async function Roles({
   ctx: OrgCtx;
   source: DataSource;
 }) {
-  const read = await source.org.roles(ctx);
+  const [read, sso] = await Promise.all([
+    source.org.roles(ctx),
+    source.org.sso(ctx),
+  ]);
   return (
     <RolesView
       org={ctx.orgSlug}
       canEdit={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
       read={read}
+      sso={sso}
     />
   );
 }
@@ -41,11 +58,13 @@ function RolesView({
   org,
   canEdit,
   read,
+  sso,
 }: {
   org: string;
   /** Owners and admins edit; the handler checks the role again. */
   canEdit: boolean;
   read: Read<RoleCatalog>;
+  sso: Read<SsoSettings>;
 }) {
   const t = useTranslations("organization.roleCatalog");
   return (
@@ -55,6 +74,7 @@ function RolesView({
         <>
           <RoleTable org={org} canEdit={canEdit} value={read.value} />
           <Catalogue catalog={read.value.catalog} />
+          <GroupMappings org={org} canEdit={canEdit} read={sso} />
         </>
       ) : (
         <ReadFailure read={read} section={t("title")} />
@@ -212,6 +232,61 @@ function Catalogue({ catalog }: { catalog: readonly Permission[] }) {
           </dl>
         </div>
       ))}
+    </section>
+  );
+}
+
+/** Each SSO provider's table of IdP group to organization role. */
+function GroupMappings({
+  org,
+  canEdit,
+  read,
+}: {
+  org: string;
+  canEdit: boolean;
+  read: Read<SsoSettings>;
+}) {
+  const t = useTranslations("organization.ssoGroups");
+  return (
+    <section
+      aria-labelledby="sso-group-mappings"
+      className={`${panel} flex flex-col gap-4 p-5`}
+      data-testid="sso-group-mappings"
+    >
+      <div className="flex flex-col gap-0.5">
+        <h2 id="sso-group-mappings" className={sectionTitle}>
+          {t("title")}
+        </h2>
+        <p className={lead}>{t("lead")}</p>
+      </div>
+      {!read.ok ? (
+        <ReadFailure read={read} section={t("title")} />
+      ) : read.value.providers.length === 0 ? (
+        <p className={lead} data-testid="sso-group-mappings-none">
+          {t("noProviders")}{" "}
+          <SafeLink to={routes.sso(org)} className={linkText}>
+            {t("openSso")}
+          </SafeLink>
+        </p>
+      ) : (
+        read.value.providers.map((provider) => (
+          <div key={provider.providerId} className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold text-foreground">
+              {t("provider", {
+                name: provider.displayName,
+                domain: provider.domain,
+              })}
+            </h3>
+            <SsoGroupRoles
+              org={org}
+              providerId={provider.providerId}
+              providerName={provider.displayName}
+              mappings={provider.groupRoles}
+              canEdit={canEdit}
+            />
+          </div>
+        ))
+      )}
     </section>
   );
 }

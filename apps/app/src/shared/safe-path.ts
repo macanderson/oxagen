@@ -82,6 +82,9 @@ export const routes = {
       next: nextParam(next),
       error: error.trim() === "" ? undefined : error,
     }),
+  /** Where requireViewer sends a member whose organization requires SSO and whose session is not one (sso-gate.ts); outside `[org]`, so it cannot loop. */
+  ssoRequired: (next?: SafePath): SafePath =>
+    withQuery(mint("/login"), { next: nextParam(next), sso: "required" }),
   signup: (next?: SafePath): SafePath =>
     withQuery(mint("/signup"), { next: nextParam(next) }),
   verify: (q: { email: string; next?: SafePath }): SafePath =>
@@ -123,6 +126,11 @@ export const routes = {
    * calls (ADR-053 §2). Org-scoped — the key pays for every workspace.
    */
   modelFunding: (org: string): SafePath => pathOf(org, "model-funding"),
+  /**
+   * Organization › Single sign-on: the organisation's identity providers,
+   * their domain proofs, and whether SSO is required (ADR-142).
+   */
+  sso: (org: string): SafePath => pathOf(org, "sso"),
   /** Fleet; `cursor` opens a later page of its runs table. */
   fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws), { cursor: q?.cursor }),

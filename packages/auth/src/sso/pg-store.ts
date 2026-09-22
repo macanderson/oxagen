@@ -246,6 +246,7 @@ async function applyRoleInTx(
 export function createPgSsoProvisioningStore(): SsoProvisioningStore {
   return {
     async groupRoles(providerId) {
+      // tenancy: system bypass during SSO sign-in bootstrap, before any session exists; every statement is scoped by the provider's orgId, filtered in the where clause.
       const rows = await withSystemDb((tx) =>
         tx
           .select({
@@ -262,6 +263,7 @@ export function createPgSsoProvisioningStore(): SsoProvisioningStore {
     },
 
     async currentRole(orgId, userId) {
+      // tenancy: system bypass during SSO sign-in bootstrap, before any session exists; every statement is scoped by the provider's orgId, filtered in the where clause.
       const [row] = await withSystemDb((tx) =>
         tx
           .select({ role: schema.orgUsers.role })
@@ -278,6 +280,7 @@ export function createPgSsoProvisioningStore(): SsoProvisioningStore {
     },
 
     async applyRole({ orgId, userId, role }) {
+      // tenancy: system bypass during SSO sign-in bootstrap, before any session exists; every statement is scoped by the provider's orgId, filtered in the where clause.
       await withSystemDb((tx) => applyRoleInTx(tx, orgId, userId, role));
     },
   };
