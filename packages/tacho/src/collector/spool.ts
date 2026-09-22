@@ -132,15 +132,21 @@ export const MAX_BODY_AUTHORITY_WAIT_MS = 24 * 60 * 60_000;
 export const RETENTION_HOLD_LOG_INTERVAL_MS = 5 * 60_000;
 
 /**
- * The wait a 429 asked for, in milliseconds, or undefined when the server gave
- * no usable hint. `Retry-After` wins; `X-RateLimit-Reset` is the fallback,
- * since a fixed-window limiter is spent until the window turns over. Capped so
- * a malformed or hostile header cannot park the daemon indefinitely, and
- * floored at a second so a reset already in the past does not spin.
+ * The wait the server asked for, in milliseconds, or undefined when it gave no
+ * usable hint. `Retry-After` wins; `X-RateLimit-Reset` is the fallback, since a
+ * fixed-window limiter is spent until the window turns over. Capped so a
+ * malformed or hostile header cannot park the daemon indefinitely, and floored
+ * at a second so a reset already in the past does not spin.
+ *
+ * Two statuses name a number. A 429 is the limiter working, and its wait
+ * replaces the backoff outright. A 503 is the store refusing the write under
+ * pressure (`store_overloaded`), and its wait is a floor under the backoff
+ * rather than a replacement: repeated backpressure is a degrading condition,
+ * so the host still escalates, and only stops coming back sooner than asked.
  */
 const MAX_SERVER_REQUESTED_WAIT_MS = 5 * 60_000;
 function serverRequestedWaitMs(error: ControlError): number | undefined {
-  if (error.status !== 429) return undefined;
+  if (error.status !== 429 && error.status !== 503) return undefined;
   const hint = error.rateLimit;
   if (!hint) return undefined;
   const wait =
@@ -204,14 +210,22 @@ export class Shipper {
     // server telling us the one number that ends the wait.
     const told =
       error instanceof ControlError ? serverRequestedWaitMs(error) : undefined;
-    if (told !== undefined) {
+    if (
+      told !== undefined &&
+      error instanceof ControlError &&
+      error.status === 429
+    ) {
       this.nextAttemptAt = this.options.now() + told;
       // Do NOT escalate backoffMs here. A 429 answered on time is the limiter
       // working as designed, not a degrading control plane, and letting it
       // ratchet the blind backoff would punish a host for obeying the ceiling.
       return;
     }
-    this.nextAttemptAt = this.options.now() + this.backoffMs;
+    // A 503 names a wait too, but backpressure that keeps coming is the store
+    // degrading, so the backoff still escalates and the server's number is
+    // only a floor: never come back sooner than it asked.
+    this.nextAttemptAt =
+      this.options.now() + Math.max(this.backoffMs, told ?? 0);
     this.backoffMs = Math.min(
       this.backoffMs * 2,
       this.options.maxBackoffMs ?? 60_000,

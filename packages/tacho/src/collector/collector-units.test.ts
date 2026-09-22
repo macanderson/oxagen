@@ -930,6 +930,48 @@ describe("shipper", () => {
     expect(s.ready()).toBe(true);
   });
 
+  it("never returns sooner than a 503 asked, and still escalates its backoff", async () => {
+    // #3662. The ingest route answers 503 with `Retry-After` when ClickHouse
+    // refuses the write under pressure. Unlike a 429, repeated backpressure is
+    // the store degrading rather than the limiter working, so the server's
+    // number is a floor under the backoff, not a replacement for it.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    let clock = 0;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async () => {
+          throw new ControlError(503, "store_overloaded", undefined, {
+            retryAfterMs: 3_000,
+          });
+        },
+      },
+      paths.quarantine,
+      () => clock,
+    );
+
+    // minBackoffMs is 1s, so without the floor the host would come back at 1s
+    // and be refused again for two seconds the server had already named.
+    await s.drain();
+    clock = 2_999;
+    expect(s.ready()).toBe(false);
+    clock = 3_000;
+    expect(s.ready()).toBe(true);
+
+    // The backoff escalated underneath: 1s doubled to 2s, then 4s, and once it
+    // passes the floor it is what decides the wait.
+    await s.drain();
+    clock = 6_000;
+    expect(s.ready()).toBe(true);
+    await s.drain();
+    clock = 6_000 + 3_999;
+    expect(s.ready()).toBe(false);
+    clock = 6_000 + 4_000;
+    expect(s.ready()).toBe(true);
+  });
+
   it("falls back to X-RateLimit-Reset when a 429 carries no Retry-After", async () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
