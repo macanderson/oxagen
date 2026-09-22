@@ -102,6 +102,8 @@ RUNNER=$(sed -n '/^# Everything above is definitions/,$p' "$TOOLS/run-db-migrati
 contains "$RUNNER" 'migration_object_key' "runner: each invocation names its own object"
 lacks "$RUNNER" '_deploy/atlas-migrations.tgz' "runner: does not upload the shared key"
 contains "$RUNNER" 's3 rm' "runner: deletes the object after the node has finished"
+contains "$RUNNER" '${TIMED_OUT:-0} == 1' \
+  "runner: a command that is still running keeps its archive"
 lacks "$DRY" "oxagen-deploy-578673726240" "dry run: no hardcoded old-account bucket"
 lacks "$DRY" "__" "dry run: no placeholder survives"
 

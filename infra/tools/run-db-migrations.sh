@@ -460,13 +460,24 @@ echo "==> packaged $(find "$DB_DIR/atlas/migrations" -name '*.sql' | wc -l | tr 
 # commit's directory and read Atlas OK as "this commit is deployed".
 OBJECT_NAME="atlas-migrations-$(migration_object_key).tgz"
 UPLOADED=0
+# 0 until send-command returns. An exit before that has no remote command,
+# so the archive is deleted. After the command exists this stays 1 until a
+# terminal status, and the archive stays with it: a command that is still
+# queued, or still downloading, fails if the object disappears.
+TIMED_OUT=0
 REMOTE_FILE=$(mktemp "${TMPDIR:-/tmp}/mig-remote-XXXXXX")
 PARAMS_FILE=$(mktemp "${TMPDIR:-/tmp}/mig-params-XXXXXX")
 cleanup_migration_object() {
   rm -f "${REMOTE_FILE:-}" "${PARAMS_FILE:-}" "${TARBALL:-}"
-  if [[ ${UPLOADED:-0} == 1 && -n ${BUCKET:-} && -n ${OBJECT_NAME:-} ]]; then
-    aws s3 rm "s3://$BUCKET/_deploy/$OBJECT_NAME" --only-show-errors || true
+  if [[ ${UPLOADED:-0} != 1 || -z ${BUCKET:-} || -z ${OBJECT_NAME:-} ]]; then
+    return 0
   fi
+  if [[ ${TIMED_OUT:-0} == 1 ]]; then
+    echo "==> leaving s3://$BUCKET/_deploy/$OBJECT_NAME in place." >&2
+    echo "==> The SSM command is still running and may not have downloaded it yet." >&2
+    return 0
+  fi
+  aws s3 rm "s3://$BUCKET/_deploy/$OBJECT_NAME" --only-show-errors || true
 }
 trap cleanup_migration_object EXIT
 
@@ -493,13 +504,13 @@ PY
 CMD=$(aws ssm send-command --region "$REGION" --instance-ids "$INSTANCE" \
   --document-name AWS-RunShellScript --parameters "file://$PARAMS_FILE" \
   --query 'Command.CommandId' --output text)
+TIMED_OUT=1
 echo "==> ssm command $CMD"
 
 # A ten-minute ceiling, and reaching it is its own outcome rather than a
 # failure — see invocation_verdict. Raise it with POLLS for a migration known
 # to be long; each poll is ten seconds.
 POLLS=${POLLS:-60}
-TIMED_OUT=1
 st=Pending
 for _ in $(seq 1 "$POLLS"); do
   st=$(aws ssm get-command-invocation --region "$REGION" --command-id "$CMD" --instance-id "$INSTANCE" --query Status --output text 2>/dev/null || echo Pending)
