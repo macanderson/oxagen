@@ -123,10 +123,9 @@ export function mapMandateToBundlePermissions(input: {
 
 /**
  * The agent-definition `budget` table an agent's active version config
- * carries (`agent.propose.ts`'s own reading of the same doc: `budget.
- * per_run_micros`, checked "against reported spend at each hook boundary").
- * `perRunMicros` is this mandate's session budget (one tacho host session is
- * one run of the wrapped harness), and `perDayMicros` its daily one.
+ * carries. `perRunMicros` is this mandate's session budget (one tacho host
+ * session is one run of the wrapped harness). `perDayMicros` is read so the
+ * figure is not lost, and signs nothing: see `deriveBundleBudget`.
  */
 export interface AgentBudgetDoc {
   perRunMicros?: number;
@@ -139,10 +138,18 @@ function microsToUsd(micros: number): number {
 
 /**
  * `budget.mode` is `"enforced"` only when the agent's own definition
- * declares a session or daily figure to enforce against; otherwise
- * `"observed"`, with no `session_limit_usd`/`daily_limit_usd` at all. No
- * default limit is invented for a mandate that named none: that would be a
- * ceiling nobody set, enforced anyway.
+ * declares a per-run figure; otherwise `"observed"`, with no limit fields at
+ * all. No default limit is invented for a mandate that named none: that
+ * would be a ceiling nobody set, enforced anyway.
+ *
+ * `per_day_micros` is never signed as `daily_limit_usd` (#3728). The loopback
+ * proxy refuses against `session_limit_usd` only (`refusalFor`,
+ * `packages/tacho/src/collector/model-proxy.ts`), and its pricing path is
+ * session-scoped by construction. A signed daily ceiling would be delivered,
+ * validated, and refuse nothing, and a mandate carrying only that ceiling
+ * would read `"enforced"` while enforcing nothing. Signing it again waits on
+ * a day-scoped counter seeded by the control plane and a decision about what
+ * a day is for a host asleep across midnight or in another timezone.
  */
 export function deriveBundleBudget(
   doc: AgentBudgetDoc | undefined,
@@ -151,16 +158,6 @@ export function deriveBundleBudget(
     doc?.perRunMicros !== undefined && doc.perRunMicros > 0
       ? microsToUsd(doc.perRunMicros)
       : undefined;
-  const dailyUsd =
-    doc?.perDayMicros !== undefined && doc.perDayMicros > 0
-      ? microsToUsd(doc.perDayMicros)
-      : undefined;
-  if (sessionUsd === undefined && dailyUsd === undefined) {
-    return { mode: "observed" };
-  }
-  return {
-    mode: "enforced",
-    ...(sessionUsd !== undefined ? { session_limit_usd: sessionUsd } : {}),
-    ...(dailyUsd !== undefined ? { daily_limit_usd: dailyUsd } : {}),
-  };
+  if (sessionUsd === undefined) return { mode: "observed" };
+  return { mode: "enforced", session_limit_usd: sessionUsd };
 }
