@@ -11,7 +11,7 @@ DEREGISTERED.md  the register of de-registered (unreachable, undeleted) features
 apps/       customer-facing applications (api, app, cli, desktop, docs, mcp, web, plus app_deprecated)
 packages/   shared platform libraries (see each package.json for workspace membership)
 tools/      dev tooling (scripts, env-manager, codemods) — also a pnpm workspace member
-docs/       VISION.md, capability specs, ADRs, SCRs (docs/scr), specs (docs/specs)
+docs/       VISION.md, capability specs, ADRs, specs (docs/specs)
 ```
 
 ### Apps
@@ -194,7 +194,7 @@ is unambiguous.
 
 ## CI Config
 
-`.github/workflows/pipeline.yml` jobs: `preflight` (runs on every trigger, and on a push to `main` skips the rest of this run when a later push already superseded it, so a merge burst cannot queue full runs without bound — `check-main-preflight.mjs`); `atlas-validate`; `checks` (lint + typecheck, then `check:manifest` / `check:contracts` / `env:check` / `db:lint-migrations` / `check:db-migrate-script`, `check:audit-coverage`, `check:ui-parity --strict`, and `check:manifest:tickets`, which still files Linear tickets for parity gaps — a no-op today because the key is revoked; #2980 moves it and the nightly's `e2e:failure-ticket` to GitHub issues); `test` (migrate Postgres/ClickHouse/Neo4j, seed, build, unit tests, coverage thresholds); `e2e`; `rls-integration`; `rds-compatibility`; then `deploy-web` and `deploy-node` on `main`. `migration-gate` runs between them on a push to `main`: it asks Postgres, ClickHouse and Neo4j whether production carries the schema the commit assumes, and `deploy-node` waits on it. It applies nothing (SCR-006). `deploy-web` is deliberately ungated — it publishes static HTML and opens no database connection. `pnpm gate` mirrors the checks and test jobs. Other workflows: `migration-label.yml` labels a schema-changing PR `migration-required` (SCR-006); `vision-gate.yml` LLM-judges the PR diff against `docs/VISION.md` (advisory); `dod-check.yml` / `dod-close-guard.yml` / `dod-recheck.yml` enforce SCR-003; `triage-guard.yml` strips creator-applied priorities (SCR-005); `scr-corpus-check.yml` keeps `docs/scr/` identical across repos; `nightly.yml`, `release.yml`, `linear-release.yml` (release notes to Linear, unrelated to issue tracking), `infra*.yml`, `store-migrate.yml`, `where-is-production.yml` are operational. CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
+`.github/workflows/pipeline.yml` jobs: `preflight` (runs on every trigger, and on a push to `main` skips the rest of this run when a later push already superseded it, so a merge burst cannot queue full runs without bound — `check-main-preflight.mjs`); `atlas-validate`; `checks` (lint + typecheck, then `check:manifest` / `check:contracts` / `env:check` / `db:lint-migrations` / `check:db-migrate-script`, `check:audit-coverage`, `check:ui-parity --strict`, and `check:manifest:tickets`, which still files Linear tickets for parity gaps — a no-op today because the key is revoked; #2980 moves it and the nightly's `e2e:failure-ticket` to GitHub issues); `test` (migrate Postgres/ClickHouse/Neo4j, seed, build, unit tests, coverage thresholds); `e2e`; `rls-integration`; `rds-compatibility`; then `deploy-web` and `deploy-node` on `main`. `migration-gate` runs between them on a push to `main`: it asks Postgres, ClickHouse and Neo4j whether production carries the schema the commit assumes, and `deploy-node` waits on it. It applies nothing (SCR-006). `deploy-web` is deliberately ungated — it publishes static HTML and opens no database connection. `pnpm gate` mirrors the checks and test jobs. Other workflows: `migration-label.yml` labels a schema-changing PR `migration-required` (SCR-006); `vision-gate.yml` LLM-judges the PR diff against `docs/VISION.md` (advisory); `dod-check.yml` / `dod-close-guard.yml` / `dod-recheck.yml` enforce SCR-003; `triage-guard.yml` strips creator-applied priorities (SCR-005); `scr-corpus-check.yml` fails if any of the five org repos still carries `docs/scr/` (ADR-137); `nightly.yml`, `release.yml`, `linear-release.yml` (release notes to Linear, unrelated to issue tracking), `infra*.yml`, `store-migrate.yml`, `where-is-production.yml` are operational. CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
 
 Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its dry run reports pending migrations. With `--apply`, it applies Atlas migrations and then runs the bundled `seedPlatform()` entry and seed assets in a Node container on the app node. A failed seed fails the operation; rerunning is idempotent. The RDS compatibility job verifies the same artifact against a fresh database without superuser privileges.
 
@@ -221,7 +221,7 @@ Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its 
 - **The count does not license a worse fix.** A finding you can fix correctly in the fourth round is still better fixed than filed.
 - **Why three.** An automated reviewer reports on each push, so a PR that fixes everything it is told generates new findings by fixing them, and a green, tested change can sit behind cosmetic notes while production carries the defects it fixes. Mac set this bound on 2026-09-19, at three rounds, replacing a first draft of two.
 
-**This rule is repo-local.** SCR-004 still requires fixing findings that can ride the PR. The severity and round rules above define the exception at merge time. This file owns those rules, and `CLAUDE.md` imports them. The compiled standing-decisions block below mirrors `docs/scr/`, whose cross-repository maintenance workflow is separate from this repo-local review policy.
+**This rule is repo-local.** SCR-004 still requires fixing findings that can ride the PR. The severity and round rules above define the exception at merge time. This file owns those rules, and `CLAUDE.md` imports them. The compiled standing-decisions block below summarises the context records in `.oxagen/rules/`. Connected repositories are steered from the workspace. They do not carry a copy.
 
 **Review main integrations for lost fixes (#3237, ADR-110).** A clean three-way squash merge normally preserves changes made only on `main`. In the #3222/#3178 incident, the PR branch had already merged the fix from `main`, but that integration commit discarded the CLI exemption. The squash then landed the damaged branch. Before merging, integrate current `main`, review the resolutions, and check the behavior both sides changed. `pipeline.yml` runs `tools/scripts/check-stale-merge-base.mjs` as an advisory overlap scan for branches behind `main`. Its exact-line signals can include formatting, and an up-to-date result does not inspect earlier integrations. Requiring up-to-date branches remains a maintainer setting decision. It cannot prevent a bad integration resolution. The historical audit and retained evidence are linked from ADR-110. Separately, `pnpm check:contracts` asserts that `packages/iam/src/machine-key-scope.ts` branches on every scope purpose value a live key can carry.
 
@@ -233,7 +233,7 @@ Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its 
 | `docs/VISION.md` | Positioning and drift tests the Vision Gate judges against |
 | `docs/capabilities/_index.md` | Index of capability doc files (one `<dotted-stem>.md` per contract) |
 | `docs/adr/` | Architecture Decision Records (ADR-043 runtime excision, ADR-042 data planes, ADR-046 CI concurrency, …) |
-| `docs/scr/` | Steering Context Records, summarised at the bottom of this file |
+| `.oxagen/rules/` | Standing decisions as context records, summarised at the bottom of this file |
 | `docs/specs/` | Specs: `tacho/`, `adr025-naming-mapping.md`, and per-feature designs |
 | `CONTRIBUTING.md` | Branch / PR workflow and the capability-parity checklist |
 | `DEREGISTERED.md` | The register of features taken off the surfaces whose code stays in the tree — what is unreachable, where its code is, and what replaced it |
@@ -311,14 +311,12 @@ Four harnesses are first-class here: Claude Code, Codex, Cursor and Stella (ADR-
 
 ## Standing decisions — apply without asking
 
-Each directive below is a Steering Context Record in [`docs/scr/`](docs/scr/);
-the SCR is canonical — it carries the rationale, exceptions, and enforcement
-status. This block is the compiled summary that every agent — Claude Code
-(via CLAUDE.md's `@AGENTS.md` import) and Stella (which reads AGENTS.md
-directly) — loads at session start. The corpus is identical across the
-macanderson org repos.
+The canonical records are context records in [`.oxagen/rules/`](.oxagen/rules/).
+Each bullet below is the compiled summary a harness reads from this file.
+A connected repository does not carry a copy. The workspace these records
+belong to steers it.
 
-- **[SCR-001](docs/scr/SCR-001-no-full-suite-builds.md) — Tests/builds
+- **[SCR-001](.oxagen/rules/ctx.scr.001-no-full-suite-builds.toml) — Tests/builds
   (inner loop):** Never compile or run the full test suite while developing.
   Build and test only the crates/packages/modules touched by the change
   (plus direct dependents on interface changes). The full suite is CI's job.
@@ -327,12 +325,12 @@ macanderson org repos.
   `test` script, so `pnpm --filter <package> test` exits 0 having run nothing at
   all. Only the repo root defines one, and it is `turbo run test:unit`, the full
   suite this rule exists to keep out of the inner loop.
-- **[SCR-002](docs/scr/SCR-002-durability-first-architecture.md) —
+- **[SCR-002](.oxagen/rules/ctx.scr.002-durability-first.toml) —
   Architecture decisions:** Do not ask. Choose the most durable option — the
   one that can't be questioned in 10 years as the right move. Cheap-and-easy
   only wins when it is also the excellent durable choice. Record every such
   decision as an ADR in `docs/adr/`; the ADR replaces the question.
-- **[SCR-003](docs/scr/SCR-003-dod-verified-close.md) — Definition of
+- **[SCR-003](.oxagen/rules/ctx.scr.003-dod-verified-close.toml) — Definition of
   done:** An issue closes only when every DoD checklist item is satisfied
   and verified. Reference-grade includes tests, code comments, docs, and
   CI — not just the implementation. A PR that advances an issue without
@@ -342,7 +340,7 @@ macanderson org repos.
   PR that closes nothing is waived by a label, and which one is a claim:
   `no-issue` for a trivial change, `closes-nothing` for a substantial one
   that closes no issue by design.
-- **[SCR-004](docs/scr/SCR-004-residue-becomes-issues.md) — Fix over
+- **[SCR-004](.oxagen/rules/ctx.scr.004-fix-over-file.toml) — Fix over
   file:** Fix what you notice in the PR you are making; two unrelated fixes
   in one PR is fine. File an issue only when a fix cannot responsibly ride
   the PR (a maintainer decision, a rig or spend, or work larger than the
@@ -351,12 +349,12 @@ macanderson org repos.
   `triage` label. One issue carries one full change as a DoD checklist —
   no sub-issues, parents or epics; the tracker is GitHub issues and the
   label scheme is in CLAUDE.md "Issues and labels".
-- **[SCR-005](docs/scr/SCR-005-triage-separation-of-duties.md) — Triage
+- **[SCR-005](.oxagen/rules/ctx.scr.005-triage-separation.toml) — Triage
   separation of duties:** Never apply priority (`P0`–`P4`), size or the
   descriptive `kind:` / `area:` / `job:` / `pillar:` / `needs:` labels — the
   triage identity owns them; a guard workflow strips creator-applied
   priorities.
-- **[SCR-006](docs/scr/SCR-006-schema-changes-are-labelled.md) — Schema
+- **[SCR-006](.oxagen/rules/ctx.scr.006-schema-change-labelled.toml) — Schema
   changes and migrations:** A pull request that changes a schema carries
   `migration-required`, and the migration reaches production before or with
   the deploy of that change, never after. Here the label is applied from the
