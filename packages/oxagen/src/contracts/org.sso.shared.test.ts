@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   RESERVED_SSO_PROVIDER_IDS,
+  ssoOidcInputSchema,
+  ssoSamlInputSchema,
   normalizeSsoGroups,
   resolveSsoGrantedRole,
   ssoProviderIdSchema,
@@ -58,5 +60,37 @@ describe("normalizeSsoGroups", () => {
     expect(normalizeSsoGroups("a, b")).toEqual(["a", "b"]);
     expect(normalizeSsoGroups(undefined)).toEqual([]);
     expect(normalizeSsoGroups({ groups: ["a"] })).toEqual([]);
+  });
+});
+
+describe("secret fields", () => {
+  const oidc = {
+    protocol: "oidc",
+    issuer: "https://idp.example",
+    clientId: "c",
+  } as const;
+
+  it("accepts a secret and refuses one shaped like a sealed token", () => {
+    expect(
+      ssoOidcInputSchema.safeParse({ ...oidc, clientSecret: "s3cret" }).success,
+    ).toBe(true);
+    expect(
+      ssoOidcInputSchema.safeParse({
+        ...oidc,
+        clientSecret: "enc:v1:sso_v1:AAAA",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("refuses a sealed-looking SAML SP private key", () => {
+    expect(
+      ssoSamlInputSchema.safeParse({
+        protocol: "saml",
+        issuer: "urn:idp",
+        entryPoint: "https://idp.example/sso",
+        cert: "CERT",
+        spPrivateKey: "enc:v1:sso_v1:AAAA",
+      }).success,
+    ).toBe(false);
   });
 });

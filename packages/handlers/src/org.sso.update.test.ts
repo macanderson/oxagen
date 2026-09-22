@@ -218,6 +218,24 @@ describe("org.sso.update handler", () => {
     expect(config.scopes).toEqual(["openid", "email", "profile", "groups"]);
   });
 
+  it("refuses a client secret that is already a sealed token (decryption oracle)", async () => {
+    await expect(
+      orgSsoUpdateHandler(
+        {
+          providerId: "acme",
+          config: {
+            protocol: "oidc",
+            issuer: ISSUER,
+            clientId: "client-2",
+            clientSecret: "enc:v1:sso_v1:b3RoZXItb3Jn",
+          },
+        },
+        CTX,
+      ),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
   it("seals a new secret and runs discovery again when the issuer changes", async () => {
     await orgSsoUpdateHandler(
       {

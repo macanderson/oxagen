@@ -16,6 +16,7 @@ import {
 } from "@oxagen/config/public-url";
 import type { schema } from "@oxagen/database";
 import {
+  isSealedSsoSecret,
   plaintextSsoSecretPaths,
   redactSsoConfig,
   resolveSsoKms,
@@ -389,6 +390,28 @@ export function requireSsoKms(): NonNullable<ReturnType<typeof resolveSsoKms>> {
     );
   }
   return kms;
+}
+
+/**
+ * Refuse a secret the caller sent that is already a sealed token. The sealer
+ * keeps a sealed value as it is and the sign-in path opens it, so accepting
+ * one from input would let an admin make the server decrypt a secret sealed
+ * for another organisation and send it to their own IdP endpoint. The
+ * contract refuses these too; this is the handler's backstop. A handler
+ * reusing the token it already stores never calls this.
+ */
+export function refuseSealedSsoInput(
+  capability: string,
+  field: string,
+  value: string | undefined,
+): void {
+  if (value !== undefined && isSealedSsoSecret(value)) {
+    throw new CapabilityError(
+      capability,
+      "invalid_input",
+      `${field} must be the secret itself, not a stored value.`,
+    );
+  }
 }
 
 /**

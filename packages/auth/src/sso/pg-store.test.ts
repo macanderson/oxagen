@@ -516,21 +516,24 @@ describe("createPgSsoProvisioningStore().groupRoles", () => {
       ],
     ]);
     await expect(
-      createPgSsoProvisioningStore().groupRoles("prov_1"),
+      createPgSsoProvisioningStore().groupRoles("org_1", "prov_1"),
     ).resolves.toEqual([
       { group: "eng-admins", role: "admin" },
       { group: "everyone", role: "member" },
     ]);
     expect(tableOf(statements[0]!)).toBe("ssoGroupRoles");
     expect(callOf(statements[0]!, "where")!.args[0]).toEqual({
-      eq: ["ssoGroupRoles.providerId", "prov_1"],
+      and: [
+        { eq: ["ssoGroupRoles.orgId", "org_1"] },
+        { eq: ["ssoGroupRoles.providerId", "prov_1"] },
+      ],
     });
   });
 
   it("returns an empty list for a provider with no mapping", async () => {
     useTx([[]]);
     await expect(
-      createPgSsoProvisioningStore().groupRoles("prov_1"),
+      createPgSsoProvisioningStore().groupRoles("org_1", "prov_1"),
     ).resolves.toEqual([]);
   });
 });

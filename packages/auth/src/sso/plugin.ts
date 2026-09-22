@@ -52,6 +52,10 @@ export function buildSsoPlugin(opts: OxagenSsoPluginOptions): BetterAuthPlugin {
     // Registration happens only through the org.sso.* capabilities.
     providersLimit: 0,
     saml: {
+      // Refuse unsolicited, IdP-initiated responses: every assertion must
+      // answer an AuthnRequest this server sent (InResponseTo). An
+      // unsolicited one is a login-CSRF vector.
+      allowIdpInitiated: false,
       // Enterprise IdPs (Okta, Entra ID, OneLogin) follow SAML2Int, which
       // requires NotBefore/NotOnOrAfter. Refuse assertions without them.
       requireTimestamps: true,

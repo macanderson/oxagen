@@ -318,6 +318,23 @@ describe("org.sso.create handler", () => {
     expect(storedValues()["issuer"]).toBe(`${ISSUER}/`);
   });
 
+  it("refuses a client secret that is already a sealed token (decryption oracle)", async () => {
+    await expect(
+      orgSsoCreateHandler(
+        {
+          ...OIDC_INPUT,
+          config: {
+            ...OIDC_INPUT.config,
+            clientSecret: "enc:v1:sso_v1:b3RoZXItb3Jn",
+          },
+        } as typeof OIDC_INPUT,
+        CTX,
+      ),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(discoveryFetch).not.toHaveBeenCalled();
+  });
+
   it("refuses a provider id another sign-in method already uses in auth.accounts", async () => {
     mocks.inUse.mockResolvedValueOnce(true);
     await expect(orgSsoCreateHandler(OIDC_INPUT, CTX)).rejects.toMatchObject({

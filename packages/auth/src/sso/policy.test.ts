@@ -41,7 +41,7 @@ vi.mock("drizzle-orm", () => ({
   inArray: (a: unknown, b: unknown) => ({ inArray: [a, b] }),
 }));
 
-import { emailDomain, isNonSsoSignInRefused } from "./policy";
+import { candidateDomains, emailDomain, isNonSsoSignInRefused } from "./policy";
 
 /** Each withSystemDb call records its chain and resolves the next answer. */
 function answer(...results: unknown[][]) {
@@ -103,10 +103,20 @@ describe("isNonSsoSignInRefused", () => {
     expect(withSystemDbMock).toHaveBeenCalledTimes(1);
     // Only a verified domain on an organisation that requires SSO counts.
     expect(whereOf(0)).toEqual([
-      { eq: ["ssoProviderTable.domain", "example.com"] },
+      { inArray: ["ssoProviderTable.domain", ["example.com"]] },
       { eq: ["ssoProviderTable.domainVerified", true] },
       { eq: ["orgSecurityPolicy.ssoRequired", true] },
     ]);
+  });
+
+  it("covers a subdomain of an SSO-required domain", async () => {
+    answer([{ orgId: "org_1" }], []);
+    await expect(isNonSsoSignInRefused("ada@eng.example.com")).resolves.toBe(
+      true,
+    );
+    expect(whereOf(0)).toContainEqual({
+      inArray: ["ssoProviderTable.domain", ["eng.example.com", "example.com"]],
+    });
   });
 
   it("refuses a non-Owner of the SSO-required organisation", async () => {
@@ -130,10 +140,22 @@ describe("isNonSsoSignInRefused", () => {
       false,
     );
     expect(whereOf(0)).toContainEqual({
-      eq: ["ssoProviderTable.domain", "example.com"],
+      inArray: ["ssoProviderTable.domain", ["example.com"]],
     });
     expect(whereOf(1)).toContainEqual({
       eq: ["users.email", "ada@example.com"],
     });
+  });
+});
+
+describe("candidateDomains", () => {
+  it("lists the domain and its parents, never a bare top-level domain", () => {
+    expect(candidateDomains("eng.acme.co.uk")).toEqual([
+      "eng.acme.co.uk",
+      "acme.co.uk",
+      "co.uk",
+    ]);
+    expect(candidateDomains("acme.com")).toEqual(["acme.com"]);
+    expect(candidateDomains("localhost")).toEqual([]);
   });
 });

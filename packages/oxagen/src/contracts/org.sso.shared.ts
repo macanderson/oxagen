@@ -194,6 +194,23 @@ export const ssoDomainSchema = z
 /** The claim or attribute that carries groups. Defaults to `groups`. */
 export const ssoGroupsClaimSchema = z.string().trim().min(1).max(128);
 
+/**
+ * A secret as an admin types it. It may not look like a sealed token
+ * (`enc:…`): the server stores sealed tokens as they are and opens them at
+ * sign-in, so a pasted token would make the server decrypt a secret sealed for
+ * another organisation and send it to an endpoint the pasting admin controls.
+ * Only a handler, reusing the token it already stores, may carry one.
+ */
+function ssoSecretSchema(max: number) {
+  return z
+    .string()
+    .min(1)
+    .max(max)
+    .refine((value) => !value.startsWith("enc:"), {
+      message: "Enter the secret itself, not a stored value.",
+    });
+}
+
 const httpsUrl = z
   .string()
   .url()
@@ -205,7 +222,7 @@ export const ssoOidcInputSchema = z.object({
   /** The IdP's issuer URL. Its discovery document is read at registration. */
   issuer: httpsUrl,
   clientId: z.string().trim().min(1).max(512),
-  clientSecret: z.string().min(1).max(4096),
+  clientSecret: ssoSecretSchema(4096),
   /** Extra scopes beyond openid, email and profile. */
   scopes: z.array(z.string().trim().min(1).max(128)).max(20).optional(),
 });
@@ -223,7 +240,7 @@ export const ssoSamlInputSchema = z.object({
    * Optional SP private key, PEM, for signing AuthnRequests. Sealed with the
    * KMS envelope before it is stored.
    */
-  spPrivateKey: z.string().min(1).max(16384).optional(),
+  spPrivateKey: ssoSecretSchema(16384).optional(),
 });
 
 export const ssoProtocolInputSchema = z.discriminatedUnion("protocol", [

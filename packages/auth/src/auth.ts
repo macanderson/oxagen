@@ -21,7 +21,8 @@ import { withSsoSecrets } from "./sso/adapter";
 import { SSO_DISABLED_PATHS, buildSsoPlugin } from "./sso/plugin";
 import { createSsoProvisioner } from "./sso/provision";
 import { createPgSsoProvisioningStore } from "./sso/pg-store";
-import { authMethodForPath } from "./sso/policy";
+import { authMethodForPath, lookupSsoProviderDomain } from "./sso/policy";
+import { createSsoDomainGuard } from "./sso/domain-guard";
 import { requireSsoPlugin } from "./sso/require-sso-plugin";
 import {
   sendEmailFireAndForget,
@@ -245,6 +246,18 @@ const ssoPlugin = buildSsoPlugin({
     emit: emitSecurityEvent,
   }),
 });
+
+// An SSO provider creates or links users only in its own verified email
+// domain; see ./sso/domain-guard.ts for the pre-hijack this closes.
+const ssoDomainGuard = createSsoDomainGuard({
+  lookupProvider: lookupSsoProviderDomain,
+});
+
+const accountHooks = withTrustedLinkHardening(
+  kmsAdapter
+    ? buildAccountTokenHooks(kmsAdapter, TOKEN_KEY_ID)
+    : buildStripOnlyAccountHooks(),
+);
 
 const oauthProxyPlugins = buildOAuthProxyPlugins({
   isLocalEnv,
@@ -547,11 +560,29 @@ export const auth = betterAuth({
     // provider links into a previously-unverified local account (closes the
     // account pre-hijacking vector opened by requireLocalEmailVerified:false —
     // see the accountLinking note above and ./account-linking.ts).
-    account: withTrustedLinkHardening(
-      kmsAdapter
-        ? buildAccountTokenHooks(kmsAdapter, TOKEN_KEY_ID)
-        : buildStripOnlyAccountHooks(),
-    ),
+    //
+    // The SSO domain guard runs first: an account for an SSO provider may be
+    // attached only to a user in that provider's verified domain.
+    account: {
+      ...accountHooks,
+      create: {
+        before: async (account, ctx) => {
+          if (
+            (await ssoDomainGuard.accountCreateBefore(account, ctx)) === false
+          ) {
+            return false;
+          }
+          return accountHooks.create.before(account);
+        },
+      },
+    },
+    // An SSO sign-in creates a user only for an email in the provider's
+    // verified domain (./sso/domain-guard.ts).
+    user: {
+      create: {
+        before: async (user, ctx) => ssoDomainGuard.userCreateBefore(user, ctx),
+      },
+    },
     session: {
       create: {
         before: async (session, ctx) => {

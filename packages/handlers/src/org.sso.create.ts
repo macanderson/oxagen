@@ -9,6 +9,7 @@ import {
   buildSsoOidcConfig,
   buildSsoSamlConfig,
   discoverOidc,
+  refuseSealedSsoInput,
   requireSsoKms,
   sealSsoConfigOrRefuse,
   ssoAuthBaseUrl,
@@ -45,6 +46,16 @@ export const orgSsoCreateHandler: CapabilityHandler<
     { org: ["Owner", "Admin"] },
   );
 
+  refuseSealedSsoInput(
+    orgSsoCreate.name,
+    "clientSecret",
+    input.config.protocol === "oidc" ? input.config.clientSecret : undefined,
+  );
+  refuseSealedSsoInput(
+    orgSsoCreate.name,
+    "spPrivateKey",
+    input.config.protocol === "saml" ? input.config.spPrivateKey : undefined,
+  );
   const kms = requireSsoKms();
   const baseUrl = ssoAuthBaseUrl();
   const groupsClaim = input.groupsClaim ?? "groups";

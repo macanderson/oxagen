@@ -11,6 +11,7 @@ import {
   buildSsoSamlConfig,
   discoverOidc,
   parseStoredSsoConfig,
+  refuseSealedSsoInput,
   requireSsoKms,
   sameSsoIssuer,
   sealSsoConfigOrRefuse,
@@ -99,6 +100,16 @@ export const orgSsoUpdateHandler: CapabilityHandler<
         `This provider uses ${protocol.toUpperCase()}. To switch to ${config.protocol.toUpperCase()}, delete it and create a new one.`,
       );
     }
+    refuseSealedSsoInput(
+      orgSsoUpdate.name,
+      "clientSecret",
+      config.protocol === "oidc" ? config.clientSecret : undefined,
+    );
+    refuseSealedSsoInput(
+      orgSsoUpdate.name,
+      "spPrivateKey",
+      config.protocol === "saml" ? config.spPrivateKey : undefined,
+    );
     const kms = requireSsoKms();
     if (config.protocol === "oidc") {
       const clientSecret =

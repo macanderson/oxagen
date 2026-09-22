@@ -37,8 +37,8 @@ import type { SecurityEventInput } from "@oxagen/telemetry";
 const MAX_AUDITED_GROUPS = 50;
 
 export interface SsoProvisioningStore {
-  /** The group → role rows for one provider. */
-  groupRoles(providerId: string): Promise<SsoGroupRole[]>;
+  /** The group → role rows for one provider of one organisation. */
+  groupRoles(orgId: string, providerId: string): Promise<SsoGroupRole[]>;
   /** The person's current org role, lowercase, or null when not a member. */
   currentRole(orgId: string, userId: string): Promise<string | null>;
   /**
@@ -113,7 +113,7 @@ export function createSsoProvisioner(deps: SsoProvisionerDeps) {
         };
       }
 
-      const mappings = await deps.store.groupRoles(provider.providerId);
+      const mappings = await deps.store.groupRoles(orgId, provider.providerId);
       const granted = resolveSsoGrantedRole(groups, mappings);
 
       if (

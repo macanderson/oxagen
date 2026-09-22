@@ -43,6 +43,7 @@ import { withSsoSecrets } from "./adapter";
 import { authMethodForPath } from "./auth-method";
 import { SSO_DISABLED_PATHS, buildSsoPlugin } from "./plugin";
 import { createSsoProvisioner, type SsoProvisioningStore } from "./provision";
+import { createSsoDomainGuard } from "./domain-guard";
 
 const BASE_URL = "http://localhost:3000";
 const ORG_ID = "0e7d8a4c-2f55-4c1b-9d7e-5c1f7f0a2b11";
@@ -273,6 +274,17 @@ async function buildAuth(opts: {
   opts.seed?.(db);
   const events: SecurityEventInput[] = [];
   const membership = memoryRoles(opts.mappings);
+  const guard = createSsoDomainGuard({
+    lookupProvider: async (providerId) => {
+      const row = db.ssoProvider!.find((p) => p.providerId === providerId);
+      return row
+        ? {
+            domain: String(row.domain),
+            domainVerified: row.domainVerified === true,
+          }
+        : null;
+    },
+  });
   const auth = betterAuth({
     baseURL: BASE_URL,
     secret: "test-secret-that-is-at-least-thirty-two-characters",
@@ -291,7 +303,21 @@ async function buildAuth(opts: {
         authMethod: { type: "string", required: false, input: false },
       },
     },
+    // The same domain guard auth.ts installs, reading the memory database.
     databaseHooks: {
+      user: {
+        create: {
+          before: async (user, ctx) => guard.userCreateBefore(user, ctx),
+        },
+      },
+      account: {
+        create: {
+          before: async (account, ctx) =>
+            (await guard.accountCreateBefore(account, ctx)) === false
+              ? false
+              : undefined,
+        },
+      },
       session: {
         create: {
           before: async (session, ctx) => ({
@@ -598,6 +624,27 @@ describe("SSO sign-in through a mock OIDC provider", () => {
       expect(JSON.stringify(db.ssoProvider)).toBe(before);
     },
   );
+
+  it("creates no user when the IdP asserts an email outside the verified domain", async () => {
+    // The pre-hijack: an org's own IdP asserts someone else's address.
+    idp.person!.email = "victim@gmail.com";
+    const { auth, db, events } = await buildAuth({
+      mappings: [{ group: "oxagen-admins", role: "admin" }],
+    });
+
+    const callback = await signInThroughIdp(auth, "ada@acme.com");
+
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get("location")).toContain("error=");
+    expect(
+      callback.headers
+        .getSetCookie()
+        .some((c) => c.startsWith("oxagen.session_token=")),
+    ).toBe(false);
+    expect(db.user).toEqual([]);
+    expect(db.account).toEqual([]);
+    expect(events).toEqual([]);
+  });
 
   it("refuses the exchange when the IdP rejects the client secret", async () => {
     const { auth, events } = await buildAuth({

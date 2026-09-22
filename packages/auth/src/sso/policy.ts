@@ -17,6 +17,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 
 export { authMethodForPath, ssoAuthMethod } from "./auth-method";
+import { emailDomain } from "./email-domain";
+export { emailDomain };
 
 /** The APIError body code the login form maps to its SSO message. */
 export const SSO_REQUIRED_CODE = "SSO_REQUIRED";
@@ -24,14 +26,17 @@ export const SSO_REQUIRED_CODE = "SSO_REQUIRED";
 export const SSO_REQUIRED_MESSAGE =
   "Your organization requires single sign-on. Sign in with SSO.";
 
-/** The email's domain, lowercased, or null for a malformed address. */
-export function emailDomain(email: string): string | null {
-  const at = email.lastIndexOf("@");
-  if (at < 1 || at === email.length - 1) return null;
-  return email
-    .slice(at + 1)
-    .trim()
-    .toLowerCase();
+/**
+ * The domain and each parent that still has a dot in it: `eng.acme.com` gives
+ * `eng.acme.com` and `acme.com`, never the bare `com`.
+ */
+export function candidateDomains(domain: string): string[] {
+  const labels = domain.split(".");
+  const out: string[] = [];
+  for (let i = 0; i < labels.length - 1; i++) {
+    out.push(labels.slice(i).join("."));
+  }
+  return out;
 }
 
 /**
@@ -61,7 +66,9 @@ export async function isNonSsoSignInRefused(email: string): Promise<boolean> {
       )
       .where(
         and(
-          eq(schema.ssoProviderTable.domain, domain),
+          // The domain or any parent of it: sign-in routes a subdomain to its
+          // parent's provider, so the refusal has to cover it too.
+          inArray(schema.ssoProviderTable.domain, candidateDomains(domain)),
           eq(schema.ssoProviderTable.domainVerified, true),
           eq(schema.orgSecurityPolicy.ssoRequired, true),
         ),
@@ -87,4 +94,29 @@ export async function isNonSsoSignInRefused(email: string): Promise<boolean> {
       .limit(1),
   );
   return owners.length === 0;
+}
+
+/**
+ * An SSO provider's domain and whether it is verified, or null when
+ * `providerId` names no SSO provider (a social provider, the credential
+ * account). The domain guard's lookup (./domain-guard.ts).
+ *
+ * tenancy: system bypass during sign-in bootstrap, before any session exists;
+ * the lookup is filtered by the provider id the verified callback route names
+ * and returns only the domain and its verified flag.
+ */
+export async function lookupSsoProviderDomain(
+  providerId: string,
+): Promise<{ domain: string; domainVerified: boolean } | null> {
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({
+        domain: schema.ssoProviderTable.domain,
+        domainVerified: schema.ssoProviderTable.domainVerified,
+      })
+      .from(schema.ssoProviderTable)
+      .where(eq(schema.ssoProviderTable.providerId, providerId))
+      .limit(1),
+  );
+  return rows[0] ?? null;
 }
