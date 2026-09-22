@@ -343,7 +343,7 @@ describe("approvals panel", () => {
 });
 
 describe("runs table", () => {
-  it("draws a row per run: the task, agent identity, operator, status, cost with its basis, frames, and start", async () => {
+  it("draws a row per run: the task, agent identity, operator, status, tier, cost with its basis, frames, and start", async () => {
     await renderFleet({
       runs: runPage([runRow()]),
       approvals: NO_APPROVALS,
@@ -354,6 +354,7 @@ describe("runs table", () => {
       "reacme.core.release-botevidence ledger",
       "Marcus Bell",
       "live",
+      "observed at the harness",
       "$4.13gateway_observed",
       "1,204",
       "Sep 15, 2026, 8:00 AM",
@@ -420,7 +421,7 @@ describe("runs table", () => {
     const cells = within(unrecorded ?? runsSection()).getAllByRole("cell");
     expect(cells[1]).toHaveTextContent(/^not recordedwrapped agent$/);
     expect(cells[2]).toHaveTextContent(/^not recorded$/);
-    expect(cells[4]).toHaveTextContent(/^not recorded$/);
+    expect(cells[5]).toHaveTextContent(/^not recorded$/);
     expect(noBasis).toHaveTextContent("$0.00basis not recorded");
     expect(runsSection()).not.toHaveTextContent(/trust/i);
   });
@@ -475,6 +476,7 @@ describe("runs table", () => {
       "Agent",
       "Operator",
       "Status",
+      "Tier",
       "Cost",
       "Frames",
       "Started",
