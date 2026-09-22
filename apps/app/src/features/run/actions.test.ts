@@ -39,6 +39,7 @@ const {
   exportRun,
   forkRun,
   haltRun,
+  readRunExport,
   readTranscriptPage,
   steerRun,
   summarizeRun,
@@ -251,6 +252,62 @@ describe("exportRun", () => {
       ok: false,
       reason: "denied",
     });
+  });
+});
+
+describe("readRunExport", () => {
+  const DIGEST = `sha256:${"a".repeat(64)}`;
+  const ROOT = `sha256:${"b".repeat(64)}`;
+  /** Every field `get_run_export`'s strict output schema requires, for a ready bundle. */
+  const ready = {
+    exportId: "rexp_1",
+    runId: RUN,
+    status: "ready",
+    createdAt: "2026-09-22T10:00:00.000Z",
+    completedAt: "2026-09-22T10:00:07.000Z",
+    bundleDigest: DIGEST,
+    bundleBytes: 48_213,
+    merkleRoot: ROOT,
+    frameCount: 412,
+    error: null,
+    download: {
+      url: "https://api.oxagen.sh/v1/run-exports/download?token=t0k",
+      expiresAt: "2026-09-22T10:15:07.000Z",
+    },
+  } as const;
+
+  it("reads the export by its id and answers the contract's record", async () => {
+    invoke.mockResolvedValue(ready);
+    expect(await readRunExport("acme", "core-platform", "rexp_1")).toEqual({
+      ok: true,
+      value: ready,
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "get_run_export",
+      { exportId: "rexp_1" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("answers an export from another workspace as not_found with the handler's reason (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "not_found",
+      reason: "run_export_not_found",
+      message: "run export not found",
+    });
+    expect(await readRunExport("acme", "core-platform", "rexp_9")).toEqual({
+      ok: false,
+      reason: "not_found",
+      code: "run_export_not_found",
+    });
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("get_run_export"));
+    expect(
+      await readRunExport("acme", "core-platform", "rexp_1"),
+    ).toMatchObject({ ok: false, reason: "denied" });
   });
 });
 

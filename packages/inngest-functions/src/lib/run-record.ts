@@ -34,6 +34,8 @@ export interface SealedSegment {
   merkleRoot: string;
   /** sha256 over the segment bytes as stored; a wrapped session has none. */
   archiveSegmentDigest: string | null;
+  /** The seal's `event_stream_digest`; a wrapped session has none. */
+  eventStreamDigest: string | null;
   enforcementTier: string;
   completenessGaps: string[];
   replayGrade: string | null;
@@ -179,6 +181,7 @@ export async function readSealedSegments(
           frameCount: rows.length,
           merkleRoot: "",
           archiveSegmentDigest: null,
+          eventStreamDigest: null,
           enforcementTier: record.enforcementTier,
           completenessGaps: record.completenessGaps,
           replayGrade: record.replayGrade,
@@ -207,6 +210,7 @@ export async function readSealedSegments(
         frameCount: envelopes.length,
         merkleRoot: seal.merkleRoot,
         archiveSegmentDigest: digestBytes(bytes),
+        eventStreamDigest: seal.eventStreamDigest,
         enforcementTier: "harness",
         completenessGaps: seal.completenessGaps,
         replayGrade: seal.replayGrade,

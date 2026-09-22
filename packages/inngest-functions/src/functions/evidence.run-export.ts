@@ -7,8 +7,8 @@
 //   2. read the run's sealed segments in its tenant scope, sign one
 //      attestation per sealed attempt with the deployment's attester key,
 //      zip the bundle and write it once to the organisation's evidence store;
-//   3. mark the row `ready` with where the bundle landed, its digest, the
-//      Merkle root and the frame count.
+//   3. mark the row `ready` with where the bundle landed, its digest and
+//      size, the Merkle root and the frame count.
 // The on-failure companion marks the row `failed` with the reason once
 // retries are exhausted, so Audit › exports never shows an eternally
 // building job. A deployment with no attester key fails at once: an
@@ -133,6 +133,7 @@ export const [evidenceRunExport, evidenceRunExportOnFailure] = createFunction(
       return {
         ref,
         digest: bundle.digest,
+        bytes: bundle.bytes.byteLength,
         merkleRoot: bundle.manifest.merkle_root,
         frameCount: bundle.manifest.frame_count,
       };
@@ -143,6 +144,7 @@ export const [evidenceRunExport, evidenceRunExportOnFailure] = createFunction(
         status: "ready",
         bundleRef: built.ref,
         bundleDigest: built.digest,
+        bundleBytes: built.bytes,
         merkleRoot: built.merkleRoot,
         frameCount: built.frameCount,
         completedAt: new Date(),

@@ -13,16 +13,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { haltRun, steerRun, summarizeRun, exportRun, replace, refresh } =
-  vi.hoisted(() => ({
-    haltRun: vi.fn(),
-    steerRun: vi.fn(),
-    summarizeRun: vi.fn(),
-    exportRun: vi.fn(),
-    replace: vi.fn(),
-    refresh: vi.fn(),
-  }));
-vi.mock("./actions", () => ({ haltRun, steerRun, summarizeRun, exportRun }));
+const {
+  haltRun,
+  steerRun,
+  summarizeRun,
+  exportRun,
+  readRunExport,
+  replace,
+  refresh,
+} = vi.hoisted(() => ({
+  haltRun: vi.fn(),
+  steerRun: vi.fn(),
+  summarizeRun: vi.fn(),
+  exportRun: vi.fn(),
+  readRunExport: vi.fn(),
+  replace: vi.fn(),
+  refresh: vi.fn(),
+}));
+vi.mock("./actions", () => ({
+  haltRun,
+  steerRun,
+  summarizeRun,
+  exportRun,
+  readRunExport,
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace, refresh }),
 }));
@@ -55,6 +69,7 @@ beforeEach(() => {
     steerRun,
     summarizeRun,
     exportRun,
+    readRunExport,
     replace,
     refresh,
   ]) {

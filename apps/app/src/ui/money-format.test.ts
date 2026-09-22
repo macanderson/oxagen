@@ -3,6 +3,7 @@
 // ratios as percentages.
 import { describe, expect, it } from "vitest";
 import {
+  formatByteSize,
   formatClock,
   formatCount,
   formatDuration,
@@ -181,5 +182,14 @@ describe("formatDuration", () => {
 
   it("reads a negative duration as zero rather than as a negative one (negative)", () => {
     expect(formatDuration(-5, "en")).toBe("0 ms");
+  });
+});
+
+describe("formatByteSize", () => {
+  it("prints a size in the largest decimal unit at or above 1", () => {
+    expect(formatByteSize(512, "en")).toBe("512 byte");
+    expect(formatByteSize(48_210, "en")).toBe("48.2 kB");
+    expect(formatByteSize(3_100_000, "en")).toBe("3.1 MB");
+    expect(formatByteSize(2_000_000_000, "en")).toBe("2 GB");
   });
 });
