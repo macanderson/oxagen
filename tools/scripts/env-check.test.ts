@@ -149,6 +149,7 @@ describe("reconcile — PLATFORM_ALLOWLIST", () => {
       "NEXT_RUNTIME",
       "NEXT_PHASE",
       "CI",
+      "GITHUB_ACTIONS",
       "PLATFORM_VERSION",
       "TURBO_TOKEN",
       "TURBO_TEAM",
@@ -363,6 +364,62 @@ describe("scanSourceReferences", () => {
       expect(result.referenced.has("SERVER_ACTIONS_ALLOWED_ORIGINS")).toBe(
         true,
       );
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("treats read targets as locals when read is not the first word", () => {
+    // `if ! read -r SOURCE` assigns SOURCE. A matcher anchored on `^\s*read`
+    // misses it, and `$SOURCE` then fails env:check as an undeclared variable.
+    // A line that only mentions the verb, `could not read $STILL_AN_ENV`, is
+    // still a reference. A comment is not an assignment either.
+    const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
+    try {
+      writeFileSync(
+        join(dir, "migrate.sh"),
+        [
+          "#!/usr/bin/env bash",
+          "if ! read -r SOURCE PGHOST PGPORT < <(writer); then",
+          '  echo "missing"',
+          "fi",
+          'case $SOURCE in env) echo "$PGHOST $PGPORT" ;; esac',
+          "while IFS= read -r LINE; do",
+          '  echo "$LINE"',
+          "done",
+          'IFS=: read -r LEFT RIGHT <<<"$pair"',
+          'echo "$LEFT $RIGHT"',
+          "read -r -d '' HELD <<EOF",
+          "body",
+          "EOF",
+          'echo "$HELD"',
+          "read -a NAMES",
+          'echo "$NAMES"',
+          "# if ! read -r COMMENT_ONLY",
+          'echo "$COMMENT_ONLY"',
+          'echo "could not read $STILL_AN_ENV"',
+          'echo "$REAL_ENV"',
+          "",
+        ].join("\n"),
+      );
+      const result = scanSourceReferences([dir]);
+      for (const local of [
+        "SOURCE",
+        "PGHOST",
+        "PGPORT",
+        "LINE",
+        "LEFT",
+        "RIGHT",
+        "HELD",
+        "NAMES",
+      ]) {
+        expect(result.referenced.has(local), `${local} is a read target`).toBe(
+          false,
+        );
+      }
+      expect(result.referenced.has("COMMENT_ONLY")).toBe(true);
+      expect(result.referenced.has("STILL_AN_ENV")).toBe(true);
+      expect(result.referenced.has("REAL_ENV")).toBe(true);
     } finally {
       rmSync(dir, { recursive: true });
     }

@@ -101,6 +101,9 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "PGPASSWORD",
   // GitHub Actions and the gh CLI inject these into a workflow step. GH_TOKEN
   // is gh's spelling of the same credential GITHUB_TOKEN carries.
+  // GITHUB_ACTIONS is "true" on every runner. The migration script masks the
+  // database URL only when that is set. An operator never configures it.
+  "GITHUB_ACTIONS",
   "GITHUB_TOKEN",
   "GH_TOKEN",
   "GITHUB_REPOSITORY",
@@ -378,8 +381,25 @@ const RE_SHELL_EXPANSION = /\$\{?([A-Z][A-Z0-9_]+)\b/g;
 const RE_SHELL_ASSIGNMENT =
   /^\s*(?:export\s+|local\s+|readonly\s+|declare\s+(?:-\w+\s+)*)?([A-Z][A-Z0-9_]+)=|^\s*for\s+([A-Z][A-Z0-9_]+)\s+in\b/gm;
 
-/** `read -r -d '' NAME <<EOF` — the option arguments make a positional match unreliable. */
-const RE_SHELL_READ = /^\s*read\b.*$/gm;
+/**
+ * `read` options whose argument is the next word when it is not attached.
+ * `-a NAME` assigns NAME. The others (`-d`, `-n`, `-p`, ...) only consume it.
+ */
+const READ_OPTION_WITH_ARG = new Set(["a", "d", "i", "n", "N", "p", "t", "u"]);
+
+/**
+ * A `read` that assigns names, including one that is not the first word.
+ *
+ * `if ! read -r SOURCE`, `while IFS= read -r LINE`, and `IFS=: read -r A B`
+ * all assign. Anchoring on `^\s*read` misses them, and `$SOURCE` then looks
+ * like an environment variable the script never declares.
+ *
+ * The names are the words after `read` and its options, before a redirect or
+ * the next command. Taking every uppercase word on a line that merely
+ * contains "read" would treat `could not read $URL` as an assignment of URL.
+ */
+const RE_SHELL_READ_COMMAND =
+  /(?:^|&&|\|\||[;|&]|!\s+|\b(?:if|elif|while|until)\b)(?:\s*[A-Za-z_][A-Za-z0-9_]*=\S*)*\s*read\b/g;
 
 /**
  * awk's own variables, which are not environment variables and never were.
@@ -424,17 +444,36 @@ const AWK_BUILTIN_NAMES = new Set([
   "ARGV",
 ]);
 
-function shellAssignedNames(content: string): Set<string> {
-  const assigned = new Set<string>();
-  for (const m of content.matchAll(RE_SHELL_ASSIGNMENT)) {
-    const name = m[1] ?? m[2];
-    if (name) assigned.add(name);
+function readAssignedNames(line: string): string[] {
+  const names: string[] = [];
+  for (const match of line.matchAll(RE_SHELL_READ_COMMAND)) {
+    let rest = line.slice((match.index ?? 0) + match[0].length);
+    const stop = rest.search(/&&|\|\||[;<>|]/);
+    if (stop >= 0) rest = rest.slice(0, stop);
+    const tokens = rest
+      .trim()
+      .split(/\s+/)
+      .filter((token) => token.length > 0);
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i]!;
+      if (!token.startsWith("-")) {
+        const bare = token.replace(/['"]/g, "");
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(bare)) names.push(bare);
+        continue;
+      }
+      const last = token
+        .slice(1)
+        .replace(/[^A-Za-z]/g, "")
+        .at(-1);
+      if (!last || !READ_OPTION_WITH_ARG.has(last)) continue;
+      const attached = token.slice(token.lastIndexOf(last) + 1);
+      const arg = attached.length > 0 ? attached : tokens[++i];
+      if (last === "a" && arg && /^[A-Za-z_][A-Za-z0-9_]*$/.test(arg)) {
+        names.push(arg);
+      }
+    }
   }
-  for (const line of content.match(RE_SHELL_READ) ?? []) {
-    for (const m of line.matchAll(/\b([A-Z][A-Z0-9_]+)\b/g))
-      assigned.add(m[1]!);
-  }
-  return assigned;
+  return names;
 }
 
 /**
@@ -443,10 +482,23 @@ function shellAssignedNames(content: string): Set<string> {
  * A doc comment naming `process.env.FOO` as an example is not a reference, and
  * counting it as one cuts both ways: an undeclared name in prose fails the
  * check, and a registry key mentioned only in a comment reads as alive. Only
- * whole-line comments are dropped — a trailing `// why` after a real read is
+ * whole-line comments are dropped. A trailing `// why` after a real read is
  * still on a line the scanner must read.
  */
 const RE_COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*\/?|#)/;
+
+function shellAssignedNames(content: string): Set<string> {
+  const assigned = new Set<string>();
+  for (const m of content.matchAll(RE_SHELL_ASSIGNMENT)) {
+    const name = m[1] ?? m[2];
+    if (name) assigned.add(name);
+  }
+  for (const line of content.split("\n")) {
+    if (RE_COMMENT_LINE.test(line)) continue;
+    for (const name of readAssignedNames(line)) assigned.add(name);
+  }
+  return assigned;
+}
 
 /**
  * Walk the given directory roots and extract every statically-resolvable
