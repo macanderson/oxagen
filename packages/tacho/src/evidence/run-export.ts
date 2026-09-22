@@ -89,6 +89,39 @@ export interface RunExportRedactions {
   withheld: RedactionCount[];
 }
 
+/**
+ * An instant in the `Date.toISOString()` form (`2026-07-21T12:00:00.123Z`).
+ *
+ * The ledger digests `observed_at` in that form, but drizzle's postgres-js
+ * driver returns `timestamptz` as Postgres text (`2026-07-21 12:00:00.123+00`),
+ * and archive segments written before this function existed carry it that
+ * way. Both spellings name the same instant, so the verifier compares the
+ * instant, not the spelling. A value that is not an instant is returned as
+ * is, and its digest then fails honestly.
+ */
+export function normalizeInstant(value: string): string {
+  const m =
+    /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}(?::?\d{2})?)$/.exec(
+      value,
+    );
+  if (!m) return value;
+  const [, day, time, frac, zone] = m as unknown as [
+    string,
+    string,
+    string,
+    string | undefined,
+    string,
+  ];
+  const ms = (frac ?? "").slice(0, 3).padEnd(3, "0");
+  let offset = zone;
+  if (zone !== "Z") {
+    const digits = zone.slice(1).replace(":", "");
+    offset = `${zone[0]}${digits.slice(0, 2)}:${(digits.slice(2) || "00").padEnd(2, "0")}`;
+  }
+  const instant = new Date(`${day}T${time}.${ms}${offset}`);
+  return Number.isNaN(instant.getTime()) ? value : instant.toISOString();
+}
+
 const WITHHELD_BODY = "frame_body";
 const WITHHELD_ENCRYPTED_PAYLOAD = "encrypted_payload";
 
@@ -243,7 +276,10 @@ function checkLedgerFrame(frame: Envelope): {
     event_type: frame["event_type"] ?? null,
     stage: frame["stage"] ?? null,
     payload_digest: payloadDigest ?? null,
-    observed_at: frame["observed_at"] ?? null,
+    observed_at:
+      typeof frame["observed_at"] === "string"
+        ? normalizeInstant(frame["observed_at"])
+        : (frame["observed_at"] ?? null),
   });
   if (recomputed !== frame["event_digest"]) {
     digest = "broken";

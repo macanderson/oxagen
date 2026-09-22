@@ -5,6 +5,7 @@ import { hashEvent } from "../chain";
 import { attesterKeyFromPem, signAttestation } from "./attestation";
 import { merkleRoot } from "./merkle";
 import {
+  normalizeInstant,
   RUN_EXPORT_FORMAT,
   type RunExportFiles,
   summarizeRunExportRedactions,
@@ -266,5 +267,33 @@ describe("verifyRunExport", () => {
       .filter((c) => c.status === "broken")
       .map((c) => c.name);
     expect(broken).toEqual(["attester key", "signature att"]);
+  });
+
+  it("holds a ledger frame whose observed_at the archive spelled as Postgres text", () => {
+    const frames = ledgerFrames();
+    (frames[0] as Record<string, JsonValue>)["observed_at"] =
+      "2026-09-22 12:00:01+00";
+    (frames[1] as Record<string, JsonValue>)["observed_at"] =
+      "2026-09-22 14:00:02.000000+02";
+    expect(verifyRunExport(bundle("ledger", frames)).ok).toBe(true);
+  });
+});
+
+describe("normalizeInstant", () => {
+  it.each([
+    ["2026-07-21 12:00:00.123+00", "2026-07-21T12:00:00.123Z"],
+    ["2026-07-21 12:00:00.123456+00", "2026-07-21T12:00:00.123Z"],
+    ["2026-07-21T14:00:00+02:00", "2026-07-21T12:00:00.000Z"],
+    ["2026-07-21 07:30:00-0430", "2026-07-21T12:00:00.000Z"],
+    ["2026-07-21T12:00:00.123Z", "2026-07-21T12:00:00.123Z"],
+  ])("reads %s as %s", (raw, iso) => {
+    expect(normalizeInstant(raw)).toBe(iso);
+  });
+
+  it("leaves a value that is not an instant alone (negative)", () => {
+    expect(normalizeInstant("yesterday")).toBe("yesterday");
+    expect(normalizeInstant("2026-13-45 99:00:00+00")).toBe(
+      "2026-13-45 99:00:00+00",
+    );
   });
 });

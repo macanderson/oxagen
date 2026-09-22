@@ -68,7 +68,12 @@ function ledgerSegment(over: Partial<SealedSegment> = {}): SealedSegment {
       }),
       payload_inline: payload,
       encrypted_payload_ref: null,
-      observed_at: observed,
+      // Frame 3 is read back the way drizzle's postgres-js driver answers
+      // timestamptz: Postgres text, not a Date.
+      observed_at:
+        n === 3
+          ? observed.toISOString().replace("T", " ").replace("Z", "+00")
+          : observed,
       created_at: observed,
       body_ref: n === 2 ? "evb:v1:k1:" + "a".repeat(64) : null,
       body_digest: n === 2 ? `sha256:${"a".repeat(64)}` : null,

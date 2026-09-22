@@ -2815,6 +2815,18 @@ describe("the archive envelope", () => {
     expect(back).toEqual({ ...row, observed_at: row.observed_at });
   });
 
+  it("writes an instant the driver returned as Postgres text in the toISOString form event_digest was taken over", () => {
+    const prepared = prepareAttemptEvent(toolEvent(1));
+    const row = {
+      ...durableRow(prepared, "0192d4a8-7c1e-7a00-8000-0000000000e1", "7"),
+      observed_at: prepared.observedAt.replace("T", " ").replace("Z", "+00"),
+      created_at: "2026-09-11 12:00:00.5+02",
+    };
+    const envelope = archiveFrameOf(row).envelope as Record<string, unknown>;
+    expect(envelope["observed_at"]).toBe(prepared.observedAt);
+    expect(envelope["recorded_at"]).toBe("2026-09-11T10:00:00.500Z");
+  });
+
   it("refuses a line that is not a frame (negative)", () => {
     expect(readArchiveFrame({ hello: "world" })).toBeNull();
     expect(readArchiveFrame("frame")).toBeNull();

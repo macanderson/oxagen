@@ -165,6 +165,17 @@ function canonical(value) {
   return JSON.stringify(value);
 }
 const digestJcs = (value) => hex(sha256(Buffer.from(canonical(value), "utf8")));
+// The ledger digests observed_at as Date.toISOString(); an older segment may
+// spell the same instant as Postgres text (2026-07-21 12:00:00.123+00).
+function instant(value) {
+  const m = typeof value === "string" && /^(\\d{4}-\\d{2}-\\d{2})[ T](\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d+))?(Z|[+-]\\d{2}(?::?\\d{2})?)$/.exec(value);
+  if (!m) return value;
+  const ms = (m[3] ?? "").slice(0, 3).padEnd(3, "0");
+  let zone = m[4];
+  if (zone !== "Z") { const d = zone.slice(1).replace(":", ""); zone = zone[0] + d.slice(0, 2) + ":" + (d.slice(2) || "00").padEnd(2, "0"); }
+  const t = new Date(m[1] + "T" + m[2] + "." + ms + zone);
+  return Number.isNaN(t.getTime()) ? value : t.toISOString();
+}
 
 function treeHash(leaves) {
   if (leaves.length === 0) return sha256(Buffer.alloc(0));
@@ -190,7 +201,7 @@ for (const attempt of manifest.attempts) {
     if (typeof digests[i] !== "string" || !DIGEST.test(digests[i])) why.push("no sha256 digest");
     if (manifest.source === "ledger") {
       if (f.payload_inline !== null && f.payload_inline !== undefined && digestJcs(f.payload_inline) !== f.payload_digest) why.push("payload does not hash to payload_digest");
-      const eventDigest = digestJcs({ attempt_seq: f.attempt_seq, event_schema_version: f.event_schema_version, event_type: f.event_type, stage: f.stage, payload_digest: f.payload_digest, observed_at: f.observed_at });
+      const eventDigest = digestJcs({ attempt_seq: f.attempt_seq, event_schema_version: f.event_schema_version, event_type: f.event_type, stage: f.stage, payload_digest: f.payload_digest, observed_at: instant(f.observed_at) });
       if (eventDigest !== f.event_digest) why.push("identity fields do not hash to event_digest");
       const due = prevSeq === null ? 1 : prevSeq + 1;
       if (f.attempt_seq !== due) why.push("attempt_seq " + f.attempt_seq + " where " + due + " was due");
