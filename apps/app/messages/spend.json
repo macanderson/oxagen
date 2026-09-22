@@ -403,10 +403,7 @@
     "gateway": {
       "title": "Gateway sessions",
       "note": "The models this workspace permits for a wrapped Claude Code or Codex session on an enrolled machine. The lists are saved here and no machine reads them yet, so nothing is refused. Cursor and Stella sessions are not routed through the gateway.",
-      "mode": {
-        "observed": "Metered",
-        "notApplied": "Not applied"
-      },
+      "notApplied": "Not applied",
       "sessionLimit": "Session limit (USD)",
       "sessionLimitHint": "Saved with the lists and not yet applied. A session's ceiling comes from the agent's own budget today. Leave blank for no limit.",
       "modelAllow": "Allowed models",

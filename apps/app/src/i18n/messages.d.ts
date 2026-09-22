@@ -4616,10 +4616,7 @@ type Messages = {
     gateway: {
       title: string;
       note: string;
-      mode: {
-        observed: string;
-        notApplied: string;
-      };
+      notApplied: string;
       sessionLimit: string;
       sessionLimitHint: string;
       modelAllow: string;

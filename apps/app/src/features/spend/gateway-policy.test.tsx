@@ -82,7 +82,7 @@ describe("the gateway policy section", () => {
     renderSection();
     expect(screen.queryByLabelText(/^Mode$/)).toBeNull();
     expect(
-      screen.getByText(spend.spend.gateway.mode.notApplied),
+      screen.getByText(spend.spend.gateway.notApplied),
     ).toBeTruthy();
   });
 

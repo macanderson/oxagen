@@ -169,7 +169,7 @@ export function GatewayPolicySection({
       note={t("note")}
       action={
         <Badge tone="quiet" data-mode={saved.mode}>
-          {t("mode.notApplied")}
+          {t("notApplied")}
         </Badge>
       }
       footer={
