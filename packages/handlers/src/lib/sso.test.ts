@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@oxagen/database/sso-secrets", async (importOriginal) => {
   const real =
@@ -13,17 +13,25 @@ vi.mock("@oxagen/database/sso-secrets", async (importOriginal) => {
 });
 
 import {
+  discoverOidc,
   parseStoredSsoConfig,
   sameSsoIssuer,
   sealSsoConfigOrRefuse,
   serializeSealedSsoConfig,
+  setSsoDiscoveryFetchForTests,
   ssoScopes,
   storedSsoOidcDiscovery,
   toSsoGroupRoles,
   toSsoProviderView,
   withSsoGroupsClaim,
 } from "./sso";
-import { ISSUER, SSO_BASE_URL, ssoRow } from "../test-utils/sso-fixtures";
+import {
+  discoveryDoc,
+  ISSUER,
+  jsonResponse,
+  SSO_BASE_URL,
+  ssoRow,
+} from "../test-utils/sso-fixtures";
 
 const KMS = { adapter: {} as never, keyId: "sso_v1" };
 
@@ -158,5 +166,106 @@ describe("toSsoGroupRoles", () => {
         "acme",
       ),
     ).toEqual([{ group: "eng", role: "member" }]);
+  });
+});
+
+describe("discoverOidc", () => {
+  const CAP = "create_sso_provider";
+  const serve = (response: () => Response) => {
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => response());
+    setSsoDiscoveryFetchForTests(fetch);
+    return fetch;
+  };
+  afterEach(() => setSsoDiscoveryFetchForTests(null));
+
+  it("reads the well-known document under the issuer and returns its endpoints", async () => {
+    const fetch = serve(() => jsonResponse(discoveryDoc()));
+    await expect(discoverOidc(CAP, `${ISSUER}/`)).resolves.toEqual({
+      issuer: ISSUER,
+      discoveryEndpoint: `${ISSUER}/.well-known/openid-configuration`,
+      authorizationEndpoint: `${ISSUER}/authorize`,
+      tokenEndpoint: `${ISSUER}/token`,
+      jwksEndpoint: `${ISSUER}/jwks`,
+      userInfoEndpoint: `${ISSUER}/userinfo`,
+      tokenEndpointAuthentication: "client_secret_basic",
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      `${ISSUER}/.well-known/openid-configuration`,
+      expect.objectContaining({ headers: { accept: "application/json" } }),
+    );
+  });
+
+  it("omits userinfo when the provider publishes none", async () => {
+    serve(() => jsonResponse(discoveryDoc({ userinfo_endpoint: undefined })));
+    const found = await discoverOidc(CAP, ISSUER);
+    expect(found).not.toHaveProperty("userInfoEndpoint");
+  });
+
+  it("chooses basic when the provider lists no auth methods", async () => {
+    serve(() =>
+      jsonResponse(
+        discoveryDoc({ token_endpoint_auth_methods_supported: undefined }),
+      ),
+    );
+    await expect(discoverOidc(CAP, ISSUER)).resolves.toMatchObject({
+      tokenEndpointAuthentication: "client_secret_basic",
+    });
+  });
+
+  it.each([
+    [
+      "a private userinfo endpoint",
+      { userinfo_endpoint: "https://10.0.0.5/u" },
+    ],
+    ["a plain-http jwks_uri", { jwks_uri: "http://idp.acme.com/jwks" }],
+    [
+      "a metadata-address authorization endpoint",
+      { authorization_endpoint: "https://169.254.169.254/authorize" },
+    ],
+  ])("refuses a document naming %s", async (_label, overrides) => {
+    serve(() => jsonResponse(discoveryDoc(overrides)));
+    await expect(discoverOidc(CAP, ISSUER)).rejects.toMatchObject({
+      code: "invalid_input",
+    });
+  });
+
+  it("refuses an endpoint that is not a string", async () => {
+    serve(() => jsonResponse(discoveryDoc({ token_endpoint: 42 })));
+    await expect(discoverOidc(CAP, ISSUER)).rejects.toThrow(
+      /token_endpoint is not a URL/,
+    );
+  });
+
+  it.each([
+    ["not JSON", () => new Response("<html>", { status: 200 })],
+    ["a JSON array", () => jsonResponse([discoveryDoc()])],
+    ["JSON null", () => jsonResponse(null)],
+  ])("refuses a document that is %s", async (_label, response) => {
+    serve(response);
+    await expect(discoverOidc(CAP, ISSUER)).rejects.toThrow(
+      /is not valid JSON/,
+    );
+  });
+
+  it("refuses a document with no issuer", async () => {
+    serve(() => jsonResponse(discoveryDoc({ issuer: undefined })));
+    await expect(discoverOidc(CAP, ISSUER)).rejects.toThrow(
+      /names the issuer null/,
+    );
+  });
+
+  it("refuses an issuer that differs by more than a trailing slash", async () => {
+    serve(() => jsonResponse(discoveryDoc({ issuer: `${ISSUER}/tenant` })));
+    await expect(discoverOidc(CAP, ISSUER)).rejects.toMatchObject({
+      code: "invalid_input",
+    });
+  });
+
+  it("does not fetch at all for a private issuer", async () => {
+    const fetch = serve(() => jsonResponse(discoveryDoc()));
+    await expect(
+      discoverOidc(CAP, "https://[::ffff:127.0.0.1]"),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

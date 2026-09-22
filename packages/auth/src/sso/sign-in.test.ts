@@ -520,6 +520,85 @@ describe("SSO sign-in through a mock OIDC provider", () => {
     });
   });
 
+  it("refuses to start sign-in through a provider whose domain is not verified", async () => {
+    const { auth, events } = await buildAuth({
+      mappings: [{ group: "oxagen-admins", role: "admin" }],
+      seed: (db) => {
+        db.ssoProvider![0]!.domainVerified = false;
+      },
+    });
+
+    const start = await auth.handler(
+      new Request(`${BASE_URL}/api/auth/sign-in/sso`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: BASE_URL },
+        body: JSON.stringify({ email: "ada@acme.com", callbackURL: "/acme" }),
+      }),
+    );
+
+    // An unproven domain claim must never send anyone to the claimant's IdP:
+    // that is what stops one organisation signing in another's people.
+    expect(start.status).toBe(401);
+    expect(idp.tokenRequests).toBe(0);
+    expect(events).toEqual([]);
+  });
+
+  it("refuses the callback when the domain lost its verification mid-flow", async () => {
+    const { auth, db, events } = await buildAuth({
+      mappings: [{ group: "oxagen-admins", role: "admin" }],
+    });
+    const start = await auth.handler(
+      new Request(`${BASE_URL}/api/auth/sign-in/sso`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: BASE_URL },
+        body: JSON.stringify({ email: "ada@acme.com", callbackURL: "/acme" }),
+      }),
+    );
+    expect(start.status).toBe(200);
+    const { url } = (await start.json()) as { url: string };
+    const authorize = new URL(url);
+    idp.codeChallenge = authorize.searchParams.get("code_challenge");
+    const state = authorize.searchParams.get("state")!;
+
+    db.ssoProvider![0]!.domainVerified = false;
+
+    const callback = await auth.handler(
+      new Request(
+        `${BASE_URL}/api/auth/sso/callback/acme-okta?code=${AUTH_CODE}&state=${encodeURIComponent(state)}`,
+        { headers: { cookie: cookieHeader(start) } },
+      ),
+    );
+
+    expect(
+      callback.headers
+        .getSetCookie()
+        .some((c) => c.startsWith("oxagen.session_token=")),
+    ).toBe(false);
+    expect(idp.tokenRequests).toBe(0);
+    expect(events).toEqual([]);
+  });
+
+  it.each([...SSO_DISABLED_PATHS])(
+    "does not serve the plugin's own %s endpoint",
+    async (path) => {
+      const { auth, db } = await buildAuth({ mappings: [] });
+      const before = JSON.stringify(db.ssoProvider);
+      const res = await auth.handler(
+        new Request(`${BASE_URL}/api/auth${path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: BASE_URL },
+          body: JSON.stringify({
+            providerId: "evil-idp",
+            issuer: "https://evil.example",
+            domain: "acme.com",
+          }),
+        }),
+      );
+      expect(res.status).toBe(404);
+      expect(JSON.stringify(db.ssoProvider)).toBe(before);
+    },
+  );
+
   it("refuses the exchange when the IdP rejects the client secret", async () => {
     const { auth, events } = await buildAuth({
       mappings: [{ group: "oxagen-admins", role: "admin" }],
