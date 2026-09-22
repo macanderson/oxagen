@@ -49,6 +49,7 @@ export async function CostCenters({
 
 const lead = `${panelBody} text-sm text-muted-foreground`;
 
+/** @internal Exported for its component test; the page renders `CostCenters`. */
 export function CostCentersView({
   org,
   canEdit,

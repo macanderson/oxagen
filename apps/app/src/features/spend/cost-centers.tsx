@@ -16,7 +16,11 @@ import { Empty, HeaderCell, Panel } from "./tables";
 
 const cell = "px-4 py-2 text-left align-top";
 
-/** A row's share of the total's spend; null when either side was not priced. */
+/**
+ * A row's share of the total's spend; null when either side was not priced.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function shareOf(row: SpendFigure, total: SpendFigure): number | null {
   if (row.cost === null || total.cost === null) return null;
   return ratioOfMicros(row.cost, total.cost);
