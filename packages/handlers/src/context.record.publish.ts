@@ -1,5 +1,5 @@
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordPublish } from "@oxagen/oxagen/contracts/context.record.publish";
 import {
   ambientPlaneKey,
@@ -13,6 +13,26 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { assertWorkspaceNotProvisional } from "./lib/onboarding";
 import { logger } from "./logger";
 import { sha256Hex } from "./registry-digest";
+
+/**
+ * How many times a version publish re-reads the latest version and tries
+ * again after losing a race to a concurrent publish (#3511).
+ *
+ * The comparison that decides idempotency and the insert that acts on it are
+ * two transactions, so two publishes of the same correction both read version
+ * N and both insert version N+1. The loser is refused by
+ * `context_record_versions_record_version_idx`, and its whole transaction
+ * rolls back, which leaves nothing to clean up and makes a retry against the
+ * winner's version the honest answer: either the winner already published
+ * what this call asked for, and the call is idempotent, or it published
+ * something else, and this correction is still outstanding.
+ *
+ * Three attempts, not one retry: two publishers can lose to each other in
+ * turn. Past that the contention is sustained rather than a race that
+ * settles, and a refusal the caller can read beats a retry loop with no
+ * bound.
+ */
+const PUBLISH_VERSION_ATTEMPTS = 3;
 
 /**
  * Publish one steering context record into the workspace agent-asset
@@ -122,11 +142,20 @@ export const contextRecordPublishHandler: CapabilityHandler<
   // republishing the unchanged body with the right kind/force, and that
   // correction must land as a new version or the record never reaches
   // `readWorkspaceSteering`.
-  const publishVersionFor = async (existing: {
-    id: string;
+  const publishVersionFor = async (
+    existing: {
+      id: string;
+      publicId: string;
+      slug: string;
+    },
+    attempt = 1,
+  ): Promise<{
     publicId: string;
-    slug: string;
-  }) => {
+    recordId: string;
+    version: number;
+    checksum: string;
+    published: boolean;
+  }> => {
     const { latest, readAtLookup } = await withTenantDb(async (tx) => {
       // ACCESS SHARE, same as context.record.promote.ts's read of these
       // columns: information_schema locks nothing on its own, so without
@@ -229,54 +258,83 @@ export const contextRecordPublishHandler: CapabilityHandler<
     }
 
     const nextVersion = (latest?.versionNumber ?? 0) + 1;
-    await withTenantDb(async (tx) => {
-      if (latest) {
-        await tx
-          .update(schema.contextRecordVersions)
-          .set({ isLatest: false, updatedAt: sql`now()` })
-          .where(eq(schema.contextRecordVersions.id, latest.id));
-      }
-      // ROW EXCLUSIVE, same as publishMerge: this is what the INSERT below
-      // acquires anyway, and taking it before the readiness probe closes the
-      // same window -- the migration's ALTER TABLE committing between a
-      // `false` answer and a write that would otherwise name the four
-      // columns regardless.
-      await tx.execute(
-        sql`lock table ${schema.contextRecordVersions} in row exclusive mode`,
-      );
-      const ready = await hasColumnFresh(
-        tx,
-        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
-        await ambientPlaneKey(),
-      );
-      const [versionRow] = await tx
-        .insert(schema.contextRecordVersions)
-        .values({
-          ...versionValuesBase,
-          ...(ready ? classification : {}),
-          recordId: existing.id,
-          versionNumber: nextVersion,
-          parentVersionId: latest?.id ?? undefined,
-        })
-        .returning({ id: schema.contextRecordVersions.id });
-      if (!versionRow) {
-        throw new Error(
-          "[context.record.publish] Version insert returned no row.",
+    const write = () =>
+      withTenantDb(async (tx) => {
+        if (latest) {
+          await tx
+            .update(schema.contextRecordVersions)
+            .set({ isLatest: false, updatedAt: sql`now()` })
+            .where(eq(schema.contextRecordVersions.id, latest.id));
+        }
+        // ROW EXCLUSIVE, same as publishMerge: this is what the INSERT below
+        // acquires anyway, and taking it before the readiness probe closes the
+        // same window -- the migration's ALTER TABLE committing between a
+        // `false` answer and a write that would otherwise name the four
+        // columns regardless.
+        await tx.execute(
+          sql`lock table ${schema.contextRecordVersions} in row exclusive mode`,
         );
+        const ready = await hasColumnFresh(
+          tx,
+          CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+          await ambientPlaneKey(),
+        );
+        const [versionRow] = await tx
+          .insert(schema.contextRecordVersions)
+          .values({
+            ...versionValuesBase,
+            ...(ready ? classification : {}),
+            recordId: existing.id,
+            versionNumber: nextVersion,
+            parentVersionId: latest?.id ?? undefined,
+          })
+          .returning({ id: schema.contextRecordVersions.id });
+        if (!versionRow) {
+          throw new Error(
+            "[context.record.publish] Version insert returned no row.",
+          );
+        }
+        await tx
+          .update(schema.contextRecords)
+          .set({
+            title: input.title,
+            activeVersionId: versionRow.id,
+            activatedByUserId: ctx.userId ?? undefined,
+            activatedAt: sql`now()`,
+            ...classification,
+            updatedById: ctx.userId ?? undefined,
+            updatedAt: sql`now()`,
+          })
+          .where(eq(schema.contextRecords.id, existing.id));
+      });
+
+    try {
+      await write();
+    } catch (err) {
+      // A concurrent publish took this version number (or the one
+      // `is_latest` row) first. The transaction above rolled back whole, so
+      // there is no half-written version to repair: re-read the latest
+      // version and answer against what the winner actually published.
+      if (!isUniqueViolation(err)) throw err;
+      if (attempt >= PUBLISH_VERSION_ATTEMPTS) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "concurrent_publish",
+          message: `Record "${slug}" is being published by another request. Try again.`,
+        });
       }
-      await tx
-        .update(schema.contextRecords)
-        .set({
-          title: input.title,
-          activeVersionId: versionRow.id,
-          activatedByUserId: ctx.userId ?? undefined,
-          activatedAt: sql`now()`,
-          ...classification,
-          updatedById: ctx.userId ?? undefined,
-          updatedAt: sql`now()`,
-        })
-        .where(eq(schema.contextRecords.id, existing.id));
-    });
+      logger.info(
+        {
+          slug,
+          publicId: existing.publicId,
+          version: nextVersion,
+          attempt,
+          workspaceId,
+        },
+        "context.record.publish: lost version race, rereading the latest version",
+      );
+      return publishVersionFor(existing, attempt + 1);
+    }
 
     logger.info(
       { slug, publicId: existing.publicId, version: nextVersion, workspaceId },
