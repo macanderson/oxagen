@@ -110,6 +110,10 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "GITHUB_EVENT_PATH",
   "GITHUB_OUTPUT",
   "GITHUB_STEP_SUMMARY",
+  // Actions sets this to "true" in every job. The migration script checks it
+  // before masking a decrypted parameter in the log. It is not an operator's
+  // variable, and it does not belong in the registry.
+  "GITHUB_ACTIONS",
   // Read by check-main-preflight.mjs's runtime mode to tell a push to main
   // apart from every other trigger, before it ever calls the GitHub API.
   "GITHUB_EVENT_NAME",
@@ -378,8 +382,17 @@ const RE_SHELL_EXPANSION = /\$\{?([A-Z][A-Z0-9_]+)\b/g;
 const RE_SHELL_ASSIGNMENT =
   /^\s*(?:export\s+|local\s+|readonly\s+|declare\s+(?:-\w+\s+)*)?([A-Z][A-Z0-9_]+)=|^\s*for\s+([A-Z][A-Z0-9_]+)\s+in\b/gm;
 
-/** `read -r -d '' NAME <<EOF` — the option arguments make a positional match unreliable. */
-const RE_SHELL_READ = /^\s*read\b.*$/gm;
+/**
+ * A `read` assigns the names that follow it. That includes a read guarded by
+ * `if` or `while`, and a read that sits behind an `IFS=` prefix.
+ *
+ * `infra/tools/run-db-migrations.sh` assigns SOURCE with `if ! read -r SOURCE`
+ * and later expands `$SOURCE`. The names come from the words before a
+ * redirect, a pipe, or a comment. `REMOTE_EOF` in `read NAME <<'REMOTE_EOF'`
+ * is a delimiter, not a variable.
+ */
+const RE_SHELL_READ_COMMAND =
+  /(?:^|[;&|]|\b(?:if|while|until|elif|then)\b)\s*!?\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*\bread\b([^#\n]*)/;
 
 /**
  * awk's own variables, which are not environment variables and never were.
@@ -430,8 +443,14 @@ function shellAssignedNames(content: string): Set<string> {
     const name = m[1] ?? m[2];
     if (name) assigned.add(name);
   }
-  for (const line of content.match(RE_SHELL_READ) ?? []) {
-    for (const m of line.matchAll(/\b([A-Z][A-Z0-9_]+)\b/g))
+  for (const rawLine of content.split("\n")) {
+    if (/^\s*#/.test(rawLine)) continue;
+    const command = rawLine.match(RE_SHELL_READ_COMMAND);
+    if (!command) continue;
+    // Stop at a redirect or a following command. Anything after that is not
+    // a name `read` assigns.
+    const args = command[1]!.split(/[;&|<>]/)[0] ?? "";
+    for (const m of args.matchAll(/\b([A-Z][A-Z0-9_]+)\b/g))
       assigned.add(m[1]!);
   }
   return assigned;
