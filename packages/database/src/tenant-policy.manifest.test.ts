@@ -204,7 +204,7 @@ describe("tenant policy manifest", () => {
     // which version answered. Both carry org_id and workspace_id and are
     // read and written through withTenantDb, so both are `standard`.
     //
-    // 115: billing.usage_outbox retains scoped usage delivery state.
+    // 114: billing.usage_outbox retains scoped usage delivery state.
     //
     // Was 113 as of `org.assistant_model_keys` (ADR-131), the OpenRouter key
     // Oxagen mints for one organisation at signup. One row per
