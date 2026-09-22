@@ -92,6 +92,22 @@ describe("assertPublicHttpUrl — SSRF protection", () => {
     ).not.toThrow();
   });
 
+  it("rejects a URL carrying a credential, and does not repeat it back", () => {
+    // Node's fetch refuses such a URL with a message quoting the whole thing,
+    // so refusing here loses nothing and says what to remove instead (#3314).
+    expect(() =>
+      assertPublicHttpUrl("https://acme:hunter2@example.com/image.png"),
+    ).toThrow(/username or password/);
+    let message = "";
+    try {
+      assertPublicHttpUrl("https://acme:hunter2@exa mple.com/image.png");
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toContain("invalid URL");
+    expect(message).not.toContain("hunter2");
+  });
+
   it("rejects non-http scheme (ftp)", () => {
     expect(() => assertPublicHttpUrl("ftp://example.com/file")).toThrow(
       /non-public/i,

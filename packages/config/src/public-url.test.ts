@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   assertPublicHttpUrl,
   fetchWithoutRedirects,
+  redactUrlCredentials,
   UnsafeOutboundUrlError,
 } from "./public-url";
 
@@ -160,6 +161,22 @@ describe("assertPublicHttpUrl", () => {
     }
   });
 
+  it("does not repeat a credential back when the address will not parse", () => {
+    // `new URL` throws on this one, so the userinfo check below never sees
+    // it and the refusal quotes what was read. That message is the field's
+    // `invalid_input` reason on every surface and is logged with it, so the
+    // password must not be in it (#3314, finding 3).
+    let message = "";
+    try {
+      assertPublicHttpUrl("https://user:hunter2@exa mple.com/v1", TLS);
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toContain("invalid URL");
+    expect(message).not.toContain("hunter2");
+    expect(message).toContain("https://***@");
+  });
+
   it("still admits an @ that is not userinfo — in a path or a query", () => {
     expect(() =>
       assertPublicHttpUrl("https://api.example.com/v1/@acme/models", TLS),
@@ -236,6 +253,29 @@ describe("fetchWithoutRedirects", () => {
     );
   });
 
+  it("redacts a credential the redirect target carried", async () => {
+    // The `Location` is the endpoint's text, not ours, and the refusal that
+    // quotes it is read by an operator and kept by a log.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(null, {
+            status: 302,
+            headers: { location: "https://user:hunter2@elsewhere.example/v1" },
+          }),
+      ),
+    );
+    let message = "";
+    try {
+      await fetchWithoutRedirects(OPTS)("https://api.example.com/v1/models");
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toContain('redirecting to "https://***@elsewhere.example');
+    expect(message).not.toContain("hunter2");
+  });
+
   it("refuses a redirect with no Location header the same way", async () => {
     vi.stubGlobal(
       "fetch",
@@ -244,5 +284,48 @@ describe("fetchWithoutRedirects", () => {
     await expect(
       fetchWithoutRedirects(OPTS)("https://api.example.com/v1/models"),
     ).rejects.toBeInstanceOf(UnsafeOutboundUrlError);
+  });
+});
+
+describe("redactUrlCredentials", () => {
+  it("replaces the whole userinfo, not only the password", () => {
+    // A bare username is a key too: `https://sk-live-…@host/v1`.
+    expect(
+      redactUrlCredentials("https://user:hunter2@api.example.com/v1"),
+    ).toBe("https://***@api.example.com/v1");
+    expect(
+      redactUrlCredentials("https://sk-live-secret@api.example.com/v1"),
+    ).toBe("https://***@api.example.com/v1");
+  });
+
+  it("cleans an address embedded in a sentence, wherever it sits", () => {
+    // What it is actually given: a vendor or transport message written by
+    // somebody else. Node's is "Request cannot be constructed from a URL that
+    // includes credentials: <the whole URL>".
+    const message =
+      "Request cannot be constructed from a URL that includes credentials: " +
+      "https://user:hunter2@api.example.com/v1/models";
+    expect(redactUrlCredentials(message)).toBe(
+      "Request cannot be constructed from a URL that includes credentials: " +
+        "https://***@api.example.com/v1/models",
+    );
+  });
+
+  it("leaves an @ that is not userinfo alone", () => {
+    for (const text of [
+      "https://api.example.com/v1/@acme/models",
+      "https://api.example.com/v1?owner=a@b.example",
+      "mail me at ops@example.com",
+    ]) {
+      expect(redactUrlCredentials(text)).toBe(text);
+    }
+  });
+
+  it("cleans every address in one string", () => {
+    expect(
+      redactUrlCredentials(
+        "from https://a:1@one.example/v1 to https://b:2@two.example/v1",
+      ),
+    ).toBe("from https://***@one.example/v1 to https://***@two.example/v1");
   });
 });

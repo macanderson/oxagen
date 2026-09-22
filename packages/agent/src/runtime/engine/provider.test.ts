@@ -9,6 +9,23 @@ vi.mock("@oxagen/ai", () => ({
   selectModel: (s: { tier?: string }) => selectModel(s),
   modelIdOf: (m: unknown) =>
     typeof m === "string" ? m : ((m as { modelId?: string }).modelId ?? ""),
+  // `modelIdentityFor` in miniature: a direct vendor key sends the vendor's
+  // own spelling, and the catalog id is that id under the vendor's prefix.
+  modelIdentityFor: (
+    wireId: string,
+    credential?: { provider?: string } | undefined,
+  ) => {
+    const provider = credential?.provider ?? null;
+    return {
+      wireId,
+      catalogId:
+        (provider === "openai" || provider === "anthropic") &&
+        !wireId.includes("/")
+          ? `${provider}/${wireId}`
+          : wireId,
+      provider,
+    };
+  },
   stepCountIs: (n: number) => ({ __stepCountIs: n }),
 }));
 vi.mock("@oxagen/tenancy", () => ({
@@ -108,6 +125,7 @@ describe("createProviderPort", () => {
     expect(args.effort).toBe("high");
     expect(args.maxOutputTokens).toBe(4096);
     expect(args.model).toEqual({ modelId: "anthropic/claude-sonnet-4.6" });
+    expect(args.catalogModelId).toBe("anthropic/claude-sonnet-4.6");
 
     expect(deltas).toHaveBeenCalledWith([
       { kind: "reasoning", text: "think" },
@@ -192,6 +210,43 @@ describe("createProviderPort", () => {
       expect.objectContaining({ tier: "precise" }),
     );
     expect(result.model).toBe("model-for-precise");
+  });
+
+  it("tells the chokepoint the catalog id of a model served on the organisation's own key", async () => {
+    // The request carries `gpt-5.2`, which is the only id `api.openai.com`
+    // answers to. Which vendor's reasoning fields to send, and which provider
+    // the tokens are attributed to, are read from the gateway form — and a
+    // bare id falls to the OpenAI namespace by default, which is the wrong
+    // answer on an Anthropic key (#3314, finding 2).
+    streamAgentReply.mockImplementation(() => stream({ text: "ok" }));
+    const port = createProviderPort({
+      model: { modelId: "claude-sonnet-5" } as never,
+      workerTier: "balanced",
+      credential: {
+        provider: "anthropic",
+        apiKey: "sk-ant-0123456789",
+        digest: "d-ant",
+        modelMap: { balanced: "claude-sonnet-5" },
+      } as never,
+      system: "S",
+      tools: {},
+      telemetry,
+      fundedBy: "org",
+      effort: "high",
+    });
+    await port(
+      {
+        request_id: "r",
+        seq: 1,
+        provider_id: "oxagen",
+        role: "worker",
+        request: { messages: [{ role: "user", content: "hi" }] },
+      },
+      { signal: new AbortController().signal, deltas: async () => undefined },
+    );
+    const args = streamAgentReply.mock.calls[0]![0] as Record<string, unknown>;
+    expect(args.model).toEqual({ modelId: "claude-sonnet-5" });
+    expect(args.catalogModelId).toBe("anthropic/claude-sonnet-5");
   });
 });
 

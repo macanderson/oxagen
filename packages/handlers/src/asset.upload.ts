@@ -1,3 +1,4 @@
+import { redactUrlCredentials } from "@oxagen/config/public-url";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { assetUpload } from "@oxagen/oxagen/contracts/asset.upload";
 import {
@@ -47,12 +48,26 @@ export function assertPublicHttpUrl(raw: string): void {
   try {
     parsed = new URL(raw);
   } catch {
-    throw new Error(`Refusing to fetch non-public URL: invalid URL "${raw}"`);
+    // Redacted: a source URL that will not parse can still carry a password,
+    // and this message is what the caller is told and what the log keeps.
+    throw new Error(
+      `Refusing to fetch non-public URL: invalid URL "${redactUrlCredentials(raw)}"`,
+    );
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error(
       `Refusing to fetch non-public URL: scheme "${parsed.protocol}" is not allowed`,
+    );
+  }
+
+  // Userinfo is a credential in the address. Node's fetch refuses such a URL
+  // anyway, so nothing that works today is refused here — but it is refused
+  // with a message that says what to remove and does not repeat the password
+  // back, rather than with the transport's, which quotes the whole URL.
+  if (parsed.username !== "" || parsed.password !== "") {
+    throw new Error(
+      "Refusing to fetch non-public URL: the URL must not carry a username or password",
     );
   }
 

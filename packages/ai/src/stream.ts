@@ -157,6 +157,19 @@ export function reasoningRequestConfig(
 export interface StreamAgentReplyArgs {
   messages: ModelMessage[];
   model?: LanguageModel;
+  /**
+   * The gateway-shaped id of the same model (`ModelIdentity.catalogId`), when
+   * the caller knows it and it differs from what the request carries.
+   *
+   * On an organisation's own vendor key the request carries the vendor's bare
+   * spelling — `claude-sonnet-5`, not `anthropic/claude-sonnet-5` — because
+   * that is the only id the vendor answers to. Everything read FROM the id
+   * here is keyed by the gateway form: which vendor's reasoning controls to
+   * send, and which provider the tokens are attributed to. Left unset, a bare
+   * id falls to the back-compat OpenAI namespace, so an Anthropic key gets
+   * OpenAI's reasoning fields and the effort reaches nothing.
+   */
+  catalogModelId?: string;
   tools?: ToolSet;
   system?: string;
   temperature?: number;
@@ -263,7 +276,11 @@ export function streamAgentReply(
 ): StreamTextResult<ToolSet, Record<string, unknown>, never> {
   const model = args.model ?? defaultModel();
   const modelId = modelIdOf(model);
-  const provider = providerFromModelId(modelId);
+  // What the request carries stays `modelId`; what the id is READ for — the
+  // vendor's reasoning controls, the provider the spend is attributed to —
+  // reads the gateway-shaped id when the caller has one.
+  const catalogModelId = args.catalogModelId ?? modelId;
+  const provider = providerFromModelId(catalogModelId);
   const startedAt = Date.now();
 
   // ── OTEL span: tracks the LLM stream from call to onFinish ───────────────
@@ -299,7 +316,7 @@ export function streamAgentReply(
       ? lastUserMessage.content
       : JSON.stringify(lastUserMessage?.content ?? "");
 
-  const rc = reasoningRequestConfig(modelId, args.effort);
+  const rc = reasoningRequestConfig(catalogModelId, args.effort);
 
   // Prompt caching: mark the (stable, per-workspace) system prompt as an
   // Anthropic ephemeral cache breakpoint so repeated turns in a conversation

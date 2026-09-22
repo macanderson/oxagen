@@ -32,7 +32,10 @@
  * connects to `169.254.169.254` with the key attached has already leaked
  * whatever it was going to leak by the time it could refuse.
  */
-import { fetchWithoutRedirects } from "@oxagen/config/public-url";
+import {
+  fetchWithoutRedirects,
+  redactUrlCredentials,
+} from "@oxagen/config/public-url";
 import type { ModelCredentialProvider } from "@oxagen/oxagen/contracts/org.model_credential.shared";
 
 /**
@@ -113,11 +116,21 @@ function elapsedMs(startedAt: number): number {
 }
 
 /**
- * Replace every occurrence of the key in a vendor or transport message. Both
- * are text we did not write, so neither is trusted not to echo the header.
+ * Take every secret out of a vendor or transport message. Both are text we did
+ * not write, so neither is trusted not to echo what it was given.
+ *
+ * Two secrets can be in one: the key, which travels in a header, and a
+ * credential embedded in the endpoint itself. `assertPublicHttpUrl` refuses an
+ * endpoint with userinfo, so a customer cannot store one today — but a row
+ * written before that guard existed still probes, and Node answers it with
+ * "Request cannot be constructed from a URL that includes credentials:
+ * https://user:pass@…", which this result hands straight back to the settings
+ * page. The URL redaction is what keeps that password out of the answer.
  */
 function scrub(text: string, apiKey: string): string {
-  return apiKey.length > 0 ? text.split(apiKey).join(REDACTED) : text;
+  const withoutKey =
+    apiKey.length > 0 ? text.split(apiKey).join(REDACTED) : text;
+  return redactUrlCredentials(withoutKey);
 }
 
 /** Join a base URL and a path without doubling or dropping the slash. */

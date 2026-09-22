@@ -39,9 +39,11 @@ None. The credential is the caller's organisation's.
 | Field | Type | Notes |
 | --- | --- | --- |
 | configured | boolean | Whether a key is stored |
-| provider | `"openrouter" \| "gateway"` \| null | Which vendor issued it; `null` when none |
+| provider | `"openrouter" \| "gateway" \| "openai" \| "anthropic" \| "openai_compatible"` \| null | Which vendor issued it; `null` when none |
 | status | `"active" \| "disabled"` \| null | Only `active` is used for completions |
 | keyHint | string \| null | The **last four characters** of the key, what a vendor dashboard shows |
+| baseUrl | string \| null | The customer's endpoint on an `openai_compatible` key, else `null` |
+| modelMap | `{ fast?, balanced?, precise? }` | The key's own model id per tier; `{}` when none were given |
 | lastVerifiedAt | ISO-8601 \| null | Last successful `verify_model_credential` |
 | rotatedAt | ISO-8601 \| null | Last time the key was set or replaced |
 
@@ -49,6 +51,11 @@ None. The credential is the caller's organisation's.
 Owner/Admin token into a copy of the customer's vendor credential, so there is
 deliberately no read-back path. An operator who needs to change the key calls
 `set_model_credential` with a new one.
+
+**`baseUrl` comes back with any userinfo redacted** (`https://***@host/v1`).
+An endpoint carrying a credential is refused on the way in, so this only ever
+shows for a row stored before that check existed. Such a row cannot serve a
+turn either, and has to be retyped.
 
 The view is the same shape the funding-source resolver in `@oxagen/ai` reads,
 so the settings page and the runtime cannot disagree about which source is

@@ -6,6 +6,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@oxagen/database";
+import { digestJcs } from "@oxagen/run-evidence";
 
 const mocks = vi.hoisted(() => ({
   apiKeyCreator: vi.fn((): string | null => null),
@@ -22,6 +23,10 @@ const mocks = vi.hoisted(() => ({
   createApprovalRequest: vi.fn(),
   waitForApproval: vi.fn(),
   assertOrgRole: vi.fn(),
+  promptConfig: vi.fn(),
+  // The catalog, as `supportsReasoning` reads it: keyed by gateway ids, so a
+  // bare vendor spelling is an id it cannot describe and answers false for.
+  supportsReasoning: vi.fn((id: string) => id.includes("/")),
   log: [] as string[],
 }));
 
@@ -29,14 +34,59 @@ vi.mock("@oxagen/ai", () => ({
   tool: (def: unknown) => def,
   resolveModelFundingSource: mocks.resolveModelFundingSource,
   loadEffectiveModelDefaults: mocks.loadEffectiveModelDefaults,
-  loadWorkspacePromptConfigSafe: async () => ({}),
-  resolvePrompt: (a: { baseline: string }) => a.baseline,
-  selectModel: (s: { model?: string; tier?: string }) => ({
-    modelId: s.model ?? `model-for-${s.tier ?? "default"}`,
-  }),
+  loadWorkspacePromptConfigSafe: async () => mocks.promptConfig(),
+  // The registry's own rule (packages/ai/src/prompts/registry.ts): the
+  // governance baseline is append-only, and the workspace's instructions are
+  // appended under their header. The fake keeps that shape so a test can see
+  // what the prompt actually carried.
+  resolvePrompt: (a: {
+    baseline: string;
+    config?: { additionalInstructions?: string | null } | null;
+  }) => {
+    const extra = a.config?.additionalInstructions?.trim();
+    return extra
+      ? `${a.baseline}\n\n---\n\n## Workspace instructions\n\n${extra}`
+      : a.baseline;
+  },
+  selectModel: (s: Selector) => ({ modelId: wireIdFor(s) }),
   modelIdOf: (m: { modelId: string }) => m.modelId,
-  supportsReasoning: () => true,
+  // The real `modelIdentityFor`, in miniature: on a direct-vendor key the
+  // request carries the key's own model id and the catalog id is that id
+  // under the vendor's prefix. Everything else is already gateway-shaped.
+  resolveModelIdentity: (s: Selector) => {
+    const wireId = wireIdFor(s);
+    const provider = s.credential?.provider ?? "anthropic";
+    return {
+      wireId,
+      catalogId:
+        provider === "openai" || provider === "anthropic"
+          ? wireId.includes("/")
+            ? wireId
+            : `${provider}/${wireId}`
+          : wireId,
+      provider,
+    };
+  },
+  supportsReasoning: (id: string) => mocks.supportsReasoning(id),
 }));
+
+interface Selector {
+  model?: string;
+  tier?: string;
+  credential?: {
+    provider: string;
+    modelMap?: Record<string, string | undefined>;
+  };
+}
+
+/** What the endpoint is asked for: the key's own id when it has one. */
+function wireIdFor(s: Selector): string {
+  const tier = s.tier ?? "balanced";
+  const mapped =
+    s.credential?.modelMap?.[tier] ?? s.credential?.modelMap?.balanced;
+  if (mapped) return mapped;
+  return s.model ?? `model-for-${s.tier ?? "default"}`;
+}
 vi.mock("@oxagen/billing", () => ({
   evaluateTurnCreditGate: mocks.evaluateTurnCreditGate,
   createTurnBudgetGuard: mocks.createTurnBudgetGuard,
@@ -101,6 +151,10 @@ import {
   type AssistantTurnHooks,
 } from "./assistant-turn";
 import { LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
+import {
+  WORKSPACE_INSTRUCTIONS_MAX_CHARS,
+  WORKSPACE_INSTRUCTIONS_PRECEDENCE,
+} from "./workspace-instructions";
 
 const CTX = {
   orgId: "org-1",
@@ -259,10 +313,13 @@ const GOVERNED_TOOLS = {
 
 /** Every outcome the run recorder was sealed with, per test. */
 let sealCalls: unknown[] = [];
+/** Every workspace-instructions frame the run recorder was given, per test. */
+let instructionFrames: unknown[] = [];
 
 beforeEach(() => {
   vi.clearAllMocks();
   setup();
+  mocks.promptConfig.mockReturnValue({});
   mocks.assertOrgRole.mockImplementation(async () => {
     mocks.log.push("roles");
     return "Owner";
@@ -304,6 +361,7 @@ beforeEach(() => {
     };
   });
   sealCalls = [];
+  instructionFrames = [];
   mocks.openAssistantRun.mockImplementation(async () => {
     mocks.log.push("open-run");
     const receipts: unknown[] = [];
@@ -313,6 +371,10 @@ beforeEach(() => {
       agentId: AGENT_ID,
       agentVersionId: AGENT_VERSION_ID,
       receipts,
+      workspaceInstructions: async (frame: unknown) => {
+        mocks.log.push("instructions");
+        instructionFrames.push(frame);
+      },
       modelCall: async (r: unknown) => {
         receipts.push({ kind: "model", ...(r as object) });
       },
@@ -362,6 +424,51 @@ describe("prepareAssistantTurn", () => {
     });
     expect(captured.inserts).toHaveLength(0);
     expect(mocks.openAssistantRun).not.toHaveBeenCalled();
+  });
+
+  describe("the model's identity on the organisation's own key (#3314)", () => {
+    // A direct-vendor key sends the vendor's own spelling — `gpt-5.2`, the id
+    // `api.openai.com` answers to. The catalog is keyed by gateway ids, so
+    // asking it about the wire id answers "unknown model" and the effort the
+    // person asked for is dropped on every turn, with nothing saying so.
+    const openaiKey = {
+      provider: "openai",
+      apiKey: "sk-openai-0123456789",
+      digest: "d-openai",
+      modelMap: { balanced: "gpt-5.2" },
+    };
+    const onOwnKey = () => {
+      mocks.resolveModelFundingSource.mockImplementation(async () => {
+        mocks.log.push("funding");
+        return { fundedBy: "org", modelKey: openaiKey, keyHint: "6789" };
+      });
+    };
+
+    it("keeps a requested reasoning effort, asking the catalog about the catalog id", async () => {
+      onOwnKey();
+      await runTurn({ ...request, effort: "high" });
+      expect(mocks.supportsReasoning).toHaveBeenCalledWith("openai/gpt-5.2");
+      expect(mocks.supportsReasoning).not.toHaveBeenCalledWith("gpt-5.2");
+      const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+      expect(turnInput.effort).toBe("high");
+    });
+
+    it("still sends the vendor's own spelling to the vendor", async () => {
+      // The catalog id is for lookups. `api.openai.com` has no model called
+      // `openai/gpt-5.2`.
+      onOwnKey();
+      await runTurn({ ...request, effort: "high" });
+      const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
+      expect(turnInput.model).toMatchObject({ modelId: "gpt-5.2" });
+      expect(turnInput.credential).toEqual(openaiKey);
+    });
+
+    it("drops the effort when the catalog says the model does not reason", async () => {
+      mocks.supportsReasoning.mockImplementation(() => false);
+      onOwnKey();
+      await runTurn({ ...request, effort: "high" });
+      expect(mocks.runGovernedTurn.mock.calls[0]![0].effort).toBeUndefined();
+    });
   });
 
   it("checks the contract's roles for the person before funding, and refuses a role it does not grant (negative)", async () => {
@@ -642,6 +749,104 @@ describe("the prepared turn", () => {
         .map((i) => i.values.role),
     ).toEqual(["user"]);
     expect(captured.updates).toHaveLength(0);
+  });
+
+  // #3303: the workspace's extra instructions are steering. Before this they
+  // reached the model with no budget and left no line in the run's record, so
+  // nobody could audit what the workspace had told the agent.
+  describe("workspace instructions", () => {
+    const INSTRUCTIONS = "Answer in British English and cite the run id.";
+
+    it("carries checked instructions under their header, with the precedence note after them, and records them by digest", async () => {
+      mocks.promptConfig.mockReturnValue({
+        additionalInstructions: INSTRUCTIONS,
+      });
+      await runTurn(request);
+
+      const system = mocks.runGovernedTurn.mock.calls[0]![0].system as string;
+      expect(system.startsWith("GOVERNANCE Acme/Core")).toBe(true);
+      expect(system).toContain(INSTRUCTIONS);
+      // A published `must` record outranks them, and the prompt says so after
+      // them rather than leaving the model to decide.
+      expect(system.indexOf(WORKSPACE_INSTRUCTIONS_PRECEDENCE)).toBeGreaterThan(
+        system.indexOf(INSTRUCTIONS),
+      );
+
+      expect(instructionFrames).toEqual([
+        {
+          outcome: "applied",
+          digest: digestJcs(INSTRUCTIONS),
+          chars: INSTRUCTIONS.length,
+          budgetChars: WORKSPACE_INSTRUCTIONS_MAX_CHARS,
+          text: INSTRUCTIONS,
+        },
+      ]);
+      // Recorded before the engine is asked anything, so a turn that then
+      // fails still says what the model was told.
+      expect(mocks.log.indexOf("instructions")).toBeGreaterThan(
+        mocks.log.indexOf("open-run"),
+      );
+      expect(mocks.log.indexOf("instructions")).toBeLessThan(
+        mocks.log.indexOf("engine"),
+      );
+    });
+
+    it("refuses instructions past the budget: the prompt carries none and the record says why (negative)", async () => {
+      const oversized = "x".repeat(WORKSPACE_INSTRUCTIONS_MAX_CHARS + 1);
+      mocks.promptConfig.mockReturnValue({
+        additionalInstructions: oversized,
+      });
+      await runTurn(request);
+
+      const system = mocks.runGovernedTurn.mock.calls[0]![0].system as string;
+      expect(system).toBe("GOVERNANCE Acme/Core");
+      expect(system).not.toContain("xxxx");
+      expect(instructionFrames).toEqual([
+        {
+          outcome: "refused",
+          reasonCode: "over_budget",
+          digest: digestJcs(oversized),
+          chars: oversized.length,
+          budgetChars: WORKSPACE_INSTRUCTIONS_MAX_CHARS,
+          text: oversized,
+        },
+      ]);
+    });
+
+    it("writes no frame for a workspace that configured none (negative)", async () => {
+      await runTurn(request);
+      expect(instructionFrames).toEqual([]);
+      expect(mocks.log).not.toContain("instructions");
+    });
+
+    it("does not run the turn when the record will not take the instructions", async () => {
+      mocks.promptConfig.mockReturnValue({
+        additionalInstructions: INSTRUCTIONS,
+      });
+      mocks.openAssistantRun.mockImplementationOnce(async () => ({
+        runId: "run-uuid",
+        runPublicId: "arun_0123456789abcdef012345",
+        agentId: AGENT_ID,
+        agentVersionId: AGENT_VERSION_ID,
+        receipts: [],
+        workspaceInstructions: async () => {
+          throw new Error("ledger refused the instructions frame");
+        },
+        seal: async (outcome: unknown) => {
+          sealCalls.push(outcome);
+        },
+      }));
+
+      await expect(runTurn(request)).rejects.toThrow(
+        "ledger refused the instructions frame",
+      );
+      expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
+      // The run is sealed rather than left open, the same as any other
+      // preflight refusal after admission.
+      expect(sealCalls).toEqual([
+        { status: "failed", error: "ledger refused the instructions frame" },
+      ]);
+    });
   });
 
   it("does not reach the engine when the ledger will not admit the run", async () => {

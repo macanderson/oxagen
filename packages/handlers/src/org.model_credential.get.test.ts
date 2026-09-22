@@ -134,6 +134,26 @@ describe("toCredentialView", () => {
     });
   });
 
+  it("redacts a credential a stored endpoint carries", () => {
+    // The endpoint is returned in full because it is not a secret — which is
+    // true because `assertPublicHttpUrl` refuses one with userinfo in it. A
+    // row written before that check would hand a password to every read, to
+    // the settings page and to `get_model_credential` on every surface
+    // (#3314, finding 3). Such a row cannot serve a turn either: Node's fetch
+    // refuses a URL carrying credentials, so it has to be retyped.
+    const view = toCredentialView({
+      provider: "openai_compatible",
+      status: "active",
+      keyHint: "9f2c",
+      baseUrl: "https://acme:hunter2@api.together.xyz/v1",
+      modelMap: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+      lastVerifiedAt: null,
+      rotatedAt: null,
+    });
+    expect(view.baseUrl).toBe("https://***@api.together.xyz/v1");
+    expect(JSON.stringify(view)).not.toContain("hunter2");
+  });
+
   it("shows the model map the runtime will act on, not the raw jsonb", () => {
     // A jsonb column says nothing about shape. The page must show what the
     // resolver will actually use, so junk is dropped on the same rules.

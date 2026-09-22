@@ -3,6 +3,7 @@
 // mutations (org.model_credential.set / .delete) warrant a domain-specific
 // model_credential.* row.
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { redactUrlCredentials } from "@oxagen/config/public-url";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import {
@@ -69,7 +70,13 @@ export function toCredentialView(
     provider,
     status,
     keyHint: row.keyHint,
-    baseUrl: row.baseUrl ?? null,
+    // The endpoint is not a secret, and an operator cannot see what their
+    // configuration is without it — unless somebody put a credential in it.
+    // `assertPublicHttpUrl` refuses that on the way in, so this only ever
+    // fires for a row written before the guard existed; that row is unusable
+    // anyway (Node's fetch refuses a URL carrying credentials), and it must be
+    // retyped rather than handed back with the password in it.
+    baseUrl: row.baseUrl ? redactUrlCredentials(row.baseUrl) : null,
     // Through the same defensive parse the resolver uses, so the page shows
     // exactly the mapping the runtime will act on — not a jsonb blob that
     // might carry keys the runtime ignores.

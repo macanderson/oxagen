@@ -30,6 +30,19 @@ vi.mock("@oxagen/ai", () => ({
   defaultModel: () => ({ modelId: "default-model" }),
   modelIdOf: (m: unknown) =>
     typeof m === "string" ? m : ((m as { modelId?: string }).modelId ?? ""),
+  // `modelIdentityFor` in miniature: the credential names who serves the
+  // turn, which is what the provider tool ceilings are found by when the wire
+  // id carries no vendor prefix.
+  modelIdentityFor: (
+    wireId: string,
+    credential?: { provider?: string } | undefined,
+  ) => ({
+    wireId,
+    catalogId: wireId,
+    provider:
+      credential?.provider ??
+      (wireId.includes("/") ? (wireId.split("/")[0] ?? null) : null),
+  }),
   selectModel: (s: { tier?: string }) => selectModel(s),
   stepCountIs: (n: number) => ({ __stepCountIs: n }),
 }));
