@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   apiLayerSatisfied,
   buildApiRouteIndex,
+  cliLayerSatisfied,
   manifestContentChanged,
   buildUiProofIndex,
 } from "./check_manifest.mjs";
@@ -108,6 +109,82 @@ describe("apiLayerSatisfied", () => {
       routeIndex,
     });
     expect(ok).toBe(false);
+  });
+});
+
+describe("cliLayerSatisfied", () => {
+  // The CLI groups commands by noun, so `oxagen run export-status` lives in
+  // run.ts and names get_run_export in a doc comment, never in a file of its
+  // own.
+  const commandIndex = buildApiRouteIndex([
+    {
+      name: "run.ts",
+      content: "/** Mirrors the `get_run_export` contract output. */",
+    },
+    {
+      name: "repo.ts",
+      content: `import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";`,
+    },
+  ]);
+
+  it("is satisfied by a grouped command file that names the capability", () => {
+    expect(
+      cliLayerSatisfied({
+        stems: ["get_run_export", "run.export.get"],
+        capName: "get_run_export",
+        capSurfaces: ["api", "mcp", "cli"],
+        hasDirectFile: false,
+        commandIndex,
+      }),
+    ).toBe(true);
+  });
+
+  it("is satisfied by a command file that imports the contract", () => {
+    expect(
+      cliLayerSatisfied({
+        stems: ["set_governance_mode", "context.governance_mode.set"],
+        capName: "set_governance_mode",
+        capSurfaces: ["api", "mcp", "cli"],
+        hasDirectFile: false,
+        commandIndex,
+      }),
+    ).toBe(true);
+  });
+
+  it("is satisfied by a dedicated command file", () => {
+    expect(
+      cliLayerSatisfied({
+        stems: ["list_agents"],
+        capName: "list_agents",
+        capSurfaces: ["cli"],
+        hasDirectFile: true,
+        commandIndex,
+      }),
+    ).toBe(true);
+  });
+
+  it("is a gap when no command file names the capability", () => {
+    expect(
+      cliLayerSatisfied({
+        stems: ["list_agents"],
+        capName: "list_agents",
+        capSurfaces: ["cli"],
+        hasDirectFile: false,
+        commandIndex,
+      }),
+    ).toBe(false);
+  });
+
+  it("is a gap when the capability does not declare the cli surface, whatever the files say", () => {
+    expect(
+      cliLayerSatisfied({
+        stems: ["get_run_export", "run.export.get"],
+        capName: "get_run_export",
+        capSurfaces: ["api", "mcp"],
+        hasDirectFile: true,
+        commandIndex,
+      }),
+    ).toBe(false);
   });
 });
 

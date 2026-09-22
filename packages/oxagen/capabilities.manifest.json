@@ -1996,6 +1996,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true,
         "app": true
@@ -4554,6 +4555,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true,
         "app": true
