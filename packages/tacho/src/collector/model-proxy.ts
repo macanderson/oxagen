@@ -93,20 +93,36 @@ import {
   type FrameBody,
   jsonContent,
 } from "../evidence/frame-body";
+import type { HeldCredential } from "../host/credential-store";
+import {
+  looksLikeRunToken,
+  peekRunTokenClaims,
+  type RunTokenClaims,
+  type RunTokenProvider,
+  type RunTokenRefusal,
+  type RunTokenVerdict,
+} from "../host/run-token";
 import {
   type PolicyBundle,
+  TACHO_CREDENTIAL_BASIS_ATTR,
+  TACHO_CREDENTIAL_GATEWAY_BROKERED,
+  TACHO_CREDENTIAL_HARNESS_HELD,
   TACHO_ENFORCEMENT_TIER_ATTR,
   TACHO_GATEWAY_TIER,
   TACHO_METERING_ATTR,
   TACHO_MAX_BODY_BYTES,
   TACHO_METERING_OBSERVED,
   TACHO_MODEL_SESSION_HEADER,
+  TACHO_RUN_TOKEN_ATTR,
+  type TachoCredentialBasis,
   type TachoHarness,
 } from "../wire";
 import { GUARD_MESSAGES, guardLoopbackRequest } from "./loopback-guard";
 import { priceObservedUsage, usdToMicros } from "./model-pricing";
 import { RequestPrefixMemory } from "./request-prefix";
 import {
+  type AttachedCredential,
+  CREDENTIAL_HEADERS,
   DEFAULT_MODEL_UPSTREAMS,
   downstreamResponseHeaders,
   MODEL_PROXY_ROUTES,
@@ -164,11 +180,42 @@ export type ModelRefusalCode =
   | "session_cancelled"
   | "host_paused"
   | "host_suspended"
-  | "host_revoked";
+  | "host_revoked"
+  | CredentialRefusalCode;
+
+/**
+ * The credential seam's refusals (ADR-138). The four `run_token_*` codes are
+ * the token codec's own. `run_token_required`: the provider is brokered on
+ * this host and the call brought no credential at all. `foreign_credential`:
+ * the provider is brokered and the call brought a vendor credential of its
+ * own, which is the bypass custody exists to close (a key in the shell's
+ * environment wins over Claude Code's helper, so this is what a person sees
+ * when they export one). `credential_unavailable`: a valid run token, and
+ * nothing in custody to spend it with.
+ */
+export type CredentialRefusalCode =
+  | RunTokenRefusal
+  | "run_token_required"
+  | "foreign_credential"
+  | "credential_unavailable";
 
 export interface ModelProxyPolicy {
   bundle: PolicyBundle;
   hostStatus: "active" | "paused" | "suspended" | "revoked";
+}
+
+/**
+ * The credential seam (ADR-138): what the gateway holds in custody for a
+ * provider, and how it checks the run token a harness presents in place of
+ * a vendor key. A provider with nothing in custody is `harness_held`, and its
+ * calls cross as they always did. A provider with a credential in custody is
+ * `gateway_brokered`: its calls must carry a run token, and the proxy swaps
+ * the token for the credential on the way out. Absent altogether, every
+ * provider is `harness_held`.
+ */
+export interface CredentialBroker {
+  custody: (provider: RunTokenProvider) => HeldCredential | undefined;
+  verify: (token: string, provider: RunTokenProvider) => RunTokenVerdict;
 }
 
 export interface ModelProxyDeps {
@@ -190,6 +237,7 @@ export interface ModelProxyDeps {
   /** Observed spend already on a session's chain, read once per session. */
   priorSpendMicros?: (sessionUuid: string) => number;
   beforeForward?: BeforeForward;
+  credentials?: CredentialBroker;
   /** How long `beforeForward` may take before the original is sent. */
   beforeForwardTimeoutMs?: number;
   /** The most request bytes held for one call. */
@@ -367,6 +415,55 @@ export function sessionFromAnthropicMetadata(
   return /_session_([0-9a-fA-F-]{8,64})$/.exec(userId)?.[1];
 }
 
+/** The one credential a request carries, whichever header it rides. */
+function presentedCredential(
+  req: IncomingMessage,
+): { header: string; value: string } | undefined {
+  for (const name of CREDENTIAL_HEADERS) {
+    const raw = header(req, name);
+    if (raw === undefined) continue;
+    const value =
+      name === "authorization" ? raw.replace(/^Bearer\s+/i, "") : raw;
+    if (value.length > 0) return { header: name, value };
+  }
+  return undefined;
+}
+
+/** A refusal that the harness can act on by itself gets a 401; the rest 403. */
+function credentialRefusalStatus(code: CredentialRefusalCode): 401 | 403 {
+  return code === "run_token_expired" ||
+    code === "run_token_invalid" ||
+    code === "run_token_malformed"
+    ? 401
+    : 403;
+}
+
+interface ResolvedCredential {
+  basis: TachoCredentialBasis;
+  /** The custody credential to send in place of the token, when brokered. */
+  attach?: AttachedCredential;
+  /** The run token's claims, verified or merely read off a refused token. */
+  claims?: RunTokenClaims;
+  refusal?: { code: CredentialRefusalCode; message: string };
+}
+
+const CREDENTIAL_MESSAGES: Record<CredentialRefusalCode, string> = {
+  run_token_malformed:
+    "The credential this call carried is not a run token this Oxagen gateway can read.",
+  run_token_invalid:
+    "The run token this call carried was not issued by this Oxagen gateway. Run `tacho credential status` on this machine.",
+  run_token_expired:
+    "The run token this call carried has expired. The harness fetches a new one from the Oxagen gateway on its next attempt.",
+  run_token_mismatch:
+    "The run token this call carried was issued for another host or another model provider.",
+  run_token_required:
+    "This machine brokers model credentials through the Oxagen gateway, and this call carried none. Run `tacho enroll` again to point the harness at the gateway's run tokens.",
+  foreign_credential:
+    "This machine brokers model credentials through the Oxagen gateway, and this call brought its own. Unset the provider's API key in the shell (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or OPENAI_API_KEY); the gateway supplies the credential.",
+  credential_unavailable:
+    "The run token is valid, but the Oxagen gateway holds no credential for this model provider. Run `tacho enroll` again, or `tacho credential status` to see what is in custody.",
+};
+
 export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
   const maxRequestBytes = deps.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES;
   const upstreamIdleMs = deps.upstreamIdleMs ?? DEFAULT_UPSTREAM_IDLE_MS;
@@ -484,11 +581,88 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     return undefined;
   }
 
-  function attrsFor(route: ModelRoute, how: string): Record<string, string> {
+  /**
+   * Decide what credential this call goes out with. Only the metered APIs and
+   * the vendor's other endpoints under the same prefix are looked at the same
+   * way: a provider with custody is brokered for every path it serves, since
+   * `/v1/models` spends the same key as `/v1/messages`.
+   */
+  function resolveCredential(
+    req: IncomingMessage,
+    route: ModelRoute,
+  ): ResolvedCredential {
+    const broker = deps.credentials;
+    const presented = presentedCredential(req);
+    const held = broker?.custody(route.provider);
+    if (broker === undefined || held === undefined) {
+      // Nothing in custody for this provider: the harness's own credential
+      // crosses untouched. A run token presented here is refused all the
+      // same, because the vendor would refuse it and the person deserves a
+      // reason that names the gateway.
+      if (presented !== undefined && looksLikeRunToken(presented.value)) {
+        const claims = peekRunTokenClaims(presented.value);
+        return {
+          basis: TACHO_CREDENTIAL_HARNESS_HELD,
+          ...(claims !== undefined ? { claims } : {}),
+          refusal: {
+            code: "credential_unavailable",
+            message: CREDENTIAL_MESSAGES.credential_unavailable,
+          },
+        };
+      }
+      return { basis: TACHO_CREDENTIAL_HARNESS_HELD };
+    }
+    if (presented === undefined) {
+      return {
+        basis: TACHO_CREDENTIAL_GATEWAY_BROKERED,
+        refusal: {
+          code: "run_token_required",
+          message: CREDENTIAL_MESSAGES.run_token_required,
+        },
+      };
+    }
+    if (!looksLikeRunToken(presented.value)) {
+      return {
+        basis: TACHO_CREDENTIAL_GATEWAY_BROKERED,
+        refusal: {
+          code: "foreign_credential",
+          message: CREDENTIAL_MESSAGES.foreign_credential,
+        },
+      };
+    }
+    const verdict = broker.verify(presented.value, route.provider);
+    if (!verdict.ok) {
+      return {
+        basis: TACHO_CREDENTIAL_GATEWAY_BROKERED,
+        ...(verdict.claims !== undefined ? { claims: verdict.claims } : {}),
+        refusal: {
+          code: verdict.code,
+          message: CREDENTIAL_MESSAGES[verdict.code],
+        },
+      };
+    }
+    return {
+      basis: TACHO_CREDENTIAL_GATEWAY_BROKERED,
+      claims: verdict.claims,
+      attach: { kind: held.kind, secret: held.secret },
+    };
+  }
+
+  function attrsFor(
+    route: ModelRoute,
+    how: string,
+    credential: ResolvedCredential,
+  ): Record<string, string> {
     return {
       [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
       "oxagen.model_api": route.api,
       "oxagen.correlation": how,
+      [TACHO_CREDENTIAL_BASIS_ATTR]: credential.basis,
+      // The id names the token on the record; the token itself is never
+      // written anywhere, and a refused token's id is read off it unverified.
+      ...(credential.claims !== undefined
+        ? { [TACHO_RUN_TOKEN_ATTR]: credential.claims.tid }
+        : {}),
     };
   }
 
@@ -597,10 +771,22 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const { record, how } = correlate(req, route, json);
     const recorder = record?.recorder ?? deps.hostRecorder();
     const sessionKey = record?.recorder.sessionUuid ?? HOST_KEY;
-    const attrs = attrsFor(route, how);
+    const credential = resolveCredential(req, route);
+    const attrs = attrsFor(route, how, credential);
     const metered = route.api !== "other";
 
-    const refusal = refusalFor(record);
+    // The operator's decisions come first: a paused session is told it is
+    // paused whatever it presented. Then the credential seam's, which are the
+    // host's own configuration and so read as `bundle` on the frame.
+    const refusal =
+      refusalFor(record) ??
+      (credential.refusal !== undefined
+        ? {
+            ...credential.refusal,
+            source: "bundle" as const,
+            status: credentialRefusalStatus(credential.refusal.code),
+          }
+        : undefined);
     if (refusal !== undefined) {
       refused += 1;
       const view = deps.policy();
@@ -636,7 +822,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       deps.log(
         `model proxy: refused ${route.provider} ${route.api} (${refusal.code})`,
       );
-      sendProviderError(res, route, 403, refusal.code, refusal.message);
+      sendProviderError(
+        res,
+        route,
+        "status" in refusal ? refusal.status : 403,
+        refusal.code,
+        refusal.message,
+      );
       return;
     }
 
@@ -722,6 +914,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       target.host,
       body.length,
       dropContentEncoding,
+      credential.attach,
     );
     const upstreamReq: ClientRequest = (secure ? httpsRequest : httpRequest)({
       protocol: target.protocol,

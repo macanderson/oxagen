@@ -45,9 +45,15 @@ What it does, from `packages/tacho/src/collector/model-proxy.ts` and
 | Frame bodies under a workspace's retention mandate, on the hook path | Built (#3332), see §3.3 |
 
 Two properties of the proxy are load-bearing for everything below, and both are
-deliberate (ADR-094). The vendor credential crosses in memory, forwarded
-untouched, and Oxagen never holds it. Prompt bodies go to the vendor the
-harness chose and never to Oxagen. Only the frame goes up.
+deliberate (ADR-094, amended by ADR-138). The vendor credential stays on the
+machine and Oxagen's servers never hold it: on a brokered provider the gateway
+holds it in custody under `TACHO_HOME` and the harness holds a run token; on a
+harness-held provider it crosses in memory, forwarded untouched. Prompt bodies
+go to the vendor the harness chose and never to Oxagen. Only the frame goes up.
+
+| Capability | State |
+|---|---|
+| The credential seam: `tacho enroll` takes the vendor key into the gateway's custody, Claude Code's `apiKeyHelper` and Codex's `auth.json` hold run tokens, the proxy verifies and swaps, refuses a foreign credential, and records `oxagen.credential_basis` on every frame | Built (ADR-138) |
 
 ## 2. What unpluggable can mean, and where
 
@@ -210,14 +216,15 @@ the turn's outcome before it raises anything.
 
 ## 4. What is not here
 
-- **Oxagen holding or minting the vendor credential.** ADR-094 rejected it on
-  2026-09-18, with reasons that still hold: a cloud-hosted proxy adds a hop and
-  an availability dependency, it puts every prompt body and every customer's
-  source code through Oxagen's network, and it moves the vendor credential off
-  the machine or forces a second one. The contained tier reaches unpluggability
-  without custody, by confining egress rather than by holding a secret. If the
-  custody question is reopened, it is an ADR that supersedes ADR-094, not a
-  line in this spec.
+- **Oxagen's servers holding or minting the vendor credential.** ADR-094
+  rejected it on 2026-09-18, with reasons that still hold: a cloud-hosted proxy
+  adds a hop and an availability dependency, it puts every prompt body and
+  every customer's source code through Oxagen's network, and it moves the
+  vendor credential off the machine or forces a second one. Custody on the
+  machine is a different question, and ADR-138 answered it on 2026-09-22: the
+  gateway daemon holds the key and the harness holds a run token. That is the
+  ADR §1 cites. The contained tier still reaches unpluggability by confining
+  egress; custody makes the bypass a key recovery rather than a one-line edit.
 - **Re-specifying the proxy.** It is built. Only the delta is here.
 - **A per-workspace or per-session model key.** `docs/specs/model-funding-source/spec.md`
   §5 rules the first out. The second has no decision behind it.

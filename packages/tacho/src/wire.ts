@@ -111,6 +111,26 @@ export const TACHO_METERING_OBSERVED = "observed" as const;
 export const TACHO_MODEL_SESSION_HEADER = "x-oxagen-session" as const;
 
 /**
+ * Which process held the credential a model call was made with (ADR-138),
+ * as `attrs[TACHO_CREDENTIAL_BASIS_ATTR]` on every frame the loopback proxy
+ * seals. `gateway_brokered`: the harness presented a run token and the
+ * gateway attached the vendor credential from its custody. `harness_held`:
+ * the harness's own credential crossed untouched, the way ADR-094 first
+ * built it. A spend number reads the same either way; what differs is
+ * whether the harness could have spent that credential anywhere else.
+ */
+export const TACHO_CREDENTIAL_BASIS_ATTR = "oxagen.credential_basis" as const;
+export const TACHO_CREDENTIAL_GATEWAY_BROKERED = "gateway_brokered" as const;
+export const TACHO_CREDENTIAL_HARNESS_HELD = "harness_held" as const;
+export const TACHO_CREDENTIAL_BASES = [
+  TACHO_CREDENTIAL_GATEWAY_BROKERED,
+  TACHO_CREDENTIAL_HARNESS_HELD,
+] as const;
+export type TachoCredentialBasis = (typeof TACHO_CREDENTIAL_BASES)[number];
+/** The id of the run token a brokered call presented; never the token. */
+export const TACHO_RUN_TOKEN_ATTR = "oxagen.run_token_id" as const;
+
+/**
  * A bundle field this host's parser understands, named on the wire so the
  * control plane can withhold fields the host would choke on.
  *
@@ -602,6 +622,25 @@ export const daemonHealthSchema = z
      * empty lead to the same emission.
      */
     bundle_features: bundleFeaturesSchema.optional(),
+    /**
+     * Which model providers this host brokers credentials for (ADR-138): the
+     * gateway holds the vendor key and the harness holds a run token. A
+     * provider absent from the list is `harness_held`. Names and a basis,
+     * never a secret or a digest of one. Optional: a daemon that predates
+     * custody reports nothing here, and the control plane reads absent as
+     * `harness_held` for every provider.
+     */
+    credentials: z
+      .array(
+        z
+          .object({
+            provider: z.enum(["anthropic", "openai"]),
+            basis: z.enum(TACHO_CREDENTIAL_BASES),
+          })
+          .strict(),
+      )
+      .max(8)
+      .optional(),
   })
   .strict();
 

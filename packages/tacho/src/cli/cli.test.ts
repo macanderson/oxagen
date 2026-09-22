@@ -53,6 +53,26 @@ import {
   shellQuote,
   transientBinDir,
 } from "./deps";
+import { openCredentialStore } from "../host/credential-store";
+import {
+  applyModelBaseUrls,
+  type ModelBaseUrlOptions,
+  readModelBaseUrlState,
+  restoreModelBaseUrls,
+} from "../host/model-base-url";
+import {
+  applyModelCredentials,
+  type ModelCredentialOptions,
+  readModelCredentialState,
+  type RestoreSecrets,
+  restoreModelCredentials,
+} from "../host/model-credential";
+import { loadOrCreateRunTokenKey, mintRunToken } from "../host/run-token";
+import {
+  credentialIssue,
+  credentialStatus,
+  parseCredentialMode,
+} from "./credential";
 import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand, resolveSessionUuid } from "./export";
@@ -295,6 +315,8 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
     },
     runtime: {
       hookCommand: "node /opt/tacho/tacho-hook.mjs",
+      credentialHelperCommand:
+        "node /opt/tacho/tacho.mjs credential issue --harness claude-code",
       daemonCommand: ["node", "/opt/tacho/tachod.mjs"],
       mcpStdioCommand: ["node", "/opt/tacho/tacho.mjs", "mcp-stdio"],
       binDir: "/opt/tacho",
@@ -644,6 +666,8 @@ describe("enroll → status → unenroll", () => {
       paths: clean.paths,
       runtime: {
         hookCommand: "/Applications/Oxagen.app/Contents/MacOS/tacho-hook",
+        credentialHelperCommand:
+          "/Applications/Oxagen.app/Contents/MacOS/tacho credential issue --harness claude-code",
         daemonCommand: ["/Applications/Oxagen.app/Contents/MacOS/tachod"],
         mcpStdioCommand: [
           "/Applications/Oxagen.app/Contents/MacOS/tacho",
@@ -718,6 +742,8 @@ describe("enroll → status → unenroll", () => {
       paths: clean.paths,
       runtime: {
         hookCommand: "/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tacho-hook",
+        credentialHelperCommand:
+          "/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tacho credential issue --harness claude-code",
         daemonCommand: ["/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tachod"],
         mcpStdioCommand: [
           "/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tacho",
@@ -2944,5 +2970,300 @@ describe("cursor", () => {
     expect(d.errors.join("\n")).toContain("relative path");
     // Nothing was written, so a refusal leaves the machine as it was.
     expect(existsSync(d.paths.cursorHooks[0] as string)).toBe(false);
+  });
+});
+
+describe("brokered credentials (ADR-138)", () => {
+  const ANTHROPIC_KEY = "sk-ant-api03-FAKE-ENROLL-CUSTODY-0001";
+  const OPENAI_KEY = "sk-proj-FAKE-ENROLL-CUSTODY-0002";
+
+  /** Deps whose daemon reports a listening proxy and mints tokens from the key on disk. */
+  function brokeredDeps(seed: { claude?: object; codex?: object } = {}) {
+    const d = deps();
+    const home = d.home;
+    if (seed.claude !== undefined)
+      writeSensitiveFileAtomic(
+        join(home, ".claude", "settings.json"),
+        `${JSON.stringify(seed.claude, null, 2)}\n`,
+      );
+    if (seed.codex !== undefined)
+      writeSensitiveFileAtomic(
+        join(home, ".codex", "auth.json"),
+        `${JSON.stringify(seed.codex, null, 2)}\n`,
+      );
+    const store = openCredentialStore({
+      file: d.paths.credentials,
+      key: d.paths.credentialsKey,
+    });
+    const issued: unknown[] = [];
+    const wired = {
+      ...d,
+      daemonGet: async (path: string) => {
+        if (path === "/health")
+          return { ok: true, gateway: { listening: true, port: 47124 } };
+        return d.daemonGet(path);
+      },
+      modelBaseUrls: {
+        apply: (options: ModelBaseUrlOptions) => applyModelBaseUrls(options),
+        restore: (options: ModelBaseUrlOptions) =>
+          restoreModelBaseUrls(options),
+        read: (options: ModelBaseUrlOptions) => readModelBaseUrlState(options),
+      },
+      modelCredentials: {
+        apply: (options: ModelCredentialOptions) =>
+          applyModelCredentials(options),
+        restore: (options: ModelCredentialOptions, secrets: RestoreSecrets) =>
+          restoreModelCredentials(options, secrets),
+        read: (options: ModelCredentialOptions) =>
+          readModelCredentialState(options),
+      },
+      credentialStore: store,
+      daemonPost: async (path: string, body: unknown) => {
+        if (path !== "/credential/issue") return undefined;
+        issued.push(body);
+        const host = readHostFile(d.paths.hostFile)!;
+        const { key } = loadOrCreateRunTokenKey(d.paths.runTokenKey);
+        const input = body as {
+          harness: "claude-code" | "codex";
+          placement?: "static";
+        };
+        const minted = mintRunToken({
+          key,
+          host: host.host_enrollment_id,
+          harness: input.harness,
+          provider: input.harness === "codex" ? "openai" : "anthropic",
+          placement: input.placement ?? "helper",
+          now: d.now(),
+          notAfter: Date.parse(host.expires_at),
+        });
+        return {
+          status: 200,
+          body: JSON.stringify({
+            token: minted.token,
+            token_id: minted.claims.tid,
+          }),
+        };
+      },
+    };
+    return { ...wired, store, issued, home };
+  }
+  const settingsOf = (home: string) =>
+    JSON.parse(readFileSync(join(home, ".claude", "settings.json"), "utf8"));
+  const authOf = (home: string) =>
+    JSON.parse(readFileSync(join(home, ".codex", "auth.json"), "utf8"));
+
+  it("takes both vendor keys into custody on enroll, hands them back on unenroll, and shreds the store", async () => {
+    const d = brokeredDeps({
+      claude: {
+        env: { ANTHROPIC_API_KEY: ANTHROPIC_KEY, KEEP: "1" },
+        theme: "dark",
+      },
+      codex: { OPENAI_API_KEY: OPENAI_KEY, last_refresh: "x" },
+    });
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code", "codex"],
+      },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toEqual([]);
+
+    const settings = settingsOf(d.home);
+    expect(settings.apiKeyHelper).toBe(
+      "node /opt/tacho/tacho.mjs credential issue --harness claude-code",
+    );
+    expect(settings.env).toEqual({
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:47124/anthropic",
+      ENABLE_TOOL_SEARCH: "true",
+      KEEP: "1",
+    });
+    expect(settings.theme).toBe("dark");
+    const auth = authOf(d.home);
+    expect(auth.OPENAI_API_KEY.startsWith("oxrt_")).toBe(true);
+    expect(auth.last_refresh).toBe("x");
+    expect(d.store.status().map((c) => [c.provider, c.kind, c.source])).toEqual(
+      [
+        ["anthropic", "api_key", "claude-code:settings.env"],
+        ["openai", "bearer", "codex:auth.json"],
+      ],
+    );
+    expect(d.store.read("anthropic")?.secret).toBe(ANTHROPIC_KEY);
+    expect(d.store.read("openai")?.secret).toBe(OPENAI_KEY);
+    // Codex's static token was minted through the daemon, bounded by the enrollment.
+    expect(d.issued).toEqual([{ harness: "codex", placement: "static" }]);
+    const out = d.lines.join("\n");
+    expect(out).toContain(
+      "holds a run token; the gateway supplies the anthropic credential",
+    );
+    expect(out).toContain(
+      "holds a run token; the gateway supplies the openai credential",
+    );
+    expect(out).toContain(
+      "anthropic credential taken into the gateway's custody",
+    );
+    expect(out).not.toContain(ANTHROPIC_KEY);
+    expect(out).not.toContain(OPENAI_KEY);
+    // Nothing under the tacho root holds either key in the clear.
+    for (const file of [
+      d.paths.credentials,
+      d.paths.credentialsKey,
+      d.paths.hostFile,
+    ]) {
+      const text = readFileSync(file, "utf8");
+      expect(text).not.toContain(ANTHROPIC_KEY);
+      expect(text).not.toContain(OPENAI_KEY);
+    }
+
+    // Status says so, without the secret.
+    d.lines.length = 0;
+    const report = await status({ json: true }, d);
+    expect(
+      report.modelCredentials?.map((h) => [h.harness, h.brokered]),
+    ).toEqual([
+      ["claude-code", true],
+      ["codex", true],
+    ]);
+    expect(report.credentialCustody?.map((c) => c.provider)).toEqual([
+      "anthropic",
+      "openai",
+    ]);
+    expect(JSON.stringify(report)).not.toContain(ANTHROPIC_KEY);
+    d.lines.length = 0;
+    await status({}, d);
+    expect(d.lines.join("\n")).toContain(
+      "Credential  Claude Code: holds a run token",
+    );
+
+    // The helper Claude Code runs prints a token and nothing else.
+    const issue = await credentialIssue({ harness: "claude-code" }, d);
+    expect(issue.ok).toBe(true);
+    expect(issue.token?.startsWith("oxrt_")).toBe(true);
+    expect(d.issued.at(-1)).toEqual({
+      harness: "claude-code",
+      placement: "helper",
+    });
+    expect((await credentialIssue({ harness: "stella" }, d)).ok).toBe(false);
+    d.lines.length = 0;
+    const custody = await credentialStatus({}, d);
+    expect(custody.custody.map((c) => c.provider)).toEqual([
+      "anthropic",
+      "openai",
+    ]);
+    expect(d.lines.join("\n")).toContain(
+      "Custody     anthropic: api_key sk-ant-a…",
+    );
+    expect(d.lines.join("\n")).not.toContain(ANTHROPIC_KEY);
+
+    // A re-enroll takes nothing again and changes nothing.
+    d.lines.length = 0;
+    const again = await enroll({ token: "tok" }, d);
+    expect(again.ok).toBe(true);
+    expect(again.warnings).toEqual([]);
+    expect(d.lines.join("\n")).not.toContain(
+      "taken into the gateway's custody",
+    );
+    expect(settingsOf(d.home)).toEqual(settings);
+    expect(authOf(d.home)).toEqual(auth);
+
+    // Unenroll gives every key back before anything else comes out.
+    d.lines.length = 0;
+    const gone = await unenroll({ token: "tok" }, d);
+    expect(gone.ok).toBe(true);
+    const restoredSettings = settingsOf(d.home);
+    expect(restoredSettings.apiKeyHelper).toBeUndefined();
+    expect(restoredSettings.env).toEqual({
+      ANTHROPIC_API_KEY: ANTHROPIC_KEY,
+      KEEP: "1",
+    });
+    expect(restoredSettings.theme).toBe("dark");
+    expect(authOf(d.home)).toEqual({
+      OPENAI_API_KEY: OPENAI_KEY,
+      last_refresh: "x",
+    });
+    expect(existsSync(d.paths.credentials)).toBe(false);
+    expect(existsSync(d.paths.credentialsKey)).toBe(false);
+    expect(existsSync(d.paths.runTokenKey)).toBe(false);
+    expect(d.lines.join("\n")).toContain("model credential given back to");
+  });
+
+  it("takes a key from the enrolling shell, and --credentials passthrough gives it back", async () => {
+    const d = brokeredDeps({ codex: { tokens: { access_token: "FAKE" } } });
+    d.env["TACHO_BROKER_ANTHROPIC_API_KEY"] = ANTHROPIC_KEY;
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code", "codex"],
+      },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    expect(d.store.status().map((c) => [c.provider, c.source])).toEqual([
+      ["anthropic", "enroll:env"],
+    ]);
+    expect(settingsOf(d.home).apiKeyHelper).toContain("credential issue");
+    // A ChatGPT login is left as it is, and the report says so.
+    expect(readFileSync(join(d.home, ".codex", "auth.json"), "utf8")).toContain(
+      "access_token",
+    );
+    expect(d.lines.join("\n")).toContain("signed in with a ChatGPT login");
+
+    const back = await enroll({ token: "tok", credentials: "passthrough" }, d);
+    expect(back.ok).toBe(true);
+    expect(d.store.status()).toEqual([]);
+    const settings = settingsOf(d.home);
+    expect(settings.apiKeyHelper).toBeUndefined();
+    expect(settings.env.ANTHROPIC_API_KEY).toBe(ANTHROPIC_KEY);
+    expect(d.lines.join("\n")).toContain("credential given back to");
+  });
+
+  it("leaves a subscription login alone when there is no key to take, and says so", async () => {
+    const d = brokeredDeps({ claude: { env: { OTHER: "x" } } });
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code"],
+      },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.warnings.join("\n")).toContain(
+      "Claude Code keeps its own login",
+    );
+    expect(settingsOf(d.home).apiKeyHelper).toBeUndefined();
+    expect(d.store.status()).toEqual([]);
+    // No token is issued for a provider nothing is held for.
+    d.daemonPost = async () => undefined;
+    const issue = await credentialIssue({ harness: "claude-code" }, d);
+    expect(issue.ok).toBe(false);
+    expect(issue.detail).toContain("holds no anthropic credential");
+  });
+
+  it("parses --credentials", () => {
+    expect(parseCredentialMode(undefined)).toBe("brokered");
+    expect(parseCredentialMode("passthrough")).toBe("passthrough");
+    expect(() => parseCredentialMode("vault")).toThrow(
+      /unknown credential mode/,
+    );
+    const option = buildTachoProgram()
+      .commands.find((c) => c.name() === "enroll")
+      ?.options.find((o) => o.long === "--credentials");
+    expect(option).toBeDefined();
+    expect(
+      buildTachoProgram()
+        .commands.find((c) => c.name() === "credential")
+        ?.commands.map((c) => c.name())
+        .sort(),
+    ).toEqual(["issue", "status"]);
   });
 });

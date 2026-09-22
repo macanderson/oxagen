@@ -18,6 +18,12 @@ export interface TachoPaths {
   hostFile: string;
   /** Ed25519 device private key, PKCS#8 PEM (0600). */
   deviceKey: string;
+  /** The HMAC key that signs this host's run tokens (0600; `host/run-token.ts`). */
+  runTokenKey: string;
+  /** Vendor credentials in the gateway's custody, sealed (`host/credential-store.ts`). */
+  credentials: string;
+  /** The key that seals `credentials`, in its own file so a copy of one is useless. */
+  credentialsKey: string;
   /** The daemon's Unix socket (unused on Windows, where the hook uses TCP). */
   socket: string;
   /** Per-session append-only event logs and the shipped cursor. */
@@ -81,6 +87,9 @@ export function tachoPaths(
     root,
     hostFile: join(root, "host.json"),
     deviceKey: join(root, "device.key"),
+    runTokenKey: join(root, "run-token.key"),
+    credentials: join(root, "credentials.json"),
+    credentialsKey: join(root, "credentials.key"),
     socket: join(root, "tachod.sock"),
     wal: join(root, "wal"),
     spool: join(root, "spool"),

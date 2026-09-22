@@ -31,6 +31,10 @@ import {
   type FetchLike,
   type RateLimitHint,
 } from "../host/control-client";
+import {
+  type CredentialStore,
+  openCredentialStore,
+} from "../host/credential-store";
 import { type DeviceKey, loadOrCreateDeviceKey } from "../host/device-key";
 import {
   ensureDir,
@@ -46,6 +50,13 @@ import {
   modelProxyPortFor,
 } from "../host/host-file";
 import { readModelBaseUrlState } from "../host/model-base-url";
+import {
+  loadOrCreateRunTokenKey,
+  readRunTokenKey,
+  RUN_TOKEN_PROVIDERS,
+  type RunTokenKey,
+  verifyRunToken,
+} from "../host/run-token";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
 import type { Exec, ExecAsync, ExecResult } from "../host/service";
@@ -68,6 +79,8 @@ import {
   type ControlEnvelope,
   type DaemonHealth,
   TACHO_BUNDLE_FEATURES,
+  TACHO_CREDENTIAL_GATEWAY_BROKERED,
+  TACHO_CREDENTIAL_HARNESS_HELD,
 } from "../wire";
 import { Detector } from "./detector";
 import {
@@ -90,6 +103,7 @@ import {
   type GatewayCallRecord,
   type GatewayFetch,
 } from "./mcp-gateway";
+import { issueRunToken } from "./credential-issuer";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
 import {
@@ -405,6 +419,32 @@ async function initializeDaemon(
   const hostRecord = registry.ensure(bootId, { pid: process.pid }).record;
   const hostRecorder = hostRecord.recorder;
 
+  /**
+   * The credential seam (ADR-138): the vendor credentials this gateway holds
+   * in custody, and the key that signs the run tokens a brokered harness
+   * presents instead. Both are re-read from disk on use rather than cached,
+   * so `tacho enroll` taking a key into custody, or `tacho unenroll` rotating
+   * the signing key, is honoured on the next call without a restart.
+   */
+  const credentialStore: CredentialStore = openCredentialStore({
+    file: paths.credentials,
+    key: paths.credentialsKey,
+  });
+  const runTokenKey = (): RunTokenKey =>
+    readRunTokenKey(paths.runTokenKey) ??
+    loadOrCreateRunTokenKey(paths.runTokenKey).key;
+  runTokenKey();
+  function inCustody(provider: "anthropic" | "openai"): boolean {
+    try {
+      return credentialStore.status().some((c) => c.provider === provider);
+    } catch (error) {
+      log(
+        `credential store unreadable: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  }
+
   let bundleVerified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
   /**
    * When the control plane last confirmed the cached mandate, as epoch ms.
@@ -579,6 +619,15 @@ async function initializeDaemon(
       // Reported from the running code rather than from `host.json`, which
       // `enroll` writes once and no upgrade rewrites.
       bundle_features: [...TACHO_BUNDLE_FEATURES],
+      // Which providers this host brokers (ADR-138): names and a basis,
+      // never a secret. Read from the store each time, so a key `tacho
+      // enroll` just took into custody is reported on the next poll.
+      credentials: RUN_TOKEN_PROVIDERS.map((provider) => ({
+        provider,
+        basis: inCustody(provider)
+          ? TACHO_CREDENTIAL_GATEWAY_BROKERED
+          : TACHO_CREDENTIAL_HARNESS_HELD,
+      })),
     };
   }
 
@@ -1875,6 +1924,29 @@ async function initializeDaemon(
     ...(options.beforeForward !== undefined
       ? { beforeForward: options.beforeForward }
       : {}),
+    credentials: {
+      custody: (provider) => {
+        try {
+          return credentialStore.read(provider);
+        } catch (error) {
+          // An unreadable store is a fault of Oxagen's, and the proxy fails
+          // open on those: the call is treated as `harness_held`. A brokered
+          // harness holds only a run token, so its call is then refused as
+          // `credential_unavailable` with a reason, never forwarded blind.
+          log(
+            `credential store unreadable: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          return undefined;
+        }
+      },
+      verify: (token, provider) =>
+        verifyRunToken(token, {
+          key: runTokenKey(),
+          host: host.host_enrollment_id,
+          provider,
+          now: now(),
+        }),
+    },
     port: () => modelProxyListener.port(),
     log,
     now,
@@ -1969,6 +2041,16 @@ async function initializeDaemon(
     // queue was never protecting the forward; it was only ever costing.
     mcp: (body, context) => gateway.handle(body, context),
     mcpClose: (sessionId) => gateway.forget(sessionId),
+    issueRunToken: (input) =>
+      issueRunToken(input, {
+        key: runTokenKey,
+        store: credentialStore,
+        host: () => host,
+        hostRecorder: () => hostRecorder,
+        record,
+        now,
+        log,
+      }),
     handleHook: (envelope) =>
       serial.run(async () => {
         await drainSpool();
@@ -2052,6 +2134,15 @@ async function initializeDaemon(
       // The loopback model proxy. `calls_observed` counts model calls since
       // the daemon started; a session's own count is on its row below.
       gateway: gatewayStatus(),
+      // What the gateway holds in custody (ADR-138): provider, kind, source
+      // and when it was taken. The secret is not here and has no field.
+      credential_custody: (() => {
+        try {
+          return credentialStore.status();
+        } catch {
+          return [];
+        }
+      })(),
       sessions: registry.list().map((session) => ({
         session_id: session.harnessSessionId,
         session_uuid: session.recorder.sessionUuid,

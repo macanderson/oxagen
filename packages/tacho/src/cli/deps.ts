@@ -17,7 +17,12 @@ import {
 import { createRequire } from "node:module";
 import { dirname, posix, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
+import { postUnix } from "../claude-code/hook-client";
 import type { FetchLike } from "../host/control-client";
+import {
+  type CredentialStore,
+  openCredentialStore,
+} from "../host/credential-store";
 import { readJsonFileIfExists } from "../host/fs";
 import { HarnessFiles, type SettleOutcome } from "../host/harness-file";
 import { readHostFile } from "../host/host-file";
@@ -28,6 +33,15 @@ import {
   readModelBaseUrlState,
   restoreModelBaseUrls,
 } from "../host/model-base-url";
+import {
+  applyModelCredentials,
+  helperCommandFor,
+  type ModelCredentialOptions,
+  type ModelCredentialState,
+  readModelCredentialState,
+  type RestoreSecrets,
+  restoreModelCredentials,
+} from "../host/model-credential";
 import {
   readStellaHooksFile,
   type StellaHooksFile,
@@ -129,6 +143,14 @@ export function resolveCredentials(
 export interface RuntimeCommands {
   /** Shell command line that runs `tacho-hook`. */
   hookCommand: string;
+  /**
+   * Shell command line that runs `tacho credential issue --harness
+   * claude-code`, which Claude Code runs as its `apiKeyHelper` on a brokered
+   * host (ADR-138). Computed beside the hook command so it names the same
+   * binary layout: a helper that outlives its executable leaves Claude Code
+   * with no credential at all.
+   */
+  credentialHelperCommand: string;
   /** argv that runs `tachod` in the foreground. */
   daemonCommand: string[];
   /**
@@ -243,6 +265,9 @@ export function runtimeCommands(
   if (nativeLayout) {
     return {
       hookCommand: `${shellQuote(nativeTacho, platform)} hook`,
+      credentialHelperCommand: helperCommandFor(
+        shellQuote(nativeTacho, platform),
+      ),
       daemonCommand: [nativeTacho, "daemon"],
       mcpStdioCommand: [nativeTacho, "mcp-stdio"],
       binDir,
@@ -251,6 +276,9 @@ export function runtimeCommands(
   }
   return {
     hookCommand: `${shellQuote(nodePath, platform)} ${shellQuote(P.join(binDir, "tacho-hook.mjs"), platform)}`,
+    credentialHelperCommand: helperCommandFor(
+      `${shellQuote(nodePath, platform)} ${shellQuote(P.join(binDir, "tacho.mjs"), platform)}`,
+    ),
     daemonCommand: [nodePath, P.join(binDir, "tachod.mjs")],
     mcpStdioCommand: [nodePath, P.join(binDir, "tacho.mjs"), "mcp-stdio"],
     binDir,
@@ -354,6 +382,32 @@ export interface CliDeps {
     restore: (options: ModelBaseUrlOptions) => Promise<ModelBaseUrlState>;
     read: (options: ModelBaseUrlOptions) => Promise<ModelBaseUrlState>;
   };
+  /**
+   * The brokered credential contract (`host/model-credential.ts`, ADR-138):
+   * take a harness's vendor key out of its file and point it at the
+   * gateway's run tokens, put it back, or report it. Optional for the same
+   * reason `modelBaseUrls` is, and absent means no credential is ever taken
+   * into custody.
+   */
+  modelCredentials?: {
+    apply: (options: ModelCredentialOptions) => Promise<ModelCredentialState>;
+    restore: (
+      options: ModelCredentialOptions,
+      restore: RestoreSecrets,
+    ) => Promise<ModelCredentialState>;
+    read: (options: ModelCredentialOptions) => Promise<ModelCredentialState>;
+  };
+  /** The gateway's custody of vendor credentials (`host/credential-store.ts`). */
+  credentialStore?: CredentialStore;
+  /**
+   * POST to the daemon over its socket (loopback TCP on Windows) with the
+   * local bearer, for `tacho credential issue`. Answers undefined when the
+   * host is not enrolled or the daemon does not answer.
+   */
+  daemonPost?: (
+    path: string,
+    body: unknown,
+  ) => Promise<{ status: number; body: string } | undefined>;
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
   /**
@@ -671,6 +725,33 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
       apply: (options) => applyModelBaseUrls(options),
       restore: (options) => restoreModelBaseUrls(options),
       read: (options) => readModelBaseUrlState(options),
+    },
+    modelCredentials: {
+      apply: (options) => applyModelCredentials(options),
+      restore: (options, secrets) => restoreModelCredentials(options, secrets),
+      read: (options) => readModelCredentialState(options),
+    },
+    credentialStore: openCredentialStore({
+      file: paths.credentials,
+      key: paths.credentialsKey,
+    }),
+    daemonPost: async (path, body) => {
+      const host = readHostFile(paths.hostFile);
+      if (host === undefined) return undefined;
+      try {
+        return await postUnix({
+          ...(platform === "win32"
+            ? { loopbackPort: host.port }
+            : { socketPath: paths.socket }),
+          path,
+          headers: { Authorization: `Bearer ${host.local_token}` },
+          body: JSON.stringify(body),
+          connectTimeoutMs: 250,
+          responseTimeoutMs: 2_000,
+        });
+      } catch {
+        return undefined;
+      }
     },
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),
