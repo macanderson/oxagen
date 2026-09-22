@@ -17,7 +17,7 @@ import type { WsCtx } from "@/server/viewer";
 import { ContextPrs } from "./context-prs";
 import { Freshness } from "./freshness";
 import { Proposals } from "./proposals";
-import { ReadFailure } from "./read-failure";
+import { SteeringReadFailure } from "./read-failure";
 import { Records } from "./records";
 import { SteeringTabs } from "./tabs";
 import { parseSteeringView, type SteeringAt, type SteeringView } from "./view";
@@ -35,7 +35,7 @@ function SettingsPanel({
   return read.ok ? (
     <Freshness at={at} read={read.value} canEdit={canEdit} />
   ) : (
-    <ReadFailure read={read} section={t("settings")} />
+    <SteeringReadFailure read={read} section={t("settings")} />
   );
 }
 

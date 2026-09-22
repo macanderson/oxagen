@@ -32,7 +32,7 @@ import {
   type Tone,
   useDate,
 } from "./parts";
-import { ReadFailure } from "./read-failure";
+import { ToolsReadFailure } from "./read-failure";
 import { type ToolsAt, toolsLink } from "./view";
 
 /** A connection's lifecycle word as a tone; the word itself is what is printed. */
@@ -142,7 +142,7 @@ function GrantsLog({
   const t = useTranslations("tools.connections");
   if (!read.ok) {
     return (
-      <ReadFailure
+      <ToolsReadFailure
         at={at}
         orgRole={orgRole}
         read={read}
@@ -279,7 +279,7 @@ function ConnectionsTable({
   const t = useTranslations("tools.connections.list");
   if (!read.ok) {
     return (
-      <ReadFailure
+      <ToolsReadFailure
         at={at}
         orgRole={orgRole}
         read={read}

@@ -19,7 +19,7 @@ import { SpendStrip } from "./figures";
 import { GatewayPolicySection } from "./gateway-policy";
 import { FindingEvidenceSection, FindingsSection } from "./findings";
 import { PricingSection } from "./pricing";
-import { ReadFailure, SpendEmpty } from "./states";
+import { SpendReadFailure, SpendEmpty } from "./states";
 import { BudgetsTable, GroupTable } from "./tables";
 import { SpendTabs } from "./tabs";
 import { WasteSection } from "./waste";
@@ -75,7 +75,7 @@ async function body(
     return drill.ok ? (
       <DrillSection drill={drill.value} at={at} />
     ) : (
-      <ReadFailure read={drill} />
+      <SpendReadFailure read={drill} />
     );
   }
   const period = monthToDate(today);
@@ -86,15 +86,15 @@ async function body(
         return evidence.ok ? (
           <FindingEvidenceSection evidence={evidence.value} at={at} />
         ) : (
-          <ReadFailure read={evidence} />
+          <SpendReadFailure read={evidence} />
         );
       }
       const [report, findings] = await Promise.all([
         source.spend.byGroup(ctx, "operator", period),
         source.spend.findings(ctx),
       ]);
-      if (!report.ok) return <ReadFailure read={report} />;
-      if (!findings.ok) return <ReadFailure read={findings} />;
+      if (!report.ok) return <SpendReadFailure read={report} />;
+      if (!findings.ok) return <SpendReadFailure read={findings} />;
       return (
         <>
           <SpendStrip total={report.value.total} period={period} />
@@ -105,7 +105,7 @@ async function body(
     case "operator":
     case "tool": {
       const report = await source.spend.byGroup(ctx, view.tab, period);
-      if (!report.ok) return <ReadFailure read={report} />;
+      if (!report.ok) return <SpendReadFailure read={report} />;
       return (
         <>
           <SpendStrip total={report.value.total} period={period} />
@@ -122,8 +122,8 @@ async function body(
         source.spend.byGroup(ctx, "agent", period),
         source.spend.byGroup(ctx, "model", period),
       ]);
-      if (!agents.ok) return <ReadFailure read={agents} />;
-      if (!models.ok) return <ReadFailure read={models} />;
+      if (!agents.ok) return <SpendReadFailure read={agents} />;
+      if (!models.ok) return <SpendReadFailure read={models} />;
       return (
         <>
           <SpendStrip total={agents.value.total} period={period} />
@@ -143,8 +143,8 @@ async function body(
         source.spend.byGroup(ctx, "operator", period),
         source.spend.waste(ctx, period),
       ]);
-      if (!report.ok) return <ReadFailure read={report} />;
-      if (!waste.ok) return <ReadFailure read={waste} />;
+      if (!report.ok) return <SpendReadFailure read={report} />;
+      if (!waste.ok) return <SpendReadFailure read={waste} />;
       return (
         <>
           <SpendStrip total={report.value.total} period={period} />
@@ -158,8 +158,8 @@ async function body(
         source.spend.budgets(ctx),
         source.spend.gatewayPolicy(ctx),
       ]);
-      if (!report.ok) return <ReadFailure read={report} />;
-      if (!budgets.ok) return <ReadFailure read={budgets} />;
+      if (!report.ok) return <SpendReadFailure read={report} />;
+      if (!budgets.ok) return <SpendReadFailure read={budgets} />;
       return (
         <>
           <SpendStrip total={report.value.total} period={period} />
@@ -174,7 +174,7 @@ async function body(
               canEdit={ctx.wsRole === "owner" || ctx.wsRole === "admin"}
             />
           ) : (
-            <ReadFailure read={gateway} />
+            <SpendReadFailure read={gateway} />
           )}
         </>
       );
