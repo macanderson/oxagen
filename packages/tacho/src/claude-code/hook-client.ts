@@ -233,6 +233,109 @@ function operatorBlockLocal(host: HostFile): string | undefined {
   return undefined;
 }
 
+/**
+ * Every hook path this evaluator answers allow on when it cannot reach the
+ * daemon and cannot decide from the cached bundle. Signed onto the bundle
+ * itself as `hook_fail_open` (`packages/handlers/src/lib/tacho-host.ts`) so
+ * the set an operator relies on is read from the record, not from this file.
+ *
+ * `SessionStart` and `UserPromptSubmit` carry no tool identity to evaluate at
+ * all; `Stop`, `PostToolUse`, `PostToolUseFailure`, `Notification` and
+ * `PermissionDenied` are record-only or non-blocking (the `default` branch
+ * below). Of the three tool-bearing events, only `ask` and `no_rule`
+ * outcomes fail open, and even then to the harness's OWN permission prompt, a
+ * channel that needs no daemon, not to a silent allow. A `deny` outcome on
+ * any of the three fails CLOSED; see `evaluateToolPermission`.
+ */
+export const FAIL_OPEN_HOOK_PATHS: readonly string[] = [
+  "SessionStart",
+  "UserPromptSubmit",
+  "Stop",
+  "PostToolUse",
+  "PostToolUseFailure",
+  "Notification",
+  "PermissionDenied",
+  "PreToolUse:ask",
+  "PreToolUse:no_rule",
+  "PermissionRequest:ask",
+  "PermissionRequest:no_rule",
+  "SubagentStart:ask",
+  "SubagentStart:no_rule",
+];
+
+/**
+ * Evaluate one tool-bearing event against the cached bundle, in whatever
+ * shape that event's own hook answer takes. Shared by `PreToolUse`,
+ * `PermissionRequest` and `SubagentStart` (Cursor's own permission event for
+ * a subagent launch) so the three can never drift into answering the same
+ * mandate three different ways. The defect this replaces was exactly that:
+ * `PermissionRequest` fell through to an unconditional `{}` (allow) whenever
+ * the daemon was unreachable, never consulting the bundle at all, even for a
+ * tool the mandate explicitly denies.
+ */
+function evaluateToolPermission(
+  host: HostFile,
+  now: number,
+  eventName: "PreToolUse" | "PermissionRequest" | "SubagentStart",
+  toolName: string,
+  toolInput: Record<string, unknown> | undefined,
+  cwd: string | undefined,
+): { response: Record<string, unknown>; evaluation: Evaluation; note: string } {
+  const verified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
+  const evaluation = evaluatePreToolUse({
+    bundle: host.bundle,
+    bundleVerified: verified,
+    toolName,
+    ...(toolInput !== undefined ? { toolInput } : {}),
+    hostStatus: host.host_status,
+    latestDenyGeneration: host.deny_generation,
+    // No daemon means no re-evaluation: a stale bundle fails closed.
+    controlReachable: false,
+    now,
+    ...(cwd !== undefined ? { context: { cwd } } : {}),
+  });
+  const decision =
+    evaluation.decision === "defer"
+      ? host.bundle.mode === "observe"
+        ? "allow"
+        : "deny"
+      : evaluation.decision;
+  const finalEvaluation: Evaluation = { ...evaluation, decision };
+  const response =
+    decision === "deny"
+      ? {
+          hookSpecificOutput: {
+            hookEventName: eventName,
+            permissionDecision: "deny",
+            permissionDecisionReason: evaluation.reason,
+          },
+        }
+      : decision === "ask" && evaluation.rule !== undefined
+        ? {
+            hookSpecificOutput: {
+              hookEventName: eventName,
+              permissionDecision: "ask",
+              permissionDecisionReason: evaluation.reason,
+            },
+          }
+        : decision === "allow" &&
+            evaluation.evaluated === "allow" &&
+            evaluation.rule !== undefined
+          ? {
+              hookSpecificOutput: {
+                hookEventName: eventName,
+                permissionDecision: "allow",
+                permissionDecisionReason: evaluation.reason,
+              },
+            }
+          : {};
+  return {
+    response,
+    evaluation: finalEvaluation,
+    note: `daemon down; decided ${decision} from cached bundle`,
+  };
+}
+
 /** Decide from the cached bundle alone; the daemon replays the event later. */
 export function decideLocally(
   host: HostFile,
@@ -270,7 +373,7 @@ export function decideLocally(
           note: "blocked by host status",
         };
       return { response: {}, note: "daemon down; recorded for replay" };
-    case "PermissionRequest":
+    case "PermissionRequest": {
       if (block !== undefined) {
         return {
           response: {
@@ -282,70 +385,33 @@ export function decideLocally(
           note: "blocked by host status",
         };
       }
-      return { response: {}, note: "daemon down; recorded for replay" };
-    case "PreToolUse": {
-      const verified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
-      const evaluation = evaluatePreToolUse({
-        bundle: host.bundle,
-        bundleVerified: verified,
-        toolName: input.tool_name ?? "unknown",
-        ...(input.tool_input !== undefined
-          ? { toolInput: input.tool_input }
-          : {}),
-        hostStatus: host.host_status,
-        latestDenyGeneration: host.deny_generation,
-        // No daemon means no re-evaluation: a stale bundle fails closed.
-        controlReachable: false,
+      if (input.tool_name === undefined) {
+        // No tool identity on the payload at all: nothing to evaluate.
+        return { response: {}, note: "daemon down; recorded for replay" };
+      }
+      return evaluateToolPermission(
+        host,
         now,
-        ...(input.cwd !== undefined ? { context: { cwd: input.cwd } } : {}),
-      });
-      const decision =
-        evaluation.decision === "defer"
-          ? host.bundle.mode === "observe"
-            ? "allow"
-            : "deny"
-          : evaluation.decision;
-      const finalEvaluation: Evaluation = { ...evaluation, decision };
-      const response =
-        decision === "deny"
-          ? {
-              hookSpecificOutput: {
-                hookEventName: "PreToolUse",
-                permissionDecision: "deny",
-                permissionDecisionReason: evaluation.reason,
-              },
-            }
-          : decision === "ask" && evaluation.rule !== undefined
-            ? {
-                hookSpecificOutput: {
-                  hookEventName: "PreToolUse",
-                  permissionDecision: "ask",
-                  permissionDecisionReason: evaluation.reason,
-                },
-              }
-            : decision === "allow" &&
-                evaluation.evaluated === "allow" &&
-                evaluation.rule !== undefined
-              ? {
-                  hookSpecificOutput: {
-                    hookEventName: "PreToolUse",
-                    permissionDecision: "allow",
-                    permissionDecisionReason: evaluation.reason,
-                  },
-                }
-              : {};
-      return {
-        response,
-        evaluation: finalEvaluation,
-        note: `daemon down; decided ${decision} from cached bundle`,
-      };
+        "PermissionRequest",
+        input.tool_name,
+        input.tool_input,
+        input.cwd,
+      );
     }
+    case "PreToolUse":
+      return evaluateToolPermission(
+        host,
+        now,
+        "PreToolUse",
+        input.tool_name ?? "unknown",
+        input.tool_input,
+        input.cwd,
+      );
     case "SubagentStart": {
       // Cursor treats subagentStart as a permission event. An empty answer
       // becomes allow, so a paused or revoked host would launch model-backed
       // subagents unless this path decides. Evaluate as Task: one rule covers
       // Claude Code's Task tool and Cursor's subagent start.
-      const block = operatorBlockLocal(host);
       if (block !== undefined) {
         return {
           response: {
@@ -358,7 +424,6 @@ export function decideLocally(
           note: "blocked by host status",
         };
       }
-      const verified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
       const toolInput =
         input.agent_type !== undefined || input.agent_id !== undefined
           ? {
@@ -370,57 +435,14 @@ export function decideLocally(
                 : {}),
             }
           : undefined;
-      const evaluation = evaluatePreToolUse({
-        bundle: host.bundle,
-        bundleVerified: verified,
-        toolName: "Task",
-        ...(toolInput !== undefined ? { toolInput } : {}),
-        hostStatus: host.host_status,
-        latestDenyGeneration: host.deny_generation,
-        controlReachable: false,
+      return evaluateToolPermission(
+        host,
         now,
-        ...(input.cwd !== undefined ? { context: { cwd: input.cwd } } : {}),
-      });
-      const decision =
-        evaluation.decision === "defer"
-          ? host.bundle.mode === "observe"
-            ? "allow"
-            : "deny"
-          : evaluation.decision;
-      const finalEvaluation: Evaluation = { ...evaluation, decision };
-      const response =
-        decision === "deny"
-          ? {
-              hookSpecificOutput: {
-                hookEventName: "SubagentStart",
-                permissionDecision: "deny",
-                permissionDecisionReason: evaluation.reason,
-              },
-            }
-          : decision === "ask" && evaluation.rule !== undefined
-            ? {
-                hookSpecificOutput: {
-                  hookEventName: "SubagentStart",
-                  permissionDecision: "ask",
-                  permissionDecisionReason: evaluation.reason,
-                },
-              }
-            : decision === "allow" &&
-                evaluation.evaluated === "allow" &&
-                evaluation.rule !== undefined
-              ? {
-                  hookSpecificOutput: {
-                    hookEventName: "SubagentStart",
-                    permissionDecision: "allow",
-                    permissionDecisionReason: evaluation.reason,
-                  },
-                }
-              : {};
-      return {
-        response,
-        evaluation: finalEvaluation,
-        note: `daemon down; decided ${decision} from cached bundle`,
-      };
+        "SubagentStart",
+        "Task",
+        toolInput,
+        input.cwd,
+      );
     }
     default:
       return { response: {}, note: "daemon down; recorded for replay" };

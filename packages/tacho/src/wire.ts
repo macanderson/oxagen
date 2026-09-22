@@ -145,6 +145,22 @@ export const BUNDLE_FEATURE_GATEWAY_TOOLS = "gateway_tools" as const;
 export const BUNDLE_FEATURE_MODEL_PRICES = "model_prices" as const;
 
 /**
+ * The host can parse `hook_fail_open`: the list of hook paths the local
+ * evaluator answers allow on when a decision cannot be made against the
+ * cached bundle (the daemon unreachable, or the event carrying no tool
+ * identity to evaluate). Gated for the same reason `gateway_tools` is: the
+ * bundle schema is strict, so a host built before the field would reject the
+ * whole mandate.
+ *
+ * The list itself is a static property of `packages/tacho`'s own hook-client
+ * code (`FAIL_OPEN_HOOK_PATHS` in `claude-code/hook-client.ts`), not of any
+ * one mandate, and is signed into every bundle a host that advertises this
+ * feature receives, so the fail-open set an operator relies on is read from
+ * the record rather than from source.
+ */
+export const BUNDLE_FEATURE_HOOK_FAIL_OPEN = "hook_fail_open" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
@@ -153,6 +169,7 @@ export const BUNDLE_FEATURE_MODEL_PRICES = "model_prices" as const;
 export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_MODEL_PRICES,
+  BUNDLE_FEATURE_HOOK_FAIL_OPEN,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -495,6 +512,21 @@ export const policyBundleSchema = z
      * dead weight before the fleet is there.
      */
     gateway_tools: z.array(z.string().max(256)).max(4096).optional(),
+    /**
+     * The hook paths this host's local evaluator answers allow on when it
+     * cannot reach the daemon and cannot decide from the cached bundle
+     * (§ BUNDLE_FEATURE_HOOK_FAIL_OPEN above). A fixed property of this
+     * tacho release, copied verbatim from `FAIL_OPEN_HOOK_PATHS`
+     * (`claude-code/hook-client.ts`) rather than computed per host, so the
+     * set an operator reads off a signed bundle is the set the code actually
+     * takes, not a description that can drift from the evaluator it
+     * documents without also failing `hook-client.test.ts`.
+     *
+     * Optional, and absent means *this host was not told*, the same reading
+     * `gateway_tools` carries: emitted only once a host advertises
+     * `BUNDLE_FEATURE_HOOK_FAIL_OPEN`, because the schema is `.strict()`.
+     */
+    hook_fail_open: z.array(z.string().max(64)).max(16).optional(),
     /**
      * The price rows the loopback model proxy prices an observed call with, so
      * `budget.session_limit_usd` can be enforced on the machine without the
