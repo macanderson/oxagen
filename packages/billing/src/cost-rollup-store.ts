@@ -24,7 +24,18 @@ import {
   MODEL_CALL_EVENT_TYPES,
   TOOL_CALL_EVENT_TYPES,
 } from "@oxagen/run-ledger";
-import { and, asc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+  type AnyColumn,
+} from "drizzle-orm";
 import {
   dailyTotalsFromRuns,
   rollupRun,
@@ -56,6 +67,27 @@ const sessions = schema.tachoSessions;
 const principals = schema.principals;
 const totals = schema.runTotals;
 const daily = schema.dailyTotals;
+
+const centers = schema.costCenters;
+
+/**
+ * The run's cost center: the agent's label when it names a live row of the
+ * organization's list, else the workspace's on the same terms, else null
+ * (ADR-142). A soft-deleted label claims no new rollup, and the row's own
+ * spelling is what the rollup records, so `eng-1001` on an agent reads as the
+ * list's `ENG-1001`.
+ */
+function resolvedCostCenter(
+  orgId: AnyColumn,
+  agentLabel: AnyColumn,
+  workspaceLabel: AnyColumn,
+) {
+  const live = (label: AnyColumn) =>
+    sql`(select ${centers.label}::text from ${centers} where ${centers.orgId} = ${orgId} and ${centers.label} = ${label} and ${centers.deletedAt} is null limit 1)`;
+  return sql<
+    string | null
+  >`coalesce(${live(agentLabel)}, ${live(workspaceLabel)})`;
+}
 
 /** What a rollup needs to know about a run before it reads the frames. */
 interface RunSource {
@@ -97,6 +129,11 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
           workspaceNamespace: schema.workspaces.namespace,
           agentSlug: schema.agents.slug,
           goal: sql<string | null>`${runs.spec}->>'goal'`,
+          costCenter: resolvedCostCenter(
+            runs.orgId,
+            schema.agents.costCenter,
+            schema.workspaces.costCenter,
+          ),
           createdAt: runs.createdAt,
           startedAt: runs.startedAt,
           sealedAt: sql<Date | null>`(select max(${seals.sealedAt}) from ${seals} where ${seals.runId} = ${runs.id})`,
@@ -149,6 +186,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
             ? `${row.orgNamespace}.${row.workspaceNamespace}.${row.agentSlug}`
             : null,
         taskRef: row.goal,
+        costCenter: row.costCenter,
         startedAt: row.startedAt ?? row.createdAt,
         sealedAt,
         turns: row.opaqueModelCalls === 0 ? row.turnIndexes : null,
@@ -177,8 +215,26 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
           numApiRetries: sessions.numApiRetries,
           enforcementTier: sessions.enforcementTier,
           replayGrade: sessions.replayGrade,
+          costCenter: resolvedCostCenter(
+            sessions.orgId,
+            schema.agents.costCenter,
+            schema.workspaces.costCenter,
+          ),
         })
         .from(sessions)
+        .leftJoin(
+          schema.workspaces,
+          eq(schema.workspaces.id, sessions.workspaceId),
+        )
+        // A wrapped agent is known by its principal; the agent row, deleted or
+        // not, is what carries its cost center.
+        .leftJoin(
+          schema.agents,
+          and(
+            eq(schema.agents.principalId, sessions.agentPrincipalId),
+            eq(schema.agents.orgId, sessions.orgId),
+          ),
+        )
         .leftJoin(
           principals,
           and(
@@ -207,6 +263,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
         agentPrincipalId: row.agentPrincipalId,
         agentKey: row.agentKey,
         taskRef: null,
+        costCenter: row.costCenter,
         startedAt: row.startedAt,
         sealedAt: row.sealedAt,
         turns: row.numTurns,
@@ -307,6 +364,7 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
     agentPrincipalId: row.agentPrincipalId,
     agentKey: row.agentKey,
     taskRef: row.taskRef,
+    costCenter: row.costCenter,
     startedAt: row.startedAt,
     sealedAt: row.sealedAt,
     turns: row.turns,
@@ -435,6 +493,7 @@ export async function upsertRunTotals(
     agentPrincipalId: record.agentPrincipalId,
     agentKey: record.agentKey,
     taskRef: record.taskRef,
+    costCenter: record.costCenter,
     startedAt: record.startedAt,
     sealedAt: record.sealedAt,
     turns: record.turns,
@@ -548,13 +607,15 @@ export async function rebuildRunTotals(
       deps.readWitnessedRun(scope, publicId),
     ]);
   // A witness run is a run of its own whose cost belongs to the worker's
-  // operator (spec §8.5 "Stamping"), so its row names that operator.
+  // operator (spec §8.5 "Stamping"), so its row names that operator, and is
+  // charged back to the worker's cost center for the same reason.
   const worker = workerId === null ? null : await deps.loadRunSource(workerId);
   const meta = worker
     ? {
         ...source.meta,
         operatorPrincipalId: worker.meta.operatorPrincipalId,
         operatorKey: worker.meta.operatorKey,
+        costCenter: worker.meta.costCenter,
       }
     : source.meta;
   const record = rollupRun({
