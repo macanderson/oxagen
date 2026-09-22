@@ -1,8 +1,10 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
 // (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_chain,
-// bisect_runs.
+// bisect_runs, get_run_export.
 // fork_run, export_run and summarize_run check an org role in the handler and
-// an MCP context carries no user, so they have no MCP tool.
+// an MCP context carries no user, so they have no MCP tool. get_run_export
+// checks the same role but its contract declares the mcp surface; the handler
+// resolves the acting user from the API key, and refuses when it cannot.
 //
 // Pattern: vi.mock the kernel `invoke` and the context seam `buildContext` so
 // each default-export handler runs without a live runtime. Each tool asserts:
@@ -40,6 +42,10 @@ import runChainGetTool, {
   schema as chainSchema,
   metadata as chainMetadata,
 } from "./run.chain.get";
+import runExportGetTool, {
+  schema as exportGetSchema,
+  metadata as exportGetMetadata,
+} from "./run.export.get";
 
 const fakeCtx = {
   orgId: "org_test",
@@ -55,6 +61,7 @@ const fakeCtx = {
 const LEDGER_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const DIGEST = `sha256:${"a".repeat(64)}`;
+const EXPORT_ID = "rexp_0a1b2c3d";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -186,6 +193,45 @@ const CASES: ToolCase[] = [
       aligned: 3,
     },
     invalidOutput: { divergentSeq: 4, keyA: null, keyB: null, aligned: 3 },
+  },
+  {
+    name: "get_run_export",
+    handler: runExportGetTool,
+    schema: exportGetSchema,
+    metadata: exportGetMetadata,
+    fields: ["exportId"],
+    readOnly: true,
+    args: { exportId: EXPORT_ID },
+    validOutput: {
+      exportId: EXPORT_ID,
+      runId: TACHO_ID,
+      status: "ready",
+      createdAt: "2026-09-22T09:00:00.000Z",
+      completedAt: "2026-09-22T09:01:00.000Z",
+      bundleDigest: DIGEST,
+      bundleBytes: 4096,
+      merkleRoot: DIGEST,
+      frameCount: 3,
+      error: null,
+      download: {
+        url: "/v1/run-exports/download?token=abc",
+        expiresAt: "2026-09-22T09:16:00.000Z",
+      },
+    },
+    // A status outside the job's four: the contract refuses it.
+    invalidOutput: {
+      exportId: EXPORT_ID,
+      runId: TACHO_ID,
+      status: "done",
+      createdAt: "2026-09-22T09:00:00.000Z",
+      completedAt: null,
+      bundleDigest: null,
+      bundleBytes: null,
+      merkleRoot: null,
+      frameCount: null,
+      error: null,
+      download: null,
+    },
   },
 ];
 

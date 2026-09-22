@@ -8,7 +8,8 @@
  * root, an Ed25519 attestation by the deployment's attester key over the
  * run's seal figures, the public key that verifies it, and a verifier script
  * that recomputes the root and checks the signature with no Oxagen code.
- * Audit › exports lists the job (`evidence.run_exports`).
+ * The job is recorded in `evidence.run_exports`. `get_run_export` reads it
+ * back and mints the download URL, and `oxagen verify` checks the bundle.
  *
  * A live run cannot be exported: the seal is what the attestation signs.
  * Org Owner or Admin only, checked in the handler (`assertOrgRole`,

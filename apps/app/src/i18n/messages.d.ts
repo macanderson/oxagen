@@ -3695,6 +3695,31 @@ type Messages = {
         pending: string;
         queued: string;
         needsRole: string;
+        status: {
+          queued: string;
+          building: string;
+        };
+        checking: string;
+        stalled: string;
+        checkAgain: string;
+        ready: string;
+        download: string;
+        size: string;
+        sizeUnknown: string;
+        digest: string;
+        expires: string;
+        expiresHint: string;
+        verify: string;
+        copy: string;
+        copied: string;
+        copyFailed: string;
+        failed: string;
+        failedUnrecorded: string;
+        readFailure: {
+          notFound: string;
+          denied: string;
+          other: string;
+        };
       };
     };
     gaps: string;

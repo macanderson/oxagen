@@ -75,6 +75,28 @@ export function formatWholeUnits(digits: string, locale: string): string {
   );
 }
 
+/**
+ * A file size in the largest decimal unit that keeps it at 1 or more, as the
+ * run export dialog prints a bundle: `512 byte`, `48.2 kB`, `3.1 MB`.
+ */
+export function formatByteSize(bytes: number, locale: string): string {
+  const total = Math.max(0, bytes);
+  const [value, unit] =
+    total < 1_000
+      ? [total, "byte"]
+      : total < 1_000_000
+        ? [total / 1_000, "kilobyte"]
+        : total < 1_000_000_000
+          ? [total / 1_000_000, "megabyte"]
+          : [total / 1_000_000_000, "gigabyte"];
+  return new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit,
+    unitDisplay: "short",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 /** Whole seconds as `m:ss`, the approval clock's reading; a negative duration reads 0:00. */
 export function formatClock(seconds: number, locale: string): string {
   const total = Math.max(0, Math.floor(seconds));

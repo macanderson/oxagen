@@ -1,14 +1,36 @@
 /**
- * `oxagen run export` and `oxagen run chain` output discipline: --json emits the exact contract
- * payload, pretty mode prints the export id, and an API failure goes to
- * stderr. The shared API client is mocked; no network is needed.
+ * `oxagen run export`, `export-status`, `download` and `chain` output
+ * discipline: --json emits the exact contract payload, pretty mode prints
+ * what to do next, and an API failure goes to stderr. The shared API client,
+ * the configured API origin and `fetch` are mocked; no network is needed.
  */
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { createHash } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../../lib/api.js", () => ({ apiPostOrThrow: vi.fn() }));
+vi.mock("../../lib/config.js", () => ({
+  getApiUrl: () => "https://api.example.test",
+}));
 
-import { runChain, runExport } from "../run.js";
+import {
+  resolveDownloadUrl,
+  runChain,
+  runDownload,
+  runExport,
+  runExportStatus,
+} from "../run.js";
 import { apiPostOrThrow } from "../../lib/api.js";
 
 function memoryWriter(): {
@@ -48,12 +70,13 @@ describe("oxagen run export", () => {
     expect(err).toEqual([]);
   });
 
-  it("prints the export id and where the bundle will be listed in pretty mode", async () => {
+  it("prints the export id and the command that checks on it in pretty mode", async () => {
     post.mockResolvedValue({ exportId: "rexp_0123", status: "queued" });
     const { writer, out } = memoryWriter();
     await runExport("arun_5f0c", {}, writer);
     expect(out[0]).toBe("Export rexp_0123 queued for arun_5f0c.");
-    expect(out[1]).toMatch(/Audit › exports/);
+    expect(out[1]).toContain("oxagen run export-status rexp_0123");
+    expect(out.join("\n")).not.toMatch(/Audit › exports/);
   });
 
   it("routes an API failure to stderr and writes nothing to stdout (negative)", async () => {
@@ -166,5 +189,199 @@ describe("oxagen run chain", () => {
     await runChain("tse_nope", {}, writer);
     expect(out).toEqual([]);
     expect(err.join("\n")).toMatch(/run_not_found/);
+  });
+});
+
+const BUNDLE = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4]);
+const BUNDLE_DIGEST = `sha256:${createHash("sha256").update(BUNDLE).digest("hex")}`;
+
+const READY = {
+  exportId: "rexp_0123",
+  runId: "arun_5f0c",
+  status: "ready",
+  createdAt: "2026-09-22T09:00:00.000Z",
+  completedAt: "2026-09-22T09:01:00.000Z",
+  bundleDigest: BUNDLE_DIGEST,
+  bundleBytes: 4096,
+  merkleRoot: `sha256:${"b".repeat(64)}`,
+  frameCount: 3,
+  error: null,
+  download: {
+    url: "/v1/run-exports/download?token=tok",
+    expiresAt: "2026-09-22T09:16:00.000Z",
+  },
+};
+
+const FAILED = {
+  ...READY,
+  status: "failed",
+  completedAt: "2026-09-22T09:01:00.000Z",
+  bundleDigest: null,
+  bundleBytes: null,
+  merkleRoot: null,
+  frameCount: null,
+  error: "run_not_sealed",
+  download: null,
+};
+
+describe("resolveDownloadUrl", () => {
+  it("keeps an absolute URL", () => {
+    expect(
+      resolveDownloadUrl("https://cdn.example/x?token=t", "https://api.a"),
+    ).toBe("https://cdn.example/x?token=t");
+  });
+
+  it("joins a path onto the API origin, not the org-scoped base", () => {
+    expect(
+      resolveDownloadUrl("/v1/run-exports/download?token=t", "https://api.a/"),
+    ).toBe("https://api.a/v1/run-exports/download?token=t");
+  });
+});
+
+describe("oxagen run export-status", () => {
+  beforeEach(() => {
+    post.mockReset();
+    process.exitCode = undefined;
+  });
+  afterEach(() => {
+    process.exitCode = undefined;
+  });
+
+  it("posts the export id to runs/export-status and emits the payload as JSON", async () => {
+    post.mockResolvedValue(READY);
+    const { writer, out, err } = memoryWriter();
+    await runExportStatus("rexp_0123", { json: true }, writer);
+    expect(post).toHaveBeenCalledWith("runs/export-status", {
+      exportId: "rexp_0123",
+    });
+    expect(JSON.parse(out[0] as string)).toEqual(READY);
+    expect(err).toEqual([]);
+  });
+
+  it("prints size, digest, frames, the resolved link and its expiry when ready", async () => {
+    post.mockResolvedValue(READY);
+    const { writer, out } = memoryWriter();
+    await runExportStatus("rexp_0123", {}, writer);
+    const text = out.join("\n");
+    expect(text).toContain("Export rexp_0123 for arun_5f0c: ready");
+    expect(text).toContain("Size: 4,096 bytes");
+    expect(text).toContain(`Digest: ${BUNDLE_DIGEST}`);
+    expect(text).toContain("Frames: 3");
+    expect(text).toContain(
+      "Download: https://api.example.test/v1/run-exports/download?token=tok",
+    );
+    expect(text).toContain("Link expires: 2026-09-22T09:16:00.000Z");
+    expect(text).toContain("oxagen run download rexp_0123");
+    expect(text).not.toContain("—");
+  });
+
+  it("prints the job's error and no link when the export failed (negative)", async () => {
+    post.mockResolvedValue(FAILED);
+    const { writer, out } = memoryWriter();
+    await runExportStatus("rexp_0123", {}, writer);
+    const text = out.join("\n");
+    expect(text).toContain("Export rexp_0123 for arun_5f0c: failed");
+    expect(text).toContain("Error: run_not_sealed");
+    expect(text).not.toContain("Download:");
+  });
+
+  it("routes an API failure to stderr (negative)", async () => {
+    post.mockRejectedValue(new Error("404 not_found: run_export_not_found"));
+    const { writer, out, err } = memoryWriter();
+    await runExportStatus("rexp_nope", {}, writer);
+    expect(out).toEqual([]);
+    expect(err.join("\n")).toMatch(/run_export_not_found/);
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+describe("oxagen run download", () => {
+  let dir: string;
+  const fetchMock = vi.fn();
+
+  function zipResponse(
+    bytes: Uint8Array<ArrayBuffer>,
+    headerDigest: string | null,
+  ) {
+    const headers = new Headers({ "content-type": "application/zip" });
+    if (headerDigest !== null) headers.set("x-bundle-digest", headerDigest);
+    return new Response(bytes, { status: 200, headers });
+  }
+
+  beforeEach(() => {
+    post.mockReset();
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    dir = mkdtempSync(join(tmpdir(), "oxagen-run-download-"));
+    process.exitCode = undefined;
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    rmSync(dir, { recursive: true, force: true });
+    process.exitCode = undefined;
+  });
+
+  it("fetches the resolved link with no auth header, checks the digest, and writes the zip", async () => {
+    post.mockResolvedValue(READY);
+    fetchMock.mockResolvedValue(zipResponse(BUNDLE, BUNDLE_DIGEST));
+    const target = join(dir, "bundle.zip");
+    const { writer, out, err } = memoryWriter();
+    await runDownload("rexp_0123", { out: target }, writer);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.test/v1/run-exports/download?token=tok",
+    );
+    expect(new Uint8Array(readFileSync(target))).toEqual(BUNDLE);
+    expect(out.join("\n")).toContain(`oxagen verify ${target}`);
+    expect(err).toEqual([]);
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("refuses a bundle whose bytes do not hash to the recorded digest and writes nothing (negative)", async () => {
+    post.mockResolvedValue(READY);
+    const tampered = new Uint8Array([...BUNDLE, 9]);
+    fetchMock.mockResolvedValue(zipResponse(tampered, null));
+    const target = join(dir, "bundle.zip");
+    const { writer, out, err } = memoryWriter();
+    await runDownload("rexp_0123", { out: target }, writer);
+    expect(existsSync(target)).toBe(false);
+    expect(out).toEqual([]);
+    expect(err.join("\n")).toMatch(/Nothing was written/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("refuses when the X-Bundle-Digest header disagrees with the bytes (negative)", async () => {
+    post.mockResolvedValue(READY);
+    fetchMock.mockResolvedValue(
+      zipResponse(BUNDLE, `sha256:${"0".repeat(64)}`),
+    );
+    const target = join(dir, "bundle.zip");
+    const { writer, err } = memoryWriter();
+    await runDownload("rexp_0123", { out: target }, writer);
+    expect(existsSync(target)).toBe(false);
+    expect(err.join("\n")).toMatch(/response header/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("refuses a failed export with its status and error before any fetch (negative)", async () => {
+    post.mockResolvedValue(FAILED);
+    const { writer, err } = memoryWriter();
+    await runDownload("rexp_0123", { out: join(dir, "x.zip") }, writer);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(err.join("\n")).toMatch(/failed: run_not_sealed/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("refuses an export that is still building (negative)", async () => {
+    post.mockResolvedValue({
+      ...FAILED,
+      status: "building",
+      error: null,
+      completedAt: null,
+    });
+    const { writer, err } = memoryWriter();
+    await runDownload("rexp_0123", { out: join(dir, "x.zip") }, writer);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(err.join("\n")).toMatch(/is building, not ready/);
+    expect(process.exitCode).toBe(1);
   });
 });
