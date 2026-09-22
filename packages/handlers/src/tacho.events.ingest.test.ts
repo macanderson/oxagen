@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   sendEvent: vi.fn(),
   bodyPut: vi.fn(),
   recordProofFrames: vi.fn(),
+  fetchAgentRunAuthz: vi.fn(),
 }));
 
 vi.mock("./lib/proof", () => ({
@@ -57,6 +58,17 @@ vi.mock("./logger", () => ({
 vi.mock("./lib/onboarding", () => ({
   unlockOnboardingGate: mocks.unlockOnboardingGate,
 }));
+
+// The tool-RBAC half of the mandate (`resolveHostMandate`), which runs only
+// for a host that names an agent principal. It reads live authority through
+// its own `withTenantDb`, which this file has already replaced with a fake
+// carrying the ingest tables and not the IAM ones. These cases are about what
+// ingest records, so the snapshot is stubbed empty; the resolution itself is
+// covered in `packages/iam` and the mapping in `lib/tacho-mandate.test.ts`.
+vi.mock("@oxagen/iam", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@oxagen/iam")>();
+  return { ...original, fetchAgentRunAuthz: mocks.fetchAgentRunAuthz };
+});
 
 vi.mock("@oxagen/billing", () => ({ recordSpend: mocks.recordSpend }));
 vi.mock("./event-client", () => ({
@@ -606,6 +618,14 @@ function wire(db: FakeDb): void {
           retentionPolicyVersions: {
             findFirst: async () => db.retentionPolicy,
           },
+          // The mandate read (`resolveHostMandate`), which the control
+          // envelope every ingest answers with is built from. This fixture
+          // publishes no agent version and stores no decision rules, so the
+          // envelope carries the empty permission set and the observed
+          // budget; `tacho-host-bundle.test.ts` covers a mandate that is not.
+          agents: { findFirst: async () => undefined },
+          agentVersions: { findFirst: async () => undefined },
+          workspaces: { findFirst: async () => undefined },
         },
         // Two reads share `select`, told apart by the table. The steering
         // read (`readWorkspaceSteering`) counts `context_promotions` for the
@@ -811,6 +831,12 @@ beforeEach(() => {
   mocks.recordSpend.mockResolvedValue(undefined);
   mocks.sendEvent.mockResolvedValue(undefined);
   mocks.recordProofFrames.mockResolvedValue({ written: 0, witnessRunIds: [] });
+  mocks.fetchAgentRunAuthz.mockResolvedValue({
+    roles: [],
+    roleGrants: [],
+    grants: [],
+    policies: [],
+  });
 });
 
 describe("ingest_tacho_events", () => {

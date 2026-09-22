@@ -64,11 +64,15 @@ interface TachoTx {
     tachoControlCommands: { findMany: (args: unknown) => Promise<unknown> };
     retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
     // The mandate read (`resolveHostMandate`): the host's agent identity and
-    // its active version's config, for the budget half of the mandate. The
-    // decision-rules half goes through `@oxagen/rules`'s own `loadRuleSetIn`
-    // on a cast to the real `Tx`, so it is not named here.
+    // its active version's config, for the budget half of the mandate.
     agents: { findFirst: (args: unknown) => Promise<unknown> };
     agentVersions: { findFirst: (args: unknown) => Promise<unknown> };
+    // The decision-rules half of the mandate. `loadRuleSetIn` (`@oxagen/rules`)
+    // reads it, and it runs on a cast to the real `Tx` because that signature
+    // asks for the whole thing. Naming the table it touches is what keeps the
+    // cast honest: a fake built to this interface and missing `workspaces`
+    // type-checks past the cast and throws at the first call (#3710).
+    workspaces: { findFirst: (args: unknown) => Promise<unknown> };
   };
   // The steering read (`readWorkspaceSteering`): the ledger count and the
   // records joined to their pinned versions.
