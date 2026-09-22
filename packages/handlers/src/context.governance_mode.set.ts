@@ -29,6 +29,7 @@
 // convenience over doing it by hand — and, unlike doing it by hand, it leaves
 // `steering.governance_overridden` behind. That record is the whole point.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
+import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import {
   contextGovernanceModeSet,
   GOVERNANCE_BRANCH,
@@ -291,6 +292,7 @@ export function makeSetGovernanceModeHandler(
                   head: GOVERNANCE_BRANCH,
                   base: repo.defaultBranch,
                   body: PR_BODY,
+                  labels: OXAGEN_PR_LABELS,
                 })),
                 reused: false,
               };

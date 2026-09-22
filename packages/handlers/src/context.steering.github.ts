@@ -109,7 +109,13 @@ export interface SteeringGitHub {
   ): Promise<{ commitSha: string }>;
   openPullRequest(
     repo: SteeringRepository,
-    args: { title: string; head: string; base: string; body: string },
+    args: {
+      title: string;
+      head: string;
+      base: string;
+      body: string;
+      labels?: readonly string[];
+    },
   ): Promise<{ number: number; htmlUrl: string }>;
   updatePullRequest(
     repo: SteeringRepository,

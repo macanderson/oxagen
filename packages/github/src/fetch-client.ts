@@ -640,6 +640,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     base: string;
     body?: string;
     draft?: boolean;
+    labels?: readonly string[];
   }): Promise<{ number: number; htmlUrl: string }> {
     const reqBody: Record<string, unknown> = {
       title: args.title,
@@ -654,6 +655,16 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls`,
       reqBody,
     );
+
+    // A pull request is an issue to the labels endpoint. Adding is additive
+    // and idempotent, so a retry after a failed label call is safe.
+    if (args.labels !== undefined && args.labels.length > 0) {
+      await request<unknown>(
+        "POST",
+        `/repos/${seg(args.owner)}/${seg(args.repo)}/issues/${data.number}/labels`,
+        { labels: [...args.labels] },
+      );
+    }
 
     return { number: data.number, htmlUrl: data.html_url };
   }

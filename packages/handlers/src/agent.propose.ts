@@ -56,6 +56,7 @@ import {
   createSteeringGitHub,
   type SteeringGitHub,
 } from "./context.steering.github";
+import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import { sha256Hex } from "./registry-digest";
 
 /** What the checks read from Postgres. Nothing here is written. */
@@ -334,6 +335,7 @@ export function createProposeAgentHandler(
       : await deps.github.openPullRequest(repo, {
           head: branch,
           base,
+          labels: OXAGEN_PR_LABELS,
           ...metadata,
         });
 

@@ -19,6 +19,7 @@ export {
   GitHubApiError,
   GitHubRateLimitedError,
 } from "./fetch-client";
+export { OXAGEN_PR_LABELS } from "./types";
 export type {
   AppInstallationTokenArgs,
   InstallationTokenResult,

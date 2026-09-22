@@ -150,7 +150,11 @@ describe("open_init_pr", () => {
     const puts = vi.mocked(client.putFile).mock.calls.map(([args]) => args);
     expect(puts.every((args) => args.branch === "oxagen/init")).toBe(true);
     expect(client.openPullRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ head: "oxagen/init", base: "main" }),
+      expect.objectContaining({
+        head: "oxagen/init",
+        base: "main",
+        labels: ["no-issue"],
+      }),
     );
   });
 
