@@ -389,6 +389,26 @@ export const deliveredCommandSchema = z
 
 export type DeliveredCommand = z.output<typeof deliveredCommandSchema>;
 
+/**
+ * The same command as a RESPONSE carries it, tolerant of keys this build has
+ * never heard of.
+ *
+ * The schema above stays strict, and the control plane keeps checking what it
+ * is about to send against it: a key it did not mean to send is drift, and
+ * that is the side where drift must be caught. This copy is the one a host
+ * parses. The envelope's own tolerance stopped at the array, so the failure it
+ * closes stayed open one level down: a single optional field added to a
+ * delivered command failed the array, the whole poll and ingest response
+ * failed with it, the host stopped acknowledging batches, and `pause`,
+ * `cancel` and `kill` stopped arriving on a host that reported itself healthy.
+ */
+export const deliveredCommandResponseSchema =
+  deliveredCommandSchema.passthrough();
+
+export type DeliveredCommandResponse = z.output<
+  typeof deliveredCommandResponseSchema
+>;
+
 /** The signed policy bundle a host caches (spec section 7.1). */
 export const policyBundleSchema = z
   .object({
@@ -715,7 +735,9 @@ export const controlEnvelopeSchema = z
     host_status: tachoHostStatusSchema,
     deny_generation: denyGenerationSchema,
     bundle_etag: z.string().min(1),
-    commands: z.array(deliveredCommandSchema).max(100),
+    // Tolerant per element as well as per envelope: a strict array inside a
+    // tolerant wrapper is the same outage one level down.
+    commands: z.array(deliveredCommandResponseSchema).max(100),
   })
   .passthrough();
 
