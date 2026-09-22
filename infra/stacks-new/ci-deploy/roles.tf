@@ -218,6 +218,18 @@ data "aws_iam_policy_document" "oxagen_platform" {
     ]
   }
 
+  # infra/tools/run-db-migrations.sh's migration_object_key() names its
+  # upload `atlas-migrations-<16 hex>.tgz`, one per invocation, so two
+  # overlapping migration gates on main each classify status against their
+  # own commit's migration directory rather than racing on a shared name.
+  # PublishArtifacts above can't cover it: its resource list is exact
+  # standalone-tarball keys, not this wildcard.
+  statement {
+    sid       = "PublishMigrationTarball"
+    actions   = ["s3:PutObject", "s3:DeleteObject"]
+    resources = ["arn:aws:s3:::${aws_s3_bucket.deploy.bucket}/_deploy/atlas-migrations-*.tgz"]
+  }
+
   statement {
     sid       = "RestartServices"
     actions   = ["ssm:SendCommand"]
@@ -244,6 +256,18 @@ data "aws_iam_policy_document" "oxagen_platform" {
       variable = "ssm:resourceTag/Name"
       values   = [var.node_name]
     }
+  }
+
+  # infra/tools/run-db-migrations.sh sends AWS-RunShellScript, not the
+  # deploy_service document RestartServices above names, to run Atlas on
+  # the node. AWS evaluates a SendCommand call against both the instance
+  # ARN and the document ARN, so RestartServicesOnTheNode's grant on the
+  # instance is not enough on its own — same split as PortForwardToTheNode
+  # / PortForwardDocument below for StartSession.
+  statement {
+    sid       = "RunShellScriptDocument"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ssm:${var.region}::document/AWS-RunShellScript"]
   }
 
   # Port-forwarding to the node, which is the only way a runner can reach
@@ -299,6 +323,17 @@ data "aws_iam_policy_document" "oxagen_platform" {
   statement {
     sid       = "ReadCommandResult"
     actions   = ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"]
+    resources = ["*"]
+  }
+
+  # The migration script asks whether the node is managed before it sends
+  # Atlas status. This action takes no resource type, so `*` is the only
+  # expressible scope, same as ReadCommandResult. The script still continues
+  # when the call is denied, because this grant is not live until the stack
+  # is applied, and a denied read must not be reported as an unregistered node.
+  statement {
+    sid       = "SeeWhetherTheNodeIsManaged"
+    actions   = ["ssm:DescribeInstanceInformation"]
     resources = ["*"]
   }
 

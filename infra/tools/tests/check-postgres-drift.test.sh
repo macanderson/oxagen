@@ -162,6 +162,44 @@ EOF
 OUT=$(classify_atlas_status "$WORK/contradiction.txt" 188); CODE=$?
 expect_code 2 "$CODE" "OK alongside pending files is unknown, not current"
 
+# OK against a shorter directory than this commit declares. Pending is zero
+# because that older directory is fully applied. The gate must still block.
+cat > "$WORK/ok-short.txt" <<'EOF'
+Migration Status: OK
+  -- Current Version: 20260918090000
+  -- Executed Files:  187
+  -- Pending Files:   0
+EOF
+OUT=$(classify_atlas_status "$WORK/ok-short.txt" 188); CODE=$?
+expect_code 1 "$CODE" "OK with fewer executed files than declared is behind"
+contains "$OUT" "not taken against this commit" "the message names the mismatched directory"
+
+cat > "$WORK/ok-long.txt" <<'EOF'
+Migration Status: OK
+  -- Executed Files:  189
+  -- Pending Files:   0
+EOF
+OUT=$(classify_atlas_status "$WORK/ok-long.txt" 188); CODE=$?
+expect_code 2 "$CODE" "OK with more executed files than declared is unknown"
+
+# A pending list longer than the 20-line SSM tail used to hide the verdict.
+# shellcheck source=infra/tools/run-db-migrations.sh
+source "$TOOLS/run-db-migrations.sh"
+{
+  echo "Migration Status: PENDING"
+  echo "  -- Executed Files:  0"
+  echo "  -- Pending Files:   188"
+  i=0
+  while [[ $i -lt 30 ]]; do
+    printf '  -- 202601010000%02d_file.sql\n' "$i"
+    i=$((i + 1))
+  done
+} > "$WORK/long-status.txt"
+visible_stream "$(cat "$WORK/long-status.txt")" > "$WORK/tailed.txt"
+OUT=$(classify_atlas_status "$WORK/tailed.txt" 188); CODE=$?
+expect_code 1 "$CODE" "a tailed status that kept the header is still the empty-revision case"
+contains "$OUT" "revision table is empty" "the tailed output still names the empty revision table"
+
 # --- the script never applies ----------------------------------------------
 #
 # The same guarantee check-store-drift.test.sh holds over its own script. A
@@ -176,6 +214,12 @@ CODE_ONLY=$(sed 's/#.*$//' "$TOOLS/check-postgres-drift.sh")
 lacks "$CODE_ONLY" "--apply" "the drift check never passes --apply"
 lacks "$CODE_ONLY" "migrate apply" "the drift check never invokes atlas migrate apply"
 contains "$CODE_ONLY" "run-db-migrations.sh" "the drift check reaches production the one way that works"
+
+# The early label has to see the ClickHouse baseline. check-store-drift.sh
+# applies packages/telemetry/src/schema.sql on every migrate, outside the ledger.
+LABEL_WF="$TOOLS/../../.github/workflows/migration-label.yml"
+contains "$(cat "$LABEL_WF")" "packages/telemetry/src/schema.sql" \
+  "migration-label watches the ClickHouse baseline schema"
 
 # --- the declared count is not optional in practice -------------------------
 #

@@ -824,6 +824,12 @@ jobs:
   # is an `aws rds describe-db-clusters` confirming it; the CI deploy role
   # still has no `rds:Describe*` permission, so that call is denied even from
   # inside the account (where-is-production.yml run 34456388188, 2026-09-10).
+  # The migration gate cannot use that call for the host. Run 35670778610
+  # reported Postgres unknown on AccessDenied and blocked the deploy. The
+  # status script reads the writer host from `/oxagen/production/DATABASE_URL`
+  # instead, the parameter this role already reads for the ClickHouse
+  # coordinator lock. describe-db-clusters stays the fallback for a caller
+  # that has the permission.
   # What that same run DID observe, read-only: exactly two running EC2
   # instances, `oxagen-nat` and `oxagen-app`, and no `oxagen-data` box — which
   # rules out the loopback/SSM story's premise even without an RDS answer.

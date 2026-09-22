@@ -18,6 +18,42 @@ const num = (value: unknown): number =>
 const str = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
 
+/**
+ * A stored path that already names a worktree.
+ *
+ * POSIX absolute, a UNC share, or a drive letter. A relative path has none
+ * of these, which is how a row written before worktree-qualified identity
+ * is recognized: the worktree was not recorded anywhere except, sometimes,
+ * as the same text in `repo_relative_path`.
+ */
+function isAbsoluteStoredPath(path: string): boolean {
+  return (
+    path.startsWith("/") ||
+    path.startsWith("\\\\") ||
+    /^[A-Za-z]:[\\/]/.test(path)
+  );
+}
+
+/**
+ * The repo-relative key of a row stored before a worktree was recorded.
+ *
+ * Undefined for an absolute path. That row is already a qualified
+ * identity and must not also answer for every worktree that holds the
+ * same relative name.
+ */
+function legacyRelativeOf(row: {
+  path: string;
+  repoRelativePath: string | null;
+}): string | undefined {
+  if (isAbsoluteStoredPath(row.path)) return undefined;
+  const relative =
+    row.repoRelativePath !== null && row.repoRelativePath.length > 0
+      ? row.repoRelativePath
+      : row.path;
+  if (relative.length === 0 || isAbsoluteStoredPath(relative)) return undefined;
+  return relative;
+}
+
 export async function rollupFiles(
   tx: Tx,
   ctx: Scope,
@@ -150,10 +186,21 @@ export async function rollupFiles(
   // case where both happen to travel together, which is the case a test
   // constructs and the rarer one in practice.
   //
-  // So the rows this session already has are read once and keyed the same
-  // way, and an entry that matches one reuses that row's stored path. The
-  // insert then conflicts as it should and enriches the row rather than
-  // adding a second. One query per rollup, not one per file.
+  // So the rows this session already has are read once. An entry that
+  // matches one reuses that row's stored path, the insert conflicts, and
+  // the row is enriched rather than duplicated. One query per rollup, not
+  // one per file.
+  //
+  // Keying is `fileIdentityOf`. An absolute stored path matches a later
+  // observation of that same path. A row written before a worktree was
+  // recorded stored a relative path, commonly the same text in
+  // `repo_relative_path`. `fileIdentityOf` on that path alone is
+  // `unplaced:<path>`, and the reconciliation is `absolute:<root>/<path>`,
+  // so that key misses. Those rows are also indexed by `repoRelativePath`
+  // onto the qualified identity of an entry in this batch that names the
+  // same relative path. An absolute stored row already occupying that
+  // identity keeps it. One relative row binds to one identity, so two
+  // worktrees that each hold an absolute `src/a.ts` stay two rows.
   const stored = await tx
     .select({
       path: schema.tachoSessionFiles.path,
@@ -170,9 +217,27 @@ export async function rollupFiles(
     })
     .from(schema.tachoSessionFiles)
     .where(eq(schema.tachoSessionFiles.sessionId, sessionId));
-  const pathByIdentity = new Map(
-    stored.map((row) => [fileIdentityOf(row.path).key, row.path]),
-  );
+  const pathByIdentity = new Map<string, string>();
+  const legacyByRelative = new Map<string, string>();
+  for (const row of stored) {
+    pathByIdentity.set(fileIdentityOf(row.path).key, row.path);
+    const relative = legacyRelativeOf(row);
+    if (relative !== undefined && !legacyByRelative.has(relative))
+      legacyByRelative.set(relative, row.path);
+  }
+  for (const [identity, entry] of byPath) {
+    if (pathByIdentity.has(identity)) continue;
+    const relative =
+      entry.observed?.repoRelativePath ??
+      (entry.root === undefined
+        ? undefined
+        : repoRelativePathOf(entry.path, entry.root));
+    if (relative === undefined) continue;
+    const legacyPath = legacyByRelative.get(relative);
+    if (legacyPath === undefined) continue;
+    pathByIdentity.set(identity, legacyPath);
+    legacyByRelative.delete(relative);
+  }
   if (observedStatusColumn) {
     // One set-based UPDATE for every path a complete snapshot clears, not one
     // awaited statement per row. A row already at rest (null status, zero
@@ -216,7 +281,19 @@ export async function rollupFiles(
     }
   }
   for (const [identity, entry] of byPath) {
-    const path = pathByIdentity.get(identity) ?? entry.path;
+    const storedPath = pathByIdentity.get(identity);
+    const path = storedPath ?? entry.path;
+    // The conflict target stays the path the row already has. When that
+    // path is still relative and this batch has the absolute one, record
+    // the absolute path on the same row. The next batch then matches it
+    // by file identity, and a later complete snapshot can clear it. A
+    // relative path would keep the observation on a row the clear pass
+    // skips, because a relative path looks inside every worktree.
+    const qualifyLegacy =
+      storedPath !== undefined &&
+      storedPath !== entry.path &&
+      !isAbsoluteStoredPath(storedPath) &&
+      isAbsoluteStoredPath(entry.path);
     await tx
       .insert(schema.tachoSessionFiles)
       .values({
@@ -254,6 +331,7 @@ export async function rollupFiles(
           schema.tachoSessionFiles.path,
         ],
         set: {
+          ...(qualifyLegacy ? { path: entry.path } : {}),
           reads: sql`${schema.tachoSessionFiles.reads} + ${entry.reads}`,
           writes: sql`${schema.tachoSessionFiles.writes} + ${entry.writes}`,
           edits: sql`${schema.tachoSessionFiles.edits} + ${entry.edits}`,

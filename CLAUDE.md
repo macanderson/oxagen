@@ -128,7 +128,7 @@ replaces `Queued` with the assigned priority and aligns the area with its label.
 
 ## Issues and labels
 
-Track work in GitHub issues on `macanderson/oxagen`. Follow SCR-003, SCR-004, and SCR-005 in `docs/scr/`.
+Track work in GitHub issues on `macanderson/oxagen`. Follow SCR-003, SCR-004, and SCR-005 in `.oxagen/rules/`.
 
 Fix defects in the task's PR when the fix can responsibly ride it. File an issue only when the work needs a maintainer decision, a rig, credentials, real spend, or more work than the session can carry. State that constraint and the maintainability, stability, reliability, innovation, efficiency, or performance benefit.
 
