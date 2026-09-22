@@ -959,4 +959,59 @@ describe("the daemon's git seam", () => {
     await handle.api.handleHook(hook("UserPromptSubmit", { prompt: "four" }));
     expect(frames(handle).at(-1)?.context?.git_branch).toBe("main");
   });
+  it("spawns no git for a throttled read until it comes due", async () => {
+    // A `Stop` inside the reconcile interval used to run the HEAD, branch,
+    // status, and remote probes and then requeue itself, so the one-second
+    // control tick repeated all four until the interval expired: about sixty
+    // git processes per session where one reconciliation was due.
+    let time = 1_000;
+    const calls: string[][] = [];
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, calls),
+      () => time,
+    );
+    const spawns = () => calls.filter((call) => call[0] === "git").length;
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    await handle.tick();
+    expect(reconciliations(handle)).toHaveLength(1);
+    const settled = spawns();
+    await handle.api.handleHook(hook("Stop"));
+    await handle.tick();
+    await handle.tick();
+    await handle.tick();
+    expect(spawns()).toBe(settled);
+    expect(reconciliations(handle)).toHaveLength(1);
+    time += 15_000;
+    await handle.tick();
+    expect(spawns()).toBeGreaterThan(settled);
+    expect(reconciliations(handle)).toHaveLength(2);
+  });
+
+  it("reads the worktree when SessionEnd is the first hook to carry cwd", async () => {
+    // A session first seen without a working directory (OTel, a transcript,
+    // or a start hook that carried none) used to seal on SessionEnd before
+    // the payload's own `cwd` was applied, so the final read never ran and
+    // the session closed with no worktree evidence.
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+    );
+    await handle.api.handleHook({
+      payload: { session_id: SESSION, hook_event_name: "SessionStart" },
+      env: {},
+    });
+    expect(handle.registry.get(SESSION)?.cwd).toBeUndefined();
+    await handle.api.handleHook(hook("SessionEnd"));
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+    expect(reconciliations(handle)).toHaveLength(1);
+    const events = frames(handle);
+    const end = events.findIndex((event) => event.kind === "agent_stop");
+    expect(end).toBeGreaterThan(-1);
+    expect(
+      events.findIndex((event) => event.kind === "oxagen:worktree_reconciled"),
+    ).toBeLessThan(end);
+  });
 });

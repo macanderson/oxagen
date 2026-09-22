@@ -115,6 +115,22 @@ export interface ShipResult {
   reachable: boolean;
 }
 
+/** Persisted event time bounds withholding across daemon restarts. */
+export const MAX_BODY_AUTHORITY_WAIT_MS = 24 * 60 * 60_000;
+
+/**
+ * The least time between two "retention: held" lines from one shipper.
+ *
+ * The hold is a zero-progress path: while a mandate is unproven, every drain
+ * withholds the same events and finds the same nothing to ship, and the drain
+ * runs on the default one-second control tick. Logging each one put 86,400
+ * identical lines per host per day into the daemon log during an outage of the
+ * control plane, which is the log growth this path exists to survive. The
+ * ceiling is one line per five minutes, and the mark clears the moment the
+ * mandate proves, so the next hold says so at once.
+ */
+export const RETENTION_HOLD_LOG_INTERVAL_MS = 5 * 60_000;
+
 /**
  * The wait a 429 asked for, in milliseconds, or undefined when the server gave
  * no usable hint. `Retry-After` wins; `X-RateLimit-Reset` is the fallback,
@@ -122,9 +138,6 @@ export interface ShipResult {
  * a malformed or hostile header cannot park the daemon indefinitely, and
  * floored at a second so a reset already in the past does not spin.
  */
-/** Persisted event time bounds withholding across daemon restarts. */
-export const MAX_BODY_AUTHORITY_WAIT_MS = 24 * 60 * 60_000;
-
 const MAX_SERVER_REQUESTED_WAIT_MS = 5 * 60_000;
 function serverRequestedWaitMs(error: ControlError): number | undefined {
   if (error.status !== 429) return undefined;
@@ -421,7 +434,8 @@ export class Shipper {
     if (
       held.size > 0 &&
       (this.lastRetentionHoldLogAt === undefined ||
-        this.options.now() - this.lastRetentionHoldLogAt >= 300_000)
+        this.options.now() - this.lastRetentionHoldLogAt >=
+          RETENTION_HOLD_LOG_INTERVAL_MS)
     ) {
       this.lastRetentionHoldLogAt = this.options.now();
       this.options.log(

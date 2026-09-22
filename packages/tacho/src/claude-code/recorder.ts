@@ -37,6 +37,11 @@ import {
   type LlmCallLedgerState,
   withoutUsage,
 } from "./llm-call-dedupe";
+import {
+  TOOL_CALL_DUPLICATE_OF_ATTR,
+  ToolCallLedger,
+  type ToolCallLedgerState,
+} from "./tool-call-dedupe";
 import { toProtocolTimestamp } from "../timestamp";
 import {
   type ClaudeCodeContext,
@@ -73,13 +78,13 @@ interface StandardUpdate {
 }
 
 /** A sighting's attrs (undefined: a repeat not to seal) and its commit. */
-interface LlmCallSightingAttrs {
+interface SightingAttrs {
   attrs: Record<string, string> | undefined;
   commit: () => void;
 }
 
-/** What a row that is not an `llm_call` takes part in: nothing. */
-const NO_SIGHTING: LlmCallSightingAttrs = { attrs: {}, commit: () => {} };
+/** What a row no ledger judges takes part in: nothing. */
+const NO_SIGHTING: SightingAttrs = { attrs: {}, commit: () => {} };
 
 export interface RecorderOptions {
   context: ClaudeCodeContext;
@@ -131,6 +136,8 @@ export interface RecorderState {
   totals: Partial<TranscriptTotals>;
   /** Model calls already sealed, keyed as `llm-call-dedupe.ts` keys them. */
   llmCalls?: LlmCallLedgerState;
+  /** Tool calls already sealed, by `tool_use_id`; see `tool-call-dedupe.ts`. */
+  toolCalls?: ToolCallLedgerState;
   children: Record<
     string,
     {
@@ -167,6 +174,7 @@ export interface ChainMark {
   started: boolean;
   stopped: boolean;
   llmCalls: LlmCallLedgerState;
+  toolCalls: ToolCallLedgerState;
   /** One mark per subagent chain open at the time, by subagent id. */
   children: Map<
     string,
@@ -272,6 +280,7 @@ export class SessionRecorder {
   readonly totals: Partial<TranscriptTotals> = {};
   readonly metrics: OtelMetricPoint[] = [];
   private llmCalls = new LlmCallLedger();
+  private toolCalls = new ToolCallLedger();
 
   constructor(options: RecorderOptions) {
     this.options = options;
@@ -328,6 +337,7 @@ export class SessionRecorder {
     this.envSnapshot = state.envSnapshot;
     Object.assign(this.totals, state.totals);
     this.llmCalls = new LlmCallLedger(state.llmCalls);
+    this.toolCalls = new ToolCallLedger(state.toolCalls);
     for (const [subagentId, link] of Object.entries(state.children)) {
       const recorder = new SessionRecorder({
         context: this.options.context,
@@ -388,6 +398,7 @@ export class SessionRecorder {
         : {}),
       totals: { ...this.totals },
       llmCalls: this.llmCalls.state(),
+      toolCalls: this.toolCalls.state(),
       children,
     };
   }
@@ -416,6 +427,7 @@ export class SessionRecorder {
       started: this.started,
       stopped: this.stopped,
       llmCalls: this.llmCalls.state(),
+      toolCalls: this.toolCalls.state(),
       children,
     };
   }
@@ -432,7 +444,8 @@ export class SessionRecorder {
    * commits to an event no verifier can read, and the record is neither
    * gap-free nor tamper-evident. This puts the cursor, the sealed events, the
    * bodies waiting to be written beside them, the turn and lifecycle flags a
-   * seal sets, and the model-call ledger back where the mark found them.
+   * seal sets, and the model-call and tool-call ledgers back where the mark
+   * found them.
    *
    * Facts absorbed from a source are not chain positions and are left alone:
    * the git context, host and `anthropic` blocks, the transcript totals, the
@@ -465,6 +478,7 @@ export class SessionRecorder {
     this.started = mark.started;
     this.stopped = mark.stopped;
     this.llmCalls = new LlmCallLedger(mark.llmCalls);
+    this.toolCalls = new ToolCallLedger(mark.toolCalls);
   }
 
   /**
@@ -793,11 +807,40 @@ export class SessionRecorder {
   private llmCallSighting(
     body: Record<string, unknown>,
     source: string,
-  ): LlmCallSightingAttrs {
+  ): SightingAttrs {
     const { verdict, commit } = this.llmCalls.judge(body, source);
     if (verdict.kind === "repeat") return { attrs: undefined, commit };
     if (verdict.kind === "duplicate")
       return { attrs: { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of }, commit };
+    return { attrs: {}, commit };
+  }
+
+  /**
+   * The attrs a `tool_call` carries, or undefined when the chain already
+   * holds this call and the row must not be sealed at all.
+   *
+   * A row from a source that reports a call another source already sealed is
+   * a second copy of one call, not a second call, and sealing it put three
+   * frames on the chain for every tool a session ran (#3661). The one row
+   * that still seals is the one bringing the body a digest-only first
+   * sighting could not, and it is stamped so a reader counts one call. See
+   * `tool-call-dedupe.ts` and ADR-140.
+   */
+  private toolCallSighting(
+    body: Record<string, unknown>,
+    source: string,
+    hasBody: boolean,
+  ): SightingAttrs {
+    const toolUseId =
+      typeof body["tool_use_id"] === "string" ? body["tool_use_id"] : undefined;
+    const { verdict, commit } = this.toolCalls.judge(
+      toolUseId,
+      source,
+      hasBody,
+    );
+    if (verdict.kind === "repeat") return { attrs: undefined, commit };
+    if (verdict.kind === "body")
+      return { attrs: { [TOOL_CALL_DUPLICATE_OF_ATTR]: verdict.of }, commit };
     return { attrs: {}, commit };
   }
 
@@ -881,16 +924,18 @@ export class SessionRecorder {
     }
     const out: TachoEvent[] = [];
     for (const draft of drafts) {
-      out.push(this.sealHookDraft(draft, env, ts));
+      const sealed = this.sealHookDraft(draft, env, ts);
+      if (sealed !== undefined) out.push(sealed);
     }
     return out;
   }
 
+  /** The event this draft seals, or undefined for a call the chain holds. */
   private sealHookDraft(
     draft: HookDraft,
     env: Record<string, string | undefined>,
     ts: string,
-  ): TachoEvent {
+  ): TachoEvent | undefined {
     this.absorbContext(draft.context);
     this.absorbHost(draft.host);
     if (this.envSnapshot === undefined) {
@@ -928,6 +973,15 @@ export class SessionRecorder {
       // The parent-side view of a spawn (no agent_id on the payload).
       body = { ...body };
     }
+    const sighting =
+      draft.kind === "tool_call"
+        ? this.toolCallSighting(body, "hook", draft.content !== undefined)
+        : NO_SIGHTING;
+    const duplicate = sighting.attrs;
+    if (duplicate === undefined) {
+      sighting.commit();
+      return undefined;
+    }
     const event = this.seal(draft.kind, body, {
       ts,
       source: "hook",
@@ -935,11 +989,12 @@ export class SessionRecorder {
       ...(draft.hook_source_kind !== undefined
         ? { hook_source_kind: draft.hook_source_kind }
         : {}),
-      attrs: draft.attrs,
+      attrs: { ...draft.attrs, ...duplicate },
       ...(draft.content !== undefined ? { content: draft.content } : {}),
       raw_source_digest: draft.raw_source_digest,
       turn: draft.turn ?? {},
     });
+    sighting.commit();
     if (draft.kind === "turn_end") {
       this.turnOpen = false;
     }
@@ -1101,7 +1156,12 @@ export class SessionRecorder {
     const sighting =
       draft.kind === "llm_call" && draft.source === "otel_log"
         ? this.llmCallSighting(draft.body, draft.source)
-        : NO_SIGHTING;
+        : draft.kind === "tool_call"
+          ? // An OTel record names a digest, never bytes, so it never brings
+            // a body the chain lacks: a call another source sealed is a
+            // repeat whichever OTel record reports it.
+            this.toolCallSighting(draft.body, draft.source, false)
+          : NO_SIGHTING;
     const duplicate = sighting.attrs;
     if (duplicate === undefined) {
       // No `seal()` call guards this branch either: a dropped repeat whose
@@ -1166,11 +1226,22 @@ export class SessionRecorder {
       const sighting =
         draft.kind === "llm_call"
           ? this.llmCallSighting(draft.body, "transcript")
-          : NO_SIGHTING;
+          : draft.kind === "tool_call"
+            ? this.toolCallSighting(
+                draft.body,
+                "transcript",
+                draft.content !== undefined,
+              )
+            : NO_SIGHTING;
       let duplicate = sighting.attrs;
+      // A tool call the chain already holds seals nothing. A model call the
+      // chain already holds is a later content block of one message: its text
+      // still ships as a body, its usage does not count again.
+      if (duplicate === undefined && draft.kind === "tool_call") {
+        sighting.commit();
+        continue;
+      }
       if (duplicate === undefined) {
-        // A later content block of a message the chain already holds: its
-        // text still ships as a body, its usage does not count again.
         body = withoutUsage(body);
         duplicate = { [LLM_CALL_DUPLICATE_OF_ATTR]: "transcript" };
       }

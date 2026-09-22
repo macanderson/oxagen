@@ -1285,6 +1285,28 @@ async function initializeDaemon(
   const RECONCILE_MIN_INTERVAL_MS = 15_000;
   const lastReconcileAt = new Map<string, number>();
 
+  /**
+   * When a throttled read may spawn its probes, by session uuid.
+   *
+   * A read the interval above turned down is put back rather than dropped, so
+   * the observation it asked for is still made. Putting it back eligible
+   * immediately meant the next control tick, a second later, ran the HEAD,
+   * branch, status, and remote probes again and turned the reconciliation
+   * down again: a session of short turns spent about sixty git processes on
+   * one reconciliation (#3676). The read now waits here until the interval it
+   * was turned down by has passed, and the tick passes over it until then.
+   *
+   * A session with a pending SessionEnd is never held: its final read is the
+   * one the chain waits on, and the interval does not apply to it.
+   */
+  const gitReadEligibleAt = new Map<string, number>();
+
+  function gitReadDue(sessionUuid: string): boolean {
+    if (pendingSessionEnds.has(sessionUuid)) return true;
+    const eligibleAt = gitReadEligibleAt.get(sessionUuid);
+    return eligibleAt === undefined || now() >= eligibleAt;
+  }
+
   function requestGitRead(
     harnessSessionId: string,
     want: { force: boolean; reconcile: boolean },
@@ -1327,7 +1349,10 @@ async function initializeDaemon(
    */
   async function drainGitReads(): Promise<void> {
     if (gitPending.size === 0) return;
-    const work = [...gitPending.keys()].slice(0, GIT_READS_PER_TICK);
+    const work = [...gitPending.keys()]
+      .filter(gitReadDue)
+      .slice(0, GIT_READS_PER_TICK);
+    if (work.length === 0) return;
     const found: Array<{
       session: SessionRecord;
       /**
@@ -1350,6 +1375,7 @@ async function initializeDaemon(
     for (const harnessSessionId of work) {
       const want = gitPending.get(harnessSessionId);
       gitPending.delete(harnessSessionId);
+      gitReadEligibleAt.delete(harnessSessionId);
       if (want === undefined) continue;
       const session = registry.byUuid(harnessSessionId);
       const ending = pendingSessionEnds.get(harnessSessionId);
@@ -1370,6 +1396,28 @@ async function initializeDaemon(
         }
         continue;
       }
+      const at = now();
+      const last = lastReconcileAt.get(harnessSessionId);
+      const due =
+        want.reconcile &&
+        (ending !== undefined ||
+          last === undefined ||
+          at - last >= RECONCILE_MIN_INTERVAL_MS);
+      // The throttle is read before the probes run, not after. A read whose
+      // reconciliation is not due yet has nothing here worth four git
+      // processes, so it is put back with the time it becomes eligible and
+      // this tick spawns nothing for it. The git context it would also have
+      // refreshed waits with it, inside the thirty seconds `gitFactsFor`
+      // already treats as fresh.
+      if (want.reconcile && !due) {
+        gitReadEligibleAt.set(
+          harnessSessionId,
+          (last ?? at) + RECONCILE_MIN_INTERVAL_MS,
+        );
+        requestGitRead(harnessSessionId, { force: true, reconcile: true });
+        continue;
+      }
+      if (due) lastReconcileAt.set(harnessSessionId, at);
       const facts = await gitFactsFor(cwd, want.force);
       // Undefined means `rev-parse HEAD` did not answer, which covers a
       // directory that is not a repository AND a repository whose first
@@ -1385,16 +1433,6 @@ async function initializeDaemon(
       // captures that tree's HEAD instead of diffing against the old one.
       if (facts !== undefined && session.baselineCommit === undefined)
         session.baselineCommit = facts.head_sha;
-      const at = now();
-      const last = lastReconcileAt.get(harnessSessionId);
-      const due =
-        want.reconcile &&
-        (ending !== undefined ||
-          last === undefined ||
-          at - last >= RECONCILE_MIN_INTERVAL_MS);
-      if (due) lastReconcileAt.set(harnessSessionId, at);
-      else if (want.reconcile)
-        requestGitRead(harnessSessionId, { force: true, reconcile: true });
       if (facts === undefined && !due) continue;
       found.push({
         session,
@@ -1537,22 +1575,38 @@ async function initializeDaemon(
         );
     await tailBeforeHook(envelope.payload);
     const endingSession = findSession();
+    // The payload's own working directory is applied before the branch below
+    // decides, not after it. A session first seen from OTel, from a transcript,
+    // or from a start hook that carried no `cwd` has none to test, and its
+    // SessionEnd is the first hook to say where it worked. Reading the stale
+    // value sealed that session on the spot, so the final worktree read never
+    // ran and the chain closed with no reconciliation on it (#3676).
+    //
+    // An inferred Cursor `cwd` is not a report of where the session worked, so
+    // it is not applied and does not make a session eligible for a final read.
+    if (
+      hookName === "SessionEnd" &&
+      endingSession !== undefined &&
+      !endingSession.sealed &&
+      !endingSession.pendingTerminal &&
+      payloadFacts.cwd !== undefined &&
+      !(
+        envelope.harness === "cursor" &&
+        (envelope.payload as Record<string, unknown>)["cursor_cwd_inferred"] ===
+          true
+      )
+    )
+      registry.ensure(payloadFacts.session_id, {
+        harness: envelope.harness,
+        customAgent: envelope.agent,
+        cwd: payloadFacts.cwd,
+      });
     if (
       hookName === "SessionEnd" &&
       endingSession?.cwd !== undefined &&
       !endingSession.sealed &&
       !endingSession.pendingTerminal
     ) {
-      const inferredCursorCwd =
-        envelope.harness === "cursor" &&
-        (envelope.payload as Record<string, unknown>)["cursor_cwd_inferred"] ===
-          true;
-      if (payloadFacts.cwd !== undefined && !inferredCursorCwd)
-        registry.ensure(payloadFacts.session_id, {
-          harness: envelope.harness,
-          customAgent: envelope.agent,
-          cwd: payloadFacts.cwd,
-        });
       const uuid = endingSession.recorder.sessionUuid;
       pendingSessionEnds.set(uuid, envelope);
       requestGitRead(uuid, { force: true, reconcile: true });
