@@ -262,16 +262,18 @@ glob, and any business-capability rule unrelated to a tool call. Both keep
 governing the in-app agent's own calls at `packages/agent/src/runtime/
 mcp-rbac.ts`, just not this second, harness-facing surface (see
 `tacho-mandate.ts`'s `decisionRuleToHarnessRule`). `budget.mode` is
-`"enforced"` only when the agent's own definition names a `per_run_micros` or
-`per_day_micros` figure (`deriveBundleBudget`); otherwise it stays
-`"observed"`, and nothing reads `session_limit_usd` yet: the loopback proxy
-that would enforce it is Phase 4, below. The bundle carries no `models` clause
+`"enforced"` only when the agent's own definition names a `per_run_micros`
+figure (`deriveBundleBudget`); otherwise it stays `"observed"`. The loopback
+model proxy refuses a call once the session's observed spend reaches
+`session_limit_usd`, with `session_budget_exceeded`
+(`src/collector/model-proxy.ts`). A `per_day_micros` figure is not signed,
+because nothing on the host keeps a day's spend (#3728). The bundle carries no `models` clause
 at all: a workspace's model allow and deny lists are stored and read back
 (`workspace.tacho_session_policy`, `get_tacho_session_policy`) and signed into
 no bundle, so the proxy refuses no model. Operator steer commands are the only
 live text channel from the server to a running agent. Token and cost numbers for
 Claude Code are the harness's own telemetry, self-reported. Codex and Stella export
-none. There is no model proxy and no sandbox. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
+none. There is no sandbox. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
 and server-enforced, and it is registered only into Claude Desktop. The leaf
 constraint stays through every phase below: the proxy imports no `@oxagen/*`
 runtime package.
@@ -308,8 +310,8 @@ the design is in `docs/specs/mission-control/spec.md` §7 and §10.5, the phases
   observe, harness, gateway, contained (ADR-095).
 
 The order of build is Phase 0 merged, Phase 4 in build, then Phases 1, 2, 3 and
-5. The epic is issue #3295. Only Phase 0 is on `main`; the rest lands when its
-branch merges.
+5. The epic is issue #3295. Phase 0 is on `main`, and so is Phase 4's model
+proxy (`src/collector/model-proxy.ts`). The rest lands when its branch merges.
 
 The words for the `harness` tier are "delivered", "recorded", "client-attested"
 and "fail-open". Never "enforced" without the qualifier: on a governed call
