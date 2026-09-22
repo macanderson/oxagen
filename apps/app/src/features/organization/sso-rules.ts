@@ -19,11 +19,11 @@ export const SSO_ROLES: readonly SsoMappableRole[] = [
 ];
 
 export function isSsoProtocol(value: string): value is SsoProtocol {
-  return (SSO_PROTOCOLS as readonly string[]).includes(value);
+  return SSO_PROTOCOLS.some((p) => p === value);
 }
 
 export function isSsoRole(value: string): value is SsoMappableRole {
-  return (SSO_ROLES as readonly string[]).includes(value);
+  return SSO_ROLES.some((r) => r === value);
 }
 
 /** The groups claim a provider reads when the admin names none. */

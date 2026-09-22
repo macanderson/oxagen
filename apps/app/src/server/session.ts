@@ -42,9 +42,7 @@ async function readSession(): Promise<AppSession | null> {
   const enrolled: unknown = Reflect.get(session.user, "twoFactorEnabled");
   // A session additionalField (packages/auth/src/auth.ts); the capped server
   // type does not name it either.
-  const method: unknown = session.session
-    ? Reflect.get(session.session, "authMethod")
-    : null;
+  const method: unknown = Reflect.get(session.session, "authMethod");
   return {
     authMethod: typeof method === "string" ? method : null,
     user: {

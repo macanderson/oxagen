@@ -273,7 +273,7 @@ export function SsoProviderDialog({
             name="domain"
             label={t("domain")}
             hint={t("domainHint")}
-            placeholder="acme.com"
+            placeholder={t("domainPlaceholder")}
             autoComplete="off"
             spellCheck={false}
             value={draft.domain}
@@ -301,7 +301,7 @@ export function SsoProviderDialog({
                 inputMode="url"
                 label={t("issuer")}
                 hint={t("issuerHint")}
-                placeholder="https://acme.okta.com"
+                placeholder={t("issuerPlaceholder")}
                 value={draft.issuer}
                 onChange={set("issuer")}
                 error={fieldError("issuer")}
@@ -362,7 +362,7 @@ export function SsoProviderDialog({
                 name="cert"
                 label={t("cert")}
                 hint={editing ? t("certEditHint") : t("certHint")}
-                placeholder="-----BEGIN CERTIFICATE-----"
+                placeholder={t("certPlaceholder")}
                 value={draft.cert}
                 onChange={set("cert")}
                 error={fieldError("cert")}

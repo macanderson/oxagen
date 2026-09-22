@@ -51,7 +51,7 @@ export function CopyValue({
           type="button"
           className={`${buttonSecondary} h-8 px-2 text-xs`}
           onClick={() => void copy()}
-          aria-label={`${t("copy")} ${label}`}
+          aria-label={t("copyLabel", { label })}
         >
           {state === "copied" ? t("copied") : t("copy")}
         </button>

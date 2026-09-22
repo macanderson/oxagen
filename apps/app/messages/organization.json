@@ -493,7 +493,8 @@
         "verifiedNow": "Domain verified.",
         "copy": "Copy",
         "copied": "Copied",
-        "copyFailed": "Copy failed. Select the text instead."
+        "copyFailed": "Copy failed. Select the text instead.",
+        "copyLabel": "Copy {label}"
       },
       "policy": {
         "title": "Sign-in policy",
@@ -535,7 +536,10 @@
         "stored": "Stored. Leave blank to keep it.",
         "notStored": "Not stored.",
         "show": "Show",
-        "hide": "Hide"
+        "hide": "Hide",
+        "domainPlaceholder": "acme.com",
+        "issuerPlaceholder": "https://acme.okta.com",
+        "certPlaceholder": "-----BEGIN CERTIFICATE-----"
       },
       "delete": {
         "open": "Delete",

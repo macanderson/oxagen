@@ -126,7 +126,9 @@ export function SsoSignIn({
       ) : (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setOpen(true);
+          }}
           className={`${buttonSecondary} justify-start`}
         >
           <KeyRound aria-hidden className="size-4 flex-none" />

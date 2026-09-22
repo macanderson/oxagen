@@ -27,6 +27,12 @@ import type { OrgRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
+/** Narrow a queried node to an element, failing the test when it is absent. */
+function asElement(node: Element | null | undefined): HTMLElement {
+  if (!(node instanceof HTMLElement)) throw new Error("element missing");
+  return node;
+}
+
 const { router, actions } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
   actions: {
@@ -129,7 +135,7 @@ describe("Sso: a verified and a pending provider", () => {
       "Pending",
     );
     expect(
-      within(okta as HTMLElement).getByRole("button", { name: "Edit" }),
+      within(asElement(okta)).getByRole("button", { name: "Edit" }),
     ).toBeTruthy();
     await expectNoAxe(container);
   });
@@ -207,7 +213,8 @@ describe("Sso: a verified and a pending provider", () => {
     await renderSection({ ok: true, value: BOTH });
     const row = screen
       .getByRole("table", { name: "Identity providers" })
-      .querySelector('[data-provider="acme-okta"]') as HTMLElement;
+      .querySelector('[data-provider="acme-okta"]');
+    if (!(row instanceof HTMLElement)) throw new Error("provider row missing");
     await userEvent.click(within(row).getByRole("button", { name: "Delete" }));
     expect(actions.deleteSsoProvider).not.toHaveBeenCalled();
     const dialog = await screen.findByTestId("sso-delete-acme-okta");

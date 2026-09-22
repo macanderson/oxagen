@@ -44,7 +44,7 @@ export function SsoGroupRoles({
   const t = useTranslations("organization.ssoGroups");
   const failureText = useSsoFailure();
   const navigate = useNavigate();
-  const nextKey = useRef(mappings.length);
+  const nextKeyRef = useRef(mappings.length);
   const [rows, setRows] = useState<Row[]>(() =>
     mappings.map((m, key) => ({ key, group: m.group, role: m.role })),
   );
@@ -64,8 +64,8 @@ export function SsoGroupRoles({
   }
 
   function addRow() {
-    const key = nextKey.current;
-    nextKey.current += 1;
+    const key = nextKeyRef.current;
+    nextKeyRef.current += 1;
     setRows((rs) => [...rs, { key, group: "", role: "member" }]);
     setSaved(false);
   }

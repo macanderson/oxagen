@@ -2817,6 +2817,7 @@ type Messages = {
         copy: string;
         copied: string;
         copyFailed: string;
+        copyLabel: string;
       };
       policy: {
         title: string;
@@ -2859,6 +2860,9 @@ type Messages = {
         notStored: string;
         show: string;
         hide: string;
+        domainPlaceholder: string;
+        issuerPlaceholder: string;
+        certPlaceholder: string;
       };
       delete: {
         open: string;

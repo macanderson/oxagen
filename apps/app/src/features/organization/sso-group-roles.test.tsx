@@ -78,7 +78,7 @@ describe("SsoGroupRoles", () => {
     const select = screen.getByRole("combobox", { name: "Role, row 1" });
     const values = within(select)
       .getAllByRole("option")
-      .map((o) => (o as HTMLOptionElement).value);
+      .map((o) => o.getAttribute("value"));
     expect(values).toEqual(["admin", "compliance", "billing", "member"]);
     expect(values).not.toContain("owner");
   });
