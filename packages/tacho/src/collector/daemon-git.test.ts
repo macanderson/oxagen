@@ -9,6 +9,7 @@
  * git context, so a checkout that went detached stops reporting the branch
  * it left.
  */
+import { existsSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { writeSensitiveFileAtomic } from "../host/fs";
 import { readHostFile, writeHostFile } from "../host/host-file";
@@ -437,12 +438,40 @@ describe("the daemon's git seam", () => {
       ).toHaveLength(1);
   });
 
+  it("stamps a deferred SessionEnd when it arrives, not when the git read lands", async () => {
+    // The laptop lid closes right after SessionEnd and opens eight hours
+    // later. The terminal frame's `ts` is the end of the session, and the
+    // frame says it was received then and deferred, not replayed.
+    const paths = scratchPaths();
+    let time = 1_000;
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => time,
+      undefined,
+      undefined,
+      undefined,
+      paths,
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    time = 5_000;
+    await handle.api.handleHook(hook("SessionEnd"));
+    // The deferred end waits in the file `paths.ts` declares for it.
+    expect(existsSync(paths.pendingEnds)).toBe(true);
+    expect(handle.registry.get(SESSION)?.sealed).toBe(false);
+    time = 5_000 + 8 * 60 * 60_000;
+    await handle.tick();
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+    const terminal = frames(handle).find((event) => event.kind === "agent_stop");
+    expect(terminal?.ts).toBe(new Date(5_000).toISOString());
+    expect(terminal?.attrs["hook.received_at"]).toBe(
+      new Date(5_000).toISOString(),
+    );
+    expect(terminal?.attrs["hook.replayed"]).toBeUndefined();
+  });
+
   it("starts with a malformed pending-end file without inventing a seal", async () => {
     const paths = scratchPaths();
-    writeSensitiveFileAtomic(
-      `${paths.root}/pending-session-ends.json`,
-      "{broken",
-    );
+    writeSensitiveFileAtomic(paths.pendingEnds, "{broken");
     const handle = await boot(
       fakeGit(() => REPO_ANSWERS, []),
       () => 1_000,

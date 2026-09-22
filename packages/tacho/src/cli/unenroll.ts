@@ -575,9 +575,14 @@ async function unenrollLocked(
       rmSync(dir, { recursive: true, force: true });
     }
     // The log is part of the local record: a purge that kept it left the
-    // one file most likely to name a repository path or a prompt.
+    // one file most likely to name a repository path or a prompt. The
+    // pending session ends hold sealed terminal batches, bodies included,
+    // that never reached the WAL, so they go with it (ADR-139).
     rmSync(deps.paths.log, { force: true });
-    deps.out("      WAL, spool, quarantine and the collector log purged");
+    rmSync(deps.paths.pendingEnds, { force: true });
+    deps.out(
+      "      WAL, spool, quarantine, pending session ends and the collector log purged",
+    );
   } else {
     deps.out(`      WAL kept at ${deps.paths.wal} (pass --purge to delete)`);
   }

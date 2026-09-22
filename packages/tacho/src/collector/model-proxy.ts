@@ -581,6 +581,24 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       const known = deps.registry.get(id);
       if (known !== undefined && !known.sealed && !known.pendingTerminal)
         return { record: known, how };
+      if (known !== undefined) {
+        // The record is sealed, or its terminal is waiting to land. `get`
+        // prefers an open record, but a pending one reads as open to it, so
+        // another harness's live record for the same id is looked for by
+        // hand before the call is filed on the host's own chain: `ensure`
+        // would hand back the closed record and seal a frame after its
+        // terminal.
+        const open = deps.registry
+          .list()
+          .find(
+            (record) =>
+              record.harnessSessionId === id &&
+              !record.sealed &&
+              !record.pendingTerminal,
+          );
+        if (open !== undefined) return { record: open, how };
+        return { how: "session_closed" };
+      }
       // Seen here before any hook named it: open it as ambient, the way a
       // session first seen through OTel is opened, and let the hook adopt it.
       const { record } = deps.registry.ensure(id, { harness, ambient: true });

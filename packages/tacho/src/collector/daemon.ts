@@ -53,6 +53,7 @@ import { readModelBaseUrlState } from "../host/model-base-url";
 import {
   applyModelCredentials,
   type ModelCredentialHarnessState,
+  readCodexApiKeyMember,
   readModelCredentialState,
   staticTokenStillGood,
 } from "../host/model-credential";
@@ -158,20 +159,6 @@ export const DEFAULT_TIMERS: DaemonTimers = {
 
 /** How often the daemon looks at Codex's static run token. */
 const STATIC_TOKEN_RENEWAL_CHECK_MS = 60 * 60_000;
-
-/** The `OPENAI_API_KEY` member of `~/.codex/auth.json`, whatever it holds. */
-function codexStaticToken(home: string): string | undefined {
-  try {
-    const raw = readJsonFileIfExists(join(home, ".codex", "auth.json"));
-    const value =
-      typeof raw === "object" && raw !== null
-        ? (raw as { OPENAI_API_KEY?: unknown }).OPENAI_API_KEY
-        : undefined;
-    return typeof value === "string" ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 export interface DaemonOptions {
   paths: TachoPaths;
@@ -836,7 +823,8 @@ async function initializeDaemon(
       clause = inForce.mandate;
     }
     try {
-      const purged = wal.purgeBodiesOutsideMandate(clause);
+      const purged =
+        wal.purgeBodiesOutsideMandate(clause) + purgePendingEndBodies(clause);
       clearBodyPurgeOwed();
       log(
         `completed an owed body purge: erased ${purged} queued body(ies) the mandate does not cover`,
@@ -868,7 +856,8 @@ async function initializeDaemon(
     // returned.
     const recorded = markBodyPurgeOwed(next, dropped);
     try {
-      const purged = wal.purgeBodiesOutsideMandate(next);
+      const purged =
+        wal.purgeBodiesOutsideMandate(next) + purgePendingEndBodies(next);
       clearBodyPurgeOwed();
       log(
         `mandate narrowed (${dropped.join(", ")}): erased ${purged} queued body(ies) from the WAL`,
@@ -1284,7 +1273,9 @@ async function initializeDaemon(
    * list as well.
    */
   const gitPending = new Map<string, { force: boolean; reconcile: boolean }>();
-  const pendingEndsPath = join(paths.root, "pending-session-ends.json");
+  // The path `paths.ts` declares, so `unenroll --purge` and this daemon name
+  // one file: it can hold a run's content and is purged with the WAL.
+  const pendingEndsPath = paths.pendingEnds;
   const terminalSchema = z.object({
     events: z.array(tachoEventSchema),
     state: z.custom<RegistryState>(
@@ -1314,7 +1305,12 @@ async function initializeDaemon(
       env: z.record(z.string(), z.string().optional()).optional(),
       harness: tachoHarnessSchema.optional(),
       agent: z.string().optional(),
-      replay: z.object({ receivedAt: z.string().datetime() }).optional(),
+      replay: z
+        .object({
+          receivedAt: z.string().datetime(),
+          deferred: z.boolean().optional(),
+        })
+        .optional(),
       terminal: terminalSchema.optional(),
     }),
   ]);
@@ -1362,6 +1358,26 @@ async function initializeDaemon(
     );
   for (const id of pendingSessionEnds.keys())
     gitPending.set(id, { force: true, reconcile: true });
+
+  /**
+   * Drop the pending terminal bodies a retention clause no longer covers,
+   * and rewrite the file. Runs beside `Wal.purgeBodiesOutsideMandate` with
+   * the same clause, so a narrowing erases the same classes from both
+   * places a body can wait.
+   */
+  function purgePendingEndBodies(clause: RetentionMandate): number {
+    let purged = 0;
+    for (const pending of pendingSessionEnds.values()) {
+      if (pending.terminal === undefined) continue;
+      const kept = pending.terminal.bodies.filter((body) =>
+        retentionAllows(clause, body.content_class),
+      );
+      purged += pending.terminal.bodies.length - kept.length;
+      pending.terminal.bodies = kept;
+    }
+    if (purged > 0) persistPendingEnds();
+    return purged;
+  }
 
   /** The most sessions one tick reads worktrees for. */
   const GIT_READS_PER_TICK = 4;
@@ -1700,7 +1716,15 @@ async function initializeDaemon(
       !endingSession.pendingTerminal
     ) {
       const uuid = endingSession.recorder.sessionUuid;
-      pendingSessionEnds.set(uuid, envelope);
+      // Stamped now, not when the git read lands: the frame's `ts` is when
+      // the session ended, however long the drain waits.
+      pendingSessionEnds.set(uuid, {
+        ...envelope,
+        replay: envelope.replay ?? {
+          receivedAt: toProtocolTimestamp(now()),
+          deferred: true,
+        },
+      });
       requestGitRead(uuid, { force: true, reconcile: true });
       persistState();
       persistPendingEnds();
@@ -2573,7 +2597,7 @@ async function initializeDaemon(
       return;
     }
     if (state === undefined || !state.brokered) return;
-    const current = codexStaticToken(home);
+    const current = readCodexApiKeyMember(home);
     if (staticTokenStillGood(current, host, paths.runTokenKey, now())) return;
     const issued = api.issueRunToken?.({
       harness: "codex",
