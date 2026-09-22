@@ -29,6 +29,13 @@ afterEach(() => {
   cleanup();
 });
 
+/** The table row a cell's text sits in. */
+function rowOf(element: HTMLElement): HTMLElement {
+  const row = element.closest("tr");
+  if (row === null) throw new Error("the text is not in a table row");
+  return row;
+}
+
 const centers: CostCenterList = {
   costCenters: [
     {
@@ -87,10 +94,10 @@ describe("Cost centers", () => {
   it("lists each label with the agents and workspaces that name it", async () => {
     await renderView();
     const labels = screen.getByRole("table", { name: "Cost centers" });
-    const eng = within(labels).getByText("ENG-1001").closest("tr")!;
+    const eng = rowOf(within(labels).getByText("ENG-1001"));
     expect(within(eng).getByText("Platform engineering")).toBeDefined();
     expect(within(eng).getByText("2")).toBeDefined();
-    const mkt = within(labels).getByText("MKT-2002").closest("tr")!;
+    const mkt = rowOf(within(labels).getByText("MKT-2002"));
     expect(within(mkt).getByText("No description")).toBeDefined();
     expect(
       within(labels).getAllByRole("button", { name: "Delete" }),
@@ -103,9 +110,9 @@ describe("Cost centers", () => {
   it("shows each live workspace's cost center and leaves archived ones out", async () => {
     await renderView();
     const table = screen.getByRole("table", { name: "Workspace cost centers" });
-    const core = within(table).getByText("Core platform").closest("tr")!;
+    const core = rowOf(within(table).getByText("Core platform"));
     expect(within(core).getByText("ENG-1001")).toBeDefined();
-    const research = within(table).getByText("Research").closest("tr")!;
+    const research = rowOf(within(table).getByText("Research"));
     expect(within(research).getByText("None")).toBeDefined();
     expect(within(table).queryByText("Old")).toBeNull();
     expect(

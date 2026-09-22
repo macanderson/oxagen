@@ -18,6 +18,13 @@ afterEach(() => {
   cleanup();
 });
 
+/** The table row a cell's text sits in. */
+function rowOf(element: HTMLElement): HTMLElement {
+  const row = element.closest("tr");
+  if (row === null) throw new Error("the text is not in a table row");
+  return row;
+}
+
 const figure = (micros: string | null, runs = 1): SpendFigure => ({
   cost:
     micros === null
@@ -72,14 +79,14 @@ describe("shareOf", () => {
 describe("CostCenterTable", () => {
   it("shows the unassigned share as its own row", async () => {
     await renderTable();
-    const none = screen.getByText("No cost center").closest("tr")!;
+    const none = rowOf(screen.getByText("No cost center"));
     expect(none.getAttribute("data-unassigned")).toBe("true");
     expect(within(none).getByText("10%")).toBeDefined();
   });
 
   it("prints every spend beside its basis and explains the share", async () => {
     await renderTable();
-    const eng = screen.getByText("ENG-1001").closest("tr")!;
+    const eng = rowOf(screen.getByText("ENG-1001"));
     expect(within(eng).getByText("gateway observed")).toBeDefined();
     expect(within(eng).getByText("60%")).toBeDefined();
     expect(
@@ -94,7 +101,7 @@ describe("CostCenterTable", () => {
       ...report,
       rows: [row("ENG-1001", null)],
     });
-    const eng = screen.getByText("ENG-1001").closest("tr")!;
+    const eng = rowOf(screen.getByText("ENG-1001"));
     expect(within(eng).getAllByText("not recorded")).toHaveLength(2);
   });
 });

@@ -8,6 +8,7 @@ import {
   type SpendReport,
   UNASSIGNED_COST_CENTER_KEY,
 } from "@/data/contracts/spend";
+import { ratioOfMicros } from "@/data/contracts/money";
 import { mono } from "@/ui/control-styles";
 import { formatRatio } from "@/ui/money-format";
 import { CostFigure, CountFigure, NotRecordedValue } from "./figures";
@@ -18,10 +19,7 @@ const cell = "px-4 py-2 text-left align-top";
 /** A row's share of the total's spend; null when either side was not priced. */
 export function shareOf(row: SpendFigure, total: SpendFigure): number | null {
   if (row.cost === null || total.cost === null) return null;
-  const whole = BigInt(total.cost.micros);
-  if (whole <= 0n) return null;
-  // Four decimal places of the ratio are enough for a percentage to one place.
-  return Number((BigInt(row.cost.micros) * 10_000n) / whole) / 10_000;
+  return ratioOfMicros(row.cost, total.cost);
 }
 
 export function CostCenterTable({ report }: { report: SpendReport }) {
