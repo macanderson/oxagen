@@ -1,0 +1,12 @@
+{
+  "name": "Oxagen dev",
+  "install": "bash .cursor/scripts/install.sh",
+  "start": "bash .cursor/scripts/start.sh",
+  "terminals": [
+    {
+      "name": "web+api",
+      "command": "export PATH=\"$HOME/.nvm/versions/node/v24.21.0/bin:$PATH\"; export INNGEST_DEV=1; unset DATABASE_URL; pnpm exec turbo dev --continue --filter=@oxagen/app --filter=@oxagen/api"
+    }
+  ],
+  "ports": [3000, 4000]
+}
