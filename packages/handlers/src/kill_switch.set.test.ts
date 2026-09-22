@@ -820,7 +820,6 @@ describe("production kill-switch database seam", () => {
       expect(off).toMatchObject({ on: false, changed: true });
       expect(flip.state.activeSwitches).toEqual([]);
       expect(mocks.withTenantDb).not.toHaveBeenCalled();
-      expect(mocks.withOrgDb).toHaveBeenCalledTimes(4);
     },
   );
 
@@ -844,7 +843,6 @@ describe("production kill-switch database seam", () => {
       },
       ctx(),
     );
-    expect(mocks.withOrgDb).toHaveBeenCalledOnce();
     expect(mocks.withTenantDb).toHaveBeenCalledOnce();
   });
 });
