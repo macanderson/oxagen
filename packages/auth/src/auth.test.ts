@@ -421,7 +421,26 @@ describe("enterprise SSO wiring", () => {
     expect(none.data.authMethod).toBe("other");
   });
 
-  const hooks = () => getConfig()["hooks"] as { before: AnyFn; after: AnyFn };
+  // The require-SSO hooks live in a plugin so the middleware types stay out
+  // of the exported `auth` type (TS2883); find it among the plugins.
+  const hooks = () => {
+    const plugin = (
+      getConfig()["plugins"] as {
+        id: string;
+        hooks?: {
+          before: { matcher: AnyFn; handler: AnyFn }[];
+          after: { matcher: AnyFn; handler: AnyFn }[];
+        };
+      }[]
+    ).find((p) => p.id === "oxagen-require-sso");
+    const h = plugin!.hooks!;
+    return {
+      before: h.before[0]!.handler,
+      beforeMatches: h.before[0]!.matcher,
+      after: h.after[0]!.handler,
+      afterMatches: h.after[0]!.matcher,
+    };
+  };
 
   it("refuses a password sign-in when the domain requires SSO", async () => {
     vi.mocked(isNonSsoSignInRefused).mockResolvedValueOnce(true);
@@ -437,12 +456,11 @@ describe("enterprise SSO wiring", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("ignores paths other than the password sign-in", async () => {
-    await hooks().before({
-      path: "/sign-in/sso",
-      body: { email: "a@acme.com" },
-    });
-    expect(isNonSsoSignInRefused).not.toHaveBeenCalled();
+  it("runs only on the password sign-in and the social callback", () => {
+    expect(hooks().beforeMatches({ path: "/sign-in/email" })).toBe(true);
+    expect(hooks().beforeMatches({ path: "/sign-in/sso" })).toBe(false);
+    expect(hooks().afterMatches({ path: "/callback/google" })).toBe(true);
+    expect(hooks().afterMatches({ path: "/sso/callback/acme" })).toBe(false);
   });
 
   it("ends a social sign-in into an SSO-required domain and redirects to /login", async () => {
