@@ -13,6 +13,7 @@ import {
 import { sql } from "drizzle-orm";
 import { orgSchema } from "./_schemas";
 import { auditMixin, bytea, citext, idMixin, softDeleteMixin } from "./_mixins";
+import { ssoProviderTable } from "./auth";
 
 export const organizations = orgSchema.table(
   "organizations",
@@ -536,6 +537,49 @@ export const onboardingState = orgSchema.table(
     firstFrameCheck: check(
       "onboarding_state_first_frame_check",
       sql`(${t.step} = 'unlocked') = (${t.firstFrameAt} IS NOT NULL) AND (${t.firstFrameAt} IS NULL) = (${t.firstRunId} IS NULL)`,
+    ),
+  }),
+);
+
+// ── SSO group → role mappings (ADR-142) ──────────────────────────────────────
+//
+// The table an org admin edits on the Roles page: one row per identity-provider
+// group that grants an organisation role. On every SSO sign-in the groups the
+// IdP asserts are looked up here and the highest-ranked mapped role replaces
+// the person's org role. Deny by default: a group with no row grants nothing,
+// and a person none of whose groups has a row is left with no org role.
+//
+// Owner is not mappable (the CHECK below): ownership is transferred by a
+// person, never minted by an IdP. Rows are replaced wholesale by
+// set_sso_group_roles and hard-deleted with their provider (ON DELETE CASCADE).
+// org_only RLS; the sign-in path reads it through withSystemDb because no
+// tenant scope exists yet.
+export const ssoGroupRoles = orgSchema.table(
+  "sso_group_roles",
+  {
+    ...idMixin("sgr"),
+    ...auditMixin(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    providerId: text("provider_id")
+      .notNull()
+      .references(() => ssoProviderTable.providerId, { onDelete: "cascade" }),
+    // The group name exactly as the IdP sends it. Compared case-sensitively,
+    // because IdPs treat "Admins" and "admins" as different groups.
+    idpGroup: text("idp_group").notNull(),
+    // An org role name, lowercase: admin, compliance, billing, member, viewer.
+    role: text("role").notNull(),
+  },
+  (t) => ({
+    groupIdx: uniqueIndex("sso_group_roles_provider_group_idx").on(
+      t.providerId,
+      t.idpGroup,
+    ),
+    orgIdx: index("sso_group_roles_org_idx").on(t.orgId),
+    roleCheck: check(
+      "sso_group_roles_role_check",
+      sql`${t.role} IN ('admin', 'compliance', 'billing', 'member', 'viewer')`,
     ),
   }),
 );

@@ -221,6 +221,21 @@ export const SECURITY_EVENT_TYPES = [
   // that "every governance change" and "every skipped review" are each one
   // event-type filter and neither answer is missing rows.
   "steering.governance_overridden",
+  // Enterprise SSO (ADR-142). Provider lifecycle, in order: an org admin
+  // registers an OIDC or SAML provider, proves the email domain with a DNS
+  // TXT record, edits it, removes it. Emitted by the org.sso.* handlers.
+  "sso.provider_created",
+  "sso.domain_verified",
+  "sso.provider_updated",
+  "sso.provider_deleted",
+  // The org turned "require SSO" on or off (set_sso_policy).
+  "sso.policy_updated",
+  // The IdP group → Oxagen role table changed (set_sso_group_roles).
+  "sso.group_roles_set",
+  // Every sign-in through an SSO provider, success or not. `outcome: "deny"`
+  // when no IdP group the person carries is mapped, so the sign-in granted
+  // nothing in the org. Emitted from packages/auth/src/sso/provision.ts.
+  "sso.sign_in",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -364,6 +379,56 @@ export interface GovernanceChangeDetail {
  * adding a named interface, never by reaching for `Record<string, unknown>`:
  * an audit reader has to be able to know what a row means.
  */
+/**
+ * Evidence recorded on an SSO provider's lifecycle events
+ * (`sso.provider_created`, `sso.domain_verified`, `sso.provider_updated`,
+ * `sso.provider_deleted`). It names the provider and never carries its
+ * configuration: a client secret or a signing key has no place in an audit
+ * row.
+ */
+export interface SsoProviderChangeDetail {
+  /** The provider's stable id, as it appears in its callback URL. */
+  providerId: string;
+  protocol: "oidc" | "saml";
+  /** The email domain the provider signs people in for. */
+  domain: string;
+  /** For `sso.provider_updated`: the top-level fields the change touched. */
+  changedFields?: readonly string[];
+}
+
+/**
+ * Evidence recorded on `sso.sign_in`.
+ *
+ * `groups` is what the identity provider asserted and `grantedRole` is what
+ * the mapping table turned it into, so a reader can tell "the IdP sent no
+ * groups" from "the IdP sent groups nobody mapped". `grantedRole` is null when
+ * the sign-in granted nothing. `previousRole` is the org role the person held
+ * before this sign-in, so a demotion or a removal is visible in one row.
+ */
+export interface SsoSignInDetail {
+  providerId: string;
+  /** The IdP groups on the assertion, capped at 50 entries. */
+  groups: readonly string[];
+  grantedRole: string | null;
+  previousRole: string | null;
+  reason: "mapped" | "no_mapped_group" | "owner_unmanaged" | "provision_failed";
+}
+
+/** Evidence recorded on `sso.policy_updated`. */
+export interface SsoPolicyDetail {
+  ssoRequired: boolean;
+}
+
+/** Evidence recorded on `sso.group_roles_set`: the table after the write. */
+export interface SsoGroupRolesDetail {
+  providerId: string;
+  mappings: readonly { group: string; role: string }[];
+}
+
 export type SecurityEventDetail =
   | ApprovalRuleInvalidationDetail
-  | GovernanceChangeDetail;
+  | GovernanceChangeDetail
+  | SsoProviderChangeDetail
+  | SsoSignInDetail
+  | SsoPolicyDetail
+  | SsoGroupRolesDetail;

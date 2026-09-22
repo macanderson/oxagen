@@ -130,6 +130,13 @@ export const sessions = authSchema.table(
     }).notNull(),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
+    // How this session was established: "sso:<providerId>" for an enterprise
+    // SSO sign-in, otherwise "password", "social:<provider>" or "other".
+    // Written once by the session.create.before hook in packages/auth and
+    // never by a client (input:false). The org gate reads it to enforce an
+    // organisation's "require SSO" policy (ADR-142). NULL on sessions created
+    // before the column existed, which the gate treats as not SSO.
+    authMethod: text("auth_method"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -270,6 +277,78 @@ export const twoFactorTable = authSchema.table(
   },
   (t) => ({
     userIdIdx: index("two_factor_user_id_idx").on(t.userId),
+  }),
+);
+
+// ── Enterprise SSO providers (ADR-142) ───────────────────────────────────────
+//
+// One row per OIDC or SAML identity provider an organisation registers. The
+// @better-auth/sso plugin reads this table through the Drizzle adapter as its
+// "ssoProvider" model (pluralised to "ssoProviders" by usePlural:true), so the
+// JS property names MUST equal the plugin's field names: id, issuer,
+// oidcConfig, samlConfig, userId, providerId, organizationId, domain,
+// domainVerified. The columns after those are Oxagen's own.
+//
+// SECRETS: oidc_config and saml_config are JSON text the plugin parses. Every
+// secret inside them (the OIDC client secret, SAML private keys and their
+// passphrases) is stored as an envelope-encrypted token ("enc:v1:<keyId>:…",
+// see @oxagen/database/sso-secrets), never as plaintext. The auth adapter
+// opens those tokens on read, so the plugin sees a usable config and the
+// column never holds one.
+//
+// NO RLS. Like every Better Auth table this is read before a tenant scope
+// exists (the sign-in request has no org yet), through the unscoped adapter.
+// organization_id is therefore spelled the plugin's way and is not an org_id
+// column the tenant-policy manifest would police. Oxagen's handlers write it
+// through withSystemDb and pin organization_id in every predicate.
+export const ssoProviderTable = authSchema.table(
+  "sso_providers",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    oidcConfig: text("oidc_config"),
+    samlConfig: text("saml_config"),
+    // The org admin who registered the provider.
+    userId: uuid("user_id"),
+    // Stable slug used in callback URLs: /api/auth/sso/callback/<providerId>.
+    providerId: text("provider_id").notNull(),
+    organizationId: uuid("organization_id").notNull(),
+    // The email domain this provider signs people in for, lowercased.
+    domain: text("domain").notNull(),
+    // True once the org proved it owns `domain` with a DNS TXT record. The
+    // plugin refuses to sign anyone in through an unverified provider.
+    domainVerified: boolean("domain_verified").notNull().default(false),
+    // Oxagen columns.
+    protocol: text("protocol").notNull(),
+    displayName: text("display_name").notNull(),
+    // The claim (OIDC) or attribute (SAML) that carries the person's groups.
+    groupsClaim: text("groups_claim").notNull().default("groups"),
+    // Token the org publishes as a DNS TXT record to prove it owns `domain`.
+    domainVerificationToken: text("domain_verification_token").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    providerIdIdx: uniqueIndex("sso_providers_provider_id_idx").on(
+      t.providerId,
+    ),
+    // One organisation per email domain: a second org cannot claim a domain
+    // another org already registered, verified or not.
+    domainIdx: uniqueIndex("sso_providers_domain_idx").on(t.domain),
+    orgIdx: index("sso_providers_organization_id_idx").on(t.organizationId),
+    protocolCheck: check(
+      "sso_providers_protocol_check",
+      sql`${t.protocol} IN ('oidc', 'saml')`,
+    ),
+    configCheck: check(
+      "sso_providers_config_check",
+      sql`(${t.protocol} = 'oidc' AND ${t.oidcConfig} IS NOT NULL AND ${t.samlConfig} IS NULL)
+       OR (${t.protocol} = 'saml' AND ${t.samlConfig} IS NOT NULL AND ${t.oidcConfig} IS NULL)`,
+    ),
   }),
 );
 
