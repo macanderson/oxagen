@@ -17,6 +17,7 @@ import {
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { runBisect } from "@oxagen/oxagen/contracts/run.bisect";
 import { runExport } from "@oxagen/oxagen/contracts/run.export";
+import { runExportGet } from "@oxagen/oxagen/contracts/run.export.get";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
 import {
@@ -34,12 +35,15 @@ import {
 } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
-import { kernelRead, kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type QueuedCommand = { commandIds: string[] };
 
 type RunTranscriptGetOutput = ContractOutput<typeof runTranscriptGet>;
+
+/** Where one run export stands, exactly as `get_run_export` answers it. */
+export type RunExportStatus = ContractOutput<typeof runExportGet>;
 
 /**
  * Pause at the next boundary, or resume a run paused earlier. The reason
@@ -159,6 +163,35 @@ export async function exportRun(
   return result.ok
     ? { ok: true, value: { exportId: result.value.exportId } }
     : result;
+}
+
+/**
+ * Read one export back (`get_run_export`): the status its job has reached, the
+ * bundle's digest and size once it is built, the job's error if it failed, and
+ * a download URL that expires.
+ *
+ * The export dialog polls this after `export_run` answers an id, so the read
+ * happens on demand and resolves its own viewer, as `readTranscriptPage` does.
+ * Every read mints a fresh 15-minute download token, which is why the dialog
+ * stops polling once the export is ready or failed.
+ *
+ * A refusal keeps its kind through `readToActionResult`: an export id from
+ * another workspace comes back `not_found` with the handler's reason
+ * (`run_export_not_found`), and a viewer below Owner or Admin comes back
+ * `denied`.
+ */
+export async function readRunExport(
+  org: string,
+  ws: string,
+  exportId: string,
+): Promise<ActionResult<RunExportStatus>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: runExportGet,
+    input: { exportId },
+    page: "run",
+  });
+  return readToActionResult(read);
 }
 
 /**
