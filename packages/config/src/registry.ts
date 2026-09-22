@@ -1430,10 +1430,12 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
   NEXT_PUBLIC_API_URL: {
     group: "Public URLs",
-    description: "Public api origin (browser-exposed).",
+    description:
+      "Public api origin (browser-exposed). The api and mcp read it too: the " +
+      "Inngest serve host, and the absolute download URL get_run_export mints.",
     secret: false,
     clientExposed: true,
-    services: ["app", "website"],
+    services: ["app", "website", "api", "mcp"],
     requiredIn: ALL,
     valueOrigin: "static",
     staticValue: {
