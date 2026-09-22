@@ -247,6 +247,118 @@ else
   fail "packages/telemetry/src/schema.sql is gone — half the ClickHouse check has no input"
 fi
 
+# --- clickhouse_migration_tables -------------------------------------------
+#
+# A ledger row is a filename, not a table. migrate.ts's pre-ledger baseline
+# bootstrap records files as applied WITHOUT executing them, so the ledger
+# half of this check can read complete against a store that is missing the
+# tables those files create. That is #3698: production held zero error_events
+# rows for weeks and this script reported ClickHouse current the whole time.
+
+MIGS="$WORK/migrations"
+mkdir -p "$MIGS"
+cat > "$MIGS/0001_create.sql" <<'SQL'
+CREATE TABLE IF NOT EXISTS kept_events (x Int8) ENGINE = Log;
+CREATE TABLE oxagen.qualified_events (x Int8) ENGINE = Log;
+CREATE TABLE IF NOT EXISTS dropped_later (x Int8) ENGINE = Log;
+-- CREATE TABLE commented_out (x Int8) ENGINE = Log;
+SQL
+cat > "$MIGS/0002_alter.sql" <<'SQL'
+ALTER TABLE kept_events ADD COLUMN y Int8;
+SQL
+cat > "$MIGS/0003_drop.sql" <<'SQL'
+DROP TABLE IF EXISTS dropped_later;
+SQL
+# The shape 0021 has: a DROP and a CREATE of the SAME table, in one file, in
+# that order. Read per-file rather than per-statement the drop wins, and the
+# check would demand a table the migration deliberately restores — red forever.
+cat > "$MIGS/0004_recreate.sql" <<'SQL'
+DROP TABLE IF EXISTS kept_events;
+CREATE TABLE IF NOT EXISTS kept_events (x Int8, y Int8) ENGINE = Log;
+SQL
+
+MIGT=$(clickhouse_migration_tables "$MIGS")
+contains "$MIGT" "kept_events" "migrations: a table dropped and re-created in one file survives"
+contains "$MIGT" "qualified_events" "migrations: the database qualifier is stripped"
+case "$MIGT" in
+  *dropped_later*) fail "migrations: a table dropped by a later file must not be demanded" ;;
+  *) pass ;;
+esac
+case "$MIGT" in
+  *commented_out*) fail "migrations: a commented-out table must not count" ;;
+  *) pass ;;
+esac
+case "$MIGT" in
+  *IF*|*EXISTS*|*NOT*) fail "migrations: a keyword must not enter the set as a table name" ;;
+  *) pass ;;
+esac
+case "$MIGT" in
+  *ALTER*) fail "migrations: ALTER must not be read as a declaration" ;;
+  *) pass ;;
+esac
+
+clickhouse_migration_tables "$WORK/no-such-dir" >/dev/null 2>&1
+expect_code 2 "$?" "migrations: an unreadable directory is 'unknown', not 'nothing declared'"
+
+# --- clickhouse_all_declared_tables ----------------------------------------
+#
+# The union is what the live check compares against system.tables, so it is
+# what has to be tested. Asserting instead that the script MENTIONS
+# clickhouse_migration_tables proves only that the name appears: a version that
+# called it and threw the output away passed that assertion and shipped the
+# same false green.
+
+BOTH=$(clickhouse_all_declared_tables "$WORK/schema.sql" "$MIGS"); CODE=$?
+expect_code 0 "$CODE" "union: both sources readable is a clean read"
+contains "$BOTH" "execution_logs" "union: carries what schema.sql declares"
+contains "$BOTH" "kept_events" "union: carries what the migrations declare"
+case "$BOTH" in
+  *dropped_later*) fail "union: a table the migrations dropped must not be demanded" ;;
+  *) pass ;;
+esac
+# schema.sql and the migrations both declare some tables. A duplicate in the
+# declared list is harmless to `comm`, but it doubles the count in the verdict
+# line someone pastes into an incident.
+cat > "$WORK/overlap.sql" <<'SQL'
+CREATE TABLE IF NOT EXISTS kept_events (x Int8) ENGINE = Log;
+SQL
+OVER=$(clickhouse_all_declared_tables "$WORK/overlap.sql" "$MIGS")
+if [[ $(printf '%s\n' "$OVER" | grep -cx kept_events) -eq 1 ]]; then pass; else
+  fail "union: a table both sources declare must appear once, not twice"
+fi
+
+# Half an answer compared against system.tables is a report of drift that is
+# not there — the one direction a drift check must never be wrong in.
+clickhouse_all_declared_tables "$WORK/no-such.sql" "$MIGS" >/dev/null 2>&1
+expect_code 2 "$?" "union: an unreadable schema.sql is 'unknown', not a shorter list"
+clickhouse_all_declared_tables "$WORK/schema.sql" "$WORK/no-such-dir" >/dev/null 2>&1
+expect_code 2 "$?" "union: an unreadable migrations dir is 'unknown', not a shorter list"
+
+# The assertion #3698 turns on. error_events is created by a migration and by
+# nothing in schema.sql, so before this function it was covered only by the
+# ledger — the one source that can be complete while the table is absent.
+REAL_MIGS="$REPO/packages/telemetry/src/migrations"
+if [[ -d $REAL_MIGS ]]; then
+  REAL_MIGT=$(clickhouse_migration_tables "$REAL_MIGS")
+  contains "$REAL_MIGT" "error_events" "the real migrations declare error_events as a table to verify (#3698)"
+  contains "$REAL_MIGT" "tacho_events" "the real migrations declare tacho_events as a table to verify"
+  # Created by a migration and dropped by a later one — 0006 then 0007 for
+  # agent_executions, 0005 then 0010 for session_recaps. Demanding either would
+  # be permanent false drift that no apply could clear. The other three names
+  # 0010 drops were never created by a migration at all, so they cover the
+  # drop-of-something-this-never-declared case instead.
+  for dead in agent_executions session_recaps traces spans api_key_events agent_logs; do
+    case "$REAL_MIGT" in
+      *"$dead"*) fail "the real migrations: $dead was dropped and must not be demanded" ;;
+      *) pass ;;
+    esac
+  done
+  n=$(printf '%s\n' "$REAL_MIGT" | grep -c .)
+  if [[ $n -gt 10 ]]; then pass; else fail "the real migrations parsed to only $n tables"; fi
+else
+  fail "packages/telemetry/src/migrations is gone — half the ClickHouse check has no input"
+fi
+
 # Unknown must outrank behind. ClickHouse unreadable then Neo4j behind used to
 # exit 1 and report "a store is behind", saying nothing about the store nobody
 # could read — and the two need different responses.

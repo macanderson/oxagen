@@ -29,11 +29,15 @@
 # ClickHouse is asked twice, because its schema arrives two ways. `db-migrate.ts`
 # records each applied file in `<database>._migrations` (column `filename`), so
 # one question is a set difference against
-# `packages/telemetry/src/migrations/*.sql`. But `packages/telemetry/src/migrate.ts`
-# also applies `schema.sql` on EVERY call, outside the ledger, and that file
-# holds twelve table definitions the ledger will never mention — so the second
-# question compares the tables it creates against `system.tables`. Checking only
-# the ledger would call a store current while most of its tables were missing.
+# `packages/telemetry/src/migrations/*.sql`. The second question is `system.tables`
+# against every table this repository declares — the ones `schema.sql` creates
+# on every call outside the ledger, and the ones the migrations create.
+#
+# The migrations belong in the second question as well as the first because a
+# ledger row is a filename, not a table. `migrate.ts`'s pre-ledger baseline
+# bootstrap records files as applied without executing them, so a store can
+# name `0020_error_events.sql` in `_migrations` and have no `error_events` —
+# which is what #3698 was, checked by this script, and reported current.
 #
 # Neo4j keeps none — its migration is idempotent `CREATE ... IF NOT EXISTS` and
 # forgets what it did. But every constraint and index in `schema.cypher` is
@@ -157,6 +161,100 @@ clickhouse_declared_tables() {
     sed -E 's/.*[[:space:]]//' |
     sed 's/^.*\.//' |
     sort -u
+}
+
+# clickhouse_migration_tables MIGRATIONS_DIR
+#
+# Every table still standing once every file in MIGRATIONS_DIR has been applied,
+# one per line. CREATE adds a name, DROP removes it, and the files are read in
+# filename order so a table created early and dropped later does not survive.
+#
+# WHY THIS EXISTS (#3698)
+#
+# The ledger half above is not evidence that a migration RAN. It is evidence
+# that a filename was written into `_migrations` — and `migrate.ts`'s pre-ledger
+# baseline bootstrap writes filenames there WITHOUT executing them, for every
+# file up to `PRE_LEDGER_BASELINE_CUTOVER`. That is deliberate: the ledger
+# arrived after those migrations had shipped, and re-running them was the worse
+# option. It also means a store can list `0020_error_events.sql` as applied
+# while `error_events` does not exist.
+#
+# That is not hypothetical. It is #3698: `error_events` held zero rows in
+# production while every runtime called `captureError()` on every 500, and this
+# check — the guard written for exactly that incident — reported ClickHouse
+# current throughout, because it asked the ledger about a table and the tables
+# query about schema.sql only. Sixteen tables arrive by migration and nothing
+# confirmed any of them existed.
+#
+# Tables only, not views: a view is in `system.tables` too, so including
+# `CREATE VIEW` would work, but nothing here has been run against a production
+# store carrying one. Narrower and true beats broad and guessed — the same call
+# neo4j_declared_names makes.
+clickhouse_migration_tables() {
+  local dir=$1
+
+  if [[ ! -d $dir ]]; then
+    echo "clickhouse_migration_tables: no such directory: $dir" >&2
+    return 2
+  fi
+
+  # Newline-separated rather than an associative array: this runs on the
+  # runner's bash and on macOS's bash 3.2, which has no `declare -A`.
+  local live="" f event verb name
+
+  # A glob rather than `ls`, for the reason the ledger list uses one: a filename
+  # with a space would otherwise split into two migrations that neither exist
+  # nor are missing.
+  for f in "$dir"/*.sql; do
+    [[ -e $f ]] || continue
+    # Both verbs in ONE pass, so their order within a file is preserved.
+    # 0021 drops `schema_conformance_events` and re-creates it four lines
+    # later; read separately, the drop would win and the check would demand a
+    # table the migration deliberately restores.
+    while IFS= read -r event; do
+      verb=${event%%[[:space:]]*}
+      name=${event##*[[:space:]]}
+      name=${name##*.}
+      # An ERE alternation is leftmost-longest, so `DROP TABLE IF EXISTS x`
+      # matches through the `IF EXISTS`. This costs nothing and means a future
+      # edit to the pattern cannot quietly enter a keyword as a table name the
+      # way an unnamed Neo4j constraint once entered as "IF".
+      case "$name" in
+        [Ii][Ff] | [Nn][Oo][Tt] | [Ee][Xx][Ii][Ss][Tt][Ss] | "") continue ;;
+      esac
+      case "$verb" in
+        [Dd][Rr][Oo][Pp]) live=$(printf '%s\n' "$live" | grep -vxF -- "$name" || true) ;;
+        *) live="$live"$'\n'"$name" ;;
+      esac
+    done < <(
+      sed -e 's|--.*||' "$f" |
+        grep -Eio '^[[:space:]]*(CREATE|DROP)[[:space:]]+TABLE[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+|IF[[:space:]]+EXISTS[[:space:]]+)?[A-Za-z_][A-Za-z0-9_.]*' |
+        sed -E 's/^[[:space:]]+//'
+    )
+  done
+
+  printf '%s\n' "$live" | sed '/^$/d' | sort -u
+}
+
+# clickhouse_all_declared_tables SCHEMA_SQL MIGRATIONS_DIR
+#
+# Every table this repository expects a ClickHouse store to carry: schema.sql's
+# and the migrations', deduplicated. Returns 2 if either side could not be read,
+# because half an answer compared against `system.tables` is a report of drift
+# that is not there.
+#
+# The union is a function rather than a `sort -u` at the call site so the test
+# can prove the two sources actually meet. Asserting instead that the script
+# mentions `clickhouse_migration_tables` proves only that the name appears —
+# a version that called it and discarded the output passed that assertion.
+clickhouse_all_declared_tables() {
+  local schema=$1 dir=$2 from_schema from_migrations rc=0
+
+  from_schema=$(clickhouse_declared_tables "$schema") || rc=2
+  from_migrations=$(clickhouse_migration_tables "$dir") || rc=2
+  [[ $rc -eq 0 ]] || return 2
+
+  printf '%s\n%s\n' "$from_schema" "$from_migrations" | sed '/^$/d' | sort -u
 }
 
 # count_names FILE
@@ -390,11 +488,18 @@ if require_declarations "ClickHouse migrations" "$WORK/ch-declared.txt"; then
   fi
 fi
 
-# --- ClickHouse: the tables schema.sql creates outside the ledger -----------
+# --- ClickHouse: the tables themselves --------------------------------------
+#
+# Both sources, because the ledger proves neither. schema.sql is applied on
+# every call and never enters `_migrations` at all; the migrations DO enter it,
+# but the pre-ledger bootstrap can record a file as applied without running it,
+# so a complete ledger is not a table (#3698).
 
 echo
 echo "== ClickHouse tables =="
-clickhouse_declared_tables "$REPO/packages/telemetry/src/schema.sql" \
+clickhouse_all_declared_tables \
+  "$REPO/packages/telemetry/src/schema.sql" \
+  "$REPO/packages/telemetry/src/migrations" \
   > "$WORK/ch-tables-declared.txt" || bump_status 2
 
 if [[ $ch_reachable -eq 1 ]] && require_declarations "ClickHouse tables" "$WORK/ch-tables-declared.txt"; then
