@@ -131,6 +131,12 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       const frames = field(p, "frame_count");
       return frames ? `frames=${frames}` : event.eventType;
     }
+    case "context.instructions_applied": {
+      const provider = field(p, "provider");
+      const outcome = field(p, "outcome");
+      if (provider && outcome) return `${provider} ${outcome}`;
+      return outcome ?? event.eventType;
+    }
     default:
       // Both spellings of each call, and both spellings of the tool's name:
       // the ledger's own event calls it `capability_name`, the assistant's
@@ -548,6 +554,7 @@ const POLICY_TYPES: ReadonlySet<string> = new Set([
 /** Frames that record what was pulled into the model's context. */
 const RECALL_TYPES: ReadonlySet<string> = new Set([
   "context.frames_selected",
+  "context.instructions_applied",
   "context.assembled",
 ]);
 /** Tool outcomes that record a call that did not do what it was asked to. */
