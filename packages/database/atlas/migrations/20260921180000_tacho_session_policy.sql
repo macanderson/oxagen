@@ -63,15 +63,30 @@ CREATE TABLE "workspace"."tacho_session_policy" (
 CREATE INDEX "tacho_session_policy_org_workspace_idx" ON "workspace"."tacho_session_policy" USING btree ("org_id","workspace_id");
 
 -- ────────────────────────────────────────────────────────────────────────────
--- RLS — standard tenant_isolation (org_id + workspace_id both NOT NULL).
--- Mirrors workspace.workspace_budget_policy (20260708120000).
+-- RLS — the `standard` class: org_id + workspace_id both NOT NULL.
+--
+-- Two policies, not one. `tenant_isolation` scopes every statement to the
+-- caller's workspace. `tenant_org_wide_read` is the read widening added by
+-- 20260917120000_org_wide_read_mode, which every `standard` table in
+-- POLICY_MANIFEST carries: with `app.org_wide = on` an org-scoped reader sees
+-- the org's rows across its workspaces, and writes are unaffected because the
+-- widening is `FOR SELECT` and adds no WITH CHECK.
+--
+-- Registering the table as `standard` without the second policy would leave
+-- an org-wide read seeing nothing here while it sees every sibling table, and
+-- `org-only-sentinel-refusal.test.ts` fails the class for exactly that.
+-- Mirrors workspace.workspace_budget_policy.
 -- ────────────────────────────────────────────────────────────────────────────
 ALTER TABLE workspace.tacho_session_policy ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workspace.tacho_session_policy FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON workspace.tacho_session_policy;
+DROP POLICY IF EXISTS tenant_org_wide_read ON workspace.tacho_session_policy;
 CREATE POLICY tenant_isolation ON workspace.tacho_session_policy
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+CREATE POLICY tenant_org_wide_read ON workspace.tacho_session_policy
+  FOR SELECT
+  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- tacho.hosts.model_base_urls — the daemon's report on the base URL it wrote
