@@ -326,9 +326,12 @@ export class Shipper {
       return { shipped: 0, quarantined: 0, reachable: this.reachable };
     const { own, foreign } = this.partitionByEnrollment(batch);
     // Complete body reads before ingest or quarantine can advance any cursor.
+    // `bodiesForAsync` indexes the body file off the synchronous path and
+    // hands the batch back in slices, so the daemon answers `/status` and its
+    // control-plane fetches while a long session's bodies are read (#3694).
     let batchBodies: TachoBody[];
     try {
-      batchBodies = this.options.wal.bodiesFor(own);
+      batchBodies = await this.options.wal.bodiesForAsync(own);
     } catch (error) {
       this.fail(error);
       this.options.log(`WAL body read failed: ${this.lastError ?? "unknown"}`);

@@ -101,6 +101,8 @@ The four tiers of `design/overview.md` §3 hold. This section places each tier i
 
 Unchanged from the design (R3): a telemetry hook costs one HTTP POST to loopback, answered after a local WAL append (target p50 under 5 ms, measured in the plan). An enforcement hook costs one process spawn of `tacho-hook` plus one local bundle evaluation; the network is on the path only for elevation. The plan carries a budget of 30 ms p95 for `tacho-hook` start-to-decision on a warm host; if a Node-based executable cannot meet it, the enforcement binary moves to a compiled target before GA, and the hook contract does not change.
 
+Shipping a batch costs the batch, not the session. Each session's body file carries a byte-offset index beside it, `<session>.bodies.index`, so the 200 bodies of a batch are read at their offsets instead of found by a scan. The index is derived from the body file and rebuilt whenever the two disagree, so a body file already on disk is indexed on its first read and a file the retention sweep rewrites is indexed again. That first scan and the batch's reads both run off the synchronous path, so the daemon answers `/status` and its control-plane fetches while a long session is read. The daemon also remembers the byte each session's shipped cursor sits on in its event file, so `unshipped` and the health probe read the unshipped tail rather than the file. One measured host held a session of 16,436 model bodies in 7.38 GB, re-read all of it for every 200 events, and shipped nothing for nine hours (#3694).
+
 ---
 
 ## 4. Package home and public surface
