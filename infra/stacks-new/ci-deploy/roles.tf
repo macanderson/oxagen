@@ -326,15 +326,13 @@ data "aws_iam_policy_document" "oxagen_platform" {
     resources = ["*"]
   }
 
-  # infra/tools/run-db-migrations.sh polls the node's registration before
-  # sending it a command, so a dead or unregistered instance fails fast
-  # instead of a ten-minute send-command timeout. DescribeInstanceInformation
-  # takes no resource-level permissions (AWS always evaluates it against
-  # "*"), so it cannot be scoped by the node's tag the way the statements
-  # above are. Without it, the poll's AccessDenied reads as "not registered"
-  # (oxagen#2652's migration-gate job, `check-postgres-drift.sh`).
+  # The migration script asks whether the node is managed before it sends
+  # Atlas status. This action takes no resource type, so `*` is the only
+  # expressible scope, same as ReadCommandResult. The script still continues
+  # when the call is denied, because this grant is not live until the stack
+  # is applied, and a denied read must not be reported as an unregistered node.
   statement {
-    sid       = "CheckNodeRegistration"
+    sid       = "SeeWhetherTheNodeIsManaged"
     actions   = ["ssm:DescribeInstanceInformation"]
     resources = ["*"]
   }

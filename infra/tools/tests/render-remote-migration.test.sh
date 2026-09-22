@@ -264,6 +264,33 @@ contains "$STILL" "cmd-1" "still-running: names the command to watch"
 contains "$STILL" "i-abc" "still-running: names the instance"
 lacks "$STILL" "FAILED" "still-running: does not call itself a failure"
 
+# --- whether the node is managed ------------------------------------------
+#
+# describe-instance-information is not granted to gha-deploy-oxagen-platform.
+# Collapsing a non-zero exit into a count of zero made every migration gate
+# say the node was unregistered (run 35674893025) and skip Atlas status.
+
+expect_word() {
+  local want=$1 got=$2 label=$3
+  if [[ $want == "$got" ]]; then pass; else fail "$label: wanted '$want', got '$got'"; fi
+}
+
+expect_word online "$(classify_ssm_online 0 1)" \
+  "one managed instance is online"
+expect_word absent "$(classify_ssm_online 0 0)" \
+  "a successful empty list is absent"
+expect_word absent "$(classify_ssm_online 0 2)" \
+  "more than one managed instance is not the node we asked for"
+expect_word unreadable "$(classify_ssm_online 254 0)" \
+  "AccessDenied is unreadable, not absent"
+expect_word unreadable "$(classify_ssm_online 255 "")" \
+  "a failed call with no count is unreadable"
+
+contains "$RUNNER" "classify_ssm_online" \
+  "runner: classifies the SSM lookup before deciding the node is dead"
+lacks "$RUNNER" '|| echo 0' \
+  "runner: a denied SSM read is not rewritten as a count of zero"
+
 FAILED_MSG=$(verdict_stderr Failed 0 cmd-2 i-abc us-east-1 600)
 contains "$FAILED_MSG" "FAILED" "failed: says so"
 lacks "$FAILED_MSG" "Do NOT re-run" "failed: a real failure may be re-run once fixed"

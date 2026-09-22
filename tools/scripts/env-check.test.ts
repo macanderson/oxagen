@@ -149,6 +149,7 @@ describe("reconcile — PLATFORM_ALLOWLIST", () => {
       "NEXT_RUNTIME",
       "NEXT_PHASE",
       "CI",
+      "GITHUB_ACTIONS",
       "PLATFORM_VERSION",
       "TURBO_TOKEN",
       "TURBO_TEAM",
@@ -378,6 +379,43 @@ describe("scanSourceReferences", () => {
       const result = scanSourceReferences([dir]);
       expect(result.referenced.has("DEPLOY_TARGET")).toBe(true);
       expect(result.referenced.has("LOCAL_DIR")).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("treats names from a guarded read as locals", () => {
+    // `if ! read -r SOURCE` assigns SOURCE, and the script later expands
+    // `$SOURCE`. A heredoc delimiter and a comment that mentions `read` are
+    // not assignments. A real reference on the following line still counts.
+    const dir = mkdtempSync(join(tmpdir(), "env-check-test-"));
+    try {
+      writeFileSync(
+        join(dir, "migrate.sh"),
+        [
+          "if ! read -r SOURCE PGHOST PGPORT < <(writer_from_sources); then",
+          "  exit 1",
+          "fi",
+          "read -r BARE_LOCAL <<'BARE_EOF'",
+          "BARE_EOF",
+          "# read -r COMMENT_ONLY",
+          "case $SOURCE in",
+          '  env) echo "$PGHOST $BARE_LOCAL" ;;',
+          "esac",
+          'echo "$STILL_AN_ENV"',
+          'echo "$COMMENT_ONLY"',
+          'echo "$BARE_EOF"',
+          "",
+        ].join("\n"),
+      );
+      const result = scanSourceReferences([dir]);
+      expect(result.referenced.has("SOURCE")).toBe(false);
+      expect(result.referenced.has("PGHOST")).toBe(false);
+      expect(result.referenced.has("PGPORT")).toBe(false);
+      expect(result.referenced.has("BARE_LOCAL")).toBe(false);
+      expect(result.referenced.has("STILL_AN_ENV")).toBe(true);
+      expect(result.referenced.has("COMMENT_ONLY")).toBe(true);
+      expect(result.referenced.has("BARE_EOF")).toBe(true);
     } finally {
       rmSync(dir, { recursive: true });
     }
