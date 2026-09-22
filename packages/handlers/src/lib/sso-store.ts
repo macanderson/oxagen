@@ -102,6 +102,26 @@ export async function countVerifiedOrgSsoProviders(
   return Number(row?.n ?? 0);
 }
 
+/**
+ * Whether any account row already uses `providerId` as its provider id. An
+ * SSO provider must never share one with another account source, because
+ * Better Auth matches an existing account by (providerId, accountId) before
+ * it checks the email (see RESERVED_SSO_PROVIDER_IDS). This is the one query
+ * in this file that is not org-scoped: auth.accounts is global identity, and
+ * the answer is a yes/no about the id, never a row.
+ */
+export async function accountProviderIdInUse(
+  tx: Tx,
+  providerId: string,
+): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: schema.accounts.id })
+    .from(schema.accounts)
+    .where(eq(schema.accounts.providerId, providerId))
+    .limit(1);
+  return row !== undefined;
+}
+
 export async function insertOrgSsoProvider(
   tx: Tx,
   values: typeof providers.$inferInsert,

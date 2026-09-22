@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   emit: vi.fn(),
   resolveKms: vi.fn(),
   insert: vi.fn(),
+  inUse: vi.fn(),
   withSystemDb: vi.fn(),
 }));
 
@@ -29,6 +30,7 @@ vi.mock("@oxagen/database/sso-secrets", async (importOriginal) => {
 });
 vi.mock("./lib/sso-store", () => ({
   insertOrgSsoProvider: mocks.insert,
+  accountProviderIdInUse: mocks.inUse,
 }));
 
 // The org-role gate every SSO handler asserts (INV-29). Allows by default, an
@@ -314,6 +316,16 @@ describe("org.sso.create handler", () => {
     );
     await orgSsoCreateHandler(OIDC_INPUT, CTX);
     expect(storedValues()["issuer"]).toBe(`${ISSUER}/`);
+  });
+
+  it("refuses a provider id another sign-in method already uses in auth.accounts", async () => {
+    mocks.inUse.mockResolvedValueOnce(true);
+    await expect(orgSsoCreateHandler(OIDC_INPUT, CTX)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "provider_id_reserved",
+    });
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.emit).not.toHaveBeenCalled();
   });
 
   it("maps a taken provider id and a taken domain to distinct conflicts", async () => {

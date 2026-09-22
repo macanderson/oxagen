@@ -104,14 +104,82 @@ export function normalizeSsoGroups(claim: unknown): string[] {
 }
 
 /**
+ * Provider ids Better Auth already uses for accounts: the password account,
+ * every built-in social provider, and the plugin ids that write account rows.
+ *
+ * SECURITY. Better Auth keys `auth.accounts` by (providerId, accountId), and
+ * its OAuth sign-in finds an existing account by that pair before it looks at
+ * the email. An SSO provider named "github" whose IdP asserts a victim's
+ * GitHub user id as `sub` would therefore sign in as the victim; "google" is
+ * also in auth.ts's trustedProviders, which links by email on any domain.
+ * So an SSO provider may never share an id with any other account source.
+ * This list is the static half; create_sso_provider also refuses any id
+ * that already appears in auth.accounts.provider_id, which covers a social
+ * provider added after this list was written.
+ */
+export const RESERVED_SSO_PROVIDER_IDS: ReadonlySet<string> = new Set([
+  "credential",
+  "email",
+  "email-otp",
+  "magic-link",
+  "passkey",
+  "anonymous",
+  "phone-number",
+  "siwe",
+  "oauth-proxy",
+  "sso",
+  "saml",
+  "oidc",
+  // Better Auth's built-in social providers (1.6).
+  "apple",
+  "atlassian",
+  "cognito",
+  "discord",
+  "dropbox",
+  "facebook",
+  "figma",
+  "github",
+  "gitlab",
+  "google",
+  "huggingface",
+  "kakao",
+  "kick",
+  "line",
+  "linear",
+  "linkedin",
+  "microsoft",
+  "naver",
+  "notion",
+  "paybin",
+  "paypal",
+  "polar",
+  "reddit",
+  "roblox",
+  "salesforce",
+  "slack",
+  "spotify",
+  "tiktok",
+  "twitch",
+  "twitter",
+  "vercel",
+  "vk",
+  "zoom",
+]);
+
+/**
  * The provider's stable id. It appears in callback URLs, so it is a slug:
  * lowercase letters, digits and hyphens, starting with a letter or digit.
+ * It may not be an id another account source uses (see above).
  */
 export const ssoProviderIdSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]{1,62}$/, {
     message:
       "Use 2 to 63 lowercase letters, digits or hyphens, starting with a letter or digit.",
+  })
+  .refine((id) => !RESERVED_SSO_PROVIDER_IDS.has(id), {
+    message:
+      "That id belongs to another sign-in method. Choose an id such as acme-okta.",
   });
 
 /** An email domain such as `acme.com`. Stored lowercase. */

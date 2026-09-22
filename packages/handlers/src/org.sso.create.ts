@@ -15,7 +15,7 @@ import {
   ssoSpEntityId,
   toSsoProviderView,
 } from "./lib/sso";
-import { insertOrgSsoProvider } from "./lib/sso-store";
+import { accountProviderIdInUse, insertOrgSsoProvider } from "./lib/sso-store";
 import { logger } from "./logger";
 
 /**
@@ -89,8 +89,17 @@ export const orgSsoCreateHandler: CapabilityHandler<
     // Owner or Admin membership check above; auth.sso_providers is a
     // shared-plane platform table with no RLS, so the bypass is the only way
     // to write it and the orgId column is the fence.
-    row = await withSystemDb((tx) =>
-      insertOrgSsoProvider(tx, {
+    row = await withSystemDb(async (tx) => {
+      // An id another account source already uses would let this provider's
+      // IdP sign in as that source's users (see RESERVED_SSO_PROVIDER_IDS).
+      if (await accountProviderIdInUse(tx, input.providerId)) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "provider_id_reserved",
+          message: `The provider id "${input.providerId}" belongs to another sign-in method. Choose another.`,
+        });
+      }
+      return insertOrgSsoProvider(tx, {
         id: randomUUID(),
         issuer,
         oidcConfig,
@@ -104,8 +113,8 @@ export const orgSsoCreateHandler: CapabilityHandler<
         displayName: input.displayName,
         groupsClaim,
         domainVerificationToken: randomBytes(24).toString("hex"),
-      }),
-    );
+      });
+    });
   } catch (err) {
     if (isUniqueViolation(err, "sso_providers_provider_id_idx")) {
       throw new HandlerError({
