@@ -78,6 +78,32 @@ lacks "$DRY" "options=-c app.rls_bypass=on" "dry run: the bypass is not left une
 # The bug that split this file out: the upload used a variable and the
 # download used a literal, so they could name different buckets.
 contains "$DRY" "s3://test-bucket/_deploy/atlas-migrations.tgz" "dry run: bucket substituted into the download"
+UNIQUE=$(render_remote_migration \
+  "test-bucket" "clus.example.rds.amazonaws.com" "5432" "oxagen" "oxagen" "0" "0" "0" \
+  "atlas-migrations-abc123.tgz")
+contains "$UNIQUE" "s3://test-bucket/_deploy/atlas-migrations-abc123.tgz" \
+  "dry run: a per-run object name is what the node downloads"
+lacks "$UNIQUE" "/_deploy/atlas-migrations.tgz" "dry run: the per-run name replaces the shared key"
+if render_remote_migration \
+  "test-bucket" "clus.example.rds.amazonaws.com" "5432" "oxagen" "oxagen" "0" "0" "0" \
+  "../atlas-migrations.tgz" >/dev/null 2>&1; then
+  fail "an object name outside the per-run pattern should be refused"
+else
+  pass
+fi
+KEY_A=$(migration_object_key)
+KEY_B=$(migration_object_key)
+if [[ $KEY_A =~ ^[0-9a-f]{16}$ && $KEY_A != "$KEY_B" ]]; then
+  pass
+else
+  fail "migration_object_key should be 16 hex chars and differ per call (got '$KEY_A' and '$KEY_B')"
+fi
+RUNNER=$(sed -n '/^# Everything above is definitions/,$p' "$TOOLS/run-db-migrations.sh")
+contains "$RUNNER" 'migration_object_key' "runner: each invocation names its own object"
+lacks "$RUNNER" '_deploy/atlas-migrations.tgz' "runner: does not upload the shared key"
+contains "$RUNNER" 's3 rm' "runner: deletes the object after the node has finished"
+contains "$RUNNER" '${TIMED_OUT:-0} == 1' \
+  "runner: a command that is still running keeps its archive"
 lacks "$DRY" "oxagen-deploy-578673726240" "dry run: no hardcoded old-account bucket"
 lacks "$DRY" "__" "dry run: no placeholder survives"
 

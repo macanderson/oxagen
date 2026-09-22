@@ -75,6 +75,11 @@ jobs:
               { prefix: 'packages/database/atlas/migrations/', store: 'Postgres (migration)' },
               { prefix: 'packages/database/src/schema/',       store: 'Postgres (Drizzle schema)' },
               { prefix: 'packages/telemetry/src/migrations/',  store: 'ClickHouse' },
+              // Applied on every ClickHouse migrate, outside the ledger.
+              // packages/telemetry/src/schema.sql is the baseline
+              // check-store-drift.sh compares. A pull request that edits
+              // only that file still changes production's stored shape.
+              { prefix: 'packages/telemetry/src/schema.sql',   store: 'ClickHouse (baseline schema)' },
               { prefix: 'packages/ontology/src/schema.cypher', store: 'Neo4j' },
             ]
 
