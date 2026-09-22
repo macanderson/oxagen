@@ -124,6 +124,7 @@ import {
   TACHO_RUN_TOKEN_ATTR,
   type TachoCredentialBasis,
   type TachoHarness,
+  defaultHarnessForProvider,
 } from "../wire";
 import { GUARD_MESSAGES, guardLoopbackRequest } from "./loopback-guard";
 import { modelVerdict } from "./model-allowlist";
@@ -553,7 +554,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
   }
 
   function harnessFor(provider: ModelProvider): TachoHarness {
-    return provider === "anthropic" ? "claude-code" : "codex";
+    return defaultHarnessForProvider(provider);
   }
 
   function correlate(

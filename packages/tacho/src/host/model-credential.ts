@@ -46,6 +46,7 @@ import {
   writeSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { BROKERABLE_HARNESS_PROVIDER, type BrokerableHarness } from "../wire";
 import type { CredentialKind, HeldCredential } from "./credential-store";
 import { claudeManagedSettingsPath } from "./model-base-url";
 import {
@@ -56,16 +57,11 @@ import {
   verifyRunToken,
 } from "./run-token";
 
-export type ModelCredentialHarness = "claude-code" | "codex";
+export type ModelCredentialHarness = BrokerableHarness;
 
-/** The provider each harness's credential is for. */
-export const HARNESS_PROVIDER: Record<
-  ModelCredentialHarness,
-  RunTokenProvider
-> = {
-  "claude-code": "anthropic",
-  codex: "openai",
-};
+/** The provider each harness's credential is for, read off the route table. */
+export const HARNESS_PROVIDER: Record<ModelCredentialHarness, RunTokenProvider> =
+  BROKERABLE_HARNESS_PROVIDER;
 
 export interface ModelCredentialOptions {
   /** The user's home directory; `~/.claude` and `~/.codex` are read under it. */

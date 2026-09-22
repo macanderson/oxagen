@@ -45,13 +45,16 @@ export {
   staticTokenStillGood,
 } from "../host/model-credential";
 import type { RunTokenPlacement, RunTokenProvider } from "../host/run-token";
-import { TACHO_HARNESS_LABELS } from "../wire";
+import {
+  BROKERABLE_HARNESSES,
+  isBrokerableHarness,
+  TACHO_HARNESS_LABELS,
+} from "../wire";
 import type { CliDeps } from "./deps";
 
-/** The harnesses whose model credential the gateway can broker. */
+/** The harnesses whose model credential the gateway can broker, off the route table. */
 export const MODEL_CREDENTIAL_HARNESSES: ModelCredentialHarness[] = [
-  "claude-code",
-  "codex",
+  ...BROKERABLE_HARNESSES,
 ];
 
 /**
@@ -84,7 +87,7 @@ export function brokerEnvVar(provider: RunTokenProvider): string {
 export function isCredentialHarness(
   harness: string,
 ): harness is ModelCredentialHarness {
-  return (MODEL_CREDENTIAL_HARNESSES as readonly string[]).includes(harness);
+  return isBrokerableHarness(harness);
 }
 
 interface IssueOptions {

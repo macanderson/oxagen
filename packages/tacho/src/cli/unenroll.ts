@@ -42,6 +42,7 @@ import {
 import { stripTachoSettings } from "../host/settings-writer";
 import { stripStellaHooks } from "../host/stella-writer";
 import { toProtocolTimestamp } from "../timestamp";
+import { MODEL_ROUTED_HARNESSES } from "../wire";
 import {
   type CliDeps,
   type CredentialOptions,
@@ -152,11 +153,9 @@ export async function revokeAndMark(
  * created after enrollment makes Stella ignore the `settings.json` Tacho
  * wrote to, without removing the hooks from it.
  */
-/** The harnesses the model base URL contract covers. */
+/** The harnesses the model base URL contract covers, off the route table. */
 export const MODEL_BASE_URL_HARNESSES: ModelBaseUrlHarness[] = [
-  "claude-code",
-  "codex",
-  "stella",
+  ...MODEL_ROUTED_HARNESSES,
 ];
 
 /**

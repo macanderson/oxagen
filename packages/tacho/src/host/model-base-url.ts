@@ -87,8 +87,10 @@ import {
   type TomlLine,
   tomlStringValue,
 } from "./model-base-url-toml";
+import type { ModelRoutedHarness } from "../wire";
 
-export type ModelBaseUrlHarness = "claude-code" | "codex" | "stella";
+/** The harnesses the route table gives a base URL. */
+export type ModelBaseUrlHarness = ModelRoutedHarness;
 
 export interface ModelBaseUrlOptions {
   /** The user's home directory; `~/.claude` and `~/.codex` are read under it. */

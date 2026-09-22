@@ -27,6 +27,7 @@ import {
   TACHO_ENFORCEMENT_TIER_ATTR,
   TACHO_GATEWAY_TIER,
   TACHO_RUN_TOKEN_ATTR,
+  isBrokerableHarness,
 } from "../wire";
 
 export interface IssueRunTokenRequest {
@@ -66,7 +67,7 @@ export interface CredentialIssuerDeps {
 export function providerForHarness(
   harness: unknown,
 ): RunTokenProvider | undefined {
-  return harness === "claude-code" || harness === "codex"
+  return typeof harness === "string" && isBrokerableHarness(harness)
     ? HARNESS_PROVIDER[harness]
     : undefined;
 }

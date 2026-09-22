@@ -8,15 +8,13 @@ import { claudeDesktopPresence } from "../host/claude-desktop-writer";
 import { codexHookPresence } from "../host/codex-writer";
 import { cursorHookPresence } from "../host/cursor-writer";
 import { modelProxyPortFor, readHostFileLenient } from "../host/host-file";
-import type {
-  ModelBaseUrlHarness,
-  ModelBaseUrlHarnessState,
-} from "../host/model-base-url";
+import type { ModelBaseUrlHarnessState } from "../host/model-base-url";
 import type { ModelCredentialHarnessState } from "../host/model-credential";
 import { describeHarness } from "./credential";
 import { tachoHookPresence } from "../host/settings-writer";
 import { stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
+import { isBrokerableHarness, isModelRoutedHarness } from "../wire";
 import type { CliDeps } from "./deps";
 
 export interface StatusOptions {
@@ -237,15 +235,9 @@ export async function status(
     : undefined;
   const walStats = new Wal(deps.paths.wal).stats();
   const gateway = gatewayOf(daemon);
-  const routedHarnesses = host.harnesses.filter(
-    (harness): harness is "claude-code" | "codex" =>
-      harness === "claude-code" || harness === "codex",
-  );
+  const routedHarnesses = host.harnesses.filter(isBrokerableHarness);
   // Stella's base URL is written too; its credential is never brokered.
-  const baseUrlHarnesses = host.harnesses.filter(
-    (harness): harness is ModelBaseUrlHarness =>
-      harness === "claude-code" || harness === "codex" || harness === "stella",
-  );
+  const baseUrlHarnesses = host.harnesses.filter(isModelRoutedHarness);
   let modelBaseUrls: ModelBaseUrlHarnessState[] | undefined;
   if (deps.modelBaseUrls !== undefined && baseUrlHarnesses.length > 0) {
     try {
