@@ -22,7 +22,7 @@ vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 const { readError, readOk } = await import("@/data/read");
-const { workspaceRow } = await import("./organization.builders");
+const { orgSource, workspaceRow } = await import("./organization.builders");
 const { CostCenters, CostCentersView } = await import("./cost-centers");
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -161,16 +161,15 @@ describe("Cost centers section", () => {
         orgName: "Acme Robotics",
         orgRole,
       });
-      const costCenters = vi.fn().mockResolvedValue(readOk(centers));
-      const workspacesRead = vi.fn().mockResolvedValue(readOk(workspaces));
-      const source = {
-        org: { costCenters, workspaces: workspacesRead },
-      } as unknown as Parameters<typeof CostCenters>[0]["source"];
+      const { source, calls } = orgSource({
+        costCenters: readOk(centers),
+        workspaces: readOk(workspaces),
+      });
       const view = render(
         <IntlProvider>{await CostCenters({ ctx, source })}</IntlProvider>,
       );
-      expect(costCenters).toHaveBeenCalledWith(ctx);
-      expect(workspacesRead).toHaveBeenCalledWith(ctx);
+      expect(calls.costCenters).toEqual([[ctx]]);
+      expect(calls.workspaces).toEqual([[ctx]]);
       expect(
         screen.queryByRole("button", { name: "Add a cost center" }) !== null,
       ).toBe(writes);
