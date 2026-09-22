@@ -29,6 +29,7 @@ import { DefinitionSection } from "./definition";
 import { EnrollmentSection } from "./enrollment";
 import { IdentitySection } from "./identity";
 import { IncidentsSection } from "./incidents";
+import { AgentKillSwitch } from "./kill-switch";
 import { MandatesSection } from "./mandates";
 import { AgentStatusBadge } from "./parts";
 import { ToolbeltSection } from "./toolbelt";
@@ -81,15 +82,24 @@ function Header({
       <div className="flex flex-wrap items-start gap-2">
         <CloneButton kind="agent" sourceRef={identity.id} />
         {identity.status === "retired" ? null : (
-          <AgentActions
-            org={org}
-            ws={ws}
-            agentId={identity.id}
-            name={identity.name}
-            suspended={identity.status === "suspended"}
-            here={routes.agent(org, ws, identity.slug)}
-            list={routes.agents(org, ws)}
-          />
+          <>
+            <AgentKillSwitch
+              org={org}
+              ws={ws}
+              agentId={identity.id}
+              agentKey={identity.agentKey}
+              name={identity.name}
+            />
+            <AgentActions
+              org={org}
+              ws={ws}
+              agentId={identity.id}
+              name={identity.name}
+              suspended={identity.status === "suspended"}
+              here={routes.agent(org, ws, identity.slug)}
+              list={routes.agents(org, ws)}
+            />
+          </>
         )}
       </div>
     </section>
