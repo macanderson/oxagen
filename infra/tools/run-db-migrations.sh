@@ -559,7 +559,7 @@ if [[ -z ${AURORA_ENDPOINT:-} ]]; then
   fi
 fi
 
-if ! read -r SOURCE PGHOST PGPORT < <(writer_from_sources \
+if ! read -r writer_source PGHOST PGPORT < <(writer_from_sources \
   "${AURORA_ENDPOINT:-}" "${AURORA_PORT:-}" "$url" "$described"); then
   echo "error: could not resolve the writer endpoint for cluster '$CLUSTER' in $REGION." >&2
   echo "error: tried $AURORA_URL_PARAMETER, then rds:DescribeDBClusters." >&2
@@ -569,7 +569,7 @@ if ! read -r SOURCE PGHOST PGPORT < <(writer_from_sources \
   exit 1
 fi
 unset url described
-case $SOURCE in
+case $writer_source in
   env) echo "==> using AURORA_ENDPOINT from the environment" ;;
   parameter) echo "==> using the host from $AURORA_URL_PARAMETER" ;;
   describe) echo "==> using describe-db-clusters" ;;
