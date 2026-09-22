@@ -71,7 +71,7 @@ describe("GatewayPolicyForm", () => {
       modelAllow: "claude-*-5",
     });
     expect(allow.success).toBe(false);
-    expect(allow.success === false && allow.error.issues[0]?.path).toEqual([
+    expect(!allow.success && allow.error.issues[0]?.path).toEqual([
       "modelAllow",
     ]);
     const deny = GatewayPolicyForm.safeParse({
@@ -79,7 +79,7 @@ describe("GatewayPolicyForm", () => {
       modelDeny: "gpt 4o",
     });
     expect(deny.success).toBe(false);
-    expect(deny.success === false && deny.error.issues[0]?.path).toEqual([
+    expect(!deny.success && deny.error.issues[0]?.path).toEqual([
       "modelDeny",
     ]);
   });
@@ -95,10 +95,10 @@ describe("GatewayPolicyForm", () => {
   it("refuses enforced with nothing to enforce, naming the mode", () => {
     const parsed = GatewayPolicyForm.safeParse({ ...BLANK, mode: "enforced" });
     expect(parsed.success).toBe(false);
-    expect(parsed.success === false && parsed.error.issues[0]?.message).toBe(
+    expect(!parsed.success && parsed.error.issues[0]?.message).toBe(
       "nothingToEnforce",
     );
-    expect(parsed.success === false && parsed.error.issues[0]?.path).toEqual([
+    expect(!parsed.success && parsed.error.issues[0]?.path).toEqual([
       "mode",
     ]);
   });
