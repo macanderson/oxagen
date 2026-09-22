@@ -56,7 +56,9 @@
               "clientSecret": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 4096
+                "maxLength": 4096,
+                "x-server-validated": true,
+                "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
               },
               "scopes": {
                 "type": "array",
@@ -100,7 +102,9 @@
               "spPrivateKey": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 16384
+                "maxLength": 16384,
+                "x-server-validated": true,
+                "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
               }
             },
             "required": [
