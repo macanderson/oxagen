@@ -383,7 +383,7 @@ describe("the loopback model proxy", () => {
     cleanups.push(() => handle.stop());
     const port = handle.modelProxyPort as number;
     expect(port).toBeGreaterThan(0);
-    const session = async (id: string, harness?: "codex") => {
+    const session = async (id: string, harness?: "codex" | "stella") => {
       await handle.api.handleHook({
         payload: {
           hook_event_name: "SessionStart",
@@ -933,6 +933,16 @@ describe("the loopback model proxy", () => {
       "other",
       "https://api.anthropic.com/v1/models",
     ]);
+    expect(at("/stella/anthropic/v1/messages")).toEqual([
+      "anthropic.messages",
+      "https://api.anthropic.com/v1/messages",
+    ]);
+    expect(
+      resolveModelRoute("/stella/anthropic/v1/messages", {})?.harness,
+    ).toBe("stella");
+    expect(
+      resolveModelRoute("/anthropic/v1/messages", {})?.harness,
+    ).toBeUndefined();
     expect(at("/v1/messages")).toEqual([
       "anthropic.messages",
       "https://api.anthropic.com/v1/messages",
@@ -1239,6 +1249,33 @@ describe("the loopback model proxy", () => {
       "request_metadata",
       "request_metadata",
       "sole_live_session",
+    ]);
+  });
+
+  it("files a call on Stella's prefix under the live Stella session, never a Claude Code one", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { port, session, frames } = await boot(fake.url);
+    const claude = await session("sess-claude");
+    const stella = await session("sess-stella", "stella");
+    // Stella sends no session header. A Claude Code header on this prefix is
+    // some other harness's, so it is not read either.
+    await call(port, {
+      path: "/stella/anthropic/v1/messages",
+      body: JSON.stringify({ model: "m" }),
+    });
+    await call(port, {
+      path: "/stella/anthropic/v1/messages",
+      headers: ["X-Claude-Code-Session-Id", "sess-claude"],
+      body: JSON.stringify({ model: "m" }),
+    });
+    expect(frames(stella).map((f) => f.attrs["oxagen.correlation"])).toEqual([
+      "sole_live_session",
+      "sole_live_session",
+    ]);
+    expect(frames(claude)).toHaveLength(0);
+    expect(fake.requests.map((r) => r.url)).toEqual([
+      "/v1/messages",
+      "/v1/messages",
     ]);
   });
 
@@ -1619,7 +1656,13 @@ describe("the loopback model proxy", () => {
     expect(handle.api.status()["gateway"]).toEqual({
       listening: true,
       port,
-      routes: ["/anthropic", "/backend-api/codex", "/openai/v1", "/v1"],
+      routes: [
+        "/anthropic",
+        "/stella/anthropic",
+        "/backend-api/codex",
+        "/openai/v1",
+        "/v1",
+      ],
       calls_observed: 2,
     });
 
@@ -1790,7 +1833,7 @@ describe("the credential seam (ADR-138)", () => {
       expect(answer.status).toBe(200);
       return answer.body as { token: string; token_id: string };
     };
-    const session = async (id: string, harness?: "codex") => {
+    const session = async (id: string, harness?: "codex" | "stella") => {
       await handle.api.handleHook({
         payload: {
           hook_event_name: "SessionStart",
@@ -1889,6 +1932,21 @@ describe("the credential seam (ADR-138)", () => {
         source: "claude-code:settings.env",
       }),
     ]);
+  });
+
+  it("forwards Stella's own key on its prefix, because custody was never taken from Stella", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session } = await bootBrokered(fake.url);
+    const uuid = await session("sess-stella-own", "stella");
+    const own = await call(port, {
+      path: "/stella/anthropic/v1/messages",
+      headers: ["X-Api-Key", LEAKED_KEY],
+      body: JSON.stringify({ model: "claude-sonnet-5", messages: [] }),
+    });
+    expect(own.status).toBe(200);
+    expect(fake.requests).toHaveLength(1);
+    const [frame] = handle.wal.read(uuid).filter((e) => e.kind === "llm_call");
+    expect(frame!.attrs[TACHO_CREDENTIAL_BASIS_ATTR]).toBe("harness_held");
   });
 
   it("refuses a call that brings its own vendor key, or none, to a brokered provider", async () => {

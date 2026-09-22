@@ -7,6 +7,12 @@
  * `/v1/models` and a bare path cannot say which one is meant:
  *
  *   - `/anthropic/…`           Claude Code, `ANTHROPIC_BASE_URL`.
+ *   - `/stella/anthropic/…`    Stella, `providers.anthropic.base_url`. Stella
+ *                              sends no session header and no request
+ *                              metadata, so the prefix is the only thing that
+ *                              says which harness made the call. Without it a
+ *                              Stella call would be filed under the one live
+ *                              Claude Code session.
  *   - `/backend-api/codex/…`   Codex, `openai_base_url`. The suffix is the one
  *                              Codex requires before it keeps its backend-only
  *                              routes, so the same URL serves both logins.
@@ -19,7 +25,7 @@
  * anything else goes to the public API.
  */
 import type { IncomingHttpHeaders } from "node:http";
-import { TACHO_MODEL_SESSION_HEADER } from "../wire";
+import { TACHO_MODEL_SESSION_HEADER, type TachoHarness } from "../wire";
 import type { ModelApi, ModelProvider } from "./model-usage";
 
 export type ModelUpstreamName = "anthropic" | "openai" | "chatgpt";
@@ -36,6 +42,7 @@ export const DEFAULT_MODEL_UPSTREAMS: ModelUpstreams = {
 /** The path prefixes the proxy answers, as the daemon's status lists them. */
 export const MODEL_PROXY_ROUTES = [
   "/anthropic",
+  "/stella/anthropic",
   "/backend-api/codex",
   "/openai/v1",
   "/v1",
@@ -50,6 +57,11 @@ export interface ModelRoute {
    * its `/v1`. For OpenAI the base already ends in the version segment.
    */
   path: string;
+  /**
+   * The harness the prefix names, when it names one. Absent, the harness is
+   * read from the provider the way it always was.
+   */
+  harness?: TachoHarness;
 }
 
 function anthropicApi(pathname: string): ModelApi {
@@ -97,6 +109,16 @@ export function resolveModelRoute(
       ? pathname.slice(prefix.length) || "/"
       : undefined;
 
+  const stella = under("/stella/anthropic");
+  if (stella !== undefined) {
+    return {
+      provider: "anthropic",
+      api: anthropicApi(stella),
+      upstream: "anthropic",
+      path: `${stella}${search}`,
+      harness: "stella",
+    };
+  }
   const anthropic = under("/anthropic");
   if (anthropic !== undefined) {
     return {

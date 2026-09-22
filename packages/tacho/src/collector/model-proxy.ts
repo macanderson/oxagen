@@ -561,12 +561,16 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     route: ModelRoute,
     body: () => Record<string, unknown> | undefined,
   ): { record?: SessionRecord; how: string } {
-    const harness = harnessFor(route.provider);
+    const harness = route.harness ?? harnessFor(route.provider);
     const explicit = header(req, TACHO_MODEL_SESSION_HEADER);
+    // Stella sends no session header of its own, so a native header on its
+    // prefix would be some other harness's and is not read.
     const native =
-      route.provider === "anthropic"
-        ? header(req, "x-claude-code-session-id")
-        : header(req, "session-id");
+      route.harness !== undefined
+        ? undefined
+        : route.provider === "anthropic"
+          ? header(req, "x-claude-code-session-id")
+          : header(req, "session-id");
     let id = explicit ?? native;
     let how = explicit !== undefined ? "header" : "harness_header";
     if (id === undefined && route.api === "anthropic.messages") {
@@ -709,9 +713,14 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // `ChatGPT-Account-ID`, and chatgpt.com takes no API key, so custody of an
     // OpenAI key has nothing to offer this call. It crosses as the harness's
     // own whatever the host holds.
+    //
+    // Stella's prefix is never brokered. Custody is taken from Claude Code
+    // and Codex, and Stella keeps its own key, so the key Stella sends is its
+    // own and not a bypass of anybody's custody.
     const brokered =
       broker !== undefined &&
       route.upstream !== "chatgpt" &&
+      route.harness !== "stella" &&
       broker.brokered(route.provider);
     if (broker === undefined || !brokered) {
       // Nothing in custody for this provider: the harness's own credential

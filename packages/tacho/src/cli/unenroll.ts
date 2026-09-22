@@ -18,6 +18,7 @@ import {
   rmSync,
   unlinkSync,
 } from "node:fs";
+import { dirname } from "node:path";
 import { acquireInstallLock } from "../host/install-lock";
 import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
 import { stripCodexHooks } from "../host/codex-writer";
@@ -155,6 +156,7 @@ export async function revokeAndMark(
 export const MODEL_BASE_URL_HARNESSES: ModelBaseUrlHarness[] = [
   "claude-code",
   "codex",
+  "stella",
 ];
 
 /**
@@ -170,18 +172,21 @@ export async function restoreModelBaseUrlsFor(
   const restored: string[] = [];
   const failed: string[] = [];
   if (deps.modelBaseUrls === undefined) return { restored, failed };
+  const stellaHome = dirname(deps.paths.stellaToml);
   for (const harness of MODEL_BASE_URL_HARNESSES) {
     try {
       if (host !== undefined && !host.harnesses.includes(harness)) {
         try {
-          lstatSync(modelBaseUrlBackupPath(harness, deps.home));
+          lstatSync(modelBaseUrlBackupPath(harness, deps.home, stellaHome));
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-          if (!hasOrphanedModelBaseUrl(harness, deps.home)) continue;
+          if (!hasOrphanedModelBaseUrl(harness, deps.home, stellaHome))
+            continue;
         }
       }
       const state = await deps.modelBaseUrls.restore({
         home: deps.home,
+        stellaHome,
         // Restore recognises the proxy's URL on any port; the port only
         // labels the report.
         port: host !== undefined ? modelProxyPortFor(host) : 1024,
