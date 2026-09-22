@@ -56,6 +56,39 @@ describe("fetch_commands contract", () => {
     ).toBeUndefined();
   });
 
+  it("accepts the credential bases a brokering daemon reports, and never a secret", () => {
+    // ADR-138: the daemon says which providers it holds a credential for.
+    // The same strictness argument as `bundle_features`: unnamed here, the
+    // field would refuse the poll of every host that brokers.
+    const parsed = tachoCommandFetch.input.parse({
+      schema: SCHEMA,
+      host_enrollment_id: HOST,
+      daemon: {
+        version: "2.2.0",
+        credentials: [
+          { provider: "anthropic", basis: "gateway_brokered" },
+          { provider: "openai", basis: "harness_held" },
+        ],
+      },
+    });
+    expect(parsed.daemon?.credentials).toHaveLength(2);
+    expect(() =>
+      tachoCommandFetch.input.parse({
+        schema: SCHEMA,
+        host_enrollment_id: HOST,
+        daemon: {
+          credentials: [
+            {
+              provider: "anthropic",
+              basis: "gateway_brokered",
+              secret: "sk-ant-x",
+            },
+          ],
+        },
+      }),
+    ).toThrow();
+  });
+
   it("refuses the v1 body, the statuses Oxagen owns, and an unknown member (negative)", () => {
     const refuse = (input: unknown) =>
       expect(tachoCommandFetch.input.safeParse(input).success).toBe(false);

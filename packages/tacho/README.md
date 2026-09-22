@@ -75,7 +75,7 @@ command lines are double-quoted for `cmd.exe`, and paths go through
 |---|---|
 | `tachod` (`src/collector/`) | The collector. Listens on a Unix socket and `127.0.0.1:<port>` with a per-install bearer; normalizes hooks, OTLP, and spool replays into per-session hash chains; appends to an NDJSON WAL; ships batches to `ingest_tacho_events` at least once with backoff and bisection; applies operator commands from the control envelope; watches for hooks removed and transcripts that advance with no hook stream; signs chain-head checkpoints with the device key; continues every chain across a restart from `daemon.json` |
 | `tacho-hook` (`src/claude-code/hook-main.ts`) | The command hook Claude Code runs on `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, and `Stop`. Hands the payload to the daemon over the socket inside a 50 ms connect budget; if the daemon is down it decides from the cached, signature-verified bundle, spools the event, and still answers, so enforcement never depends on the daemon |
-| `tacho` (`src/cli/`) | `enroll`, `status`, `reassign`, `unenroll`, `export` (tacho NDJSON, `contextgraph-trace` journal, OTLP JSON), `verify`, `daemon`, `hook` |
+| `tacho` (`src/cli/`) | `enroll`, `status`, `reassign`, `unenroll`, `export` (tacho NDJSON, `contextgraph-trace` journal, OTLP JSON), `verify`, `daemon`, `hook`, `credential issue` (what Claude Code runs as its `apiKeyHelper`) and `credential status` |
 
 Telemetry-only events (`PostToolUse`, `SubagentStart`, `SessionEnd`, and the
 rest of the 28 http events) post straight to the daemon; a failure there is
@@ -85,15 +85,63 @@ recorded as a chained `telemetry_gap`, never as a blocked action.
 
 `tachod` also stands between a wrapped harness and its model vendor (ADR-094).
 It serves a second loopback listener, on the port after the collector's unless
-`host.json` pins `model_proxy_port`, and forwards each request to the vendor
-unchanged. The prompt goes from your machine to the vendor you chose. Oxagen
-receives a frame: digests, token counts, latency and status, never a body. The
-vendor credential crosses in memory and is never written or logged.
+`host.json` pins `model_proxy_port`, and forwards each request to the vendor.
+The prompt goes from your machine to the vendor you chose. Oxagen receives a
+frame: digests, token counts, latency and status, never a body. The vendor
+credential stays on the machine and is never written to a frame or a log.
 
 | Harness | File and key | Value written | Logins covered |
 |---|---|---|---|
 | Claude Code | `~/.claude/settings.json`, `env.ANTHROPIC_BASE_URL` | `http://127.0.0.1:<port>/anthropic` | API key (`X-Api-Key`) and claude.ai subscription (`Authorization: Bearer`) |
 | Codex | `~/.codex/config.toml`, top-level `openai_base_url` | `http://127.0.0.1:<port>/backend-api/codex` | API key (forwarded to `api.openai.com/v1`) and ChatGPT login (a request carrying `ChatGPT-Account-ID` is forwarded to `chatgpt.com/backend-api/codex`) |
+
+### The credential seam: the harness holds a run token
+
+By default `tacho enroll` also takes the vendor key out of the harness and
+gives the harness a **run token** instead (ADR-138). It seals the key first
+and edits the file second, so a crash between the two leaves the key where it
+was. The key is sealed in
+`credentials.json` under `TACHO_HOME`, AES-256-GCM under `credentials.key`
+beside it, both mode 0600, and it is read by `tachod` and by nothing else. A
+run token is `oxrt_<claims>.<hmac>`, signed by `run-token.key`, naming this
+host, the harness, the provider and an expiry. It works at this machine's
+gateway and nowhere else: the vendor refuses it, and reverting the base URL
+leaves the harness with no credential the vendor accepts.
+
+| Harness | What the harness holds | How it is refreshed |
+|---|---|---|
+| Claude Code | `apiKeyHelper` in `~/.claude/settings.json` runs `tacho credential issue --harness claude-code`, which prints a fifteen-minute token; `env.ANTHROPIC_API_KEY` and `env.ANTHROPIC_AUTH_TOKEN` are taken into custody, since either would win over the helper | Claude Code re-runs the helper every five minutes and on any 401 |
+| Codex | `OPENAI_API_KEY` in `~/.codex/auth.json` holds a static token bounded by the enrollment's expiry | `tachod` re-mints it once an hour when it nears expiry or no longer verifies for the enrollment; `tacho enroll` does the same; it dies with the enrollment, the signing key, or a host revoke |
+
+The proxy verifies the token, drops it, and attaches the custody credential in
+the vendor's own header. A call to a brokered provider that brings its own
+vendor key is refused as `foreign_credential` (a key exported in the shell
+wins over the helper, and the message names the variable to unset); one with
+no credential as `run_token_required`; an expired or foreign-signed token is
+answered 401 so the harness fetches a new one. Every frame the proxy seals
+carries `oxagen.credential_basis`, `gateway_brokered` or `harness_held`, and a
+brokered call carries `oxagen.run_token_id`. Every mint is a `token_issued`
+frame on the host's chain, by id and expiry, never the token.
+
+A provider with nothing in custody is `harness_held` and crosses as before: a
+claude.ai subscription has no key to take (the helper wins over it, so a
+brokered host sends the token however the person signed in), and a ChatGPT
+login in Codex's `auth.json` cannot be brokered, so a call carrying
+`ChatGPT-Account-ID` crosses as the harness's own whatever the host holds,
+and `tacho status` says so. Only `tachod` mints: when it is not running,
+`tacho credential issue` prints nothing and says why, since the proxy the
+token would be spent at is the daemon.
+`TACHO_BROKER_ANTHROPIC_API_KEY` and `TACHO_BROKER_OPENAI_API_KEY` in the
+enrolling shell hand a key to custody that was never in a harness file.
+`tacho enroll --credentials passthrough` gives every key back; `tacho
+unenroll` does the same first of all, then shreds the store and the signing
+key. `tacho credential status` shows what is held by provider, kind, source
+and date, and never the secret.
+
+`src/host/model-credential.ts` writes and restores the harness files,
+`src/host/credential-store.ts` is the custody, and `src/host/run-token.ts`
+the token codec. Cursor and Stella are not brokered: neither routes its model
+calls through the gateway.
 
 `src/host/model-base-url.ts` writes and restores both, and is the contract the
 CLI and the desktop app call:

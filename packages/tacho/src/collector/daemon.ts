@@ -31,6 +31,10 @@ import {
   type FetchLike,
   type RateLimitHint,
 } from "../host/control-client";
+import {
+  type CredentialStore,
+  openCredentialStore,
+} from "../host/credential-store";
 import { type DeviceKey, loadOrCreateDeviceKey } from "../host/device-key";
 import {
   ensureDir,
@@ -46,6 +50,19 @@ import {
   modelProxyPortFor,
 } from "../host/host-file";
 import { readModelBaseUrlState } from "../host/model-base-url";
+import {
+  applyModelCredentials,
+  type ModelCredentialHarnessState,
+  readModelCredentialState,
+  staticTokenStillGood,
+} from "../host/model-credential";
+import {
+  loadOrCreateRunTokenKey,
+  readRunTokenKey,
+  RUN_TOKEN_PROVIDERS,
+  type RunTokenKey,
+  verifyRunToken,
+} from "../host/run-token";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
 import type { Exec, ExecAsync, ExecResult } from "../host/service";
@@ -68,6 +85,8 @@ import {
   type ControlEnvelope,
   type DaemonHealth,
   TACHO_BUNDLE_FEATURES,
+  TACHO_CREDENTIAL_GATEWAY_BROKERED,
+  TACHO_CREDENTIAL_HARNESS_HELD,
 } from "../wire";
 import { Detector } from "./detector";
 import {
@@ -90,6 +109,7 @@ import {
   type GatewayCallRecord,
   type GatewayFetch,
 } from "./mcp-gateway";
+import { issueRunToken } from "./credential-issuer";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
 import {
@@ -134,6 +154,23 @@ export const DEFAULT_TIMERS: DaemonTimers = {
   idleSessionMs: 6 * 60 * 60_000,
   walRetainMs: 7 * 24 * 60 * 60_000,
 };
+
+/** How often the daemon looks at Codex's static run token. */
+const STATIC_TOKEN_RENEWAL_CHECK_MS = 60 * 60_000;
+
+/** The `OPENAI_API_KEY` member of `~/.codex/auth.json`, whatever it holds. */
+function codexStaticToken(home: string): string | undefined {
+  try {
+    const raw = readJsonFileIfExists(join(home, ".codex", "auth.json"));
+    const value =
+      typeof raw === "object" && raw !== null
+        ? (raw as { OPENAI_API_KEY?: unknown }).OPENAI_API_KEY
+        : undefined;
+    return typeof value === "string" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export interface DaemonOptions {
   paths: TachoPaths;
@@ -405,6 +442,32 @@ async function initializeDaemon(
   const hostRecord = registry.ensure(bootId, { pid: process.pid }).record;
   const hostRecorder = hostRecord.recorder;
 
+  /**
+   * The credential seam (ADR-138): the vendor credentials this gateway holds
+   * in custody, and the key that signs the run tokens a brokered harness
+   * presents instead. Both are re-read from disk on use rather than cached,
+   * so `tacho enroll` taking a key into custody, or `tacho unenroll` rotating
+   * the signing key, is honoured on the next call without a restart.
+   */
+  const credentialStore: CredentialStore = openCredentialStore({
+    file: paths.credentials,
+    key: paths.credentialsKey,
+  });
+  const runTokenKey = (): RunTokenKey =>
+    readRunTokenKey(paths.runTokenKey) ??
+    loadOrCreateRunTokenKey(paths.runTokenKey).key;
+  runTokenKey();
+  function inCustody(provider: "anthropic" | "openai"): boolean {
+    try {
+      return credentialStore.has(provider);
+    } catch (error) {
+      log(
+        `credential store unreadable: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  }
+
   let bundleVerified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
   /**
    * When the control plane last confirmed the cached mandate, as epoch ms.
@@ -579,6 +642,15 @@ async function initializeDaemon(
       // Reported from the running code rather than from `host.json`, which
       // `enroll` writes once and no upgrade rewrites.
       bundle_features: [...TACHO_BUNDLE_FEATURES],
+      // Which providers this host brokers (ADR-138): names and a basis,
+      // never a secret. Read from the store each time, so a key `tacho
+      // enroll` just took into custody is reported on the next poll.
+      credentials: RUN_TOKEN_PROVIDERS.map((provider) => ({
+        provider,
+        basis: inCustody(provider)
+          ? TACHO_CREDENTIAL_GATEWAY_BROKERED
+          : TACHO_CREDENTIAL_HARNESS_HELD,
+      })),
     };
   }
 
@@ -1985,6 +2057,30 @@ async function initializeDaemon(
     ...(options.beforeForward !== undefined
       ? { beforeForward: options.beforeForward }
       : {}),
+    credentials: {
+      brokered: (provider) => inCustody(provider),
+      custody: (provider) => {
+        try {
+          return credentialStore.read(provider);
+        } catch (error) {
+          // An unreadable store is a fault of Oxagen's, and the proxy fails
+          // open on those: the call is treated as `harness_held`. A brokered
+          // harness holds only a run token, so its call is then refused as
+          // `credential_unavailable` with a reason, never forwarded blind.
+          log(
+            `credential store unreadable: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          return undefined;
+        }
+      },
+      verify: (token, provider) =>
+        verifyRunToken(token, {
+          key: runTokenKey(),
+          host: host.host_enrollment_id,
+          provider,
+          now: now(),
+        }),
+    },
     port: () => modelProxyListener.port(),
     log,
     now,
@@ -2079,6 +2175,16 @@ async function initializeDaemon(
     // queue was never protecting the forward; it was only ever costing.
     mcp: (body, context) => gateway.handle(body, context),
     mcpClose: (sessionId) => gateway.forget(sessionId),
+    issueRunToken: (input) =>
+      issueRunToken(input, {
+        key: runTokenKey,
+        store: credentialStore,
+        host: () => host,
+        hostRecorder: () => hostRecorder,
+        record,
+        now,
+        log,
+      }),
     handleHook: (envelope) =>
       serial.run(async () => {
         await drainSpool();
@@ -2162,6 +2268,15 @@ async function initializeDaemon(
       // The loopback model proxy. `calls_observed` counts model calls since
       // the daemon started; a session's own count is on its row below.
       gateway: gatewayStatus(),
+      // What the gateway holds in custody (ADR-138): provider, kind, source
+      // and when it was taken. The secret is not here and has no field.
+      credential_custody: (() => {
+        try {
+          return credentialStore.status();
+        } catch {
+          return [];
+        }
+      })(),
       sessions: registry.list().map((session) => ({
         session_id: session.harnessSessionId,
         session_uuid: session.recorder.sessionUuid,
@@ -2399,8 +2514,63 @@ async function initializeDaemon(
    * means "and the reconciliation it asked for has landed". The interval driver
    * does NOT use it, for the reason {@link startGitReads} gives.
    */
+  /**
+   * Codex reads a static run token from `auth.json` and has no helper to
+   * fetch a fresh one, so the gateway that issued it renews it (ADR-138):
+   * once an hour, when the token in place no longer verifies for this
+   * enrollment or is inside the renewal window, a new one is minted through
+   * the issuer (so the record carries it) and written in place. A host with
+   * no OpenAI key in custody, or a Codex on a ChatGPT login, is left alone.
+   */
+  let lastStaticRenewalAt = 0;
+  async function renewStaticTokens(): Promise<void> {
+    if (!host.harnesses.includes("codex")) return;
+    if (now() - lastStaticRenewalAt < STATIC_TOKEN_RENEWAL_CHECK_MS) return;
+    lastStaticRenewalAt = now();
+    if (host.host_status !== "active" || !inCustody("openai")) return;
+    const home = options.home ?? homedir();
+    let state: ModelCredentialHarnessState | undefined;
+    try {
+      state = (await readModelCredentialState({ home, harnesses: ["codex"] }))
+        .harnesses[0];
+    } catch (error) {
+      log(
+        `static token renewal: cannot read Codex's auth file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    if (state === undefined || !state.brokered) return;
+    const current = codexStaticToken(home);
+    if (staticTokenStillGood(current, host, paths.runTokenKey, now())) return;
+    const issued = api.issueRunToken?.({
+      harness: "codex",
+      placement: "static",
+    });
+    if (issued === undefined || issued.status !== 200) {
+      log(
+        `static token renewal: not issued (${issued?.body.error ?? "no issuer"})`,
+      );
+      return;
+    }
+    try {
+      await applyModelCredentials({
+        home,
+        harnesses: ["codex"],
+        staticTokens: { codex: issued.body.token },
+      });
+      log(
+        `renewed Codex's static run token ${issued.body.token_id}, expires ${issued.body.expires_at}`,
+      );
+    } catch (error) {
+      log(
+        `static token renewal: could not write Codex's auth file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   async function tick(): Promise<void> {
     await controlTick();
+    await renewStaticTokens();
     await gitLane;
   }
 
@@ -2415,6 +2585,7 @@ async function initializeDaemon(
         // control path is done, or a fourteen-minute git drain would drop every
         // poll in between and put the stall straight back.
         controlTick()
+          .then(() => renewStaticTokens())
           .catch((error) => {
             // The code and the first frame name the site. A message alone
             // ("Cannot create a string longer than 0x1fffffe8 characters",

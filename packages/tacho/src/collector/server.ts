@@ -17,6 +17,10 @@ import type { TachoHarness } from "../wire";
 import type { ExportFormat } from "./exporters";
 import type { HookReplay } from "./hook-handler";
 import { GUARD_MESSAGES, guardLoopbackRequest } from "./loopback-guard";
+import type {
+  IssueRunTokenAnswer,
+  IssueRunTokenRequest,
+} from "./credential-issuer";
 import type { GatewayHttpResponse } from "./mcp-gateway";
 
 export interface HookEnvelope {
@@ -52,6 +56,13 @@ export interface CollectorApi {
   ) => Promise<GatewayHttpResponse>;
   /** Drop a gateway session's state when its connection closes. */
   mcpClose?: (sessionId: string) => void;
+  /**
+   * Mint a run token for a brokered harness (ADR-138). `tacho credential
+   * issue` calls this over the socket with the local bearer; Claude Code
+   * runs that command as its `apiKeyHelper`. Absent on a daemon built
+   * without the credential seam, in which case `/credential/issue` is a 404.
+   */
+  issueRunToken?: (input: IssueRunTokenRequest) => IssueRunTokenAnswer;
 }
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -200,6 +211,19 @@ export function createRequestHandler(
           parsed = raw.length === 0 ? {} : JSON.parse(raw);
         } catch {
           send(res, 400, { error: "invalid JSON" });
+          return;
+        }
+        if (path === "/credential/issue") {
+          if (api.issueRunToken === undefined) {
+            send(res, 404, { error: "this daemon issues no run tokens" });
+            return;
+          }
+          const answer = api.issueRunToken(
+            (typeof parsed === "object" && parsed !== null
+              ? parsed
+              : {}) as IssueRunTokenRequest,
+          );
+          send(res, answer.status, answer.body);
           return;
         }
         if (path === "/hook" || path === `/hook/${api.enrollmentId}`) {

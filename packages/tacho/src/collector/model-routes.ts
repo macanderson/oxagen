@@ -164,18 +164,36 @@ function connectionTokens(raw: readonly string[]): Set<string> {
   return named;
 }
 
+/** The headers a credential rides in, whichever vendor and whichever kind. */
+export const CREDENTIAL_HEADERS = ["authorization", "x-api-key"] as const;
+
+/**
+ * A credential the proxy attaches in place of what the caller sent (ADR-138):
+ * the caller presented a run token, and this is the vendor credential from
+ * custody. `api_key` goes out as `X-Api-Key`, `bearer` as
+ * `Authorization: Bearer`.
+ */
+export interface AttachedCredential {
+  kind: "api_key" | "bearer";
+  secret: string;
+}
+
 /**
  * The request headers to send upstream, in the caller's order and spelling.
- * Credentials cross untouched. What does not cross: hop-by-hop headers, the
- * `Host` and `Content-Length` this hop restates, the session header that was
- * addressed to the proxy, and `Accept-Encoding`, which is restated as
- * `identity` so the meter reads the response without decoding it.
+ * Without `attach`, credentials cross untouched. With it, every credential
+ * header the caller sent is dropped (it held a run token, which the vendor
+ * must never see) and the custody credential is appended. What never
+ * crosses: hop-by-hop headers, the `Host` and `Content-Length` this hop
+ * restates, the session header that was addressed to the proxy, and
+ * `Accept-Encoding`, which is restated as `identity` so the meter reads the
+ * response without decoding it.
  */
 export function upstreamRequestHeaders(
   raw: readonly string[],
   host: string,
   bodyLength: number,
   dropContentEncoding: boolean,
+  attach?: AttachedCredential,
 ): string[] {
   const named = connectionTokens(raw);
   const out: string[] = ["Host", host];
@@ -187,7 +205,16 @@ export function upstreamRequestHeaders(
     if (lower === "accept-encoding" || lower === "expect") continue;
     if (lower === TACHO_MODEL_SESSION_HEADER) continue;
     if (dropContentEncoding && lower === "content-encoding") continue;
+    if (
+      attach !== undefined &&
+      (CREDENTIAL_HEADERS as readonly string[]).includes(lower)
+    )
+      continue;
     out.push(name, raw[i + 1] as string);
+  }
+  if (attach !== undefined) {
+    if (attach.kind === "api_key") out.push("X-Api-Key", attach.secret);
+    else out.push("Authorization", `Bearer ${attach.secret}`);
   }
   out.push("Accept-Encoding", "identity");
   if (
@@ -219,7 +246,9 @@ export interface ProviderError {
  * A refusal in the vendor's own error shape, so the harness shows the message
  * to its operator instead of a parse failure. 4xx and never 429: both SDKs
  * retry a 429 and a 5xx, and a refusal that is retried is a refusal nobody
- * reads.
+ * reads. A 401 is the one refusal a harness acts on by itself: Claude Code
+ * re-runs its `apiKeyHelper` on a 401, which is how an expired run token is
+ * replaced without anyone noticing.
  */
 export function providerError(
   provider: ModelProvider,
@@ -232,16 +261,24 @@ export function providerError(
       ? {
           type: "error",
           error: {
-            type: status === 403 ? "permission_error" : "api_error",
+            type:
+              status === 401
+                ? "authentication_error"
+                : status === 403
+                  ? "permission_error"
+                  : "api_error",
             message: `${message} (${code})`,
           },
         }
       : {
           error: {
             message,
-            type: status === 403 ? "invalid_request_error" : "server_error",
+            type:
+              status === 401 || status === 403
+                ? "invalid_request_error"
+                : "server_error",
             param: null,
-            code,
+            code: status === 401 ? "invalid_api_key" : code,
           },
         };
   return { status, body: JSON.stringify(body) };

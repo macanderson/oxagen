@@ -1744,11 +1744,73 @@ describe("request handler", () => {
     expect(await call("POST", "/elsewhere", "{}")).toMatchObject({
       status: 404,
     });
+    // A daemon booted without the credential seam (ADR-138) issues no run
+    // tokens, and says so as a 404 rather than a refusal a harness would
+    // read as "the key is wrong".
+    expect(
+      await call("POST", "/credential/issue", '{"harness":"claude-code"}'),
+    ).toMatchObject({
+      status: 404,
+      text: '{"error":"this daemon issues no run tokens"}',
+    });
     expect(await call("POST", "/hook", '{"boom":true}')).toMatchObject({
       status: 500,
     });
     expect(
       calls.some((c) => c.startsWith("log:request POST /hook failed: boom")),
     ).toBe(true);
+  });
+
+  it("hands /credential/issue to the issuer and returns its status verbatim", async () => {
+    const seen: unknown[] = [];
+    const handler = createRequestHandler(
+      {
+        localToken: "tok",
+        enrollmentId: TEST_ENROLLMENT,
+        handleHook: async () => ({ ok: true }),
+        handleOtlp: async () => undefined,
+        health: () => ({ ok: true }),
+        status: () => ({}),
+        sessions: () => [],
+        exportSession: () => undefined,
+        issueRunToken: (input) => {
+          seen.push(input);
+          return {
+            status: 403,
+            body: { error: "no custody", code: "credential_unavailable" },
+          };
+        },
+      },
+      () => undefined,
+    );
+    const { EventEmitter } = await import("node:events");
+    const req =
+      new EventEmitter() as never as import("node:http").IncomingMessage;
+    Object.assign(req, {
+      method: "POST",
+      url: "/credential/issue",
+      headers: { authorization: "Bearer tok" },
+      destroy: () => undefined,
+    });
+    let status = 0;
+    let text = "";
+    const res = {
+      writeHead: (code: number) => {
+        status = code;
+      },
+      end: (chunk: string) => {
+        text = chunk;
+      },
+    } as never as import("node:http").ServerResponse;
+    handler(req, res);
+    req.emit("data", Buffer.from('{"harness":"codex","placement":"static"}'));
+    req.emit("end");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(seen).toEqual([{ harness: "codex", placement: "static" }]);
+    expect(status).toBe(403);
+    expect(JSON.parse(text)).toEqual({
+      error: "no custody",
+      code: "credential_unavailable",
+    });
   });
 });

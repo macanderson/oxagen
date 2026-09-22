@@ -191,6 +191,40 @@ describe("computeAgentRows: hook presence", () => {
     expect(stella.details).toEqual(["Stella 1.0.0", "hooks complete"]);
   });
 
+  it("says how each harness gets its model credential (ADR-138)", () => {
+    const tacho: TachoStatus = {
+      enrolled: true,
+      hooks: { complete: true, present: ["Stop"], missing: [] },
+      codexHooks: { complete: true, present: ["Stop"], missing: [] },
+      modelCredentials: [
+        { harness: "claude-code", brokered: true },
+        { harness: "codex", brokered: false, reason: "subscription_login" },
+      ],
+    };
+    const rows = computeAgentRows(
+      state({ host: host({ harnesses: ["claude-code", "codex"] }) }),
+      tacho,
+      NOW,
+    );
+    expect(rows.find((r) => r.key === "claude-code")!.details).toContain(
+      "credential brokered by the gateway",
+    );
+    expect(rows.find((r) => r.key === "codex")!.details).toContain(
+      "own login crosses the proxy (subscription, nothing to broker)",
+    );
+    // A status that predates the seam says nothing about credentials.
+    const silent = computeAgentRows(
+      state({ host: host({ harnesses: ["claude-code"] }) }),
+      { enrolled: true },
+      NOW,
+    );
+    expect(
+      silent
+        .find((r) => r.key === "claude-code")!
+        .details.some((d) => d.includes("credential")),
+    ).toBe(false);
+  });
+
   it("reads cursor's hook presence and version from its own fields", () => {
     const tacho: TachoStatus = {
       enrolled: true,

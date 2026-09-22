@@ -11,6 +11,8 @@ import type {
   ModelBaseUrlHarness,
   ModelBaseUrlHarnessState,
 } from "../host/model-base-url";
+import type { ModelCredentialHarnessState } from "../host/model-credential";
+import { describeHarness } from "./credential";
 import { tachoHookPresence } from "../host/settings-writer";
 import { stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
@@ -41,6 +43,19 @@ export interface StatusReport {
   };
   /** Whether each harness's model base URL points at the proxy. */
   modelBaseUrls?: ModelBaseUrlHarnessState[];
+  /**
+   * How each routed harness gets its model credential (ADR-138): a run token
+   * the gateway swaps for the key in its custody, or its own key. Absent
+   * when no harness the gateway routes is enrolled.
+   */
+  modelCredentials?: ModelCredentialHarnessState[];
+  /** Which providers are in the gateway's custody. Never a secret. */
+  credentialCustody?: Array<{
+    provider: string;
+    kind: string;
+    source: string;
+    taken_at: string;
+  }>;
   /**
    * The tier each harness's runs earned since the collector started, from
    * what was routed (ADR-095): `observe`, `harness` or `gateway`. A harness
@@ -239,6 +254,33 @@ export async function status(
       problems.push(error instanceof Error ? error.message : String(error));
     }
   }
+  let modelCredentials: ModelCredentialHarnessState[] | undefined;
+  if (deps.modelCredentials !== undefined && routedHarnesses.length > 0) {
+    try {
+      modelCredentials = (
+        await deps.modelCredentials.read({
+          home: deps.home,
+          harnesses: routedHarnesses,
+          helperCommand: deps.runtime.credentialHelperCommand,
+        })
+      ).harnesses;
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  let credentialCustody: StatusReport["credentialCustody"];
+  if (deps.credentialStore !== undefined) {
+    try {
+      credentialCustody = deps.credentialStore.status().map((c) => ({
+        provider: c.provider,
+        kind: c.kind,
+        source: c.source,
+        taken_at: c.taken_at,
+      }));
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+  }
   const tiers = observedTiers(daemon);
   // `revoked_at` means unenrolled on this machine: the hooks and the service
   // are gone and only the server-side revoke is pending. Reporting that as
@@ -251,6 +293,8 @@ export async function status(
     ...(problems.length > 0 ? { problems } : {}),
     ...(gateway !== undefined ? { gateway } : {}),
     ...(modelBaseUrls !== undefined ? { modelBaseUrls } : {}),
+    ...(modelCredentials !== undefined ? { modelCredentials } : {}),
+    ...(credentialCustody !== undefined ? { credentialCustody } : {}),
     ...(Object.keys(tiers).length > 0 ? { tiers } : {}),
     host: {
       host_enrollment_id: host.host_enrollment_id,
@@ -326,6 +370,8 @@ export async function status(
         `            ${entry.harness}: env.ENABLE_TOOL_SEARCH is ${entry.toolSearch.current === null ? "not set" : JSON.stringify(entry.toolSearch.current)}, so every request carries the whole MCP tool catalog and a large one overflows the context (run \`tacho enroll\` to set it)`,
       );
   }
+  for (const entry of modelCredentials ?? [])
+    deps.out(`Credential  ${describeHarness(entry)}`);
   // The tier is what runs earned, not what is installed (ADR-095). `contained`
   // is the fourth word and is not available yet.
   for (const harness of host.harnesses)

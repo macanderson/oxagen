@@ -463,6 +463,7 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
     }),
     runtime: {
       hookCommand: `'${join(bin, "tacho")}' hook`,
+      credentialHelperCommand: `'${join(bin, "tacho")}' credential issue --harness claude-code`,
       daemonCommand: [join(bin, "tacho"), "daemon"],
       mcpStdioCommand: [join(bin, "tacho"), "mcp-stdio"],
       binDir: bin,
