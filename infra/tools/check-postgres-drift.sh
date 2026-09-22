@@ -8,9 +8,8 @@
 # 1 when it is behind, 2 when the check could not be made. Reads only — it
 # never applies anything. Applying stays manual: `run-db-migrations.sh --apply`
 # from a laptop, or the `DB Migrate (manual)` dispatch that runs the same
-# script, with a human reading the pending list first (CLAUDE.md, "Apply
-# production Postgres migrations with run-db-migrations.sh. Deployment does
-# not apply them.").
+# script, with a human reading the pending list first (CLAUDE.md: "Deployment
+# applies none of them.").
 #
 # WHY THIS EXISTS (#1275)
 #

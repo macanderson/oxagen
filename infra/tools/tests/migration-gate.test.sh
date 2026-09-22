@@ -88,10 +88,10 @@ done
 
 # --- the gate never applies ------------------------------------------------
 #
-# The rule it must not break, stated in CLAUDE.md: "Apply production migrations
-# through the manual db-migrate.yml and store-migrate.yml workflows. Deployment
-# does not apply them." #3653 is the issue filed when a generated workflow broke
-# that rule. A gate that grew an apply would be the same mistake wearing a name
+# The rule it must not break, stated in CLAUDE.md: production Postgres
+# migrations are applied by hand with run-db-migrations.sh, the stores through
+# store-migrate.yml, and "Deployment applies none of them." #3653 is the issue
+# filed when a generated workflow broke that rule. A gate that grew an apply would be the same mistake wearing a name
 # nobody would think to check.
 #
 # Scoped to the gate's own YAML block, because the file's prose discusses
