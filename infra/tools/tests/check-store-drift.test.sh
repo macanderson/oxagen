@@ -405,15 +405,36 @@ for var in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DAT
     *) fail "script: the header's environment list omits $var, which the script reads" ;;
   esac
 done
-# The workflow has to supply it, or the fallback above silently becomes the
-# answer on every run.
-DRIFT_WORKFLOW="$REPO/.github/workflows/store-migrate-drift.yml"
-if [[ -f $DRIFT_WORKFLOW ]]; then
-  contains "$(cat "$DRIFT_WORKFLOW")" "NEO4J_DATABASE" \
-    "workflow: reads NEO4J_DATABASE from Parameter Store like store-migrate.yml"
+# Something has to supply it, or the fallback above silently becomes the answer
+# on every run.
+#
+# That read used to live in store-migrate-drift.yml and now lives in the
+# composite action both callers share, so the assertion follows it there. Every
+# caller is checked too: an action that reads the parameter is worth nothing to
+# a workflow that stopped calling it, and this test's whole subject is a value
+# whose absence is invisible because the fallback is plausible.
+TUNNEL_ACTION="$REPO/.github/actions/open-store-tunnels/action.yml"
+if [[ -f $TUNNEL_ACTION ]]; then
+  contains "$(cat "$TUNNEL_ACTION")" "NEO4J_DATABASE" \
+    "action: reads NEO4J_DATABASE from Parameter Store like store-migrate.yml"
 else
-  fail "workflow: .github/workflows/store-migrate-drift.yml is gone"
+  fail "action: .github/actions/open-store-tunnels/action.yml is gone"
 fi
+
+# store-migrate-drift.yml asks every morning; pipeline.yml's migration-gate asks
+# before a deploy ships code that assumes the answer. Both reach the stores the
+# same way, and neither can reach them without this.
+for caller in \
+  "$REPO/.github/workflows/store-migrate-drift.yml" \
+  "$REPO/.github/workflows/pipeline.yml"
+do
+  if [[ -f $caller ]]; then
+    contains "$(cat "$caller")" "./.github/actions/open-store-tunnels" \
+      "caller: $(basename "$caller") opens the tunnels through the shared action"
+  else
+    fail "caller: $caller is gone"
+  fi
+done
 
 # Credentials belong out of the process table on a shared runner.
 case "$SCRIPT" in

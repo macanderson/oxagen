@@ -1,0 +1,184 @@
+# open-store-tunnels — reach production ClickHouse and Neo4j from a runner.
+#
+# Both stores bind 127.0.0.1 on the `oxagen-app` node and neither is exposed to
+# the VPC, so a forwarded port is the only way in. This opens one SSM port-
+# forwarding session per store, reads the connection parameters out of
+# Parameter Store, and rewrites the endpoints to point at the forwarded ports.
+#
+# Why it is an action rather than steps in a workflow: two workflows now need
+# it — `store-migrate-drift.yml`, which asks every morning whether production
+# carries the committed schema, and `pipeline.yml`'s `migration-gate`, which
+# asks the same question before a deploy ships code that assumes the answer.
+# Two copies of this setup would drift, and the half that drifts is the half
+# that reports a store as unreadable for a reason that was fixed next door.
+#
+# Every non-obvious step here was paid for once already; the comments say by
+# what. Do not simplify one away without reading the issue it names.
+#
+# The caller supplies AWS credentials before calling this. It assumes no role
+# of its own, so the permissions stay visible in the job that wanted them.
+name: Open store tunnels
+description: Port-forward production ClickHouse and Neo4j over SSM and export their connection settings.
+
+inputs:
+  clickhouse-port:
+    description: Local port to forward ClickHouse's 8123 to.
+    required: false
+    default: "8123"
+  neo4j-port:
+    description: Local port to forward Neo4j's 7687 to.
+    required: false
+    default: "7687"
+
+outputs:
+  instance:
+    description: The instance id the tunnels point at.
+    value: ${{ steps.node.outputs.instance }}
+
+runs:
+  using: composite
+  steps:
+    # Without the plugin `start-session` fails on "SessionManagerPlugin is not
+    # found", which reads like a missing instance rather than a missing package
+    # on the runner.
+    - name: Install the Session Manager plugin
+      shell: bash
+      run: |
+        set -euo pipefail
+        curl -fsSL -o /tmp/sm.deb \
+          "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
+        sudo dpkg -i /tmp/sm.deb
+        session-manager-plugin --version
+
+    # The apt package tracks the latest Neo4j line, which needs Java 21; the
+    # runner's default is 17. On that Java cypher-shell prints "Unsupported
+    # Java 17 detected", exits 0, and returns no rows — for every query. The
+    # check read that as an empty database and filed "production is behind"
+    # against a store that carried the whole schema (#3036).
+    - name: Set up Java 21 for cypher-shell
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "21"
+
+    # Neo4j keeps no migration ledger, so the only way to ask what it has is to
+    # ask it. cypher-shell comes from Neo4j's own apt repository; the runner has
+    # no Neo4j otherwise.
+    #
+    # The version check insists on a version LINE rather than on an exit code,
+    # because on the wrong Java the exit code is the thing that lied (#3036).
+    - name: Install cypher-shell
+      shell: bash
+      run: |
+        set -euo pipefail
+        curl -fsSL https://debian.neo4j.com/neotechnology.gpg.key \
+          | sudo gpg --dearmor -o /usr/share/keyrings/neo4j.gpg
+        echo "deb [signed-by=/usr/share/keyrings/neo4j.gpg] https://debian.neo4j.com stable latest" \
+          | sudo tee /etc/apt/sources.list.d/neo4j.list > /dev/null
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq cypher-shell
+        version=$(cypher-shell --version 2>&1 || true)
+        echo "$version"
+        case "$version" in
+          *[Uu]nsupported*|*[Ee]rror*|"")
+            echo "::error::cypher-shell cannot run on this runner; every Neo4j query would return nothing and read as an empty store."
+            exit 1 ;;
+        esac
+
+    # By tag, not by a pinned id: the node is replaced whenever its user data
+    # changes, and a pinned id points at a terminated box after the first
+    # replacement. Same reasoning as the deploy and store-migrate.yml.
+    - name: Find the node
+      id: node
+      shell: bash
+      run: |
+        set -euo pipefail
+        INSTANCE=$(aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values=oxagen-app" \
+                    "Name=instance-state-name,Values=running" \
+          --query 'Reservations[].Instances[].InstanceId' --output text)
+        if [ "$(printf '%s' "$INSTANCE" | wc -w)" -ne 1 ]; then
+          echo "::error::expected exactly one running instance tagged Name=oxagen-app, got: $INSTANCE"
+          exit 1
+        fi
+        echo "instance=$INSTANCE" >> "$GITHUB_OUTPUT"
+        echo "node: $INSTANCE"
+
+    # Backgrounded, then waited on: `start-session` does not return once the
+    # tunnel is up.
+    - name: Open the tunnels
+      shell: bash
+      env:
+        CH_PORT: ${{ inputs.clickhouse-port }}
+        NEO_PORT: ${{ inputs.neo4j-port }}
+        INSTANCE: ${{ steps.node.outputs.instance }}
+      run: |
+        set -euo pipefail
+        open_tunnel() {
+          local remote=$1 local_port=$2 label=$3
+          aws ssm start-session \
+            --target "$INSTANCE" \
+            --document-name AWS-StartPortForwardingSession \
+            --parameters "{\"portNumber\":[\"$remote\"],\"localPortNumber\":[\"$local_port\"]}" \
+            > "/tmp/tunnel-$label.log" 2>&1 &
+          echo $! > "/tmp/tunnel-$label.pid"
+        }
+        open_tunnel 8123 "$CH_PORT" clickhouse
+        open_tunnel 7687 "$NEO_PORT" neo4j
+
+        # Waited for rather than slept through: SSM takes a few seconds and a
+        # fixed sleep is either short on a bad day or wasted on a good one.
+        for port in "$CH_PORT" "$NEO_PORT"; do
+          opened=0
+          for _ in $(seq 1 30); do
+            if timeout 1 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+              echo "  port $port is open"
+              opened=1
+              break
+            fi
+            sleep 2
+          done
+          # Naming the port that never opened turns "could not be read" into a
+          # cause. Not fatal here: the check downstream produces the right
+          # verdict either way, and a store answering over one tunnel while the
+          # other is dead is worth seeing rather than aborting on.
+          [ "$opened" = "1" ] || echo "::warning::port $port never opened after 60s"
+        done
+        echo "--- tunnel logs ---"
+        tail -3 /tmp/tunnel-*.log || true
+
+    - name: Read the production store config
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Written to the environment file rather than echoed: these are
+        # SecureString values and a `set -x` here would print them.
+        #
+        # NEO4J_DATABASE is on this list because SHOW CONSTRAINTS and SHOW
+        # INDEXES answer for ONE database, and the applier writes to the one
+        # this parameter names. Omitting it pointed the check at the connection
+        # default and reported "0 present" about a database nothing migrates.
+        for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
+                   NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
+          value=$(aws ssm get-parameter --name "/oxagen/production/$key" \
+            --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$value"
+          echo "$key=$value" >> "$GITHUB_ENV"
+        done
+        echo "read 8 parameters"
+
+    # The parameters name the stores as the NODE reaches them, over loopback.
+    # This runner reaches them over a forwarded port on its own loopback, so the
+    # host is right and only the scheme and port need to survive the trip.
+    # Rewritten here rather than in the check script, because the tunnel is this
+    # action's arrangement and the script should not have to know about it.
+    - name: Point the endpoints at the tunnel
+      shell: bash
+      env:
+        CH_PORT: ${{ inputs.clickhouse-port }}
+        NEO_PORT: ${{ inputs.neo4j-port }}
+      run: |
+        set -euo pipefail
+        echo "CLICKHOUSE_URL=http://127.0.0.1:$CH_PORT/" >> "$GITHUB_ENV"
+        echo "NEO4J_URI=bolt://127.0.0.1:$NEO_PORT" >> "$GITHUB_ENV"
+        echo "endpoints point at the forwarded ports"

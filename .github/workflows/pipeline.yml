@@ -834,12 +834,204 @@ jobs:
   #   Stripe billing plan sync        pnpm billing:stripe-sync      #1371
   # Both were already unreachable before this deletion; neither becomes more
   # broken by it, and both now have a home.
+  #
+  # Applying is still not covered, and deliberately so. `migration-gate` below
+  # does not restore the retired job: it never applies anything. It restores
+  # only the ORDERING the retired job's `needs:` used to imply, by refusing to
+  # ship code whose schema has not landed.
+
+  # ==========================================================================
+
+  # migration-gate — does production carry the schema this commit assumes?
+  #
+  # THE FAILURE THIS EXISTS FOR
+  #
+  # A schema change merges. `deploy-node` ships the code that reads it. Nobody
+  # runs the manual apply, because nothing asks them to at the moment it
+  # matters. The services 500 against columns and tables that are not there.
+  #
+  # That is not a hypothetical and it is not a first: #1275 (2026-09-09,
+  # "column ... does not exist"), #2796, #3449 (2026-09-19), #3692 (2026-09-21).
+  # `deploy-node`'s own comment below says the guarantee is gone —
+  # "deploying code ahead of its migration is what took production login down
+  # once already ... the ordering guarantee is gone either way".
+  #
+  # WHAT IT DOES, AND WHAT IT REFUSES TO DO
+  #
+  # It asks all three stores whether they carry what this repository declares,
+  # read-only, and fails the deploy when any of them does not. It applies
+  # nothing. Applying production migrations stays manual, through `DB Migrate
+  # (manual)` and `Store Migrate (manual)`, with a human reading the pending
+  # list first — CLAUDE.md states that rule and #3653 is the issue filed when a
+  # generated workflow broke it. A gate that applied would be that same mistake
+  # wearing this job's name, and `check-postgres-drift.sh`'s tests assert it
+  # cannot grow one.
+  #
+  # So this does not fix drift. It makes drift STOP THE DEPLOY instead of
+  # reaching production inside it. The human step is unchanged; what changes is
+  # that skipping it can no longer break production silently.
+  #
+  # WHY IT GATES A DEPLOY WHEN `store-migrate-drift.yml` ALREADY ASKS
+  #
+  # That job asks every morning at 06:20 UTC and files an issue. It is how
+  # #3449 and #3692 were found — after the fact, both times, with the code
+  # already live against the schema it was missing. Its header explains why it
+  # is not a PR check, and that reasoning is right: between adding a migration
+  # and applying it, a PR being red is normal, not a defect.
+  #
+  # A DEPLOY is the one moment where it is not normal. "The code that needs
+  # this migration is about to start serving traffic" is exactly when "the
+  # migration has not been applied" stops being a routine interval and becomes
+  # the outage. Same question, and the only place the answer can still prevent
+  # something.
+  #
+  # WHY UNREADABLE BLOCKS TOO
+  #
+  # The check reports three states, not two: current, behind, and unknown. A
+  # deploy proceeds only on current. Unknown does not mean current, and this
+  # repository has already paid for treating "no answer" as a clean answer —
+  # #3036, where cypher-shell on the wrong Java exited 0 with no rows and the
+  # check read an empty result as an empty database. `require_declarations` and
+  # `bump_status` in check-store-drift.sh are both that lesson.
+  #
+  # The cost of that choice is that a flaky tunnel wedges a deploy. That is a
+  # re-run, it is loud, and it names itself as a tunnel problem rather than a
+  # migration one. The cost of the other choice is an outage nobody sees coming.
+  #
+  # THE BREAK-GLASS PATH
+  #
+  # `manual-app-deploy` at the bottom of this file is deliberately NOT gated on
+  # this job. It is the recovery path, it takes a deliberate human dispatch, and
+  # a gate you cannot get past during an incident is a gate people delete.
+  migration-gate:
+    name: Production schema is ready for this commit
+    needs: [preflight]
+    # Same shape as `checks` and `test`, so a superseded commit skips this job
+    # exactly as it skips those — and `deploy-node`, which needs all three,
+    # skips with them rather than waiting on a job that will never run.
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.preflight.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Required: the deploy role's trust policy keys on the OIDC `sub` claim
+    # carrying `environment:production` (see where-is-production.yml).
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
+
+      # Postgres first, and without the tunnels: it needs neither. Aurora is
+      # reached by sending `atlas migrate status` to the node over SSM, which
+      # run-db-migrations.sh already does in its status-only mode. Running it
+      # before the ~2 minutes of tunnel and cypher-shell setup means the most
+      # common drift answers arrive fastest.
+      - name: Postgres — is Aurora at the head of the migration directory?
+        id: pg
+        run: |
+          set +e
+          bash infra/tools/check-postgres-drift.sh | tee /tmp/pg-drift.txt
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Open the store tunnels
+        uses: ./.github/actions/open-store-tunnels
+
+      # The exit code is captured rather than allowed to fail the step, so that
+      # the verdict survives into the summary below and Postgres's answer is
+      # still reported when this one fails. Same reasoning as
+      # store-migrate-drift.yml's `drift` step.
+      - name: ClickHouse and Neo4j — do they carry the committed schema?
+        id: stores
+        run: |
+          set +e
+          bash infra/tools/check-store-drift.sh | tee /tmp/store-drift.txt
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Close the tunnels
+        if: always()
+        run: |
+          for f in /tmp/tunnel-*.pid; do
+            [ -f "$f" ] || continue
+            kill "$(cat "$f")" 2>/dev/null || true
+          done
+
+      # One place that decides, and one message that says what to do about it.
+      # A deploy blocked by a check nobody can act on is worse than no check.
+      - name: Decide whether this commit may deploy
+        if: always()
+        env:
+          PG: ${{ steps.pg.outputs.code }}
+          STORES: ${{ steps.stores.outputs.code }}
+        run: |
+          set -uo pipefail
+          # An empty code is a step that never ran — the tunnel action failing,
+          # or the job being cancelled mid-flight. That is unknown, not current.
+          pg=${PG:-2}
+          stores=${STORES:-2}
+
+          echo "postgres: $pg    clickhouse/neo4j: $stores    (0 current, 1 behind, 2 unknown)"
+
+          if [ "$pg" = "0" ] && [ "$stores" = "0" ]; then
+            echo "Every store carries the schema this commit assumes. Deploy may proceed."
+            exit 0
+          fi
+
+          {
+            echo "### Deploy blocked: production schema is not ready for this commit"
+            echo
+            if [ "$pg" = "1" ] || [ "$stores" = "1" ]; then
+              echo "A migration on this branch has not been applied to production."
+              echo "Shipping now would start serving code against a schema that is not there."
+              echo
+              echo "Apply it, then re-run this job:"
+              echo
+              # Each store gets exactly one named path, and it is the manual
+              # workflow. The underlying scripts can be run by hand from the app
+              # node, and deliberately are not offered here: the workflow is the
+              # one route that leaves a run record of who applied what and when,
+              # which is the whole reason CLAUDE.md sends applies through it.
+              echo "- Postgres — the **DB Migrate (manual)** workflow"
+              echo "- ClickHouse / Neo4j — the **Store Migrate (manual)** workflow"
+              echo
+              echo "Read the pending list before applying. A store whose ledger was lost reports its"
+              echo "whole history as pending, and applying from there is not what you want."
+            else
+              echo "The stores could not be read, so nothing here says they are ready."
+              echo
+              echo "This is usually the SSM tunnel not coming up, not a migration problem."
+              echo "Re-run this job. If it fails the same way twice, read the step output above"
+              echo "before reaching for the manual apply workflows."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$pg" = "1" ] || [ "$stores" = "1" ]; then
+            echo "::error::A committed migration has not reached production. Apply it, then re-run this job. See the run summary."
+          else
+            echo "::error::The stores could not be read, so this job cannot say the schema is ready. Re-run it. See the run summary."
+          fi
+          exit 1
 
   # ==========================================================================
 
   deploy-web:
     name: deploy oxagen.sh
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Deliberately NOT gated on `migration-gate`, unlike `deploy-node`. This
+    # publishes apps/web — hand-authored HTML and a compiled blog — to S3. It
+    # opens no database connection, so a pending migration cannot break it, and
+    # blocking the marketing site on the schema would only train people to treat
+    # a red gate as noise.
     needs: [checks, test]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -941,9 +1133,14 @@ jobs:
     # same merge may have changed, and deploying code ahead of its migration is
     # what took production login down once already. That job is retired (#1341)
     # and had applied nothing since #1280, so the wait had been decorative for
-    # months — the ordering guarantee is gone either way. Restoring it is part of
-    # giving production migrations a real trigger again (#1275).
-    needs: [checks, test]
+    # months — the ordering guarantee is gone either way.
+    #
+    # `migration-gate` restores it, and restores the guarantee rather than the
+    # job: it applies nothing, it only refuses to let this job ship code whose
+    # migration has not landed. The wait is no longer decorative — the gate
+    # fails on a real answer from the real stores. See its header for why
+    # unknown blocks as well as behind, and why `manual-app-deploy` is exempt.
+    needs: [checks, test, migration-gate]
     # arm64, matching the t4g.large these ship to (verified 2026-09-10 via
     # where-is-production.yml, run 34456388188 — instance `oxagen-app`). An
     # x86 build passes every check here and fails to load a native module
@@ -1084,6 +1281,15 @@ jobs:
 
   manual-app-deploy:
     name: Manual production app deployment
+    # The break-glass path, and the one deploy `migration-gate` does not stand
+    # in front of. It takes a deliberate human dispatch naming a commit, and
+    # during an incident the schema check is as likely to be the thing that is
+    # broken as the thing that is right. A gate with no way past is a gate
+    # somebody deletes at 3am; this is the way past, and it is auditable.
+    #
+    # The trade is real and worth stating: a dispatch here can ship code ahead
+    # of its migration. Check `Store Drift (scheduled)`'s last run, or dispatch
+    # it, before using this for anything but recovery.
     if: github.event_name == 'workflow_dispatch' && inputs.deploy_app
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45

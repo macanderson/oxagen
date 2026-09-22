@@ -45,6 +45,10 @@ Lightweight file, link, contract, and prose integrity checks remain part of revi
 - From `packages/database`, regenerate the checksum with `atlas migrate hash --dir "file://atlas/migrations"`. Do not hand-edit `atlas.sum`.
 - Confirm the database host and database name before mutation. Do not print credentials. A shell-exported `DATABASE_URL` overrides `tsx --env-file=.env.local`; unset it when the env file should choose the target.
 - Apply production migrations through the manual `db-migrate.yml` and `store-migrate.yml` workflows. Deployment does not apply them. See README.md Deployment.
+- Label a schema-changing PR `migration-required` (SCR-006). `.github/workflows/migration-label.yml` reads the diff and applies it, and re-applies it if it is removed while the diff still changes a schema. Say in the PR description which store changed and what must be applied.
+- Apply the migration before or with the deploy of the code that assumes it, never after. `migration-gate` in `pipeline.yml` checks all three stores on a push to `main` and blocks `deploy-node` until production carries the schema. It applies nothing; it enforces the ordering. An unreadable store blocks too, so a failed SSM tunnel stops a deploy that has no missing migration — re-run the job before reaching for a manual apply.
+
+The four incidents behind those two rules are #1275, #2796, #3449 and #3692: the same schema change merging green, deploying, and never reaching a database. Whether CI may apply migrations on its own is open in #3653 and is a maintainer decision. Until it is decided, do not add an automatic apply to a deploy pipeline.
 
 ## Four first-class harnesses: Claude Code, Codex, Cursor, Stella
 
@@ -132,6 +136,7 @@ One issue carries one full change. Include context, paths, reproduction steps wh
 
 - A PR uses `Closes #N` only when it finishes every item in that issue's definition of done. Otherwise use `Refs #N`.
 - A PR that closes no issue uses `no-issue` for a trivial change or `closes-nothing` for a substantial change. These are PR labels, not substitute text in the body.
+- A PR that changes a schema carries `migration-required` (SCR-006). It is applied from the diff by `migration-label.yml`, so it is not one you add by hand — and removing it while the diff still changes a schema puts it back. This is the one label an agent is expected to leave alone rather than curate.
 - Apply only `triage` to an issue you create. The triage identity applies priority, size, and descriptive labels. Never apply workflow-owned labels manually.
 - Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
 - Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block.
