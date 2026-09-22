@@ -101,6 +101,7 @@
         "agent": "Agent",
         "operator": "Operator",
         "status": "Status",
+        "tier": "Tier",
         "cost": "Cost",
         "frames": "Frames",
         "started": "Started",

@@ -1,0 +1,236 @@
+# Model gateway: wired versus armed
+
+You want to know whether the loopback model proxy actually governs a wrapped
+harness's model spend today, or whether it only watches. Short answer: it
+watches. Every enforcement branch in `model-proxy.ts` is real code, but the one
+condition that would make budget enforcement fire is hardcoded off, and there
+is no model allowlist for it to check at all. Checked at `main` `da2c3795f`,
+audited from a worktree branched off `origin/main`.
+
+## 1. Which harnesses actually route through the proxy
+
+`tacho enroll` writes hook entries for up to four harnesses (`--harness
+claude-code,codex,cursor,stella`), but it writes the model base URL for only
+two of them.
+
+`packages/tacho/src/cli/enroll.ts:1053-1056` filters the enrolled harness list
+down before it ever calls the base-URL writer:
+
+```ts
+const routed = harnesses.filter(
+  (harness): harness is ModelBaseUrlHarness =>
+    harness === "claude-code" || harness === "codex",
+);
+```
+
+`ModelBaseUrlHarness` (`packages/tacho/src/host/model-base-url.ts:67`) is
+`"claude-code" | "codex"`, full stop. Cursor and Stella get their hook entries
+(`host/cursor-writer.ts`, `host/stella-writer.ts`) so their tool calls and
+lifecycle events are still chained and shipped, but nothing ever writes a base
+URL for them, and `model-routes.ts` has no route for either vendor's traffic
+under a Cursor- or Stella-only path. Their model calls go straight to the
+vendor. This is confirmed, not inferred: `packages/tacho/README.md`'s gateway
+table (lines 96-98) lists exactly two rows, Claude Code and Codex.
+
+For Claude Code, enrollment writes `env.ANTHROPIC_BASE_URL` in
+`~/.claude/settings.json` to `http://127.0.0.1:<port>/anthropic`
+(`model-base-url.ts:114-138`). For Codex, it writes the top-level
+`openai_base_url` key in `~/.codex/config.toml`
+(`model-base-url.ts:118,132-139`), never an environment variable.
+
+I checked the installed Codex build on this machine: `codex-cli 0.155.1`
+(`/opt/homebrew/bin/codex`). Its own binary carries `openai_base_url` as a
+field of its `ConfigToml` struct (confirmed by string-scanning the binary), so
+the installed version reads the TOML key the repo's writer targets. It does
+**not** read an `OPENAI_BASE_URL` environment variable for this purpose — that
+is not the mechanism Codex or this codebase use; the config key is. Framing
+the question as an env var would be answered "no," and that would be the wrong
+question. The right one, "does Codex honor the `openai_base_url` config key,"
+is yes, on the version installed here.
+
+## 2. What sets `budget.mode` to `enforced`, and what happens mid-stream
+
+Nothing does. `unsignedBundle()` in
+`packages/handlers/src/lib/tacho-host.ts:337` hardcodes it:
+
+```ts
+budget: { mode: "observed" as const },
+```
+
+There is no column read, no workspace setting, no code path anywhere in
+`packages/handlers` that ever produces `"enforced"`. `router.policy.set`
+(`packages/oxagen/src/contracts/router.policy.set.ts`) is a different system:
+it governs the Verified-Outcome Market Router's mode (`off` / `shadow` /
+`enforce`), success threshold and tier escalation for the in-app assistant's
+model selection. It has no field for a wrapped harness's session budget and
+writes to a different table. The two "enforce" words name unrelated
+mechanisms.
+
+The refusal logic that would fire on `enforced` is real and already shipped:
+`model-proxy.ts:472-483` compares a session's observed spend against
+`budget.session_limit_usd` and refuses with `session_budget_exceeded` when the
+comparison would trip. It has simply never been given a bundle where
+`budget.mode` is anything but `"observed"`, so that branch is dead code in
+production.
+
+Mid-stream: the budget is checked once, at admission, before the upstream
+request opens (`model-proxy.ts:603`, before `forward()` reaches
+`upstreamReq.end(body)` at line 1008). Once a call is admitted it runs to
+completion even if the session crosses its limit while the response streams.
+This is a documented design choice, not a gap: the module's own header
+comment (`model-proxy.ts:57-60`) states it plainly — cutting a stream in half
+to save its last tokens would cost the operator the whole call, so the
+proxy never re-checks mid-flight. Only the session's *next* call is refused.
+
+## 3. Can the proxy enforce a model allowlist today
+
+No, and there is no policy for it to enforce even if it could. `refusalFor()`
+(`model-proxy.ts:444-485`) checks exactly four things: host status, session
+cancellation, session pause, and the budget. It never inspects `route.provider`
+or the model name. The model is not even known yet at that point in the
+call: `requestModel` is computed at `model-proxy.ts:674-678`, after
+`refusalFor()` has already run and, if it refused, already returned at line
+640. An allowlist check bolted onto today's code would silently never fire for
+a refusal, because the model string does not exist yet at the point the
+refusal decision is made.
+
+There is also no wire concept of "the model the router policy permits."
+`policyBundleSchema` (`packages/tacho/src/wire.ts:420-426`) carries `budget`
+and, optionally, `model_prices` (a price list, gated behind
+`BUNDLE_FEATURE_MODEL_PRICES`, used only for costing — an unpriced model is
+still forwarded, `cost_basis: "observed_unpriced"`). Nothing in the bundle
+says which models are allowed. `router.policy.get`/`.set`
+(`packages/oxagen/src/contracts/router.policy.*.ts`) is, again, the market
+router's mode and threshold, not a model allow/deny list — so "the model the
+router policy does not permit" names a policy that does not exist yet.
+
+**The smallest change that makes the proxy refuse a disallowed model** is
+three pieces, in order:
+
+1. Move the model-name read (`leadingModel`/`json()?.model`, currently at
+   `model-proxy.ts:674-678`) ahead of the `refusalFor()` call at line 603, so
+   the refusal check can see it.
+2. Add an optional `models: { allow: string[] }` (or `deny`) object to
+   `policyBundleSchema`, gated behind a new `BUNDLE_FEATURE_MODEL_ALLOWLIST`
+   flag, following the exact rollout pattern `gateway_tools` and
+   `model_prices` already use (`tacho-host.ts:225-249`,
+   `wire.ts:449-497`) — required because the schema is `.strict()` and an
+   older daemon would reject the whole bundle otherwise.
+3. Add a fifth branch to `refusalFor()` — `model_not_permitted` — that checks
+   `requestModel` (and `route.provider`) against that list before the budget
+   check, mirroring the existing four branches.
+
+That is an implementation-sized change (see PR 4 below). What it depends on,
+and cannot substitute for, is a maintainer decision on what "permitted" means:
+a new field on `router.policy.set`, a separate per-workspace model allowlist,
+or something else. Coding the check against a policy field that does not
+exist is not possible; that decision blocks PR 4, not the audit.
+
+## 4. Where proxied spend lands, and whether it double-counts
+
+Proxied spend and self-reported spend land in the same three places, and all
+three de-duplicate the same way, so the Spend page does not double count.
+
+- **The session budget counter.** `usageCountedEvents()`
+  (`packages/handlers/src/tacho.events.ingest.ts:250-266`) drops every
+  self-reported `llm_call` for a session once that session has one
+  proxy-observed call (`isObservedModelCall`, lines 221-228, requires
+  `source: "collector"`, `fidelity: "proxy"`, and the
+  `oxagen.metering: observed` attribute — none of which a process holding
+  only the local bearer can forge). `foldDelta` (line 293) and `rollupModels`
+  (line 1779) both consume the deduplicated `counted` list, not the raw
+  batch.
+- **The billing spend counter.** `recordSpend()`
+  (`packages/billing/src/spend-counter.ts:39`) is called once per accepted
+  batch with `delta.totalCostMicros` (`tacho.events.ingest.ts:1525-1526`),
+  which already reflects the same dedupe. This is the identical counter the
+  `@oxagen/ai` gateway writes to for the in-app assistant's own spend
+  (`spend-counter.ts:5-11`), so a wrapped session and an assistant turn share
+  one ledger by construction, not by later reconciliation.
+- **The Spend page's `cost.run_totals`/`cost.daily_totals` rollup.** This is a
+  third, independent pipeline (ClickHouse, not the Postgres path above), and
+  it has its own dedupe rather than trusting the first two:
+  `packages/telemetry/src/cost-frames.ts:105` filters on
+  `attrs[duplicateAttr] = ''`, where `duplicateAttr` is
+  `oxagen.llm_call_duplicate_of`, a stamp the host's own recorder writes
+  (`packages/tacho/src/claude-code/recorder.ts`, `llm-call-dedupe.ts:1-3`) on
+  whichever sighting of a call (OTel, transcript, or proxy) is not the one
+  being priced. All three readers — the session fold, the spend counter, and
+  the ClickHouse rollup — agree on which sighting wins, and the agreement is
+  enforced by one shared rule (`countsLlmCallUsage` in `@oxagen/tacho`), not
+  by three engineers keeping three lists in sync.
+
+I found no double-count path. The one caveat: this dedupe keys on
+`request_id`/`message_id` matching within a session. A call that fails before
+the vendor returns a request id, on both the proxy sighting and the harness's
+own sighting, would not join, and could in principle be counted from both
+sides. I did not find evidence this happens in practice, and it is a narrow
+edge case, not a gap in the design.
+
+## 5. What a laptop user can do to bypass the proxy, and what the record shows
+
+| Bypass | What it takes | What the record shows |
+|---|---|---|
+| Edit `~/.claude/settings.json` or `~/.codex/config.toml` after enrollment, pointing the base URL back at the real vendor or removing it | One file edit, no restart needed | The session's tier stops reaching `gateway` (ADR-095 rule, `tacho.events.ingest.ts:603-636`: `modelRouted` goes false with no proxy frame to set it true). The control plane sees a tier drop but not a stated cause — `touchHost`'s daemon payload (`tacho-host.ts:531-548`) carries version, uptime, spool depth and hook health, never model-base-url state. An operator has to run `tacho status` locally to see `ours: false` or `shadowedBy` |
+| Add or already have a managed settings file that also sets `ANTHROPIC_BASE_URL` | Nothing the user has to do; managed settings win by policy | Same as above: reported locally as `shadowedBy` (`model-base-url.ts:99`) via `tacho status`, never pushed to the control plane |
+| Call the vendor API directly (curl, a raw SDK client, a second tool) instead of through the enrolled harness | A model key and any HTTP client | Nothing. This traffic never touches loopback, so no frame, no digest, no tier change — fully invisible |
+| Kill `tachod` | `kill` the daemon process | For Claude Code and Codex, this is self-defeating on its own: the base URL still points at the now-dead loopback port, so the harness's next model call gets connection-refused rather than silently reaching the vendor (there is no fallback URL). It only becomes a silent bypass combined with reverting the base URL first. Hook-tier enforcement (`PreToolUse` etc.) keeps deciding from the last cached, signature-verified bundle either way (`packages/tacho/README.md`, the `tacho-hook` row) |
+| Set Claude Code's `disableAllHooks` | One settings key | Telemetry and hook-tier enforcement (pause/cancel/deny checks on tool use) stop. Model traffic is unaffected either way, since the proxy sits at the network layer, not the hook layer — it keeps metering unless the base URL is also reverted |
+| Run the harness under Cursor or Stella | Nothing — this is the default, not an evasion | Never routed in the first place (Q1). Indistinguishable, from the record, from a Claude Code or Codex session where the base URL was reverted |
+
+The pattern across every row: the proxy's own presence is well-defended (a
+forged `oxagen.metering: observed` attribute cannot be minted from outside
+the collector), but *whether the harness was pointed at the proxy at all* is
+enforced by nothing and reported to the control plane by nothing. The tier
+field is the only signal, and it is a symptom, not a cause.
+
+## Harness × enforcement matrix
+
+| Harness | Metered (observed) | Enforced (budget/allowlist) | Bypass path |
+|---|---|---|---|
+| Claude Code | Yes, once enrolled and the base URL holds | No — `budget.mode` is hardcoded `observed`; no allowlist exists | Revert `env.ANTHROPIC_BASE_URL`; a managed settings file; call the vendor directly |
+| Codex | Yes, once enrolled and the base URL holds | No, same as Claude Code | Revert `openai_base_url`; call the vendor directly |
+| Cursor | No — never routed | No | None needed; this is the default path |
+| Stella | No — never routed | No | None needed; this is the default path |
+
+## Ordered PR list
+
+1. **Source `budget.mode`/`session_limit_usd` from a real per-workspace
+   setting into the signed bundle.** New capability contract (mirroring
+   `workspace.budget_policy.*`, but for Tacho sessions, not per-turn assistant
+   spend) plus wiring `unsignedBundle()` to read it instead of the literal.
+   Moves reliability: the refusal branch that already exists starts doing
+   something. **3 days.**
+2. **Minimal Organization-page UI to set that budget** (mode, `session_limit_usd`).
+   GAP-INVENTORY §9 already lists "Set model route" as Missing; this is the
+   adjacent gap the same page should close. Depends on PR 1's contract.
+   **2 days.**
+3. **Decide and encode what "a model the router policy does not permit"
+   means.** This is a design decision before it is code: extend
+   `router.policy.set`/`.get` with an explicit model allow/deny list, or a
+   separate workspace-level allowlist, is the maintainer's call, not an
+   implementation detail. Sizing the decision + schema/contract work once
+   made: **3 days.**
+4. **Wire the allowlist check into the proxy**, per the three-piece change in
+   Q3: reorder `forward()` to resolve the model name before `refusalFor()`,
+   add the `models` bundle field behind a new `BUNDLE_FEATURE` flag, add the
+   `model_not_permitted` refusal branch. Depends on PR 3 landing first.
+   **2 days.**
+5. **Spike: can Cursor's or Stella's model traffic be routed at all.**
+   Neither has a documented base-URL or proxy override in this codebase
+   today (unlike Claude Code and Codex, which vendor-document theirs).
+   Establish whether either exposes an equivalent knob before committing to
+   build it. **1 day.**
+6. **Route Cursor and/or Stella through the proxy**, contingent on PR 5's
+   finding. If feasible, mirrors `model-base-url.ts`'s existing
+   apply/restore/read contract for a third and fourth harness. **2-3 days
+   per harness, only if PR 5 says it is possible.**
+7. **Report model-base-url drift to the control plane.** Add
+   `model_base_urls` (mode, `ours`, `shadowedBy`) to the daemon health
+   payload `touchHost()` already reads, so a reverted base URL shows as a
+   stated cause instead of a bare tier drop. Moves reliability and
+   maintainability: today the only diagnostic is a laptop-local `tacho
+   status`. **2 days.**
+
+No PR is needed for the spend-rollup dedupe (Q4): it is already correct, at
+all three layers, verified above.
