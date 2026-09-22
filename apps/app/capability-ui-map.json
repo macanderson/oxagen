@@ -1212,6 +1212,46 @@
       "proof": "apps/app/src/features/organization/model-funding-form.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-343b879e-byok"
+    },
+    "list_cost_centers": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] Cost centers section, the label list (features/organization/cost-centers.tsx)",
+      "proof": "apps/app/src/features/organization/cost-centers.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-1a3727fe-cost-centers"
+    },
+    "create_cost_center": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] Cost centers section, Add a cost center (features/organization/cost-center-actions.ts)",
+      "proof": "apps/app/src/features/organization/cost-centers.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-1a3727fe-cost-centers"
+    },
+    "delete_cost_center": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] Cost centers section, Delete (features/organization/cost-center-actions.ts)",
+      "proof": "apps/app/src/features/organization/cost-centers.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-1a3727fe-cost-centers"
+    },
+    "set_cost_center": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] Cost centers section, a workspace's Change control (features/organization/cost-center-controls.tsx)",
+      "proof": "apps/app/src/features/organization/cost-centers.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-1a3727fe-cost-centers"
+    },
+    "export_cost_center_statement": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "/[org]/[ws]/spend export dialog, Organization by cost center (features/spend/actions.ts)",
+      "proof": "apps/app/src/features/spend/dialogs.test.tsx",
+      "verifiedAt": "2026-09-22",
+      "verifiedBy": "session-1a3727fe-cost-centers"
     }
   }
 }

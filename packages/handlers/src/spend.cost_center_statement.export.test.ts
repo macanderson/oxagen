@@ -7,9 +7,33 @@ import {
   UNASSIGNED_COST_CENTER_KEY,
   type RunTotalsRecord,
 } from "@oxagen/billing";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCostCenterStatementHandler } from "./spend.cost_center_statement.export";
 import { ctx, pricedRun, run, SCOPE } from "./spend.test-support";
+
+// The org-role gate (INV-29). Allows by default, an org Billing member, so each
+// case tests its own behaviour. The refusal case sets `roleGate.refuse`.
+const roleGate = vi.hoisted(() => ({
+  refuse: false,
+  assertOrgRole: vi.fn(),
+}));
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (c: { userId?: string | null }) =>
+    c.userId ?? null,
+  assertOrgRole: roleGate.assertOrgRole.mockImplementation(async () => {
+    if (roleGate.refuse) {
+      throw Object.assign(new Error("forbidden: org role required"), {
+        code: "forbidden",
+      });
+    }
+    return "Billing";
+  }),
+}));
+
+beforeEach(() => {
+  roleGate.refuse = false;
+  roleGate.assertOrgRole.mockClear();
+});
 
 // The fixture organization (ADR-142): two workspaces, three agents, two cost
 // centers. `alpha` names ENG-1001 itself. `beta` names none and sits in the
@@ -77,6 +101,18 @@ const exported = async (runs = fixtureRuns) => {
 const orgTotal = fixtureRuns.reduce((sum, r) => sum + (r.costMicros ?? 0n), 0n);
 
 describe("export_cost_center_statement", () => {
+  it("refuses a member outside Owner, Admin and Billing before reading any run", async () => {
+    roleGate.refuse = true;
+    const { handler, readRunTotals } = harness(fixtureRuns);
+    await expect(
+      handler({ month: "2026-09", format: "csv" }, ctx()),
+    ).rejects.toMatchObject({ code: "forbidden" });
+    expect(roleGate.assertOrgRole).toHaveBeenCalledWith(expect.anything(), {
+      org: ["Owner", "Admin", "Billing"],
+    });
+    expect(readRunTotals).not.toHaveBeenCalled();
+  });
+
   it("answers per-center totals that sum to the organization total", async () => {
     const out = await exported();
     const lineSum = out.lines.reduce(

@@ -6,6 +6,7 @@
 // run rows, the record the daily cost_center level is folded from, so each
 // line traces to the runs a finance reader can open, and every run lands on
 // exactly one line at its full cost: the lines' micros sum to the total's.
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   COST_CENTER_STATEMENT_COLUMNS,
@@ -36,6 +37,9 @@ export type CostCenterStatementDeps = {
 };
 
 const totals = schema.runTotals;
+
+/** Who may read the organization-wide statement: the people accountable for the bill. */
+const STATEMENT_READERS = { org: ["Owner", "Admin", "Billing"] } as const;
 
 async function readOrgRunTotals(
   orgId: string,
@@ -133,6 +137,11 @@ export function createCostCenterStatementHandler(
   deps: CostCenterStatementDeps,
 ): CapabilityHandler<typeof spendCostCenterStatementExport> {
   return async (input, ctx): Promise<SpendCostCenterStatementExportOutput> => {
+    // The statement reads every workspace's spend, and the contract admits
+    // Owner, Admin and Billing only. The kernel's IAM check fast-paths
+    // non-enterprise humans, so the org role is enforced here (INV-29).
+    const userId = await resolveActingUserId(ctx);
+    await assertOrgRole({ ...ctx, userId }, STATEMENT_READERS);
     const runs = await deps.readRunTotals(ctx.orgId, monthBounds(input.month));
     const byCenter = new Map<string, LineAccumulator>();
     const all = empty();
