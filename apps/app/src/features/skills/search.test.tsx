@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -103,6 +109,22 @@ describe("skill search preview", () => {
       });
     },
   );
+});
+
+it("offers no version while nothing is published for the current repository", () => {
+  mount({ ...configuration, current: null });
+  const select = screen.getByLabelText("Configuration version");
+  expect(
+    within(select)
+      .getAllByRole("option")
+      .map((option) => option.textContent),
+  ).toEqual(["Select a version"]);
+  expect(screen.getByRole("button", { name: "Preview search" })).toBeDisabled();
+  expect(
+    screen.getByText(
+      "No configuration is published for the current repository. Skills start off.",
+    ),
+  ).toBeVisible();
 });
 
 it("keeps one pending request pinned to an explicitly selected older version", async () => {

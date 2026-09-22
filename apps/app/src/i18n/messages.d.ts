@@ -4198,6 +4198,8 @@ type Messages = {
         refused: string;
         invalidConfig: string;
         notMerged: string;
+        unrelatedPr: string;
+        superseded: string;
         repositoryMissing: string;
         repositoryChanged: string;
         identityChanged: string;
