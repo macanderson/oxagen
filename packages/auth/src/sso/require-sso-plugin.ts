@@ -10,6 +10,8 @@
  * middleware types stay inside it: the exported `auth` type would otherwise
  * name better-call's MiddlewareInputContext, which TypeScript cannot emit
  * (TS2883), the same reason twoFactor() is widened to BetterAuthPlugin.
+ * The two middlewares stay module-private for the same reason: an exported
+ * one needs its better-call type written out, which TypeScript cannot do.
  */
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
@@ -23,7 +25,7 @@ import {
 export const REQUIRE_SSO_PLUGIN_ID = "oxagen-require-sso";
 
 /** Refuse a password sign-in into a domain that requires SSO. */
-export const refusePasswordSignIn = createAuthMiddleware(async (ctx) => {
+const refusePasswordSignIn = createAuthMiddleware(async (ctx) => {
   const email = (ctx.body as { email?: unknown } | undefined)?.email;
   if (typeof email !== "string") return;
   if (await isNonSsoSignInRefused(email)) {
@@ -35,7 +37,7 @@ export const refusePasswordSignIn = createAuthMiddleware(async (ctx) => {
 });
 
 /** End a social sign-in into a domain that requires SSO. */
-export const endSocialSignIn = createAuthMiddleware(async (ctx) => {
+const endSocialSignIn = createAuthMiddleware(async (ctx) => {
   const created = ctx.context.newSession;
   if (!created?.user?.email) return;
   if (!(await isNonSsoSignInRefused(created.user.email))) return;
