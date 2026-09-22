@@ -266,6 +266,7 @@ import "./contracts/run.bisect";
 import "./contracts/run.chain.get";
 import "./contracts/run.cost";
 import "./contracts/run.export";
+import "./contracts/run.export.get";
 import "./contracts/run.fork";
 import "./contracts/run.frame_body.get";
 import "./contracts/run.frames.ingest";

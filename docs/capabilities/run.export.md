@@ -1,6 +1,6 @@
 # export_run
 
-The signed, offline-verifiable evidence bundle for one sealed run (Mission Control spec §13.4 "Exports produce a verifiable bundle: segments, attestations, key ids, and a verifier script"; App. E; ADR-058). The capability queues the job and answers its id; the bundle is built by the durable function `evidence.run-export` and listed under Audit › exports (`evidence.run_exports`).
+The signed, offline-verifiable evidence bundle for one sealed run (Mission Control spec §13.4 "Exports produce a verifiable bundle: segments, attestations, key ids, and a verifier script"; App. E; ADR-058). The capability queues the job and answers its id. The durable function `evidence.run-export` builds the bundle and records it in `evidence.run_exports`. Read the export back, and get a download URL, with [`get_run_export`](run.export.get.md).
 
 ## Mode
 
@@ -9,7 +9,7 @@ The signed, offline-verifiable evidence bundle for one sealed run (Mission Contr
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/runs/export`
-- MCP: none; no tool is built.
+- MCP: none; no tool is built. `get_run_export` is on MCP.
 - CLI: `oxagen run export <run-id>`
 - Authentication: session or API key; org Owner or Admin, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2) for the signed-in user or the key's creator (`resolveActingUserId`); a key with no recorded creator is refused `forbidden / no_principal`
 - Capability name: `export_run`
@@ -32,10 +32,13 @@ The signed, offline-verifiable evidence bundle for one sealed run (Mission Contr
 
 A zip written to `evidence/<org>/<workspace>/exports/<export id>/<sha256 hex>.zip` in the organisation's object store, holding:
 
-- `manifest.json` — bundle format, run id, attempt ids, frame count, Merkle root, enforcement tier, completeness gaps, replay grade, the attester key id and the export instant;
-- `frames.ndjson` — one JCS envelope per frame in sequence order: the ledger's archive segments decompressed (the same bytes the seal wrote, spec §13.3), or the wrapped session's hash-chained events;
-- `attestation.json` — an Ed25519 signature by the deployment's attester key over the RFC 8785 canonical JSON of `(run_id, attempt_id, frame_count, merkle_root, archive_segment_digest, enforcement_tier, completeness_gaps)` (spec §8.3), with the verifying public key (PEM) and its key id;
-- `verify.mjs` — a Node script with no dependencies that recomputes the RFC 6962 Merkle root from `frames.ndjson`, checks it against the manifest, and verifies the attestation with the bundled key.
+- `manifest.json`: bundle format (`oxagen.run-export/2`), run id, and per attempt its frame count, Merkle root, sealed `event_stream_digest` (ledger runs), enforcement tier, completeness gaps and replay grade, plus the attester key id and the export instant.
+- `frames.ndjson`: one JCS envelope per frame in sequence order. For a ledger run these are the archive segments the seal wrote (spec §13.3). For a wrapped session they are the hash-chained rows, as a projection of the stored event.
+- `attestation.json`: an Ed25519 signature by the deployment's attester key over the RFC 8785 canonical JSON of `(run_id, attempt_id, frame_count, merkle_root, archive_segment_digest, enforcement_tier, completeness_gaps)` (spec §8.3), with the verifying public key (PEM) and its key id.
+- `redactions.json`: what the host redacted before the bytes were written, and what the bundle withholds, as kinds and counts. It holds no value, byte span, or `original_digest`. The verifier recomputes it from the frames, so an edited summary shows as broken.
+- `verify.mjs`: a Node script with no dependencies that runs the same checks as `oxagen verify`.
+
+`oxagen verify <bundle>` recomputes, per ledger frame, the payload digest and `event_digest` (RFC 8785) and checks `attempt_seq` is dense, then folds the attempt's `event_stream_digest`. Per wrapped frame it checks the `prev_hash` link and `seq`. The export does not carry the full wrapped event, so a wrapped frame's own hash is reported `not carried`. Over the bundle it checks the frame count, the Merkle roots, each signature and key id, and `redactions.json`.
 
 When the job cannot build the bundle (no attester key configured, a segment missing) the export row records `status: failed` with the reason.
 
