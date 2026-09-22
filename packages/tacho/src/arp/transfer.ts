@@ -29,6 +29,7 @@ import { handoffFrame, readHandoffFrames } from "./context";
 import { projectToTrace } from "../trace/project";
 import { runOracles } from "../trace/oracles";
 import { TRACE_FORMAT } from "../trace/types";
+import { HARNESS_BINARY } from "../wire";
 import {
   safeRelativePath,
   type ArpCheckpoint,
@@ -517,10 +518,10 @@ export function prepareCheckpoint(options: PrepareCheckpointOptions): {
       TransferHarness,
       { binary: string; args: string[] }
     > = {
-      codex: { binary: "codex", args: [instruction] },
-      "claude-code": { binary: "claude", args: [instruction] },
-      cursor: { binary: "agent", args: [instruction] },
-      stella: { binary: "stella", args: ["run", instruction] },
+      codex: { binary: HARNESS_BINARY.codex, args: [instruction] },
+      "claude-code": { binary: HARNESS_BINARY["claude-code"], args: [instruction] },
+      cursor: { binary: HARNESS_BINARY.cursor, args: [instruction] },
+      stella: { binary: HARNESS_BINARY.stella, args: ["run", instruction] },
     };
     return {
       checkpointDigest,

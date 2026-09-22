@@ -300,6 +300,19 @@ export type WrappedHarness = (typeof WRAPPED_HARNESSES)[number];
 export const CONNECTED_HARNESSES = ["claude-desktop"] as const;
 export type ConnectedHarness = (typeof CONNECTED_HARNESSES)[number];
 
+/**
+ * The executable each wrapped harness is launched by: what `tacho verify`
+ * runs for a headless turn, what an ARP transfer hands the next machine,
+ * and the one name the dependency probe trusts. Cursor's is its
+ * `cursor-agent` alias and never a bare `agent`, which any binary could be.
+ */
+export const HARNESS_BINARY = {
+  "claude-code": "claude",
+  codex: "codex",
+  cursor: "cursor-agent",
+  stella: "stella",
+} as const satisfies Record<WrappedHarness, string>;
+
 export function isWrappedHarness(harness: string): harness is WrappedHarness {
   return (WRAPPED_HARNESSES as readonly string[]).includes(harness);
 }

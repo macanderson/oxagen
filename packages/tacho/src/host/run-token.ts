@@ -36,9 +36,10 @@
  *
  * ## Revocation
  *
- * Rotating the signing key (`rotateRunTokenKey`) invalidates every token this
- * host ever issued at its next use. Unenroll rotates before it stops, and a
- * host `revoke` reaches the proxy through `host_status` on the same request
+ * The signing key lives in one file, and a token is only ever as good as
+ * that key: unenroll deletes the file after custody is shredded, so every
+ * token this host issued is refused from the next call on, and a host
+ * `revoke` reaches the proxy through `host_status` on the same request
  * path, so a revoked host refuses a valid token too.
  */
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -145,17 +146,6 @@ export function readRunTokenKey(path: string): RunTokenKey | undefined {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
-}
-
-/**
- * Replace the key on disk. Every token signed by the old key is refused from
- * the next call on; this is how `unenroll` and a host revoke kill outstanding
- * tokens without a list of them.
- */
-export function rotateRunTokenKey(path: string): RunTokenKey {
-  const key = generateRunTokenKey();
-  writeSensitiveFileAtomic(path, `${key.bytes.toString("hex")}\n`);
-  return key;
 }
 
 function b64url(bytes: Buffer): string {

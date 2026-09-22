@@ -16,7 +16,6 @@ import {
   mintRunToken,
   peekRunTokenClaims,
   readRunTokenKey,
-  rotateRunTokenKey,
   RUN_TOKEN_MAX_TTL_MS,
   RUN_TOKEN_STATIC_MAX_TTL_MS,
   type RunTokenKey,
@@ -268,7 +267,7 @@ describe("the signing key file", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("is created once, mode 0600, read back, and rotated to kill every token", () => {
+  it("is created once, mode 0600, read back, and refuses a token another key signed", () => {
     const path = join(dir, "run-token.key");
     expect(readRunTokenKey(path)).toBeUndefined();
     const first = loadOrCreateRunTokenKey(path);
@@ -288,11 +287,13 @@ describe("the signing key file", () => {
       placement: "static",
       now: NOW,
     });
-    const rotated = rotateRunTokenKey(path);
-    expect(rotated.id).not.toBe(first.key.id);
+    // A fresh key refuses every token the old one signed: this is what
+    // deleting the key file at unenroll relies on.
+    const other = generateRunTokenKey();
+    expect(other.id).not.toBe(first.key.id);
     expect(
       verifyRunToken(token, {
-        key: rotated,
+        key: other,
         host: HOST,
         provider: "openai",
         now: NOW,
