@@ -193,7 +193,7 @@ const SKILLS = () => import("./[ws]/skills/page");
 const TOOLS: Load = () => import("./[ws]/tools/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
 
-const FLEET: Load = () => import("./[ws]/page");
+const FLEET: Load = () => import("./[ws]/(fleet)/page");
 const AGENTS: Load = () => import("./[ws]/agents/page");
 const AGENT: Load = () => import("./[ws]/agents/[agent]/page");
 const AGENT_SOURCE: Load = () => import("./[ws]/agents/[agent]/source/page");
