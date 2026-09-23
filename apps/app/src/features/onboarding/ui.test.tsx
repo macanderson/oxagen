@@ -4,7 +4,7 @@
 // token mint and its continue, and the run step's re-read and repository bind.
 // Every write is answered ok and refused, so each refusal path renders its
 // sentence and changes nothing.
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -90,6 +90,7 @@ function renderRun(
   render(
     <IntlProvider>
       <FirstFrameStep
+        pollRevision="initial-read"
         org={ORG}
         ws={WS}
         workspace="Core platform"
@@ -129,6 +130,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await expectNoAxe(document.body);
   cleanup();
 });
@@ -277,25 +279,45 @@ describe("the wrap step", () => {
 });
 
 describe("the run step", () => {
-  it("does not poll while no host has enrolled, and re-reads when asked", async () => {
-    const user = userEvent.setup();
-    renderRun(null);
+  it("checks before enrollment and schedules again after an unchanged server answer", async () => {
+    vi.useFakeTimers();
+    const props = {
+      org: ORG,
+      ws: WS,
+      workspace: "Core platform",
+      agentKey: "acme.core.release-bot",
+      host: null,
+      here: HERE,
+      repository: null,
+      provisionalUntil: null,
+    };
+    const view = (revision: string) => (
+      <IntlProvider>
+        <FirstFrameStep {...props} pollRevision={revision} />
+      </IntlProvider>
+    );
+    const mounted = render(view("first"));
     expect(router.refresh).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Check again" }));
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
     expect(router.refresh).toHaveBeenCalledTimes(1);
-    expect(router.replace).not.toHaveBeenCalled();
+    mounted.rerender(view("first"));
+    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+    mounted.rerender(view("second"));
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+    mounted.rerender(view("third"));
+    mounted.unmount();
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+    expect(router.refresh).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 
-  it("asks for one wait per enrolled host, not one per render", async () => {
+  it("re-reads immediately when asked", async () => {
     const user = userEvent.setup();
     renderRun(null, { hostEnrollmentId: "hen_1" });
-    // The effect fires for the record, not for the render. Clicking adds one
-    // ask, and the re-render its pending state causes adds none: `waitMs` is
-    // 20 s per invoke, so a per-render effect would spend the budget several
-    // times over on one click (ARCHITECTURE.md §3.5).
-    expect(router.refresh).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole("button", { name: "Check again" }));
-    expect(router.refresh).toHaveBeenCalledTimes(2);
+    expect(router.refresh).toHaveBeenCalledTimes(1);
     expect(router.replace).not.toHaveBeenCalled();
   });
 
