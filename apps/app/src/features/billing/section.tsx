@@ -106,10 +106,6 @@ export function isoDate(iso: string): string {
   return new Date(iso).toISOString().slice(0, 10);
 }
 
-export function useDate(): (iso: string) => string {
-  return isoDate;
-}
-
 /** Whether [start, end) is one whole UTC calendar month. */
 function calendarMonth(start: Date, end: Date): boolean {
   if (

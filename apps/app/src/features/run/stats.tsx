@@ -25,6 +25,7 @@ import { Money } from "@/ui/money";
 import { formatCount, formatDuration, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { NoValue, Panel } from "./parts";
+import { isWhole } from "./whole-transcript";
 
 export function SummaryPanel({
   run,
@@ -137,14 +138,14 @@ export function StatRow({
       <Stat
         label={t("prompts")}
         note={
-          transcript.ok && !transcript.value.complete
+          transcript.ok && !isWhole(transcript.value)
             ? t("promptsCut")
             : undefined
         }
       >
         {prompts === null ? (
           <NoValue />
-        ) : transcript.ok && !transcript.value.complete ? (
+        ) : transcript.ok && !isWhole(transcript.value) ? (
           `${formatCount(prompts, locale)}+`
         ) : (
           formatCount(prompts, locale)

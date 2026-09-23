@@ -40,12 +40,16 @@ export type ListRow = {
 };
 
 /** The Rows select's options; 0 is All. */
-export const LIST_PAGE_SIZES = [5, 10, 25, 50, 0] as const;
+const LIST_PAGE_SIZES = [5, 10, 25, 50, 0] as const;
 const DEFAULT_PER = 10;
 
 type Sort = { column: number; dir: 1 | -1 } | null;
 
-/** The number a cell's text leads with, or null (the mockup's `ltNum`). */
+/**
+ * The number a cell's text leads with, or null (the mockup's `ltNum`).
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function leadingNumber(text: string): number | null {
   const s = text.trim();
   if (s === "" || /^\d{4}-\d{2}/.test(s)) return null;
@@ -115,13 +119,13 @@ export function ListTable({
   const [texts, setTexts] = useState<ReadonlyMap<string, readonly string[]>>(
     () => new Map(),
   );
-  const body = useRef<HTMLTableSectionElement>(null);
+  const bodyRef = useRef<HTMLTableSectionElement>(null);
   const searchId = useId();
 
   /** What each row renders, read from the DOM; called from an event, never during render. */
   const measure = (): ReadonlyMap<string, readonly string[]> => {
     const next = new Map<string, readonly string[]>();
-    const tbody = body.current;
+    const tbody = bodyRef.current;
     if (tbody === null) return next;
     for (const tr of tbody.querySelectorAll<HTMLTableRowElement>(
       "tr[data-lt-key]",
@@ -291,7 +295,7 @@ export function ListTable({
               })}
             </tr>
           </thead>
-          <tbody ref={body}>
+          <tbody ref={bodyRef}>
             {order.map((row) => renderRow(row, shown.get(row.key) ?? null))}
             {hiddenRows.map((row) => renderRow(row, null))}
             {total === 0 ? (

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // The writes on an agent identity: each dialog calls its action for the agent
 // and the workspace, shows a rotated secret once, reloads the page a suspend
-// or deregister leaves, and names every refusal without navigating.
+// leaves, leaves a receipt after a deregister and reloads the list once it is
+// closed, and names every refusal without navigating.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,15 +10,22 @@ import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { router, retireAgent, rotateAgentCredential, setAgentSuspended } =
-  vi.hoisted(() => ({
-    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-    retireAgent: vi.fn(),
-    rotateAgentCredential: vi.fn(),
-    setAgentSuspended: vi.fn(),
-  }));
+const {
+  router,
+  readAgentRoleNames,
+  retireAgent,
+  rotateAgentCredential,
+  setAgentSuspended,
+} = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  readAgentRoleNames: vi.fn(),
+  retireAgent: vi.fn(),
+  rotateAgentCredential: vi.fn(),
+  setAgentSuspended: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
+  readAgentRoleNames,
   retireAgent,
   rotateAgentCredential,
   setAgentSuspended,
@@ -36,6 +44,7 @@ function renderActions(suspended = false) {
         ws="core-platform"
         agentId="agt_releasebot"
         name="Release bot"
+        slug="release-bot"
         suspended={suspended}
         here={HERE}
         list={LIST}
@@ -51,12 +60,32 @@ async function confirm(open: string, testId: string, action: string) {
   return dialog;
 }
 
+/** Deregister waits on the "cannot be undone" checkbox, as the design draws it. */
+async function deregister() {
+  await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
+  const dialog = screen.getByTestId("retire-agent");
+  await userEvent.click(
+    within(dialog).getByRole("checkbox", {
+      name: /I understand this cannot be undone/,
+    }),
+  );
+  await userEvent.click(
+    within(dialog).getByRole("button", { name: "Deregister" }),
+  );
+  return dialog;
+}
+
 beforeEach(() => {
   router.replace.mockReset();
   router.refresh.mockReset();
   retireAgent.mockReset();
   rotateAgentCredential.mockReset();
   setAgentSuspended.mockReset();
+  readAgentRoleNames.mockReset();
+  readAgentRoleNames.mockResolvedValue({
+    ok: true,
+    value: ["Agent Observer", "Release deputy"],
+  });
 });
 
 afterEach(async () => {
@@ -126,17 +155,26 @@ describe("AgentActions", () => {
     expect(router.replace).toHaveBeenCalledWith(HERE);
   });
 
-  it("deregisters the agent and goes to the identities list", async () => {
+  it("deregisters the agent, leaves a receipt and goes to the identities list once it is closed", async () => {
     retireAgent.mockResolvedValue({
       ok: true,
       value: { retiredAt: "2026-09-15T09:00:00.000Z" },
     });
     renderActions();
-    await confirm("Deregister", "retire-agent", "Deregister");
+    const dialog = await deregister();
     expect(retireAgent).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       "agt_releasebot",
+    );
+    expect(
+      await within(dialog).findByTestId("retire-agent-receipt"),
+    ).toHaveTextContent(
+      "Release bot deregistered. Credential revoked, every run and frame kept.",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Close" }),
     );
     expect(router.replace).toHaveBeenCalledWith(LIST);
   });
@@ -208,17 +246,47 @@ describe("AgentActions", () => {
       code: "org_role_required",
     });
     renderActions();
-    await confirm("Deregister", "retire-agent", "Deregister");
+    await deregister();
     expect(
       await screen.findByTestId("retire-agent-failure"),
     ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
     expect(screen.queryByTestId("retire-agent-failure")).toBeNull();
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });
 
 describe("RetireAgent", () => {
+  it("names the roles without a count when they cannot be read (negative)", async () => {
+    readAgentRoleNames.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "kernel_failure",
+    });
+    render(
+      <IntlProvider>
+        <RetireAgent
+          org="acme"
+          ws="core-platform"
+          agentId="agt_other"
+          name="acme.core.other"
+          slug="other"
+          holds={{ mandates: 2, hosts: 3 }}
+          after={LIST}
+        />
+      </IntlProvider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
+    const dialog = screen.getByTestId("retire-agent");
+    await vi.waitFor(() => {
+      expect(readAgentRoleNames).toHaveBeenCalled();
+    });
+    expect(dialog).toHaveTextContent(
+      "the roles it holds, 2 mandates, 3 host enrollments",
+    );
+  });
+
   it("deregisters from a table row and reloads the list it was given", async () => {
     retireAgent.mockResolvedValue({
       ok: true,
@@ -230,17 +298,104 @@ describe("RetireAgent", () => {
           org="acme"
           ws="core-platform"
           agentId="agt_other"
-          name="Other"
+          name="acme.core.other"
+          slug="other"
+          holds={{ mandates: 1, hosts: 1 }}
           after={LIST}
         />
       </IntlProvider>,
     );
-    await confirm("Deregister", "retire-agent", "Deregister");
+    const dialog = await deregister();
     expect(retireAgent).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       "agt_other",
     );
+    expect(
+      await within(dialog).findByTestId("retire-agent-receipt"),
+    ).toHaveTextContent("acme.core.other deregistered.");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Close" }),
+    );
     expect(router.replace).toHaveBeenCalledWith(LIST);
+  });
+
+  it("draws the design's dialog: the key, what is kept and what ends, and no pull request it cannot open", async () => {
+    render(
+      <IntlProvider>
+        <RetireAgent
+          org="acme"
+          ws="core-platform"
+          agentId="agt_other"
+          name="acme.core.other"
+          slug="other"
+          holds={{ mandates: 0, hosts: 1 }}
+          after={LIST}
+          danger
+        />
+      </IntlProvider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
+    const dialog = screen.getByTestId("retire-agent");
+    expect(
+      within(dialog).getByRole("heading", { name: "Deregister agent" }),
+    ).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("acme.core.other");
+    expect(readAgentRoleNames).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "agt_other",
+    );
+    // The design's Ends line: the roles held, the mandates, the enrollment.
+    expect(
+      await within(dialog).findByText(
+        "2 roles, 0 mandates, the host enrollment",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog)
+        .getAllByRole("definition")
+        .map((dd) => dd.textContent),
+    ).toEqual([
+      "every run, frame and receipt. The record is never deleted.",
+      "2 roles, 0 mandates, the host enrollment",
+    ]);
+    // Deregister sits in the footer beside Cancel.
+    const footer = dialog.querySelector("[data-sheet-footer]");
+    if (!(footer instanceof HTMLElement)) throw new Error("no footer");
+    expect(
+      within(footer)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Cancel", "Deregister"]);
+    const pr = dialog.querySelector("[data-not-backed]");
+    expect(pr).toHaveAttribute("data-gap", "#3855");
+    expect(pr).toHaveTextContent(".oxagen/agents/other.toml");
+  });
+
+  it("keeps Deregister disabled until the person says they understand (negative)", async () => {
+    render(
+      <IntlProvider>
+        <RetireAgent
+          org="acme"
+          ws="core-platform"
+          agentId="agt_other"
+          name="acme.core.other"
+          slug="other"
+          after={LIST}
+        />
+      </IntlProvider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
+    const dialog = screen.getByTestId("retire-agent");
+    const confirmButton = within(dialog).getByRole("button", {
+      name: "Deregister",
+    });
+    expect(confirmButton).toBeDisabled();
+    await userEvent.click(confirmButton);
+    expect(retireAgent).not.toHaveBeenCalled();
+    expect(dialog).toHaveTextContent("its roles, mandates and host enrollment");
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    expect(confirmButton).toBeEnabled();
   });
 });

@@ -1,6 +1,6 @@
 ---
 title: "What an agent should be told before it starts"
-description: "A prompt is a bad container for a standing rule. It has no owner, no date, no scope, and no record that the agent read it. Context records fix the container."
+description: "A prompt file has no owner, no date, no scope, and no record that the agent read it. So it is a poor place for a standing rule. Context records give each rule those things."
 date: 2026-09-16
 authors:
   - Oxagen Research
@@ -16,32 +16,32 @@ tags:
 draft: false
 ---
 
-Every team that runs agents ends up with a file. It starts as four lines about the test command, grows a section on which directory things go in, picks up a paragraph someone added at 2am after an incident, and within a quarter it is 600 lines that nobody has read top to bottom since March.
+Most teams that run agents end up with one instruction file. It starts as four lines about the test command. Then it gains a section on which directory things go in. Someone adds a paragraph at 2am after an incident. Within a quarter the file is 600 lines long, and nobody has read all of it since March.
 
-The file is doing real work. It is also the wrong shape for the work. It has one author who happens to be whoever edited it last, no scope, no dates, no way to say that rule three applies to this repository and rule nine applies to everyone, and no record anywhere of whether the agent that just spent four hours in your codebase actually read line 412. When something goes wrong, you cannot answer what the agent was told. You can only show what the file says now.
+The file does real work, but its shape is wrong for that work. Its author is whoever edited it last. It has no scope and no dates. It cannot say that rule three applies to one repository and rule nine applies to everyone. It also keeps no record of whether the agent read line 412 during its four hours in your codebase. So when something goes wrong, you cannot say what the agent was told. You can only show what the file says now.
 
-## The prompt is not a container
+## Why a longer prompt does not help
 
-Two research findings between them rule out the obvious fix, which is to write more into the file.
+The obvious fix is to write more into the file. Two research findings rule that out.
 
-Liu and colleagues measured how models use long inputs and found a U-shaped curve: accuracy is highest when the relevant passage sits near the beginning or the end, and drops when it sits in the middle, a pattern that holds even for models built for long contexts.[^1] A rule's position in your file determines how well it lands, and its position is a function of when somebody added it. That is not a policy. That is a filing accident.
+Liu and colleagues measured how models use long inputs.[^1] Accuracy was highest when the relevant passage sat near the start or the end of the input. It dropped when the passage sat in the middle. This U-shaped pattern held even for models built for long inputs. In your file, a rule's position depends on when someone added it. So how well a rule works depends on when it was written, not on how much it matters.
 
-The second finding removes the other fix, which is to say it again during the run. Laban and colleagues compared a fully specified instruction delivered at once against the same instruction spread across a conversation and found an average drop of 39 percent across six generation tasks, driven mainly by an increase in unreliability rather than a loss of capability.[^2] Models commit to an assumption early and over-rely on it. Telling an agent at hour six what you should have told it at hour zero is the worst of the available options.
+The second finding rules out the other fix, which is to repeat the rule during the run. Laban and colleagues gave models a full instruction all at once. They also gave the same instruction in pieces across a conversation. Across six generation tasks, the split version scored 39 percent lower on average.[^2] Most of the drop came from less consistent answers, not from lost skill. The models made an assumption early and then relied on it too much. So telling an agent at hour six what it needed at hour zero is the worst of the options.
 
-So the standing rules have to be in before the run starts, and they have to be positioned rather than appended. That is already more structure than a text file has.
+This means the standing rules must be in place before the run starts. They must also be put in a chosen position, not added to the end. A plain text file cannot do that.
 
-## What the memory research settled
+## What the memory research found
 
-The agent-memory literature converged some time ago on the idea that an agent's context should be compiled rather than pasted.
+Research on agent memory agreed on one idea some time ago. An agent's context should be built by picking the right pieces for each step, not pasted in whole.
 
-Sumers and colleagues proposed CoALA, which draws on cognitive architectures to describe a language agent as modular memory components plus a structured action space over internal memory and external environments.[^3] The framing matters more than the specific modules: an agent's knowledge is several different kinds of thing with different lifetimes, and treating them as one undifferentiated transcript throws away the distinctions that decide what should be resident.
+Sumers and colleagues proposed CoALA, a framework based on cognitive architectures, which are older models of how a mind is organised.[^3] CoALA describes a language agent as separate memory parts plus a set of actions. Some actions work on the agent's memory, and some work on the outside world. The specific parts matter less than the main idea. An agent knows several kinds of things, and each kind lasts a different length of time. If you treat them all as one long transcript, you lose the differences that decide what the agent should keep in view.
 
-Packer and colleagues built MemGPT around the same observation, borrowing hierarchical memory from operating systems: manage tiers of memory so that a limited context window holds the right subset, and move things in and out under control.[^4] Park and colleagues stored a complete record of an agent's experiences in natural language, synthesised higher-level reflections over them, and retrieved them dynamically at planning time rather than keeping them all resident.[^5] In each case, something decides what the agent sees this turn, and that something is a component with rules, not an author with a text editor.
+Packer and colleagues built MemGPT on the same idea.[^4] They borrowed tiered memory from operating systems. The system keeps the right subset of memory in the limited context window and moves items in and out as needed. Park and colleagues stored a full record of an agent's experiences in plain language.[^5] Their system wrote higher-level reflections from that record. Then it retrieved the relevant pieces when the agent planned, instead of keeping everything in view. In each case, a component with rules decides what the agent sees on each turn. A person with a text editor does not.
 
-Wang and colleagues showed what durable, retrievable knowledge is worth when it accumulates. Voyager pairs an exploration curriculum with an ever-growing library of executable skills that the agent stores and retrieves.[^6]
+Wang and colleagues showed what stored knowledge is worth when it builds up over time. Their agent, Voyager, explores by following a curriculum of tasks.[^6] It saves the skills it learns as code in a growing library, and it retrieves them later.
 
 <Bars
-  title="Voyager against the prior state of the art, with a persistent skill library"
+  title="Voyager with a saved skill library, compared with earlier agents"
   unit="x"
   head={["Measure", "Improvement"]}
   data={[
@@ -49,18 +49,18 @@ Wang and colleagues showed what durable, retrievable knowledge is worth when it 
     { label: "Distance travelled", value: 2.3, display: "2.3x" },
     { label: "Tech tree milestones unlocked", value: 15.3, display: "up to 15.3x faster", emph: true },
     ]}
-  caption="Source: Wang et al. (2023), Voyager in Minecraft against prior state-of-the-art agents. The authors also report that the learned skill library transfers to new worlds, where competing approaches struggled."
+  caption="Source: Wang et al. (2023), Voyager in Minecraft compared with earlier state-of-the-art agents. The authors also report that the learned skill library transfers to new worlds, where competing approaches struggled."
 />
 
-The transfer result is the one to keep. The library worked in worlds it was not built in. Knowledge that is stored as a retrievable, named thing survives a change of task; knowledge that lives in a prompt for one run does not.
+The transfer result matters most here. The library worked in worlds it was not built in. Knowledge saved as a named item that can be found again still helps when the task changes. Knowledge kept in one run's prompt does not.
 
-## A rule needs the things a rule has
+## What a rule needs
 
-Take the file apart and ask what each line would need to be a rule rather than a sentence.
+Go through the file line by line. For each line, ask what it would need to count as a rule.
 
-It needs an owner, because someone has to be answerable for it. It needs a scope, because the rule about the staging database is not the rule about every repository in the organisation. It needs a date and a way to stop applying, because half of what is in that file describes a system that no longer exists. It needs provenance, because the most useful thing about a rule is usually the incident that caused it. And it needs a way to be entered into force that is not one person editing a line, because a rule an agent can rewrite is not a rule.
+It needs an owner, so that someone answers for it. It needs a scope, because a rule about the staging database is not a rule for every repository in the organisation. It needs a start date and a way to end, because much of the file describes systems that no longer exist. It needs a source, because the incident that caused a rule is often the most useful thing to know about it. Last, it needs a way to take effect that is more than one person editing a line. If an agent could rewrite a rule, the rule would not bind the agent.
 
-In Oxagen that object is a **context record**. A record holds one thing an agent or a person asserts, learns, proposes, or decides. It is immutable and content-addressed: the record is hashed over its canonical form, so two copies are the same record or they are visibly different ones. It carries a scope, from a single user up to the whole organisation. It carries provenance back to the frame of the run that taught it, so the rule and the incident that produced it are one link apart.
+In Oxagen, that object is a **context record**. A record holds one thing that an agent or a person states, learns, proposes, or decides. Once written, a record never changes. Oxagen computes a hash, a short fingerprint of the content, from a standard form of the record. So two copies are either the same record or visibly different records. Each record has a scope, from one user up to the whole organisation. Each record also points back to the frame, the recorded event in a run, where it was learned. So the rule and the incident behind it are one link apart.
 
 <Timeline
   title="Three records over the same repository, read as of today"
@@ -78,51 +78,51 @@ In Oxagen that object is a **context record**. A record holds one thing an agent
     { label: "Each organisation resolves its own store", when: "Jun onward", from: 6, to: 12 },
     { label: "Release notes wait for a named approver", when: "Mar onward", from: 3, to: 12 },
   ]}
-  caption="Illustrative. A record has a beginning and can be retracted, so what the agent was told in April is answerable separately from what it would be told now."
+  caption="Illustrative. A record has a start date and can be retracted. So you can ask what the agent was told in April separately from what it would be told now."
 />
 
-The point of the middle two rows is that they contradict each other and both are correct, at different times. A text file cannot hold that. It can only hold the winner, which means the record of what the agent was operating under in April is gone the moment somebody edits the line.
+The first two rows contradict each other, and each was correct at its own time. A text file cannot hold both. It holds only the newest line. When someone edits that line, the record of what the agent worked under in April is lost.
 
-## An agent proposes, a person merges
+## An agent proposes a record and a person merges it
 
-The part that makes records work as governance rather than as storage is where they live and how they become active.
+Records work as governance, and not only as storage, because of where they live and how they take effect.
 
-Records for a workspace live as files in the linked repository, and a record becomes active only through a pull request. An agent that learns something during a run can propose a record. It cannot enact one. The proposal opens a pull request, the checks run against it, a person reviews it under whichever review mode the workspace is set to, and the merge is what puts it into force. Git decides what is in force, which means the question "what rules were active on the 14th" has the same answer as "what was in the tree on the 14th", and that is a question your existing tools already answer.
+A workspace keeps its records as files in its linked repository. A record takes effect only through a pull request. An agent that learns something during a run can propose a record, but it cannot put one into effect. The proposal opens a pull request. Checks run against it. A person reviews it under the workspace's review mode. The merge puts the record into effect. So Git decides which records are active. "Which rules were active on the 14th" has the same answer as "what was in the tree on the 14th." Your existing tools already answer that question.
 
 <Flow
   title="How a proposed record becomes one the agent runs under"
   steps={[
-    { label: "Propose", detail: "An agent or a person writes a record, with its scope and its provenance." },
-    { label: "Check", detail: "Schema, lineage, hash recompute, secret scan, conflict against active records." },
+    { label: "Propose", detail: "An agent or a person writes a record, with its scope and its source." },
+    { label: "Check", detail: "Oxagen checks the format, the link to the source, and the hash. It scans for secrets and for conflicts with active records." },
     { label: "Review", detail: "A person approves under the workspace's review mode.", emph: true },
-    { label: "Merge", detail: "The commit is what puts the record into force." },
-    { label: "Promote", detail: "A promotion event lands in a hash-chained ledger." },
-    { label: "Deliver", detail: "The record reaches the next run as compiled context." },
+    { label: "Merge", detail: "The commit puts the record into effect." },
+    { label: "Promote", detail: "Oxagen writes a promotion event to a ledger. Each entry carries the hash of the entry before it." },
+    { label: "Deliver", detail: "Oxagen adds the record to the context of the next run." },
   ]}
-  caption="The Context PR path. The review step is the one that makes the difference between a record and a note an agent wrote to itself."
+  caption="The Context PR path. Without the review step, a record would be only a note an agent wrote to itself."
 />
 
-That constraint is the answer to a question this pillar keeps arriving at. If an agent can write its own standing rules, then the self-conditioning problem gets a permanent home: one wrong conclusion at hour three becomes a rule that shapes every run afterward. Requiring a merge does not make the agent's proposals better. It makes them reviewable while they are still proposals.
+The review step answers a problem this pillar keeps returning to. It is the self-conditioning problem, where an agent builds on its own earlier mistakes. If an agent could write its own standing rules, one wrong conclusion at hour three would become a rule for every later run. The merge requirement does not make the agent's proposals better. It lets a person review them while they are still proposals.
 
-## Delivery is a decision, not a paste
+## How records reach a run
 
-Records reach a run in a way that answers the positional problem directly rather than hoping around it.
+Oxagen delivers records in a way that deals with the position problem directly.
 
-What must hold is compiled into the stable part of the system context, at the front, where the attention research says a constraint survives. Lower-priority records are selected for the run by relevance rather than shipped wholesale, because a budget that admits everything is not a budget. Records that arrive between turns are injected as a volatile message immediately after the cached system block rather than being edited into it, which keeps the cached prefix stable across runs. And a record can be served as a context frame with provenance pointing back at the record and the commit that activated it, so an answer can cite the rule it came from.
+Records that must hold go at the front of the stable part of the system context. The research above found that models read the start of a long input best. Oxagen picks lower-priority records for each run by relevance instead of sending all of them. A budget that lets everything in does not limit anything. Some records arrive between turns. Oxagen adds each of these as a separate message right after the cached system block, and does not edit it into that block. This keeps the cached start of the context the same across runs. A record can also be delivered as a context frame that points back to the record and to the commit that made it active. So an answer can cite the rule it came from.
 
-<Callout kind="note" title="Why position is a design decision">
-Liu and colleagues found accuracy highest at the beginning and end of a long input and lowest in the middle. If your standing rules are a file, their position is whatever order they were written in. If they are records with a priority, position is something a compiler decides, and the rule that must hold is the rule that sits where the model reads best.
+<Callout kind="note" title="Why a record's position is chosen">
+Liu and colleagues found accuracy highest at the start and end of a long input and lowest in the middle. If your standing rules are a file, their position is the order they were written in. If they are records with a priority, the program that builds the context decides their position. It puts the rule that must hold where the model reads best.
 </Callout>
 
-Two things follow that are worth stating plainly. A record delivered is not a record obeyed; nothing here makes a model comply, and the check that the work was right still has to come from outside the model, as Huang and colleagues found when unaided self-correction sometimes made answers worse.[^7] And a record is only as good as its scope: a rule promoted to the whole organisation because it was easier than scoping it is a rule that will be wrong somewhere.
+Two limits follow. First, delivering a record does not make the model obey it. Nothing here makes a model comply. The check that the work was right still has to come from outside the model. Huang and colleagues found that when models corrected themselves without outside help, their answers sometimes got worse.[^7] Second, a record is only as good as its scope. Someone may promote a rule to the whole organisation because that was easier than scoping it. That rule will be wrong somewhere.
 
 ## Where this meets Oxagen
 
-Oxagen is workforce management for autonomous agents. Context records are part of the equipment clause of an agent's mandate: the business context it is permitted to read and the steering it runs under, set by the engineers accountable for it. The scope on the record and the scope in the mandate are the same mechanism, so an agent is handed what its work requires rather than everything the organisation knows.
+Oxagen is workforce management for autonomous agents. Context records belong to the equipment clause of an agent's mandate. That clause covers the business context the agent may read and the steering it runs under. The engineers accountable for the agent set it. The scope on a record and the scope in the mandate use the same mechanism. So an agent gets what its work needs, not everything the organisation knows.
 
-What that buys an operator is a question with an answer. When a run goes wrong, "what was this agent told" resolves to a set of records with owners, scopes, hashes, and the commits that activated them, rather than to a file whose history is a series of edits by whoever was on call. When an agent learns something worth keeping, it proposes rather than decides. And when a rule turns out to be wrong, retracting it is a pull request, which means the retraction is dated too.
+For an operator, this means "what was this agent told" has an answer. When a run goes wrong, the answer is a set of records. Each one has an owner, a scope, a hash, and the commit that made it active. Without records, the answer is a file edited over time by whoever was on call. When an agent learns something worth keeping, it proposes a record and does not decide alone. When a rule turns out to be wrong, you retract it with a pull request, so the retraction has a date too.
 
-The next post takes the other half: what to do when the run has already started and it is going the wrong way.
+The next post covers the other half: what to do when a run has started and is going the wrong way.
 
 [^1]: Liu, N. F., Lin, K., Hewitt, J., Paranjape, A., Bevilacqua, M., Petroni, F., & Liang, P. (2023). *Lost in the Middle: How Language Models Use Long Contexts*. TACL. https://arxiv.org/abs/2307.03172
 [^2]: Laban, P., Hayashi, H., Zhou, Y., & Neville, J. (2025). *LLMs Get Lost In Multi-Turn Conversation*. arXiv. https://arxiv.org/abs/2505.06120
