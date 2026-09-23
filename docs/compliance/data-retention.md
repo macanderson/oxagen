@@ -12,6 +12,11 @@ Your retention review needs the deletion mechanism beside the period. These are 
 | Durable token usage | 365 days | Table TTL in [0029](../../packages/telemetry/src/migrations/0029_durable_token_usage.sql). |
 | Error events | 90 days | Table TTL in [0020](../../packages/telemetry/src/migrations/0020_error_events.sql). |
 | Claude telemetry and run summaries | One year and two years respectively | TTLs in [0006](../../packages/telemetry/src/migrations/0006_claude_telemetry.sql) and [0007](../../packages/telemetry/src/migrations/0007_claude_sessions.sql). The older erasure processor comment saying these have no TTL is stale. TTL is not subject-specific erasure. |
+| Execution logs and generic events | 90 days | TTLs in the [base schema](../../packages/telemetry/src/schema.sql). |
+| Tool invocations | 180 days | TTL in the [base schema](../../packages/telemetry/src/schema.sql). |
+| Token usage, skill loads, router outcomes, evaluation results, and evaluation item results | 365 days | [Base schema](../../packages/telemetry/src/schema.sql) and [evaluation item migration](../../packages/telemetry/src/migrations/0020_eval_item_results.sql). Evaluation items include free-text outputs and rationales. |
+| Development and sandbox command logs | 14 days | [Base schema](../../packages/telemetry/src/schema.sql) and [sandbox migration](../../packages/telemetry/src/migrations/0024_sandbox_log_events.sql). These records can contain command output. |
+| Evaluation run summaries and Stella operational events | No table TTL | [Base schema](../../packages/telemetry/src/schema.sql) and [Stella events migration](../../packages/telemetry/src/migrations/0026_stella_operational_events.sql). A separate deletion mechanism is not established here. |
 | Wrapped-run events | No timed deletion established here | [0027](../../packages/telemetry/src/migrations/0027_tacho_events.sql). Do not apply another telemetry table's TTL by analogy. |
 | Expired credential grants | 90 days after expiry or revocation | Weekly [grant retention](../../packages/inngest-functions/src/functions/mcp.credential-grant-retention.ts). |
 | Deleted-server tool snapshots | 365 days after server deletion | Monthly [snapshot retention](../../packages/inngest-functions/src/functions/mcp.tool-snapshot-retention.ts). |
