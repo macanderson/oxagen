@@ -6,6 +6,23 @@ Status: Accepted
 
 A wrapped harness can push with its operator's personal GitHub credential. Model credential custody does not govern that credential. Returning a GitHub installation token from a Git credential helper would still place the vendor token inside the harness's Git process.
 
+## Inventory
+
+Before this record, `tacho enroll` wrote nothing that touches Git. Each harness pushed with whatever its operator's account already held. The table lists what a wrapped session could push with on 2026-09-23.
+
+| Source | Claude Code | Codex | Cursor | Stella |
+|---|---|---|---|---|
+| `GH_TOKEN`, `GITHUB_TOKEN` in the environment | inherited from the launching shell | inherited from the launching shell | inherited from the IDE or `cursor-agent` shell | stripped from tool subprocesses |
+| `~/.config/gh/hosts.yml` through `gh` and `gh auth git-credential` | readable | readable | readable | readable |
+| Git credential helpers (`~/.gitconfig`, the system gitconfig, such as Homebrew's `osxkeychain`) | used | used | used | used |
+| `~/.netrc` | used by Git over HTTPS | used by Git over HTTPS | used by Git over HTTPS | used by Git over HTTPS |
+| SSH keys and `ssh-agent` | used for `git@github.com:` remotes | used | used | used, though `GIT_SSH_COMMAND` is stripped |
+| What `tacho enroll` writes | `settings.json` hooks and `apiKeyHelper` | `hooks.json` | `~/.cursor/hooks.json` | hooks only |
+
+Stella's subprocess filter drops every variable ending in `_TOKEN` and the `GIT_CONFIG_*` family (`stella-tool-facts/src/subprocess_env.rs`). So a Stella tool call cannot see `GH_TOKEN` or a redirected global Git config. It can still reach every file-based credential in the other rows. The only Git control the other three harnesses had was a policy rule such as `Bash(git push*)`, which denies the push outright (`packages/tacho/src/host/bundle.ts`).
+
+Custody is a repository-local remote rewrite, so it works the same way in all four harnesses. Stella's filter does not reach `.git/config`.
+
 ## Decision
 
 An operator opts a local repository into custody with `tacho github configure --repository owner/name --harness claude-code`. Codex, Cursor, and Stella use the same command with their harness name. The deployment also sets `OXAGEN_TACHO_GITHUB_BROKER=1`.
@@ -21,6 +38,16 @@ The daemon keeps that token in memory, replaces the local lease with GitHub auth
 Before forwarding, the daemon records a `token_use` event on the session chain with `gateway_brokered`, the run token ID, and the repository. Completion records the HTTP status. HTTP success does not claim that GitHub accepted the ref update. Git's protocol response carries that result.
 
 The host records the Git settings it owns. `tacho github configure --remove` removes them for one repository. Unenrollment removes recorded proxy settings before stopping the daemon. If a helper changed or a repository cannot be reached, unenrollment stops and names the directory that needs repair.
+
+## Personal tokens
+
+A personal token the operator already holds stays where it is. Tacho neither takes it into custody nor refuses to enroll because of it. A push that reaches GitHub without the proxy is harness-held. Three options were weighed.
+
+- **Take it into custody.** Model custody can hold the vendor key because the gateway proxies every model call. The gateway does not proxy the GitHub API, and the same token serves `gh`, other editors, and the operator's own terminal. Moving it out of `hosts.yml`, the keychain, or `.netrc` would break each of those and still leave SSH keys in place. Custody of the model key worked because Oxagen could serve every use of it. Oxagen cannot serve every use of a GitHub token.
+- **Refuse to enroll.** Nearly every developer machine carries `gh` authentication or a keychain entry for GitHub. Refusing would stop rollout on the first machine and prove nothing, because the operator could log back in after enrolling.
+- **Leave it in place.** This is the choice. A configured repository's remote points at the proxy, so a plain `git push` in the harness goes through custody. The run then shows a `token_use` frame with `gateway_brokered` beside the `git_push` command. A push that bypasses the proxy shows the `git_push` command with no brokered `token_use` frame. Examples include a URL with an embedded token, a new remote, `gh` calls to the API, and an SSH remote the operator adds back. The `git_push` command frame does not yet carry `oxagen.credential_basis` itself. A reader tells the two apart by the `token_use` frame, and the record claims no more than that.
+
+To make a bypass impossible rather than visible, pair custody with a policy that denies the paths the proxy does not cover, and remove the personal credential from the machine the agent runs on.
 
 ## Boundary
 
