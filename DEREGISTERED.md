@@ -432,3 +432,7 @@ packages/oxagen/src/contracts/connection.mappings.get.ts
 packages/oxagen/src/contracts/agent.memory_policy.read.ts
 packages/oxagen/src/contracts/router.policy.get.ts
 ```
+
+## 15. Run summary implementation (ADR-153)
+
+`packages/inngest-functions/src/functions/run.summarize.ts` is preserved but no longer registered. Nothing sends its `run/summarize` event any more: `summarize_run` sends `run/enrich`, which uses Stella and the workspace enrichment setting. A `run/summarize` event still queued when this shipped is not replayed. The five-minute sweep enriches that run instead. The manual `summarize_run` capability remains available.

@@ -1,6 +1,10 @@
 {
   "run": {
     "notRecorded": "not recorded",
+    "enrichment": {
+      "label": "Automatic run names and summaries",
+      "description": "Stella reads captured turns and uses organization credits. Applies to this workspace. Turning this off shows run IDs; recorded repositories, files, outputs, and harness facts remain available."
+    },
     "noSummary": "No summary yet. Open the transcript to review recorded prompts, model calls, and tools.",
     "facts": {
       "operatorKind": {
@@ -606,7 +610,8 @@
       "effortWhy": "Oxagen reads the effort setting out of the model request, which this record does not keep (G6).",
       "branchNotCaptured": "branch not captured",
       "pathWhy": "The checkout path is not on the run record, so it is not shown.",
-      "pausedTitle": "Paused."
+      "pausedTitle": "Paused.",
+      "pathRecorded": "Recorded by the collector on this host, frames {from} to {to}."
     },
     "summary": {
       "title": "Summary",
@@ -654,7 +659,8 @@
       },
       "edge": {
         "observed": "observed",
-        "stated": "stated"
+        "stated": "stated",
+        "inferred": "inferred"
       },
       "frame": "fr {seq}",
       "noLink": "no link",
@@ -664,7 +670,7 @@
         "title": "Linked work",
         "observed": "observed: written by Oxagen from a frame it recorded",
         "stated": "stated: carried by the task",
-        "inferred": "inferred: proposed by a model from the frames. {inferred} of {total}",
+        "inferred": "inferred: matched on the branch or proposed from the frames, not recorded. {inferred} of {total}",
         "cut": "The outputs read stopped at its cap, so this list is a prefix.",
         "repositories": "Repositories",
         "repositoryNotCaptured": "The run record does not name the repository it worked in.",
@@ -772,7 +778,16 @@
         "awaiting": "awaiting",
         "blocked": "blocked",
         "withheld": "withheld"
-      }
+      },
+      "checkState": {
+        "passing": "passing",
+        "failing": "failing",
+        "pending": "pending",
+        "neutral": "neutral",
+        "unknown": "none reported"
+      },
+      "checkCounts": "{passed} passed · {failed} failed · {pending} pending",
+      "checksPartial": "check list incomplete"
     },
     "state": {
       "back": "Back to Fleet",
@@ -807,6 +822,18 @@
       "pending": {
         "title": "Access to this run is waiting for approval",
         "body": "Access request {request}"
+      }
+    },
+    "workCi": {
+      "pullState": {
+        "open": "open",
+        "closed": "closed",
+        "merged": "merged"
+      },
+      "association": {
+        "recorded": "PR receipt recorded",
+        "head_commit": "Matches recorded commit",
+        "branch": "Matches recorded branch"
       }
     }
   }

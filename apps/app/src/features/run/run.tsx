@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { TranscriptZoom } from "@/data/contracts/run";
 import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
@@ -11,6 +11,7 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { PAGE_FAILURES, type Read, readError } from "@/data/read";
 import { ApprovalsPanel } from "@/features/fleet";
+import { RunOutcomesConsent } from "@/features/run-outcomes";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { Money } from "@/ui/money";
@@ -32,6 +33,7 @@ import { StatRow, SummaryPanel } from "./stats";
 import { RunEmpty, RunReadFailure } from "./states";
 import { kindsParam, TranscriptSection } from "./transcript";
 import { ChangesPanel, SpendByArea } from "./work";
+import { readRunWork, WithWork } from "./work-ci";
 
 /** The seven tabs, in the spec's order (pages/run.md). */
 const TABS = [
@@ -326,6 +328,10 @@ export async function Run({
     readApprovals(source, ctx, run.id, now),
     agentSlug === null ? null : source.agents.get(ctx, agentSlug),
   ]);
+  // Started, never awaited here: provider latency (GitHub pull requests,
+  // checks, diffs) streams inside the Suspense boundaries of the checkout
+  // strip and the Changes panel, and cannot hold the rest of the page.
+  const work = readRunWork(ctx, source, run.id);
   let section: ReactNode;
   switch (selected) {
     case "transcript":
@@ -345,9 +351,32 @@ export async function Run({
         />
       );
       break;
-    case "issues":
-      section = <IssuesSection run={run} outputs={outputs} place={place} />;
+    case "issues": {
+      // The tab reads the work evidence for Linked work and the
+      // organization's follow-through setting beside it, so both wait only
+      // when this tab is open.
+      const [settled, outcomesPolicy] = await Promise.all([
+        work,
+        source.runs
+          .outcomesSettings(ctx)
+          .catch(() =>
+            readError(
+              PAGE_FAILURES.run.error.code,
+              PAGE_FAILURES.run.error.status,
+            ),
+          ),
+      ]);
+      section = (
+        <IssuesSection run={run} outputs={outputs} work={settled} place={place}>
+          <RunOutcomesConsent
+            at={place}
+            policy={outcomesPolicy}
+            canManage={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
+          />
+        </IssuesSection>
+      );
       break;
+    }
     case "actions": {
       const seq = body !== null && FRAME_SEQ.test(body) ? body : null;
       const resolved = await source.approvals.resolved(ctx, {
@@ -434,6 +463,7 @@ export async function Run({
             ? outputs.value.nodes.filter((node) => node.kind === "pr")
             : null
         }
+        work={work}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         org={place.org}
@@ -447,6 +477,7 @@ export async function Run({
             org={place.org}
             ws={place.ws}
             orgRole={ctx.orgRole}
+            wsRole={ctx.wsRole}
           />
           <StatRow
             run={run}
@@ -466,7 +497,13 @@ export async function Run({
           </div>
         </div>
         <Work>
-          <ChangesPanel read={outputs} place={place} />
+          <Suspense fallback={<ChangesPanel read={outputs} place={place} />}>
+            <WithWork read={work}>
+              {(settled) => (
+                <ChangesPanel read={outputs} work={settled} place={place} />
+              )}
+            </WithWork>
+          </Suspense>
           <OutputsSpine read={outputs} reads={reads} spine={spine} {...place} />
           <SpendByArea read={cost} place={place} />
         </Work>

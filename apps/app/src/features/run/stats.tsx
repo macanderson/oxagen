@@ -14,7 +14,7 @@ import type { RunCost, RunTranscript, TokenCounts } from "@/data/contracts/run";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-import type { OrgRole } from "@/server/viewer";
+import type { OrgRole, WsRole } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import {
@@ -32,6 +32,7 @@ import { Money } from "@/ui/money";
 import { formatCount, formatDuration, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
+import { EnrichmentSwitch } from "./enrichment-switch";
 import { useHarness } from "./header";
 import { NoValue } from "./parts";
 import { SummarizeAction } from "./record-actions";
@@ -96,6 +97,7 @@ export function SummaryPanel({
   org,
   ws,
   orgRole,
+  wsRole,
 }: {
   run: RunRow;
   /** `get_agent` for the run's agent: the harness label the agent card carries. */
@@ -103,11 +105,14 @@ export function SummaryPanel({
   org: string;
   ws: string;
   orgRole: OrgRole;
+  wsRole: WsRole;
 }) {
   const t = useTranslations("run");
   const harness = useHarness(run, agent)?.name ?? null;
   const format = useFormatter();
-  const summary = run.summary;
+  // A workspace that turned automatic summaries off shows none, even one
+  // generated before it did (ADR-153).
+  const summary = run.enrichmentEnabled === false ? null : run.summary;
   return (
     <section
       aria-labelledby="run-summary-title"
@@ -194,6 +199,15 @@ export function SummaryPanel({
           {t("summary.check")}
         </SafeLink>
       </div>
+      <EnrichmentSwitch
+        org={org}
+        ws={ws}
+        enabled={run.enrichmentEnabled !== false}
+        canEdit={
+          ["owner", "admin"].includes(orgRole) ||
+          ["owner", "admin"].includes(wsRole)
+        }
+      />
     </section>
   );
 }

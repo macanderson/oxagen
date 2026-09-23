@@ -8,12 +8,15 @@
 // other shape names no tracker page, and says so. The tracker's own status is
 // not read (no connection reads it yet), so the cell says that.
 //
-// Linked work reads the outputs spine the page already holds: the pull
-// requests and commits the frames recorded, and the files they changed, each
-// with the frame that recorded it. The repository is not on the run record,
-// so its panel says so rather than guessing one from a branch name.
+// Linked work reads `get_run_work` for the repositories and pull requests,
+// each a link to the forge, and the outputs spine for the commits and the
+// files they changed, each with the frame that recorded it. With no work
+// evidence the repository panel says so rather than guessing one from a
+// branch name.
 import { useLocale, useTranslations } from "next-intl";
 import type { RunOutputNode, RunOutputs } from "@/data/contracts/run";
+import type { ReactNode } from "react";
+import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
@@ -24,6 +27,14 @@ import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, Table } from "@/ui/table";
 import { Panel } from "./parts";
+import {
+  checkoutOf,
+  ForgeLink,
+  pullName,
+  repositoriesOf,
+  type RunWorkPull,
+  workOf,
+} from "./work-ci";
 
 type Place = { org: string; ws: string; runId: string };
 
@@ -128,7 +139,34 @@ function isFile(node: RunOutputNode) {
   return (node.kind === "file" || node.kind === "change") && node.stat !== null;
 }
 
-function LinkedWork({ read, place }: { read: Read<RunOutputs>; place: Place }) {
+/**
+ * How Oxagen knows a pull request belongs to the run: the collector recorded
+ * its receipt or its head commit (observed), or it only shares the branch the
+ * run worked on (inferred, and counted as such in the legend).
+ */
+function PullEdge({ pull }: { pull: RunWorkPull }) {
+  const t = useTranslations("run.issues");
+  const tw = useTranslations("run.workCi.association");
+  return (
+    <span title={tw(pull.association)}>
+      {pull.association === "branch" ? (
+        <Badge tone="denied">{t("edge.inferred")}</Badge>
+      ) : (
+        <Badge tone="allowed">{t("edge.observed")}</Badge>
+      )}
+    </span>
+  );
+}
+
+function LinkedWork({
+  read,
+  work,
+  place,
+}: {
+  read: Read<RunOutputs>;
+  work: Read<RunWork> | null;
+  place: Place;
+}) {
   const t = useTranslations("run.issues.linked");
   const locale = useLocale();
   if (!read.ok) {
@@ -138,11 +176,22 @@ function LinkedWork({ read, place }: { read: Read<RunOutputs>; place: Place }) {
       </Panel>
     );
   }
-  const work = read.value.nodes.filter(
-    (node) => node.kind === "pr" || node.kind === "commit",
+  const evidence = workOf(work);
+  const repositories = repositoriesOf(evidence);
+  const forgePulls = evidence?.pullRequests ?? [];
+  // A pull request the forge answered for replaces the spine's bare name for
+  // it; the commits stay, because only the spine records them.
+  const artifacts = read.value.nodes.filter(
+    (node) =>
+      node.kind === "commit" || (node.kind === "pr" && forgePulls.length === 0),
   );
   const files = read.value.nodes.filter(isFile);
-  const rows = work.length + files.length;
+  const checkout = checkoutOf(evidence);
+  const rows =
+    repositories.length + forgePulls.length + artifacts.length + files.length;
+  const inferred = forgePulls.filter(
+    (pull) => pull.association === "branch",
+  ).length;
   const count = (value: number) => formatCount(value, locale);
   const counted = (value: number) => (
     <Badge tone="quiet" dot={false}>
@@ -160,21 +209,74 @@ function LinkedWork({ read, place }: { read: Read<RunOutputs>; place: Place }) {
         <p>{t("observed")}</p>
         <p>{t("stated")}</p>
         <p>
-          {t("inferred", { inferred: 0, total: rows })}
+          {t("inferred", { inferred, total: rows })}
           {read.value.complete ? "" : ` ${t("cut")}`}
         </p>
       </div>
-      <Panel title={t("repositories")} aside={counted(0)}>
-        <p className="text-sm text-muted-foreground" data-gap="run-work">
-          {t("repositoryNotCaptured")}
-        </p>
+      <Panel title={t("repositories")} aside={counted(repositories.length)}>
+        {repositories.length === 0 ? (
+          <p className="text-sm text-muted-foreground" data-gap="run-work">
+            {t("repositoryNotCaptured")}
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border text-sm">
+            {repositories.map((repository) => (
+              <li
+                key={repository.url}
+                data-testid="run-linked-repository"
+                className="flex flex-wrap items-center justify-between gap-2 py-2"
+              >
+                <ForgeLink
+                  url={repository.url}
+                  className={`${mono} ${linkText} truncate`}
+                >
+                  {repository.owner}/{repository.name}
+                </ForgeLink>
+                <EdgeChip
+                  seq={
+                    checkout?.repository?.url === repository.url
+                      ? checkout.firstSeq
+                      : null
+                  }
+                  place={place}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
       </Panel>
-      <Panel title={t("artifacts")} aside={counted(work.length)}>
-        {work.length === 0 ? (
+      <Panel
+        title={t("artifacts")}
+        aside={counted(forgePulls.length + artifacts.length)}
+      >
+        {forgePulls.length + artifacts.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("noArtifacts")}</p>
         ) : (
           <ul className="flex flex-col divide-y divide-border text-sm">
-            {work.map((node) => (
+            {forgePulls.map((pull) => (
+              <li
+                key={pull.url}
+                data-testid="run-linked-pr"
+                className="flex flex-wrap items-center justify-between gap-2 py-2"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Badge tone="quiet" dot={false}>
+                    {t("kind.pr")}
+                  </Badge>
+                  <ForgeLink
+                    url={pull.url}
+                    className={`${mono} ${linkText} truncate`}
+                  >
+                    {pullName(pull)}
+                  </ForgeLink>
+                  <span className="truncate text-muted-foreground">
+                    {pull.title}
+                  </span>
+                </span>
+                <PullEdge pull={pull} />
+              </li>
+            ))}
+            {artifacts.map((node) => (
               <li
                 key={`${node.seq ?? ""}${node.name}`}
                 className="flex flex-wrap items-center justify-between gap-2 py-2"
@@ -227,16 +329,23 @@ function LinkedWork({ read, place }: { read: Read<RunOutputs>; place: Place }) {
 export function IssuesSection({
   run,
   outputs,
+  work = null,
   place,
+  children,
 }: {
   run: RunRow;
   outputs: Read<RunOutputs>;
+  /** `get_run_work`, settled; null when the page did not read it. */
+  work?: Read<RunWork> | null;
   place: Place;
+  /** What follows Linked work: the organization's follow-through setting. */
+  children?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-4">
       <IssuesTable run={run} />
-      <LinkedWork read={outputs} place={place} />
+      <LinkedWork read={outputs} work={work} place={place} />
+      {children}
     </div>
   );
 }

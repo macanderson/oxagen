@@ -34,3 +34,5 @@ None (read-only). ClickHouse observes the invocation via the kernel.
 
 - Requires a workspace context.
 - Throws when the workspace is not found for the caller's scope.
+
+`runEnrichmentEnabled` reports whether automatic Stella run names and summaries are enabled. It is true unless the workspace explicitly saved false. Recording and deterministic output evidence do not depend on it.

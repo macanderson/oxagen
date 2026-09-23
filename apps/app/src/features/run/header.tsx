@@ -9,8 +9,10 @@
 // beside the rig need a fit reading nothing records (G14), so they are not
 // drawn; the Cost tab's Model fit panel names that gap.
 import { useTranslations } from "next-intl";
+import { Suspense } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
+import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import type { OrgRole, WsRole } from "@/server/viewer";
@@ -22,6 +24,17 @@ import { HarnessIcon } from "@/ui/harness-icon";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { CopyText } from "./copy-text";
+import {
+  branchUrl,
+  checkoutOf,
+  ForgeLink,
+  pullForBranch,
+  pullName,
+  repositoriesOf,
+  usePullState,
+  WithWork,
+  workOf,
+} from "./work-ci";
 import { ExportAction } from "./record-actions";
 import { ReplayActions } from "./replay-actions";
 import { RunControls } from "./run-controls";
@@ -174,29 +187,79 @@ function useMachineProvenance(run: RunRow): string | null {
 
 /**
  * The checkout: the repository, the branch, every pull request the run pushed
- * to, and `<machine>:<path>`. The run record carries the host and the pull
- * requests the outputs recorded; the repository, the branch and the path are
- * not on it, so each says so rather than borrowing a value from another host.
+ * to, and `<machine>:<path>`. `get_run_work` carries what the collector
+ * recorded (the checkout's repository, branch and path, and the pull requests
+ * that name its commits); until it answers, or when it fails, the strip draws
+ * what the run record alone carries and says the rest was not captured,
+ * rather than borrowing a value from another host.
+ *
+ * Every path shown here is one the collector recorded on the run's own host,
+ * so none is marked `derived`: Oxagen does not work a path out.
  */
 function Checkout({
   run,
   pulls,
+  work,
 }: {
   run: RunRow;
   /** The pull requests the outputs recorded; null when the outputs read failed. */
   pulls: readonly RunOutputNode[] | null;
+  /** The settled work read; null while it is on its way. */
+  work: Read<RunWork> | null;
 }) {
   const t = useTranslations("run.header");
+  const stateOf = usePullState();
   const provenance = useMachineProvenance(run);
+  const evidence = workOf(work);
+  const checkout = checkoutOf(evidence);
+  const repository =
+    checkout?.repository ?? repositoriesOf(evidence)[0] ?? null;
+  const branch = checkout?.branch ?? null;
+  const headed = pullForBranch(evidence, branch);
+  const forgePulls = evidence?.pullRequests ?? [];
+  const machine = evidence?.machine?.name ?? run.machine?.hostname ?? null;
   return (
     <Strip label={t("checkout")} testId="run-checkout">
-      <span className={chip}>
-        <span className="text-muted-foreground">{t("repoNotCaptured")}</span>
-      </span>
-      <span className={chip}>
-        <span className="text-muted-foreground">{t("branchNotCaptured")}</span>
-      </span>
-      {pulls === null ? null : pulls.length === 0 ? (
+      {repository === null ? (
+        <span className={chip}>
+          <span className="text-muted-foreground">{t("repoNotCaptured")}</span>
+        </span>
+      ) : (
+        <ForgeLink
+          url={repository.url}
+          className={`${chip} font-semibold hover:border-foreground`}
+        >
+          <span data-testid="run-checkout-repo">
+            {repository.owner}/{repository.name}
+          </span>
+        </ForgeLink>
+      )}
+      {branch === null ? (
+        <span className={chip}>
+          <span className="text-muted-foreground">
+            {t("branchNotCaptured")}
+          </span>
+        </span>
+      ) : (
+        <ForgeLink
+          url={branchUrl(repository, branch, headed)}
+          className={`${chip} hover:border-foreground`}
+        >
+          <span data-testid="run-checkout-branch">{branch}</span>
+        </ForgeLink>
+      )}
+      {forgePulls.length > 0 ? (
+        forgePulls.map((pull) => (
+          <ForgeLink
+            key={pull.url}
+            url={pull.url}
+            className={`${chip} hover:border-foreground`}
+          >
+            <span data-testid="run-checkout-pr">{pullName(pull)}</span>
+            <span className="text-muted-foreground">{stateOf(pull)}</span>
+          </ForgeLink>
+        ))
+      ) : pulls === null ? null : pulls.length === 0 ? (
         <span className={chip}>
           <span className="text-muted-foreground">{t("noPullRequest")}</span>
         </span>
@@ -211,20 +274,31 @@ function Checkout({
           </span>
         ))
       )}
-      {run.machine === null ? (
+      {machine === null ? (
         <span className={chip}>
           <span className="text-muted-foreground">
             {run.source === "ledger" ? t("noMachineOnLedger") : t("noMachine")}
           </span>
         </span>
-      ) : (
+      ) : checkout === null ? (
         <span
           data-testid="run-machine"
           title={provenance ?? undefined}
           className="inline-flex flex-wrap items-center gap-1.5"
         >
-          <CopyText text={run.machine.hostname} />
+          <CopyText text={machine} />
           <span className={missing}>{t("pathNotCaptured")}</span>
+        </span>
+      ) : (
+        <span
+          data-testid="run-machine"
+          title={t("pathRecorded", {
+            from: checkout.firstSeq,
+            to: checkout.lastSeq,
+          })}
+          className="inline-flex flex-wrap items-center gap-1.5"
+        >
+          <CopyText text={`${machine}:${checkout.path}`} />
         </span>
       )}
     </Strip>
@@ -237,7 +311,10 @@ function When({ run }: { run: RunRow }) {
   const format = useFormatter();
   const when = (at: string) =>
     format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "short" });
-  const title = run.name ?? run.taskRef;
+  // A workspace that turned automatic naming off shows the task reference,
+  // never a generated name (ADR-153).
+  const title =
+    (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
   return (
     <p
       data-testid="run-when"
@@ -270,6 +347,7 @@ export function RunHeader({
   run,
   agent,
   pulls,
+  work,
   orgRole,
   wsRole,
   org,
@@ -279,6 +357,12 @@ export function RunHeader({
   /** `get_agent` for the run's agent; null when the run names no agent. */
   agent: Read<AgentDetail> | null;
   pulls: readonly RunOutputNode[] | null;
+  /**
+   * `get_run_work`, started by the page and never awaited by it: the
+   * checkout strip reads it inside its own Suspense boundary. Left out, the
+   * strip draws the run record alone.
+   */
+  work?: Promise<Read<RunWork>>;
   /**
    * The viewer's two roles, because the writes gate on them differently:
    * `dispatch_command` admits an org Owner or Admin or a workspace Owner or
@@ -339,7 +423,19 @@ export function RunHeader({
             )}
           </div>
           <Rig run={run} agent={agent} />
-          <Checkout run={run} pulls={pulls} />
+          {work === undefined ? (
+            <Checkout run={run} pulls={pulls} work={null} />
+          ) : (
+            <Suspense
+              fallback={<Checkout run={run} pulls={pulls} work={null} />}
+            >
+              <WithWork read={work}>
+                {(settled) => (
+                  <Checkout run={run} pulls={pulls} work={settled} />
+                )}
+              </WithWork>
+            </Suspense>
+          )}
           <When run={run} />
         </div>
         <div
