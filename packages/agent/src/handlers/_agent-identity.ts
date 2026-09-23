@@ -11,7 +11,8 @@
 import { agentCreatorUserJoin, schema, type Tx } from "@oxagen/database";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
 import type { AgentIdentityStatus } from "@oxagen/oxagen/contracts/agent.list";
-import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { TAMPER_INCIDENT_KINDS } from "@oxagen/oxagen/contracts/tacho.incident.list";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   composeAgentKey,
   isUuid,
@@ -37,6 +38,8 @@ export interface AgentIdentityRow {
   /** The principal's last write; a suspend or resume is one of them. */
   principalUpdatedAt: Date | null;
   operatorPublicId: string | null;
+  /** The operator's display name, from the same user row as `operatorPublicId`. */
+  operatorName: string | null;
   /** The label set through set_cost_center (ADR-142); null inherits the workspace's. */
   costCenter: string | null;
 }
@@ -56,6 +59,7 @@ const identityColumns = {
   principalStatus: schema.principals.status,
   principalUpdatedAt: schema.principals.updatedAt,
   operatorPublicId: schema.users.publicId,
+  operatorName: schema.users.name,
   costCenter: schema.agents.costCenter,
 } as const;
 
@@ -201,6 +205,67 @@ export async function liveHostsByAgentKey(
 }
 
 /**
+ * The hostname of each agent key's live host seen most recently. A host that
+ * has never reported ranks after one that has, then the newest enrollment.
+ */
+export async function latestLiveHostByAgentKey(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  agentKeys: readonly string[],
+): Promise<Map<string, string>> {
+  if (agentKeys.length === 0) return new Map();
+  const h = schema.tachoHosts;
+  const rows = await tx
+    .selectDistinctOn([h.agentKey], {
+      agentKey: h.agentKey,
+      hostname: h.hostname,
+    })
+    .from(h)
+    .where(
+      and(
+        eq(h.orgId, scope.orgId),
+        eq(h.workspaceId, scope.workspaceId),
+        inArray(h.agentKey, [...agentKeys]),
+        inArray(h.status, [...HOST_LIVE_STATUSES]),
+      ),
+    )
+    .orderBy(h.agentKey, sql`${h.lastSeenAt} desc nulls last`, desc(h.createdAt));
+  return new Map(rows.map((r) => [r.agentKey, r.hostname]));
+}
+
+/**
+ * Active mandates per agent principal (uuid) in the scope's workspace: status
+ * `active` and inside the validity window, which is what the mandate gate
+ * reads. A draft, an expired or a revoked mandate authorizes nothing.
+ */
+export async function activeMandatesByPrincipal(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  principalIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (principalIds.length === 0) return new Map();
+  const m = schema.mandates;
+  const rows = await tx
+    .select({
+      principalId: m.agentPrincipalId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(m)
+    .where(
+      and(
+        eq(m.orgId, scope.orgId),
+        eq(m.workspaceId, scope.workspaceId),
+        inArray(m.agentPrincipalId, [...principalIds]),
+        eq(m.status, "active"),
+        sql`${m.validFrom} <= now()`,
+        sql`${m.validTo} > now()`,
+      ),
+    )
+    .groupBy(m.agentPrincipalId);
+  return new Map(rows.map((r) => [r.principalId, r.count]));
+}
+
+/**
  * The identity's state (contract `agentIdentityStatusSchema`). Archived
  * wins over suspended: a retired agent's principal is suspended too.
  */
@@ -218,6 +283,11 @@ export interface RunWindowFigures {
   /** Sum of priced wrapped sessions' `total_cost_micros`; null when none was priced. */
   spendMicros: bigint | null;
   earliestStartedAt: Date | null;
+  /**
+   * The enforcement tier the latest root wrapped session recorded, ignoring
+   * the window; null when no wrapped session was recorded.
+   */
+  latestTier: string | null;
 }
 
 /**
@@ -270,6 +340,9 @@ export async function runFiguresByAgent(
             earliest: sql<Date | null>`min(${s.startedAt})`.mapWith(
               (v: unknown) => (v === null ? null : new Date(v as string)),
             ),
+            latestTier: sql<
+              string | null
+            >`(array_agg(${s.enforcementTier} order by ${s.startedAt} desc nulls last))[1]`,
           })
           .from(s)
           .where(
@@ -297,16 +370,22 @@ export async function runFiguresByAgent(
         starts.length === 0
           ? null
           : new Date(Math.min(...starts.map((d) => d.getTime()))),
+      latestTier: w?.latestTier ?? null,
     });
   }
   return out;
 }
 
-/** Open incidents per agent key, through the hosts enrolled under it. */
+/**
+ * Open incidents per agent key, through the hosts enrolled under it. With
+ * `tamperOnly`, only the kinds `TAMPER_INCIDENT_KINDS` names, which is the set
+ * the workspace tile and the Audit page count.
+ */
 export async function openIncidentsByAgentKey(
   tx: Tx,
   scope: { orgId: string; workspaceId: string },
   agentKeys: readonly string[],
+  tamperOnly = false,
 ): Promise<Map<string, number>> {
   if (agentKeys.length === 0) return new Map();
   const rows = await tx
@@ -328,6 +407,9 @@ export async function openIncidentsByAgentKey(
         eq(schema.tachoIncidents.workspaceId, scope.workspaceId),
         isNull(schema.tachoIncidents.resolvedAt),
         inArray(schema.tachoHosts.agentKey, [...agentKeys]),
+        tamperOnly
+          ? inArray(schema.tachoIncidents.kind, [...TAMPER_INCIDENT_KINDS])
+          : undefined,
       ),
     )
     .groupBy(schema.tachoHosts.agentKey);

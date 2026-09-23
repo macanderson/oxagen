@@ -6,20 +6,25 @@ const item = {
   id: "agt_0123456789abcdefghjkmn",
   slug: "release-bot",
   name: "Release bot",
+  description: "Cuts releases and opens their pull requests.",
   agentKey: "acme.core.release-bot",
   harness: "stella",
   principalId: "prn_0123456789abcdefghjkmn",
   operatorId: "usr_0123456789abcdefghjkmn",
+  operatorName: "Marcus Bell",
   status: "enrolled",
   tier: null,
+  enforcementTier: null,
   beltSize: null,
   runs30d: 12,
   spend30d: { micros: "1250000", currency: "USD", basis: "client_attested" },
   proven30d: null,
   mandates: null,
   incidents: 1,
+  tamperIncidents: 0,
   credentials: 1,
   hosts: 2,
+  host: null,
   registeredAt: "2026-09-13T10:00:00.000Z",
 };
 
@@ -58,6 +63,27 @@ describe("list_agents contract", () => {
     expect(parsed.proven30d).toBeNull();
     expect(parsed.mandates).toBeNull();
     expect(parsed.spend30d).toEqual(item.spend30d);
+  });
+
+  it("carries the recorded enforcement tier, the mandate count and the live host, and refuses a tier off the ladder", () => {
+    const parsed = agentListItem.parse({
+      ...item,
+      enforcementTier: "gateway",
+      mandates: 2,
+      tamperIncidents: 1,
+      host: "build-01",
+    });
+    expect(parsed.enforcementTier).toBe("gateway");
+    expect(parsed.mandates).toBe(2);
+    expect(parsed.tamperIncidents).toBe(1);
+    expect(parsed.host).toBe("build-01");
+    expect(
+      agentListItem.safeParse({ ...item, enforcementTier: "enforced" })
+        .success,
+    ).toBe(false);
+    expect(
+      agentListItem.safeParse({ ...item, tamperIncidents: -1 }).success,
+    ).toBe(false);
   });
 
   it("refuses a spend without a basis and a spend as a float", () => {

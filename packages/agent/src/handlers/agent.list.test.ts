@@ -31,8 +31,15 @@ const row = {
   principalStatus: "active",
   principalUpdatedAt: new Date("2026-09-13T10:00:00.000Z"),
   operatorPublicId: "usr_0123456789abcdefghjkmn",
+  operatorName: "Marcus Bell",
   costCenter: null,
 };
+
+const none = {
+  tamperIncidents: 0,
+  mandates: null,
+  host: null,
+} as const;
 
 describe("list_agents cursor", () => {
   it("round-trips a slug and starts over on a cursor it did not mint", () => {
@@ -53,9 +60,12 @@ describe("list_agents row", () => {
       credentials: 0,
       hosts: 0,
       incidents: 0,
+      ...none,
       figures: undefined,
     });
     expect(item.tier).toBeNull();
+    expect(item.enforcementTier).toBeNull();
+    expect(item.host).toBeNull();
     expect(item.beltSize).toBeNull();
     expect(item.proven30d).toBeNull();
     expect(item.mandates).toBeNull();
@@ -71,7 +81,13 @@ describe("list_agents row", () => {
       credentials: 1,
       hosts: 0,
       incidents: 2,
-      figures: { runs: 4, spendMicros: 1_250_000n, earliestStartedAt: null },
+      ...none,
+      figures: {
+        runs: 4,
+        spendMicros: 1_250_000n,
+        earliestStartedAt: null,
+        latestTier: null,
+      },
     });
     expect(priced.spend30d).toEqual({
       micros: "1250000",
@@ -84,10 +100,63 @@ describe("list_agents row", () => {
       credentials: 0,
       hosts: 1,
       incidents: 0,
-      figures: { runs: 4, spendMicros: null, earliestStartedAt: null },
+      ...none,
+      figures: {
+        runs: 4,
+        spendMicros: null,
+        earliestStartedAt: null,
+        latestTier: null,
+      },
     });
     expect(unpriced.spend30d).toBeNull();
     expect(unpriced.status).toBe("enrolled");
+  });
+
+  it("carries the purpose, the operator's name, the recorded tier, the mandates and the live host", () => {
+    const item = toAgentListItem(row, {
+      agentKey: "acme.core.release-bot",
+      credentials: 1,
+      hosts: 1,
+      incidents: 3,
+      tamperIncidents: 1,
+      mandates: 2,
+      host: "build-01",
+      figures: {
+        runs: 1,
+        spendMicros: null,
+        earliestStartedAt: null,
+        latestTier: "gateway",
+      },
+    });
+    expect(item.description).toBeNull();
+    expect(item.operatorName).toBe("Marcus Bell");
+    expect(item.enforcementTier).toBe("gateway");
+    expect(item.mandates).toBe(2);
+    expect(item.incidents).toBe(3);
+    expect(item.tamperIncidents).toBe(1);
+    expect(item.host).toBe("build-01");
+    expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
+  });
+
+  it("reports a tier off the ladder as no tier, and no operator name without an operator", () => {
+    const item = toAgentListItem(
+      { ...row, operatorPublicId: null, operatorName: "stale" },
+      {
+        agentKey: null,
+        credentials: 0,
+        hosts: 0,
+        incidents: 0,
+        ...none,
+        figures: {
+          runs: 0,
+          spendMicros: null,
+          earliestStartedAt: null,
+          latestTier: "enforced",
+        },
+      },
+    );
+    expect(item.enforcementTier).toBeNull();
+    expect(item.operatorName).toBeNull();
   });
 });
 
@@ -201,8 +270,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         severity: 3,
       });
 
-      // bravo: enrolled by a paused host only; no credential; no runs.
+      // bravo: enrolled by a paused host only; no credential; no runs; one
+      // active mandate, and a draft and an expired one that count for nothing.
       const bravo = await support.seedAgent(tenant, { slug: "bravo" });
+      await support.seedMandate(tenant, bravo);
+      await support.seedMandate(tenant, bravo, { status: "draft" });
+      await support.seedMandate(tenant, bravo, { expired: true });
       await support.seedHost(tenant, bravo.agentKey!, { status: "paused" });
       // charlie: nothing held, an unpriced session in the window.
       const charlie = await support.seedAgent(tenant, { slug: "charlie" });
@@ -266,6 +339,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(alpha.credentials).toBe(1);
       expect(alpha.hosts).toBe(1);
       expect(alpha.incidents).toBe(1);
+      expect(alpha.tamperIncidents).toBe(1);
+      expect(alpha.host).toBe("build-1");
+      expect(alpha.mandates).toBe(0);
+      expect(alpha.operatorName).not.toBeNull();
       // Two root sessions in the window plus one ledger run; the child and
       // the 40-day-old session are outside the count.
       expect(alpha.runs30d).toBe(3);
@@ -277,7 +354,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         basis: "client_attested",
       });
       expect(alpha.tier).toBeNull();
-      expect(alpha.mandates).toBeNull();
+      // Every seeded session takes the column default, `observe`.
+      expect(alpha.enforcementTier).toBe("observe");
+      const bravo = out.items.find((i) => i.slug === "bravo")!;
+      expect(bravo.mandates).toBe(1);
+      expect(bravo.enforcementTier).toBeNull();
     });
 
     it("derives each status from what the row holds", async () => {
@@ -297,13 +378,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(charlie.spend30d).toBeNull();
     });
 
-    it("counts the tiles over the whole workspace and leaves the mandate tile null", async () => {
+    it("counts the tiles over the whole workspace, the mandate tile included", async () => {
       const out = await list(tenant, { limit: 2 });
       expect(out.items).toHaveLength(2);
       expect(out.totals).toEqual({
         identities: 5,
         enrolled: 2,
-        holdingMandate: null,
+        holdingMandate: 1,
         tamperIncidents: 1,
       });
     });

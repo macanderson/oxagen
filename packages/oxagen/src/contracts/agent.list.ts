@@ -10,8 +10,9 @@
 // reason on the field. No rollup table exists (spec §12 names one; none is
 // migrated), so the 30-day figures are counted from the run stores directly:
 // runs from `agent.agent_runs` and root `tacho.sessions`; spend from the
-// priced wrapped sessions, client-attested; proven and mandates from stores
-// that do not exist, so null.
+// priced wrapped sessions, client-attested; mandates from `tools.mandates`;
+// the enforcement tier as the latest root session recorded it; proven from a
+// store that does not exist, so null.
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { costSchema } from "./spend.shared";
@@ -45,12 +46,22 @@ export const agentIdentityStatusSchema = z.enum([
 ]);
 export type AgentIdentityStatus = z.output<typeof agentIdentityStatusSchema>;
 
+/** The enforcement tier a wrapped session records (`tacho.sessions.enforcement_tier`). */
+export const agentEnforcementTierSchema = z.enum([
+  "contained",
+  "gateway",
+  "harness",
+  "observe",
+]);
+
 export const agentListItem = z
   .object({
     /** `agt_…`. */
     id: z.string().regex(/^agt_[0-9a-z]+$/),
     slug: z.string().min(1),
     name: z.string().min(1),
+    /** What the agent is for (`agent.agents.description`); null when none was written. */
+    description: z.string().nullable(),
     /** `org_ns.ws_ns.slug` (ADR-024); null until the namespaces are backfilled. */
     agentKey: z.string().nullable(),
     harness: agentHarnessSchema,
@@ -58,9 +69,17 @@ export const agentListItem = z
     principalId: z.string().nullable(),
     /** `usr_…` of the person the agent acts for (`principals.parent_user_id`); null when none. */
     operatorId: z.string().nullable(),
+    /** The operator's display name (`auth.users.name`); null when there is no operator. */
+    operatorName: z.string().nullable(),
     status: agentIdentityStatusSchema,
     /** The model tier the definition names. No store records it on the identity row: null. */
     tier: z.string().nullable(),
+    /**
+     * The enforcement tier the agent's latest root wrapped session recorded,
+     * derived at ingest from the control plane's own records. Null when no
+     * wrapped session was ever recorded for the agent.
+     */
+    enforcementTier: agentEnforcementTierSchema.nullable(),
     /** Tools in the computed belt. Computed per agent by `get_agent_toolbelt`, not on the list: null. */
     beltSize: z.number().int().nonnegative().nullable(),
     /** Ledger runs plus root wrapped sessions started in the last 30 days. */
@@ -74,14 +93,22 @@ export const agentListItem = z
     spend30d: costSchema.nullable(),
     /** Runs with a verified outcome. No store records verification: null. */
     proven30d: z.number().int().nonnegative().nullable(),
-    /** Mandates held. No mandate store exists: null. */
+    /**
+     * Active mandates held by the agent's principal in this workspace
+     * (`tools.mandates`, status `active`, inside its validity window). Null
+     * only for a row with no principal.
+     */
     mandates: z.number().int().nonnegative().nullable(),
     /** Open `tacho.incidents` rows on the agent's hosts. */
     incidents: z.number().int().nonnegative(),
+    /** The open incidents among them whose kind is a tamper kind (`TAMPER_INCIDENT_KINDS`). */
+    tamperIncidents: z.number().int().nonnegative(),
     /** Active long-lived agent credentials (`auth.api_keys`, purpose `agent_credential_v1`). */
     credentials: z.number().int().nonnegative(),
     /** Active `tacho.hosts` rows enrolled under the agent's key. */
     hosts: z.number().int().nonnegative(),
+    /** The hostname of the live host seen most recently; null when none is live. */
+    host: z.string().nullable(),
     registeredAt: instant,
   })
   .strict();
@@ -90,7 +117,7 @@ export const agentList = registerCapability({
   name: "list_agents",
   domain: "agent",
   description:
-    "List the agent identities registered in this workspace with their principal, harness, operator, status, enrollment and credential counts, and the 30-day run, spend and incident figures the stores record.",
+    "List the agents registered in this workspace with their purpose, principal, harness, operator, status, enrollment and credential counts, live host, latest enforcement tier, active mandates, and the 30-day run, spend and incident figures the stores record.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -124,7 +151,7 @@ export const agentList = registerCapability({
         .object({
           identities: z.number().int().nonnegative(),
           enrolled: z.number().int().nonnegative(),
-          /** No mandate store exists: null. */
+          /** Agents in the workspace whose principal holds at least one active mandate. */
           holdingMandate: z.number().int().nonnegative().nullable(),
           /** Open incidents of a tamper kind across the workspace's hosts. */
           tamperIncidents: z.number().int().nonnegative(),
