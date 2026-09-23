@@ -36,6 +36,7 @@ describe("Steering routes", () => {
   });
   it.each([
     [{ tab: "unknown" }, { tab: "library" }],
+    [{ tab: "__proto__" }, { tab: "library" }],
     [{ tab: "library", shelf: "unknown" }, { shelf: "all" }],
     [
       { tab: "freshness", kind: "rule", proposal: "prp_1", cursor: "c2" },

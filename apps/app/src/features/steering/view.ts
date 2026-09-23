@@ -44,7 +44,9 @@ export function parseSteeringView(params: Params): SteeringView {
   };
   const tab =
     STEERING_TABS.find((value) => value === rawTab) ??
-    aliases[rawTab ?? ""] ??
+    (rawTab !== undefined && Object.hasOwn(aliases, rawTab)
+      ? aliases[rawTab]
+      : undefined) ??
     "library";
   const rawShelf =
     firstParam(params.shelf) ??

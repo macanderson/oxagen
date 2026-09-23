@@ -5,7 +5,7 @@ The requirements served at localhost:3310 come from `oxagen-roadmap/mockups/page
 | Existing function | Proposed placement | Difference to review |
 | --- | --- | --- |
 | Fleet run list, status filters, run commands, paging | Fleet | Retain every current action and recorded field. |
-| Pending approval queue, mandate authority, approval decisions | Shared approvals drawer, with Fleet waiting tile entry | Move only after the drawer preserves the full decision flow. |
+| Pending approval queue, mandate authority, approval decisions | Shared approvals drawer, with Fleet waiting tile entry | The waiting tile opens the shared drawer, which preserves the existing decision panel and mandate details. |
 | Run transcript, search, kinds, raw bodies | Run Transcript | Retain all captured evidence and controls. |
 | Run cost attribution and basis | Run Cost | Retain all cost instruments. |
 | Chain frames, seal, export and raw frame body | Run Frames | The mock reorganizes these; keep the existing view available. |

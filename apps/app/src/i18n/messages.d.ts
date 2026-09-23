@@ -1820,6 +1820,7 @@ type Messages = {
         none: string;
         more: string;
         moreBasis: string;
+        open: string;
       };
     };
     approvals: {

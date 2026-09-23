@@ -11,6 +11,8 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { formatClock, formatCount } from "@/ui/money-format";
+import { ApprovalsEntry } from "./approvals-entry";
+import { ReadFailure } from "@/ui/read-failure";
 import { Clock } from "./clock";
 
 function LiveRuns({ page }: { page: RunPage }) {
@@ -56,7 +58,9 @@ function Waiting({ queue, now }: { queue: ApprovalQueue; now: number }) {
     <dl data-testid="tile" className={statTile}>
       <dt className={statTerm}>{t("title")}</dt>
       <dd className={`${statValue} ${items.length > 0 ? "text-info" : ""}`}>
-        {queue.more ? t("more", { count }) : count}
+        <ApprovalsEntry>
+          {queue.more ? t("more", { count }) : count}
+        </ApprovalsEntry>
       </dd>
       {queue.more ? (
         <dd data-testid="waiting-more" className={statNote}>
@@ -98,11 +102,17 @@ export function StatStrip({
   now: number;
 }) {
   const t = useTranslations("fleet.stats");
-  if (!runs.ok && !approvals.ok && spendTiles === undefined) return null;
   return (
     <section aria-label={t("label")} className={statStrip}>
       {runs.ok ? <LiveRuns page={runs.value} /> : null}
-      {approvals.ok ? <Waiting queue={approvals.value} now={now} /> : null}
+      {approvals.ok ? (
+        <Waiting queue={approvals.value} now={now} />
+      ) : (
+        <div className={statTile}>
+          <ReadFailure read={approvals} section={t("waiting.title")} />
+          <ApprovalsEntry />
+        </div>
+      )}
       {spendTiles}
     </section>
   );
