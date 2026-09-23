@@ -1,4 +1,4 @@
-# ADR-102: Restore the marketing ebook lead gate
+# ADR-154: Restore the marketing ebook lead gate
 
 - **Status:** Accepted
 - **Date:** 2026-09-19
