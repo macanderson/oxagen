@@ -815,7 +815,7 @@
         "wire": "Wire",
         "connection": "Connection",
         "hint": "Changing the endpoint does not re-import. A version already on a belt keeps its digest until a re-import brings a new one.",
-        "note": "Editing a provider is not built yet: the roster stores MCP servers only, and nothing changes one’s endpoint, transport or connection after it is registered.",
+        "note": "Editing a provider is not built yet: the roster records a provider only by the endpoint it was imported from, and nothing changes its endpoint, transport or connection after it is registered.",
         "confirm": "Save"
       },
       "oauth": {
