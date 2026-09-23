@@ -3,6 +3,7 @@
   "pages": [
     "overview",
     "rbac",
+    "sso",
     "agent-roles",
     "byok-and-models",
     "plugins-governance"

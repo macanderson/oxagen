@@ -14,6 +14,7 @@ Start with [engineering onboarding](ONBOARDING.md) to find the code and rules fo
 | Capability inputs, outputs, and surfaces | [Capability index](capabilities/_index.md) |
 | Operational procedures | [Runbooks](ops/) |
 | Connector and storage extensions | [Guides](guides/) |
+| Enterprise SSO setup | [SSO guide](guides/sso.md) |
 | Harness and repository host support | [Coverage matrix](reference/harness-matrix.md) |
 | Dated findings | [Audits](audits/) |
 | Preserved, unreachable features | [DEREGISTERED.md](../DEREGISTERED.md) |

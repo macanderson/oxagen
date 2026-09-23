@@ -5,7 +5,8 @@
       "people": "People",
       "roles": "Roles",
       "apiKeys": "API keys",
-      "modelFunding": "Model funding"
+      "modelFunding": "Model funding",
+      "sso": "Single sign-on"
     },
     "roles": {
       "owner": "Owner",
@@ -135,7 +136,8 @@
         "repositoryNotInstalled": "The App’s installation on that owner cannot see that repository. Grant it access on GitHub, then try again.",
         "mainRepoClaimed": "Another workspace already steers by that repository. A repository is the main repository of one workspace.",
         "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be a main repository. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
-        "repositoryUnparsable": "That is not a repository name GitHub accepts. Write it as owner/name."
+        "repositoryUnparsable": "That is not a repository name GitHub accepts. Write it as owner/name.",
+        "ssoProviderNotFound": "This identity provider no longer exists. Reload the page."
       }
     },
     "invitations": {
@@ -446,6 +448,167 @@
         "refused": "Refused ({code}).",
         "pendingApproval": "This change is waiting for approval.",
         "unavailable": "Oxagen could not reach the key service ({code}). Try again."
+      }
+    },
+    "sso": {
+      "title": "Single sign-on",
+      "intro": "Let members sign in with your company identity provider. Add an OIDC or SAML provider for your email domain, publish one DNS record to prove you own the domain, then map the provider's groups to roles on the Roles tab.",
+      "readOnly": "Only an Owner or an Admin can change single sign-on.",
+      "denied": {
+        "title": "Owners and Admins only",
+        "body": "Single sign-on settings are visible to Owners and Admins. Ask one of them for access."
+      },
+      "plan": {
+        "notice": "Single sign-on is part of the Enterprise plan.",
+        "upgrade": "Change the plan on Billing.",
+        "lapsed": "Your providers no longer sign anyone in. You can still delete them."
+      },
+      "providers": {
+        "title": "Identity providers",
+        "tableLabel": "Identity providers",
+        "empty": "No identity provider yet. A provider lets members sign in with your company identity provider instead of a password.",
+        "columns": {
+          "name": "Name",
+          "protocol": "Protocol",
+          "domain": "Email domain",
+          "status": "Domain status",
+          "actions": "Actions"
+        },
+        "verified": "Verified",
+        "pending": "Pending"
+      },
+      "protocols": {
+        "oidc": "OIDC",
+        "saml": "SAML"
+      },
+      "setup": {
+        "title": "Setup for {name}",
+        "dnsTitle": "DNS record",
+        "dnsLead": "Publish this TXT record at your DNS host, then verify the domain. The provider signs nobody in until the domain is verified.",
+        "dnsVerified": "Domain verified. Members with a {domain} address can sign in through this provider.",
+        "recordName": "Name",
+        "recordValue": "Value",
+        "idpTitle": "Identity provider settings",
+        "idpLead": "Paste these into your identity provider's application settings.",
+        "redirectUri": "Redirect URI",
+        "acsUrl": "ACS URL",
+        "spMetadataUrl": "SP metadata URL",
+        "verify": "Verify domain",
+        "verifying": "Checking DNS",
+        "verifiedNow": "Domain verified.",
+        "copy": "Copy",
+        "copied": "Copied",
+        "copyFailed": "Copy failed. Select the text instead.",
+        "copyLabel": "Copy {label}"
+      },
+      "policy": {
+        "title": "Sign-in policy",
+        "label": "Require SSO for members",
+        "on": "Members other than Owners must sign in through one of your providers.",
+        "off": "Members can sign in with a password or through a provider.",
+        "owners": "Owners can always sign in with a password, so an identity provider outage cannot lock your organization out.",
+        "needsVerified": "Verify a provider's domain before you require SSO.",
+        "saving": "Saving",
+        "lapsed": "Require SSO does not apply on your current plan. Turn it off to clear it."
+      },
+      "form": {
+        "add": "Add provider",
+        "addTitle": "Add an identity provider",
+        "editTitle": "Edit {name}",
+        "edit": "Edit",
+        "save": "Save provider",
+        "saving": "Saving",
+        "cancel": "Cancel",
+        "protocol": "Protocol",
+        "providerId": "Provider ID",
+        "providerIdHint": "Lowercase letters, digits, and hyphens. It appears in the callback URL and cannot change.",
+        "displayName": "Display name",
+        "displayNameHint": "Shown on the sign-in button.",
+        "domain": "Email domain",
+        "domainHint": "People with an address at this domain sign in through this provider. It cannot change after you add the provider.",
+        "groupsClaim": "Groups claim",
+        "groupsClaimHint": "The claim or attribute that carries the person's groups.",
+        "issuer": "Issuer URL",
+        "issuerHint": "Oxagen reads the issuer's discovery document when you save.",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "entityId": "IdP entity ID",
+        "entryPoint": "SSO URL",
+        "cert": "Signing certificate",
+        "certHint": "The identity provider's X.509 certificate, in PEM format.",
+        "certEditHint": "Paste the certificate again to change the entity ID, the SSO URL, or the private key.",
+        "spPrivateKey": "SP private key",
+        "spPrivateKeyHint": "Optional. PEM. Oxagen signs its sign-in requests with this key.",
+        "stored": "Stored. Leave blank to keep it.",
+        "notStored": "Not stored.",
+        "show": "Show",
+        "hide": "Hide",
+        "domainPlaceholder": "acme.com",
+        "issuerPlaceholder": "https://acme.okta.com",
+        "certPlaceholder": "-----BEGIN CERTIFICATE-----"
+      },
+      "delete": {
+        "open": "Delete",
+        "title": "Delete {name}",
+        "body": "Members stop signing in through this provider, and its group mappings are removed. If it is your last verified provider, SSO stops being required.",
+        "confirm": "Delete provider",
+        "pending": "Deleting"
+      },
+      "failure": {
+        "denied": "Only an Owner or an Admin can change single sign-on.",
+        "invalid": "Check this value and try again.",
+        "invalidSettings": "Oxagen could not use these settings. For OIDC, check that the issuer URL serves a discovery document. For SAML, check the SSO URL and the certificate.",
+        "providerIdRequired": "Enter a provider ID.",
+        "displayNameRequired": "Enter a display name.",
+        "domainRequired": "Enter an email domain.",
+        "issuerRequired": "Enter the issuer.",
+        "clientIdRequired": "Enter the client ID.",
+        "clientSecretRequired": "Enter the client secret.",
+        "entryPointRequired": "Enter the SSO URL.",
+        "certRequired": "Paste the signing certificate.",
+        "certRequiredForChange": "Paste the signing certificate to save a change to the SAML settings.",
+        "dnsRecordNotFound": "The TXT record was not found. DNS changes can take a few minutes to reach Oxagen. Check the name and value, then try again.",
+        "noVerifiedProvider": "Verify a provider's domain before you require SSO.",
+        "providerIdTaken": "A provider with this ID already exists. Choose another ID.",
+        "providerIdReserved": "This ID belongs to another sign-in method. Choose another ID.",
+        "domainTaken": "Another provider already uses this email domain.",
+        "notFound": "This provider no longer exists. Reload the page.",
+        "refused": "Oxagen refused the change ({code}).",
+        "pendingApproval": "The change is waiting for approval.",
+        "unavailable": "The change could not be saved ({code}). Try again.",
+        "requiresEnterprise": "Single sign-on is part of the Enterprise plan. Upgrade the organization to set it up."
+      }
+    },
+    "ssoGroups": {
+      "title": "IdP group mappings",
+      "lead": "Map each identity provider group to an organization role. A group with no row grants nothing. A person whose groups match no row loses their organization role at their next SSO sign-in. When a person's groups match more than one row, the highest role wins.",
+      "noProviders": "No identity provider yet.",
+      "openSso": "Add one on the Single sign-on tab.",
+      "provider": "{name} ({domain})",
+      "tableLabel": "Group mappings for {name}",
+      "empty": "No mappings. Nobody gets a role through this provider.",
+      "columns": {
+        "group": "Group",
+        "role": "Role",
+        "actions": "Actions"
+      },
+      "groupLabel": "Group name, row {row}",
+      "roleLabel": "Role, row {row}",
+      "add": "Add row",
+      "remove": "Remove",
+      "removeLabel": "Remove row {row}",
+      "save": "Save mappings",
+      "saving": "Saving",
+      "saved": "Mappings saved. They apply at each person's next SSO sign-in.",
+      "roles": {
+        "admin": "Admin",
+        "compliance": "Compliance",
+        "billing": "Billing",
+        "member": "Member"
+      },
+      "failure": {
+        "groupRequired": "Enter a group name.",
+        "groupDuplicate": "This group already has a row. Give each group one role."
       }
     },
     "costCenters": {
