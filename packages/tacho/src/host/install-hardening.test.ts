@@ -69,6 +69,34 @@ describe("HarnessFiles", () => {
     expect(existsSync(join(dir, "tacho", "backups"))).toBe(false);
   });
 
+  it("restores an original whose only difference is an empty container the strip dropped", () => {
+    const dir = scratch();
+    const files = new HarnessFiles(join(dir, "tacho"));
+    const path = join(dir, "settings.json");
+    const original =
+      '{\n    "model": "opus",\n    "env": {},\n    "hooks": { "Stop": [] }\n}\n';
+    writeFileSync(path, original);
+    files.write(
+      path,
+      '{"model":"opus","env":{"TACHO_PORT":"1"},"hooks":{"Stop":[{"ours":true}]}}',
+    );
+    // The strip dropped `env` and `hooks` once it had emptied them.
+    files.write(path, '{\n  "model": "opus"\n}\n');
+    expect(files.settle()).toEqual([{ path, result: "restored" }]);
+    expect(readFileSync(path, "utf8")).toBe(original);
+  });
+
+  it("still keeps an edit that emptied a container of the user's that held something", () => {
+    const dir = scratch();
+    const files = new HarnessFiles(join(dir, "tacho"));
+    const path = join(dir, "settings.json");
+    writeFileSync(path, '{"permissions":{"deny":["Bash"]}}');
+    files.write(path, '{"permissions":{"deny":["Bash"]},"ours":true}');
+    files.write(path, '{"permissions":{"deny":[]}}');
+    expect(files.settle()[0]?.result).toBe("kept-user-edit");
+    expect(readFileSync(path, "utf8")).toBe('{"permissions":{"deny":[]}}');
+  });
+
   it("keeps a user edit made while enrolled, and still restores the mode", () => {
     const dir = scratch();
     const files = new HarnessFiles(join(dir, "tacho"));

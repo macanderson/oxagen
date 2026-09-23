@@ -2,6 +2,8 @@
  * The install and uninstall rig: a scratch HOME seeded the way a real
  * developer's machine looks, a fake `launchctl` / `systemctl`, a fake control
  * plane, and a tree snapshot (paths, modes, content hashes, link targets).
+ * On Windows the fake is `schtasks` with `tasklist` and `taskkill`, and the
+ * daemon it starts writes its pid file the way `runDaemonProcess` does.
  *
  * Nothing here touches the real home directory, the real LaunchAgents or a
  * real service manager: every path hangs off a `mkdtemp` directory and every
@@ -189,16 +191,62 @@ export const USER_CLAUDE_DESKTOP = `{
 }
 `;
 
+/** The three platforms with a user service manager: launchd, systemd, Task Scheduler. */
+export type RigPlatform = "darwin" | "linux" | "win32";
+
 export interface SeedOptions {
   /** Make `~/.claude/settings.json` a symlink into a dotfiles checkout. */
   symlinkedClaudeSettings?: boolean;
-  platform?: "darwin" | "linux";
+  platform?: RigPlatform;
+}
+
+/**
+ * What the fake service manager holds for one machine. It belongs to the
+ * seed, not to a rig, so a rig built after another one died mid-install sees
+ * the unit that one loaded or the task it registered, the way a real
+ * `unenroll` run after a crash sees what the crashed `enroll` left.
+ */
+export interface RigMachine {
+  /** The daemon is running (launchd and systemd: the unit is loaded). */
+  loaded: boolean;
+  /**
+   * Windows: the tasks Task Scheduler holds. The task and the daemon are
+   * apart there: the task's action is `cmd /c start`, which hands the daemon
+   * off and returns, so ending the task leaves the daemon running and only
+   * `taskkill` by pid stops it.
+   */
+  tasks: Set<string>;
+  /** Windows: the daemon's pid while it runs. */
+  daemonPid: number | undefined;
 }
 
 export interface RigHome {
   /** The scratch HOME. Everything the rig touches is under it. */
   home: string;
-  platform: "darwin" | "linux";
+  platform: RigPlatform;
+  /** The machine's service manager state; a fresh one when omitted. */
+  machine?: RigMachine;
+}
+
+/**
+ * Where Claude Desktop keeps its MCP config under the scratch HOME on
+ * `platform`, relative to it; undefined where Anthropic ships no build. The
+ * Windows path is `%APPDATA%`, which the rig leaves unset so it falls back
+ * to `AppData\Roaming` under the home directory.
+ */
+export function rigClaudeDesktopConfig(
+  platform: RigPlatform,
+): string[] | undefined {
+  if (platform === "darwin")
+    return [
+      "Library",
+      "Application Support",
+      "Claude",
+      "claude_desktop_config.json",
+    ];
+  if (platform === "win32")
+    return ["AppData", "Roaming", "Claude", "claude_desktop_config.json"];
+  return undefined;
 }
 
 /**
@@ -227,20 +275,21 @@ export function seedHome(options: SeedOptions = {}): RigHome {
   put(join(home, ".codex", "hooks.json"), USER_CODEX_HOOKS);
   put(join(home, ".cursor", "hooks.json"), USER_CURSOR_HOOKS);
   put(join(home, ".stella", "stella.toml"), USER_STELLA_TOML);
+  const desktopConfig = rigClaudeDesktopConfig(platform);
+  if (desktopConfig !== undefined)
+    put(join(home, ...desktopConfig), USER_CLAUDE_DESKTOP);
   if (platform === "darwin") {
-    put(
-      join(
-        home,
-        "Library",
-        "Application Support",
-        "Claude",
-        "claude_desktop_config.json",
-      ),
-      USER_CLAUDE_DESKTOP,
-    );
     put(
       join(home, "Library", "LaunchAgents", "com.example.other.plist"),
       "<plist/>\n",
+    );
+  } else if (platform === "win32") {
+    // Another vendor's per-user program, so the snapshot covers a
+    // `%LOCALAPPDATA%` Tacho has no business touching.
+    put(
+      join(home, "AppData", "Local", "Programs", "other", "other.exe"),
+      "MZ\n",
+      0o755,
     );
   } else {
     put(
@@ -272,7 +321,11 @@ export function seedHome(options: SeedOptions = {}): RigHome {
     )}\n`,
     0o600,
   );
-  return { home, platform };
+  return {
+    home,
+    platform,
+    machine: { loaded: false, tasks: new Set(), daemonPid: undefined },
+  };
 }
 
 function enrollmentResponse(
@@ -334,8 +387,14 @@ export interface Rig {
   requests: Array<{ url: string; body: unknown }>;
   lines: string[];
   errors: string[];
-  /** Whether the fake service manager currently has the unit loaded. */
+  /**
+   * Whether the fake service manager still holds anything of Tacho's: the
+   * unit loaded (launchd, systemd), or on Windows the scheduled task
+   * registered or the daemon it started still running.
+   */
   serviceLoaded: () => boolean;
+  /** Windows only: the fake Task Scheduler's view. Empty elsewhere. */
+  scheduler: () => { tasks: string[]; daemonPid: number | undefined };
   /** Make the control plane unreachable (offline unenroll). */
   setOffline: (offline: boolean) => void;
 }
@@ -344,6 +403,9 @@ export interface Rig {
 export type KillPoint =
   | "fetch"
   | "launchctl bootstrap"
+  | "systemctl --user"
+  | "schtasks /Create"
+  | "schtasks /Run"
   | "readCodexHooks"
   | "readCursorHooks"
   | "readStellaHooks"
@@ -370,6 +432,19 @@ export interface RigOptions {
 /** The port the rig's fake model proxy reports. */
 export const RIG_GATEWAY_PORT = 47124;
 
+/** The pid the rig's fake Windows daemon runs as. */
+export const RIG_DAEMON_PID = 4242;
+
+/**
+ * Where the rig's app bundle keeps `tacho`: inside `Oxagen.app` on macOS,
+ * the per-user install under `%LOCALAPPDATA%\Programs` on Windows.
+ */
+function rigBinDir(home: string, platform: RigPlatform): string {
+  return platform === "win32"
+    ? join(home, "AppData", "Local", "Programs", "Oxagen")
+    : join(home, "Applications", "Oxagen.app", "Contents", "MacOS");
+}
+
 /**
  * The real `defaultCliDeps` — real path resolution, real file writers, the
  * real launchd / systemd manager — with the four things that would reach
@@ -386,7 +461,17 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
   const lines: string[] = [];
   const errors: string[] = [];
   const signer = bundleSigner();
-  let loaded = false;
+  const machine: RigMachine = seed.machine ?? {
+    loaded: false,
+    tasks: new Set(),
+    daemonPid: undefined,
+  };
+  const { tasks } = machine;
+  /**
+   * Where the fake daemon writes its pid. Read through `real`, which exists
+   * by the time anything runs a task.
+   */
+  const pidFile = (): string => real.paths.pid;
   let offline = false;
   let dead = false;
   /** Throw if already dead, and die here when this is the kill point. */
@@ -402,28 +487,95 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
     options.onExec?.(command, args);
     execs.push({ command, args });
     if (command === "launchctl") {
-      if (args[0] === "bootstrap") loaded = true;
+      if (args[0] === "bootstrap") machine.loaded = true;
       if (args[0] === "bootout") {
-        const was = loaded;
-        loaded = false;
+        const was = machine.loaded;
+        machine.loaded = false;
         // launchctl answers 3 ("No such process") for a label not loaded.
         return { status: was ? 0 : 3, stdout: "", stderr: "" };
       }
       if (args[0] === "print")
         return {
-          status: loaded ? 0 : 113,
-          stdout: loaded ? "state = running\n" : "",
+          status: machine.loaded ? 0 : 113,
+          stdout: machine.loaded ? "state = running\n" : "",
           stderr: "",
         };
       return { status: 0, stdout: "", stderr: "" };
     }
+    if (command === "schtasks") {
+      const name = args[args.indexOf("/TN") + 1] ?? "";
+      const missing = {
+        status: 1,
+        stdout: "",
+        stderr: "ERROR: The system cannot find the file specified.\r\n",
+      };
+      if (args[0] === "/Create") {
+        tasks.add(name);
+        return { status: 0, stdout: "SUCCESS\r\n", stderr: "" };
+      }
+      if (args[0] === "/Run") {
+        if (!tasks.has(name)) return missing;
+        // The launcher starts the daemon, and the daemon writes its pid file
+        // (`runDaemonProcess`); a pid file is all Windows knows it by.
+        machine.daemonPid = RIG_DAEMON_PID;
+        machine.loaded = true;
+        writeFileSync(pidFile(), `${machine.daemonPid}\n`);
+        return { status: 0, stdout: "SUCCESS\r\n", stderr: "" };
+      }
+      if (args[0] === "/End")
+        return tasks.has(name)
+          ? { status: 0, stdout: "SUCCESS\r\n", stderr: "" }
+          : missing;
+      if (args[0] === "/Delete") {
+        if (!tasks.delete(name)) return missing;
+        return { status: 0, stdout: "SUCCESS\r\n", stderr: "" };
+      }
+      if (args[0] === "/Query")
+        return tasks.has(name)
+          ? {
+              status: 0,
+              stdout: `TaskName: \\${name}\r\nStatus: Ready\r\n`,
+              stderr: "",
+            }
+          : missing;
+      return missing;
+    }
+    if (command === "tasklist") {
+      const filter = args[args.indexOf("/FI") + 1] ?? "";
+      const pid = Number(/PID eq (\d+)/.exec(filter)?.[1]);
+      return pid === machine.daemonPid
+        ? {
+            status: 0,
+            stdout: `"tacho.exe","${pid}","Console","1","12,345 K"\r\n`,
+            stderr: "",
+          }
+        : {
+            status: 0,
+            stdout:
+              "INFO: No tasks are running which match the specified criteria.\r\n",
+            stderr: "",
+          };
+    }
+    if (command === "taskkill") {
+      const pid = Number(args[args.indexOf("/PID") + 1]);
+      if (pid !== machine.daemonPid)
+        return {
+          status: 128,
+          stdout: "",
+          stderr: `ERROR: The process "${pid}" not found.\r\n`,
+        };
+      // Killed with /F: it runs no exit handler, so its pid file stays.
+      machine.daemonPid = undefined;
+      machine.loaded = false;
+      return { status: 0, stdout: "SUCCESS\r\n", stderr: "" };
+    }
     if (command === "systemctl") {
-      if (args.includes("enable")) loaded = true;
-      if (args.includes("disable")) loaded = false;
+      if (args.includes("enable")) machine.loaded = true;
+      if (args.includes("disable")) machine.loaded = false;
       if (args.includes("is-active"))
         return {
-          status: loaded ? 0 : 3,
-          stdout: loaded ? "active\n" : "inactive\n",
+          status: machine.loaded ? 0 : 3,
+          stdout: machine.loaded ? "active\n" : "inactive\n",
           stderr: "",
         };
       return { status: 0, stdout: "", stderr: "" };
@@ -446,14 +598,20 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
       return { ok: true, status: 200, text: async () => "{}" };
     return { ok: false, status: 404, text: async () => "no" };
   };
-  const bin = join(home, "Applications", "Oxagen.app", "Contents", "MacOS");
+  const bin = rigBinDir(home, platform);
+  const tacho = join(bin, platform === "win32" ? "tacho.exe" : "tacho");
+  // Windows quotes a command-line path with double quotes, the others with single.
+  const quoted = platform === "win32" ? `"${tacho}"` : `'${tacho}'`;
   const real = defaultCliDeps({
     home,
-    env: {
-      HOME: home,
-      PATH: "/usr/bin:/bin",
-      SHELL: "/bin/zsh",
-    },
+    env:
+      platform === "win32"
+        ? { USERPROFILE: home, HOME: home, PATH: "C:\\Windows\\System32" }
+        : {
+            HOME: home,
+            PATH: "/usr/bin:/bin",
+            SHELL: "/bin/zsh",
+          },
     platform,
     exec,
     fetch,
@@ -474,14 +632,14 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
       path: "/Applications/Claude.app",
     }),
     runtime: {
-      hookCommand: `'${join(bin, "tacho")}' hook`,
-      credentialHelperCommand: `'${join(bin, "tacho")}' credential issue --harness claude-code`,
-      daemonCommand: [join(bin, "tacho"), "daemon"],
-      mcpStdioCommand: [join(bin, "tacho"), "mcp-stdio"],
+      hookCommand: `${quoted} hook`,
+      credentialHelperCommand: `${quoted} credential issue --harness claude-code`,
+      daemonCommand: [tacho, "daemon"],
+      mcpStdioCommand: [tacho, "mcp-stdio"],
       binDir: bin,
     },
     daemonGet: async (path) =>
-      loaded && path === "/health"
+      machine.loaded && path === "/health"
         ? {
             ok: true,
             gateway: {
@@ -534,7 +692,8 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
     requests,
     lines,
     errors,
-    serviceLoaded: () => loaded,
+    serviceLoaded: () => machine.loaded || tasks.size > 0,
+    scheduler: () => ({ tasks: [...tasks], daemonPid: machine.daemonPid }),
     setOffline: (value) => {
       offline = value;
     },

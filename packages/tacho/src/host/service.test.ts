@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  daemonImages,
   type Exec,
   type ExecResult,
   renderLaunchdPlist,
@@ -12,6 +13,7 @@ import {
   SERVICE_LABEL,
   serviceManagerFor,
   type ServiceSpec,
+  tasklistImage,
 } from "./service";
 
 const SPEC: ServiceSpec = {
@@ -396,5 +398,65 @@ describe("service managers", () => {
       launcherPath: launcher,
     });
     expect(absent.status().installed).toBe(false);
+  });
+});
+
+describe("recognising the Windows daemon by pid", () => {
+  it("reads the image from the tasklist row whose pid column matches", () => {
+    const rows =
+      '"svchost.exe","17","Services","0","4,242 K"\r\n' +
+      '"tacho.exe","4242","Console","1","12,345 K"\r\n';
+    expect(tasklistImage(rows, 4242)).toBe("tacho.exe");
+    // 4242 appears in svchost's memory column, never its pid column.
+    expect(
+      tasklistImage(rows.split("\r\n")[0] as string, 4242),
+    ).toBeUndefined();
+    expect(
+      tasklistImage(
+        "INFO: No tasks are running which match the specified criteria.\r\n",
+        4242,
+      ),
+    ).toBeUndefined();
+  });
+
+  it("accepts the daemon's own images and the program the launcher starts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tacho-win-images-"));
+    const launcher = join(dir, "tachod.cmd");
+    expect([...daemonImages(launcher)].sort()).toEqual([
+      "node.exe",
+      "tacho.exe",
+      "tachod.exe",
+    ]);
+    writeFileSync(
+      launcher,
+      renderWindowsLauncher({
+        ...SPEC,
+        command: ["C:\\Program Files\\Oxagen\\Oxagen-Tacho.EXE", "daemon"],
+      }),
+    );
+    expect(daemonImages(launcher).has("oxagen-tacho.exe")).toBe(true);
+  });
+
+  it("reads a pid file naming another program as stale and kills nothing", () => {
+    const home = mkdtempSync(join(tmpdir(), "tacho-win-stale-"));
+    const pidPath = join(home, "tachod.pid");
+    writeFileSync(pidPath, "4242\n");
+    const fake = fakeExec({
+      "tasklist /FI PID eq 4242": {
+        status: 0,
+        stdout: '"chrome.exe","4242","Console","1","99,999 K"\r\n',
+        stderr: "",
+      },
+    });
+    const manager = serviceManagerFor({
+      platform: "win32",
+      home,
+      exec: fake.exec,
+      launcherPath: join(home, "tachod.cmd"),
+      pidPath,
+    });
+    expect(manager.status().running).toBe(false);
+    manager.uninstall();
+    expect(fake.calls.some((call) => call.startsWith("taskkill"))).toBe(false);
   });
 });

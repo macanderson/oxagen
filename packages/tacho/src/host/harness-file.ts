@@ -28,24 +28,20 @@
  */
 import {
   chmodSync,
-  closeSync,
   existsSync,
-  fsyncSync,
   lstatSync,
   mkdirSync,
-  openSync,
   readdirSync,
   readFileSync,
   readlinkSync,
-  renameSync,
   rmdirSync,
   statSync,
   unlinkSync,
-  writeSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { writeFileAtomic } from "./fs";
 
 /** A harness file could not be read or written; `path` names it for the operator. */
 export class HarnessFileError extends Error {
@@ -111,29 +107,7 @@ function realTarget(path: string): string {
 }
 
 function writeAtomic(path: string, data: string | Buffer, mode: number): void {
-  const tmp = join(
-    dirname(path),
-    `.${basename(path)}.${process.pid}.${Date.now()}.tmp`,
-  );
-  const fd = openSync(tmp, "w", mode);
-  try {
-    writeSync(fd, data as never);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  try {
-    // openSync's mode is masked by the umask; the receipt's mode is exact.
-    chmodSync(tmp, mode);
-    renameSync(tmp, path);
-  } catch (error) {
-    try {
-      unlinkSync(tmp);
-    } catch {
-      // The temp file is already gone.
-    }
-    throw error;
-  }
+  writeFileAtomic(path, data, { mode });
 }
 
 /** Blank: nothing, whitespace, or a JSON document with nothing in it. */
@@ -151,14 +125,48 @@ function isBlank(text: string): boolean {
   }
 }
 
-/** Two texts say the same thing: equal bytes, or equal JSON whatever the layout. */
+/**
+ * Two texts say the same thing: equal bytes, or equal JSON whatever the
+ * layout, once empty containers are set aside.
+ *
+ * The empty containers are the strips' doing. `stripTachoSettings`,
+ * `stripHookGroups` and `stripOxagenMcpServer` drop a `hooks`, `env` or
+ * `mcpServers` they emptied, because one the merge created must not outlive
+ * it. They cannot tell that from one the user already had empty: the merge
+ * put Tacho's entries into it, so both look the same by the time of the
+ * strip. A user whose settings held `"env": {}` then read as having edited
+ * the file while enrolled, and got it back re-serialized instead of
+ * byte-identical. An empty object or array says nothing a missing key does
+ * not, so the comparison ignores them and the original bytes go back.
+ */
 function sameDocument(a: string, b: string): boolean {
   if (a === b) return true;
   try {
-    return isDeepStrictEqual(sortKeys(JSON.parse(a)), sortKeys(JSON.parse(b)));
+    return isDeepStrictEqual(
+      withoutEmptyContainers(sortKeys(JSON.parse(a))),
+      withoutEmptyContainers(sortKeys(JSON.parse(b))),
+    );
   } catch {
     return false;
   }
+}
+
+/** The value with every member that is an empty object or array removed, innermost first. */
+function withoutEmptyContainers(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutEmptyContainers);
+  if (typeof value !== "object" || value === null) return value;
+  const kept: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const pruned = withoutEmptyContainers(child);
+    const empty =
+      (Array.isArray(pruned) && pruned.length === 0) ||
+      (pruned !== null &&
+        typeof pruned === "object" &&
+        !Array.isArray(pruned) &&
+        Object.keys(pruned).length === 0);
+    if (!empty) kept[key] = pruned;
+  }
+  return kept;
 }
 
 function sortKeys(value: unknown): unknown {

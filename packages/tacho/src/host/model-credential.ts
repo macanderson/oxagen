@@ -32,20 +32,15 @@
 import { createHash } from "node:crypto";
 import {
   chmodSync,
-  chownSync,
-  closeSync,
   existsSync,
-  fsyncSync,
   lstatSync,
   mkdirSync,
-  openSync,
   readFileSync,
-  renameSync,
   statSync,
   unlinkSync,
-  writeSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { writeFileAtomic } from "./fs";
 import { BROKERABLE_HARNESS_PROVIDER, type BrokerableHarness } from "../wire";
 import type { CredentialKind, HeldCredential } from "./credential-store";
 import { claudeManagedSettingsPath } from "./model-base-url";
@@ -244,35 +239,10 @@ function writeAtomicPreserving(path: string, data: string): void {
   } catch {
     // A new file has no mode or owner to keep.
   }
-  const tmp = join(
-    dirname(path),
-    `.${basename(path)}.${process.pid}.${Date.now()}.tmp`,
-  );
-  const fd = openSync(tmp, "w", mode);
-  try {
-    writeSync(fd, Buffer.from(data, "utf8"));
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  try {
-    chmodSync(tmp, mode);
-    if (owner !== undefined) {
-      try {
-        chownSync(tmp, owner.uid, owner.gid);
-      } catch {
-        // Only root may give a file away.
-      }
-    }
-    renameSync(tmp, path);
-  } catch (error) {
-    try {
-      unlinkSync(tmp);
-    } catch {
-      // Already gone.
-    }
-    throw error;
-  }
+  writeFileAtomic(path, data, {
+    mode,
+    ...(owner !== undefined ? { owner } : {}),
+  });
 }
 
 function readTextIfExists(path: string): string | undefined {

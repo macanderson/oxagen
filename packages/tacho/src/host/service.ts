@@ -5,9 +5,9 @@
  * service manager calls are behind an `Exec` port so tests run against a
  * fake.
  */
-import { join } from "node:path";
-import { ensureDir, writeSensitiveFileAtomic } from "./fs";
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import { join, win32 } from "node:path";
+import { ensureDir, writeSensitiveFileAtomic } from "./fs";
 
 export const SERVICE_LABEL = "sh.oxagen.tachod";
 /** Task Scheduler names cannot carry dots; this is the Windows label. */
@@ -349,6 +349,47 @@ export function renderWindowsLauncher(spec: ServiceSpec): string {
 }
 
 /**
+ * The image name `tasklist /FO CSV /NH` reports for `pid`, or undefined when
+ * no row carries it. A row is `"image","pid","session","#","mem"`; the image
+ * is compared by row, not by a substring search, so a pid that appears in
+ * another column (a memory figure, a session name) never matches.
+ */
+export function tasklistImage(stdout: string, pid: number): string | undefined {
+  for (const line of stdout.split(/\r?\n/)) {
+    const cells = [...line.matchAll(/"((?:[^"]|"")*)"/g)].map((match) =>
+      (match[1] as string).replace(/""/g, '"'),
+    );
+    if (cells.length >= 2 && cells[1] === String(pid)) return cells[0];
+  }
+  return undefined;
+}
+
+/**
+ * Every image the daemon can run as, lower-cased: the multi-call binary
+ * (`tacho.exe daemon`), a standalone `tachod.exe`, and Node for the bundle
+ * (`node.exe tacho.mjs daemon`), plus whatever program the launcher on disk
+ * starts, so a renamed install is still recognised. The fixed names stay in
+ * even when the launcher names another, because a daemon started by an
+ * older install may still be running under one of them.
+ */
+export function daemonImages(launcher: string): Set<string> {
+  const images = new Set(["tacho.exe", "tachod.exe", "node.exe"]);
+  try {
+    const text = readFileSync(launcher, "utf8");
+    // The last command line of `renderWindowsLauncher`: the quoted program
+    // first, then its quoted arguments and the log redirection.
+    for (const line of text.split(/\r?\n/)) {
+      const program = /^"((?:[^"]|"")+)"\s/.exec(line)?.[1];
+      if (program !== undefined)
+        images.add(win32.basename(program.replace(/""/g, '"')).toLowerCase());
+    }
+  } catch {
+    // No launcher (already removed, or never written): the fixed names stand.
+  }
+  return images;
+}
+
+/**
  * Task Scheduler is the per-user equivalent of a launchd agent: `/SC ONLOGON`
  * starts it at sign-in, `/RL LIMITED` keeps it unelevated, and `/Run` starts
  * it right away. The task is hidden from the foreground with `cmd /c start
@@ -358,14 +399,22 @@ export function renderWindowsLauncher(spec: ServiceSpec): string {
  * task's action is `cmd /c start`, which returns as soon as the launcher is
  * handed off, so the task's own status says nothing reliable about the
  * daemon, and the daemon's image is `tacho.exe` (multi-call) or `node.exe`
- * (bundle), so no image name identifies it either. `runDaemonProcess`
+ * (bundle), so no image name identifies it on its own. `runDaemonProcess`
  * writes `tachod.pid`; that is the handle. A stale pid file (the process is
  * gone) reads as stopped.
+ *
+ * The pid alone is not proof, though. A daemon killed without cleaning up
+ * (a crash, a power cut, `taskkill /F`) leaves its pid file behind, and
+ * Windows reuses pids quickly, so the number can name another program by
+ * the time uninstall reads it. `taskkill /T /F` on that pid would end that
+ * program and its whole process tree. So the process must also be running
+ * one of the images the daemon can run as (`daemonImages`); anything else
+ * is a stale pid file and reads as stopped.
  */
 function schtasksManager(options: ServiceManagerOptions): ServiceManager {
   const launcher = options.launcherPath ?? join(options.home, "tachod.cmd");
   const pidPath = options.pidPath ?? join(launcher, "..", "tachod.pid");
-  /** The pid in `tachod.pid` when that process exists. */
+  /** The pid in `tachod.pid` when that process exists and is the daemon. */
   const livePid = (): number | undefined => {
     if (!existsSync(pidPath)) return undefined;
     const pid = Number(readFileSync(pidPath, "utf8").trim());
@@ -381,7 +430,9 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
       throw new Error(
         `Cannot inspect daemon pid ${pid}: ${query.stderr.trim() || "tasklist failed"}`,
       );
-    return query.stdout.includes(`"${pid}"`) ? pid : undefined;
+    const image = tasklistImage(query.stdout, pid);
+    if (image === undefined) return undefined;
+    return daemonImages(launcher).has(image.toLowerCase()) ? pid : undefined;
   };
   /**
    * Stop whatever the task started: end the task instance (harmless when
