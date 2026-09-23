@@ -81,9 +81,10 @@ path rule mean different things by the same character.
 
 `globToRegex` in `packages/tacho/src/host/bundle.ts` matches the path rules in
 Tacho's policy bundle. Tacho takes no `@oxagen/*` runtime dependency, so it
-cannot import this package. Its rules differ at `**/`: it consumes the
-separator and emits `.*`, so under Tacho `**/.env` also matches `foo.env`.
-Here it emits `(?:.*/)?`, and `**/.env` does not.
+cannot import this package, so it writes out the same rules, `**/` as
+`(?:.*/)?` included. Until 2026-09-23 it emitted `.*` there, so under Tacho
+`**/.env` also matched `foo.env`. If you change a rule here, change it there
+and add the row to both test tables.
 
 ## God files
 
