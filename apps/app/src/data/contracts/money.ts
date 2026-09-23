@@ -102,6 +102,19 @@ export function ratioOfMicros(part: Money, whole: Money): number | null {
 }
 
 /**
+ * `value` split evenly over a whole `count` (a spend figure per run, per
+ * call), exact in BigInt and truncated toward zero. A count below one names
+ * no share, so the answer is null and the caller shows the figure as missing.
+ */
+export function divMicros(value: Money, count: number): Money | null {
+  if (!Number.isSafeInteger(count) || count < 1) return null;
+  return {
+    micros: (toBigInt(value.micros) / BigInt(count)).toString(),
+    currency: value.currency,
+  };
+}
+
+/**
  * The part of `value` a `share` between 0 and 1 names: the Run page's wasted
  * spend is its cost times the share the rollup did not count as productive.
  * The share is rounded to a millionth and the micros are divided by BigInt, so

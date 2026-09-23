@@ -68,12 +68,26 @@
       }
     },
     "detail": {
-      "header": "Agent identity",
+      "header": {
+        "label": "Agent",
+        "eyebrow": "Agent",
+        "tierNotRecorded": "tier not recorded",
+        "fromRun": "Recorded on run {run}",
+        "replay": "replay {grade}",
+        "replayNotRecorded": "replay not recorded",
+        "operator": "operator {name}",
+        "operatorNotRecorded": "operator not recorded",
+        "avatar": {
+          "open": "Edit avatar",
+          "title": "Edit avatar",
+          "body": "Oxagen would store an icon, up to three letters, or a photo as this agent’s avatar. No store holds an agent avatar yet, so the card shows the first two letters of its slug."
+        }
+      },
       "tabs": {
         "label": "Agent sections",
         "identity": "Identity",
         "toolbelt": "Toolbelt",
-        "definition": "Definition",
+        "definition": "Definition in git",
         "overview": "Overview",
         "steering": "Steering",
         "runtime": "Runtime",
@@ -81,35 +95,96 @@
         "activity": "Activity"
       },
       "identity": {
-        "title": "Identity",
-        "lead": "In Postgres, revocable in one second.",
-        "agentKey": "Agent key",
-        "principal": "Principal",
-        "harness": "Harness",
-        "operator": "Operator",
-        "status": "Status",
-        "registered": "Registered",
-        "firstFrame": "First frame",
-        "noFrame": "no frame yet",
-        "costCenter": "Cost center",
-        "inherited": "Inherited from the workspace"
+        "facts": {
+          "title": "Identity",
+          "lead": "In Postgres, and revocable at the next call.",
+          "agentKey": "Agent key",
+          "principal": "Principal",
+          "principalSub": "minted at registration and never reused. A retired agent’s runs keep their identity.",
+          "kind": "Kind",
+          "kindValue": "agent · workspace {workspace} required",
+          "harness": "Harness",
+          "modelTier": "Model tier",
+          "modelTierSub": "as the definition file names it",
+          "operator": "Operator",
+          "operatorSub": "accountable for every run · IAM field initiating_principal",
+          "lifecycle": "Lifecycle state",
+          "lifecycleSub": "registered → enrolled → active → retired. Deregistering retires the principal and never deletes it, so old runs keep their identity.",
+          "firstFrame": "First frame",
+          "noFrame": "no frame yet",
+          "costCenter": "Cost center",
+          "inherited": "Inherited from the workspace"
+        },
+        "credentials": {
+          "title": "Credentials",
+          "lead": "The single property most of the threat model rests on.",
+          "none": "none",
+          "apiKey": "API key",
+          "oauthToken": "OAuth token",
+          "cloudRole": "Cloud role",
+          "githubToken": "GitHub token",
+          "runToken": "Run token",
+          "runTokenValue": "one, and it reaches Oxagen only",
+          "body": "It holds one run token, and that token is good for talking to Oxagen and nothing else. Every secret a call needs is minted by the broker at dispatch, scoped to that one call, and never transmitted to the agent. A leaked run token cannot reach a provider.",
+          "connections": "See the connections that mint them"
+        },
+        "runCredential": {
+          "title": "Run credential",
+          "lead": "Long-lived, purpose-locked, hashed at rest, shown to the operator once.",
+          "empty": "The agent holds no long-lived credential.",
+          "key": "Key",
+          "keySub": "shown once at issue; stored as a hash",
+          "state": {
+            "live": "active",
+            "expired": "expired",
+            "revoked": "revoked"
+          },
+          "purposeLock": "Purpose lock",
+          "issued": "Issued",
+          "issuedTo": "to {name}",
+          "lastUsed": "Last used",
+          "never": "never",
+          "expires": "Expires",
+          "noExpiry": "does not expire",
+          "runTokens": "Run tokens",
+          "runTokensSub": "Revoking the key or suspending the agent kills every run token at the next call. This is what makes a halt stick.",
+          "deviceKey": "Host device key",
+          "deviceKeySub": "signs checkpoints from {host}",
+          "notEnrolled": "not enrolled",
+          "change": {
+            "open": "Change identity",
+            "title": "Change identity",
+            "body": "Oxagen would move this agent to act on behalf of another person, with the new parent’s approval, and recompute its delegation ceiling at the next call. No contract changes an agent’s operator yet, so nothing changes."
+          },
+          "revoke": {
+            "open": "Revoke credential",
+            "title": "Revoke credential",
+            "body": "Oxagen would revoke this key alone and kill every run token at the next call. No contract revokes one agent credential yet. Rotate credential replaces the key, and Suspend stops the agent."
+          }
+        },
+        "trust": {
+          "title": "Trust relationships",
+          "lead": "Who this principal answers to, and what will speak for it.",
+          "human": "Accountable human",
+          "humanSub": "every run of this agent carries their name as initiating_principal",
+          "workspace": "Workspace",
+          "workspaceSub": "the principal is scoped to it and cannot be used in another",
+          "runtime": "Runtime",
+          "notEnrolled": "not enrolled",
+          "runtimeSub": "its device key signs this agent’s checkpoints",
+          "runtimeNoneSub": "nothing signs its checkpoints yet",
+          "delegation": "Delegation",
+          "delegationValue": "subagents narrow, never widen",
+          "delegationSub": "a subagent’s effective permission is this agent’s grants ∩ the invoking human’s grants",
+          "replay": "Replay",
+          "replaySub": "what a reader can do with this agent’s frames after the fact, as its newest run recorded",
+          "tamper": "Tamper incidents",
+          "tamperValue": "{count} · {kind}",
+          "readThem": "Read them",
+          "permissions": "Open its permissions"
+        }
       },
       "roles": {
-        "title": "Roles",
-        "lead": "Effective permission is the agent's grants intersected with the invoking person's.",
-        "empty": "No role is assigned: the agent reaches nothing but its own run channel.",
-        "columns": {
-          "role": "Role",
-          "scope": "Scope",
-          "assigned": "Assigned",
-          "expires": "Expires",
-          "actions": "Actions"
-        },
-        "scope": {
-          "org": "organization",
-          "workspace": "workspace"
-        },
-        "standing": "standing",
         "assign": {
           "open": "Assign a role",
           "title": "Assign a role",
@@ -131,72 +206,107 @@
           "pending": "Revoking"
         }
       },
-      "credentials": {
-        "title": "Run credentials",
-        "lead": "Long-lived, purpose-locked and hashed at rest; the secret was shown once, at issue.",
-        "empty": "The agent holds no long-lived credential.",
-        "columns": {
-          "key": "Key",
-          "issued": "Issued",
-          "lastUsed": "Last used",
-          "expires": "Expires",
-          "state": "State"
-        },
-        "never": "never",
-        "noExpiry": "does not expire",
-        "active": "active",
-        "expired": "expired",
-        "revoked": "revoked"
-      },
       "toolbelt": {
         "title": "Toolbelt",
         "computation": {
-          "title": "How this belt was computed",
-          "computedAt": "Computed",
-          "ceiling": "Delegation ceiling",
+          "title": "Belt computation",
+          "lead": "At run start, recomputed on any deny-generation bump.",
+          "denyGen": "deny gen org {org} · workspace {workspace}",
+          "wire": "How the belt is computed",
+          "grants": "grants",
+          "grantsValue": "{count} role grants",
+          "ceiling": "delegation ceiling",
           "ceilingValue": {
             "caller": "the agent's grants intersected with yours",
             "sentinel": "no person resolved, so the unprivileged ceiling"
           },
-          "roleGrants": "Role grants",
-          "denyGeneration": "Deny generation",
-          "denyGenerationValue": "organization {org}, workspace {workspace}",
-          "killSwitches": "Kill switches in scope"
+          "policy": "policy bundle",
+          "switches": "kill switches",
+          "switchesValue": "{count} in scope",
+          "belt": "belt",
+          "beltValue": "{count} tools",
+          "body": "This agent’s model is shown {count} tools. The {off} listed under Off the belt are not, and the model is never shown them.",
+          "computedAt": "Computed"
         },
-        "presentation": {
-          "title": "What the model receives",
-          "mode": {
-            "full": "Full belt",
-            "searchable": "Searchable belt"
+        "model": {
+          "title": "Model view",
+          "over": "The belt is {count} tools, over this workspace’s full-belt limit of {limit}, so it is presented as a {mode} belt.",
+          "under": "The belt is {count} tools, under this workspace’s full-belt limit of {limit}, so it is presented as a {mode} belt.",
+          "toggle": "Belt presentation",
+          "searchable": "Searchable belt",
+          "full": "Full belt",
+          "searchableLead": "Searchable belt.",
+          "searchableBody": "The request carries the search and load meta-tools, and the model finds a tool before it calls it. This is a preview and changes nothing about how the agent runs.",
+          "fullLead": "Full belt.",
+          "fullBody": "Every definition is in the request, and there are no meta-tools to call. This is a preview and changes nothing about how the agent runs.",
+          "block": {
+            "searchable": "the meta-tools of the next model request",
+            "full": "{count} definitions, each named with its schema digest",
+            "noSchema": "no schema recorded"
           },
-          "sent": {
-            "definitions": "Every tool definition is in the request.",
-            "meta_tools": "The request carries the search and load meta-tools; the model finds a tool before it calls it."
-          },
-          "limit": "A belt of up to {limit} tools is sent in full."
+          "trailer": "The design puts a machine-readable trailer on every definition: the risk grade, whether the call is held, the ceiling, and the schema digest. The belt does not record the description or the trailer yet, so the block shows the names and digests it does record."
         },
-        "tools": {
+        "search": {
+          "title": "Belt search",
+          "lead": "This matches the tool names on the belt the model is shown; the search_tools index itself is not read here.",
+          "label": "Search this agent’s belt",
+          "placeholder": "release notes",
+          "run": "Run",
+          "try": "Try:",
+          "noCategory": "no category recorded",
+          "matched": "{hits} of {total} belt members matched. The model sees names and one-line descriptions, and calls load_tools to see a schema.",
+          "zero": "Zero results.",
+          "nothing": "Nothing on this agent’s belt matches that.",
+          "outside": "{tool} exists in the registry, but it is not on this agent’s belt:",
+          "never": "A search never returns a tool outside the belt. What the model cannot call, it cannot find, and so cannot be prompt-injected into calling."
+        },
+        "rules": {
           "title": "Per-tool decision rules",
+          "lead": "What the policy engine answers for each member of this belt, before the call is made.",
+          "layout": "Layout",
+          "byCategory": "By category",
+          "flat": "Flat",
+          "shown": "{shown} of {total} shown",
           "empty": "The belt is empty: the model is shown no tool.",
+          "chips": "Categories",
+          "all": "All {count}",
+          "high": "{count} high",
+          "approvalCount": "{count} need approval",
+          "groupCount": "{count, plural, one {# tool} other {# tools}}",
           "columns": {
             "tool": "Tool",
             "category": "Category",
-            "risk": "Risk",
             "decision": "Decision",
-            "rule": "Rule",
-            "access": "Access"
-          },
-          "risk": {
-            "low": "low",
-            "medium": "medium",
-            "high": "high"
+            "hazard": "Hazard",
+            "egress": "Egress",
+            "financial": "Financial",
+            "digest": "Schema digest"
           },
           "decision": {
-            "allow": "allow",
-            "require_approval": "requires approval"
+            "allow": "allowed",
+            "require_approval": "needs approval"
           },
-          "readOnly": "reads only",
-          "writes": "writes",
+          "hazard": "{risk} · {access}",
+          "rule": "Rule",
+          "categories": {
+            "open": "What the categories mean",
+            "title": "Tool categories",
+            "body": "A category is a registry attribute the tool version was published with. It says what a tool acts on, and a rule may reference it.",
+            "none": "no category",
+            "axes": "Only the risk grade, the side effect, the financial class and the egress carry a decision by themselves. This belt records the risk grade and whether the tool writes."
+          }
+        },
+        "off": {
+          "title": "Off the belt",
+          "lead": "The tools the registry holds that this belt leaves out, and the rule that left each one out.",
+          "badge": "not visible to the model",
+          "empty": "Every tool in the registry is on the belt.",
+          "columns": {
+            "tool": "Tool",
+            "reason": "Reason"
+          }
+        },
+        "tools": {
           "schema": {
             "title": "Input schema",
             "none": "No input schema is recorded for this tool.",
@@ -211,46 +321,11 @@
             "copyFailed": "Copy it by hand: this browser refused the clipboard.",
             "truncated": "This schema is larger than the belt carries inline. The digest identifies it; read the full schema from the tool registry."
           }
-        },
-        "cannotSee": {
-          "title": "What this agent cannot see",
-          "empty": "Every tool in the registry is on the belt.",
-          "columns": {
-            "tool": "Tool",
-            "rule": "Why it is not on the belt"
-          }
         }
       },
       "enrollment": {
-        "title": "Hosts",
-        "lead": "The hosts enrolled under this agent's key, and what each one's daemon last reported.",
-        "columns": {
-          "host": "Host",
-          "status": "Status",
-          "mode": "Mode",
-          "collector": "Collector",
-          "hooks": "Hooks",
-          "bundle": "Policy bundle",
-          "deviceKey": "Device key",
-          "lastSeen": "Last seen",
-          "actions": "Actions"
-        },
-        "hooks": {
-          "ok": "in place",
-          "missing": "removed",
-          "unreported": "not reported"
-        },
-        "bundleVersion": "version {version}",
-        "never": "never",
-        "revoked": "revoked",
-        "expired": "expired",
-        "empty": {
-          "title": "No host is enrolled under this agent",
-          "body": "Enroll the host it runs on, from the repository it works in:",
-          "command": "oxagen agent enroll"
-        },
         "enroll": {
-          "open": "Enroll a host",
+          "open": "Show the CLI path",
           "title": "Enroll a host under {name}",
           "body": "Mint a single-use token, then run the command below on the machine. The token is shown once and is consumed the first time it is presented.",
           "confirm": "Mint a token",
@@ -265,41 +340,48 @@
           "copyFailed": "Copying is blocked in this browser. Select the text and copy it."
         },
         "revoke": {
-          "open": "Revoke",
-          "label": "Revoke {hostname}",
-          "title": "Revoke {hostname}",
+          "open": "Unenroll",
+          "label": "Unenroll {hostname}",
+          "title": "Unenroll {hostname}",
           "body": "The host's key is retired and every session on it is denied at its next prompt or tool boundary. Enrolling the machine again mints a new key. This cannot be undone.",
           "reason": "Reason",
           "reasonHint": "Recorded on the host row and on the revoke command. Optional.",
-          "confirm": "Revoke",
-          "pending": "Revoking"
+          "confirm": "Unenroll",
+          "pending": "Unenrolling"
         }
       },
       "incidents": {
         "title": "Tamper incidents",
-        "empty": "No incident is recorded on this agent's hosts.",
-        "columns": {
-          "kind": "Kind",
-          "severity": "Severity",
-          "detected": "Detected",
-          "session": "Session",
-          "state": "State"
-        },
+        "tamper": "tamper",
         "severity": {
           "notice": "notice",
           "warning": "warning",
           "tamper": "tamper"
         },
         "detectedBy": {
-          "collector": "by the collector",
-          "control_plane": "by the control plane",
-          "human": "by a person"
+          "collector": "detected by the collector",
+          "control_plane": "detected by the control plane",
+          "human": "detected by a person"
         },
         "open": "open",
         "resolved": "resolved",
+        "happened": "What happened",
+        "stopped": "What it stopped",
+        "owner": "Owner",
+        "closed": "Closed",
+        "incident": "Incident",
+        "audit": "Open on Audit",
         "pager": "Incident pages",
         "first": "Newest incidents",
-        "next": "Older incidents"
+        "next": "Older incidents",
+        "empty": {
+          "title": "No tamper incident recorded",
+          "lead": "list_incidents holds none for this agent.",
+          "badge": "clean",
+          "body": "Detectors that would raise one: {kinds}. Each is a security event with who, why, and what it stopped.",
+          "register": "Open the incident register"
+        },
+        "note": "A tamper incident never raises the tier of the frames it touched. The window it covers stays labeled as what was actually observed, which is why the count here and the count on the Audit page are the same number read from the same record."
       },
       "definition": {
         "openEditor": "Open in the source editor",
@@ -310,7 +392,10 @@
           "against": "against {branch} at {commit}. Nothing is written until you commit.",
           "againstSeed": "against a file that has not been committed. Nothing is written until you commit.",
           "discard": "Discard",
-          "save": "Save changes"
+          "save": "Save changes",
+          "onBranch": "On branch {branch}",
+          "pending": "Last committed at {commit}. The merge of its pull request is not recorded here, so the running definition is the default branch’s until it merges.",
+          "pullRequest": "Open the pull request"
         },
         "identity": {
           "title": "Identity",
@@ -369,7 +454,9 @@
           "draft": "draft",
           "digest": "definition_digest",
           "pullRequest": "Pull request",
-          "committed": "Committed"
+          "committed": "Committed",
+          "repository": "Repository",
+          "repositoryUnknown": "not recorded"
         },
         "changing": {
           "title": "Changing this agent",
@@ -393,8 +480,8 @@
         }
       },
       "budgets": {
-        "title": "Budgets",
-        "lead": "The spend ceilings this agent runs under. They are set on Spend and enforced across every agent in their scope.",
+        "title": "Ceilings above this agent",
+        "lead": "The organization and workspace spend ceilings, set on Spend and enforced across every agent in their scope.",
         "columns": {
           "scope": "Scope",
           "period": "Period",
@@ -435,20 +522,397 @@
         "pending": "Saving"
       },
       "overview": {
-        "title": "Composition",
-        "lead": "The identity, authority, hosts, and definition recorded for this agent.",
-        "principal": "Principal",
-        "operator": "Operator",
-        "hosts": "Recorded hosts",
-        "roles": "Assigned roles",
-        "definition": "Definition file",
-        "unavailable": "Not recorded",
-        "composition": "Agent composition"
+        "basisNotRecorded": "basis not recorded",
+        "tokens": {
+          "title": "30-day token use",
+          "none": "The 30-day rollup holds no row for this agent.",
+          "badge": "{tokens} tok",
+          "costNotRecorded": "cost not recorded",
+          "classes": {
+            "conversation": "Conversation",
+            "toolResults": "Tool results",
+            "contextFrames": "Context frames",
+            "toolDefinitions": "Tool definitions",
+            "steering": "Steering",
+            "system": "System",
+            "output": "Output",
+            "reasoning": "Reasoning"
+          },
+          "inputSplit": "Input is recorded as one figure, {input} tokens, and not split by class yet. The six input classes wait on that split.",
+          "cacheRate": "Cache hit rate",
+          "cacheRateValue": "{rate} · {read} of {input} input tokens served from cache",
+          "perRun": "Per run",
+          "tok": "{tokens} tok",
+          "perCall": "Per model call",
+          "perCallValue": "{tokens} tok in the mean request",
+          "basis": "Basis",
+          "basisValue": {
+            "gateway_observed": "observed by the gateway proxy from the bytes that passed through it",
+            "client_attested": "self-reported by the harness",
+            "mixed": "partly observed by the gateway and partly reported by the harness",
+            "estimated": "estimated from the price book",
+            "none": "not recorded"
+          }
+        },
+        "coaching": {
+          "title": "Coaching",
+          "badge": "0 from the token record",
+          "notBacked": "Coaching is read off the token classes, and the record does not split input by class yet. Nothing is suggested until it does.",
+          "all": "All coaching for this workspace →"
+        },
+        "composition": {
+          "title": "Composition",
+          "lead": "One principal, and a reference to every other object it uses.",
+          "health": {
+            "tamper": "tamper",
+            "notEnrolled": "not enrolled",
+            "observe": "observe",
+            "healthy": "healthy",
+            "noFrame": "no frame yet"
+          },
+          "open": "Open",
+          "identity": "Identity",
+          "identitySub": "minted at registration and never reused",
+          "steering": "Steering",
+          "steeringItems": "{items} items · {tokens} tok",
+          "steeringSub": "assembled from the workspace library on this agent’s newest run",
+          "steeringNone": "no steering manifest is recorded",
+          "steeringNoneSub": "steering is a workspace library; this agent holds a reference, never a copy",
+          "toolbelt": "Toolbelt",
+          "toolbeltNotBacked": "Toolbelts are not stored as objects yet, so no assignment can be named here.",
+          "toolbeltSub": "{count, plural, one {# tool} other {# tools}} in all, sent as a {mode} belt",
+          "toolbeltUnread": "the belt could not be read",
+          "runtime": "Runtime",
+          "runtimeNone": "no host is enrolled",
+          "runtimeSub": "{platform} · bundle mode {mode}",
+          "owner": "Owner",
+          "ownerSub": "accountable for every run this agent makes",
+          "permissions": "Permissions",
+          "roles": "{count, plural, one {# role} other {# roles}}",
+          "mandates": "{count, plural, =0 {no mandate} one {# mandate} other {# mandates}}",
+          "mandatesUnread": "mandates not readable",
+          "permissionsSub": "a toolbelt says what it can see; its roles and the policy say what it may call"
+        },
+        "last30": {
+          "title": "Last 30 days",
+          "lead": "This agent’s own rollup, the same one the Agents table reads.",
+          "open": "Open activity",
+          "runs": "Runs",
+          "runsNone": "no run on the newest page of runs",
+          "lastAt": "last at",
+          "spend": "Spend",
+          "tokens": "Tokens",
+          "cacheRate": "{rate} cache read over input",
+          "cacheNotRecorded": "cache read not recorded",
+          "tamper": "Tamper incidents",
+          "health": {
+            "tamper": "{count, plural, one {# open incident} other {# open incidents}}",
+            "notEnrolled": "no hook is installed, so its runs are recorded only",
+            "observe": "enrolled, and nothing is delivered or refused yet",
+            "healthy": "frames arriving and no open incident",
+            "noFrame": "no frame has arrived yet"
+          },
+          "note": "Every tool definition on the belt is paid for as input on every call, whether the tool is used or not, which is why the belt width and the token bill are read together."
+        },
+        "definition": {
+          "title": "Definition in git",
+          "lead": "Identity is in Postgres; the definition is a file, and the file is the source of truth.",
+          "open": "Open the file",
+          "path": "Path",
+          "repo": "Repo",
+          "repoAt": "{repo} @ {branch}",
+          "uncommitted": "no definition is committed yet",
+          "commit": "Commit",
+          "generated": "Generated beside it",
+          "generatedSub": "Written when the agent was proposed. A commit from this page writes the definition file alone.",
+          "generatedNone": "none: this harness reads no generated subagent file"
+        }
       },
       "steering": {
-        "title": "Steering",
-        "lead": "Browse the existing steering library and assignments. An assembled agent preview is not available on this page.",
-        "open": "Open Steering"
+        "library": "Open the library",
+        "empty": {
+          "title": "No steering is assembled for this agent",
+          "body": "No run of this agent in the last seven days recorded a steering manifest, so there is nothing assembled to show. Writing a record on Steering is what changes that."
+        },
+        "observe": {
+          "lead": "Nothing below reaches this agent today.",
+          "body": "Its newest run is on the observe tier: no hook is installed, so Oxagen has no injection point. This is what the assembler would deliver on the harness tier."
+        },
+        "prefix": {
+          "label": "Stable prefix",
+          "sub": "SessionStart additional context against the 16 KiB cap",
+          "notBacked": "The manifest does not record the stable prefix in bytes yet."
+        },
+        "volatile": {
+          "label": "Volatile selection",
+          "sub": "Token budget of the newest run",
+          "value": "{spent} of {budget} tok",
+          "note": "{included} items fit. {cut} items cut in all."
+        },
+        "reaches": {
+          "title": "What reaches this agent",
+          "lead": "{items} items compiled from the workspace library at {tokens} tok.",
+          "assigned": "Change what is assigned",
+          "compiler": {
+            "open": "Open in the compiler",
+            "title": "Open in the compiler",
+            "body": "Oxagen would open the Steering compiler seeded with this agent. The compiler is not built yet, so nothing opens."
+          },
+          "columns": {
+            "item": "Item",
+            "kind": "Kind",
+            "force": "Force",
+            "scope": "Scope",
+            "body": "Body",
+            "source": "Source",
+            "lands": "Where it lands",
+            "cost": "Token cost"
+          },
+          "notBacked": "The manifest records how many items reached this agent and not which ones. The item list waits on a per-agent assembly the assembler does not store yet.",
+          "note": "A gate notice is never dropped for budget. Everything else competes: must and should for the 16 KiB SessionStart cap, then may and info ranked against the prompt."
+        },
+        "cut": {
+          "title": "Cut for this agent",
+          "badge": "{count} cut",
+          "columns": {
+            "item": "Item",
+            "kind": "Kind",
+            "force": "Force",
+            "cost": "Token cost",
+            "because": "Cut because",
+            "why": "Why"
+          },
+          "notBacked": "The manifest counts the cut items, {budget} of them for budget, and does not name them yet."
+        }
+      },
+      "runtime": {
+        "empty": {
+          "title": "No runtime is enrolled for this agent",
+          "body": "Until a host enrolls, this agent has an identity and a toolbelt but no hook is installed. Its runs would be graded observe, and no report could say more.",
+          "wrap": "Wrap it"
+        },
+        "host": {
+          "title": "Host",
+          "lead": "The enrollment tacho records for this host, the same record the host reports into.",
+          "open": {
+            "label": "Open the runtime",
+            "title": "Open the runtime",
+            "body": "Oxagen would open this host on the Runtimes page. That page is not built yet, so nothing opens."
+          },
+          "runtime": "Runtime",
+          "runtimeSub": "{platform} · bundle mode {mode}",
+          "harness": "Harness",
+          "harnessSub": "the runtime is shared; every agent on it is seen through the same hooks",
+          "deviceKey": "Device key",
+          "deviceKeySub": "sha256 of the host’s Ed25519 key, which signs its checkpoints",
+          "collector": "Collector",
+          "lastSeen": "last seen",
+          "neverSeen": "never seen",
+          "hookBinary": "Hook binary",
+          "hooks": "Hooks written",
+          "hooksValue": {
+            "ok": "in place",
+            "missing": "removed",
+            "unreported": "not reported"
+          },
+          "proxy": "Model proxy",
+          "proxyRouted": "loopback proxy on the host",
+          "proxyRoutedSub": "every model call leaves through it; tokens are counted from the bytes that pass",
+          "proxyNot": "not routed",
+          "proxyNotSub": "model traffic goes from the harness to its provider. Routing it is the gateway tier.",
+          "mcp": "Oxagen MCP endpoint",
+          "bundle": "Policy bundle",
+          "bundleValue": "version {version}",
+          "settings": "Settings",
+          "tier": "Tier earned",
+          "tierSub": "Computed per run from what was actually routed, as the newest run recorded it. The UI cannot render a stronger word than the tier allows.",
+          "firstFrame": "First frame",
+          "noFrame": "no frame yet",
+          "checkpoint": "Last checkpoint",
+          "expires": "Enrollment expires",
+          "revoked": "revoked"
+        },
+        "tier": {
+          "title": "What this tier delivers",
+          "lead": "The tier is computed per run from what was actually routed.",
+          "all": {
+            "label": "All runtimes",
+            "title": "All runtimes",
+            "body": "Oxagen would open the Runtimes page with every host in this workspace. That page is not built yet, so nothing opens."
+          },
+          "ladder": "Enforcement tiers, weakest first",
+          "thisAgent": "this agent",
+          "noRun": "No run of this agent is on the newest page of runs, so no tier is recorded for it.",
+          "rungs": {
+            "observe": "Recorded only. No hook is installed and nothing is delivered.",
+            "harness": "Hooks installed. Steering is delivered and the four blocking hook events can refuse: client-attested and fail-open.",
+            "gateway": "Model and MCP traffic routed through the gateway. Metering observed, budgets enforced on routed traffic.",
+            "contained": "The agent runs under an OS sandbox whose only egress is the gateway. The only tier that earns the word enforced."
+          },
+          "rows": {
+            "model": {
+              "label": "Model calls",
+              "observe": "not routed through Oxagen. The harness calls its provider with its own key and reports usage. Spend is client_attested.",
+              "harness": "not routed through Oxagen. The harness calls its provider with its own key and reports usage. Spend is client_attested.",
+              "gateway": "routed through the loopback proxy on the host. Tokens are counted from the bytes that pass through it. Spend is gateway_observed.",
+              "contained": "routed through the loopback proxy on the host. Tokens are counted from the bytes that pass through it. Spend is gateway_observed."
+            },
+            "mcp": {
+              "label": "Tool calls over MCP",
+              "observe": "recorded only",
+              "harness": "the providers registered with Oxagen are routed through Oxagen and decided on the server. Any other MCP server the harness holds is not.",
+              "gateway": "every provider the harness reaches over MCP is reached through the gateway and decided on the server.",
+              "contained": "every provider the harness reaches over MCP is reached through the gateway and decided on the server."
+            },
+            "native": {
+              "label": "Harness-native tools",
+              "observe": "recorded only",
+              "harness": "the four blocking hook events can refuse: client-attested and fail-open",
+              "gateway": "the four blocking hook events can refuse: client-attested and fail-open",
+              "contained": "the four blocking hook events can refuse, and the sandbox refuses a write to the settings file, the hook entries or the hook binary"
+            },
+            "budgets": {
+              "label": "Budgets",
+              "observe": "a recorded number and a notice in steering, never a stop",
+              "harness": "a recorded number and a notice in steering, never a stop",
+              "gateway": "enforced before the call: a run budget by the proxy",
+              "contained": "enforced before the call: a run budget by the proxy"
+            },
+            "steering": {
+              "label": "Steering",
+              "observe": "not delivered: no hook is installed",
+              "harness": "delivered at SessionStart and UserPromptSubmit, and as files in the checkout",
+              "gateway": "delivered at SessionStart and UserPromptSubmit, and as files in the checkout",
+              "contained": "delivered at SessionStart and UserPromptSubmit, and as files in the checkout"
+            },
+            "credentials": "Credentials held by this agent"
+          },
+          "none": "none",
+          "note": "The tier is computed per run from what was actually routed and rendered verbatim. No report can say a stronger word than the tier allows, and only contained earns the word enforced."
+        },
+        "rollback": {
+          "title": "Rollback",
+          "lead": "Shown beside the installer from the first screen, and never hidden afterwards.",
+          "command": "oxagen agent unenroll",
+          "note": "Run it on the host: it removes the hooks and the service, revokes the enrollment, and deletes the host key. If hooks are stripped by hand instead, the next run records hooks_removed and the tier falls to observe. It is never upgraded after the fact.",
+          "smoke": {
+            "label": "Run a smoke session",
+            "title": "Run a smoke session",
+            "body": "Oxagen would queue one turn on this host, recorded like any other run. No contract starts a smoke session yet, so nothing is queued. Run the agent once on the host instead."
+          }
+        }
+      },
+      "permissions": {
+        "roles": {
+          "title": "Roles",
+          "lead": "Effective permission is its own grants ∩ the invoking human’s grants. Subagents can only narrow.",
+          "wire": "How the effective permission is computed",
+          "operator": "operator",
+          "belt": "{count} tools",
+          "beltUnread": "belt not read",
+          "beltSub": "the belt its model is shown",
+          "none": "Roles",
+          "noneValue": "none held. It can reach nothing but its own run channel.",
+          "scope": "{scope, select, org {organization role} other {workspace role}} since",
+          "expires": "expires",
+          "resourceScope": "Resource scope",
+          "spendCeiling": "Spend ceiling",
+          "perRunSub": "per run, from the definition file",
+          "perDaySub": "per day, kept in the definition file and not enforced",
+          "moveMoney": "Can move money",
+          "no": "no",
+          "noValue": "no mandate, so a financial call is denied before dispatch",
+          "mandates": "{count, plural, one {# mandate} other {# mandates}}",
+          "mandatesValue": "and only inside it",
+          "note": "Assigning a toolbelt grants nothing. It widens what the model is shown; every call on it is still decided against these roles, the policy on the tool, and the mandate ledger."
+        },
+        "budgets": {
+          "title": "Budgets",
+          "lead": "The per-run budget is the definition file’s. Once a wrapped session’s observed spend reaches it, the local model proxy refuses the session’s next model call on the gateway and contained tiers.",
+          "set": "Set budget",
+          "perRun": "Per run",
+          "perRunNone": "no priced run of this agent on the newest page of runs",
+          "highest": "highest run on the newest page",
+          "basis": "basis:",
+          "basisNone": "not recorded",
+          "perDay": "Per day",
+          "perDayNote": "kept in the definition file; nothing enforces it yet",
+          "perDayNone": "No per-day ceiling is recorded for this agent, and nothing would enforce one yet.",
+          "mode": "Mode",
+          "modeValue": "hard: the proxy refuses the next model call once observed spend reaches the per-run budget",
+          "breach": "On a breach",
+          "breachValue": "the session’s next model call is refused and the refusal is recorded as a frame",
+          "ceiling": "Delegation ceiling",
+          "ceilingValue": {
+            "caller": "the agent's grants intersected with yours",
+            "sentinel": "no person resolved, so the unprivileged ceiling"
+          }
+        }
+      },
+      "activity": {
+        "runs": {
+          "title": "Runs",
+          "shown": "{count} shown",
+          "empty": "No run of this agent is on the newest page of runs. It has {count} in the last 30 days, and every one of them is in the audit record.",
+          "emptyNoRollup": "No run of this agent is on the newest page of runs, and the 30-day rollup holds none.",
+          "audit": "Open the audit record",
+          "columns": {
+            "run": "Run",
+            "status": "Status",
+            "tokens": "Tokens",
+            "cost": "Cost",
+            "frames": "Frames",
+            "started": "Started"
+          }
+        },
+        "accounting": {
+          "title": "Token accounting",
+          "lead": "By class, from this agent’s 30-day rollup.",
+          "window": "30 days",
+          "none": "The 30-day rollup holds no row for this agent.",
+          "columns": {
+            "class": "Class",
+            "tokens": "Tokens 30d",
+            "rate": "Rate",
+            "cost": "Cost"
+          },
+          "classes": {
+            "inputUncached": "Input, uncached",
+            "cacheWrite": "Input, cache write",
+            "cacheRead": "Input, cache read",
+            "output": "Output",
+            "reasoning": "Reasoning",
+            "toolDefinitions": "Tool definitions"
+          },
+          "countedAsInput": "counted as input",
+          "note": "Cache hit rate {rate}. The findings job flags a toolbelt wider than the agent uses, because those tokens are paid on every call whether the tool is used or not.",
+          "noteNoCache": "No input token is recorded, so there is no cache hit rate.",
+          "notBacked": "A class’s rate and cost, and the tool-definition share of input, are not recorded per class yet."
+        },
+        "last30": {
+          "title": "Last 30 days",
+          "lead": "Read from the run records, not from the agent row.",
+          "spend": "Open on Spend",
+          "runs": "Runs",
+          "spendLabel": "Spend",
+          "basis": "basis",
+          "basisNone": "not recorded",
+          "productive": "Productive ratio",
+          "productiveSub": "the share of spend on turns that produced a change",
+          "tokens": "Tokens",
+          "tokensValue": "{tokens} · {rate} cached",
+          "findings": "Findings",
+          "noFinding": "No finding is open against this agent.",
+          "atStake": "at stake",
+          "evidence": "Evidence",
+          "fix": "Fix",
+          "kinds": {
+            "cache_writes_never_read": "Cache writes never read",
+            "duplicate_tool_calls": "Duplicate tool calls",
+            "repeated_shell_commands": "Repeated shell commands",
+            "unpaged_results": "Unpaged results"
+          }
+        }
       }
     },
     "actions": {
@@ -527,17 +991,15 @@
     },
     "source": {
       "facts": "Definition file",
-      "loading": "Loading the definition file",
-      "branchAt": "{branch} at {commit}",
+      "branchAt": "{branch} @ {commit}",
       "uncommitted": "no committed definition",
       "truth": "source of truth",
-      "lead": "Every field on the Configuration tab is a view of this file. Saving commits it to a branch and opens a pull request; the default branch is never written.",
-      "back": "Back to the configuration",
+      "lead": "Every field on the agent form is a view of this file. Saving opens the same commit dialog the form uses; nothing is written to Postgres.",
+      "back": "Back to the form",
       "discard": "Discard",
       "save": "Save",
       "modified": "modified",
       "unchanged": "unchanged",
-      "identityLocked": "This registered agent’s slug and filename are fixed.",
       "identityMismatch": "The source slug must match this registered agent. Restore slug = \"{slug}\" before saving.",
       "stat": "+{added} −{removed}",
       "parse": {
@@ -555,12 +1017,18 @@
         }
       },
       "commit": {
-        "title": "Commit {path}",
-        "diff": "{added} lines added and {removed} removed against the file you started from.",
+        "title": "Commit the definition",
+        "cancel": "Cancel",
+        "diffLabel": "The draft against the file it started from",
         "branch": "Branch",
         "branchHint": "Created from the default branch when new; a branch with an open pull request gets this commit on it.",
-        "message": "Message",
-        "messageHint": "The commit and pull request title. Optional.",
+        "newBranch": "+ New branch",
+        "newBranchName": "New branch name",
+        "summary": "Summary",
+        "summaryHint": "The commit and pull request title.",
+        "description": "A description and Redraft wait on commit_agent_definition carrying a pull request body.",
+        "pullRequestBox": "Open a pull request",
+        "pullRequestHint": "commit_agent_definition always opens one, or reuses the branch’s open one.",
         "submit": "Commit and open a pull request",
         "pending": "Committing",
         "done": "Committed {commit} to {branch}.",
@@ -570,10 +1038,20 @@
           "message": "The message is at most 200 characters.",
           "source": "The file is empty or larger than 64 KB."
         }
-      }
+      },
+      "eyebrow": "Agent source",
+      "noRepository": "no repository recorded",
+      "find": {
+        "placeholder": "Find  ⌘F",
+        "label": "Find in file",
+        "of": "{index} of {count}"
+      },
+      "position": "Ln {line}, Col {col}",
+      "spaces": "Spaces: 2",
+      "keys": "⌘S save · Tab indent · ⇧Tab outdent · ⌘/ comment · ⌘F find · ⌘Z undo"
     },
     "mandates": {
-      "title": "Mandates recorded",
+      "title": "Mandates held",
       "noneTitle": "No mandate",
       "lead": "A mandate is bounded, expiring authority for the consequences it names. Nothing in a role, a grant or a toolbelt substitutes for one.",
       "none": "No mandate is recorded for this agent — none granted, and none requested — so it cannot carry a consequence.",
@@ -635,7 +1113,66 @@
       "noneListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate recorded in the workspace. Ask one of them whether this agent holds authority, or read the Tools ledger with that role.",
       "retired": "This agent is retired, so it cannot be given a mandate: its principal is suspended and authority granted now could never be drawn. The mandates recorded for it stay listed.",
       "noneEffectiveUpcoming": "No mandate recorded for this agent is in effect yet, so it cannot carry a consequence. A mandate granted below has not reached the date it starts on; any others are a request awaiting a decision, or history.",
-      "startsOn": "starts {date}"
+      "startsOn": "starts {date}",
+      "cannotMove": "cannot move money",
+      "active": "{count} active",
+      "chain": {
+        "label": "How a financial call from this agent is decided",
+        "call": "Call",
+        "callValue": "a tool call whose version declares a financial class",
+        "financial": "Financial class",
+        "financialValue": "read from the tool version’s declared consequence tags",
+        "lookup": "Mandate lookup",
+        "lookupValue": "none for {agent}",
+        "thisAgent": "this agent",
+        "decision": "Decision",
+        "decisionValue": "· mandate ledger unchanged · no credential minted",
+        "denied": "denied"
+      }
+    },
+    "states": {
+      "loading": "Loading this agent",
+      "agent": {
+        "denied": "You cannot see this agent",
+        "error": "This agent could not be loaded"
+      },
+      "source": {
+        "denied": "You cannot see this agent’s definition",
+        "error": "This file could not be loaded"
+      },
+      "needed": "{permission} on {workspace}",
+      "denied": {
+        "body": "Your roles on {org} do not include {permission}. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it."
+      },
+      "signedInAs": "Signed in as",
+      "signedInValue": "organization {orgRole} · workspace {wsRole} on {workspace}",
+      "neededLabel": "Needed",
+      "decidedBy": "Decided by",
+      "decidedByValue": "the workspace’s IAM policy · deny wins over every allow",
+      "requestAccess": {
+        "open": "Request access",
+        "title": "Request access",
+        "body": "Oxagen would send an organization owner a request for {permission}, and the grant would land in the audit record with both names on it. No contract records an access request yet, so nothing is sent. Ask an organization owner for the role."
+      },
+      "backToFleet": "Back to Fleet",
+      "pending": {
+        "title": "Access requested",
+        "body": "Your request {request} is waiting for an owner’s decision."
+      },
+      "tryAgain": "Try again",
+      "openIncident": {
+        "open": "Open an incident",
+        "title": "Open an incident",
+        "body": "Oxagen would open an incident that carries {code} and the time below. No contract files an incident yet, so nothing is sent. Send the code and the time to your workspace owner."
+      },
+      "error": {
+        "body": "The control plane answered {code}. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
+        "trace": "{code} · read at {at}"
+      },
+      "empty": {
+        "title": "This agent has never run",
+        "body": "It is registered and enrolled, but no frame has arrived. Its belt is computed at run start, so there is nothing yet to show for tools either."
+      }
     }
   }
 }
