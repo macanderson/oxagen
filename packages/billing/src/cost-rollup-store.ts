@@ -531,6 +531,9 @@ export async function upsertRunTotals(
         ? null
         : record.productiveRatio.toFixed(8),
   };
+  // tenancy: the scheduled rollup job writes outside a tenant scope; the row
+  // carries the run's own orgId and workspaceId, and the conflict target is the
+  // run's globally unique public id, so no other organization's row is written.
   await withSystemDb((tx) =>
     tx
       .insert(totals)
