@@ -447,4 +447,4 @@ On 2026-09-23 the Run page spec (`mockups/pages/run.md` in the roadmap repositor
 
 ### Run summary implementation (ADR-153)
 
-`packages/inngest-functions/src/functions/run.summarize.ts` is preserved but no longer registered. Its old `run/summarize` event forwards to `run/enrich`, which uses Stella and the workspace enrichment setting. The manual `summarize_run` capability remains available.
+`packages/inngest-functions/src/functions/run.summarize.ts` is preserved but no longer registered. Nothing sends its `run/summarize` event any more: `summarize_run` sends `run/enrich`, which uses Stella and the workspace enrichment setting. A `run/summarize` event still queued when this shipped is not replayed. The five-minute sweep enriches that run instead. The manual `summarize_run` capability remains available.

@@ -402,14 +402,3 @@ export const [runEnrichmentSweep] = createFunction(
     return { queued: pending.length };
   },
 );
-
-/** Previously queued manual summaries use the same setting and credit gate. */
-export const [runSummarizeForward] = createFunction(
-  { id: "run.summarize", retries: 2 },
-  { event: "run/summarize" },
-  async ({ event, step }) => {
-    const data = eventSchema.parse(event.data);
-    await step.sendEvent("forward-to-stella", { name: RUN_ENRICH_EVENT, data });
-    return { status: "forwarded" };
-  },
-);

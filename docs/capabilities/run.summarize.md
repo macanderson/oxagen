@@ -30,7 +30,7 @@ The generated name and summary of a sealed run (Mission Control mockup 2821-2835
 
 ## The job
 
-`run.summarize` (`@oxagen/inngest-functions`) reads the run's transcript at the `steps` zoom, bounded to the first 60 entries and 4 000 characters of body text each, and asks the fast tier (`OXAGEN_LLM_FAST`, `modelIdOf()` recorded as `summary_model`) for a name of at most 80 characters and a summary of at most 1 200. When none of those steps kept a readable body the job fails without retry and makes no model call: a prompt of step labels alone would produce the receipts-only summary the interface forbids, and `get_run` keeps answering no summary. It writes `name`, `summary`, `summary_generated_at` and `summary_model` together on `agent.agent_runs` or `tacho.sessions`.
+`run.enrich` (`@oxagen/inngest-functions`, ADR-153) handles the `run/enrich` event this action sends. It reads every retained frame body in chronological chunks and asks Stella, through a tool-free governed turn on organization funding, for a name of at most 80 characters and a summary of at most 1 600. A run with no retained text gets no model call. It writes `name`, `summary`, `summary_generated_at` and `summary_model` together on `agent.agent_runs` or `tacho.sessions`, with `summary_input_digest`, `summary_observed_at` and `summary_observed_revision` as its cursor.
 
 ## Errors
 
