@@ -195,13 +195,13 @@ export function GatewayPolicySection({
             aria-describedby={errors.mode ? "gateway-mode-error" : undefined}
             className={inputBase}
             value={values.mode}
-            onChange={(event) =>
+            onChange={(event) => {
               setValues((prev) => ({
                 ...prev,
                 mode:
                   event.target.value === "enforced" ? "enforced" : "observed",
-              }))
-            }
+              }));
+            }}
           >
             <option value="observed">{t("notApplied")}</option>
             <option value="enforced">{t("enforced")}</option>

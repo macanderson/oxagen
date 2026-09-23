@@ -235,12 +235,12 @@ describe("the gateway policy section", () => {
     );
     await user.type(screen.getByLabelText(spend.spend.gateway.modelDeny), "*");
     await user.click(screen.getByRole("button", { name: /save the policy/i }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(setGatewayPolicyAction).toHaveBeenCalledWith(
         at,
         expect.objectContaining({ mode: "enforced", modelDeny: "*" }),
-      ),
-    );
+      );
+    });
   });
 
   it("shows a reader with no deny list only the lines that apply", () => {
