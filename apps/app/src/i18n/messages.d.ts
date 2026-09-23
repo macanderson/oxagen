@@ -722,7 +722,6 @@ type Messages = {
       service: string;
       serviceNote: string;
       agent: string;
-      agentNote: string;
     };
     events: {
       title: string;
@@ -760,6 +759,12 @@ type Messages = {
       pager: string;
       newer: string;
       older: string;
+      actorKinds: {
+        human: string;
+        agent: string;
+        service: string;
+      };
+      actorKindNotRecorded: string;
     };
     outcomes: {
       allow: string;
@@ -779,15 +784,21 @@ type Messages = {
       title: string;
       subtitle: string;
       scope: string;
-      scopeAll: string;
+      scopeOrg: string;
       from: string;
       to: string;
       format: string;
       formatBundle: string;
       formatCsv: string;
       formatJson: string;
+      fieldsNotRecorded: string;
+      callout: string;
       notRecorded: string;
       build: string;
+      building: string;
+      denied: string;
+      pending: string;
+      failed: string;
     };
     incidents: {
       open: string;
@@ -815,12 +826,44 @@ type Messages = {
     receipts: {
       title: string;
       caption: string;
+      search: string;
+      searchPlaceholder: string;
+      submit: string;
+      examples: string;
+      chips: {
+        stripe: string;
+        harness: string;
+        observe: string;
+        deny: string;
+        agentKey: string;
+        effect: string;
+      };
+      clear: string;
       notRecorded: string;
     };
     exports: {
-      title: string;
-      caption: string;
+      callout: string;
       notRecorded: string;
+      card: string;
+      states: {
+        queued: string;
+        processing: string;
+        ready: string;
+        failed: string;
+      };
+      verify: string;
+      download: string;
+      verifyNotRecorded: string;
+      exportId: string;
+      range: string;
+      contents: string;
+      contentsOrg: string;
+      size: string;
+      created: string;
+      completed: string;
+      signature: string;
+      keyIds: string;
+      unread: string;
       verifier: string;
       verifierNotRecorded: string;
       outbound: string;
@@ -835,6 +878,19 @@ type Messages = {
     rotate: {
       title: string;
       subtitle: string;
+      facts: {
+        generation: string;
+        effect: string;
+        effectValue: string;
+        old: string;
+        oldValue: string;
+        rewrap: string;
+        rewrapValue: string;
+        receipts: string;
+        receiptsValue: string;
+        recorded: string;
+        recordedValue: string;
+      };
       notRecorded: string;
       submit: string;
     };
@@ -847,14 +903,22 @@ type Messages = {
       redaction: string;
       redactionCaption: string;
       redactionNote: string;
+      store: string;
+      body: string;
+      bodyValue: string;
+      hot: string;
+      replay: string;
+      optDown: string;
+      cold: string;
+      coldValue: string;
+      coldRate: string;
     };
     policy: {
       title: string;
       subtitle: string;
       body: string;
-      bodyDefault: string;
       hot: string;
-      hotDefault: string;
+      callout: string;
       notRecorded: string;
       submit: string;
     };
@@ -878,6 +942,7 @@ type Messages = {
       signedIn: string;
       needed: string;
       decidedBy: string;
+      signedInAs: string;
     };
     request: {
       title: string;
@@ -890,14 +955,9 @@ type Messages = {
       title: string;
       body: string;
     };
-    roles: {
-      owner: string;
-      admin: string;
-      member: string;
-      billing: string;
-      compliance: string;
-      viewer: string;
-    };
+    retentionYears: string;
+    retentionDays: string;
+    cancel: string;
   };
   auth: {
     shell: {

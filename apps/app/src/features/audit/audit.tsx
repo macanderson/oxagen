@@ -11,19 +11,34 @@
 // table at the Rows size, narrowed by the Result filter. Actor names come from
 // the members read the Organization page already makes.
 //
+// Retention reads the organization's evidence retention (get_evidence_retention)
+// for Body retention and the policy dialog; Exports reads back the export
+// Build bundle queued, by the id its URL carries (get_export_status). A denied
+// read names the signed-in person from the session, as the design's "Signed
+// in as" does.
+//
+// Incidents are not read. list_incidents answers one workspace, and this page
+// has an organization viewer: reading every workspace would need a workspace
+// viewer per workspace, which the app mints only for a workspace the person
+// belongs to, so the count would be partial while reading as the
+// organization's (#3874 records this and asks for an organization read).
+//
 // Every read here is a noBillingGate kernel read through the audit and org
 // ports, gated in its handler (org Owner or Admin, INV-29).
 import "server-only";
 import { useTranslations } from "next-intl";
 import {
   AUDIT_TILE_LIMIT,
+  type AuditBundle,
   type AuditPage,
   type AuditQuery,
+  type EvidenceRetention,
 } from "@/data/contracts/audit";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
+import { getAuthUser } from "@/server/session";
 import type { OrgCtx } from "@/server/viewer";
-import { routes, type SafePath } from "@/shared/safe-path";
+import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 import { panel, statStrip, statTile } from "@/ui/control-styles";
 import { RouteTabs } from "@/ui/route-tabs";
 import { useFormatter } from "@/ui/formatter";
@@ -33,7 +48,12 @@ import {
   EventsPanel,
   EventTiles,
 } from "./events";
-import { auditWindow, hasAuditFilters, parseAuditQuery } from "./filters";
+import {
+  auditQueryParams,
+  auditWindow,
+  hasAuditFilters,
+  parseAuditQuery,
+} from "./filters";
 import {
   ExportsTab,
   IncidentsTab,
@@ -49,14 +69,28 @@ type Params = Readonly<Record<string, string | string[] | undefined>>;
 type Failure = Exclude<Read<unknown>, { ok: true }>;
 
 type Loaded =
-  | { kind: "failed"; read: Failure; fleet: SafePath | null }
+  | {
+      kind: "failed";
+      read: Failure;
+      fleet: SafePath | null;
+      /** The signed-in person, named in the denied state. */
+      viewer: string;
+    }
   | { kind: "empty" }
   | {
       kind: "loaded";
       window: AuditWindowRows;
       page: AuditPage | null;
       actors: readonly AuditActor[];
+      /** Read on Retention only. */
+      retention: Read<EvidenceRetention> | null;
+      /** The export the Exports URL names, and its read. */
+      bundle: { id: string; read: Read<AuditBundle> } | null;
     };
+
+/** An export id is a uuid; anything else in `?export=` is not read. */
+const EXPORT_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Every read the page makes, and the instant they were made at. The clock is
@@ -68,6 +102,7 @@ async function readAudit(
   source: DataSource,
   tab: AuditTab,
   query: AuditQuery,
+  exportId: string | null,
 ): Promise<{ loaded: Loaded; now: number }> {
   const now = Date.now();
   const { offset, rows, outcome, ...filters } = query;
@@ -77,12 +112,20 @@ async function readAudit(
     { ...filters, outcome: null },
     now,
   );
-  const [windowRead, pageRead, members] = await Promise.all([
-    source.audit.events(ctx, { ...range, offset: 0, limit: AUDIT_TILE_LIMIT }),
+  const [windowRead, pageRead, members, retention, bundle] = await Promise.all([
+    source.audit.events(ctx, {
+      ...range,
+      offset: 0,
+      limit: AUDIT_TILE_LIMIT,
+    }),
     tab === "events"
       ? source.audit.events(ctx, { ...range, outcome, offset, limit: rows })
       : Promise.resolve(null),
     source.org.members(ctx),
+    tab === "retention" ? source.audit.retention(ctx) : Promise.resolve(null),
+    tab === "exports" && exportId !== null
+      ? source.audit.bundle(ctx, exportId)
+      : Promise.resolve(null),
   ]);
   // The window read decides the state on every tab; on Events the page read
   // can fail on its own, and then it does.
@@ -91,6 +134,7 @@ async function readAudit(
       kind: "failed" as const,
       read,
       fleet: read.reason === "denied" ? await fleetOf(ctx, source) : null,
+      viewer: read.reason === "denied" ? await viewerName() : "",
     },
     now,
   });
@@ -117,9 +161,22 @@ async function readAudit(
             name: member.name ?? member.email,
           }))
         : [],
+      retention,
+      bundle:
+        exportId === null || bundle === null
+          ? null
+          : { id: exportId, read: bundle },
     },
     now,
   };
+}
+
+/** The signed-in person as the denied state names them: their name, or their email when they set none. */
+async function viewerName(): Promise<string> {
+  const user = await getAuthUser();
+  // requireViewer admitted this request, so its session is present.
+  if (user === null) throw new Error("audit_without_session");
+  return user.name || user.email;
 }
 
 /** Whether the organization's record holds no event at all, in any window. */
@@ -164,9 +221,21 @@ export async function Audit({
   searchParams: Params;
 }) {
   const query = parseAuditQuery(searchParams);
-  const { loaded, now } = await readAudit(ctx, source, tab, query);
+  const raw = firstParam(searchParams.export);
+  const exportId =
+    tab === "exports" && raw !== undefined && EXPORT_ID.test(raw)
+      ? raw.toLowerCase()
+      : null;
+  const { loaded, now } = await readAudit(ctx, source, tab, query, exportId);
   return (
-    <AuditBody ctx={ctx} tab={tab} query={query} loaded={loaded} now={now} />
+    <AuditBody
+      ctx={ctx}
+      tab={tab}
+      query={query}
+      exportId={exportId}
+      loaded={loaded}
+      now={now}
+    />
   );
 }
 
@@ -174,16 +243,33 @@ function tabPath(org: string, tab: AuditTab): SafePath {
   return tab === "events" ? routes.audit(org) : routes.auditTab(org, tab);
 }
 
+/** This same page with the query it was opened with, for Try again. */
+function retryPath(
+  org: string,
+  tab: AuditTab,
+  query: AuditQuery,
+  exportId: string | null,
+): SafePath {
+  if (tab === "events") return routes.audit(org, auditQueryParams(query));
+  return routes.auditTab(
+    org,
+    tab,
+    exportId === null ? {} : { export: exportId },
+  );
+}
+
 function AuditBody({
   ctx,
   tab,
   query,
+  exportId,
   loaded,
   now,
 }: {
   ctx: OrgCtx;
   tab: AuditTab;
   query: AuditQuery;
+  exportId: string | null;
   loaded: Loaded;
   now: number;
 }) {
@@ -195,9 +281,11 @@ function AuditBody({
     return (
       <AuditFailure
         read={loaded.read}
+        org={org}
         orgName={ctx.orgName}
         orgRole={ctx.orgRole}
-        retry={tabPath(org, tab)}
+        viewer={loaded.viewer}
+        retry={retryPath(org, tab, query, exportId)}
         fleet={loaded.fleet}
         organization={routes.people(org)}
         at={new Date(now).toISOString()}
@@ -233,9 +321,13 @@ function AuditBody({
       ) : null}
       {tab === "incidents" ? <IncidentsTab /> : null}
       {tab === "receipts" ? <ReceiptsTab /> : null}
-      {tab === "exports" ? <ExportsTab /> : null}
+      {tab === "exports" ? (
+        <ExportsTab org={org} bundle={loaded.bundle} />
+      ) : null}
       {tab === "keys" ? <KeysTab /> : null}
-      {tab === "retention" ? <RetentionTab /> : null}
+      {tab === "retention" && loaded.retention !== null ? (
+        <RetentionTab retention={loaded.retention} />
+      ) : null}
     </div>
   );
 }
@@ -243,6 +335,8 @@ function AuditBody({
 /**
  * The skeleton the page shows while the record is read (audit.md, loading):
  * four tile blocks and a panel of seven rows, with no figure in any of them.
+ * It marks itself `data-audit-state` like the other states, so the header
+ * steps out of view and the skeleton is shown alone, as the design draws it.
  */
 export function AuditSkeleton() {
   const t = useTranslations("audit");
@@ -252,6 +346,7 @@ export function AuditSkeleton() {
       aria-busy="true"
       aria-label={t("loading")}
       data-state="loading"
+      data-audit-state="loading"
       className="flex flex-col gap-3.5"
     >
       <div className={statStrip}>

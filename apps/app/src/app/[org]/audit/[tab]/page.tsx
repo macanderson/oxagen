@@ -9,6 +9,7 @@ import { dataSource } from "@/data/source";
 import {
   Audit,
   AuditHeaderAction,
+  AuditRetentionLine,
   AuditSkeleton,
   auditTabOf,
 } from "@/features/audit";
@@ -22,11 +23,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function AuditTabPage({
   params,
+  searchParams,
 }: PageProps<"/[org]/audit/[tab]">) {
   const { org, tab: segment } = await params;
   const ctx = await requireViewer(org);
   const tab = auditTabOf(segment);
   if (tab === null) notFound();
+  const query = await searchParams;
   const t = await getTranslations("pages");
   const page = await getTranslations("audit");
   return (
@@ -34,19 +37,24 @@ export default async function AuditTabPage({
       id="main"
       className="group/audit mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader
-        title={t("audit")}
-        eyebrow={page("eyebrow")}
-        description={page("description")}
-        meta={
-          <p className="font-mono text-[11.5px] text-dim">
-            {page("retentionLine", { org: ctx.orgSlug })}
-          </p>
-        }
-        actions={<AuditHeaderAction />}
-      />
+      {/* A state (empty, loading, error, denied) is shown alone, as the
+          design draws it: the header stays in the document for its h1 and
+          steps out of view. */}
+      <div className="group-has-[[data-audit-state]]/audit:sr-only">
+        <PageHeader
+          title={t("audit")}
+          eyebrow={page("eyebrow")}
+          description={page("description")}
+          meta={
+            <Suspense fallback={null}>
+              <AuditRetentionLine ctx={ctx} source={dataSource()} />
+            </Suspense>
+          }
+          actions={<AuditHeaderAction org={ctx.orgSlug} />}
+        />
+      </div>
       <Suspense fallback={<AuditSkeleton />}>
-        <Audit ctx={ctx} source={dataSource()} tab={tab} searchParams={{}} />
+        <Audit ctx={ctx} source={dataSource()} tab={tab} searchParams={query} />
       </Suspense>
     </main>
   );

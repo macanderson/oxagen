@@ -3,19 +3,28 @@
 // from its button as a centred dialog, or on a phone as a sheet risen from the
 // bottom edge (ui/sheet-dialog.tsx).
 //
-// Only one of them writes nothing and needs nothing more: `exportevents`
-// downloads the signed CSV export_audit_events answers. The other five would
-// each run a write no contract offers yet (build a bundle, raise an incident,
-// rotate the key-encryption key, save a retention policy, request a role), so
-// each draws the fields the design names, disabled, beside one sentence
-// saying what is missing, and its submit is disabled. A stub says what the
-// product would do; none of these silently does nothing (audit.md, Rules).
+// Two of them run: `exportevents` downloads the signed CSV export_audit_events
+// answers, and `newexport` queues export_data for the organization (Build
+// bundle, actions.ts) and opens Exports on the export it queued. The other four
+// would each run a write no contract offers yet (raise an incident, rotate the
+// key-encryption key, save a retention policy, request a role), so each draws
+// the fields the design names, disabled, beside one sentence saying what is
+// missing, and its submit is disabled. A stub says what the product would do;
+// none of these silently does nothing (audit.md, Rules). Every footer's
+// dismiss button reads Cancel, as the design's does.
 import { useTranslations } from "next-intl";
-import { type ReactNode, useId, useState } from "react";
-import type { SafePath } from "@/shared/safe-path";
-import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
-import { DownloadLink } from "@/ui/navigation";
+import { type ReactNode, useId, useState, useTransition } from "react";
+import { routes, type SafePath } from "@/shared/safe-path";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  inputBase,
+  mono,
+} from "@/ui/control-styles";
+import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { DownloadLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
+import { buildBundle } from "./actions";
 
 /** The issue a dialog's missing write is tracked in, as a data attribute only. */
 type Gap = { issue: string };
@@ -36,8 +45,9 @@ function DialogButton({
   title: string;
   subtitle?: string;
   footer?: ReactNode;
-  children: ReactNode;
+  children: ReactNode | ((close: () => void) => ReactNode);
 }) {
+  const t = useTranslations("audit");
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -56,8 +66,11 @@ function DialogButton({
         subtitle={subtitle}
         testId={testId}
         footer={footer}
+        closeLabel={t("cancel")}
       >
-        {children}
+        {typeof children === "function"
+          ? children(() => setOpen(false))
+          : children}
       </SheetDialog>
     </>
   );
@@ -102,10 +115,47 @@ function DisabledSubmit({
   );
 }
 
-/** `newexport`: the header's gold action. Build bundle waits on an evidence bundle store. */
-export function BundleDialog({ gap }: { gap: Gap }) {
+/** A callout: the one fact a dialog states about the write it runs. */
+function Callout({ children }: { children: ReactNode }) {
+  return (
+    <p className="border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+const BUNDLE_FORM = "audit-bundle-form";
+
+/**
+ * `newexport`: the header's gold action. Build bundle queues export_data for
+ * the organization and opens Exports on the export it queued. Scope is the one
+ * value export_data takes; From, To and Format stay disabled beside the reason.
+ */
+export function BundleDialog({ org, gap }: { org: string; gap: Gap }) {
   const t = useTranslations("audit.bundle");
-  const note = useId();
+  const navigate = useNavigate();
+  const fields = useId();
+  const [pending, start] = useTransition();
+  const [failure, setFailure] = useState<string | null>(null);
+  const submit = (close: () => void) => () =>
+    start(async () => {
+      setFailure(null);
+      const result = await buildBundle(org);
+      if (result.ok) {
+        close();
+        navigate.push(
+          routes.auditTab(org, "exports", { export: result.value.exportId }),
+        );
+        return;
+      }
+      setFailure(
+        result.reason === "denied"
+          ? t("denied")
+          : result.reason === "pending_approval"
+            ? t("pending", { id: result.accessRequestId })
+            : t("failed", { code: result.code }),
+      );
+    });
   return (
     <DialogButton
       primary
@@ -113,39 +163,69 @@ export function BundleDialog({ gap }: { gap: Gap }) {
       testId="audit-newexport"
       title={t("title")}
       subtitle={t("subtitle")}
-      footer={<DisabledSubmit label={t("build")} describedBy={note} />}
+      footer={
+        <SubmitButton
+          form={BUNDLE_FORM}
+          pending={pending}
+          label={t("build")}
+          pendingLabel={t("building")}
+          fullWidth={false}
+        />
+      }
     >
-      <fieldset
-        disabled
-        aria-describedby={note}
-        className="flex flex-col gap-3"
-      >
-        <label className={field}>
-          <span className={label}>{t("scope")}</span>
-          <select className={control} defaultValue="all">
-            <option value="all">{t("scopeAll")}</option>
-          </select>
-        </label>
-        <span className="grid grid-cols-2 gap-3">
+      {(close) => (
+        <form
+          id={BUNDLE_FORM}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!pending) submit(close)();
+          }}
+          className="flex flex-col gap-3"
+        >
           <label className={field}>
-            <span className={label}>{t("from")}</span>
-            <input type="date" className={control} />
+            <span className={label}>{t("scope")}</span>
+            <select name="scope" className={control} defaultValue="org">
+              <option value="org">{t("scopeOrg")}</option>
+            </select>
           </label>
-          <label className={field}>
-            <span className={label}>{t("to")}</span>
-            <input type="date" className={control} />
-          </label>
-        </span>
-        <label className={field}>
-          <span className={label}>{t("format")}</span>
-          <select className={control} defaultValue="bundle">
-            <option value="bundle">{t("formatBundle")}</option>
-            <option value="csv">{t("formatCsv")}</option>
-            <option value="json">{t("formatJson")}</option>
-          </select>
-        </label>
-        <Missing id={note} gap={gap} text={t("notRecorded")} />
-      </fieldset>
+          <fieldset
+            disabled
+            aria-describedby={fields}
+            className="flex flex-col gap-3"
+          >
+            <span className="grid grid-cols-2 gap-3">
+              <label className={field}>
+                <span className={label}>{t("from")}</span>
+                <input type="date" className={control} />
+              </label>
+              <label className={field}>
+                <span className={label}>{t("to")}</span>
+                <input type="date" className={control} />
+              </label>
+            </span>
+            <label className={field}>
+              <span className={label}>{t("format")}</span>
+              <select className={control} defaultValue="bundle">
+                <option value="bundle">{t("formatBundle")}</option>
+                <option value="csv">{t("formatCsv")}</option>
+                <option value="json">{t("formatJson")}</option>
+              </select>
+            </label>
+            <p id={fields} className="text-xs text-muted-foreground">
+              {t("fieldsNotRecorded")}
+            </p>
+          </fieldset>
+          <Callout>
+            {t.rich("callout", {
+              c: (chunks) => <span className={mono}>{chunks}</span>,
+            })}
+          </Callout>
+          <Missing id={`${fields}-bundle`} gap={gap} text={t("notRecorded")} />
+          {failure === null ? null : (
+            <FormAlert testId="audit-bundle-failure">{failure}</FormAlert>
+          )}
+        </form>
+      )}
     </DialogButton>
   );
 }
@@ -211,11 +291,13 @@ export function IncidentDialog({ gap }: { gap: Gap }) {
   );
 }
 
-/** `rotatekek`: Rotate KEK. Waits on a key registry. */
+/** `rotatekek`: Rotate KEK. What a rotation does, and the write it waits on (a key registry). */
 export function RotateDialog({ gap }: { gap: Gap }) {
   const t = useTranslations("audit.rotate");
   const keys = useTranslations("audit.keys");
+  const recorded = useTranslations("audit");
   const note = useId();
+  const fact = "text-muted-foreground";
   return (
     <DialogButton
       label={keys("rotate")}
@@ -224,15 +306,47 @@ export function RotateDialog({ gap }: { gap: Gap }) {
       subtitle={t("subtitle")}
       footer={<DisabledSubmit label={t("submit")} describedBy={note} />}
     >
+      <dl className="mb-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+        <dt className={fact}>{t("facts.generation")}</dt>
+        <dd data-recorded="false" className={fact}>
+          {recorded("notRecorded")}
+        </dd>
+        <dt className={fact}>{t("facts.effect")}</dt>
+        <dd>{t("facts.effectValue")}</dd>
+        <dt className={fact}>{t("facts.old")}</dt>
+        <dd>{t("facts.oldValue")}</dd>
+        <dt className={fact}>{t("facts.rewrap")}</dt>
+        <dd>{t("facts.rewrapValue")}</dd>
+        <dt className={fact}>{t("facts.receipts")}</dt>
+        <dd>{t("facts.receiptsValue")}</dd>
+        <dt className={fact}>{t("facts.recorded")}</dt>
+        <dd>
+          {t.rich("facts.recordedValue", {
+            c: (chunks) => <span className={mono}>{chunks}</span>,
+          })}
+        </dd>
+      </dl>
       <Missing id={note} gap={gap} text={t("notRecorded")} />
     </DialogButton>
   );
 }
 
-/** `retention`: Edit policy. Waits on a retention policy store and its write. */
-export function PolicyDialog({ gap }: { gap: Gap }) {
+/**
+ * `retention`: Edit policy. The body retention is the pinned policy's window
+ * (get_evidence_retention), printed as recorded; the hot window has no store.
+ * Both stay disabled until a write saves a policy.
+ */
+export function PolicyDialog({
+  gap,
+  body,
+}: {
+  gap: Gap;
+  /** The body retention as the page words it, or null when no policy is pinned. */
+  body: string | null;
+}) {
   const t = useTranslations("audit.policy");
   const retention = useTranslations("audit.retention");
+  const recorded = useTranslations("audit");
   const note = useId();
   return (
     <DialogButton
@@ -249,16 +363,17 @@ export function PolicyDialog({ gap }: { gap: Gap }) {
       >
         <label className={field}>
           <span className={label}>{t("body")}</span>
-          <select className={control} defaultValue="7y">
-            <option value="7y">{t("bodyDefault")}</option>
+          <select className={control} defaultValue="recorded">
+            <option value="recorded">{body ?? recorded("notRecorded")}</option>
           </select>
         </label>
         <label className={field}>
           <span className={label}>{t("hot")}</span>
-          <select className={control} defaultValue="13m">
-            <option value="13m">{t("hotDefault")}</option>
+          <select className={control} defaultValue="recorded">
+            <option value="recorded">{recorded("notRecorded")}</option>
           </select>
         </label>
+        <Callout>{t("callout")}</Callout>
         <Missing id={note} gap={gap} text={t("notRecorded")} />
       </fieldset>
     </DialogButton>

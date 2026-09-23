@@ -1,17 +1,19 @@
 // The Audit page's not-loaded states (rev1 audit.md, States): empty, error,
 // access denied, and an access request still waiting. Each replaces the page
-// body under the header and never the shell, carries the design's copy, and
-// marks itself `data-audit-failed` when the read did not answer, so the
-// header's gold Export evidence bundle steps aside and the state's own action
-// is the one gold action on the screen.
+// body and never the shell, carries the design's copy and glyph, and marks
+// itself `data-audit-state`, so the page header steps out of view (its h1
+// stays in the document) and the state is shown alone, as the design draws
+// it. The state's own action is then the one gold action on the screen, and
+// the empty state has none.
 //
 // What the design asks for and the record cannot give is said, not invented:
 // the trace id and region of a failed read and the policy that refused one are
 // "not recorded" (#3841, #3846), and Request access and Open an incident open
 // dialogs that name the write they wait on (#3820, #3847).
 import "server-only";
+import { CircleAlert, Clock, Lock, PanelTop } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
 import type { OrgRole } from "@/server/viewer";
@@ -24,14 +26,15 @@ type Failure = Exclude<Read<unknown>, { ok: true }>;
 
 function StateWrap({
   state,
-  failed,
+  icon: Icon,
   title,
   body,
   actions,
   children,
 }: {
   state: string;
-  failed: boolean;
+  /** The design's glyph for the state, drawn in a bordered square above the title. */
+  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   title: string;
   body: ReactNode;
   actions: ReactNode;
@@ -41,10 +44,16 @@ function StateWrap({
     <section
       data-state={state}
       data-testid={`audit-${state}`}
-      {...(failed ? { "data-audit-failed": "" } : {})}
+      data-audit-state={state}
       aria-labelledby={`audit-${state}-title`}
       className="mx-auto flex max-w-lg flex-col items-center gap-3 px-4 py-16 text-center"
     >
+      <span
+        data-state-icon=""
+        className={`flex size-11 items-center justify-center rounded-lg border ${state === "denied" || state === "error" ? "border-destructive/40 text-destructive" : "border-border text-foreground"}`}
+      >
+        <Icon aria-hidden className="size-4" />
+      </span>
       <h2 id={`audit-${state}-title`} className="text-lg font-semibold">
         {title}
       </h2>
@@ -62,7 +71,7 @@ export function AuditEmpty({ org }: { org: string }) {
   return (
     <StateWrap
       state="empty"
-      failed={false}
+      icon={PanelTop}
       title={t("title")}
       body={t("body")}
       actions={
@@ -78,17 +87,23 @@ const code = "rounded bg-hl px-1 font-mono text-[0.92em]";
 
 export function AuditFailure({
   read,
+  org,
   orgName,
   orgRole,
+  viewer,
   retry,
   fleet,
   organization,
   at,
 }: {
   read: Failure;
+  /** The organization's slug, named beside the viewer's role. */
+  org: string;
   orgName: string;
   orgRole: OrgRole;
-  /** This same page, for Try again. */
+  /** The signed-in person's name, or their email when they set none. */
+  viewer: string;
+  /** This same page with its query, for Try again. */
   retry: SafePath;
   /** Fleet of a workspace the viewer can open, or null when none was read. */
   fleet: SafePath | null;
@@ -103,7 +118,7 @@ export function AuditFailure({
       return (
         <StateWrap
           state="denied"
-          failed
+          icon={Lock}
           title={t("denied.title")}
           body={t.rich("denied.body", {
             org: orgName,
@@ -131,7 +146,14 @@ export function AuditFailure({
         >
           <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-left text-[13px]">
             <dt className="text-muted-foreground">{t("denied.signedIn")}</dt>
-            <dd className={mono}>{t(`roles.${orgRole}`)}</dd>
+            <dd>
+              {t.rich("denied.signedInAs", {
+                name: viewer,
+                role: `org.${orgRole}`,
+                org,
+                c: (chunks) => <span className={mono}>{chunks}</span>,
+              })}
+            </dd>
             <dt className="text-muted-foreground">{t("denied.needed")}</dt>
             <dd className={mono}>{read.permission}</dd>
             <dt className="text-muted-foreground">{t("denied.decidedBy")}</dt>
@@ -145,7 +167,7 @@ export function AuditFailure({
       return (
         <StateWrap
           state="pending"
-          failed
+          icon={Clock}
           title={t("pending.title")}
           body={t("pending.body", { id: read.accessRequestId })}
           actions={null}
@@ -155,7 +177,7 @@ export function AuditFailure({
       return (
         <StateWrap
           state="error"
-          failed
+          icon={CircleAlert}
           title={t("error.title")}
           body={t.rich("error.body", {
             status: String(read.status),

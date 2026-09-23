@@ -2,7 +2,7 @@
   "audit": {
     "eyebrow": "Organization",
     "description": "What happened, who allowed it, under what authority, and what it cost.",
-    "retentionLine": "control-plane events retained 7 years · {org}",
+    "retentionLine": "control-plane events retained 7 years · run ledger not recorded · bodies {bodies} · {org}",
     "loading": "Loading the audit record",
     "notRecorded": "not recorded",
     "tabs": {
@@ -26,8 +26,7 @@
       "deniedNote": "denials are recorded and cost nothing",
       "service": "By a service principal",
       "serviceNote": "Terraform, CI, exports, the archiver",
-      "agent": "By an agent",
-      "agentNote": "each one a governed action with a receipt"
+      "agent": "By an agent"
     },
     "events": {
       "title": "Control-plane events",
@@ -60,11 +59,17 @@
       "detail": "Recorded facts",
       "none": "No events in this window match these filters.",
       "note": "The record is written by the kernel, never by an agent. A client-attested call is labeled as such and can never be shown as decided by Oxagen.",
-      "shown": "{start}-{end} of {total}",
-      "shownOpen": "{start}-{end}",
+      "shown": "{start}–{end} of {total}",
+      "shownOpen": "{start}–{end}",
       "pager": "Pages of the audit record",
       "newer": "Newer events",
-      "older": "Older events"
+      "older": "Older events",
+      "actorKinds": {
+        "human": "Humans",
+        "agent": "Agents",
+        "service": "Services"
+      },
+      "actorKindNotRecorded": "An audit event records no actor kind yet, so Humans, Agents and Services cannot be picked."
     },
     "outcomes": {
       "allow": "allowed",
@@ -84,15 +89,21 @@
       "title": "Export an evidence bundle",
       "subtitle": "segments, attestations, key ids, and the verifier",
       "scope": "Scope",
-      "scopeAll": "All workspaces · all runs",
+      "scopeOrg": "The whole organization",
       "from": "From",
       "to": "To",
       "format": "Format",
       "formatBundle": "Signed bundle (segments + verifier)",
       "formatCsv": "Receipts as CSV",
       "formatJson": "Receipts as JSON",
-      "notRecorded": "Oxagen does not build evidence bundles yet. No store holds archive segments, seal attestations or receipts to put in one. The signed CSV of control-plane events is on the Events tab.",
-      "build": "Build bundle"
+      "fieldsNotRecorded": "export_data takes no range or format yet. It exports the whole organization as one ZIP.",
+      "callout": "Runs as <c>export_data</c>, a governed action with third-party egress.",
+      "notRecorded": "The ZIP carries no verifier yet. The signed segment bundle with attestations, key ids and the verifier is not built for the organization.",
+      "build": "Build bundle",
+      "building": "Queuing the export",
+      "denied": "Only an organization owner or admin can export the organization. Nothing was queued.",
+      "pending": "The export waits on access request {id}.",
+      "failed": "The export was not queued. The control plane answered {code}."
     },
     "incidents": {
       "open": "Open",
@@ -120,14 +131,46 @@
     "receipts": {
       "title": "Receipt search",
       "caption": "one signed record per tool call",
+      "search": "Search receipts",
+      "searchPlaceholder": "agent key, tool, external effect id, call digest, receipt id",
+      "submit": "Search",
+      "examples": "Examples",
+      "chips": {
+        "stripe": "stripe",
+        "harness": "harness",
+        "observe": "observe",
+        "deny": "deny",
+        "agentKey": "agent key",
+        "effect": "external effect id"
+      },
+      "clear": "clear",
       "notRecorded": "Receipts are not recorded yet. No store holds a signed receipt per tool call, so there is nothing to search."
     },
     "exports": {
-      "title": "Exports",
-      "caption": "signed archives with a verifier",
-      "notRecorded": "Evidence bundles are not recorded yet. No store lists a built bundle, its signature or its key ids.",
+      "callout": "An export is a verifiable bundle: archive segments, attestations, key ids, and a verifier script. The segment was written at seal time, so it is never a later copy of the graph. It is the same bytes the graph indexed, written once. A customer’s auditor checks it offline, without trusting Oxagen or the worker’s harness.",
+      "notRecorded": "No store lists the organization's evidence bundles yet. Build bundle queues the organization's data export as a ZIP through export_data, and the export it queued shows here. A signed evidence bundle with its verifier is built per run today, not for the organization.",
+      "card": "Organization data export (ZIP)",
+      "states": {
+        "queued": "building",
+        "processing": "building",
+        "ready": "ready",
+        "failed": "failed"
+      },
+      "verify": "Verify bundle",
+      "download": "Download",
+      "verifyNotRecorded": "A ZIP data export carries no seal signatures, so there is nothing to verify.",
+      "exportId": "Export id",
+      "range": "Range",
+      "contents": "Contents",
+      "contentsOrg": "the organization's data, one ZIP",
+      "size": "Size",
+      "created": "Created",
+      "completed": "Completed",
+      "signature": "Signature",
+      "keyIds": "Key ids",
+      "unread": "Export {id} could not be read. The control plane answered {code}.",
       "verifier": "Verifier",
-      "verifierNotRecorded": "The offline verifier ships with evidence bundles, and none is built yet.",
+      "verifierNotRecorded": "The offline verifier ships inside a run's evidence bundle. No organization-wide bundle is built yet, so none is shown here.",
       "outbound": "Outbound events",
       "outboundNotRecorded": "No outbound event subscription is recorded. Nothing names the event kinds, the dead-letter view or the delivery."
     },
@@ -140,27 +183,48 @@
     "rotate": {
       "title": "Rotate the key-encryption key",
       "subtitle": "a new generation, nothing rewritten",
+      "facts": {
+        "generation": "New generation",
+        "effect": "Takes effect",
+        "effectValue": "immediately for new bodies, segments and subject keys",
+        "old": "Old generation",
+        "oldValue": "becomes retiring and stays valid for decryption until re-wrap completes",
+        "rewrap": "Re-wrap",
+        "rewrapValue": "runs in the archiver",
+        "receipts": "Receipts",
+        "receiptsValue": "keep citing the signing generation they were signed under, so an old receipt still verifies",
+        "recorded": "Recorded as",
+        "recordedValue": "<c>key.rotated</c> with who, when and the generation"
+      },
       "notRecorded": "No write rotates a key-encryption key yet, because no key registry exists to hold the next generation.",
       "submit": "Rotate"
     },
     "retention": {
       "title": "Retention",
       "edit": "Edit policy",
-      "notRecorded": "The retention policy is not recorded yet. No read carries the body retention, the hot window, replay of a compacted run, each workspace's opt-down or the cold storage cost.",
+      "notRecorded": "The hot window, replay of a compacted run and each workspace's opt-down are not recorded yet. No read carries them.",
       "tiers": "Archive tiers",
       "tiersNotRecorded": "No read lists the archive tiers, where each is held or how much each holds today.",
       "redaction": "Redaction",
       "redactionCaption": "before write",
-      "redactionNote": "The collector redacts credential shapes before a frame body is written. Each removal is recorded with the digest of the bytes removed, so a redacted body still verifies against its digest."
+      "redactionNote": "The collector redacts credential shapes before a frame body is written. Each removal is recorded with the digest of the bytes removed, so a redacted body still verifies against its digest.",
+      "store": "organization policy",
+      "body": "Body retention",
+      "bodyValue": "{window} from the seal",
+      "hot": "Hot window",
+      "replay": "Replay of a compacted run",
+      "optDown": "Workspace opt-down",
+      "cold": "Cold storage cost",
+      "coldValue": "{gb} GB held past the included {months} months",
+      "coldRate": "per GB-month"
     },
     "policy": {
       "title": "Retention policy",
       "subtitle": "organization-wide",
       "body": "Body retention",
-      "bodyDefault": "7 years (default)",
       "hot": "Frame hot window",
-      "hotDefault": "13 months (default)",
-      "notRecorded": "No write saves a retention policy yet. The policy has no store for the body retention or the hot window.",
+      "callout": "Shortening the hot window compacts frame rows sooner and saves database cost. It does not touch bodies, and replay of a compacted run reads the segment at the same grade.",
+      "notRecorded": "No write saves a retention policy yet. The hot window has no store, and the body retention is read from the pinned policy but cannot be changed here.",
       "submit": "Save policy"
     },
     "empty": {
@@ -182,7 +246,8 @@
       "open": "Open Organization",
       "signedIn": "Signed in as",
       "needed": "Needed",
-      "decidedBy": "Decided by"
+      "decidedBy": "Decided by",
+      "signedInAs": "{name} · <c>{role}</c> · <c>{org}</c>"
     },
     "request": {
       "title": "Request access",
@@ -195,13 +260,8 @@
       "title": "Waiting for approval",
       "body": "Access request {id} is waiting for an owner's decision."
     },
-    "roles": {
-      "owner": "owner",
-      "admin": "admin",
-      "member": "member",
-      "billing": "billing",
-      "compliance": "compliance",
-      "viewer": "viewer"
-    }
+    "retentionYears": "{count, plural, one {# year} other {# years}}",
+    "retentionDays": "{count, plural, one {# day} other {# days}}",
+    "cancel": "Cancel"
   }
 }

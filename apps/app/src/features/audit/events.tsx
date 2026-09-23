@@ -6,7 +6,16 @@
 // and the list cannot tell different stories. A window holding more than one
 // read returns shows its counts as a lower bound, `200+`, never as a total.
 // Two tiles need an actor kind and the record carries none, so they say
-// "not recorded" rather than a zero, and so does every Severity cell.
+// "not recorded" rather than a zero, and so does every Severity cell. The
+// agent tile drops the design's basis line ("each one a governed action with a
+// receipt") while it is not recorded: no receipt store exists (#3875), so the
+// line would claim what the record does not hold.
+//
+// The Actor filter is the design's actor kinds. The record carries no kind
+// (#3873), so Humans, Agents and Services are drawn and disabled beside the
+// sentence that says why. A link that names one person (`?actor=usr_…`) still
+// narrows the read, and the select shows that person so the filter it applied
+// is visible and can be cleared.
 import "server-only";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -73,14 +82,15 @@ function Tile({
   children,
 }: {
   term: string;
-  note: string;
+  /** The basis line; left out where the record cannot back one. */
+  note?: string;
   children: ReactNode;
 }) {
   return (
     <div className={statTile}>
       <dt className={statTerm}>{term}</dt>
       <dd className={statValue}>{children}</dd>
-      <dd className={statNote}>{note}</dd>
+      {note === undefined ? null : <dd className={statNote}>{note}</dd>}
     </div>
   );
 }
@@ -119,7 +129,7 @@ export function EventTiles({
       <Tile term={t("service")} note={t("serviceNote")}>
         <NotRecordedValue />
       </Tile>
-      <Tile term={t("agent")} note={t("agentNote")}>
+      <Tile term={t("agent")}>
         <NotRecordedValue />
       </Tile>
     </dl>
@@ -157,6 +167,9 @@ function When({ iso }: { iso: string }) {
 }
 
 const label = "sr-only";
+/** The design's actor kinds (audit.md, Events), none of which the record carries yet. */
+const ACTOR_KINDS = ["human", "agent", "service"] as const;
+const ACTOR_KIND_NOTE = "audit-actor-kind-note";
 const select = `${inputBase} w-auto max-md:text-base`;
 
 function Filters({ org, query }: { org: string; query: AuditQuery }) {
@@ -243,6 +256,7 @@ function Filters({ org, query }: { org: string; query: AuditQuery }) {
         data-issue={AUDIT_GAPS.events.issue}
         className="flex flex-col gap-0.5 text-xs text-muted-foreground"
       >
+        <span id={ACTOR_KIND_NOTE}>{t("actorKindNotRecorded")}</span>
         <span id={searchNote}>{t("searchNotRecorded")}</span>
         <span id="audit-severity-note">{t("severityNotRecorded")}</span>
       </span>
@@ -261,6 +275,15 @@ function HeaderFilters({
   actors: readonly AuditActor[];
 }) {
   const t = useTranslations("audit.events");
+  const picked =
+    query.actor === null
+      ? null
+      : {
+          id: query.actor,
+          name:
+            actors.find((actor) => actor.id === query.actor)?.name ??
+            query.actor,
+        };
   return (
     <SafeForm
       action={routes.audit(org)}
@@ -273,14 +296,18 @@ function HeaderFilters({
         <FilterSelect
           name="actor"
           defaultValue={query.actor ?? ""}
+          aria-describedby={ACTOR_KIND_NOTE}
           className={select}
         >
           <option value="">{t("anyActor")}</option>
-          {actors.map((actor) => (
-            <option key={actor.id} value={actor.id}>
-              {actor.name}
+          {ACTOR_KINDS.map((kind) => (
+            <option key={kind} value={`kind:${kind}`} disabled>
+              {t(`actorKinds.${kind}`)}
             </option>
           ))}
+          {picked === null ? null : (
+            <option value={picked.id}>{picked.name}</option>
+          )}
         </FilterSelect>
       </label>
       <label>
