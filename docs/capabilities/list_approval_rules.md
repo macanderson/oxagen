@@ -6,7 +6,7 @@
 **Surfaces:** api, mcp
 **Sensitivity:** medium
 **Metering:** none (`noBillingGate`, a console read)
-**App:** Tools › Auto-approvals at `/{org}/{ws}/tools?tab=autoapprovals`: the rules table and its three totals. An org Owner, Admin or Compliance sees it.
+**App:** Tools › Policy at `/{org}/{ws}/tools/policy`: the auto-approval rules table. An org Owner, Admin or Compliance sees it.
 
 ## Intent
 

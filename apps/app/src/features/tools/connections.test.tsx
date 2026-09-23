@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The Connections tab as a person reads and acts on it: the workspace's
-// connections above the credential grants log, a detail drawer over one of
+// The connections and the credential grants log on the Providers tab, as a
+// person reads and acts on them: the workspace's connections above the log, a detail drawer over one of
 // them, and the add-connection dialog.
 //
 // Three things these tests pin, because the tab is about what was recorded:
@@ -37,7 +37,7 @@ const { router, addConnection, readConnection } = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({ addConnection, readConnection }));
 
-const { Connections } = await import("./connections");
+const { ConnectionsTable, GrantsLog } = await import("./connections");
 const { connectionList, credentialGrantPage } = await import(
   "./tools.builders"
 );
@@ -45,7 +45,7 @@ const { connectionGetOutput } = await import("@/test/tools-outputs");
 const { ConnectionDetail } = await import("@/data/contracts/tools");
 
 const at = { org: "acme", ws: "core-platform" };
-const CONNECTIONS = "/acme/core-platform/tools?tab=connections";
+const CONNECTIONS = "/acme/core-platform/tools/providers";
 
 /** The element or a failure naming what was missing: the tests assert, they never cast. */
 function element(node: Element | null | undefined, what: string): HTMLElement {
@@ -66,14 +66,21 @@ type Reads = {
 };
 
 function renderTab({ connections, grants, orgRole = "owner" }: Reads = {}) {
+  // The two panels as the Providers tab stacks them, below the roster.
   return withIntl(
-    <Connections
-      at={at}
-      orgRole={orgRole}
-      cursor={null}
-      connections={connections ?? readOk(connectionList())}
-      read={grants ?? readOk(credentialGrantPage())}
-    />,
+    <>
+      <ConnectionsTable
+        at={at}
+        orgRole={orgRole}
+        read={connections ?? readOk(connectionList())}
+      />
+      <GrantsLog
+        at={at}
+        orgRole={orgRole}
+        cursor={null}
+        read={grants ?? readOk(credentialGrantPage())}
+      />
+    </>,
   );
 }
 
@@ -130,11 +137,16 @@ describe("Connections table", () => {
     renderTab();
     const table = screen.getByRole("table", { name: "Connections" });
     const github = rowOf(within(table).getByText("Acme GitHub"));
-    // Owner, Reviewed and Next review: three cells, three not-recorded marks.
-    expect(github.querySelectorAll("[data-not-carried]")).toHaveLength(3);
+    // Owner, Reviewed and Next review: three cells, three not-backed marks,
+    // each carrying the issue that owns the connection's review record.
+    const marks = github.querySelectorAll('[data-state="not-backed"]');
+    expect(marks).toHaveLength(3);
+    for (const mark of marks) {
+      expect(mark.getAttribute("data-gap")).toMatch(/^#\d+$/);
+    }
     expect(
       screen.getByText(
-        "Owner, Reviewed and Next review have no field on the connection record, so they are shown as not recorded rather than guessed.",
+        "Owner, Reviewed and Next review have no field on the connection record yet.",
       ),
     ).toBeVisible();
   });
@@ -143,8 +155,12 @@ describe("Connections table", () => {
     renderTab();
     const table = screen.getByRole("table", { name: "Connections" });
     const stripe = rowOf(within(table).getByText("Acme Stripe"));
-    // Owner, Reviewed, Next review and the missing last sync.
-    expect(stripe.querySelectorAll("[data-not-carried]")).toHaveLength(4);
+    // Owner, Reviewed and Next review are not backed; the missing last sync
+    // is a value the record carries as absent.
+    expect(stripe.querySelectorAll('[data-state="not-backed"]')).toHaveLength(
+      3,
+    );
+    expect(stripe.querySelectorAll("[data-not-carried]")).toHaveLength(1);
   });
 
   it("says nothing is stored when the workspace has no connection", () => {
@@ -152,7 +168,7 @@ describe("Connections table", () => {
     expect(screen.getByText("No connection is stored")).toBeVisible();
     // The log below is a separate read and is still drawn.
     expect(
-      screen.getByRole("table", { name: "Credential grants" }),
+      screen.getByRole("table", { name: "Credential grants log" }),
     ).toBeInTheDocument();
   });
 
@@ -162,7 +178,7 @@ describe("Connections table", () => {
     });
     expect(screen.getByTestId("tools-denied")).toBeVisible();
     expect(
-      screen.getByRole("table", { name: "Credential grants" }),
+      screen.getByRole("table", { name: "Credential grants log" }),
     ).toBeInTheDocument();
   });
 

@@ -1,109 +1,57 @@
-// Registry (#2958; spec §14, mockup `mockups/pages/tools.md`): the workspace's
-// active tool versions with the classification the mandate gate reads, the
-// kill switch that stops each one today, the schema's origin and digest, and
-// the calls it took in the last 30 days.
+// The Tools tab (mockup `tools.md`): every tool version the workspace
+// registry holds, with the provider it came from, its classification, the kill
+// switch that stops it today, the schema's origin and digest, and its 30-day
+// calls. A row opens the version; its Provider cell opens that provider.
 //
-// Two columns the mockup draws are not here, because no capability carries
-// them: the ten-category "what it acts on" taxonomy (the mockup derives it
-// from a hard-coded name table) and "On belts". The Category column is the
-// registry attribute `list_tool_versions` does carry and filter on — the
-// version's consequence tags.
+// What the record does not carry is said, not filled:
 //
-// Provider registration lives beside connections and grants on Providers.
+//  - Output schemas observed rather than declared have no store, so no version
+//    waits on approval and the banner says the proposals are not recorded
+//    (#3865). The tab's count is the registry's, never "N to approve".
+//  - The ten categories the design groups by are not a registry attribute yet
+//    (#3865). The chips and the Category column show the consequence tags the
+//    classification records, which is what `list_tool_versions` filters on.
+//  - Toolbelts and Agents: no store holds a toolbelt or who carries it (#3852).
 import { useLocale, useTranslations } from "next-intl";
 import type {
   McpServerList,
   ToolVersion,
   ToolVersionPage,
 } from "@/data/contracts/tools";
-import { MONEY_TAG } from "@/data/contracts/tools";
 import type { Read } from "@/data/read";
 import type { OrgRole } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
-import { mono } from "@/ui/control-styles";
+import {
+  mono,
+  panel,
+  panelBody,
+  panelHeader,
+  panelTitle,
+} from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { SafeLink } from "@/ui/navigation";
 import { cell, numericCell, Table } from "@/ui/table";
-import { ImportControls } from "./import-controls";
-import {
-  Chip,
-  CursorPager,
-  NotCarried,
-  Section,
-  StateDot,
-  type Tone,
-} from "./parts";
+import { ImportProvider } from "./import-provider";
+import { NotBacked, NotBackedValue } from "./not-backed";
+import { CursorPager, NotCarried } from "./parts";
+import { ProviderButton, type ProviderView } from "./provider-dialog";
 import { ToolsReadFailure } from "./read-failure";
-import { ToolDialog } from "./tool-dialog";
 import {
-  type ToolNameStyle,
-  type ToolsAt,
-  toolsLink,
-  versionLabel,
-} from "./view";
-
-const GATE_TONE = {
-  open: "ok",
-  killed_version: "deny",
-  killed_server: "deny",
-  killed_class: "deny",
-} as const satisfies Record<ToolVersion["gate"]["kind"], Tone>;
-
-const RISK_TONE = {
-  low: "neutral",
-  medium: "neutral",
-  high: "warn",
-  critical: "deny",
-} as const satisfies Record<ToolVersion["riskGrade"], Tone>;
-
-/** The version's identity everywhere: `name@version`, label over the API name or the other way round. */
-function ToolName({
-  version,
-  names,
-}: {
-  version: ToolVersion;
-  names: ToolNameStyle;
-}) {
-  const api = versionLabel(version);
-  const primary = names === "api" ? api : version.name;
-  const secondary = names === "api" ? version.name : api;
-  return (
-    <span className="flex flex-col gap-0.5">
-      <span
-        className={`font-medium text-foreground ${names === "api" ? mono : ""}`}
-      >
-        {primary}
-      </span>
-      <span
-        className={`text-xs text-muted-foreground ${names === "api" ? "" : mono}`}
-      >
-        {secondary}
-      </span>
-    </span>
-  );
-}
+  CategoryCell,
+  FinancialCell,
+  GateDot,
+  HazardCell,
+  ToolName,
+} from "./registry-cells";
+import { StubAction } from "./stub-action";
+import { ToggleLink } from "./toggle-link";
+import { ToolDialog } from "./tool-dialog";
+import { type ToolNameStyle, type ToolsAt, toolsLink } from "./view";
 
 /**
- * Every consequence tag the versions in `items` carry *in their
- * classification*, with its count.
- *
- * Three things this is not, each of which the chips now say out loud rather
- * than leave the reader to assume:
- *
- *  1. Not the registry's tags. `list_tool_versions` returns a page and a
- *     cursor and offers no facet aggregate, so this counts what was read.
- *  2. Not the tags of an unfiltered registry. With `?category=` the kernel has
- *     already filtered `items`, so these are the tags carried *alongside* the
- *     selected one and the tally is of the matches, not of everything.
- *  3. Not the tags a filter or a kill switch matches on. Those match the union
- *     of the declared `consequence_tags` column and the classified jsonb
- *     (`unionConsequenceTags`, packages/handlers/src/tool.version.list.ts),
- *     and the contract hands this page only the classified half — so a version
- *     carrying a declared tag and not yet classified is selectable by that tag
- *     and has no chip for it here.
- *
- * (3) wants the union on `toolVersionItemSchema` to fix properly; it is a
- * contract change and is not taken here.
+ * Every consequence tag the versions in `items` carry in their classification,
+ * with its count. Not the registry's tags (the read is a page with no facet
+ * aggregate), not an unfiltered tally while a tag narrows the page, and not
+ * the declared tags a filter also matches: the chips say each of these.
  */
 function categoryCounts(
   items: readonly ToolVersion[],
@@ -120,7 +68,7 @@ function categoryCounts(
 }
 
 const chip =
-  "inline-flex min-h-9 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground";
+  "inline-flex min-h-8 max-md:min-h-11 items-center gap-2 rounded-md border border-border px-3 text-[13px] text-muted-foreground hover:text-foreground aria-pressed:border-foreground aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 function CategoryChips({
   at,
@@ -139,40 +87,45 @@ function CategoryChips({
   const t = useTranslations("tools.registry");
   const locale = useLocale();
   const counts = categoryCounts(items);
-  // `items` is already narrowed to the selected tag, so a count on "All" would
-  // be the match count wearing the word "All". There is no unfiltered total in
-  // this read, so the chip clears the filter and counts nothing.
   const filtered = category !== null;
   return (
-    <nav aria-label={t("categories")} className="flex flex-wrap gap-2">
-      <SafeLink
-        to={toolsLink(at, { tab: "registry", names })}
+    <div
+      role="group"
+      aria-label={t("categories")}
+      className="flex flex-wrap gap-2"
+    >
+      <ToggleLink
+        to={toolsLink(at, { tab: "tools", names })}
+        pressed={category === null}
         data-category="all"
-        aria-current={category === null ? "page" : undefined}
         className={chip}
       >
         {filtered || complete ? t("allCategories") : t("allOnPage")}
         {filtered ? null : (
-          <span className="text-xs tabular-nums">
+          <span className={`${mono} text-[10.5px] text-dim`}>
             {formatCount(items.length, locale)}
           </span>
         )}
-      </SafeLink>
+      </ToggleLink>
       {counts.map(({ tag, count }) => (
-        <SafeLink
+        <ToggleLink
           key={tag}
-          to={toolsLink(at, { tab: "registry", names, category: tag })}
+          to={
+            category === tag
+              ? toolsLink(at, { tab: "tools", names })
+              : toolsLink(at, { tab: "tools", names, category: tag })
+          }
+          pressed={category === tag}
           data-category={tag}
-          aria-current={category === tag ? "page" : undefined}
           className={chip}
         >
           <span className={mono}>{tag}</span>
-          <span className="text-xs tabular-nums">
+          <span className={`${mono} text-[10.5px] text-dim`}>
             {formatCount(count, locale)}
           </span>
-        </SafeLink>
+        </ToggleLink>
       ))}
-    </nav>
+    </div>
   );
 }
 
@@ -187,19 +140,60 @@ function NamesToggle({
 }) {
   const t = useTranslations("tools.registry");
   return (
-    <nav aria-label={t("names.label")} className="flex gap-1">
+    <div
+      role="group"
+      aria-label={t("names.label")}
+      className="inline-flex rounded-[9px] border border-border p-0.5"
+    >
       {(["labels", "api"] as const).map((style) => (
-        <SafeLink
+        <ToggleLink
           key={style}
-          to={toolsLink(at, { tab: "registry", category, names: style })}
+          to={toolsLink(at, { tab: "tools", category, names: style })}
+          pressed={names === style}
           data-names={style}
-          aria-current={names === style ? "page" : undefined}
-          className="inline-flex min-h-9 items-center rounded-md border border-transparent px-3 text-sm text-muted-foreground hover:text-foreground aria-[current=page]:border-border aria-[current=page]:text-foreground"
+          className="inline-flex min-h-7 max-md:min-h-11 items-center rounded-md px-2.5 text-[13px] text-muted-foreground hover:text-foreground aria-pressed:bg-hl aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           {t(`names.${style}`)}
-        </SafeLink>
+        </ToggleLink>
       ))}
-    </nav>
+    </div>
+  );
+}
+
+/** What the categories mean (`toolcats`): the tags the chips show, and what they decide. */
+function CategoriesDialog() {
+  const t = useTranslations("tools.registry.categoriesDialog");
+  return (
+    <StubAction
+      label={t("open")}
+      tone="ghost"
+      title={t("title")}
+      gap="registry"
+      note={t("note")}
+      confirm={t("close")}
+      wide
+      testId="tools-categories"
+    >
+      <p className="text-[13px] text-foreground">{t("lead")}</p>
+      <dl className="grid gap-x-4 gap-y-1.5 text-[13px] sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+        {(
+          [
+            "moves_money",
+            "destroys_data",
+            "alters_production",
+            "communicates_externally",
+            "changes_access",
+            "changes_entitlement",
+          ] as const
+        ).map((tag) => (
+          <div key={tag} className="contents">
+            <dt className={mono}>{tag}</dt>
+            <dd className="text-muted-foreground">{t(`tags.${tag}`)}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-xs text-muted-foreground">{t("decides")}</p>
+    </StubAction>
   );
 }
 
@@ -208,22 +202,19 @@ function Row({
   version,
   names,
   canClassify,
+  canAdminister,
+  provider,
 }: {
   at: ToolsAt;
   version: ToolVersion;
   names: ToolNameStyle;
   canClassify: boolean;
+  canAdminister: boolean;
+  /** The provider the version came from, or null for a declared tool. */
+  provider: ProviderView | null;
 }) {
   const t = useTranslations("tools.registry");
-  const gates = useTranslations("tools.gate");
   const locale = useLocale();
-  // The classified half alone: the record this page is handed carries no
-  // declared tags, and the union of the two is what the filter and a class
-  // kill switch match on. So this can confirm a money tag and can never rule
-  // one out — a governance table must not print "no" over a question it was
-  // not given the data to answer.
-  const financial =
-    version.classification?.consequenceTags.includes(MONEY_TAG) === true;
   return (
     <tr data-tool-version={version.id}>
       <td className={cell}>
@@ -232,40 +223,27 @@ function Row({
         </ToolDialog>
       </td>
       <td className={cell}>
-        {version.classification === null ? (
+        {provider === null ? (
           <span className="text-xs text-muted-foreground">
-            {t("unclassified")}
+            {t(`declaredSource.${version.source}`)}
           </span>
-        ) : version.classification.consequenceTags.length === 0 ? (
-          <span className="text-xs text-muted-foreground">{t("noTags")}</span>
         ) : (
-          <span className="flex flex-wrap gap-1">
-            {version.classification.consequenceTags.map((tag) => (
-              <Chip key={tag}>{tag}</Chip>
-            ))}
-          </span>
+          <ProviderButton
+            at={at}
+            view={provider}
+            canAdminister={canAdminister}
+            canClassify={canClassify}
+          />
         )}
       </td>
       <td className={cell}>
-        <span className="flex flex-col gap-1">
-          <StateDot
-            tone={RISK_TONE[version.riskGrade]}
-            name={version.riskGrade}
-            label={t(`risk.${version.riskGrade}`)}
-          />
-          {version.classification === null ? null : (
-            <span className="text-xs text-muted-foreground">
-              {t(`sideEffect.${version.classification.sideEffect}`)}
-            </span>
-          )}
-        </span>
+        <CategoryCell version={version} />
       </td>
       <td className={cell}>
-        <StateDot
-          tone={GATE_TONE[version.gate.kind]}
-          name={version.gate.kind}
-          label={gates(version.gate.kind)}
-        />
+        <HazardCell version={version} />
+      </td>
+      <td className={cell}>
+        <GateDot version={version} />
       </td>
       <td className={cell}>
         {version.classification === null ? (
@@ -277,11 +255,7 @@ function Row({
         )}
       </td>
       <td className={cell}>
-        {financial ? (
-          <StateDot tone="deny" name="financial" label={t("financial.yes")} />
-        ) : (
-          <NotCarried />
-        )}
+        <FinancialCell version={version} />
       </td>
       <td className={cell}>
         <span className="text-xs text-foreground">
@@ -292,6 +266,12 @@ function Row({
         <span className={`${mono} text-xs text-muted-foreground`}>
           {version.schemaDigest.slice(0, 12)}
         </span>
+      </td>
+      <td className={cell}>
+        <NotBackedValue gap="toolbelts" />
+      </td>
+      <td className={cell}>
+        <NotBackedValue gap="toolbelts" />
       </td>
       <td className={numericCell}>
         {version.calls30d === null ? (
@@ -304,6 +284,23 @@ function Row({
   );
 }
 
+/** Each provider's view, from the roster and the versions the registry read. */
+export function providerViews(
+  servers: readonly McpServerList["servers"][number][],
+  total: ToolVersionPage | null,
+): ReadonlyMap<string, ProviderView> {
+  const views = new Map<string, ProviderView>();
+  for (const server of servers) {
+    views.set(server.id, {
+      server,
+      versions:
+        total?.items.filter((version) => version.serverId === server.id) ?? [],
+      complete: total !== null && total.nextCursor === null,
+    });
+  }
+  return views;
+}
+
 export function Registry({
   at,
   orgRole,
@@ -313,6 +310,7 @@ export function Registry({
   canImport,
   canClassify,
   read,
+  total,
   servers,
 }: {
   at: ToolsAt;
@@ -322,11 +320,15 @@ export function Registry({
   cursor: string | null;
   canImport: boolean;
   canClassify: boolean;
+  /** The page this view shows: narrowed by the chip and the cursor. */
   read: Read<ToolVersionPage>;
-  /** list_mcp_servers: the servers the import control picks from. */
+  /** The registry's unfiltered first page, which the badge counts against. */
+  total: ToolVersionPage | null;
+  /** list_mcp_servers: each row's provider, and the import dialog's picker. */
   servers: Read<McpServerList>;
 }) {
   const t = useTranslations("tools.registry");
+  const locale = useLocale();
   if (!read.ok) {
     return (
       <ToolsReadFailure
@@ -338,55 +340,71 @@ export function Registry({
     );
   }
   const { items, nextCursor } = read.value;
-  // The import control picks a server from the roster rather than taking a
-  // typed `mcs_…`; when the roster could not be read it falls back to the id.
-  const importAction = canImport ? (
-    <ImportControls
-      at={at}
-      servers={servers.ok ? servers.value.servers : null}
-    />
-  ) : null;
-
-  if (items.length === 0 && category === null && cursor === null) {
-    return (
-      <div className="flex flex-col gap-6">
-        <Section
-          id="tools-registry"
-          title={t("empty.title")}
-          lead={t("empty.body")}
-          actions={importAction}
-          data-state="empty"
-        />
-      </div>
-    );
-  }
+  const roster = servers.ok ? servers.value.servers : [];
+  const views = providerViews(roster, total);
+  const totalKnown = total !== null && total.nextCursor === null;
   return (
-    <div className="flex flex-col gap-6">
-      <Section
-        id="tools-registry"
-        title={t("title")}
-        lead={t("lead")}
-        actions={importAction}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CategoryChips
-            at={at}
-            names={names}
-            category={category}
-            items={items}
-            complete={nextCursor === null}
-          />
-          <NamesToggle at={at} names={names} category={category} />
+    <div className="flex flex-col gap-4">
+      <NotBacked gap="registry" testId="tools-observed-schemas">
+        {t("observedNotBacked")}
+      </NotBacked>
+      <section aria-labelledby="tools-registry" className={panel}>
+        <div className={panelHeader}>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <h2 id="tools-registry" className={panelTitle}>
+              {t("title")}
+            </h2>
+            <p className="text-xs text-muted-foreground">{t("caption")}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <NamesToggle at={at} names={names} category={category} />
+            <span
+              data-testid="tools-shown"
+              className={`${mono} rounded border border-border px-1.5 py-0.5 text-[10.5px] text-muted-foreground`}
+            >
+              {totalKnown
+                ? t("shownOf", {
+                    shown: formatCount(items.length, locale),
+                    total: formatCount(total.items.length, locale),
+                  })
+                : t("shown", { shown: formatCount(items.length, locale) })}
+            </span>
+            {canImport ? (
+              <ImportProvider
+                at={at}
+                servers={servers.ok ? servers.value.servers : null}
+                compact
+              />
+            ) : null}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5 border-b border-border px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <CategoryChips
+              at={at}
+              names={names}
+              category={category}
+              items={items}
+              complete={nextCursor === null}
+            />
+          </div>
+          <CategoriesDialog />
         </div>
         {items.length === 0 ? (
-          <p data-state="empty" className="text-sm text-muted-foreground">
-            {t("emptyCategory")}
+          <p
+            data-state="empty"
+            className={`${panelBody} text-sm text-muted-foreground`}
+          >
+            {category === null && cursor === null
+              ? t("emptyRegistry")
+              : t("emptyCategory")}
           </p>
         ) : (
           <Table
             label={t("title")}
             columns={[
               { label: t("columns.version") },
+              { label: t("columns.provider") },
               { label: t("columns.category") },
               { label: t("columns.hazard") },
               { label: t("columns.gate") },
@@ -394,6 +412,8 @@ export function Registry({
               { label: t("columns.financial") },
               { label: t("columns.origin") },
               { label: t("columns.digest") },
+              { label: t("columns.toolbelts") },
+              { label: t("columns.agents") },
               { label: t("columns.calls"), numeric: true },
             ]}
           >
@@ -404,42 +424,40 @@ export function Registry({
                 version={version}
                 names={names}
                 canClassify={canClassify}
+                canAdminister={canImport}
+                provider={
+                  version.serverId === null
+                    ? null
+                    : (views.get(version.serverId) ?? null)
+                }
               />
             ))}
           </Table>
         )}
-        <p
-          data-state="facets-declared"
-          className="max-w-prose text-xs text-muted-foreground"
-        >
-          {t("categoriesDeclaredNote")}
-        </p>
-        {category === null ? null : (
+        <div className={`${panelBody} flex flex-col gap-2`}>
+          {nextCursor === null ? null : (
+            <CursorPager
+              nextCursor={nextCursor}
+              link={(next) =>
+                toolsLink(at, { tab: "tools", names, category, cursor: next })
+              }
+            />
+          )}
           <p
-            data-state="facets-filtered"
+            data-state="facets-declared"
             className="max-w-prose text-xs text-muted-foreground"
           >
-            {t("categoriesFilteredNote")}
+            {category === null
+              ? nextCursor === null
+                ? t("categoriesDeclaredNote")
+                : t("categoriesNote")
+              : t("categoriesFilteredNote")}
           </p>
-        )}
-        {nextCursor === null ? null : (
-          <p
-            data-state="facets-partial"
-            className="max-w-prose text-xs text-muted-foreground"
-          >
-            {t("categoriesNote")}
+          <p className="max-w-prose border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
+            {t("gateNote")}
           </p>
-        )}
-        <CursorPager
-          nextCursor={nextCursor}
-          link={(next) =>
-            toolsLink(at, { tab: "registry", names, category, cursor: next })
-          }
-        />
-        <p className="max-w-prose text-xs text-muted-foreground">
-          {t("gateNote")}
-        </p>
-      </Section>
+        </div>
+      </section>
     </div>
   );
 }
