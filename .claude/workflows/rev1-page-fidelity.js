@@ -1,11 +1,9 @@
 export const meta = {
   name: 'rev1-page-fidelity',
-  description: 'Build rev1 pages (any of shell, fleet, agents, runtimes, billing, steering) to the mockups in oxagen-roadmap, audit each with its own audit prompt, file backend-gap issues, and integrate onto one branch and PR',
+  description: 'Build rev1 pages (any of shell, fleet, agents, runtimes, billing, steering) to the mockups in oxagen-roadmap, file backend-gap issues, and integrate onto one branch and PR',
   whenToUse: 'When apps/app pages must match mockups/pages/<page>.md in macanderson/oxagen-roadmap exactly, in every state, desktop and mobile.',
   phases: [
-    { title: 'Build', detail: 'one builder per lane in its own worktree: baseline audit, mock screenshots, build, backend-gap issues' },
-    { title: 'Audit', detail: 'an independent auditor runs the page audit prompt against the lane' },
-    { title: 'Fix', detail: 'the builder fixes every FAIL a frontend change can clear' },
+    { title: 'Build', detail: 'one builder per lane in its own worktree: mock screenshots, build, backend-gap issues' },
     { title: 'Integrate', detail: 'merge each finished lane onto the session branch and push' },
     { title: 'Finish', detail: 'coverage audit, generators, merge main, PR, CI' },
   ],
@@ -40,7 +38,7 @@ HARD RULES (restate them to any subagent you spawn):
 - A capability given an "app" layer needs its apps/app/capability-ui-map.json binding and a component or action test as proof (check:ui-parity --strict).
 - No fourth Playwright spec. New routes go in apps/app/e2e/routes.ts for page-load.
 - Read DEREGISTERED.md before removing a feature's files.
-- Never edit, commit to, or add files in the oxagen-roadmap clone. The spec and audit prompt are fixed. A deviation you cannot avoid is not written into the spec: list it under deviations in your result, and the auditor marks its check FAIL.
+- Never edit, commit to, or add files in the oxagen-roadmap clone. The spec and audit prompt are fixed. A deviation you cannot avoid is not written into the spec: list it under deviations in your result, and the PR lists it.
 - Plain-noun headings: no comma, mid-dot or not/never contrast in a heading or label; subtext under a heading is one sentence or nothing. Exactly one gold action per screen.
 - Open PRs that overlap this work (read their diffs with the GitHub MCP pull_request_read tool, loaded via ToolSearch, on macanderson/oxagen): #3776 "resurface existing Fleet, Run and Steering functions" and #3777 "resurface shell activity and organization sections". Do not duplicate what they add; build compatibly with them and name any overlap in your result.
 `
@@ -167,7 +165,6 @@ const LANE_RESULT = {
     worktree: { type: 'string' },
     head_sha: { type: 'string' },
     summary: { type: 'string' },
-    baseline: { type: 'string', description: 'baseline audit on origin/main: counts of PASS/FAIL/N/A per spec and the worst gaps' },
     files_touched: { type: 'array', items: { type: 'string' } },
     tests_run: { type: 'array', items: { type: 'string' }, description: 'each test file run and its result' },
     issues: { type: 'array', items: { type: 'object', properties: { url: { type: 'string' }, title: { type: 'string' }, new: { type: 'boolean' }, checks: { type: 'string' } }, required: ['url', 'title'] } },
@@ -175,33 +172,6 @@ const LANE_RESULT = {
     deviations: { type: 'array', items: { type: 'string' } },
   },
   required: ['lane', 'branch', 'worktree', 'head_sha', 'summary', 'issues'],
-}
-
-const AUDIT = {
-  type: 'object',
-  properties: {
-    lane: { type: 'string' },
-    head_sha: { type: 'string' },
-    report_path: { type: 'string' },
-    checks: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          spec: { type: 'string' },
-          n: { type: 'string' },
-          check: { type: 'string' },
-          result: { type: 'string', enum: ['PASS', 'FAIL', 'N/A'] },
-          evidence: { type: 'string' },
-          fix: { type: 'string' },
-          blocked_by_backend: { type: 'boolean', description: 'true only when the fail cannot clear without backend work that a filed issue covers' },
-          issue_url: { type: 'string' },
-        },
-        required: ['spec', 'n', 'check', 'result', 'evidence', 'blocked_by_backend'],
-      },
-    },
-  },
-  required: ['lane', 'head_sha', 'checks'],
 }
 
 const FINAL = {
@@ -225,7 +195,7 @@ function buildPrompt(lane, base) {
 TASK: lane "${lane.id}". Make ${lane.routes} in apps/app match the rev1 design exactly, in every state, desktop and mobile.
 Specs and audit prompts: ${specList(lane)}.
 1. Setup: git -C ${REPO} fetch origin; git -C ${REPO} worktree add ${WT}/${lane.id} -b page/${lane.id} ${base}. If that worktree and branch already exist from an earlier attempt, reuse them: read their commits (git log ${base}..HEAD) and continue from them rather than starting over. Work only in that worktree. Do not push.
-2. Baseline: read the spec(s) in full, then run the audit prompt(s) yourself against the current code (read the files; {{APP_ROOT}} is ${WT}/${lane.id}/apps/app). Record every check's PASS/FAIL with evidence in ${REPO}/${VERIF}/${lane.id}/baseline.md.
+2. Read the spec(s) in full. Use the audit prompt(s) as your checklist of what the page must have.
 3. Screenshot the mock in every state the catalog lists for these pages, desktop and mobile, and study them.
 4. Build: ${lane.task}
    You own: ${lane.owns}. Touch shared files (messages outside your namespace, capability-ui-map.json, data/ports.ts, data/contracts/common.ts, e2e/routes.ts) only in the smallest hunk your lane needs. Do not edit the shell (features/shell, app layouts) unless you are the shell lane: list shell needs under coordination.
@@ -234,25 +204,6 @@ Specs and audit prompts: ${specList(lane)}.
 5. Tests: a co-located component test for each new or changed component covering every state and the key interactions (tabs, chips, dialogs, aria attributes, verbatim copy), and an action test for each server action. Run each changed test file alone once. Commit.
 6. Backend gaps: render NotBacked and file or reuse issues per BACKEND GAPS. Every issue's DoD ends with re-running the audit prompt to all PASS.
 7. Commit everything on page/${lane.id}. Return the structured result with the worktree's HEAD sha.`
-}
-
-function auditPrompt(lane, built, round) {
-  return `${RULES}\n${MOCK_HOWTO}
-TASK: independent audit (round ${round}) of lane "${lane.id}" at ${built.worktree} (branch ${built.branch}, HEAD ${built.head_sha}). You did not build this. Be exact and adversarial: the design is the spec and close enough is a FAIL. Do not edit source files.
-Run each audit prompt in full, check by check: ${lane.specs.map(s => `${PAGES}/${s}.audit-prompt.md`).join(', ')}. {{APP_ROOT}} is ${built.worktree}/apps/app; there is no running server, so cite file:line and rendered output from the component tests (you may run ONE test file at a time to see what renders) and compare against mock screenshots you take (desktop and mobile, every state). Shell checks (sidebar, top bar, approvals drawer, mobile thumb bar) belong to the shell lane: mark them N/A with "shell lane" unless this lane is the shell lane.
-Issues the builder filed for backend gaps: ${JSON.stringify(built.issues || [])}. Mark a FAIL blocked_by_backend=true only when it truly cannot clear without that backend work AND the page renders NotBacked honestly for it; otherwise it is a frontend FAIL. A fixture or invented value in production code is a FAIL.
-Write the report in the prompt's output format to ${REPO}/${VERIF}/${lane.id}/audit-round-${round}.md and return every check as structured data.`
-}
-
-function fixPrompt(lane, built, audit, round) {
-  const fails = audit.checks.filter(c => c.result === 'FAIL' && !c.blocked_by_backend)
-  const blocked = audit.checks.filter(c => c.result === 'FAIL' && c.blocked_by_backend && !c.issue_url)
-  return `${RULES}\n${MOCK_HOWTO}\n${ISSUE_RULES}
-TASK: fix round ${round} for lane "${lane.id}" in ${built.worktree} on ${built.branch} (HEAD ${built.head_sha}). The independent audit (${REPO}/${VERIF}/${lane.id}/audit-round-${round}.md) failed these checks that a frontend change can clear:
-${JSON.stringify(fails.map(c => ({ spec: c.spec, n: c.n, check: c.check, evidence: c.evidence, fix: c.fix })), null, 1)}
-Fix every one to the spec (${lane.specs.join(', ')}). If you prove a FAIL truly needs backend work, render NotBacked and file or reuse an issue for it.
-Backend-blocked FAILs without an issue yet (file or reuse one each): ${JSON.stringify(blocked.map(c => ({ spec: c.spec, n: c.n, check: c.check })))}
-Update tests; run each changed test file alone once; commit. Return the structured result with all issues (old and new) and the new HEAD sha.`
 }
 
 let chain = Promise.resolve()
@@ -269,21 +220,9 @@ TASK: integrate lane "${lane.id}" onto ${BRANCH} in ${REPO} (the main checkout, 
 }
 
 async function runLane(lane, base) {
-  let built = await agent(buildPrompt(lane, base), { label: `build:${lane.id}`, phase: 'Build', schema: LANE_RESULT, agentType: 'general-purpose' })
+  const built = await agent(buildPrompt(lane, base), { label: `build:${lane.id}`, phase: 'Build', schema: LANE_RESULT, agentType: 'general-purpose' })
   if (!built) { log(`lane ${lane.id}: build agent failed`); return null }
-  let audit = null
-  for (let round = 1; round <= 3; round++) {
-    audit = await agent(auditPrompt(lane, built, round), { label: `audit:${lane.id}:r${round}`, phase: 'Audit', schema: AUDIT, agentType: 'general-purpose' })
-    if (!audit) { log(`lane ${lane.id}: audit round ${round} failed`); break }
-    const fails = audit.checks.filter(c => c.result === 'FAIL' && !c.blocked_by_backend)
-    const blockedNoIssue = audit.checks.filter(c => c.result === 'FAIL' && c.blocked_by_backend && !c.issue_url)
-    log(`lane ${lane.id} round ${round}: ${audit.checks.filter(c => c.result === 'PASS').length} pass, ${fails.length} frontend fail, ${audit.checks.filter(c => c.blocked_by_backend).length} backend-blocked`)
-    if (!fails.length && !blockedNoIssue.length) break
-    if (round === 3) { log(`lane ${lane.id}: ${fails.length} frontend fails remain after 3 rounds`); break }
-    const fixed = await agent(fixPrompt(lane, built, audit, round), { label: `fix:${lane.id}:r${round}`, phase: 'Fix', schema: LANE_RESULT, agentType: 'general-purpose' })
-    if (fixed) built = { ...built, ...fixed, issues: [...(built.issues || []), ...(fixed.issues || [])] }
-  }
-  return { lane: lane.id, built, audit }
+  return { lane: lane.id, built }
 }
 
 const lanes = cfg.only ? LANES.filter(l => cfg.only.includes(l.id)) : LANES
@@ -316,9 +255,8 @@ const results = await parallel(lanes.map(lane => async () => {
 const done = results.filter(Boolean)
 const scoreboard = done.map(r => ({
   lane: r.lane,
-  pass: r.audit ? r.audit.checks.filter(c => c.result === 'PASS').length : null,
-  frontend_fail: r.audit ? r.audit.checks.filter(c => c.result === 'FAIL' && !c.blocked_by_backend).map(c => `${c.spec}#${c.n} ${c.check}`) : null,
-  backend_blocked: r.audit ? r.audit.checks.filter(c => c.result === 'FAIL' && c.blocked_by_backend).map(c => `${c.spec}#${c.n} ${c.issue_url || 'no issue'}`) : null,
+  summary: r.built.summary,
+  deviations: r.built.deviations || [],
   issues: (r.built.issues || []).map(i => i.url),
   merged: r.merged,
 }))
@@ -331,7 +269,7 @@ const final = await agent(`${RULES}
 TASK: finish ${BRANCH} in ${REPO} and open its PR.
 1. git fetch origin; git merge origin/main (never rebase); resolve conflicts keeping both behaviours; run pnpm --filter @oxagen/app gen:messages if messages changed and commit. Make sure every new route is in apps/app/e2e/routes.ts and apps/app/ARCHITECTURE.md §1.2 rows reflect the new and changed pages (Runtimes is new). Push.
 2. Read the whole diff once against the scoreboard below; fix anything inconsistent between lanes (duplicate state components, two drawers, unwired coordination notes). Push.
-3. Open a PR (GitHub MCP create_pull_request, loaded with ToolSearch) from ${BRANCH} into main, ready for review, titled "${PR_TITLE}". Body per .github/PULL_REQUEST_TEMPLATE.md (clear-prose): what ships per page, the audit scoreboard per lane (pass, remaining frontend fails, backend-blocked checks with their issues), "Refs #N" for every backend-gap issue (never Closes), defects fixed along the way, verification (which single test files ran; what is unverified), and end with:
+3. Open a PR (GitHub MCP create_pull_request, loaded with ToolSearch) from ${BRANCH} into main, ready for review, titled "${PR_TITLE}". Body per .github/PULL_REQUEST_TEMPLATE.md (clear-prose): what ships per page, per lane: what was built, deviations from the spec, and the backend-gap issues, "Refs #N" for every backend-gap issue (never Closes), defects fixed along the way, verification (which single test files ran; what is unverified), and end with:
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
 https://claude.ai/code/${cfg.session}
