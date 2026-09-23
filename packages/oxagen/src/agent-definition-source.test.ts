@@ -67,6 +67,14 @@ describe("agent definition source validation", () => {
       );
     }
   });
+  it.each(["1979-05-27T07:32:00Z", "1979-05-27", "07:32:00"])(
+    "rejects a TOML date or time as the budget table: %s",
+    (value) => {
+      expect(() => parseAgentDefinitionSource(`budget = ${value}`)).toThrow(
+        expect.objectContaining({ reason: "invalid_definition_budget" }),
+      );
+    },
+  );
   it("rejects malformed budget tables and tool lists", () => {
     expect(() => parseAgentDefinitionSource('budget = "none"')).toThrow(
       /TOML table/,

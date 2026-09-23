@@ -7,7 +7,10 @@ export interface DefinitionBudget {
 }
 
 function table(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
+  return typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !(value instanceof Date)
     ? (value as Record<string, unknown>)
     : undefined;
 }
