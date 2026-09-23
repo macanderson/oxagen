@@ -2211,6 +2211,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "12",
   },
+  DEPLOYMENT_FAILURE_RUN_ID: {
+    group: "Operator scripts",
+    description:
+      "The CI run on main that deployment-failure-issue.mjs records. deployment-failure.yml sets it from the workflow_run event, or from the run_id input on a manual replay.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "35930652260",
+  },
   SCR_OWNER: {
     group: "Operator scripts",
     description:
