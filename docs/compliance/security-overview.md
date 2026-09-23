@@ -4,7 +4,7 @@ Your review needs to distinguish a control in code from a control exercised in p
 
 ## Data flow
 
-A person authenticates through [Better Auth](../../packages/auth/src/auth.ts). API, MCP, and app calls reach the [capability kernel](../../packages/oxagen/src/kernel.ts), which validates contracts and applies the installed identity, billing, entitlement, and decision-rule gates. Surface bootstrap must install these gates. A missing runtime gate is not equivalent to a denial.
+A person authenticates through [Better Auth](../../packages/auth/src/auth.ts). Governed capability calls from the API, MCP, and app reach the [capability kernel](../../packages/oxagen/src/kernel.ts), which validates contracts and applies the installed identity, billing, entitlement, and decision-rule gates. Surface bootstrap must install these gates. A missing runtime gate is not equivalent to a denial. Webhooks, the Inngest endpoint, and CMS routes have separate authentication and validation boundaries in [API routing](../../apps/api/src/app.ts); they do not inherit these kernel gates merely by reaching the API.
 
 Postgres stores transactional identity and configuration. [Tenant transactions](../../packages/database/src/tenant.ts) set organization and workspace scope for row-level security. Explicit system transactions serve cross-tenant jobs. [Data-plane resolution](../../packages/tenancy/src/data-plane.ts) selects configured stores. Neo4j stores graph relationships, ClickHouse stores telemetry, and [blob adapters](../../packages/storage/src/client.ts) store binary objects.
 
@@ -18,7 +18,7 @@ Enterprise SSO is in [PR #3735](https://github.com/macanderson/oxagen/pull/3735)
 
 ## Encryption
 
-[Aurora configuration](../../infra/stacks-new/oxagen/data-services.tf) sets storage encryption. [App-node volumes](../../infra/modules/app-node/main.tf) are encrypted. [Caddy](../../infra/tools/caddy/Caddyfile) terminates public HTTPS and forwards to local services. This is not a claim that every internal connection uses TLS.
+[Aurora configuration](../../infra/stacks-new/oxagen/data-services.tf) sets storage encryption. [App-node volumes](../../infra/modules/app-node/main.tf) are encrypted. The [active ALB HTTPS listener](../../infra/stacks-new/oxagen/main.tf) terminates public TLS. It forwards HTTP to the node, where [Caddy](../../infra/tools/caddy/Caddyfile.alb) routes to local services. The node security group restricts inbound HTTP to the ALB security group; the ALB-to-node hop is not encrypted.
 
 [Envelope encryption](../../packages/crypto/src/envelope.ts) uses AES-256-GCM with a fresh data key wrapped by the configured KMS adapter. The current envelope does not authenticate tenant or row context. [Plugin credential KMS](../../packages/plugins/src/credentials/kms.ts) uses a local wrapping key from `AUTH_TOKEN_ENCRYPTION_KEY`. It must not be described as an AWS KMS call merely because it has a KMS interface.
 

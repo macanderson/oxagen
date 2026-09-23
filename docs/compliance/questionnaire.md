@@ -8,7 +8,7 @@ Use these answers for an initial procurement review of identity, authority, cred
 | Has an independent penetration test completed? | No report evidenced. [#3758](https://github.com/macanderson/oxagen/issues/3758). |
 | Is a signed DPA available? | This pack contains a [draft](dpa-template.md), not an executed agreement. |
 | Are processor locations documented? | [Recipient inventory](subprocessors.md) distinguishes AWS region from unverified vendor locations. Contract schedule remains incomplete. |
-| Does every agent have an identity? | Agent records and principal attribution are implemented in [agent schema](../../packages/database/src/schema/agent.ts) and [tenant scope](../../packages/tenancy/src/scope.ts). |
+| Does every agent have an identity? | New registered agents receive delegated principals, but the [agent schema](../../packages/database/src/schema/agent.ts) permits a null principal. Legacy agents and the [workspace qa-chat bootstrap](../../packages/handlers/src/workspace-agents.ts) may lack one. Confirm provisioning before making an every-agent claim. |
 | Are roles checked? | [IAM](../../packages/iam/src/check-iam.ts) and sensitive handler checks apply to governed calls. Tier-dependent fast paths and runtime bootstrap require review. |
 | Is tenant isolation implemented? | Postgres RLS and scoped transactions: [tenant helper](../../packages/database/src/tenant.ts), [scope](../../packages/tenancy/src/scope.ts). Dedicated system operations use explicit bypass. |
 | Are machine credentials scoped? | [Machine-key scope](../../packages/iam/src/machine-key-scope.ts) checks credential purpose and context. |
@@ -20,7 +20,7 @@ Use these answers for an initial procurement review of identity, authority, cred
 | Is access review periodically performed? | No operating access-review evidence supplied. [#3757](https://github.com/macanderson/oxagen/issues/3757). |
 | Are secrets field-encrypted? | [Envelope encryption](../../packages/crypto/src/envelope.ts) and [credential resolver](../../packages/plugins/src/credentials/kms.ts) implement specific paths. [OAuth hook limits](../../packages/auth/src/token-encryption.ts) prevent a universal yes. |
 | Is stored infrastructure data encrypted? | [Aurora](../../infra/stacks-new/oxagen/data-services.tf) and [node volumes](../../infra/modules/app-node/main.tf) configure encryption. Verify deployed settings. |
-| Is public traffic encrypted? | HTTPS terminates in [Caddy](../../infra/tools/caddy/Caddyfile). Internal loopback forwarding is a separate boundary. |
+| Is public traffic encrypted? | Public TLS terminates at the [ALB](../../infra/stacks-new/oxagen/main.tf). The ALB forwards HTTP to [Caddy](../../infra/tools/caddy/Caddyfile.alb) on the node through a restricted security group; that hop is not encrypted. |
 | Are model credentials hidden from the harness? | Supported host custody paths exist in [credential store](../../packages/tacho/src/host/credential-store.ts). Host-owner access remains possible. |
 | Can an operator approve or deny governed work? | [Approval runtime](../../packages/agent/src/runtime/approval.ts) and [decision capability](../../packages/oxagen/src/contracts/agent.approval.resolve.ts). |
 | Do hooks contain a process? | No. [Vision](../VISION.md) distinguishes hook controls from the unbuilt contained tier. |
