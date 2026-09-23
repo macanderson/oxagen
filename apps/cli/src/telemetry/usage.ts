@@ -269,6 +269,14 @@ export function classifyCommand(
   return process.stdout.isTTY ? "repl" : "stdin";
 }
 
+/**
+ * Commands that promise to open no socket and write no file. `verify` is the
+ * check an auditor runs on a bundle, offline, on a machine with no Oxagen
+ * account (docs/guides/export-and-verify.md), so it sends no usage event and
+ * writes no install id, whatever the opt-out settings say.
+ */
+export const OFFLINE_COMMANDS: ReadonlySet<string> = new Set(["verify"]);
+
 /** One random id per CLI process — groups the (at most one) event this run emits. */
 const SESSION_ID = randomUUID();
 
@@ -352,7 +360,7 @@ export async function sendUsageEvent(
  */
 export async function recordUsageEvent(input: BuildEventInput): Promise<void> {
   try {
-    if (!isTelemetryEnabled()) return;
+    if (OFFLINE_COMMANDS.has(input.command) || !isTelemetryEnabled()) return;
     ensureDisclosureShown();
     const installId = getOrCreateInstallId();
     const payload = buildUsageEvent(input, installId);

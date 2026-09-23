@@ -131,7 +131,9 @@ export function buildRunExportBundle(input: {
  * Oxagen CLI. It depends on node:crypto and node:fs alone and reimplements
  * what `oxagen verify` checks: JCS (keys sorted, no whitespace, which is what
  * RFC 8785 yields for these shapes); each ledger frame's payload and event
- * digest and dense attempt sequence; each wrapped frame's prev_hash link;
+ * digest and dense attempt sequence; each wrapped frame's prev_hash link
+ * and, where the frame carries its event, the event's hash and the members
+ * shown beside it (the rule is `wrappedFrameOf` in @oxagen/tacho);
  * each ledger attempt's stream fold; the RFC 6962 tree over the frame
  * digests; the Ed25519 check with the bundled key, whose id must be the first
  * 16 hex chars of sha256 over the JSON string of the PEM (the platform's
@@ -188,12 +190,45 @@ function treeHash(leaves) {
 }
 const rootOf = (digests) => hex(treeHash(digests.map((d) => Buffer.from(d.slice(7), "hex"))));
 
+// A wrapped frame as the export writes it from its event (wrappedFrameOf).
+const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+function wrappedFrameOf(event, bytesRef) {
+  const body = isObject(event.body) ? event.body : {};
+  const content = isObject(event.content) ? event.content : null;
+  const turn = isObject(event.turn) ? event.turn : null;
+  const text = (v) => (typeof v === "string" ? v : "");
+  const count = (v) => (typeof v === "number" ? v : null);
+  return {
+    event_id: event.event_id ?? null, seq: event.seq ?? null, ts: event.ts ?? null, kind: event.kind ?? null,
+    prev_hash: event.prev_hash ?? null, hash: event.hash ?? null,
+    content: { digest: content?.digest ?? null, bytes_ref: bytesRef, redactions: content?.redactions ?? [] },
+    body: event.body ?? null,
+    tool_name: text(body.tool_name), tool_status: text(body.tool_status), tool_use_id: text(body.tool_use_id),
+    model: text(body.model), provider: text(body.provider), policy_decision: text(body.policy_decision),
+    cost_usd_micros: count(body.cost_usd_micros), turn_seq: count(turn?.turn_seq),
+  };
+}
+// null when the frame carries no event; otherwise the reasons it is broken.
+function checkWrapped(f) {
+  if (f.event === undefined || f.event === null) return null;
+  if (!isObject(f.event)) return ["event is not a JSON object"];
+  const why = [];
+  const { hash: _hash, ...unhashed } = f.event;
+  if (digestJcs(unhashed) !== f.hash) why.push("the event does not hash to hash");
+  const expected = wrappedFrameOf(f.event, typeof f.content?.bytes_ref === "string" ? f.content.bytes_ref : null);
+  const differs = [...new Set([...Object.keys(expected), ...Object.keys(f)])].filter((k) => k !== "event")
+    .filter((k) => f[k] === undefined || expected[k] === undefined || canonical(f[k]) !== canonical(expected[k])).sort();
+  if (differs.length > 0) why.push(differs.join(", ") + (differs.length === 1 ? " differs" : " differ") + " from the hashed event");
+  return why;
+}
+
 const failures = [];
 if (!((manifest.source === "ledger" && typeof manifest.run_id === "string" && manifest.run_id.startsWith("arun_")) || (manifest.source === "tacho" && typeof manifest.run_id === "string" && manifest.run_id.startsWith("tse_")))) failures.push("the source is invalid or does not match the run identifier");
 const frames = lines.map((line) => { try { return JSON.parse(line); } catch { return {}; } });
 const digests = frames.map((frame) => frame.event_digest ?? frame.hash);
 
 let offset = 0;
+let notCarried = 0;
 for (const attempt of manifest.attempts) {
   let prevSeq = null;
   let prevHash = null;
@@ -216,10 +251,13 @@ for (const attempt of manifest.attempts) {
       if (prevSeq !== null && f.seq !== prevSeq + 1) why.push("seq " + f.seq + " where " + (prevSeq + 1) + " was due");
       prevSeq = f.seq;
       prevHash = f.hash;
+      const own = checkWrapped(f);
+      if (own === null) notCarried += 1;
+      else why.push(...own);
     }
     const label = "frame " + (i + 1) + " (" + attempt.attempt_id + " #" + (f.attempt_seq ?? f.seq) + ")";
     if (why.length > 0) failures.push(label + " broken: " + why.join("; "));
-    else console.log(label + " held");
+    else console.log(label + " held" + (manifest.source === "tacho" && (f.event === undefined || f.event === null) ? " (digest not carried)" : ""));
   }
   if (manifest.source === "ledger" && typeof attempt.event_stream_digest === "string" && stream !== attempt.event_stream_digest) failures.push("attempt " + attempt.attempt_id + ": frames do not fold to the sealed event_stream_digest");
   offset += attempt.frame_count;
@@ -268,6 +306,7 @@ if (existsSync(join(dir, "redactions.json"))) {
   if (canonical(recomputed) !== canonical(claimed)) failures.push("redactions.json does not match what the frames record");
 }
 
+if (notCarried > 0) console.log("digest not carried on " + notCarried + " wrapped frame(s): the bundle holds no event to hash for them, so only their links and the Merkle root are checked");
 if (failures.length > 0) {
   for (const f of failures) console.error("BROKEN " + f);
   process.exit(1);

@@ -32,13 +32,13 @@ The signed, offline-verifiable evidence bundle for one sealed run (Mission Contr
 
 A zip written to `evidence/<org>/<workspace>/exports/<export id>/<sha256 hex>.zip` in the organisation's object store, holding:
 
-- `manifest.json`: bundle format (`oxagen.run-export/2`), run id, and per attempt its frame count, Merkle root, sealed `event_stream_digest` (ledger runs), enforcement tier, completeness gaps and replay grade, plus the attester key id and the export instant.
-- `frames.ndjson`: one JCS envelope per frame in sequence order. For a ledger run these are the archive segments the seal wrote (spec §13.3). For a wrapped session they are the hash-chained rows, as a projection of the stored event.
+- `manifest.json`: bundle format (`oxagen.run-export/3`), run id, and per attempt its frame count, Merkle root, sealed `event_stream_digest` (ledger runs), enforcement tier, completeness gaps and replay grade, plus the attester key id and the export instant.
+- `frames.ndjson`: one JCS envelope per frame in sequence order. For a ledger run these are the archive segments the seal wrote (spec §13.3). For a wrapped session they are the hash-chained rows as the Run page shows them, each with `event`: the sealed Tacho event, rebuilt from the stored `tacho_events` row by `unflattenEvent` (`packages/tacho/src/columns.ts`). The export keeps the event only when it hashes to the row's `hash`, and otherwise leaves it out rather than guess.
 - `attestation.json`: an Ed25519 signature by the deployment's attester key over the RFC 8785 canonical JSON of `(run_id, attempt_id, frame_count, merkle_root, archive_segment_digest, enforcement_tier, completeness_gaps)` (spec §8.3), with the verifying public key (PEM) and its key id.
 - `redactions.json`: what the host redacted before the bytes were written, and what the bundle withholds, as kinds and counts. It holds no value, byte span, or `original_digest`. The verifier recomputes it from the frames, so an edited summary shows as broken.
 - `verify.mjs`: a Node script with no dependencies that runs the same checks as `oxagen verify`.
 
-`oxagen verify <bundle>` recomputes, per ledger frame, the payload digest and `event_digest` (RFC 8785) and checks `attempt_seq` is dense, then folds the attempt's `event_stream_digest`. Per wrapped frame it checks the `prev_hash` link and `seq`. The export does not carry the full wrapped event, so a wrapped frame's own hash is reported `not carried`. Over the bundle it checks the frame count, the Merkle roots, each signature and key id, and `redactions.json`.
+`oxagen verify <bundle>` recomputes, per ledger frame, the payload digest and `event_digest` (RFC 8785) and checks `attempt_seq` is dense, then folds the attempt's `event_stream_digest`. Per wrapped frame it checks the `prev_hash` link and `seq`, recomputes the carried event's hash, and checks that the frame shows what that event says (`wrappedFrameOf`). A wrapped frame without an event, including every wrapped frame of a format-1 or format-2 bundle, reports its digest `not carried`. Over the bundle it checks the frame count, the Merkle roots, each signature and key id, and `redactions.json`.
 
 When the job cannot build the bundle (no attester key configured, a segment missing) the export row records `status: failed` with the reason.
 

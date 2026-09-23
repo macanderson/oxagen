@@ -102,6 +102,17 @@ describe("opting out fully suppresses id generation and network I/O", () => {
     expect(mockWriteConfig).not.toHaveBeenCalled();
   });
 
+  it("never sends or writes for verify, the offline auditor's check, even with telemetry on", async () => {
+    await recordUsageEvent({
+      command: "verify",
+      durationMs: 100,
+      exitStatus: "success",
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+    expect(mockReadConfig).not.toHaveBeenCalled();
+  });
+
   it("sendUsageEvent itself refuses to send when disabled, even if called directly", async () => {
     process.env["OXAGEN_TELEMETRY"] = "0";
     await sendUsageEvent(

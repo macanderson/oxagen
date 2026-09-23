@@ -1,5 +1,6 @@
 /** Builders shared by the package tests. Not part of the public surface. */
 import { type ChainCursor, GENESIS_CURSOR, sealEvent } from "./chain";
+import { ENVELOPE_COLUMNS, type TachoEventRow } from "./columns";
 import { newEventId, sessionUuid } from "./ids";
 import type {
   BodyOf,
@@ -108,4 +109,45 @@ export function minimalSession(): TachoEvent[] {
       session_end_reason: "other",
     }),
   ]);
+}
+
+/** Envelope columns ClickHouse declares `Nullable` (0027_tacho_events.sql). */
+const NULLABLE_ENVELOPE_COLUMNS = new Set([
+  "parent_session_uuid",
+  "turn_seq",
+  "harness_event_sequence",
+  "git_dirty",
+  "claude_pid",
+  "claude_ppid",
+  "is_child_session",
+  "has_tty",
+]);
+
+/**
+ * A flattened row's envelope columns as `selectTachoEventRecords` reads them
+ * back: an unset `String` column is `""`, an unset `Nullable` one is null,
+ * `spawn_depth` (a plain `UInt8`) is 0, `seq` (a `UInt64`) is JSON text, `ts`
+ * is `toString(DateTime64(3))`, and `bytes_ref` is dropped as server-owned.
+ */
+export function asClickHouseRead(row: TachoEventRow): TachoEventRow {
+  const out: TachoEventRow = {};
+  for (const column of ENVELOPE_COLUMNS) {
+    if (column === "bytes_ref") continue;
+    const value = row[column];
+    if (column === "ts") {
+      const instant = new Date(String(value)).toISOString();
+      out[column] = instant.replace("T", " ").replace("Z", "");
+    } else if (column === "seq") {
+      out[column] = String(value);
+    } else if (column === "attrs") {
+      out[column] = value ?? {};
+    } else if (value !== undefined) {
+      out[column] = value;
+    } else if (NULLABLE_ENVELOPE_COLUMNS.has(column)) {
+      out[column] = null;
+    } else {
+      out[column] = column === "spawn_depth" ? 0 : "";
+    }
+  }
+  return out;
 }
