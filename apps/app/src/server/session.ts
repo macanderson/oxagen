@@ -21,7 +21,16 @@ type SessionUser = {
   twoFactorEnabled: boolean;
 };
 
-export type AppSession = { user: SessionUser };
+export type AppSession = {
+  user: SessionUser;
+  /**
+   * How this session was established (auth.sessions.auth_method, written by
+   * packages/auth): "sso:<providerId>" for an SSO sign-in, otherwise
+   * "password", "social:<provider>" or "other". Null or absent on a session
+   * older than the column; the require-SSO gate reads that as not SSO.
+   */
+  authMethod?: string | null;
+};
 
 /** Uncached read; request code uses `getSession`. */
 async function readSession(): Promise<AppSession | null> {
@@ -31,7 +40,13 @@ async function readSession(): Promise<AppSession | null> {
   const { id, email, name, image, emailVerified } = session.user;
   // The twoFactor plugin adds the column; the base session type does not name it.
   const enrolled: unknown = Reflect.get(session.user, "twoFactorEnabled");
+  // A session additionalField (packages/auth/src/auth.ts); the capped server
+  // type does not name it either.
+  // Object() because a session read from an older client, or a test double,
+  // can arrive without the session half; Reflect.get throws on a non-object.
+  const method: unknown = Reflect.get(Object(session.session), "authMethod");
   return {
+    authMethod: typeof method === "string" ? method : null,
     user: {
       id,
       email,

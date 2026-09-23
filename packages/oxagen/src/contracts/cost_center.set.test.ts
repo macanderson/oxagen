@@ -28,4 +28,33 @@ describe("set_cost_center contract", () => {
       }).success,
     ).toBe(true);
   });
+
+  it("names a workspace by public id, and only for a workspace target", () => {
+    expect(
+      costCenterSet.input.parse({
+        target: "workspace",
+        workspaceId: "wrk_1",
+        costCenter: "ENG-1001",
+      }),
+    ).toEqual({
+      target: "workspace",
+      workspaceId: "wrk_1",
+      costCenter: "ENG-1001",
+    });
+    expect(
+      costCenterSet.input.safeParse({
+        target: "workspace",
+        workspaceId: "core-platform",
+        costCenter: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      costCenterSet.input.safeParse({
+        target: "agent",
+        agent: "reviewer",
+        workspaceId: "wrk_1",
+        costCenter: null,
+      }).success,
+    ).toBe(false);
+  });
 });

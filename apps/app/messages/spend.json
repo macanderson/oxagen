@@ -171,7 +171,7 @@
       "cost_center": {
         "title": "By cost center",
         "key": "Cost center",
-        "note": "Each run is charged to its agent's cost center, or its workspace's when the agent names none.",
+        "note": "This workspace's runs, each charged to its agent's cost center, or to the workspace's when the agent names none. The chargeback statement covers every workspace.",
         "unassigned": "No cost center",
         "shareBasis": "Share is the row's spend divided by the month's spend in the strip above, both on the basis beside each figure.",
         "empty": "No run in this period has been rolled up."
