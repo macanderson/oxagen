@@ -238,12 +238,12 @@ export function createRequestHandler(
             );
             res.end(`${JSON.stringify({ result })}\n`);
           } catch (error) {
-            log(
-              `Contained execution failed: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            res.end(
-              `${JSON.stringify({ error: "Contained execution failed; inspect the daemon log for the cause" })}\n`,
-            );
+            const message =
+              error instanceof Error ? error.message : String(error);
+            log(`Contained execution failed: ${message}`);
+            // The launcher's own refusals name what the runner lacks, and the
+            // caller already holds the local token, so the reason goes back.
+            res.end(`${JSON.stringify({ error: message.slice(0, 1000) })}\n`);
           }
           return;
         }
