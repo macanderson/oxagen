@@ -80,14 +80,49 @@ export interface TachoPaths {
   daemonLauncher: string;
 }
 
+/** Claude Code's config directory: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */
+export function claudeConfigDirFor(
+  env: Record<string, string | undefined>,
+  home: string,
+): string {
+  return env["CLAUDE_CONFIG_DIR"] ?? join(home, ".claude");
+}
+
+/** Codex's home directory: `$CODEX_HOME`, else `~/.codex`. */
+export function codexHomeFor(
+  env: Record<string, string | undefined>,
+  home: string,
+): string {
+  return env["CODEX_HOME"] ?? join(home, ".codex");
+}
+
+/**
+ * The Claude Code and Codex directories for `home`, resolved the way
+ * `tachoPaths` resolves them. The variables describe the running user's own
+ * home, so they apply only when `home` is that home: a caller that names
+ * another one (a test's scratch directory) gets that home's defaults and
+ * never the real directory a variable points at.
+ */
+export function harnessConfigDirs(
+  home: string,
+  env: Record<string, string | undefined> = process.env,
+  ownHome: string = homedir(),
+): { claudeConfigDir: string; codexHome: string } {
+  const own = home === ownHome ? env : {};
+  return {
+    claudeConfigDir: claudeConfigDirFor(own, home),
+    codexHome: codexHomeFor(own, home),
+  };
+}
+
 export function tachoPaths(
   env: Record<string, string | undefined> = process.env,
   home: string = homedir(),
   platform: NodeJS.Platform = process.platform,
 ): TachoPaths {
   const root = env["TACHO_HOME"] ?? join(home, ".config", "oxagen", "tacho");
-  const claudeConfigDir = env["CLAUDE_CONFIG_DIR"] ?? join(home, ".claude");
-  const codexHome = env["CODEX_HOME"] ?? join(home, ".codex");
+  const claudeConfigDir = claudeConfigDirFor(env, home);
+  const codexHome = codexHomeFor(env, home);
   const stellaHome = env["STELLA_HOME"] ?? join(home, ".stella");
   return {
     root,
