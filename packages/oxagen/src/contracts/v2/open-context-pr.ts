@@ -93,6 +93,7 @@ export const openContextPr = defineTool({
 
       // Carried by reference.
       title: publishIn.title,
+      label: publishIn.label,
       body: publishIn.body,
 
       /**

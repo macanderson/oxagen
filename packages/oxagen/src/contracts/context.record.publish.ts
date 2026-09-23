@@ -33,6 +33,7 @@ export const contextRecordPublishShape = z
         "The record's stable id — the .stella/rules/<record_id>.toml file stem; the workspace-unique key",
       ),
     title: z.string().min(1).describe("Human-readable record title"),
+    label: z.string().trim().min(1).max(200).optional(),
     body: z
       .string()
       .min(1)

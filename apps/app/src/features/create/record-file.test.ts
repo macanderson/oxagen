@@ -159,6 +159,9 @@ describe("choiceKey", () => {
     expect(choiceKey({ ...base, statement: "Cache it." })).not.toBe(
       choiceKey(base),
     );
+    expect(choiceKey({ ...base, label: "Release Checklist" })).not.toBe(
+      choiceKey(base),
+    );
     expect(choiceKey({ ...base, force: "must" })).not.toBe(choiceKey(base));
     expect(
       choiceKey({ ...base, kind: "constraint", constraintEffect: "forbid" }),

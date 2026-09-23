@@ -244,6 +244,7 @@ export function toRunTranscript(
       type: entry.type,
       label: entry.label,
       callKey: entry.callId,
+      usage: entry.usage ?? null,
       kinds: entry.kinds,
       request: toTranscriptBody(entry.request),
       response: toTranscriptBody(entry.response),

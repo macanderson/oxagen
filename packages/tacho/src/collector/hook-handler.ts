@@ -12,6 +12,7 @@ import {
   type HookInput,
 } from "../claude-code/hooks";
 import { digestText } from "../claude-code/context";
+import { classifyShellEffect } from "../claude-code/tools";
 import type { TachoEvent } from "../envelope";
 import {
   type DeliveredPrompt,
@@ -24,6 +25,9 @@ import {
   type CommandAcknowledgement,
   type DenyGeneration,
   type PolicyBundle,
+  TACHO_CREDENTIAL_BASIS_ATTR,
+  TACHO_CREDENTIAL_HARNESS_HELD,
+  type TachoCredentialBasis,
   type TachoHarness,
 } from "../wire";
 import {
@@ -61,6 +65,16 @@ export interface HookHandlerDeps {
   acknowledge?: (ack: CommandAcknowledgement) => void;
   now: () => number;
   match?: MatchContext;
+  /**
+   * Which credential a successful `git push` went out with (ADR-151). The
+   * daemon answers from the host's GitHub custody receipts
+   * (`pushCredentialBasis` in `./push-basis`). Absent, every push is
+   * `harness_held`, because nothing then shows the proxy carried it.
+   */
+  pushCredentialBasis?: (
+    command: string,
+    cwd: string | undefined,
+  ) => Promise<TachoCredentialBasis>;
 }
 
 export interface HookReplay {
@@ -375,6 +389,36 @@ function evaluationRequestFor(
   };
 }
 
+/**
+ * The credential basis for a hook that records a successful `git push`, or
+ * undefined for any other hook. Only a completed push seals the `command`
+ * frame that carries it, so only `PostToolUse` asks.
+ */
+async function gitPushBasis(
+  input: HookInput,
+  record: SessionRecord,
+  deps: HookHandlerDeps,
+): Promise<TachoCredentialBasis | undefined> {
+  if (input.hook_event_name !== "PostToolUse") return undefined;
+  const command = input.tool_input?.["command"];
+  if (
+    typeof command !== "string" ||
+    classifyShellEffect(command) !== "git_push"
+  )
+    return undefined;
+  if (deps.pushCredentialBasis === undefined)
+    return TACHO_CREDENTIAL_HARNESS_HELD;
+  // The registry keeps the session's working directory, and for Cursor it
+  // keeps the explicit root over one inferred from the workspace list.
+  try {
+    return await deps.pushCredentialBasis(command, record.cwd ?? input.cwd);
+  } catch {
+    // A failed read proves nothing about the proxy, and the hook must still
+    // record the push.
+    return TACHO_CREDENTIAL_HARNESS_HELD;
+  }
+}
+
 async function routeHook(
   raw: unknown,
   env: Record<string, string | undefined>,
@@ -416,12 +460,24 @@ async function routeHook(
   const view = deps.policy();
   const events: TachoEvent[] = [];
   const replayed = replayAttrs(replay);
+  const pushBasis = await gitPushBasis(input, record, deps);
   const withReplay = (draft: HookDraft): HookDraft => ({
     ...draft,
     ...(inferredCwd && record.cwd !== undefined
       ? { context: { ...draft.context, cwd: record.cwd } }
       : {}),
-    attrs: { ...draft.attrs, ...replayed },
+    attrs: {
+      ...draft.attrs,
+      ...replayed,
+      // The push's own `command` frame carries the basis, the way every
+      // model-proxy frame does, so a reader counts bypass pushes from the
+      // frame rather than from a missing `token_use` beside it (#3788).
+      ...(pushBasis !== undefined &&
+      draft.kind === "command" &&
+      draft.body["effect_kind"] === "git_push"
+        ? { [TACHO_CREDENTIAL_BASIS_ATTR]: pushBasis }
+        : {}),
+    },
   });
 
   switch (input.hook_event_name) {

@@ -102,8 +102,9 @@ export const STELLA_TELEMETRY_PURPOSE = "stella_operational_telemetry_v1";
 export const MACHINE_KEY_CAPABILITIES: Readonly<
   Record<string, ReadonlySet<string>>
 > = {
-  // The three calls `createControlClient` makes, and nothing else. A host
-  // reports events, fetches its mandate, and polls for commands; it does not
+  // The enrolled daemon's four control calls, and nothing else. A host
+  // reports events, fetches its mandate, polls for commands, and asks for a
+  // repository-scoped git credential (ADR-151); it does not
   // enroll, revoke, or read the fleet. The command poll is `fetch_commands`
   // since ADR-025 renamed it from `fetch_tacho_commands`; this list kept the
   // old name, so every host's poll was refused and a pause or revoke never
@@ -113,6 +114,9 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
     "ingest_tacho_events",
     "get_tacho_bundle",
     "fetch_commands",
+    // ADR-151: the git credential a wrapped run pushes with. Refused unless
+    // the repository is bound to the host's workspace.
+    "create_github_token",
   ]),
   [LEDGER_RUN_SCOPE_PURPOSE]: new Set(["ingest_run_frames"]),
   [STELLA_TELEMETRY_PURPOSE]: new Set(["ingest_stella_operational_telemetry"]),
