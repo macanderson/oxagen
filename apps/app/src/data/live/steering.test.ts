@@ -235,6 +235,25 @@ describe("steering.deliveries", () => {
       }),
     );
   });
+  it("carries a cut record's manifest id as a ref, not a public id", async () => {
+    const row = { runs: 3, lastReason: "budget", lastSeen: "2026-09-22" };
+    kernelRead.mockResolvedValue(
+      readOk({
+        runs: [],
+        undelivered: [{ recordId: "ctx.release", ...row }],
+        scanned: 3,
+        truncated: false,
+      }),
+    );
+    expect(await steering.deliveries(ctx)).toEqual(
+      readOk({
+        runs: [],
+        undelivered: [{ recordRef: "ctx.release", ...row }],
+        scanned: 3,
+        truncated: false,
+      }),
+    );
+  });
   it("preserves a refusal and reports malformed output", async () => {
     const refused = {
       ok: false,

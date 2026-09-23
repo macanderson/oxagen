@@ -79,8 +79,8 @@ export function Deliveries({ read }: { read: Read<SteeringDeliveries> }) {
               ]}
             >
               {report.undelivered.map((record) => (
-                <tr key={record.recordId}>
-                  <td className={cell}>{record.recordId}</td>
+                <tr key={record.recordRef}>
+                  <td className={cell}>{record.recordRef}</td>
                   <td className={numericCell}>{count(record.runs)}</td>
                   <td className={cell}>{reason(record.lastReason)}</td>
                 </tr>

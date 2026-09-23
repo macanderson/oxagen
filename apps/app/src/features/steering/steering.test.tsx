@@ -535,7 +535,7 @@ describe("Delivery", () => {
           ],
           undelivered: [
             {
-              recordId: "ctx.release",
+              recordRef: "ctx.release",
               runs: 9,
               lastReason: "budget",
               lastSeen: "2026-09-22 12:00:00.000",

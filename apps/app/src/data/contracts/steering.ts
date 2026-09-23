@@ -261,7 +261,11 @@ export const SteeringDeliveries = z.object({
   ),
   undelivered: z.array(
     z.object({
-      recordId: z.string(),
+      /**
+       * The record as the steering manifest named it. Oxagen neither mints nor
+       * validates it here, so it is a `…Ref`, not a `PublicId` (INV-11).
+       */
+      recordRef: z.string(),
       runs: Count,
       lastReason: z.string(),
       lastSeen: z.string(),
