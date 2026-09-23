@@ -66,7 +66,7 @@ describe("loadInvitation", () => {
     expect(read.value.expiresAt).toBe("2026-09-12T09:00:00.000Z");
     expect(
       decideInvitation(read.value, null, new Date("2026-09-15T00:00:00Z")),
-    ).toEqual({ kind: "closed", status: "expired" });
+    ).toEqual({ kind: "closed", status: "expired", signedInAs: null });
   });
 
   it("reads a row outside the enums as an error (negative)", async () => {

@@ -40,7 +40,18 @@ describe("decideInvitation", () => {
     ).toEqual({
       kind: "closed",
       status: "accepted",
+      signedInAs: base.email,
     });
+  });
+
+  it("closes an invitation for a signed-out visitor with nobody named in the footer", () => {
+    expect(decideInvitation({ ...base, status: "revoked" }, null, now)).toEqual(
+      {
+        kind: "closed",
+        status: "revoked",
+        signedInAs: null,
+      },
+    );
   });
 
   it("closes a pending invitation past its expiry as expired", () => {
@@ -53,6 +64,7 @@ describe("decideInvitation", () => {
     ).toEqual({
       kind: "closed",
       status: "expired",
+      signedInAs: base.email,
     });
   });
 

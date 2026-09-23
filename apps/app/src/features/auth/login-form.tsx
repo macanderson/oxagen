@@ -183,7 +183,7 @@ export function LoginForm({
           {t("login.passwordSet")}
         </p>
       ) : null}
-      <AuthPanel>
+      <AuthPanel testId="login-card">
         {outcome ? (
           <AuthAlert
             testId="login-outcome"
