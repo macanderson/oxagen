@@ -33,7 +33,7 @@ docs/       VISION.md, capability specs, ADRs, specs (docs/specs)
 | `oxagen` | `src/contracts/` | Capability contracts (Zod schemas and metadata; inspect the registry for current names) |
 | `oxagen` | `src/iam/resolve.ts` | IAM policy resolution |
 | `oxagen` | `src/registry.ts` | Capability registry (`registerCapability`, `getCapability`) |
-| `oxagen` | `src/plugins/` | Plugin manifest registry + built-in plugin catalogs |
+| `oxagen` | `src/plugins/` | Plugin manifest schema + registry (which plugin claims a contract) |
 | `handlers` | `src/register.ts` | All built-in capability handler registrations (lazy-loaded) |
 | `agent` | `src/runtime/materialize-tools.ts` | Governed tool materialisation (IAM → entitlement → tool RBAC → consent → approval → telemetry per call), MCP gateway auth, `runGovernedTurn` for the in-app agent |
 | `agent` | `src/handlers/` | Agent registry, approval, MCP, memory, role, trace handlers |

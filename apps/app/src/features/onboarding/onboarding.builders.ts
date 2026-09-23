@@ -44,6 +44,47 @@ export function firstFrame(overrides: Partial<FirstFrame> = {}): FirstFrame {
   };
 }
 
+/**
+ * The newest runs page, holding one row per id given: the installer's smoke
+ * session and, for the negative case, a second run.
+ */
+export function runsPage(
+  runs: { id: string; agentKey: string | null }[],
+): Read<RunPage> {
+  return {
+    ok: true,
+    value: {
+      nextCursor: null,
+      runs: runs.map(({ id, agentKey }) => ({
+        id,
+        source: "tacho",
+        agentKey,
+        operatorId: null,
+        operatorKind: null,
+        operatorName: null,
+        status: "sealed",
+        outcome: "completed",
+        turns: 1,
+        steps: 3,
+        frames: 12,
+        cost: null,
+        model: null,
+        machine: null,
+        taskRef: null,
+        name: "Installer smoke session",
+        summary: null,
+        replayGrade: null,
+        verdict: null,
+        enforcementTier: "harness",
+        completenessGaps: [],
+        canSummarize: false,
+        startedAt: "2026-09-15T14:02:11.000Z",
+        sealedAt: "2026-09-15T14:02:40.000Z",
+      })),
+    },
+  };
+}
+
 type Reads = {
   state?: Read<OnboardingGate>;
   firstFrame?: Read<FirstFrame>;
@@ -183,6 +224,7 @@ export function onboardingSource(reads: Reads): {
       proposals: refuse("steering.proposals"),
       contextPr: refuse("steering.contextPr"),
       freshness: refuse("steering.freshness"),
+      hub: refuse("steering.hub"),
       deliveries: refuse("steering.deliveries"),
     },
     tools: {

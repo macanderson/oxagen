@@ -2,8 +2,8 @@
 // rows, pending approvals and a DataSource that answers Fleet's reads with
 // what a test hands it. Importable from tests only (`testOnlyTarget` in
 // src/test/arch/layers.ts).
+import type { AgentPage } from "@/data/contracts/agents";
 import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
-import type { MandateList } from "@/data/contracts/mandates";
 import type { RunPage } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
@@ -91,11 +91,57 @@ export function runPage(
   return readOk({ runs, nextCursor });
 }
 
+/**
+ * The workspace's agents as `agents.list` answers them: one row per key, and
+ * the workspace total the Live runs tile reads its basis from.
+ */
+export function agentPage(
+  keys: string[],
+  identities: number = keys.length,
+): Read<AgentPage> {
+  return readOk({
+    agents: keys.map((agentKey, index) => ({
+      id: `agt_${String(index + 1)}`,
+      slug: agentKey.split(".").at(-1) ?? agentKey,
+      name: agentKey,
+      description: null,
+      agentKey,
+      harness: "claude-code",
+      operatorId: null,
+      operatorName: null,
+      principalId: null,
+      credentials: 0,
+      hosts: 0,
+      host: null,
+      status: "enrolled",
+      enforcementTier: null,
+      runs30d: 0,
+      spend30d: null,
+      tokens30d: null,
+      mandates: null,
+      incidents: 0,
+      tamperIncidents: 0,
+      tamperIncidentsRecorded: 0,
+    })),
+    nextCursor: null,
+    totals: {
+      identities,
+      enrolled: identities,
+      holdingMandate: null,
+      tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
+    },
+  });
+}
+
 type FleetReads = {
   runs: Read<RunPage>;
   approvals: Read<ApprovalQueue>;
-  /** Only read when a parked call names a mandate; refused when absent. */
-  mandates?: Read<MandateList>;
+  /**
+   * The workspace's agents; an empty page when absent. A function answers
+   * each page by the cursor it was asked for, for the roster's walk.
+   */
+  agents?: Read<AgentPage> | ((cursor: string | null) => Read<AgentPage>);
 };
 
 /** A DataSource answering Fleet's reads; `calls` records their arguments. */
@@ -103,11 +149,11 @@ export function fleetSource(reads: FleetReads) {
   const calls: {
     runs: unknown[][];
     approvals: unknown[][];
-    mandates: unknown[][];
+    agents: unknown[][];
   } = {
     runs: [],
     approvals: [],
-    mandates: [],
+    agents: [],
   };
   const refuse = () => Promise.reject(new Error("not a Fleet read"));
   const source: DataSource = {
@@ -138,7 +184,15 @@ export function fleetSource(reads: FleetReads) {
       resolved: refuse,
     },
     agents: {
-      list: refuse,
+      list: (...args) => {
+        calls.agents.push(args);
+        const agents = reads.agents;
+        return Promise.resolve(
+          typeof agents === "function"
+            ? agents(args[1].cursor)
+            : (agents ?? agentPage([])),
+        );
+      },
       get: refuse,
       toolbelt: refuse,
       incidents: refuse,
@@ -173,15 +227,9 @@ export function fleetSource(reads: FleetReads) {
       modelCredential: refuse,
       sso: refuse,
     },
-    mandates: {
-      list: (...args) => {
-        calls.mandates.push(args);
-        return reads.mandates === undefined
-          ? Promise.reject(new Error("mandates.list was not expected"))
-          : Promise.resolve(reads.mandates);
-      },
-      get: refuse,
-    },
+    // Fleet reads no mandate: the approval cards that draw a mandate bar are
+    // the shell drawer's and the Run page's.
+    mandates: { list: refuse, get: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse, configuration: refuse },
     steering: {
@@ -190,6 +238,7 @@ export function fleetSource(reads: FleetReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      hub: refuse,
       deliveries: refuse,
     },
     tools: {
