@@ -19,6 +19,11 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { bundleSignerFromPem, verifyBundle } from "./tacho-bundle-signing";
 
+const policyRead = vi.hoisted(() => vi.fn());
+vi.mock("./tacho-session-policy", () => ({
+  readTachoSessionPolicyIn: policyRead,
+}));
+
 const gatewayMandateTools = vi.fn(() => undefined as string[] | undefined);
 vi.mock("@oxagen/iam/machine-key-scope", () => ({
   gatewayMandateTools: () => gatewayMandateTools(),
@@ -31,6 +36,7 @@ const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
 const {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_MODEL_ALLOWLIST,
+  BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_MODEL_PRICES,
   BUNDLE_FEATURE_STEERING_MANIFEST,
 } = await import("@oxagen/tacho");
@@ -79,8 +85,6 @@ const STEERING = assembleWorkspaceSteering("org", "ws", [
     activatedAt: "2026-09-15T00:00:00.000Z",
   },
 ]);
-
-const NO_STEERING = assembleWorkspaceSteering("org", "ws", []);
 
 function bundle(bundleFeatures: string[] = CURRENT) {
   return unsignedBundle(
@@ -314,19 +318,70 @@ describe("the prices the host's model proxy needs (ADR-094)", () => {
 });
 
 describe("the wrapped-session policy on the bundle", () => {
-  it("signs no clause from the workspace's session policy", () => {
-    // The bundle's budget is the agent's mandate (`deriveBundleBudget`,
-    // #3710), and `models` is not signed at all. The workspace's own policy
-    // is stored and read back by `get_tacho_session_policy` and reaches no
-    // host, which is why the panel that sets it says "Not applied". This is
-    // the assertion that fails first if a clause is wired in without the
-    // decision the audit's §3 is reopened for.
-    expect(bundle(CURRENT)).not.toHaveProperty("models");
-    expect(bundle([BUNDLE_FEATURE_MODEL_ALLOWLIST])).not.toHaveProperty(
-      "models",
-    );
-    expect(bundle(CURRENT).budget).toEqual(NO_MANDATE.budget);
+  it("does not send independently armed lists to a legacy host", () => {
+    const mandate = { ...NO_MANDATE, models: { allow: null, deny: ["*"] } };
+    for (const features of [[], [BUNDLE_FEATURE_MODEL_ALLOWLIST]]) {
+      expect(
+        unsignedBundle(
+          host(features),
+          { org: 1, workspace: 1 },
+          { mode: "digest_only", classes: [] },
+          STEERING,
+          mandate,
+          NOW,
+        ),
+      ).not.toHaveProperty("models");
+    }
   });
+
+  it.each(["observed", "enforced"] as const)(
+    "resolves model mode %s independently of the agent budget",
+    async (mode) => {
+      policyRead.mockResolvedValue({
+        mode,
+        modelAllow: ["claude-*"],
+        modelDeny: ["claude-old"],
+        sessionLimitUsd: 99,
+      });
+      const current = {
+        ...host([BUNDLE_FEATURE_INDEPENDENT_MODELS]),
+        agentId: null,
+        agentPrincipalId: null,
+      };
+      const tx = {
+        query: { workspaces: { findFirst: async () => undefined } },
+      } as unknown as Parameters<typeof resolveHostMandate>[0];
+      const mandate = await resolveHostMandate(
+        tx,
+        { orgId: "o", workspaceId: "w" },
+        current,
+      );
+      expect(policyRead).toHaveBeenCalledWith(tx, "w");
+      const result = unsignedBundle(
+        current,
+        { org: 1, workspace: 1 },
+        { mode: "digest_only", classes: [] },
+        STEERING,
+        mandate,
+        NOW,
+      );
+      expect(result.budget).toEqual({ mode: "observed" });
+      expect(result.models).toEqual(
+        mode === "enforced"
+          ? { allow: ["claude-*"], deny: ["claude-old"] }
+          : undefined,
+      );
+      const withBudget = unsignedBundle(
+        current,
+        { org: 1, workspace: 1 },
+        { mode: "digest_only", classes: [] },
+        STEERING,
+        { ...mandate, budget: { mode: "enforced", session_limit_usd: 2 } },
+        NOW,
+      );
+      expect(withBudget.models).toEqual(result.models);
+    },
+  );
 
   it("refuses the field on a host schema that predates it", () => {
     // The gate still has to work when the clause arrives: the host's bundle
@@ -393,7 +448,7 @@ describe("the active definition budget on the signed bundle", () => {
         governedHost(),
         { org: 1, workspace: 1 },
         { mode: "digest_only", classes: [] },
-        NO_STEERING,
+        STEERING,
         mandate,
         NOW,
       ),
@@ -430,7 +485,7 @@ describe("the active definition budget on the signed bundle", () => {
           governedHost(),
           { org: 1, workspace: 1 },
           { mode: "digest_only", classes: [] },
-          NO_STEERING,
+          STEERING,
           mandate,
           NOW,
         ),

@@ -7,9 +7,7 @@
  *   1. An omitted field does not change, and `null` is a value rather than an
  *      omission. `modelAllow: null` drops the allowlist; leaving it out keeps
  *      whatever was there.
- *   2. `enforced` is refused outright, with a message that says why. Nothing
- *      reads this policy yet, so accepting the word would put a claim in the
- *      record that no enforcer answers for.
+ *   2. Enforced mode requires a model list, independently of run budgets.
  *   3. The reach is reported. `models` rides a gated bundle field, so a saved
  *      allowlist can govern no machine, and a surface that showed only the
  *      saved value would report that as success.
@@ -135,23 +133,27 @@ describe("update_tacho_session_policy", () => {
     expect(dropped.modelDeny).toEqual(["gpt-4o"]);
   });
 
-  it("refuses enforced outright, and says why rather than what to set", async () => {
-    // No bundle carries a `models` clause and `budget.mode` comes from the
-    // agent's mandate, so there is no enforcer to name. Even a policy with
-    // every clause filled in is refused.
-    const stub = tx({});
+  it("arms a model list independently of a run budget", async () => {
+    const out = await run({ mode: "enforced", modelDeny: ["*"] }, tx({}));
+    expect(out).toMatchObject({
+      mode: "enforced",
+      modelDeny: ["*"],
+      sessionLimitUsd: null,
+    });
+    expect(mocks.insertValues).toHaveBeenCalled();
+  });
+
+  it("does not call a legacy recorded ceiling an enforced model policy", async () => {
     await expect(
-      run({ mode: "enforced", sessionLimitUsd: 25, modelDeny: ["*"] }, stub),
-    ).rejects.toThrow(/Enforced is not available yet/);
-    // Nothing was written: the refusal is before the upsert, so a policy that
-    // says it enforces and does not never reaches the record.
+      run({ mode: "enforced", sessionLimitUsd: 25 }, tx({})),
+    ).rejects.toThrow(/Set an allowed or denied model list/);
     expect(mocks.insertValues).not.toHaveBeenCalled();
     expect(mocks.updateSet).not.toHaveBeenCalled();
   });
 
   it("accepts an allowlist that permits nothing, which is a decision", async () => {
     // `[]` is a decision — permit no model — and must not be mistaken for an
-    // absent clause. Nothing reads it yet; the record keeps it apart from null.
+    // absent clause. The record keeps it apart from null.
     const out = await run({ mode: "observed", modelAllow: [] }, tx({}));
     expect(out.mode).toBe("observed");
     expect(out.modelAllow).toEqual([]);
@@ -162,8 +164,15 @@ describe("update_tacho_session_policy", () => {
       { mode: "observed", modelDeny: ["gpt-4o"] },
       tx({
         hosts: [
-          { bundleFeatures: ["gateway_tools", "model_prices", "models"] },
-          { bundleFeatures: ["gateway_tools"] },
+          {
+            bundleFeatures: [
+              "gateway_tools",
+              "model_prices",
+              "models",
+              "models_independent",
+            ],
+          },
+          { bundleFeatures: ["gateway_tools", "models"] },
           { bundleFeatures: null },
         ],
       }),
@@ -198,11 +207,13 @@ describe("update_tacho_session_policy", () => {
       new Error("Requires one of the org roles Owner, Admin"),
     );
     await expect(
-      run({ mode: "observed", modelAllow: null }, tx({ existing: { id: "p1" } })),
+      run(
+        { mode: "observed", modelAllow: null },
+        tx({ existing: { id: "p1" } }),
+      ),
     ).rejects.toThrow(/Owner, Admin/);
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
     expect(mocks.insertValues).not.toHaveBeenCalled();
     expect(mocks.updateSet).not.toHaveBeenCalled();
   });
-
 });

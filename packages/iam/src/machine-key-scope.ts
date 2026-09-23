@@ -471,6 +471,8 @@ export async function machineKeyDenial(
   }
 
   if (purpose === TACHO_GATEWAY_PURPOSE) {
+    // Launcher control traffic is not evidence of a governed agent call.
+    if (capabilityName === "register_contained_launch") return undefined;
     // The observation the enforcement tier is derived from.
     //
     // This is the only place the control plane KNOWS a gateway call happened:

@@ -13,6 +13,7 @@ import {
   mulMicros,
   ratioOfIntegers,
   ratioOfMicros,
+  shareOfMicros,
   sumMoney,
 } from "./money";
 
@@ -111,6 +112,25 @@ describe("mulMicros", () => {
     expect(() => mulMicros(usd("0.005"), 2)).toThrow(
       "micros must be an integer string",
     );
+  });
+});
+
+describe("shareOfMicros", () => {
+  it("takes the named share of the micros, exact past a float", () => {
+    expect(shareOfMicros(usd("4200000"), 0.25)).toEqual(usd("1050000"));
+    expect(shareOfMicros(usd("90071992547409930"), 0.5)).toEqual(
+      usd("45035996273704965"),
+    );
+  });
+
+  it("truncates toward zero at the millionth", () => {
+    expect(shareOfMicros(usd("3"), 1 / 3)).toEqual(usd("0"));
+  });
+
+  it("answers null for a share outside 0 to 1", () => {
+    expect(shareOfMicros(usd("100"), -0.1)).toBeNull();
+    expect(shareOfMicros(usd("100"), 1.2)).toBeNull();
+    expect(shareOfMicros(usd("100"), Number.NaN)).toBeNull();
   });
 });
 

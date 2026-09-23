@@ -334,24 +334,34 @@ describe("setGatewayPolicyAction", () => {
     modelDeny: "",
   };
 
-  it("sends observed even when the values say enforced (negative)", async () => {
-    // Nothing reads this policy yet, so the handler refuses `enforced`. The
-    // action states the one value the contract accepts rather than passing a
-    // stale row's mode through to a refusal the person did not ask for.
+  it("sends the explicit enforced model decision", async () => {
     invoke.mockResolvedValue({
-      mode: "observed",
+      mode: "enforced",
       sessionLimitUsd: null,
       modelAllow: null,
-      modelDeny: [],
+      modelDeny: ["*"],
       reach: { hosts: 0, hostsEnforcingModels: 0 },
     });
-    await setGatewayPolicyAction(at, { ...gateway, mode: "enforced" });
+    await setGatewayPolicyAction(at, {
+      ...gateway,
+      mode: "enforced",
+      modelDeny: "*",
+    });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     expect(invoke).toHaveBeenCalledWith(
       tachoSessionPolicyWrite.name,
-      expect.objectContaining({ mode: "observed" }),
+      expect.objectContaining({ mode: "enforced", modelDeny: ["*"] }),
       expect.anything(),
     );
+  });
+
+  it("rejects enabled empty lists with a mode-field error before invoking", async () => {
+    const result = await setGatewayPolicyAction(at, {
+      ...gateway,
+      mode: "enforced",
+    });
+    expect(result.ok).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("refuses a model pattern the host could not apply, naming its list (negative)", async () => {

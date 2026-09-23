@@ -947,3 +947,37 @@ describe("the mandate, materialised for the host that serves it", () => {
     expect(gatewayMandateTools()).toEqual([]);
   });
 });
+
+describe("trusted launcher control", () => {
+  it("permits gateway registration without fabricating gateway traffic", async () => {
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_host",
+    });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "gateway-key",
+        userId: null,
+        capabilityName: "register_contained_launch",
+      }),
+    ).toBeUndefined();
+    expect(hostUpdates).toHaveLength(0);
+    expect(chainUpserts).toHaveLength(0);
+    expect(gatewayMayInvoke("register_contained_launch")).toBe(false);
+  });
+  it("does not grant launcher registration to the ingest credential", async () => {
+    keyWithScope({
+      purpose: TACHO_HOST_PURPOSE,
+      host_enrollment_id: "tch_host",
+    });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "ingest-key",
+        userId: null,
+        capabilityName: "register_contained_launch",
+      }),
+    ).toBeDefined();
+  });
+});

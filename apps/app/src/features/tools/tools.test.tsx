@@ -168,9 +168,10 @@ describe("Tools › tabs", () => {
       killSwitches: board(),
     });
     const tabs = screen.getByRole("navigation", { name: "Tools sections" });
-    expect(
-      within(tabs).getByRole("link", { name: /Registry/ }),
-    ).toHaveAttribute("aria-current", "page");
+    expect(within(tabs).getByRole("link", { name: /^Tools$/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(within(tabs).getByText("1 on")).toBeInTheDocument();
   });
 
@@ -376,6 +377,21 @@ describe("Tools › registry", () => {
 });
 
 describe("Tools › connections", () => {
+  it("keeps provider registration, connections, and credential grants on one tab", async () => {
+    const { calls } = await renderTools(
+      { grants: readOk(credentialGrantPage()), killSwitches: board() },
+      { tab: "connections" },
+    );
+    expect(
+      screen.getByRole("table", { name: "Providers" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("server-register-open")).toBeInTheDocument();
+    expect(
+      screen.getByRole("table", { name: "Credential grants" }),
+    ).toBeInTheDocument();
+    expect(calls.mcpServers).toHaveLength(1);
+  });
+
   it("prints each grant with the connection, the scope, its TTL and its state", async () => {
     await renderTools(
       { grants: readOk(credentialGrantPage()), killSwitches: board() },

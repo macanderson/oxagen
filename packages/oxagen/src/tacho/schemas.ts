@@ -124,7 +124,7 @@ export const sessionSummarySchema = z
     harness: z.string(),
     harnessVersion: z.string().nullable(),
     outcome: tachoSessionOutcomeSchema,
-    enforcementTier: z.enum(["gateway", "harness", "observe"]),
+    enforcementTier: z.enum(["contained", "gateway", "harness", "observe"]),
     startedAt: z.string(),
     lastEventAt: z.string(),
     endedAt: z.string().nullable(),

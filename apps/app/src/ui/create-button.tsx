@@ -6,13 +6,15 @@
 // before its wizard ships and the button appears the day the kind is offered.
 // Gold, because it is the one action the page is for (creation-spec §6).
 import { CREATE_KINDS, type CreateKind, openCreate } from "@/shared/create";
-import { buttonPrimary } from "./control-styles";
+import { buttonPrimary, buttonSecondary } from "./control-styles";
 
 export function CreateButton({
   kind,
   label,
+  primary = true,
 }: {
   kind: CreateKind;
+  primary?: boolean;
   /** The page's own words for it: "Add a skill", "New agent". */
   label: string;
 }) {
@@ -21,7 +23,7 @@ export function CreateButton({
     <button
       type="button"
       data-create={kind}
-      className={buttonPrimary}
+      className={primary ? buttonPrimary : buttonSecondary}
       onClick={() => {
         openCreate(kind);
       }}
