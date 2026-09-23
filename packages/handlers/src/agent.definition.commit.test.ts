@@ -75,6 +75,7 @@ const gh = vi.hoisted(() => ({
 
 vi.mock("@oxagen/github", () => ({
   createGitHubClient: vi.fn(() => gh.client),
+  OXAGEN_PR_LABELS: ["no-issue"],
 }));
 vi.mock("@oxagen/github/workspace-token", () => ({
   resolveGitHubToken: vi.fn(async () => "ghs_test"),
