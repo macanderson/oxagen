@@ -287,7 +287,19 @@ describe("the drawer", () => {
     await user.click(button());
     const aside = drawer();
     expect(aside).toHaveTextContent("3 waiting on you");
+    // `.eyebrow.q` is muted, and `.apd-row` has the plain hairline: no row is
+    // tinted while nothing it records marks it critical (#3848).
+    expect(within(aside).getByText("3 waiting on you")).toHaveClass(
+      "text-muted-foreground",
+    );
+    // `.apd-btn[aria-pressed="true"]`: the open drawer's button takes the approval ink.
+    expect(button()).toHaveAttribute("aria-pressed", "true");
+    expect(button()).toHaveClass("border-info", "text-info");
     const rows = within(aside).getAllByTestId("approval-row");
+    for (const r of rows) {
+      expect(r).toHaveClass("border-border");
+      expect(r).not.toHaveClass("border-info/40");
+    }
     expect(rows.map((r) => r.querySelector("b")?.textContent)).toEqual([
       "github__create_release@2",
       "jira__delete_issue@1",
@@ -403,7 +415,7 @@ describe("the drawer", () => {
     const soonest = drawer().querySelector('[data-countdown="apr_05K5RS8F3J"]');
     const later = drawer().querySelector('[data-countdown="apr_06K5RS8F3J"]');
     expect(soonest).toHaveAttribute("data-warn");
-    expect(soonest).toHaveClass("text-warning");
+    expect(soonest).toHaveClass("text-critical");
     expect(later).not.toHaveAttribute("data-warn");
     expect(later).toHaveClass("text-info");
   });

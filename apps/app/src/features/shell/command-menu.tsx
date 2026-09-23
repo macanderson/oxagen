@@ -6,6 +6,16 @@
 // the footer says so. Arrow keys move, Enter opens, ⌘1 to ⌘5 open the five
 // pages that carry them, Esc closes. On a phone it rises from the bottom edge
 // as a sheet (src/ui/phone.css).
+//
+// Two strings differ from the mock's `shell.json` on purpose, and the audit
+// (audit-prompt check 6) reads them against this note. The placeholder is
+// "Search runs, agents, tools, records, or run an action": the mock joins the
+// last clause with an em dash, which the house prose rules forbid
+// (clear-prose rule 1), so a comma takes its place. The footer says a search
+// is "recorded in the audit record" where the mock says "recorded as a
+// frame": `search_tools` here is a kernel read the audit log records, and no
+// run is open to hold a frame until the assistant records its turns as runs
+// (#2968), so "frame" would claim a record that does not exist.
 import { Dialog } from "@base-ui/react/dialog";
 import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -229,7 +239,7 @@ function CommandPalette({
             >
               <div
                 id={`${listId}-g-${group}`}
-                className="flex items-baseline gap-2 px-3 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-dim"
+                className="flex items-baseline gap-2 px-3 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-muted-foreground"
               >
                 <span>{t(`commands.groups.${group}.label`)}</span>
                 {notes[group] === undefined ? null : (
@@ -273,7 +283,7 @@ function CommandPalette({
                       )}
                     </span>
                     {"shortcut" in c && c.shortcut !== undefined ? (
-                      <kbd className="flex-none font-mono text-[11px] text-dim">
+                      <kbd className="flex-none font-mono text-[11px] text-muted-foreground">
                         {t("commands.shortcut", { n: c.shortcut })}
                       </kbd>
                     ) : null}

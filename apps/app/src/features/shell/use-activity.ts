@@ -52,15 +52,21 @@ export function useShellCounts(data: ShellData): ShellCounts {
   const { ws } = useSidebarSections(data);
   const activity = useWorkspaceActivity(ws);
   const here = data.approvals.workspaces.find((w) => w.slug === ws);
-  const counts = activity?.counts.ok ? activity.counts.value : null;
+  // A workspace page publishes its own read; an organization page has none,
+  // so the chrome's own read of the first workspace (the one the sidebar
+  // points at there) stands in. A read for another workspace is never used.
+  const read =
+    activity?.counts ??
+    (data.counts !== null && data.counts.slug === ws ? data.counts.read : null);
+  const counts = read?.ok ? read.value : null;
   const steering = counts?.proposals ?? null;
   const audit = counts?.incidents ?? null;
-  // The workspace's read has landed once `activity` is here; before that a
-  // null is a count on its way, not a count that is missing.
+  // Once a read is here it has landed; before that a null is a count on its
+  // way, not a count that is missing.
   const unrecorded: NavCountKey[] = [];
   if (here !== undefined && !here.pending.ok) unrecorded.push("fleet");
-  if (activity !== null && steering === null) unrecorded.push("steering");
-  if (activity !== null && audit === null) unrecorded.push("audit");
+  if (read !== null && steering === null) unrecorded.push("steering");
+  if (read !== null && audit === null) unrecorded.push("audit");
   return {
     waiting: orgWaiting(data),
     fleet: here?.pending.ok ? here.pending.value.items.length : null,

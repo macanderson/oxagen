@@ -23,7 +23,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { readOk } from "@/data/read";
+import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { phoneWidth } from "@/test/phone";
 import en from "../../../messages/en.json";
@@ -264,6 +264,52 @@ describe("thumb bar", () => {
         .filter((s) => s.getAttribute("aria-current") === "page")
         .map((s) => s.dataset.slot),
     ).toEqual([slot]);
+    // `.mn[aria-current=page]::before`: the gold bar sits over that slot alone.
+    expect(
+      slots()
+        .filter((s) => s.querySelector("[data-current-marker]") !== null)
+        .map((s) => s.dataset.slot),
+    ).toEqual([slot]);
+  });
+
+  it("does not call More the current page because its sheet is open (negative)", async () => {
+    nav.pathname = "/acme/core-platform";
+    renderPhone(shellData());
+    const more = screen.getByRole("button", { name: "More" });
+    await userEvent.click(more);
+    await screen.findByRole("dialog", { name: "More" });
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    expect(more).not.toHaveAttribute("aria-current");
+  });
+
+  it("carries Audit's count on More on an organization page, from the chrome's own read", () => {
+    nav.pathname = "/acme/audit";
+    renderPhone(
+      shellData({
+        counts: {
+          slug: "core-platform",
+          read: readOk({ approvals: 0, proposals: 10, incidents: 3 }),
+        },
+      }),
+    );
+    expect(screen.getByRole("button", { name: /^More/ })).toHaveAccessibleName(
+      "More, 3 critical incidents open",
+    );
+  });
+
+  it("marks More's count not recorded when the read failed, never zero (negative)", () => {
+    nav.pathname = "/acme/audit";
+    renderPhone(
+      shellData({
+        counts: {
+          slug: "core-platform",
+          read: readError("control_plane_unavailable", 503),
+        },
+      }),
+    );
+    expect(screen.getByRole("button", { name: /^More/ })).toHaveAccessibleName(
+      "More, count not recorded",
+    );
   });
 
   it("keeps only More when the organization has no workspace the viewer can open (negative)", async () => {
@@ -416,6 +462,11 @@ describe("the other dialogs on a phone", () => {
     await user.click(screen.getByRole("button", { name: "Open navigation" }));
     const drawer = await screen.findByTestId("nav-drawer");
     expect(document.querySelector("[data-scrim]")).not.toBeNull();
+    // The mock's drawer opens on the brand and the switchers, with no close
+    // row: the scrim and Escape close it.
+    expect(
+      within(drawer).queryByRole("button", { name: "Close navigation" }),
+    ).toBeNull();
     expect(
       within(drawer)
         .getByRole("navigation", { name: "Main" })

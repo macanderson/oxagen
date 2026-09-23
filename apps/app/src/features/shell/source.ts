@@ -116,15 +116,22 @@ export async function shellSource(
       mandates.set(one.approvals.slug, one.mandates);
     }
   }
-  // The bell on an organization page reads the feed in the workspace the
-  // sidebar points at: the organization's rows and that workspace's.
+  // On an organization page there is no workspace layout to publish the
+  // bell's feed and the sidebar's counts, so the chrome reads both in the
+  // workspace the sidebar points at: the first `shell.context` lists. The
+  // feed carries the organization's rows and that workspace's; the counts are
+  // that workspace's Steering and Audit figures. A workspace page replaces
+  // both with its own (`<ShellWorkspace>`).
   const first = read[0];
-  const feed =
-    first === undefined
-      ? null
-      : await source.shell.notifications(
-          await requireViewer(ctx.orgSlug, first.slug),
-        );
+  const firstCtx =
+    first === undefined ? null : await requireViewer(ctx.orgSlug, first.slug);
+  const [feed, counts] =
+    firstCtx === null
+      ? [null, null]
+      : await Promise.all([
+          source.shell.notifications(firstCtx),
+          source.shell.counts(firstCtx),
+        ]);
   const data: ShellData = {
     org: {
       key: createHash("sha256").update(`account:${ctx.orgId}`).digest("hex"),
@@ -148,6 +155,10 @@ export async function shellSource(
       readAt,
     },
     feed,
+    counts:
+      first === undefined || counts === null
+        ? null
+        : { slug: first.slug, read: counts },
   };
   return { data, cards: { mandates } };
 }

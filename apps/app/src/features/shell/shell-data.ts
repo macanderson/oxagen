@@ -6,7 +6,11 @@ import type {
   ApprovalQueue,
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
-import type { NotificationFeed, ShellContext } from "@/data/contracts/shell";
+import type {
+  NavCounts,
+  NotificationFeed,
+  ShellContext,
+} from "@/data/contracts/shell";
 import type { Read } from "@/data/read";
 
 /**
@@ -61,4 +65,11 @@ export type ShellData = {
    * organization has no workspace to read it in.
    */
   feed: Read<NotificationFeed> | null;
+  /**
+   * The sidebar's Steering and Audit counts (`get_nav_counts`) for the same
+   * first workspace, so an organization page (Organization, Billing, Audit)
+   * draws them the way a workspace page does. A workspace page replaces them
+   * with its own. Null when the organization has no workspace to read.
+   */
+  counts: { slug: string; read: Read<NavCounts> } | null;
 };

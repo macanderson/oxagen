@@ -10,7 +10,10 @@
 // goes to the Workspaces section of the Organization page where the governed
 // `create_workspace` form lives. The mock's meta (plan, agent counts, main
 // repository and branch) is not returned by `list_orgs` or `list_workspaces`,
-// so each dialog says so once and the tiles print the slug (#3861).
+// so each dialog says so once, and each tile prints what the mock prints up
+// to the missing part and marks that part not recorded: `acme · ?` where the
+// mock has `a-intel · Team`, `acme/core-platform · ?` where it has
+// `a-intel/platform · main` (#3861).
 import { ChevronsUpDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useState } from "react";
@@ -47,6 +50,24 @@ function Tile({ text, mono }: { text: string; mono?: boolean }) {
       }
     >
       {text}
+    </span>
+  );
+}
+
+/**
+ * The tile's missing meta: a dashed "?" that names what is not recorded to a
+ * screen reader and on hover, where the mock prints the plan or the branch.
+ */
+function MetaNotRecorded({ label }: { label: string }) {
+  return (
+    <span
+      data-testid="switcher-tile-not-backed"
+      data-gap={META_GAP}
+      title={label}
+      className="rounded-[4px] border border-dashed border-border px-1"
+    >
+      <span aria-hidden="true">?</span>
+      <span className="sr-only">{label}</span>
     </span>
   );
 }
@@ -291,7 +312,7 @@ export function OrgSwitcher({ data }: { data: ShellData }) {
       <span className="min-w-0 flex-1">
         <b className="block truncate text-[13px] font-semibold">{org.name}</b>
         <span className="block truncate font-mono text-[11px] text-muted-foreground">
-          {org.slug}
+          {org.slug} · <MetaNotRecorded label={t("orgTileNotBacked")} />
         </span>
       </span>
     </Switcher>
@@ -325,7 +346,8 @@ export function WorkspaceSwitcher({
       <span className="min-w-0 flex-1">
         <b className="block truncate text-[13px] font-semibold">{name}</b>
         <span className="block truncate font-mono text-[11px] text-muted-foreground">
-          {ws}
+          {data.org.slug}/{ws} ·{" "}
+          <MetaNotRecorded label={t("wsTileNotBacked")} />
         </span>
       </span>
     </Switcher>

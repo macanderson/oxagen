@@ -91,6 +91,12 @@ describe("organization switcher", () => {
     renderSwitchers(listed, "core-platform");
     const tile = screen.getByRole("button", { name: /^Switch organization/ });
     expect(tile).toHaveTextContent("Acme Robotics");
+    // The mock's `a-intel · Team`: the slug, then the plan, which is not
+    // recorded, marked on the tile itself (#3861).
+    expect(tile).toHaveTextContent("acme · ?plan not recorded");
+    expect(
+      within(tile).getByTestId("switcher-tile-not-backed"),
+    ).toHaveAttribute("data-gap", "#3861");
     const dialog = await openDialog("Switch organization");
     const links = within(dialog).getAllByRole("link");
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
@@ -138,6 +144,12 @@ describe("workspace switcher", () => {
     renderSwitchers(listed, "finops");
     const tile = screen.getByRole("button", { name: /^Switch workspace/ });
     expect(tile).toHaveTextContent("FinOps");
+    // The mock's `a-intel/platform · main`: the path, then the branch, which
+    // is not recorded, marked on the tile itself (#3861).
+    expect(tile).toHaveTextContent("acme/finops · ?branch not recorded");
+    expect(
+      within(tile).getByTestId("switcher-tile-not-backed"),
+    ).toHaveAttribute("data-gap", "#3861");
     const dialog = await openDialog("Switch workspace");
     const links = within(dialog)
       .getAllByRole("link")

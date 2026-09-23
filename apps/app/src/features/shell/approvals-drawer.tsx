@@ -41,7 +41,7 @@ import { orgWaiting } from "./use-activity";
 const ROW_GAP = "#3848";
 const INTERJECTION_GAP = "#3849";
 
-/** Under two minutes left, a countdown takes the warning tone (mockup `sec<120`). */
+/** Under two minutes left, a countdown takes the critical ink (mockup `sec<120`, `.apsm-clk.warn`). */
 export const WARN_BELOW_SECONDS = 120;
 
 /** `m:ss` until `at`, or null once it has passed. */
@@ -113,7 +113,7 @@ function PendingRow({
         data-testid="approval-row"
         aria-label={t("openApproval", { id: item.id })}
         onClick={onOpen}
-        className="flex w-full items-start gap-2.5 rounded-xl border border-info/40 bg-card px-3 py-2.5 text-left text-card-foreground transition-colors hover:border-info focus-visible:outline-2 focus-visible:outline-ring"
+        className="flex w-full items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring"
       >
         <Glyph />
         <span className="min-w-0 flex-1">
@@ -128,7 +128,7 @@ function PendingRow({
           data-countdown={item.id}
           data-warn={warn ? "" : undefined}
           className={`flex-none font-mono text-[13px] font-semibold ${
-            warn ? "text-warning" : "text-info"
+            warn ? "text-critical" : "text-info"
           }`}
         >
           {left ?? t("expired")}
@@ -156,7 +156,7 @@ function ResolvedRow({
         data-testid="resolved-row"
         aria-label={t("openApproval", { id: item.id })}
         onClick={onOpen}
-        className="flex w-full items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-card-foreground opacity-80 transition-colors hover:border-ring focus-visible:outline-2 focus-visible:outline-ring"
+        className="flex w-full items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-card-foreground opacity-80 transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring"
       >
         <Glyph />
         <span className="min-w-0 flex-1">
@@ -251,7 +251,7 @@ function ResolvedCard({
 }
 
 const eyebrow =
-  "mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-info";
+  "mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground";
 
 export function ApprovalsDrawer({
   data,
@@ -436,7 +436,7 @@ export function ApprovalsDrawer({
                   <p className="text-[12.5px] text-muted-foreground">
                     {t("empty")}
                   </p>
-                  <p className="mt-2 text-[11.5px] text-dim">
+                  <p className="mt-2 text-[11.5px] text-muted-foreground">
                     {t.rich("emptyDetail", {
                       code: (chunks) => (
                         <span className="font-mono">{chunks}</span>

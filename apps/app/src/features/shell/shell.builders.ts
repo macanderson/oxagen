@@ -40,6 +40,7 @@ export function shellData(overrides: Partial<ShellData> = {}): ShellData {
       readAt: SHELL_NOW,
     },
     feed: readOk({ items: [], unread: 0 }),
+    counts: null,
     ...overrides,
   };
 }

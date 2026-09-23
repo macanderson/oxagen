@@ -15,7 +15,6 @@ import {
   Search,
   Sparkles,
   UserRound,
-  X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
@@ -41,9 +40,21 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 const slotClass =
   "relative flex min-h-13 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[10.5px] font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-[current=page]:text-app-topbar-fg";
 
-/** `.mn .ct.hot`: the slot's count, in the approval ink. */
-function SlotCount({ count, label }: { count: number; label: string }) {
-  return (
+/**
+ * `.mn .ct.hot`: the slot's count, in the approval ink. A null count is a
+ * read that landed without a figure: it draws "?" in a dashed pill and says
+ * the count is not recorded, the way the sidebar does, never a zero.
+ */
+function SlotCount({ count, label }: { count: number | null; label: string }) {
+  return count === null ? (
+    <span
+      data-count-unrecorded=""
+      className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-dashed border-border bg-app-panel-bg px-1 text-center font-mono text-[10px] text-muted-foreground"
+    >
+      <span aria-hidden="true">?</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  ) : (
     <span
       data-count={count}
       className="absolute left-[calc(50%+6px)] top-0.5 min-w-[18px] rounded-full border border-info/40 bg-app-panel-bg px-1 text-center font-mono text-[10px] text-info"
@@ -51,6 +62,17 @@ function SlotCount({ count, label }: { count: number; label: string }) {
       <span aria-hidden="true">{count}</span>
       <span className="sr-only">{label}</span>
     </span>
+  );
+}
+
+/** `.mn[aria-current=page]::before`: the 26 by 2 px gold bar above the current slot. */
+function CurrentMarker() {
+  return (
+    <span
+      aria-hidden="true"
+      data-current-marker=""
+      className="absolute -top-1.5 left-1/2 h-0.5 w-[26px] -translate-x-1/2 rounded-b-[2px] bg-gold"
+    />
   );
 }
 
@@ -189,6 +211,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
         : ws;
   const moreWaiting =
     counts.audit !== null && counts.audit > 0 ? counts.audit : null;
+  const moreCurrent = isMoreCurrent(pathname);
   return (
     <>
       <nav
@@ -201,6 +224,8 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
           const Icon = NAV_ICONS[key];
           const current = isNavItemCurrent(key, pathname);
           const waiting = key === "fleet" ? counts.fleet : null;
+          const fleetUnrecorded =
+            key === "fleet" && counts.unrecorded.includes("fleet");
           return (
             <SafeLink
               key={key}
@@ -210,9 +235,15 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
               aria-current={current ? "page" : undefined}
               className={slotClass}
             >
+              {current ? <CurrentMarker /> : null}
               <Icon aria-hidden="true" className="size-5" />
               <span>{t(`mobileNav.slots.${key}`)}</span>
-              {waiting !== null && waiting > 0 ? (
+              {fleetUnrecorded ? (
+                <SlotCount
+                  count={null}
+                  label={t("sidebar.countNotRecordedShort")}
+                />
+              ) : waiting !== null && waiting > 0 ? (
                 // The name reads "Fleet, 3 approvals waiting".
                 <SlotCount
                   count={waiting}
@@ -228,17 +259,23 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
           data-touch-target=""
           aria-haspopup="dialog"
           aria-expanded={moreOpen}
-          aria-current={
-            isMoreCurrent(pathname) || moreOpen ? "page" : undefined
-          }
+          // The sheet being open is `aria-expanded`; `aria-current` names the
+          // page the URL is on, and nothing else.
+          aria-current={moreCurrent ? "page" : undefined}
           onClick={() => {
             setMoreOpen(true);
           }}
           className={`${slotClass} col-start-5`}
         >
+          {moreCurrent ? <CurrentMarker /> : null}
           <Ellipsis aria-hidden="true" className="size-5" />
           <span>{t("mobileNav.more")}</span>
-          {moreWaiting === null ? null : (
+          {counts.unrecorded.includes("audit") ? (
+            <SlotCount
+              count={null}
+              label={t("sidebar.countNotRecordedShort")}
+            />
+          ) : moreWaiting === null ? null : (
             <SlotCount
               count={moreWaiting}
               label={t("mobileNav.incidents", { count: moreWaiting })}
@@ -456,18 +493,11 @@ export function NavDrawer({ data }: { data: ShellData }) {
         />
         <Dialog.Popup
           data-testid="nav-drawer"
-          className="fixed inset-y-0 left-0 z-50 flex w-[min(18.75rem,86vw)] flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar-bg pb-[env(safe-area-inset-bottom)] text-sidebar-fg shadow-2xl md:hidden"
+          className="fixed inset-y-0 left-0 z-50 flex w-[min(18.75rem,86vw)] flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar-bg pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-sidebar-fg shadow-2xl md:hidden"
         >
-          <div className="flex items-center px-3 pt-3">
-            <Dialog.Title className="sr-only">{t("title")}</Dialog.Title>
-            <Dialog.Close
-              aria-label={t("close")}
-              data-touch-target=""
-              className="ml-auto grid place-items-center rounded-sm p-1 text-sidebar-nav-label-fg hover:text-sidebar-fg focus-visible:outline-2 focus-visible:outline-ring"
-            >
-              <X aria-hidden="true" className="size-4" />
-            </Dialog.Close>
-          </div>
+          {/* The mock's drawer opens on the brand and the switchers; the
+              scrim and Escape close it, so it carries no close row. */}
+          <Dialog.Title className="sr-only">{t("title")}</Dialog.Title>
           <SidebarHeader data={data} />
           <SidebarNav data={data} onNavigate={close} />
           <SidebarFoot onNavigate={close} />

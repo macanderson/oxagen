@@ -201,6 +201,12 @@ describe("the shell on /{org}/{ws}", () => {
     expect(launcher).toBeInTheDocument();
     // What it opens is a dialog, and it says so before it is pressed.
     expect(launcher).toHaveAttribute("aria-haspopup", "dialog");
+    // The mock's label, and under it the model and engine state, which the
+    // chrome does not read: the line says so rather than naming a model.
+    expect(launcher).toHaveTextContent("Assistant");
+    expect(
+      within(launcher).getByTestId("assistant-launcher-not-backed"),
+    ).toHaveAttribute("data-gap", "#2968");
     expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
     // The bell and the approvals button sit in the top bar (fleet.md
     // "Shell"); the assistant has no top bar button, only the launcher.

@@ -171,14 +171,14 @@ export function NotificationsDialog({ data }: { data: ShellData }) {
                   <p className="text-xs text-muted-foreground">{n.body}</p>
                 )}
                 {n.event === null ? null : (
-                  <p className="mt-0.5 font-mono text-[11px] text-dim">
+                  <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
                     {n.event}
                   </p>
                 )}
               </div>
               <time
                 dateTime={n.createdAt}
-                className="flex-none font-mono text-[11px] text-dim"
+                className="flex-none font-mono text-[11px] text-muted-foreground"
               >
                 {time(n.createdAt)}
               </time>

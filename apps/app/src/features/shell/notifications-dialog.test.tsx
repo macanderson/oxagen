@@ -319,7 +319,7 @@ describe("the open workspace's own reads", () => {
     ).toHaveAccessibleName("Steering, 4 waiting");
     expect(
       within(main).getByRole("link", { name: /^Audit/ }),
-    ).toHaveAccessibleName("Audit, 2 waiting");
+    ).toHaveAccessibleName("Audit, 2 open");
   });
 
   it.each([
@@ -373,6 +373,61 @@ describe("the open workspace's own reads", () => {
     });
     expect(bell()).toHaveAccessibleName("Notifications, 1 unread");
     const main = screen.getByRole("navigation", { name: "Main" });
+    expect(main.querySelector('[data-count="steering"]')).toBeNull();
+  });
+});
+
+describe("the counts on an organization page", () => {
+  // No workspace layout mounts on Organization, Billing or Audit, so the
+  // chrome's own read of the first workspace (the one the sidebar points at
+  // there) lights Steering and Audit, as the mock's Audit page draws them.
+  it("light Steering and Audit from the chrome's read of the sidebar's workspace", () => {
+    nav.pathname = "/acme/audit";
+    renderShell(
+      shellData({
+        counts: {
+          slug: "core-platform",
+          read: readOk({ approvals: 0, proposals: 10, incidents: 3 }),
+        },
+      }),
+    );
+    const main = screen.getByRole("navigation", { name: "Main" });
+    expect(
+      within(main).getByRole("link", { name: /^Steering/ }),
+    ).toHaveAccessibleName("Steering, 10 waiting");
+    expect(
+      within(main).getByRole("link", { name: /^Audit/ }),
+    ).toHaveAccessibleName("Audit, 3 open");
+  });
+
+  it("say the counts are not recorded when that read failed, never zero (negative)", () => {
+    nav.pathname = "/acme/billing";
+    renderShell(
+      shellData({
+        counts: {
+          slug: "core-platform",
+          read: readError("control_plane_unavailable", 503),
+        },
+      }),
+    );
+    const main = screen.getByRole("navigation", { name: "Main" });
+    expect(
+      within(main).getByRole("link", { name: /^Audit/ }),
+    ).toHaveAccessibleName("Audit, count not recorded");
+  });
+
+  it("ignore a read made for another workspace (negative)", () => {
+    nav.pathname = "/acme/audit";
+    renderShell(
+      shellData({
+        counts: {
+          slug: "finops",
+          read: readOk({ approvals: 0, proposals: 10, incidents: 3 }),
+        },
+      }),
+    );
+    const main = screen.getByRole("navigation", { name: "Main" });
+    expect(main.querySelector('[data-count="audit"]')).toBeNull();
     expect(main.querySelector('[data-count="steering"]')).toBeNull();
   });
 });

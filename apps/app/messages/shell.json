@@ -10,11 +10,12 @@
         "organization": "Organization"
       },
       "waiting": ", {count} waiting",
+      "open": ", {count} open",
       "foot": {
         "connected": "connected",
         "offline": "offline",
         "reachable": "The control plane answered when this page loaded, and the browser is online.",
-        "notBacked": "Agent count and data plane are not recorded for the organization yet."
+        "notBacked": "Agent count and data plane not read here"
       },
       "countNotRecorded": "The count could not be read when this page loaded.",
       "countNotRecordedShort": ", count not recorded"
@@ -46,7 +47,9 @@
       "orgNote": "An organization owns a key-encryption key, a Postgres partition, a billing account, and optionally a dedicated data plane. You belong to {count} here.",
       "orgMetaNotBacked": "The plan and the agent count of each organization are not recorded with this list yet.",
       "wsMetaNotBacked": "The main repository, its branch and the agent count of each workspace are not recorded with this list yet.",
-      "createWorkspace": "Create a workspace"
+      "createWorkspace": "Create a workspace",
+      "orgTileNotBacked": "plan not recorded",
+      "wsTileNotBacked": "branch not recorded"
     },
     "topbar": {
       "label": "Top bar",
@@ -171,8 +174,7 @@
       "account": "Account"
     },
     "drawer": {
-      "title": "Navigation",
-      "close": "Close navigation"
+      "title": "Navigation"
     },
     "account": {
       "title": "Account",
@@ -278,8 +280,8 @@
     },
     "assistant": {
       "label": "Assistant",
-      "launcher": "Ask the assistant",
-      "launcherHint": "over this workspace",
+      "launcher": "Assistant",
+      "launcherNotBacked": "Model and state not read here",
       "close": "Close the assistant",
       "thinking": "Working…",
       "recordedAs": "recorded as",
@@ -364,7 +366,7 @@
       "gone": "That approval is no longer listed.",
       "empty": "Nothing is waiting on a human.",
       "emptyDetail": "A call parks here when policy returns <code>approve</code>. Denials never park; they end the call and are free.",
-      "rowNotBacked": "A parked call's risk is recorded, but list_approvals does not return it yet, and no amount, side effect, taint or task is recorded, so the rows name the tool, the agent and the workspace.",
+      "rowNotBacked": "Risk, amount, side effect, taint and task are not returned for a parked call yet.",
       "truncated": "Oxagen read the first {count} workspaces of this organization. Calls parked in the rest are not counted here.",
       "note": "A resolution mints a single-use approval token bound to the call digest, the agent, the run, and an expiry. It cannot be replayed on a second call. On expiry the call ends and the reason reaches the model.",
       "interjectionNotBacked": "An open interjection is not recorded yet, so this list holds approvals only.",

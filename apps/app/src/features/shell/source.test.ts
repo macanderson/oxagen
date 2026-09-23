@@ -37,12 +37,13 @@ const ctx = unsafeMint(OrgCtx, {
 const context = vi.fn();
 const preferences = vi.fn();
 const notifications = vi.fn();
+const counts = vi.fn();
 const pending = vi.fn();
 const resolvedSince = vi.fn();
 const mandatesList = vi.fn();
 const source = {
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context, preferences, counts: vi.fn(), notifications },
+  shell: { context, preferences, counts, notifications },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
@@ -135,6 +136,10 @@ beforeEach(() => {
   );
   notifications.mockReset();
   notifications.mockResolvedValue(feed);
+  counts.mockReset();
+  counts.mockResolvedValue(
+    readOk({ approvals: 0, proposals: 4, incidents: 1 }),
+  );
   pending.mockReset();
   pending.mockResolvedValue(emptyQueue);
   resolvedSince.mockReset();
@@ -188,6 +193,10 @@ describe("shellSource", () => {
         readAt: expect.any(Number) as number,
       },
       feed,
+      counts: {
+        slug: "core-platform",
+        read: readOk({ approvals: 0, proposals: 4, incidents: 1 }),
+      },
     });
     expect(context).toHaveBeenCalledWith(ctx);
     expect(preferences).toHaveBeenCalledWith(ctx);
@@ -273,6 +282,24 @@ describe("shellSource across the organization's workspaces", () => {
       since: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) as string,
     });
     expect(notifications).toHaveBeenCalledWith(wsCtx);
+  });
+
+  it("reads the nav counts in the workspace the sidebar points at, for an organization page to draw", async () => {
+    const { data } = await shellSource(ctx, source);
+    expect(counts).toHaveBeenCalledOnce();
+    expect(counts).toHaveBeenCalledWith({ org: "acme", ws: "core-platform" });
+    expect(data.counts).toEqual({
+      slug: "core-platform",
+      read: readOk({ approvals: 0, proposals: 4, incidents: 1 }),
+    });
+  });
+
+  it("reads no counts when the organization has no workspace to read (negative)", async () => {
+    context.mockResolvedValue(readOk({ orgs: [], workspaces: [] }));
+    const { data } = await shellSource(ctx, source);
+    expect(counts).not.toHaveBeenCalled();
+    expect(data.counts).toBeNull();
+    expect(data.feed).toBeNull();
   });
 
   it("reads the mandate ledger only for a workspace whose parked call names a mandate", async () => {

@@ -4240,6 +4240,7 @@ type Messages = {
         organization: string;
       };
       waiting: string;
+      open: string;
       foot: {
         connected: string;
         offline: string;
@@ -4277,6 +4278,8 @@ type Messages = {
       orgMetaNotBacked: string;
       wsMetaNotBacked: string;
       createWorkspace: string;
+      orgTileNotBacked: string;
+      wsTileNotBacked: string;
     };
     topbar: {
       label: string;
@@ -4402,7 +4405,6 @@ type Messages = {
     };
     drawer: {
       title: string;
-      close: string;
     };
     account: {
       title: string;
@@ -4509,7 +4511,7 @@ type Messages = {
     assistant: {
       label: string;
       launcher: string;
-      launcherHint: string;
+      launcherNotBacked: string;
       close: string;
       thinking: string;
       recordedAs: string;
@@ -6219,6 +6221,7 @@ type Messages = {
       loading: string;
       error: {
         title: string;
+        titleNamed: string;
         body: string;
         retry: string;
         incident: string;

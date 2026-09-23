@@ -167,7 +167,7 @@ export function parseShellPath(pathname: string): ShellPath {
 }
 
 /** The nav item a pathname belongs to, or null for a path no nav item holds. */
-function currentNavKey(pathname: string): NavKey | null {
+export function currentNavKey(pathname: string): NavKey | null {
   const { org, ws, rest } = parseShellPath(pathname);
   if (org === null) return null;
   const [head] = rest;

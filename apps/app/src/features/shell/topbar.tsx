@@ -14,8 +14,11 @@ import { type OrgWaiting, useShellCounts } from "./use-activity";
 import { UserMenu } from "./user-menu";
 import { SafeLink } from "@/ui/navigation";
 
-const iconButton =
-  "relative grid size-8 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
+const iconBase =
+  "relative grid size-8 place-items-center rounded-lg border bg-card transition-colors focus-visible:outline-2 focus-visible:outline-ring";
+const iconButton = `${iconBase} border-border text-muted-foreground hover:border-rule hover:text-foreground`;
+/** `.apd-btn[aria-pressed="true"]`: the open drawer's button takes the approval ink. */
+const iconButtonPressed = `${iconBase} border-info text-info`;
 
 function Breadcrumbs({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
@@ -92,7 +95,9 @@ export function Topbar({ data }: { data: ShellData }) {
   return (
     <header
       aria-label={t("label")}
-      className="sticky top-0 z-30 flex items-center gap-3 border-b border-app-topbar-border bg-app-topbar-bg/90 px-4 py-2.5 text-app-topbar-fg backdrop-blur md:col-start-2 md:row-start-1 md:px-5"
+      // viewport-fit=cover (app/layout.tsx) draws the page under a notch, so
+      // the sticky bar pads its top by the inset (mockup `#viewport.phone .top`).
+      className="sticky top-0 z-30 flex items-center gap-3 border-b border-app-topbar-border bg-app-topbar-bg/90 px-4 pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] text-app-topbar-fg backdrop-blur md:col-start-2 md:row-start-1 md:px-5"
     >
       <a
         href="#main"
@@ -103,6 +108,7 @@ export function Topbar({ data }: { data: ShellData }) {
       <button
         type="button"
         className={`${iconButton} md:hidden`}
+        data-touch-target=""
         aria-label={t("menu")}
         onClick={() => {
           setDrawerOpen(true);
@@ -118,13 +124,14 @@ export function Topbar({ data }: { data: ShellData }) {
         }}
         aria-keyshortcuts="Meta+K Control+K"
         aria-label={t("search")}
+        data-touch-target=""
         className="flex items-center gap-2 rounded-[9px] border border-border bg-card px-2.5 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:min-w-[190px]"
       >
         <Search aria-hidden="true" className="size-3.5" />
         <span className="hidden lg:inline">{t("search")}</span>
         <kbd
           aria-hidden="true"
-          className="ml-auto hidden rounded border border-border bg-hl px-[5px] font-mono text-[10.5px] text-dim sm:inline"
+          className="ml-auto hidden rounded border border-border bg-hl px-[5px] font-mono text-[10.5px] text-muted-foreground sm:inline"
         >
           {t("searchShortcut")}
         </kbd>
@@ -168,7 +175,7 @@ export function Topbar({ data }: { data: ShellData }) {
         onClick={() => {
           setApprovalsOpen(!approvalsOpen);
         }}
-        className={iconButton}
+        className={approvalsOpen ? iconButtonPressed : iconButton}
       >
         <ShieldCheck aria-hidden="true" className="size-4" />
         {waiting !== null && waiting.count > 0 ? (

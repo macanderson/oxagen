@@ -3,6 +3,7 @@
 // It streams immediately; the chrome's data swaps in from its <Suspense>.
 import { getTranslations } from "next-intl/server";
 import { type ReactNode, Suspense } from "react";
+import { ShellRoutePageName } from "./route-page-name";
 import { THEME_SCRIPT } from "./theme";
 
 function ChromeSkeleton({ loading }: { loading: string }) {
@@ -57,7 +58,7 @@ export async function ShellFrame({
         data-shell-page=""
         className="min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:col-start-2 md:row-start-2 md:pb-0"
       >
-        {children}
+        <ShellRoutePageName>{children}</ShellRoutePageName>
       </div>
     </div>
   );

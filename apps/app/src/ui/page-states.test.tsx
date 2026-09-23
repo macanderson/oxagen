@@ -12,7 +12,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { pathOf } from "@/shared/safe-path";
-import { PageDenied, PageError, PageSkeleton, RouteError } from "./page-states";
+import {
+  PageDenied,
+  PageError,
+  PageSkeleton,
+  RouteError,
+  RoutePageName,
+} from "./page-states";
 
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
@@ -144,14 +150,29 @@ describe("RouteError", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("500 internal_error")).toBeInTheDocument();
     expect(screen.getByTestId("page-error-trace").textContent).toMatch(
-      /^trace 2731905432 · \d{2}:\d{2}:\d{2}Z$/,
+      /^trace 2731905432 · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
+    // The skip link's target is on the boundary's own <main>.
+    expect(screen.getByRole("main")).toHaveAttribute("id", "main");
+  });
+
+  it("names the page the shell resolved from the path, as the mock's title does", () => {
+    render(
+      <IntlProvider>
+        <RoutePageName value="Fleet">
+          <RouteError error={new Error("boom")} reset={vi.fn()} />
+        </RoutePageName>
+      </IntlProvider>,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Fleet could not be loaded" }),
+    ).toBeInTheDocument();
   });
 
   it("prints no trace id when the failure carries no digest (negative)", () => {
     renderBoundary();
     expect(screen.getByTestId("page-error-trace").textContent).toMatch(
-      /^\d{2}:\d{2}:\d{2}Z$/,
+      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
   });
 

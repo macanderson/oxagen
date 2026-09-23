@@ -56,7 +56,7 @@ export function SidebarNav({
         <div key={section.key} className="mb-3">
           <p
             id={`${labelId}-${section.key}`}
-            className="px-2 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-dim"
+            className="px-2 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-sidebar-nav-label-fg"
           >
             {t(`sidebar.sections.${section.key}`)}
           </p>
@@ -108,7 +108,11 @@ export function SidebarNav({
                       >
                         <span aria-hidden="true">{waiting.value}</span>
                         <span className="sr-only">
-                          {t("sidebar.waiting", { count: waiting.value })}
+                          {/* Audit counts open critical incidents, which
+                              are open, not waiting (mobileNav.incidents). */}
+                          {item.key === "audit"
+                            ? t("sidebar.open", { count: waiting.value })
+                            : t("sidebar.waiting", { count: waiting.value })}
                         </span>
                       </span>
                     )}
@@ -173,9 +177,10 @@ function ConnectionBadge() {
 
 /**
  * `.side-foot`: the assistant launcher, then the organization's agent count
- * and data plane beside the connection badge. No read an organization member
- * can make answers the agent count or the data plane for the organization, so
- * the line says so rather than printing a figure (#3851).
+ * and data plane beside the connection badge. Both are recorded, but no read
+ * an organization member can make answers them for the whole organization
+ * (`list_agents` is per workspace, `get_data_plane` is Owner and Admin), so
+ * the line says they are not read here rather than printing a figure (#3851).
  */
 export function SidebarFoot({ onNavigate }: { onNavigate?: () => void }) {
   const t = useTranslations("shell.sidebar.foot");

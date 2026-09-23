@@ -13,8 +13,10 @@
 // route that does exist rather than pressing a control that does nothing.
 import { useTranslations } from "next-intl";
 import {
+  createContext,
   type ReactNode,
   startTransition,
+  useContext,
   useEffect,
   useId,
   useState,
@@ -204,7 +206,7 @@ export function PageError({
       </div>
       <p
         data-testid="page-error-trace"
-        className="mt-4 font-mono text-[11.5px] text-dim"
+        className="mt-4 font-mono text-[11.5px] text-muted-foreground"
       >
         {line.join(" · ")}
       </p>
@@ -219,9 +221,19 @@ export function PageError({
   );
 }
 
-/** `hh:mm:ssZ`, the instant a boundary caught the failure, as the mock's trace line prints it. */
-function utcTime(at: Date): string {
-  return `${at.toISOString().slice(11, 19)}Z`;
+/**
+ * The name of the page the route is on, as the sidebar prints it ("Fleet").
+ * The shell provides it around every page it frames, above the route error
+ * boundaries, so `RouteError` can title the failure "Fleet could not be
+ * loaded" the way the mock's `errorState("Fleet", …)` does. Outside the shell,
+ * or on a path no nav item holds, it is null and the title stays generic.
+ */
+export const RoutePageName = createContext<string | null>(null);
+
+/** `YYYY-MM-DD hh:mm:ssZ`, the instant a boundary caught the failure, as the mock's trace line prints it. */
+export function utcInstant(at: Date): string {
+  const iso = at.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 19)}Z`;
 }
 
 /**
@@ -236,20 +248,30 @@ function utcTime(at: Date): string {
 export function RouteError({
   error,
   reset,
+  page,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
+  /**
+   * The page's name as the sidebar prints it ("Fleet"), so the title reads
+   * "Fleet could not be loaded" as the mock's does. Read from
+   * `RoutePageName` when absent; null keeps the generic title.
+   */
+  page?: string | null;
 }) {
   const t = useTranslations("ui.pageState.error");
+  const framed = useContext(RoutePageName);
+  const name = page === undefined ? framed : page;
   const navigate = useNavigate();
   const [at, setAt] = useState<string | null>(null);
   useEffect(() => {
-    setAt(utcTime(new Date()));
+    setAt(utcInstant(new Date()));
   }, []);
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col">
+    // `id="main"` is the skip link's target, as every page's own <main> is.
+    <main id="main" className="mx-auto flex w-full max-w-6xl flex-col">
       <PageError
-        title={t("title")}
+        title={name === null ? t("title") : t("titleNamed", { page: name })}
         status={500}
         code="internal_error"
         trace={{ at: at ?? "", id: error.digest ?? null }}
@@ -332,7 +354,7 @@ export function PageDenied({
         {t("requestNotBacked")}
       </p>
       <dl className="mt-5 grid w-full max-w-[420px] grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-left text-[13px]">
-        <dt className="text-dim">{t("signedIn")}</dt>
+        <dt className="text-muted-foreground">{t("signedIn")}</dt>
         <dd>
           {signedIn.name} · <span className={mono}>{signedIn.role}</span>
           {signedIn.scope === null ? null : (
@@ -342,11 +364,11 @@ export function PageDenied({
             </>
           )}
         </dd>
-        <dt className="text-dim">{t("needed")}</dt>
+        <dt className="text-muted-foreground">{t("needed")}</dt>
         <dd>
           <span className={mono}>{permission}</span>
         </dd>
-        <dt className="text-dim">{t("decidedBy")}</dt>
+        <dt className="text-muted-foreground">{t("decidedBy")}</dt>
         <dd data-testid="page-denied-decided-by">
           {decidedBy === null ? (
             <span className="text-muted-foreground">

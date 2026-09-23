@@ -18,6 +18,12 @@ vi.mock("./source", () => ({ shellSource }));
 // call, alone, with no Fleet panel (heading, parked count, grid) around it.
 vi.mock("@/features/fleet", () => ({ ApprovalCardAlone }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+// The page-name provider reads the client router and the intl catalogue,
+// neither of which a server render test mounts; route-page-name.test.tsx
+// covers it on its own.
+vi.mock("./route-page-name", () => ({
+  ShellRoutePageName: ({ children }: { children: ReactNode }) => children,
+}));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 vi.mock("next-intl/server", () => ({
