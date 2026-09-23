@@ -133,7 +133,6 @@
         "reread": "Re-read the runs",
         "unavailable": "View only"
       },
-      "unnamedRun": "Untitled run",
       "operatorKind": {
         "human": "Unnamed operator",
         "agent": "Agent",
