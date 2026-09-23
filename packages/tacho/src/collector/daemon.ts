@@ -116,6 +116,8 @@ import {
   type GatewayCallRecord,
   type GatewayFetch,
 } from "./mcp-gateway";
+import { createGithubProxy } from "./github-proxy";
+import { pushCredentialBasis } from "./push-basis";
 import { issueRunToken } from "./credential-issuer";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
@@ -1832,6 +1834,12 @@ async function initializeDaemon(
           pendingAcks.push(ack);
         },
         now,
+        pushCredentialBasis: (command, cwd) =>
+          pushCredentialBasis(command, cwd, {
+            receipts: () =>
+              readHostFile(paths.hostFile)?.github_repositories ?? [],
+            execAsync,
+          }),
       },
       envelope.replay,
       envelope.harness,
@@ -2282,7 +2290,27 @@ async function initializeDaemon(
     return host.bundle.mode === "enforce" ? "harness" : "observe";
   }
 
+  const githubProxy = createGithubProxy({
+    host: () => {
+      const current = readHostFile(paths.hostFile);
+      return {
+        ...host,
+        github_broker_enabled: current?.github_broker_enabled === true,
+        github_repositories: current?.github_repositories ?? [],
+      };
+    },
+    policy,
+    refreshBundle,
+    registry,
+    controlFetch: options.fetch ?? globalThis.fetch,
+    now,
+    record,
+    log,
+  });
+
   const api: CollectorApi = {
+    githubLease: (input) => githubProxy.issue(input),
+    githubProxy: (req, res) => githubProxy.handle(req, res),
     localToken: host.local_token,
     enrollmentId: host.host_enrollment_id,
     // Deliberately NOT on `serial`. A gateway call is a round trip to the

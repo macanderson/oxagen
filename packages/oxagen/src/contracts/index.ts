@@ -70,6 +70,7 @@ import { tachoEnrollmentRevoke } from "./tacho.enrollment.revoke";
 import { tachoEventsIngest } from "./tacho.events.ingest";
 import { tachoContainedLaunchRegister } from "./tacho.contained_launch.register";
 import { tachoBundleGet } from "./tacho.bundle.get";
+import { tachoGithubTokenIssue } from "./tacho.github_token.issue";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { tachoCommandFetch } from "./tacho.command.fetch";
 import { tachoCommandList } from "./tacho.command.list";
@@ -679,6 +680,7 @@ export {
   tachoEnrollmentRevoke,
   tachoEventsIngest,
   tachoBundleGet,
+  tachoGithubTokenIssue,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   tachoCommandFetch,
@@ -1060,6 +1062,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoEnrollmentRevoke,
   tachoEventsIngest,
   tachoBundleGet,
+  tachoGithubTokenIssue,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   tachoCommandFetch,

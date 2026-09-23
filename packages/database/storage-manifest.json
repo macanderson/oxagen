@@ -315,6 +315,15 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "create_github_token",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "create_org",
       "reads": [],
@@ -3882,7 +3891,7 @@
       "writes": []
     }
   ],
-  "contentHash": "044b71a3d7c0026bacec9112288d114799e8de6d339052f9e22cb0e8e1977298",
+  "contentHash": "3c9eb098f005fef5993d8229aa987868c1443fd6717a20e5fc5d68423a6d1fda",
   "domains": [
     {
       "name": "agent",
