@@ -1655,9 +1655,10 @@ describe("connecting a GitLab project", () => {
     expect(
       (await screen.findByTestId("workspace-gitlab-failure")).textContent,
     ).toContain("GitLab no longer accepts");
-    expect(
-      (screen.getByLabelText("Project access token") as HTMLInputElement).value,
-    ).toBe("");
+    expect(screen.getByLabelText("Project access token")).toHaveProperty(
+      "value",
+      "",
+    );
   });
 
   it("tells the person when the webhook could not be registered", async () => {
@@ -1699,11 +1700,9 @@ describe("connecting a GitLab project", () => {
     connectGitLabProject.mockResolvedValue(CONNECTED);
     const { user } = await openSettings();
     const retired = await screen.findByTestId("workspace-repository-retired");
-    const path = within(retired).getByLabelText(
-      "Project path",
-    ) as HTMLInputElement;
-    expect(path.value).toBe("acme/platform/rules");
-    expect(path.readOnly).toBe(true);
+    const path = within(retired).getByLabelText("Project path");
+    expect(path).toHaveProperty("value", "acme/platform/rules");
+    expect(path).toHaveProperty("readOnly", true);
     // The GitHub App is not the repair for a GitLab binding.
     expect(screen.queryByTestId("workspace-repository-install")).toBeNull();
     await user.type(
