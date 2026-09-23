@@ -8,7 +8,7 @@
 //
 // Two controls the design draws have no write behind them yet, and neither is
 // stubbed into silence. *Request access* would ask an owner for a role and
-// *Open an incident* would file one; no contract does either (#3818, #3819).
+// *Open an incident* would file one; no contract does either (#3846, #3847).
 // Each renders as a disabled button that says why, so the reader learns the
 // route that does exist rather than pressing a control that does nothing.
 import { useTranslations } from "next-intl";
@@ -18,8 +18,8 @@ import { buttonPrimary, buttonSecondary, mono, panel } from "./control-styles";
 import { SafeLink, useNavigate } from "./navigation";
 
 /** The issue that owns each missing write, carried as a data attribute only. */
-const REQUEST_ACCESS_GAP = "GAP_REQUEST_ACCESS";
-const OPEN_INCIDENT_GAP = "GAP_OPEN_INCIDENT";
+const REQUEST_ACCESS_GAP = "#3846";
+const OPEN_INCIDENT_GAP = "#3847";
 
 const bone =
   "block animate-pulse rounded-lg bg-muted motion-reduce:animate-none";
@@ -147,7 +147,7 @@ export function PageError({
   /**
    * The trace line. `at` is the instant the read failed, formatted by the
    * caller (a component may not read a clock during render). A read error
-   * records no trace id or region yet (#3819), so each is drawn only when the
+   * records no trace id or region yet (#3847), so each is drawn only when the
    * caller has one.
    */
   trace: { at: string; id?: string | null; region?: string | null };
@@ -230,7 +230,7 @@ export function PageDenied({
   signedIn: { name: string; role: string; scope: string | null };
   /**
    * The policy that decided the refusal. A refusal records no policy id yet
-   * (#3818), so null draws what the record does not say instead of a
+   * (#3846), so null draws what the record does not say instead of a
    * policy version nobody read.
    */
   decidedBy: string | null;

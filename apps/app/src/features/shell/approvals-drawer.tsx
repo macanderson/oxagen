@@ -12,8 +12,8 @@
 //
 // A parked call records its tool, its agent, its run and its expiry. It does
 // not record an amount, a risk, a side effect, a taint or the run's task, so a
-// row draws none of them and one line says so (GAP_APPROVALS). An interjection
-// has no record either (GAP_INTERJECTION), so the list holds approvals only.
+// row draws none of them and one line says so (#3848). An interjection
+// has no record either (#3849), so the list holds approvals only.
 import { ChevronLeft, ShieldCheck, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -29,7 +29,7 @@ import { useShellState } from "./shell-state";
 import { orgWaiting } from "./use-activity";
 
 /** The issues that own what a row cannot show, carried as data attributes only. */
-const ROW_GAP = "GAP_APPROVALS";
+const ROW_GAP = "#3848";
 
 /** `m:ss` until `at`, or null once it has passed. */
 export function countdown(at: number, now: number): string | null {

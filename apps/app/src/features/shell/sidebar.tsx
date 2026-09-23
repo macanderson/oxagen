@@ -19,7 +19,7 @@ import { SafeLink } from "@/ui/navigation";
 export { useSidebarSections } from "./sidebar-sections";
 
 /** The issue that owns the foot's missing organization read, as a data attribute only. */
-const FOOT_GAP = "GAP_ORG_SUMMARY";
+const FOOT_GAP = "#3851";
 
 /**
  * `.navitem .ct`: a count appears only where something waits on a person
@@ -166,7 +166,7 @@ function ConnectionBadge() {
  * `.side-foot`: the assistant launcher, then the organization's agent count
  * and data plane beside the connection badge. No read an organization member
  * can make answers the agent count or the data plane for the organization, so
- * the line says so rather than printing a figure (GAP_ORG_SUMMARY).
+ * the line says so rather than printing a figure (#3851).
  */
 export function SidebarFoot({ onNavigate }: { onNavigate?: () => void }) {
   const t = useTranslations("shell.sidebar.foot");

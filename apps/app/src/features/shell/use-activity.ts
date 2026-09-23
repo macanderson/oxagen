@@ -3,7 +3,8 @@
 // (mockups/pages/audit-prompt.md check 5): the topbar's approvals badge over
 // the whole organization, and the sidebar's Fleet, Steering and Audit counts
 // for the workspace the sidebar points at. A count the record cannot give is
-// null and draws nothing, never a zero.
+// null and draws nothing, never a zero: `get_nav_counts` answers no proposals
+// or incidents yet (#3850), and no interjection is recorded (#3849).
 import type { NotificationFeed } from "@/data/contracts/shell";
 import type { Read } from "@/data/read";
 import { useWorkspaceActivity } from "./activity-store";
