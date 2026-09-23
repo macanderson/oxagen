@@ -54,7 +54,7 @@
       },
       "provisional": {
         "badge": "provisional",
-        "title": "{workspace} is provisional until {until}",
+        "title": "{workspace} is provisional until {until}.",
         "body": "Runs record and spend counts. Steering, context records and agent definitions stay off until a main repo is bound, because there is nowhere to publish them to.",
         "detected": "Bind {repository}",
         "binding": "Binding…",
@@ -62,9 +62,10 @@
       },
       "firstRun": {
         "badge": "first run",
-        "title": "The first frame arrived",
-        "body": "This workspace recorded <run></run> when the gate opened. The tiles below read off the runs it has kept since.",
-        "open": "Open the first run"
+        "title": "One run so far.",
+        "body": "This workspace has recorded the installer’s smoke session, <run></run> from <agent></agent>, and nothing else. The tiles below read off that run.",
+        "dismiss": "Show the seeded fleet",
+        "agentNotRecorded": "an agent not recorded"
       }
     },
     "register": {

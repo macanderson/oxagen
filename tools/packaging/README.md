@@ -1,4 +1,55 @@
-# Package-manager distribution
+# tools/packaging
+
+Package-manager distribution: templates and scripts for installing the Oxagen
+desktop app and the two compiled CLIs through Homebrew and Scoop. This
+directory is not a workspace package. It has no `package.json`, and callers
+run its scripts with `node`.
+
+## Boundary
+
+- **Owns:** the Homebrew cask and formula templates (`homebrew/`), the Scoop
+  manifest template (`scoop/`), the checksum writer (`checksums.mjs`), and the
+  template filler (`stamp.mjs`).
+- **Does not own:** compiling the binaries ([`tools/sea`](../sea/README.md));
+  building and signing the desktop bundles
+  ([`apps/desktop`](../../apps/desktop/README.md) and
+  `.github/workflows/desktop.yml`); the tap and the bucket, which do not
+  exist yet; the release artifact table the publish script checks
+  (`tools/scripts/lib/release-artifacts.ts`, which mirrors the tables here).
+- **Depends on:** No `@oxagen/*` dependencies. Both scripts use Node
+  built-ins only.
+- **Used by:** `.github/workflows/desktop.yml`, which runs `checksums.mjs` on
+  each release job. `stamp.mjs` is run by hand, or later by a tap job.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| `node tools/packaging/checksums.mjs <dir \| file> [...]` | boundary | `tools/packaging/checksums.mjs` | `.github/workflows/desktop.yml` |
+| `<asset>.sha256` files in `sha256sum` format | boundary | `tools/packaging/checksums.mjs` | Read back by `stamp.mjs`, and by `shasum -a 256 -c` or `sha256sum -c` |
+| `{{version}}`, `{{sha256:<asset>}}`, and `# stamp:` tokens | boundary | `tools/packaging/stamp.mjs` | The templates in `homebrew/` and `scoop/` |
+| Release asset names | boundary | This README's tables | `tools/scripts/lib/release-artifacts.ts` mirrors them |
+
+## Entry points
+
+- `checksums.mjs`: writes a `.sha256` beside every release asset.
+- `stamp.mjs --version <v> --sums <dir> --out <dir>`: fills the templates.
+- `homebrew/oxagen.rb`, `homebrew/tacho.rb`, `scoop/oxagen.json`: the
+  templates.
+
+## Rules
+
+- A checked-in template carries no digest for a build nobody has made.
+- `stamp.mjs` fails on a token with no matching `.sha256` rather than writing
+  a file that installs nothing.
+- Every package runs `tacho unenroll` before it removes the binaries.
+
+## Tests
+
+This directory has no tests. `brew audit` and Scoop's `checkver` run in the
+tap and the bucket, on the stamped copies.
+
+## Overview
 
 Templates for installing the Oxagen desktop app and the two compiled CLIs
 through Homebrew and Scoop. They are **templates until a tap and a bucket
@@ -82,7 +133,7 @@ stamped copies.
 ## Uninstall order, everywhere
 
 All three carry the order the app enforces: `tacho unenroll` first (strips
-the hooks in both harnesses, stops the service, revokes on the control plane,
+the hooks it wrote into every enrolled harness, stops the service, revokes on the control plane,
 deletes the host credentials), then the package. The cask runs it in
 `uninstall script:` and also unloads `sh.oxagen.tachod`; the manifest runs it
 in `pre_uninstall` when `host.json` exists; the formula says so in its

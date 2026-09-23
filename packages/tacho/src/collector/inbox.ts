@@ -14,7 +14,7 @@
  * pid, acknowledges `failed`: the process is still running, and the
  * `oxagen:kill_attempted` event beside the acknowledgement records the same
  * outcome. Reporting `applied` there puts a claim on the wire that the chain
- * contradicts. See `docs/specs/local-supervisor/spec.md` §3.1.
+ * contradicts. See `oxagen-roadmap:docs/oxagen/specs/local-supervisor/spec.md` §3.1.
  */
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";

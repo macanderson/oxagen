@@ -141,10 +141,10 @@ Read the real source and confirm the defect before changing anything (don't fix 
 - **Group all your fixes by module/domain into ONE branch and ONE PR**, cut from a fresh, synced `main`. **Commit each fix the moment its narrow test is green** — parallel agents share this working tree, so uncommitted work can be lost. Open the PR for Mac to merge; **never push to `main`** (the no-push rule in CLAUDE.md). One PR per domain, not one per finding — conserve tokens and CI minutes.
 
 ### 3. Write a report — every run
-Write a Markdown report to `docs/audits/<your-name>/<timestamp>-<slug>.md`:
+Write a Markdown report to `verifications/audits/<your-name>/<timestamp>-<slug>.md`:
 - `<your-name>` is **this agent's `name`** (the value in the frontmatter above) — the subdirectory IS the agent name.
 - `<timestamp>` is the **system time at write**, UTC compact, from `date -u +%Y%m%dT%H%M%SZ`. The filename MUST begin with it.
-- `mkdir -p docs/audits/<your-name>` first.
+- `mkdir -p verifications/audits/<your-name>` first.
 
 Report body: the monorepo slice reviewed · a findings table (severity · `file:line` · issue · status = fixed / deferred / reported) · root-cause notes for each P0/P1 · the PR link for fixes · anything left for a human and why.
 
@@ -156,4 +156,4 @@ When you learn something worth persisting (a recurring defect class, a fragile/e
 - Commit the memory alongside the fix so it is never lost.
 
 ### Definition of done
-A run is complete only when: every confirmed P0/P1 is fixed + regression-tested and committed into the grouped PR (or explicitly deferred with a stated reason), the timestamped report is written under `docs/audits/<your-name>/`, and any worthwhile memory is recorded. State the evidence — never claim done without it.
+A run is complete only when: every confirmed P0/P1 is fixed + regression-tested and committed into the grouped PR (or explicitly deferred with a stated reason), the timestamped report is written under `verifications/audits/<your-name>/`, and any worthwhile memory is recorded. State the evidence — never claim done without it.

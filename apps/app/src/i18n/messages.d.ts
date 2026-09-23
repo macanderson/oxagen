@@ -2032,23 +2032,75 @@ type Messages = {
     };
   };
   fleet: {
+    subtitle: string;
     loading: string;
     actions: {
+      steer: string;
       register: string;
+    };
+    steer: {
+      title: string;
+      agents: string;
+      all: string;
+      none: string;
+      pick: string;
+      inFlight: string;
+      inFlightNoTurn: string;
+      idle: string;
+      idleSub: string;
+      hint: string;
+      noAgents: string;
+      agentsUnread: string;
+      keyless: string;
+      stopped: string;
+      text: string;
+      delivery: string;
+      boundary: string;
+      boundaryBody: string;
+      interrupt: string;
+      interruptUnavailable: string;
+      interruptHint: string;
+      recorded: string;
+      note: string;
+      footer: string;
+      send: string;
+      sending: string;
+      cancel: string;
+      queued: string;
+      refused: string;
     };
     stats: {
       label: string;
       live: {
         title: string;
         basis: string;
+        basisUnread: string;
       };
       waiting: {
         title: string;
+        open: string;
         oldest: string;
         none: string;
+        drawer: string;
         more: string;
         moreBasis: string;
-        open: string;
+        window: string;
+        windowSeconds: string;
+        interjections: string;
+        unread: string;
+      };
+      spend: {
+        title: string;
+        noBasis: string;
+        unbased: string;
+        unpriced: string;
+        notRecorded: string;
+        mixed: string;
+      };
+      tokens: {
+        title: string;
+        notRecorded: string;
+        noCache: string;
       };
     };
     approvals: {
@@ -2124,53 +2176,130 @@ type Messages = {
     };
     runs: {
       title: string;
+      chipsLabel: string;
+      chips: {
+        all: string;
+        live: string;
+        parked: string;
+        sealed: string;
+      };
+      search: string;
+      facetAll: string;
+      facetLabel: string;
+      rows: string;
+      rowsAll: string;
+      sortBy: string;
+      tokensUnsorted: string;
       columns: {
         run: string;
         agent: string;
         operator: string;
         status: string;
         tier: string;
+        replay: string;
+        tokens: string;
         cost: string;
         frames: string;
         started: string;
-        controls: string;
       };
+      parked: string;
       notRecorded: string;
       basisNotRecorded: string;
-      unpriced: string;
-      unpricedLink: string;
       source: {
         ledger: string;
         tacho: string;
-      };
-      older: string;
-      newest: string;
-      pager: string;
-      empty: {
-        title: string;
-        body: string;
-        enroll: string;
-        command: string;
-      };
-      controls: {
-        group: string;
-        action: string;
-        verbs: {
-          pause: string;
-          resume: string;
-          cancel: string;
-        };
-        sending: string;
-        queued: string;
-        reread: string;
-        unavailable: string;
       };
       operatorKind: {
         human: string;
         agent: string;
         service: string;
       };
-      rowsShown: string;
+      noMatch: string;
+      pager: {
+        label: string;
+        range: string;
+        rangeMore: string;
+        none: string;
+        previous: string;
+        next: string;
+        page: string;
+        older: string;
+        newest: string;
+      };
+      pause: string;
+      resolve: string;
+      export: string;
+      rowAction: string;
+      exportQueued: string;
+      exportFailed: string;
+    };
+    pause: {
+      title: string;
+      body: string;
+      run: string;
+      position: string;
+      positionValue: string;
+      positionNoTurn: string;
+      recordedAs: string;
+      recordedValue: string;
+      reason: string;
+      note: string;
+      footer: string;
+      confirm: string;
+      pending: string;
+      cancel: string;
+      queued: string;
+    };
+    empty: {
+      title: string;
+      body: string;
+      register: string;
+      agents: string;
+    };
+    error: {
+      title: string;
+      body: string;
+      retry: string;
+      incident: string;
+      trace: string;
+    };
+    denied: {
+      title: string;
+      body: string;
+      back: string;
+      signedIn: string;
+      signedInValue: string;
+      needed: string;
+      neededValue: string;
+      decidedBy: string;
+      decidedByValue: string;
+    };
+    pending: {
+      title: string;
+      body: string;
+    };
+    requestAccess: {
+      title: string;
+      role: string;
+      why: string;
+      note: string;
+      send: string;
+      cancel: string;
+      unbacked: string;
+    };
+    incident: {
+      title: string;
+      subject: string;
+      severity: string;
+      severities: {
+        critical: string;
+        warning: string;
+        info: string;
+      };
+      attach: string;
+      raise: string;
+      cancel: string;
+      unbacked: string;
     };
   };
   mandate: {
@@ -2429,7 +2558,8 @@ type Messages = {
         badge: string;
         title: string;
         body: string;
-        open: string;
+        dismiss: string;
+        agentNotRecorded: string;
       };
     };
     register: {
@@ -6655,6 +6785,8 @@ type Messages = {
     };
     runStatus: {
       live: string;
+      sealed: string;
+      halted: string;
       running: string;
       completed: string;
       failed: string;

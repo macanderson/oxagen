@@ -2,7 +2,7 @@
 
 /**
  * connect-wizard.tsx — orchestrator for the "Connect a source" wizard
- * (docs/web-app-2.0/workspace/knowledge/sources/connect/spec.md).
+ * (docs/web-app-2.0/workspace/knowledge/sources/connect/spec.md, removed 2026-09-23; git history keeps it).
  *
  * Owns all cross-step state (selected connector, schema, connectionId,
  * preview data, mapping drafts) and drives the 5 step components under
