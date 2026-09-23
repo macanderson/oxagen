@@ -770,6 +770,93 @@ describe("empty", () => {
     });
     expect(document.querySelector("[data-state=empty]")).toBeNull();
   });
+
+  it.each([
+    ["a subscription", { plan: readOk({ subscription: SUBSCRIPTION }) }, {}],
+    [
+      "a block bought",
+      {
+        bucket: readOk(
+          prepaidBucket({ purchasedGau: 5_000, usedGau: 0, carriedGau: 0 }),
+        ),
+      },
+      {},
+    ],
+    ["an invoice", { invoices: invoicePage([invoiceRow()]) }, {}],
+    ["an older invoices page", {}, { cursor: "c2" }],
+  ] as const)(
+    "is not the empty state with %s (negative)",
+    async (_what, reads, options) => {
+      await renderBilling({ ...EMPTY, ...reads }, options);
+      expect(document.querySelector("[data-state=empty]")).toBeNull();
+      expect(document.querySelector("[data-page-state=loaded]")).not.toBeNull();
+    },
+  );
+
+  it("draws an older invoices page past the last invoice as an empty table with the way back to the newest", async () => {
+    // A characterization: a cursor past the last page is not the "No
+    // invoices yet" sentence. The list controls say no rows match, and the
+    // pager keeps Newest invoices.
+    await renderBilling(
+      { ...LOADED, invoices: invoicePage([]) },
+      { cursor: "c9" },
+    );
+    const invoices = section("Invoices");
+    expect(invoices).not.toHaveTextContent("No invoices yet.");
+    expect(invoices).toHaveTextContent("No rows match.");
+    expect(
+      within(invoices).getByRole("link", { name: "Newest invoices" }),
+    ).toHaveAttribute("href", "/acme/billing");
+  });
+});
+
+describe("which state wins", () => {
+  it("is the denied state when one read is refused and another failed", async () => {
+    await renderBilling({ ...LOADED, plan: DOWN, invoices: DENIED });
+    expect(document.querySelector("[data-state=denied]")).not.toBeNull();
+    expect(document.querySelector("[data-state=error]")).toBeNull();
+  });
+
+  it("is the pending state when a request waits and another read failed", async () => {
+    await renderBilling({
+      ...LOADED,
+      bucket: DOWN,
+      rate: { ok: false, reason: "pending_approval", accessRequestId: "arq_9" },
+    });
+    expect(document.querySelector("[data-state=pending]")).toHaveTextContent(
+      "arq_9",
+    );
+    expect(document.querySelector("[data-state=error]")).toBeNull();
+  });
+
+  it("names the first failed read's code, in the order the page reads them", async () => {
+    await renderBilling({
+      ...LOADED,
+      retention: readError("clickhouse_unreachable", 503),
+      plan: DOWN,
+    });
+    const state = document.querySelector("[data-state=error]") as HTMLElement;
+    expect(state).toHaveTextContent("answered 502 stripe_unreachable");
+    expect(
+      within(state).getByRole("button", { name: "Open an incident" }),
+    ).toBeInTheDocument();
+  });
+
+  it("is the denied state when only the token balance read is refused", async () => {
+    await renderBilling({ ...LOADED, usageCredits: DENIED });
+    expect(document.querySelector("[data-state=denied]")).not.toBeNull();
+  });
+
+  it("keeps the page when only the token balance read failed, and says so in its panel (negative)", async () => {
+    await renderBilling({ ...LOADED, usageCredits: DOWN });
+    expect(document.querySelector("[data-state=error]")).toBeNull();
+    expect(document.querySelector("[data-page-state=loaded]")).not.toBeNull();
+    const balance = section("Token balance");
+    expect(balance.querySelector("[data-reason=error]")).toHaveTextContent(
+      "stripe_unreachable",
+    );
+    expect(gold().map((el) => el.textContent)).toEqual(["Change plan"]);
+  });
 });
 
 describe("error", () => {
