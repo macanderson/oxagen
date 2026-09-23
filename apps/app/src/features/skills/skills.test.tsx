@@ -137,7 +137,6 @@ const source: DataSource = {
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),
-    hub: vi.fn(),
     deliveries: vi.fn(),
   },
   tools: {
@@ -260,7 +259,7 @@ describe("Skills › loaded", () => {
     expect(read).toHaveBeenCalledWith(ctx, { cursor: "c1" });
     expect(screen.getByRole("link", { name: "Next page" })).toHaveAttribute(
       "href",
-      "/acme/core-platform/steering/skills?cursor=c2",
+      "/acme/core-platform/steering?tab=skills&cursor=c2",
     );
   });
 });
@@ -355,7 +354,7 @@ describe("Skills › refusals", () => {
     expect(document.body).toHaveTextContent("session_store_unavailable · 503");
     expect(screen.getByRole("link", { name: "Try again" })).toHaveAttribute(
       "href",
-      "/acme/core-platform/steering/skills?cursor=c1",
+      "/acme/core-platform/steering?tab=skills&cursor=c1",
     );
   });
 });
@@ -382,6 +381,6 @@ it("reads configuration only on Search and Versions, with refusal in the selecte
   );
   expect(screen.getByRole("link", { name: "Try again" })).toHaveAttribute(
     "href",
-    "/acme/core-platform/steering/skills?view=search",
+    "/acme/core-platform/steering?tab=skills&view=search",
   );
 });

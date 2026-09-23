@@ -14,8 +14,8 @@ import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { GraphStatsOutput } from "@oxagen/oxagen/contracts/graph.stats";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
-import Link from "next/link";
 import type { ComponentType, SVGProps } from "react";
+import Link from "next/link";
 import { Network, Boxes, GitGraph, Plug } from "lucide-react";
 import { GithubIcon } from "@/components/brand/github-icon";
 import { Card } from "@/components/ui/card";
@@ -61,7 +61,6 @@ interface StatCell {
   key: string;
   label: string;
   value: number;
-  /** A lucide icon or a local brand mark: both take SVG props. */
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
 }
 

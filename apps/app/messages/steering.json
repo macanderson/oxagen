@@ -1,172 +1,12 @@
 {
   "steering": {
     "tabs": {
-      "label": "Steering",
-      "library": "Library",
-      "assignments": "Assignments",
-      "gates": "Gates",
+      "label": "Steering views",
       "proposals": "Proposals",
-      "compiler": "Compiler",
-      "candidates": "Candidates",
-      "prs": "Context PRs",
-      "segments": "Proposals or pull requests"
-    },
-    "hub": {
-      "description": "Everything that can steer an agent in this workspace competes in one assembler."
-    },
-    "shelves": {
-      "label": "Library shelves",
-      "all": "All",
-      "records": "Records",
-      "instructions": "Instructions",
-      "skills": "Skills",
-      "memory": "Memory",
-      "ontology": "Ontology",
-      "notRecorded": "not recorded"
-    },
-    "governance": {
-      "chip": "Governance:",
-      "chipTitle": "Change the governance mode",
-      "absentTitle": "{repository} has no .oxagen/rules/governance.toml. A missing file means team.",
-      "invalidTitle": ".oxagen/rules/governance.toml on {repository} names no mode Oxagen knows, so every Context PR open and merge is refused.",
-      "unboundTitle": "No main repository is bound, so no governance.toml is read.",
-      "unreadTitle": "The governance mode could not be read: {code}.",
-      "shown": {
-        "invalid": "invalid",
-        "unbound": "unbound",
-        "unread": "not read"
-      },
-      "title": "Governance mode \u00b7 {workspace}",
-      "subtitle": ".oxagen/rules/governance.toml on {repository}",
-      "mainRepository": "the main repository",
-      "pick": "Governance mode",
-      "now": "\u00b7 now",
-      "modes": {
-        "solo": {
-          "summary": "The author may merge their own.",
-          "hint": "One person, or a repository nobody else reviews."
-        },
-        "team": {
-          "summary": "A code-owner review is required.",
-          "hint": "What a missing governance.toml means, and what most repositories want."
-        },
-        "regulated": {
-          "summary": "A named approver from a role must approve, and the promotion ledger is hash-chained.",
-          "hint": "Separation of duties: the author of a record may never be its approver."
-        }
-      },
-      "tomlHeader": "# .oxagen/rules/governance.toml \u2014 read on the production branch when a pull request is\n# opened and again when it is merged. A missing file means team.",
-      "note": "The mode is read off the file when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight.",
-      "cancel": "Cancel",
-      "close": "Close",
-      "submit": "Open the Context PR",
-      "pending": "Opening the Context PR",
-      "commit": "Commit the change",
-      "commitPending": "Committing the change",
-      "proposed": "Pull request opened on {repository}: .oxagen/rules/governance.toml sets mode = {mode}. It takes effect on merge for everything already in flight; nothing else in Oxagen writes that file.",
-      "applied": "Committed to {branch} on {repository}: .oxagen/rules/governance.toml sets mode = {mode}. It is in force now. Under solo the change skips review.",
-      "unchanged": "Governance mode is already {mode}; nothing to change.",
-      "openPr": "Open pull request #{number}",
-      "failure": {
-        "denied": "Your roles here do not include set_governance_mode. An org Owner or Admin, or a workspace Owner or Admin, changes the mode. Nothing was changed.",
-        "noRepository": "This workspace has no main repository with the GitHub App installed, so there is no governance.toml to change. Bind one on Repositories.",
-        "refused": "The change was refused: {code}. Nothing was changed.",
-        "pendingApproval": "The change is waiting for approval: {accessRequestId}.",
-        "unavailable": "The change could not be made: {code}. Nothing was changed."
-      },
-      "lowering": "Not recorded yet: an org-owner approval and a security event when the mode is lowered. Tracked in #{issue}."
-    },
-    "library": {
-      "items": "Items",
-      "itemsNote": "everything that can steer an agent here",
-      "byKind": "By kind",
-      "byKindNote": "one shape, every kind",
-      "compiledSize": "Compiled size",
-      "compiledSizeNote": "if every item were rendered at once, which no run does",
-      "grants": "Carry a grant",
-      "grantsNote": "these compile to a gate as well as to text",
-      "notRecorded": "not recorded",
-      "kindRecord": "record",
-      "lead": "A shelf is a filter on this list, never a second list. The assembler reads exactly these items, in this order, and decides per run which of them a given agent is shown. Assignments says who receives what; the compiler shows one decision in full.",
-      "planes": "Steering is what the model reads: advisory, ranked, budgeted, and it may be dropped. Gating is what gets refused: deterministic, never budgeted, never ranked. The Library, Assignments, and the Compiler are the text plane. Gates is the gate plane.",
-      "title": "Everything written down",
-      "receives": "Who receives it",
-      "columns": {
-        "item": "Item",
-        "kind": "Kind",
-        "force": "Force",
-        "scope": "Scope",
-        "compiles": "Compiles to",
-        "tokens": "Token cost",
-        "source": "Source"
-      },
-      "compilesNotRecorded": "not recorded",
-      "compilesTitle": "list_records carries no enforcement grant, so whether this record also compiles to a gate is not recorded. Tracked in #{issue}.",
-      "tokensTitle": "list_records carries no token cost for a record. Tracked in #{issue}.",
-      "scopeTargetTitle": "list_records carries no repository for a record, so the repository this record names is not recorded. Tracked in #{issue}.",
-      "sourceNone": "not recorded",
-      "gap": "Only records are read into this list today. Instructions, skills, memory, and ontology notes join it when the steering registry (Phase 1) reads every source into one item type, tracked in #{issue}.",
-      "truncated": "This list holds the first {read} of the {total} records in force, in the assembler's order."
-    },
-    "state": {
-      "loading": "Loading steering",
-      "empty": {
-        "title": "Nothing steers this workspace yet",
-        "body": "Published records live in <code>.oxagen/rules/</code> on {repository}. A record becomes published by being merged, never by being saved here.",
-        "repository": "the main repository"
-      },
-      "error": {
-        "title": "Steering could not be loaded",
-        "answered": "The control plane answered <code>{answer}</code>.",
-        "body": "Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
-        "retry": "Try again",
-        "incident": "Open an incident",
-        "incidentNote": "Oxagen records no incidents yet. Report the line below to your operator.",
-        "trace": "{status} {code} \u00b7 {at}"
-      },
-      "denied": {
-        "title": "You cannot see this workspace\u2019s steering",
-        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
-        "request": "Request access",
-        "requestNote": "Oxagen records no access requests yet. An organization owner grants {permission} on Organization \u203a Roles.",
-        "back": "Back to Fleet",
-        "signedIn": "Signed in as",
-        "signedInValue": "workspace.{role} \u00b7 {workspace}",
-        "signedInNamed": "<person>{name}</person> \u00b7 <mono>workspace.{role} \u00b7 {workspace}</mono>",
-        "needed": "Needed",
-        "neededValue": "{permission} on {workspace}",
-        "decidedBy": "Decided by",
-        "decidedByValue": "policy not recorded (#{issue}) \u00b7 deny wins over every allow"
-      },
-      "pending": {
-        "title": "Your access to this workspace\u2019s steering is waiting for approval",
-        "body": "Access request {request}"
-      }
-    },
-    "bodies": {
-      "notBacked": "Not recorded yet: {what}",
-      "issue": "Tracked in #{number}",
-      "assignments": {
-        "what": "which agent receives which item, per agent, with its delivery, gates, stable prefix, volatile selection, cuts, and skills. It needs the assembler's registry port (Phase 1)."
-      },
-      "gates": {
-        "what": "the gates that reach this workspace and the gate notice each puts back into steering. The workspace's freshness gates are below."
-      },
-      "compiler": {
-        "what": "one assembly for one agent and one prompt, with the manifest of what was cut and why. It needs assembleSteering behind a read contract."
-      },
-      "memory": {
-        "what": "the memory an agent's own runs left behind, as items of the one steering list."
-      },
-      "ontology": {
-        "what": "the ontology notes under .oxagen/ontology/, as items of the one steering list."
-      },
-      "instructions": {
-        "what": "the workspace instructions, as items of the one steering list."
-      },
-      "skillSource": {
-        "pending": "The source of <code>{skill}</code> opens here when the skill source page ships. The catalog below lists the skill."
-      }
+      "settings": "Settings",
+      "library": "Library",
+      "freshness": "Freshness",
+      "deliveries": "Delivery"
     },
     "failure": {
       "denied": "You cannot see {section} in this workspace. The roles you hold do not include {permission}. An owner can grant it.",
@@ -347,6 +187,20 @@
       "skill": "Add a skill",
       "record": "Write a context record"
     },
+    "library": {
+      "label": "Library shelves",
+      "all": "All",
+      "records": "Records",
+      "skills": "Skills",
+      "memory": "Memory"
+    },
+    "proposalSections": {
+      "label": "Proposal views",
+      "candidates": "Candidates",
+      "prs": "Context PRs"
+    },
+    "description": "Published records, observed skills, proposals, checkout freshness and steering delivery for this workspace.",
+    "governance": "Governance in Context PRs",
     "deliveries": {
       "title": "Steering delivery",
       "lead": "The latest verified manifest for each recorded run in the last 7 days.",
