@@ -105,13 +105,18 @@ describe("an allowed viewer", () => {
     expect(select).toHaveValue("build-v2:month");
   });
 
-  it("carries the design's note and says Checkout shows the amount due first", async () => {
+  it("carries the design's note and no paragraph beyond it", async () => {
     const dialog = await openDialog();
     expect(dialog).toHaveTextContent(
       "The free tier is in every plan: an included monthly allowance of governed actions and every governance feature on. Enterprise adds a dedicated data plane or behind-the-firewall deployment, and support with an SLA.",
     );
-    expect(dialog).toHaveTextContent(
-      "Stripe Checkout shows the amount due before anything is charged.",
+    // 995ee8a24 dropped the Checkout-and-Enterprise paragraph the design does
+    // not draw; the form holds the select and the note alone.
+    expect(within(dialog).getByRole("form").querySelectorAll("p")).toHaveLength(
+      1,
+    );
+    expect(dialog).not.toHaveTextContent(
+      "Stripe Checkout shows the amount due",
     );
   });
 
@@ -201,5 +206,16 @@ describe("a viewer the page blocks", () => {
     );
     expect(within(dialog).queryByRole("combobox")).toBeNull();
     expect(startPlanChange).not.toHaveBeenCalled();
+  });
+
+  it("names the subscription by its Stripe plan when no tier is known", async () => {
+    const dialog = await openDialog({
+      kind: "subscribed",
+      plan: "legacy-team-2025",
+      tier: null,
+    });
+    expect(dialog).toHaveTextContent(
+      "This organization already has a legacy-team-2025 subscription.",
+    );
   });
 });
