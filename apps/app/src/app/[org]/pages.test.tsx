@@ -429,6 +429,7 @@ describe("the Agents pages", () => {
       ctx,
       source,
       cursor: "c2",
+      view: null,
     });
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });

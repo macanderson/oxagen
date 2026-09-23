@@ -67,7 +67,11 @@ async function renderAgent(
   /** The viewer, for the cases that turn on the organization role it holds. */
   viewer = ctx,
 ) {
-  const { source, calls } = agentsSource(reads);
+  const { source, calls } = agentsSource(
+    tab === "permissions" || tab === "budgets" || tab === "mandates"
+      ? { budgets: readOk([]), mandates: mandateList([]), ...reads }
+      : reads,
+  );
   const element = await Agent({
     ctx: viewer,
     source,
@@ -163,7 +167,7 @@ describe("Agent header and tabs", () => {
     expect(region("Composition")).toHaveTextContent("prn_91");
   });
 
-  it("reads the ceilings the agent runs under on the Budgets tab, and nothing else", async () => {
+  it("reads ceilings and mandates together on Permissions", async () => {
     const calls = await renderAgent(
       { get: readOk(agentDetail()), budgets: readOk(spendBudgets()) },
       "budgets",
