@@ -1063,7 +1063,7 @@ export const agentRunAttemptSeals = agentSchema.table(
     runIdx: index("agent_run_attempt_seals_run_idx").on(t.runId),
     enforcementTierCheck: check(
       "agent_run_attempt_seals_enforcement_tier_check",
-      sql`${t.enforcementTier} IS NULL OR ${t.enforcementTier} IN ('gateway', 'harness', 'observe')`,
+      sql`${t.enforcementTier} IS NULL OR ${t.enforcementTier} IN ('contained', 'gateway', 'harness', 'observe')`,
     ),
     terminalStatusCheck: check(
       "agent_run_attempt_seals_terminal_status_check",

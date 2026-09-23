@@ -1,3 +1,4 @@
+import { evaluatePreToolUse } from "@oxagen/tacho/host";
 /**
  * What the policy bundle has to carry for the local MCP gateway to serve a
  * connected app honestly (ADR-078 §4).
@@ -13,19 +14,33 @@
  * `tool_ceiling` counted forbidden tools toward the limit.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { generateKeyPairSync } from "node:crypto";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { bundleSignerFromPem, verifyBundle } from "./tacho-bundle-signing";
+
+const policyRead = vi.hoisted(() => vi.fn());
+vi.mock("./tacho-session-policy", () => ({
+  readTachoSessionPolicyIn: policyRead,
+}));
 
 const gatewayMandateTools = vi.fn(() => undefined as string[] | undefined);
 vi.mock("@oxagen/iam/machine-key-scope", () => ({
   gatewayMandateTools: () => gatewayMandateTools(),
 }));
 
-const { unsignedBundle } = await import("./tacho-host");
+const { resolveHostMandate, signBundle, unsignedBundle } = await import(
+  "./tacho-host"
+);
 const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
 const {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_MODEL_ALLOWLIST,
+  BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_MODEL_PRICES,
+  BUNDLE_FEATURE_STEERING_MANIFEST,
 } = await import("@oxagen/tacho");
+const { assembleWorkspaceSteering } = await import("./tacho-steering");
 const { PROVIDER_RATE_CARD } = await import("@oxagen/billing");
 
 const NOW = new Date("2026-09-17T09:30:00.000Z");
@@ -51,12 +66,32 @@ const NO_MANDATE = {
   budget: { mode: "observed" as const },
 };
 
+/** One must record and one may record: text for the first, a manifest naming both. */
+const STEERING = assembleWorkspaceSteering("org", "ws", [
+  {
+    slug: "no-force-push",
+    kind: "constraint",
+    force: "must",
+    constraintEffect: "forbid",
+    statement: "Never force-push.",
+    activatedAt: "2026-09-16T00:00:00.000Z",
+  },
+  {
+    slug: "prefer-small-prs",
+    kind: "preference",
+    force: "may",
+    constraintEffect: null,
+    statement: "Prefer small pull requests.",
+    activatedAt: "2026-09-15T00:00:00.000Z",
+  },
+]);
+
 function bundle(bundleFeatures: string[] = CURRENT) {
   return unsignedBundle(
     host(bundleFeatures),
     { org: 1, workspace: 1 },
     { mode: "digest_only", classes: [] },
-    null,
+    STEERING,
     NO_MANDATE,
     NOW,
   );
@@ -195,6 +230,33 @@ describe("a host that cannot parse the field is not sent it", () => {
     gatewayMandateTools.mockReturnValue(["get_run"]);
     expect(served(["some_later_field"])).not.toHaveProperty("gateway_tools");
   });
+});
+
+describe("the steering manifest on the bundle", () => {
+  it("signs the text for every host, and the manifest only for a host that can parse it", () => {
+    const plain = bundle([]);
+    expect(plain.context.system).toBe(STEERING.text);
+    expect(plain.context).not.toHaveProperty("manifest");
+    // A host deployed before the field parses what it is served.
+    expect(() => policyBundleSchema.parse(served([]))).not.toThrow();
+
+    const current = bundle([BUNDLE_FEATURE_STEERING_MANIFEST]);
+    expect(current.context.system).toBe(STEERING.text);
+    expect(current.context.manifest).toEqual(STEERING.manifest);
+    expect(current.context.manifest?.items.map((i) => i.outcome)).toEqual([
+      "included",
+      "cut",
+    ]);
+    expect(() =>
+      policyBundleSchema.parse(served([BUNDLE_FEATURE_STEERING_MANIFEST])),
+    ).not.toThrow();
+  });
+
+  it("moves the etag with the manifest, so a host that gains the field refetches once", () => {
+    expect(bundle([BUNDLE_FEATURE_STEERING_MANIFEST]).etag).not.toBe(
+      bundle([]).etag,
+    );
+  });
 
   it("keeps the etag stable per host, so neither end refetches forever", () => {
     // `controlEnvelope` publishes this etag on every ingest and command poll,
@@ -256,19 +318,70 @@ describe("the prices the host's model proxy needs (ADR-094)", () => {
 });
 
 describe("the wrapped-session policy on the bundle", () => {
-  it("signs no clause from the workspace's session policy", () => {
-    // The bundle's budget is the agent's mandate (`deriveBundleBudget`,
-    // #3710), and `models` is not signed at all. The workspace's own policy
-    // is stored and read back by `get_tacho_session_policy` and reaches no
-    // host, which is why the panel that sets it says "Not applied". This is
-    // the assertion that fails first if a clause is wired in without the
-    // decision the audit's §3 is reopened for.
-    expect(bundle(CURRENT)).not.toHaveProperty("models");
-    expect(bundle([BUNDLE_FEATURE_MODEL_ALLOWLIST])).not.toHaveProperty(
-      "models",
-    );
-    expect(bundle(CURRENT).budget).toEqual(NO_MANDATE.budget);
+  it("does not send independently armed lists to a legacy host", () => {
+    const mandate = { ...NO_MANDATE, models: { allow: null, deny: ["*"] } };
+    for (const features of [[], [BUNDLE_FEATURE_MODEL_ALLOWLIST]]) {
+      expect(
+        unsignedBundle(
+          host(features),
+          { org: 1, workspace: 1 },
+          { mode: "digest_only", classes: [] },
+          STEERING,
+          mandate,
+          NOW,
+        ),
+      ).not.toHaveProperty("models");
+    }
   });
+
+  it.each(["observed", "enforced"] as const)(
+    "resolves model mode %s independently of the agent budget",
+    async (mode) => {
+      policyRead.mockResolvedValue({
+        mode,
+        modelAllow: ["claude-*"],
+        modelDeny: ["claude-old"],
+        sessionLimitUsd: 99,
+      });
+      const current = {
+        ...host([BUNDLE_FEATURE_INDEPENDENT_MODELS]),
+        agentId: null,
+        agentPrincipalId: null,
+      };
+      const tx = {
+        query: { workspaces: { findFirst: async () => undefined } },
+      } as unknown as Parameters<typeof resolveHostMandate>[0];
+      const mandate = await resolveHostMandate(
+        tx,
+        { orgId: "o", workspaceId: "w" },
+        current,
+      );
+      expect(policyRead).toHaveBeenCalledWith(tx, "w");
+      const result = unsignedBundle(
+        current,
+        { org: 1, workspace: 1 },
+        { mode: "digest_only", classes: [] },
+        STEERING,
+        mandate,
+        NOW,
+      );
+      expect(result.budget).toEqual({ mode: "observed" });
+      expect(result.models).toEqual(
+        mode === "enforced"
+          ? { allow: ["claude-*"], deny: ["claude-old"] }
+          : undefined,
+      );
+      const withBudget = unsignedBundle(
+        current,
+        { org: 1, workspace: 1 },
+        { mode: "digest_only", classes: [] },
+        STEERING,
+        { ...mandate, budget: { mode: "enforced", session_limit_usd: 2 } },
+        NOW,
+      );
+      expect(withBudget.models).toEqual(result.models);
+    },
+  );
 
   it("refuses the field on a host schema that predates it", () => {
     // The gate still has to work when the clause arrives: the host's bundle
@@ -282,5 +395,137 @@ describe("the wrapped-session policy on the bundle", () => {
         signature: { key_id: "k", alg: "ed25519", sig: "s" },
       }),
     ).toThrow();
+  });
+});
+
+describe("the active definition budget on the signed bundle", () => {
+  function budgetTransaction(
+    definitionSource: string,
+    activeVersionId: string | null = "version-active",
+  ) {
+    const findVersion = vi.fn(async (args: unknown) => {
+      const { columns } = args as { columns: Record<string, boolean> };
+      const row: Record<string, unknown> = { config: {}, definitionSource };
+      return Object.fromEntries(
+        Object.keys(columns).map((key) => [key, row[key]]),
+      );
+    });
+    const tx = {
+      query: {
+        agents: { findFirst: vi.fn(async () => ({ activeVersionId })) },
+        agentVersions: { findFirst: findVersion },
+        workspaces: { findFirst: vi.fn(async () => undefined) },
+      },
+    } as unknown as Parameters<typeof resolveHostMandate>[0];
+    return { tx, findVersion };
+  }
+
+  const ctx = { orgId: "org-1", workspaceId: "workspace-1" };
+  const governedHost = () => ({
+    ...host(),
+    agentId: "agent-1",
+    agentPrincipalId: null,
+  });
+
+  it("signs the editor's TOML budget from the selected active version", async () => {
+    // The form writes this inline table. The commit handler preserves config
+    // and stores the text as definitionSource; publishing selects this row.
+    const { tx, findVersion } = budgetTransaction(
+      'schema = "agent-definition/v0.1"\nslug = "review"\nbudget = { per_run_micros = 2500000 }\n[instructions]\nbody = "Review."\n',
+    );
+    const mandate = await resolveHostMandate(tx, ctx, governedHost());
+    const lookup = findVersion.mock.calls[0]?.[0] as { where: SQL };
+    expect(new PgDialect().sqlToQuery(lookup.where).params).toEqual([
+      "version-active",
+    ]);
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const signer = bundleSignerFromPem(
+      privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    );
+    const signed = signBundle(
+      signer,
+      unsignedBundle(
+        governedHost(),
+        { org: 1, workspace: 1 },
+        { mode: "digest_only", classes: [] },
+        STEERING,
+        mandate,
+        NOW,
+      ),
+    );
+    expect(policyBundleSchema.parse(signed).budget).toEqual({
+      mode: "enforced",
+      session_limit_usd: 2.5,
+    });
+    expect(verifyBundle(signed, signer.publicKeyPem)).toBe(true);
+    expect(
+      verifyBundle(
+        { ...signed, budget: { mode: "observed" } },
+        signer.publicKeyPem,
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    "[budget",
+    "budget = { per_run_micros = nan }",
+    "budget = { per_run_micros = 1.5 }",
+  ])(
+    "signs a suspension for an invalid persisted definition: %s",
+    async (source) => {
+      const { tx } = budgetTransaction(source);
+      const mandate = await resolveHostMandate(tx, ctx, governedHost());
+      const { privateKey } = generateKeyPairSync("ed25519");
+      const signer = bundleSignerFromPem(
+        privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+      );
+      const signed = signBundle(
+        signer,
+        unsignedBundle(
+          governedHost(),
+          { org: 1, workspace: 1 },
+          { mode: "digest_only", classes: [] },
+          STEERING,
+          mandate,
+          NOW,
+        ),
+      );
+      expect(policyBundleSchema.parse(signed).host_status).toBe("suspended");
+      expect(verifyBundle(signed, signer.publicKeyPem)).toBe(true);
+      expect(
+        verifyBundle({ ...signed, host_status: "active" }, signer.publicKeyPem),
+      ).toBe(false);
+      expect(governedHost().status).toBe("active");
+      expect(
+        evaluatePreToolUse({
+          bundle: signed,
+          bundleVerified: true,
+          hostStatus: signed.host_status,
+          session: {},
+          controlReachable: true,
+          now: NOW.getTime(),
+          toolName: "Bash",
+          toolInput: { command: "git push" },
+        }).decision,
+      ).toBe("deny");
+    },
+  );
+
+  it("does not arm an unpublished definition when there is no active version", async () => {
+    const { tx, findVersion } = budgetTransaction(
+      "budget = { per_run_micros = 2500000 }",
+      null,
+    );
+    expect((await resolveHostMandate(tx, ctx, governedHost())).budget).toEqual({
+      mode: "observed",
+    });
+    expect(findVersion).not.toHaveBeenCalled();
+  });
+
+  it("keeps a daily-only declaration observed without inventing a session limit", async () => {
+    const { tx } = budgetTransaction("budget = { per_day_micros = 20000000 }");
+    expect((await resolveHostMandate(tx, ctx, governedHost())).budget).toEqual({
+      mode: "observed",
+    });
   });
 });

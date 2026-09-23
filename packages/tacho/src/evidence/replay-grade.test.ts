@@ -19,9 +19,12 @@ const clean = {
 };
 
 describe("computeReplayGrade", () => {
-  it("grades a gapless gateway run fork", () => {
-    expect(computeReplayGrade(clean)).toBe("fork");
-  });
+  it.each(["gateway", "contained"] as const)(
+    "grades a gapless %s run fork",
+    (enforcementTier) => {
+      expect(computeReplayGrade({ ...clean, enforcementTier })).toBe("fork");
+    },
+  );
 
   it("grades retry only when the harness reports a reproducible run", () => {
     expect(computeReplayGrade({ ...clean, harnessReproducible: true })).toBe(
@@ -151,7 +154,12 @@ describe("explainReplayGrade", () => {
     for (const tier of ["gateway", "harness", "observe"] as const) {
       for (const gaps of [[], ["tool_bodies"], ["chain_break"]]) {
         for (const bodies of [0, 3]) {
-          const input = { ...base, enforcementTier: tier, gaps, retainedBodies: bodies };
+          const input = {
+            ...base,
+            enforcementTier: tier,
+            gaps,
+            retainedBodies: bodies,
+          };
           expect(explainReplayGrade(input).grade).toBe(
             computeReplayGrade(input),
           );

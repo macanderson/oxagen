@@ -73,6 +73,7 @@ export const TACHO_SESSION_OUTCOMES = [
   "unknown",
 ] as const;
 export const TACHO_ENFORCEMENT_TIERS = [
+  "contained",
   "gateway",
   "harness",
   "observe",
@@ -1104,4 +1105,31 @@ export const GATEWAY_CHAIN_COLUMN = {
   schema: "tacho",
   table: "gateway_chains",
   column: "chain_session_uuid",
+} as const;
+
+/** Trusted launcher receipt. One immutable association per host and session. */
+export const tachoContainedLaunches = tachoSchema.table(
+  "contained_launches",
+  {
+    ...idMixin("tcl"),
+    ...orgScopeMixin(),
+    hostId: uuid("host_id").notNull(),
+    sessionUuid: uuid("session_uuid").notNull(),
+    genesisHash: text("genesis_hash").notNull(),
+    measurement: jsonb("measurement")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    registeredAt: ts("registered_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    hostSessionUniq: uniqueIndex(
+      "tacho_contained_launches_host_session_uniq",
+    ).on(t.hostId, t.sessionUuid),
+  }),
+);
+
+export const CONTAINED_LAUNCH_COLUMN = {
+  schema: "tacho",
+  table: "contained_launches",
+  column: "genesis_hash",
 } as const;

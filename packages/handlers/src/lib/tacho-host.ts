@@ -4,6 +4,8 @@
  * building the control envelope every machine response carries.
  */
 import { CapabilityError } from "@oxagen/oxagen/kernel";
+import { isHandlerError } from "@oxagen/oxagen/handler-error";
+import { logger } from "../logger";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import {
   type PolicyBundle,
@@ -19,10 +21,13 @@ import { loadRuleSetIn } from "@oxagen/rules";
 import { PROVIDER_RATE_CARD, usdPerMillionToMicros } from "@oxagen/billing";
 import {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
+  BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
   BUNDLE_FEATURE_MODEL_PRICES,
+  BUNDLE_FEATURE_STEERING_MANIFEST,
   digestJcs,
   type JsonValue,
+  type SteeringManifest,
 } from "@oxagen/tacho";
 import { FAIL_OPEN_HOOK_PATHS } from "@oxagen/tacho/claude-code";
 import { schema, type Tx } from "@oxagen/database";
@@ -48,10 +53,20 @@ import {
 } from "./tacho-gateway-columns";
 import {
   type AgentBudgetDoc,
+  budgetDocFromVersion,
   deriveBundleBudget,
   mapMandateToBundlePermissions,
 } from "./tacho-mandate";
-import { readWorkspaceSteering, type SteeringTx } from "./tacho-steering";
+import {
+  readWorkspaceSteering,
+  type SteeringTx,
+  type WorkspaceSteering,
+} from "./tacho-steering";
+
+import {
+  readTachoSessionPolicyIn,
+  type SessionPolicyTx,
+} from "./tacho-session-policy";
 
 export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
@@ -333,8 +348,10 @@ function modelPrices(host: TachoHostRow): {
 
 /** The tool-RBAC-and-budget half of a host's mandate, resolved for the wire. */
 export interface HostMandate {
+  invalidDefinition?: true;
   permissions: PolicyBundle["permissions"];
   budget: PolicyBundle["budget"];
+  models?: PolicyBundle["models"];
 }
 
 /**
@@ -354,10 +371,30 @@ function hookFailOpen(host: TachoHostRow): { hook_fail_open?: string[] } {
 }
 
 /**
+ * The assembler's manifest for `context.system` (ADR-093), signed beside the
+ * text for a host that advertised it can parse the field. `context` is
+ * strict on the host, so a host built before the field would reject the
+ * whole mandate; a host that advertises it seals the manifest into every
+ * session's chain as a `steering.manifest` frame at `SessionStart`.
+ */
+function steeringManifest(
+  host: TachoHostRow,
+  steering: WorkspaceSteering,
+): { manifest?: SteeringManifest } {
+  const advertised: unknown = host.bundleFeatures;
+  if (
+    !Array.isArray(advertised) ||
+    !advertised.includes(BUNDLE_FEATURE_STEERING_MANIFEST)
+  )
+    return {};
+  return { manifest: steering.manifest };
+}
+
+/**
  * The agent-definition `budget` table off the host's agent's ACTIVE version
- * config (`agent.propose.ts`'s own reading of the same doc), or `undefined`
- * when the host names no agent, the agent has no published version, or the
- * config carries no `budget` table at all.
+ * definition source, with config as a fallback for legacy versions. It is
+ * undefined when the host names no agent, has no active version, or declares
+ * no budget.
  */
 async function readAgentBudgetDoc(
   tx: TachoTx,
@@ -371,21 +408,9 @@ async function readAgentBudgetDoc(
   if (!agent?.activeVersionId) return undefined;
   const version = (await tx.query.agentVersions.findFirst({
     where: eq(schema.agentVersions.id, agent.activeVersionId),
-    columns: { config: true },
-  })) as { config: unknown } | undefined;
-  const config = version?.config;
-  const budgetTable =
-    typeof config === "object" && config !== null
-      ? (config as Record<string, unknown>)["budget"]
-      : undefined;
-  if (typeof budgetTable !== "object" || budgetTable === null) return undefined;
-  const table = budgetTable as Record<string, unknown>;
-  const perRunMicros = table["per_run_micros"];
-  const perDayMicros = table["per_day_micros"];
-  return {
-    ...(typeof perRunMicros === "number" ? { perRunMicros } : {}),
-    ...(typeof perDayMicros === "number" ? { perDayMicros } : {}),
-  };
+    columns: { config: true, definitionSource: true },
+  })) as { config: unknown; definitionSource: string | null } | undefined;
+  return version === undefined ? undefined : budgetDocFromVersion(version);
 }
 
 /**
@@ -401,7 +426,7 @@ async function readAgentBudgetDoc(
  * `register_agent` runs), the workspace's decision rules still apply either
  * way (they govern the workspace, not one agent's own grants), and the
  * budget stays `observed` when the host names no agent, the agent has no
- * published version, or its config carries no budget table.
+ * published version, or its active definition carries no budget table.
  */
 export async function resolveHostMandate(
   tx: TachoTx,
@@ -435,35 +460,62 @@ export async function resolveHostMandate(
     mcpRules,
     externalToolRules: ruleSet?.rules ?? [],
   });
-  const budgetDoc = await readAgentBudgetDoc(tx, host.agentId);
-  const budget = deriveBundleBudget(budgetDoc);
-  return { permissions, budget };
+  const models = await workspaceModels(tx, ctx, host);
+  try {
+    const budgetDoc = await readAgentBudgetDoc(tx, host.agentId);
+    const budget = deriveBundleBudget(budgetDoc);
+    return { permissions, budget, ...models };
+  } catch (error) {
+    if (
+      !isHandlerError(error) ||
+      !["invalid_definition_source", "invalid_definition_budget"].includes(
+        error.reason,
+      )
+    )
+      throw error;
+    logger.warn(
+      { host: host.publicId, agentId: host.agentId, reason: error.reason },
+      "Invalid active definition suspends governed actions while evidence intake continues",
+    );
+    return {
+      permissions,
+      budget: { mode: "observed" },
+      invalidDefinition: true,
+      ...models,
+    };
+  }
 }
 
 /**
- * The bundle carries no `models` clause today.
- *
- * The workspace's allow and deny lists are stored
- * (`workspace.tacho_session_policy`) and read back by
- * `get_tacho_session_policy`, and nothing signs them into a bundle. The clause
- * they would fill fires on `budget.mode === "enforced"`, and that mode is set
- * from the agent's mandate budget (#3710) — so emitting the lists here would
- * arm them on every workspace that had already set an agent budget, which is
- * not a decision a model list's author made. `unsignedBundle` emits the
- * mandate's budget and nothing else until that ordering is settled.
- *
- * `BUNDLE_FEATURE_MODEL_ALLOWLIST` stays declared, and hosts keep advertising
- * it, so the gate is already in the field when the clause arrives. See
- * `docs/audits/2026-09-21-model-gateway-arming.md`.
+ * The workspace's enabled model lists, for a host that advertises
+ * `models_independent` (ADR-149). An older host gets no clause: it would
+ * check the lists only under an enforced budget.
  */
+async function workspaceModels(
+  tx: TachoTx,
+  ctx: { workspaceId: string },
+  host: TachoHostRow,
+): Promise<Pick<HostMandate, "models">> {
+  if (!host.bundleFeatures?.includes(BUNDLE_FEATURE_INDEPENDENT_MODELS)) {
+    return {};
+  }
+  const policy = await readTachoSessionPolicyIn(
+    tx as unknown as SessionPolicyTx,
+    ctx.workspaceId,
+  );
+  return policy.mode === "enforced"
+    ? { models: { allow: policy.modelAllow, deny: policy.modelDeny } }
+    : {};
+}
 
 /**
  * The unsigned bundle for a host at this moment (spec section 7.1).
  *
- * `contextSystem` is the workspace's compiled steering
- * (`readWorkspaceSteering`), or `null` when nothing steers. It is required so
- * that a caller cannot build a bundle and forget it: a record that silently
- * failed to reach the agent is the defect #2592 was filed about.
+ * `steering` is the workspace's assembled steering (`readWorkspaceSteering`):
+ * the `context.system` text, or `null` when nothing steers, and the manifest
+ * that accounts for every record. It is required so that a caller cannot
+ * build a bundle and forget it: a record that silently failed to reach the
+ * agent is the defect #2592 was filed about.
  *
  * `mandate` is the tool-RBAC-and-budget half (`resolveHostMandate`), likewise
  * required: a caller building a bundle without resolving it would silently
@@ -473,11 +525,15 @@ export function unsignedBundle(
   host: TachoHostRow,
   denyGeneration: DenyGeneration,
   retention: BundleRetention,
-  contextSystem: string | null,
+  steering: WorkspaceSteering,
   mandate: HostMandate,
   now: Date = new Date(),
 ): Omit<PolicyBundle, "signature"> {
-  const status = tachoHostStatusSchema.parse(host.status);
+  const status = tachoHostStatusSchema.parse(
+    mandate.invalidDefinition && host.status === "active"
+      ? "suspended"
+      : host.status,
+  );
   const mode = tachoBundleModeSchema.parse(host.mode);
   // Version and etag cover the policy content only, never the timestamps, so
   // an unchanged bundle answers not_modified across polls.
@@ -488,7 +544,11 @@ export function unsignedBundle(
     permissions: mandate.permissions,
     tools: {} as PolicyBundle["tools"],
     budget: mandate.budget,
-    context: { system: contextSystem },
+    ...(host.bundleFeatures?.includes(BUNDLE_FEATURE_INDEPENDENT_MODELS) &&
+    mandate.models
+      ? { models: mandate.models }
+      : {}),
+    context: { system: steering.text, ...steeringManifest(host, steering) },
     retention,
     mode,
     ...gatewayTools(host),
@@ -649,7 +709,7 @@ export async function controlEnvelope(
   );
   const commands = await drainCommands(tx, host, now);
   return controlEnvelopeSchema.parse({
-    host_status: tachoHostStatusSchema.parse(host.status),
+    host_status: bundle.host_status,
     deny_generation: denyGeneration,
     bundle_etag: bundle.etag,
     commands,

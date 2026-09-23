@@ -1,5 +1,7 @@
 # Model gateway: wired versus armed
 
+> Update 2026-09-22: [ADR-149](../adr/ADR-149-independent-model-policy.md) resolves the ownership decision in §3. Workspace mode arms model lists independently of agent budgets. Upgraded hosts advertise `models_independent`; older hosts receive no clause. The implementation is in `resolveHostMandate`, `unsignedBundle`, and the proxy's `refusalFor`. The historical findings below describe the earlier revision. CI and deployment must establish rollout.
+
 You want to know whether the loopback model proxy actually governs a wrapped
 harness's model spend today, or whether it only watches. Short answer: it
 watches. Every enforcement branch in `model-proxy.ts` is real code, but the one
@@ -15,7 +17,7 @@ findings still stand, at 2026-09-22.
 | Finding | Where it stands |
 |---|---|
 | §2 `budget.mode` hardcoded `observed` | Closed, by #3710 rather than by this work. `deriveBundleBudget` sets the mode from the agent's own mandate budget, so `session_budget_exceeded` is reachable. `workspace.tacho_session_policy` holds a workspace ceiling that nothing reads. |
-| §3 no model allowlist to check | Open. The parts are built and none is connected: the lists are stored, the bundle field and its feature gate exist, `refusalFor` answers `model_not_permitted`, and `unsignedBundle` signs no `models` clause, so no host is ever sent one. See "Why the clause waits" below. |
+| §3 no model allowlist to check | Closed by ADR-149 and PR #3761. Workspace mode independently arms the model lists, `unsignedBundle` sends the clause to hosts advertising `models_independent`, and `refusalFor` checks it regardless of the agent budget mode. Hosts need an upgrade and a mandate refresh. |
 | §4 spend rollup does not double count | Stands. No change was needed. |
 | §5 a reverted base URL is reported by nothing | Closed for the report. The daemon sends `model_base_urls` on every health poll, `tacho.hosts.model_base_urls` stores it, and `list_tacho_hosts` returns it. Reverting the URL is still possible; the control plane now sees the cause rather than only the tier drop. |
 | §1 Cursor and Stella are never routed | Stands. The spike below says what routing each would take. |

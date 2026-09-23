@@ -95,7 +95,9 @@ export function AssignRole({ org, ws, agentId, agentSlug }: RoleTarget) {
       const result = await assignAgentRole(org, ws, agentId, roleName);
       if (result.ok) {
         setOpen(false);
-        navigate.replace(routes.agent(org, ws, agentSlug));
+        navigate.replace(
+          routes.agent(org, ws, agentSlug, { tab: "permissions" }),
+        );
       } else {
         setFailure(failureText(result));
       }
@@ -220,7 +222,9 @@ export function RevokeRole({
       const result = await revokeAgentRole(org, ws, agentId, roleName);
       if (result.ok) {
         setOpen(false);
-        navigate.replace(routes.agent(org, ws, agentSlug));
+        navigate.replace(
+          routes.agent(org, ws, agentSlug, { tab: "permissions" }),
+        );
       } else {
         setFailure(failureText(result));
       }

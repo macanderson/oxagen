@@ -519,6 +519,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(gh.calls).toEqual([]);
     });
 
+    it.each([
+      "[budget",
+      "budget = { per_run_micros = nan }",
+      "budget = { per_day_micros = 0 }",
+    ])(
+      "refuses invalid source before GitHub or a version write: %s",
+      async (tail) => {
+        await expect(
+          commit(tenant, {
+            agentId: "release-bot",
+            branch: "agents/invalid",
+            source: `schema = "${AGENT_DEFINITION_SCHEMA}"\nslug = "release-bot"\n${tail}`,
+          }),
+        ).rejects.toMatchObject({ code: "conflict" });
+        expect(gh.calls).toEqual([]);
+      },
+    );
+
     it("refuses a file with the wrong schema or another agent's slug, and a retired agent", async () => {
       await expect(
         commit(tenant, {

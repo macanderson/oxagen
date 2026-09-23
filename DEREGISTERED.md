@@ -436,15 +436,14 @@ packages/oxagen/src/contracts/router.policy.get.ts
 
 ## 15. Completion and replay UI deferred (2026-09-20)
 
-[ADR-130](docs/adr/ADR-130-spend-and-operator-feedback-ui.md) removes completion, witness, proof, and scores from the app's current presentation. The chain and replay components remain in place with their tests and backend contracts:
+[ADR-130](docs/adr/ADR-130-spend-and-operator-feedback-ui.md) removes completion, witness, proof, and scores from the app's current presentation. The replay write components remain in place with their tests and backend contracts:
 
-- `apps/app/src/features/run/chain.tsx`
 - `apps/app/src/features/run/replay-actions.tsx`
-- `apps/app/src/ui/replay-grade.tsx`
 - `forkRun` and `bisectRuns` in `apps/app/src/features/run/actions.ts`
-- `ChainCheckpoint` in `apps/app/src/data/contracts/run.ts`
 
-The app's Knip configuration excludes only these retained files from unused-file reporting. The three retained exports carry `@deregistered`. They still compile and their tests remain. No production route imports the components. The shrink-only baseline stays empty.
+The app's Knip configuration excludes only this retained file from unused-file reporting. The two retained exports carry `@deregistered`. They still compile and their tests remain. No production route imports the component. The shrink-only baseline stays empty.
+
+On 2026-09-23 the Run page spec (`mockups/pages/run.md` in the roadmap repository) restored the Chain and seal tab and the replay grade badge, which it marks as built. `chain.tsx`, `replay-grade.tsx` and `ChainCheckpoint` left this register then. Fork and Bisect stay here because the same spec marks them as later work.
 
 ### Run summary implementation (ADR-153)
 

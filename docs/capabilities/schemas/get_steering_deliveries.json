@@ -1,0 +1,138 @@
+{
+  "name": "get_steering_deliveries",
+  "domain": "context",
+  "description": "Read included and cut steering records from the latest verified manifest of recent runs.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "days": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 30,
+        "default": 7
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 50
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sessionUuid": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "harness": {
+              "type": "string"
+            },
+            "agentKey": {
+              "type": "string"
+            },
+            "recordsIncluded": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "recordsCut": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "recordsCutForBudget": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "budgetTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "spentTokens": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "sessionUuid",
+            "ts",
+            "harness",
+            "agentKey",
+            "recordsIncluded",
+            "recordsCut",
+            "recordsCutForBudget",
+            "budgetTokens",
+            "spentTokens"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "undelivered": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "recordId": {
+              "type": "string"
+            },
+            "runs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "lastReason": {
+              "type": "string"
+            },
+            "lastSeen": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "recordId",
+            "runs",
+            "lastReason",
+            "lastSeen"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "scanned": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "truncated": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "runs",
+      "undelivered",
+      "scanned",
+      "truncated"
+    ],
+    "additionalProperties": false
+  }
+}
