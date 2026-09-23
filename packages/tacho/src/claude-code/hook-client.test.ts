@@ -1116,3 +1116,69 @@ describe("a mandate that denies git push, end to end", () => {
     expect(JSON.parse(result.stdout)).toEqual({});
   });
 });
+
+describe("Codex approval translation", () => {
+  it.each(["daemon", "local"] as const)(
+    "refuses an unsupported ask from the %s decision path",
+    async (path) => {
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      const now = Date.parse("2026-09-10T12:00:00.000Z");
+      const host = testHostFile(
+        signer,
+        signer.sign(
+          unsignedBundle({
+            permissions: { allow: [], deny: [], ask: ["Bash"] },
+          }),
+        ),
+      );
+      writeHostFile(paths.hostFile, host);
+      const result = await runTachoHook({
+        paths,
+        env: {},
+        stdin: PRE,
+        harness: "codex",
+        now: () => now,
+        post: async () => {
+          if (path === "local") throw new Error("daemon unavailable");
+          return {
+            status: 200,
+            body: JSON.stringify({
+              hookSpecificOutput: {
+                permissionDecision: "ask",
+                permissionDecisionReason: "Review this tool",
+              },
+            }),
+          };
+        },
+      });
+      expect(result.path).toBe(path);
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason: expect.stringContaining(
+            "Approve the request in Oxagen",
+          ),
+        },
+      });
+    },
+  );
+
+  it("preserves a native Claude Code ask", async () => {
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const response = { hookSpecificOutput: { permissionDecision: "ask" } };
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: PRE,
+      harness: "claude-code",
+      post: async () => ({ status: 200, body: JSON.stringify(response) }),
+    });
+    expect(JSON.parse(result.stdout)).toEqual(response);
+  });
+});

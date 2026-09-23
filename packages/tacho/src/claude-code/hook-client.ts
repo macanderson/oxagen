@@ -483,6 +483,35 @@ export function decideLocally(
   }
 }
 
+/** Codex ignores PreToolUse ask, so require approval by refusing the call. */
+function codexAnswer(
+  response: Record<string, unknown>,
+  event: string,
+): Record<string, unknown> {
+  const output = response["hookSpecificOutput"];
+  if (
+    event !== "PreToolUse" ||
+    typeof output !== "object" ||
+    output === null ||
+    Array.isArray(output)
+  )
+    return response;
+  const fields = output as Record<string, unknown>;
+  if (fields["permissionDecision"] !== "ask") return response;
+  const reason =
+    typeof fields["permissionDecisionReason"] === "string"
+      ? fields["permissionDecisionReason"]
+      : "Oxagen policy requires approval.";
+  return {
+    ...response,
+    hookSpecificOutput: {
+      ...fields,
+      permissionDecision: "deny",
+      permissionDecisionReason: `${reason} Codex cannot ask for approval through this hook. Approve the request in Oxagen before retrying.`,
+    },
+  };
+}
+
 export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   const now = deps.now ?? (() => Date.now());
   const platform = deps.platform ?? process.platform;
@@ -504,8 +533,10 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   const stella = harness === "stella";
   const cursor = harness === "cursor";
   // Stella and Cursor speak their own hook shapes; their adapters translate
-  // the payload in and the answer out. Every other harness is Claude Code's.
-  const translated = stella || cursor;
+  // the payload in and the answer out. Codex shares the payload but needs
+  // an explicit refusal when its hook protocol cannot honor an ask.
+  const codex = harness === "codex";
+  const translated = stella || cursor || codex;
   let raw: unknown;
   try {
     raw = JSON.parse(deps.stdin);
@@ -578,7 +609,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       ? stellaAnswer(response, input.hook_event_name)
       : cursor
         ? cursorAnswer(response, input.hook_event_name)
-        : `${JSON.stringify(response)}\n`;
+        : `${JSON.stringify(codex ? codexAnswer(response, input.hook_event_name) : response)}\n`;
   const emptyAnswer = answer({});
   /**
    * The answer for a machine that has enrollment state this hook cannot
