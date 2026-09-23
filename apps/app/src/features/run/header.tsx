@@ -1,3 +1,4 @@
+import { HarnessLabel } from "@/ui/harness-icon";
 import { useLocale, useTranslations } from "next-intl";
 import type { RunMachine, RunModel, RunRow } from "@/data/contracts/runs";
 import type { OrgRole, WsRole } from "@/server/viewer";
@@ -297,12 +298,25 @@ export function RunHeader({
       </div>
       <div
         data-testid="run-facts"
-        className="grid gap-x-8 gap-y-3 rounded-lg border border-border px-4 py-3 sm:grid-cols-2 lg:grid-cols-3"
+        className="grid gap-x-8 gap-y-3 rounded-lg border border-border px-4 py-3 sm:grid-cols-2 lg:grid-cols-4"
       >
         <Fact
           label={t("facts.operator")}
           value={operator.value}
           detail={operator.detail}
+        />
+        <Fact
+          label={t("facts.harness")}
+          value={
+            <HarnessLabel harness={run.harness?.name}>
+              {run.harness?.name || <NoValue />}
+            </HarnessLabel>
+          }
+          detail={
+            run.harness?.version
+              ? t("facts.harnessVersion", { version: run.harness.version })
+              : t("facts.harnessVersionNotRecorded")
+          }
         />
         {run.model === null ? (
           <Fact label={t("facts.model")} value={<NoValue />} />

@@ -9,7 +9,7 @@
 //    that the ledger keeps no path, rather than passing `rpl_…` off as a file
 //    name.
 // 3. A gate sits where it stopped the run, with the held call under it.
-// 4. A run that produced nothing says so.
+// 4. Missing output evidence is stated without claiming no work happened.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -247,15 +247,25 @@ describe("the spine", () => {
     expect(screen.getByRole("link", { name: "Fold these back" })).toBeTruthy();
   });
 
-  it("says a run produced nothing rather than drawing an empty list", async () => {
+  it("states that no output evidence was captured", async () => {
     const { container } = renderSpine(readOk(runOutputs()));
     expect(screen.getByTestId("run-outputs")).toHaveTextContent(
-      "Nothing recorded. This run read nothing and changed nothing.",
+      "No file or output evidence was captured for this run. Recorded frames may still contain activity.",
     );
     expect(screen.getByTestId("run-outputs-tally")).toHaveTextContent(
       "0 artifacts",
     );
     await expectNoAxe(container);
+  });
+
+  it("does not claim absence when the empty read was cut", () => {
+    renderSpine(readOk(runOutputs([], { complete: false })));
+    expect(screen.getByTestId("run-outputs")).toHaveTextContent(
+      "the spine ends early",
+    );
+    expect(screen.getByTestId("run-outputs")).not.toHaveTextContent(
+      "No file or output evidence was captured",
+    );
   });
 
   it("says the spine ends early when the read was cut", () => {
