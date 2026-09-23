@@ -225,7 +225,7 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
           for (const runs of [schema.tachoSessions, schema.agentRuns]) {
             await tx
               .update(runs)
-              .set({ summaryInputDigest: null, summaryObservedAt: null })
+              .set({ summaryObservedAt: null })
               .where(
                 and(
                   eq(runs.orgId, ctx.orgId),

@@ -42,8 +42,11 @@ import {
   evidenceRunExportOnFailure,
 } from "./functions/evidence.run-export";
 import { evidenceFrameCompaction } from "./functions/evidence.frame-compaction";
-import { runEnrich, runEnrichmentSweep } from "./functions/run.enrich";
-import { runSummarize } from "./functions/run.summarize";
+import {
+  runEnrich,
+  runEnrichmentSweep,
+  runSummarizeForward,
+} from "./functions/run.enrich";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -88,7 +91,7 @@ export const functions: any[] = [
   evidenceRunExport,
   evidenceRunExportOnFailure,
   evidenceFrameCompaction,
-  runSummarize,
+  runSummarizeForward,
   runEnrich,
   runEnrichmentSweep,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

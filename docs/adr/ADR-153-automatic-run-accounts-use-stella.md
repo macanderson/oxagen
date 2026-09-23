@@ -16,3 +16,5 @@ Model selection, funding, credit admission and charging use the existing organiz
 The schema adds nullable `summary_input_digest` and `summary_observed_at` columns to both run stores. Deploy migration 20260923070000 before registering the new jobs. Existing runs are eligible for the initial sweep. The existing manual summarize action queues the same enrichment event; its sealed/body-retention admission remains unchanged.
 
 The sweep processes up to five hundred rows per store per pass. A backlog takes multiple passes. Derived accounts expose their generation time. They do not claim to cover actions or messages the recorder never retained.
+
+The previous `run.summarize.ts` implementation and its tests remain preserved. The registered `run.summarize` function now forwards queued legacy events into the Stella job. Re-enabling enrichment resets observation cursors but retains input digests, so unchanged generated accounts do not incur another charge.

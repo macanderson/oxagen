@@ -445,3 +445,7 @@ packages/oxagen/src/contracts/router.policy.get.ts
 - `ChainCheckpoint` in `apps/app/src/data/contracts/run.ts`
 
 The app's Knip configuration excludes only these retained files from unused-file reporting. The three retained exports carry `@deregistered`. They still compile and their tests remain. No production route imports the components. The shrink-only baseline stays empty.
+
+### Run summary implementation (ADR-153)
+
+`packages/inngest-functions/src/functions/run.summarize.ts` is preserved but no longer registered. Its old `run/summarize` event forwards to `run/enrich`, which uses Stella and the workspace enrichment setting. The manual `summarize_run` capability remains available.

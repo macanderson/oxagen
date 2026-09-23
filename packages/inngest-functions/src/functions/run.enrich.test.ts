@@ -31,7 +31,12 @@ vi.mock("@oxagen/database", async (original) => {
               limit: async () =>
                 table === actual.schema.workspaces
                   ? [{ settings: { runEnrichmentEnabled: state.enabled } }]
-                  : [{ digest: state.digest }],
+                  : [
+                      {
+                        digest: state.digest,
+                        name: state.digest ? "Prior account" : null,
+                      },
+                    ],
             }),
           }),
         }),

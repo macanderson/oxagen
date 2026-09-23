@@ -101,7 +101,7 @@ export const [runEnrich] = createFunction(
         );
         const [previous] = await withTenantDb((tx) =>
           tx
-            .select({ digest: table.summaryInputDigest })
+            .select({ digest: table.summaryInputDigest, name: table.name })
             .from(table)
             .where(where)
             .limit(1),
@@ -130,7 +130,8 @@ export const [runEnrich] = createFunction(
         return {
           ...facts,
           manifest: manifest.ref,
-          unchanged: previous?.digest === transcript.digest,
+          unchanged:
+            previous?.digest === transcript.digest && previous.name !== null,
         };
       }),
     );
@@ -264,5 +265,16 @@ export const [runEnrichmentSweep] = createFunction(
       "Run enrichment sweep queued recorded runs",
     );
     return { queued: pending.length };
+  },
+);
+
+/** Previously queued manual summaries use the same setting and credit gate. */
+export const [runSummarizeForward] = createFunction(
+  { id: "run.summarize", retries: 2 },
+  { event: "run/summarize" },
+  async ({ event, step }) => {
+    const data = eventSchema.parse(event.data);
+    await step.sendEvent("forward-to-stella", { name: RUN_ENRICH_EVENT, data });
+    return { status: "forwarded" };
   },
 );
