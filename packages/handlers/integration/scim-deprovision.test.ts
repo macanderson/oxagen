@@ -49,11 +49,18 @@ const PROVIDER = `scim-it-${RUN}`;
 const BASE = "https://app.oxagen.sh/api/scim/v2";
 const PATCH_OP = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 
-async function scim(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown) {
+async function scimFor(
+  org: string,
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+) {
   return withSystemDb((tx) =>
-    serveScim(createPgScimStore(tx, ORG, null), { method, path, query: {}, body }, BASE),
+    serveScim(createPgScimStore(tx, org, null), { method, path, query: {}, body }, BASE),
   );
 }
+const scim = (method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown) =>
+  scimFor(ORG, method, path, body);
 
 function apiKey(): { raw: string; prefix: string; hash: string } {
   const raw = `ox_${randomBytes(32).toString("base64url")}`;
@@ -280,6 +287,96 @@ describe("#3734: removing a person at the identity provider ends their Oxagen ac
         AND detail->>'userId' = ${userId}
     `);
     expect(removed?.detail).toMatchObject({ trigger: "scim_group_change", apiKeysRevoked: 1 });
+  });
+
+  it("reaches no person of another organization", async () => {
+    const other = randomUUID();
+    const otherDomain = `other-${RUN}.test`;
+    await q(sql`
+      INSERT INTO org.organizations (id, public_id, name, slug, namespace, plan_type, status, type)
+      VALUES (${other}, ${`oth_org_${RUN}`}, 'Other Org', ${`oth-org-${RUN}`}, ${`o${RUN}`}, 'enterprise', 'active', 'business')
+    `);
+    await q(sql`
+      INSERT INTO auth.sso_providers
+        (id, issuer, oidc_config, provider_id, organization_id, domain, domain_verified,
+         protocol, display_name, domain_verification_token)
+      VALUES (${randomUUID()}, 'https://idp.test', '{}', ${`oth-it-${RUN}`}, ${other}, ${otherDomain}, true,
+              'oidc', 'Other IdP', 'tok')
+    `);
+    const theirs = await scimFor(other, "POST", "/Users", { userName: `eve@${otherDomain}` });
+    const theirId = (theirs.body as { id: string }).id;
+
+    const notFound = async (p: Promise<unknown>) =>
+      expect(await p.then(() => null, (e: unknown) => e)).toMatchObject({ status: 404 });
+    await notFound(scim("GET", `/Users/${theirId}`));
+    await notFound(
+      scim("PATCH", `/Users/${theirId}`, {
+        schemas: [PATCH_OP],
+        Operations: [{ op: "replace", value: { active: false } }],
+      }),
+    );
+    await notFound(scim("DELETE", `/Users/${theirId}`));
+    const group = await scim("POST", "/Groups", {
+      displayName: `Probe-${RUN}`,
+      members: [{ value: theirId }],
+    });
+    expect((group.body as { members: unknown[] }).members).toEqual([]);
+    const listed = await scim("GET", "/Users");
+    expect(
+      (listed.body as { Resources: { id: string }[] }).Resources.map((r) => r.id),
+    ).not.toContain(theirId);
+    // Their principal in their own organization is untouched.
+    const [principal] = await q(sql`
+      SELECT status FROM iam.principals WHERE org_id = ${other} AND parent_user_id = ${theirId}
+    `);
+    expect(principal?.status).toBe("active");
+  });
+
+  it("deprovisions a member from another domain without signing them out elsewhere", async () => {
+    // A contractor invited on a personal address: this organization removes
+    // them and their keys, but does not own the identity, so their sessions
+    // in other organizations stay.
+    const userId = randomUUID();
+    const key = apiKey();
+    const sessionToken = randomBytes(24).toString("hex");
+    await q(sql`
+      INSERT INTO auth.users (id, public_id, email, status, email_verified)
+      VALUES (${userId}, ${`usr_c${RUN}`}, ${`contractor-${RUN}@gmail.test`}, 'active', true)
+    `);
+    await q(sql`
+      INSERT INTO iam.principals (public_id, org_id, kind, display_name, status, parent_user_id)
+      VALUES (${`prn_c${RUN}`}, ${ORG}, 'human', 'Contractor', 'active', ${userId})
+    `);
+    await q(sql`
+      INSERT INTO org.org_users (public_id, org_id, user_id, role, joined_at)
+      VALUES (${`ou_c${RUN}`}, ${ORG}, ${userId}, 'member', now())
+    `);
+    await q(sql`
+      INSERT INTO auth.api_keys (public_id, org_id, workspace_id, key_prefix, key_hash, name, scope, created_by_id)
+      VALUES (${`aky_${RUN}c`}, ${ORG}, ${WS}, ${key.prefix}, ${key.hash}, 'k', '{}'::jsonb, ${userId})
+    `);
+    await q(sql`
+      INSERT INTO auth.sessions (id, user_id, token, expires_at)
+      VALUES (${randomUUID()}, ${userId}, ${sessionToken}, now() + interval '30 days')
+    `);
+    // SCIM cannot move the shared account onto this organization's domain.
+    const moved = await scim("PATCH", `/Users/${userId}`, {
+      schemas: [PATCH_OP],
+      Operations: [{ op: "replace", path: "userName", value: `takeover@${DOMAIN}` }],
+    }).then(() => null, (e: unknown) => e);
+    expect(moved).toMatchObject({ status: 403, denial: "identity_not_owned" });
+    const [unchanged] = await q(sql`SELECT email FROM auth.users WHERE id = ${userId}`);
+    expect(unchanged?.email).toBe(`contractor-${RUN}@gmail.test`);
+
+    await scim("PATCH", `/Users/${userId}`, {
+      schemas: [PATCH_OP],
+      Operations: [{ op: "replace", path: "active", value: false }],
+    });
+    await expect(resolveApiKey(key.raw)).resolves.toEqual({ ok: false, kind: "invalid" });
+    await expect(resolveSession(sessionToken)).resolves.toEqual({ userId });
+    expect(
+      await q(sql`SELECT 1 FROM org.org_users WHERE org_id = ${ORG} AND user_id = ${userId}`),
+    ).toHaveLength(0);
   });
 
   it("refuses to deprovision an Owner and changes nothing", async () => {

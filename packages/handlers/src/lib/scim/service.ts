@@ -13,9 +13,13 @@
 //     from groups: a group change recomputes the organization role of each
 //     person it touches through org.sso_group_roles, highest mapped role wins,
 //     deny by default, and an Owner is never changed.
-//   - `active: false` and DELETE deprovision: every session ended, every key
-//     and host revoked, every role assignment and membership removed, in the
-//     request's transaction. An Owner is refused. `active: true` on a
+//   - `active: false` and DELETE deprovision: every key and host revoked,
+//     every role assignment and membership removed, in the request's
+//     transaction, and every session ended when the organization owns the
+//     identity (its email is on a verified domain). An Owner is refused.
+//   - The Oxagen account is shared by every organization its person belongs
+//     to. SCIM changes its email or its name only for an identity this
+//     organization owns, and never an Owner's email. `active: true` on a
 //     deprovisioned person reactivates them and recomputes their role.
 import {
   resolveSsoGrantedRole,
@@ -95,11 +99,25 @@ export interface ScimStore {
   }): Promise<{ userId: string; linked: boolean }>;
   /** Change the account's email. Throws a 409 ScimError when another account holds it. */
   setUserEmail(userId: string, email: string): Promise<void>;
-  setUserName(userId: string, name: ScimNameInput): Promise<void>;
+  /**
+   * Record the person's name on their principal in this organization, and on
+   * the shared Oxagen account too when `account` is true. The account is
+   * shared by every organization the person belongs to, so only an
+   * organization that owns the identity may rename it.
+   */
+  setUserName(
+    userId: string,
+    name: ScimNameInput,
+    opts: { account: boolean },
+  ): Promise<void>;
   setExternalId(userId: string, externalId: string | null): Promise<void>;
   isOwner(userId: string): Promise<boolean>;
   /** The shared removal transaction; also drops the person's group memberships on DELETE. */
-  deprovision(userId: string, trigger: ScimRemovalTrigger): Promise<void>;
+  deprovision(
+    userId: string,
+    trigger: ScimRemovalTrigger,
+    opts: { endSessions: boolean },
+  ): Promise<void>;
   /** Clear the deprovision marker so the person's groups decide their role again. */
   reactivate(userId: string): Promise<void>;
   /** The person's organization role, lowercase, or null when not a member. */
@@ -229,6 +247,26 @@ function emailDomainOf(email: string): string | null {
   return email.slice(at + 1).toLowerCase();
 }
 
+function onVerifiedDomain(email: string, verified: readonly string[]): boolean {
+  const domain = emailDomainOf(email);
+  return (
+    domain !== null &&
+    verified.some((d) => domain === d || domain.endsWith(`.${d}`))
+  );
+}
+
+/**
+ * Whether this organization owns the person's identity: their current email is
+ * on one of its verified domains. Only then may SCIM change the shared Oxagen
+ * account (its email and name) or end the person's sessions, which reach
+ * every organization they belong to. A member invited from another domain,
+ * such as a contractor on a personal address, is this organization's to
+ * remove but not its to rename or sign out everywhere.
+ */
+async function ownsIdentity(store: ScimStore, email: string): Promise<boolean> {
+  return onVerifiedDomain(email, await store.verifiedDomains());
+}
+
 /** The email is on one of the organization's verified domains, or a subdomain of one. */
 async function assertOrgDomain(store: ScimStore, email: string): Promise<void> {
   const domain = emailDomainOf(email);
@@ -236,7 +274,7 @@ async function assertOrgDomain(store: ScimStore, email: string): Promise<void> {
     throw new ScimError(400, "userName must be an email address", "invalidValue");
   }
   const verified = await store.verifiedDomains();
-  if (verified.some((d) => domain === d || domain.endsWith(`.${d}`))) return;
+  if (onVerifiedDomain(email, verified)) return;
   throw new ScimError(
     400,
     `${domain} is not a verified SSO domain of this organization. Verify it on Organization › Single sign-on first.`,
@@ -271,8 +309,10 @@ async function recomputeRole(
   userId: string,
   mappings: readonly SsoGroupRole[],
 ): Promise<string | null> {
+  // Owner by either record (org_users or the IAM assignment); a group never
+  // changes an Owner.
+  if (await store.isOwner(userId)) return "owner";
   const current = await store.currentRole(userId);
-  if (current === "owner") return "owner";
   const user = await store.findUser(userId);
   if (!user || !user.active) return current;
   const granted = resolveSsoGrantedRole(await store.groupNamesOf(userId), mappings);
@@ -296,15 +336,33 @@ async function applyUserChanges(
   user: ScimUserRow,
   changes: UserChanges,
 ): Promise<void> {
-  if (changes.active === false && user.active) {
+  const emailChange =
+    changes.email !== undefined && changes.email !== user.email;
+  if ((changes.active === false && user.active) || emailChange) {
+    // An Owner is neither deprovisioned nor moved to another address by the
+    // identity provider: either would hand the organization's last word to
+    // whoever holds the SCIM token.
     await refuseOwner(store, user.id);
   }
-  if (changes.email !== undefined && changes.email !== user.email) {
-    await assertOrgDomain(store, changes.email);
+  const owned = await ownsIdentity(store, user.email);
+  if (emailChange) {
+    // The account is shared by every organization the person belongs to.
+    // Moving an address this organization does not own onto one it does
+    // would let the token holder take the account over (a reset mail or an
+    // SSO sign-in to the new address), so only an owned identity moves.
+    if (!owned) {
+      throw new ScimError(
+        403,
+        `${user.email} is not on a verified domain of this organization, so SCIM cannot change it.`,
+        "mutability",
+        "identity_not_owned",
+      );
+    }
+    await assertOrgDomain(store, changes.email as string);
   }
 
   const changed: string[] = [];
-  if (changes.email !== undefined && changes.email !== user.email) {
+  if (emailChange && changes.email !== undefined) {
     await store.setUserEmail(user.id, changes.email);
     changed.push("userName");
   }
@@ -314,7 +372,9 @@ async function applyUserChanges(
       changes.name.givenName !== user.givenName ||
       changes.name.familyName !== user.familyName)
   ) {
-    await store.setUserName(user.id, changes.name);
+    await store.setUserName(user.id, changes.name, {
+      account: owned && !(await store.isOwner(user.id)),
+    });
     changed.push("name");
   }
   if (changes.externalId !== undefined && changes.externalId !== user.externalId) {
@@ -336,7 +396,9 @@ async function applyUserChanges(
     });
   }
   if (changes.active === false && user.active) {
-    await store.deprovision(user.id, "scim_active_false");
+    await store.deprovision(user.id, "scim_active_false", {
+      endSessions: owned,
+    });
   }
 }
 
@@ -475,7 +537,11 @@ async function serveUsers(
         scimBoolean(resource.active, "active") === false
       ) {
         await refuseOwner(store, userId);
-        await store.deprovision(userId, "scim_active_false");
+        // The userName passed the domain check above, so the identity is
+        // this organization's.
+        await store.deprovision(userId, "scim_active_false", {
+          endSessions: true,
+        });
       }
       const row = await requireUser(store, userId);
       return {
@@ -510,7 +576,9 @@ async function serveUsers(
     }
     case "DELETE":
       await refuseOwner(store, user.id);
-      await store.deprovision(user.id, "scim_delete");
+      await store.deprovision(user.id, "scim_delete", {
+        endSessions: await ownsIdentity(store, user.email),
+      });
       return { status: 204, body: null };
     default:
       throw new ScimError(405, `${req.method} is not supported on /Users/{id}`);

@@ -277,12 +277,24 @@ each unused enrollment token expired, and, for a deprovision, every session.
 Its audit rows are written in the same transaction. A SCIM deprovision refuses
 an Owner before any write.
 
-**A deprovision ends every session.** `auth.sessions` has no organization
-column, so ending the person's sessions signs them out of every organization.
-The identity provider owns identities on its verified domain, so its removal
-ends the identity. A manual removal and a sign-in no group admits leave
-sessions alone, because one organization does not own the person's other
-memberships.
+**A deprovision ends sessions only for an identity the organization owns.**
+`auth.sessions` has no organization column, so ending the person's sessions
+signs them out of every organization. The identity provider owns identities on
+the organization's verified domains, so its removal ends those. A member on
+another domain, such as a contractor invited on a personal address, keeps
+their sessions elsewhere. A manual removal and a sign-in no group admits leave
+sessions alone for the same reason.
+
+**The shared account moves only for an identity the organization owns.** An
+Oxagen account belongs to every organization its person joined. SCIM changes
+its email only when the current email is on one of the organization's verified
+domains and the person is not an Owner, and changes its display name only for
+such an identity. Anything else would let a SCIM token holder move another
+organization's member, or an Owner, to an address they control and take the
+account over (the round-one security review of this change). Linking an
+existing account that never verified its email drops the password and the
+sessions that registration left, as `account-linking.ts` does for a trusted
+social sign-in.
 
 **A deprovisioned person stays out.** The removal suspends the person's
 principal with a `scim_deprovisioned_at` marker, and a later SSO sign-in with

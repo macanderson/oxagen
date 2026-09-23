@@ -80,7 +80,7 @@ export const scimRequestHandler: CapabilityHandler<typeof scimRequest> = async (
     return { status: err.status, body: scimErrorBody(err) };
   };
 
-  // tenancy: the token row is filtered by its id and by orgId = ctx.orgId, the organization the route authenticated from the token's hash.
+  // tenancy: the token row is filtered by the id the route verified by its hash; its orgId is compared with ctx.orgId right after the read.
   const token = await withSystemDb(async (tx) => {
     const [row] = await tx
       .select({ orgId: schema.scimTokens.orgId })

@@ -290,14 +290,17 @@ describe("listing users", () => {
     }
   });
 
-  it("matches nobody for an id that is not a uuid rather than failing the cast", async () => {
-    await store().listUsers({ attribute: "id", value: "not-a-uuid" }, 0, 10);
-    for (const stmt of stmts) {
-      expectOrgUserFilter(stmt);
-      expect(stmt.sql).toMatch(/and false\)$|and false\) order by/);
-      expect(stmt.params).not.toContain("not-a-uuid");
-    }
-  });
+  it.each(["not-a-uuid", "-".repeat(36), "0".repeat(36)])(
+    "matches nobody for the id %s rather than failing the uuid cast",
+    async (value) => {
+      await store().listUsers({ attribute: "id", value }, 0, 10);
+      for (const stmt of stmts) {
+        expectOrgUserFilter(stmt);
+        expect(stmt.sql).toMatch(/and false\)$|and false\) order by/);
+        expect(stmt.params).not.toContain(value);
+      }
+    },
+  );
 });
 
 describe("provisioning a user", () => {
@@ -309,7 +312,7 @@ describe("provisioning a user", () => {
     expect(out).toEqual({ userId: USER, linked: false });
 
     const lookup = stmts[0]!;
-    expect(lookup.sql).toMatch(/^select "id" from "auth"."users"/);
+    expect(lookup.sql).toMatch(/^select "id", "email_verified" from "auth"."users"/);
     expect(boundTo(lookup, '"auth"."users"."email"')).toEqual(["ada@acme.com"]);
     expect(lookup.sql).toContain('"auth"."users"."deleted_at" is null');
 
@@ -331,7 +334,7 @@ describe("provisioning a user", () => {
   });
 
   it("links an existing account and revives this organization's principal, clearing both SCIM markers", async () => {
-    answers.push({ match: /from "auth"."users"/, rows: [[USER]] });
+    answers.push({ match: /from "auth"."users"/, rows: [[USER, true]] });
     answers.push({ match: /from "iam"."principals"/, rows: [["prn-1"]] });
     const out = await store().provisionUser({
       email: "ada@acme.com",
@@ -349,6 +352,41 @@ describe("provisioning a user", () => {
     );
     // No display name falls back to the email.
     expect(update.params).toEqual(expect.arrayContaining(["active", "ada@acme.com"]));
+  });
+
+  it("links an unverified account only after dropping what its registration left", async () => {
+    // Account pre-hijacking: someone registered the address without owning
+    // the inbox. The identity provider now vouches for it, so the address is
+    // verified and the squatter's password and sessions go.
+    answers.push({ match: /from "auth"."users"/, rows: [[USER, false]] });
+    answers.push({ match: /from "iam"."principals"/, rows: [["prn-1"]] });
+    await store().provisionUser({
+      email: "ada@acme.com",
+      name: { displayName: null, givenName: null, familyName: null },
+      externalId: null,
+    });
+    const verify = find(/^update "auth"."users"/)!;
+    expect(boundTo(verify, '"auth"."users"."id"')).toEqual([USER]);
+    expect(verify.params).toContain(true);
+    const password = find(/^update "auth"."accounts"/)!;
+    expect(boundTo(password, '"auth"."accounts"."user_id"')).toEqual([USER]);
+    expect(boundTo(password, '"auth"."accounts"."provider_id"')).toEqual(["credential"]);
+    expect(password.sql).toContain('"password" = $');
+    const sessions = find(/^delete from "auth"."sessions"/)!;
+    expect(boundTo(sessions, '"auth"."sessions"."user_id"')).toEqual([USER]);
+  });
+
+  it("leaves a verified account's password and sessions alone", async () => {
+    answers.push({ match: /from "auth"."users"/, rows: [[USER, true]] });
+    answers.push({ match: /from "iam"."principals"/, rows: [["prn-1"]] });
+    await store().provisionUser({
+      email: "ada@acme.com",
+      name: { displayName: null, givenName: null, familyName: null },
+      externalId: null,
+    });
+    expect(find(/"auth"."accounts"/)).toBeUndefined();
+    expect(find(/"auth"."sessions"/)).toBeUndefined();
+    expect(find(/^update "auth"."users"/)).toBeUndefined();
   });
 
   it("throws when the account insert answers no row", async () => {
@@ -380,11 +418,11 @@ describe("updating a user", () => {
   });
 
   it("writes the name to the account and to this organization's principal", async () => {
-    await store().setUserName(USER, {
-      displayName: "Ada King",
-      givenName: "Ada",
-      familyName: "King",
-    });
+    await store().setUserName(
+      USER,
+      { displayName: "Ada King", givenName: "Ada", familyName: "King" },
+      { account: true },
+    );
     const account = find(/^update "auth"."users"/)!;
     expect(boundTo(account, '"auth"."users"."id"')).toEqual([USER]);
     const principal = find(/^update "iam"."principals"/)!;
@@ -395,8 +433,24 @@ describe("updating a user", () => {
     );
   });
 
+  it("leaves the shared account alone for an identity the organization does not own", async () => {
+    await store().setUserName(
+      USER,
+      { displayName: "Ada King", givenName: "Ada", familyName: "King" },
+      { account: false },
+    );
+    expect(find(/^update "auth"."users"/)).toBeUndefined();
+    const principal = find(/^update "iam"."principals"/)!;
+    expectPrincipalOf(principal, USER);
+    expect(principal.params).toContain("Ada King");
+  });
+
   it("leaves the account's display name alone when none is sent", async () => {
-    await store().setUserName(USER, { displayName: null, givenName: "Ada", familyName: null });
+    await store().setUserName(
+      USER,
+      { displayName: null, givenName: "Ada", familyName: null },
+      { account: true },
+    );
     expect(find(/^update "auth"."users"/)).toBeUndefined();
     const principal = find(/^update "iam"."principals"/)!;
     expectPrincipalOf(principal, USER);
@@ -421,7 +475,7 @@ describe("updating a user", () => {
 
 describe("deprovisioning", () => {
   it("hands active: false to the shared removal transaction, fenced on this organization", async () => {
-    await store().deprovision(USER, "scim_active_false");
+    await store().deprovision(USER, "scim_active_false", { endSessions: true });
     expect(lifecycle.removeOrgMemberInTx).toHaveBeenCalledTimes(1);
     expect(lifecycle.removeOrgMemberInTx.mock.calls[0]![1]).toEqual({
       orgId: ORG,
@@ -440,10 +494,12 @@ describe("deprovisioning", () => {
   });
 
   it("on DELETE also drops this organization's memberships and marks the principal deleted", async () => {
-    await store().deprovision(USER, "scim_delete");
+    await store().deprovision(USER, "scim_delete", { endSessions: false });
     expect(lifecycle.removeOrgMemberInTx.mock.calls[0]![1]).toMatchObject({
       orgId: ORG,
       trigger: "scim_delete",
+      // The service decides whether the organization owns the identity.
+      endSessions: false,
     });
     const members = find(/^delete from "org"."scim_group_members"/)!;
     expectFenced(members, MEMBER_ORG);
@@ -457,7 +513,9 @@ describe("deprovisioning", () => {
 
   it("writes nothing of its own when the removal refuses", async () => {
     lifecycle.removeOrgMemberInTx.mockRejectedValueOnce(new Error("owner"));
-    await expect(store().deprovision(USER, "scim_delete")).rejects.toThrow("owner");
+    await expect(
+      store().deprovision(USER, "scim_delete", { endSessions: true }),
+    ).rejects.toThrow("owner");
     expect(stmts).toEqual([]);
   });
 
@@ -580,11 +638,11 @@ describe("groups", () => {
     }
   });
 
-  it("matches no group for an id that is not a uuid", async () => {
-    await store().listGroups({ attribute: "id", value: "grp-1" }, 0, 10);
+  it.each(["grp-1", "-".repeat(36)])("matches no group for the id %s", async (value) => {
+    await store().listGroups({ attribute: "id", value }, 0, 10);
     for (const stmt of stmts) {
       expectFenced(stmt, GROUP_ORG);
-      expect(stmt.params).not.toContain("grp-1");
+      expect(stmt.params).not.toContain(value);
       expect(stmt.sql).toContain("and false)");
     }
   });
@@ -663,7 +721,11 @@ describe("every statement the port sends", () => {
     await s.findUser(USER);
     await s.findUserByEmail("ada@acme.com");
     await s.listUsers({ attribute: "username", value: "ada@acme.com" }, 0, 10);
-    await s.setUserName(USER, { displayName: null, givenName: null, familyName: null });
+    await s.setUserName(
+      USER,
+      { displayName: null, givenName: null, familyName: null },
+      { account: true },
+    );
     await s.setExternalId(USER, null);
     await s.reactivate(USER);
     await s.currentRole(USER);
@@ -677,7 +739,7 @@ describe("every statement the port sends", () => {
     await s.groupMembers(GROUP);
     await s.addGroupMembers(GROUP, [USER]);
     await s.removeGroupMembers(GROUP, [USER]);
-    await s.deprovision(USER, "scim_delete");
+    await s.deprovision(USER, "scim_delete", { endSessions: true });
     // Every statement that is not a read or write of the global account row
     // carries the organization as a bound value.
     const tenantStatements = stmts.filter(

@@ -43,6 +43,10 @@ class MemoryStore implements ScimStore {
   owners = new Set<string>();
   groups = new Map<string, ScimGroupRow & { members: Set<string> }>();
   deprovisioned: { userId: string; trigger: string }[] = [];
+  /** Whether each deprovision ended the person's sessions everywhere. */
+  sessionsEnded: boolean[] = [];
+  /** Whether each name change reached the shared Oxagen account. */
+  accountRenames: boolean[] = [];
   roleWrites: { userId: string; role: SsoMappableRole | null }[] = [];
   audits: { eventType: string; detail: Record<string, unknown> }[] = [];
   private seq = 0;
@@ -106,7 +110,12 @@ class MemoryStore implements ScimStore {
     }
     this.users.get(userId)!.email = email;
   }
-  async setUserName(userId: string, name: { displayName: string | null; givenName: string | null; familyName: string | null }) {
+  async setUserName(
+    userId: string,
+    name: { displayName: string | null; givenName: string | null; familyName: string | null },
+    opts: { account: boolean },
+  ) {
+    this.accountRenames.push(opts.account);
     Object.assign(this.users.get(userId)!, name);
   }
   async setExternalId(userId: string, externalId: string | null) {
@@ -115,7 +124,12 @@ class MemoryStore implements ScimStore {
   async isOwner(userId: string) {
     return this.owners.has(userId);
   }
-  async deprovision(userId: string, trigger: "scim_active_false" | "scim_delete") {
+  async deprovision(
+    userId: string,
+    trigger: "scim_active_false" | "scim_delete",
+    opts: { endSessions: boolean },
+  ) {
+    this.sessionsEnded.push(opts.endSessions);
     if (this.owners.has(userId)) throw new Error("the service must refuse an Owner first");
     this.deprovisioned.push({ userId, trigger });
     this.roles.delete(userId);
@@ -764,6 +778,67 @@ describe("changing a userName", () => {
       expect(err).toMatchObject({ status: 400, scimType: "invalidValue" });
       expect(err.denial).toBeUndefined();
     }
+  });
+});
+
+describe("identities the organization does not own (security review of #3734)", () => {
+  /** A member invited from another domain, as SCIM finds them by filter. */
+  function seedOffDomain(): string {
+    const id = "00000000-0000-4000-8000-00000000c0c0";
+    store.users.set(id, {
+      id,
+      email: "contractor@gmail.com",
+      displayName: "Contractor",
+      givenName: null,
+      familyName: null,
+      externalId: null,
+      active: true,
+      deleted: false,
+      createdAt: new Date("2026-09-01T00:00:00Z"),
+      updatedAt: new Date("2026-09-01T00:00:00Z"),
+    });
+    return id;
+  }
+
+  it("refuses to move an off-domain account onto the organization's domain", async () => {
+    // The takeover: the token holder moves someone else's shared account to an
+    // address whose mailbox the organization controls.
+    const id = seedOffDomain();
+    const err = await refusal(
+      patchUser(id, [{ op: "replace", path: "userName", value: "takeover@acme.com" }]),
+    );
+    expect(err).toMatchObject({ status: 403, denial: "identity_not_owned" });
+    expect(store.users.get(id)?.email).toBe("contractor@gmail.com");
+  });
+
+  it("refuses to change an Owner's userName, even on the organization's domain", async () => {
+    const id = await oktaProvision();
+    store.owners.add(id);
+    const err = await refusal(
+      patchUser(id, [{ op: "replace", path: "userName", value: "someone.else@acme.com" }]),
+    );
+    expect(err).toMatchObject({ status: 403, denial: "owner_protected" });
+    expect(store.users.get(id)?.email).toBe("ada@acme.com");
+  });
+
+  it("renames the shared account only for an owned identity that is not an Owner", async () => {
+    const offDomain = seedOffDomain();
+    await patchUser(offDomain, [{ op: "replace", path: "displayName", value: "New Name" }]);
+    const owned = await oktaProvision();
+    await patchUser(owned, [{ op: "replace", path: "displayName", value: "Ada K" }]);
+    const owner = await entraProvision();
+    store.owners.add(owner);
+    await patchUser(owner, [{ op: "replace", path: "displayName", value: "Rear Admiral" }]);
+    expect(store.accountRenames).toEqual([false, true, false]);
+  });
+
+  it("deprovisions an off-domain member without ending their sessions elsewhere", async () => {
+    const offDomain = seedOffDomain();
+    await patchUser(offDomain, [{ op: "replace", path: "active", value: false }]);
+    const owned = await oktaProvision();
+    await call({ method: "DELETE", path: `/Users/${owned}` });
+    expect(store.deprovisioned.map((d) => d.userId)).toEqual([offDomain, owned]);
+    expect(store.sessionsEnded).toEqual([false, true]);
   });
 });
 

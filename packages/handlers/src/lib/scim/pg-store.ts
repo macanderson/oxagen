@@ -20,7 +20,7 @@ import {
 } from "@oxagen/database/member-lifecycle";
 import { emitSecurityEventIn } from "@oxagen/database/security";
 import type { SsoMappableRole } from "@oxagen/oxagen/contracts/org.sso.shared";
-import { ScimError, type ScimEqFilter } from "./protocol";
+import { isScimId, ScimError, type ScimEqFilter } from "./protocol";
 import type {
   ScimGroupRow,
   ScimNameInput,
@@ -70,7 +70,9 @@ export function createPgScimStore(
   const userColumns = {
     id: schema.users.id,
     email: schema.users.email,
-    displayName: schema.users.displayName,
+    // The principal's name, not the shared account's: SCIM renames the
+    // account only for an identity this organization owns.
+    displayName: schema.principals.displayName,
     createdAt: schema.users.createdAt,
     updatedAt: schema.users.updatedAt,
     externalId: schema.principals.idpSubject,
@@ -117,7 +119,7 @@ export function createPgScimStore(
       default:
         // `id`: a value that is not a uuid matches nobody rather than failing
         // the cast in Postgres.
-        return /^[0-9a-f-]{36}$/i.test(filter.value)
+        return isScimId(filter.value)
           ? eq(schema.users.id, filter.value)
           : sql`false`;
     }
@@ -138,7 +140,7 @@ export function createPgScimStore(
       case "externalid":
         return eq(schema.scimGroups.externalId, filter.value);
       default:
-        return /^[0-9a-f-]{36}$/i.test(filter.value)
+        return isScimId(filter.value)
           ? eq(schema.scimGroups.id, filter.value)
           : sql`false`;
     }
@@ -216,11 +218,37 @@ export function createPgScimStore(
     async provisionUser({ email, name, externalId }) {
       const now = new Date();
       const [existing] = await tx
-        .select({ id: schema.users.id })
+        .select({ id: schema.users.id, emailVerified: schema.users.emailVerified })
         .from(schema.users)
         .where(and(eq(schema.users.email, email), isNull(schema.users.deletedAt)))
         .limit(1);
       let userId = existing?.id;
+      if (existing && !existing.emailVerified) {
+        // An unverified account on this address may have been registered by
+        // someone who does not own the inbox (account pre-hijacking). The
+        // identity provider has just vouched for the address on a domain
+        // this organization proved it owns, so the address is now verified,
+        // and whatever password and sessions the unverified registration
+        // left behind are dropped, as account-linking.ts does for a trusted
+        // social sign-in. The real owner sets a password through the
+        // verified forgot-password flow.
+        await tx
+          .update(schema.users)
+          .set({ emailVerified: true, updatedAt: now })
+          .where(eq(schema.users.id, existing.id));
+        await tx
+          .update(schema.accounts)
+          .set({ password: null, updatedAt: now })
+          .where(
+            and(
+              eq(schema.accounts.userId, existing.id),
+              eq(schema.accounts.providerId, "credential"),
+            ),
+          );
+        await tx
+          .delete(schema.sessions)
+          .where(eq(schema.sessions.userId, existing.id));
+      }
       if (!userId) {
         // The identity provider vouches for the address and the organization
         // proved it owns the domain, so the email counts as verified, as it
@@ -287,9 +315,11 @@ export function createPgScimStore(
         .where(eq(schema.users.id, userId));
     },
 
-    async setUserName(userId, name: ScimNameInput) {
+    async setUserName(userId, name: ScimNameInput, { account }) {
       const now = new Date();
-      if (name.displayName !== null) {
+      // The account is shared across organizations; the service passes
+      // `account` only for an identity this organization owns.
+      if (account && name.displayName !== null) {
         await tx
           .update(schema.users)
           .set({ displayName: name.displayName, updatedAt: now })
@@ -316,13 +346,13 @@ export function createPgScimStore(
 
     isOwner: (userId) => isOrgOwner(tx, orgId, userId),
 
-    async deprovision(userId, trigger) {
+    async deprovision(userId, trigger, { endSessions }) {
       await removeOrgMemberInTx(tx, {
         orgId,
         userId,
         actorId: null,
         trigger,
-        endSessions: true,
+        endSessions,
         keys: "all",
         refuseOwner: true,
         principalStatus: "suspended",

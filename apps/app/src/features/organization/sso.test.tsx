@@ -492,7 +492,9 @@ describe("Sso: SCIM provisioning", () => {
     await userEvent.click(screen.getByRole("button", { name: "Generate token" }));
     const dialog = await screen.findByTestId("scim-token-generate");
     await userEvent.click(within(dialog).getByRole("button", { name: "Generate token" }));
-    expect(await screen.findByTestId("scim-token-generate-failure")).toBeTruthy();
+    expect(await screen.findByTestId("scim-token-generate-failure")).toHaveTextContent(
+      "The organization already has a SCIM token. Rotate it to get a new one.",
+    );
     expect(screen.queryByTestId("scim-token-value")).toBeNull();
     expect(router.refresh).not.toHaveBeenCalled();
   });
@@ -503,7 +505,9 @@ describe("Sso: SCIM provisioning", () => {
     await userEvent.click(screen.getByRole("button", { name: "Generate token" }));
     const dialog = await screen.findByTestId("scim-token-generate");
     await userEvent.click(within(dialog).getByRole("button", { name: "Generate token" }));
-    expect(await screen.findByTestId("scim-token-generate-failure")).toBeTruthy();
+    expect(await screen.findByTestId("scim-token-generate-failure")).toHaveTextContent(
+      "action_failed",
+    );
     expect(screen.queryByTestId("scim-token-value")).toBeNull();
     expect(router.refresh).not.toHaveBeenCalled();
   });

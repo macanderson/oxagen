@@ -2499,6 +2499,9 @@ type Messages = {
         repositoryLinkedElsewhere: string;
         repositoryUnparsable: string;
         ssoProviderNotFound: string;
+        ssoRequiresEnterprise: string;
+        scimTokenExists: string;
+        scimTokenChanged: string;
       };
     };
     invitations: {

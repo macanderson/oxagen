@@ -214,6 +214,10 @@ describe("removeOrgMemberInTx — a SCIM deprovision", () => {
       (s) => s.op === "update" && s.table === "principals",
     );
     expect(principal?.values).toMatchObject({ status: "suspended" });
+    // The marker isScimSuspended reads, merged into the principal's metadata.
+    const marker = dialect.sqlToQuery(principal?.values?.metadata as SQL);
+    expect(marker.sql).toContain('"metadata" ||');
+    expect(marker.params.join(" ")).toContain("scim_deprovisioned_at");
   });
 
   it("writes one row per ended session and revoked credential, then the summary", async () => {

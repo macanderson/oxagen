@@ -137,7 +137,10 @@
         "mainRepoClaimed": "Another workspace already steers by that repository. A repository is the main repository of one workspace.",
         "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be a main repository. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
         "repositoryUnparsable": "That is not a repository name GitHub accepts. Write it as owner/name.",
-        "ssoProviderNotFound": "This identity provider no longer exists. Reload the page."
+        "ssoProviderNotFound": "This identity provider no longer exists. Reload the page.",
+        "ssoRequiresEnterprise": "Single sign-on is part of the Enterprise plan. Upgrade the organization to set it up.",
+        "scimTokenExists": "The organization already has a SCIM token. Rotate it to get a new one.",
+        "scimTokenChanged": "Another change to the SCIM token finished first. Reload the page and try again."
       }
     },
     "invitations": {
