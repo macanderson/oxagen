@@ -38,16 +38,32 @@ describe("contained workspace inspection", () => {
       validateContainedWorkspace(workspace, session, ""),
     ).not.toThrow();
   });
-  it.each([".env", ".env.local", ".aws", ".ssh", ".netrc", ".git-credentials"])(
-    "refuses local credential path %s",
+  it.each([".env.example", ".env.sample", ".env.template"])(
+    "accepts the committed template %s",
     (name) => {
       const { workspace, session } = fixture();
-      writeFileSync(join(workspace, name), "secret");
-      expect(() => validateContainedWorkspace(workspace, session, "")).toThrow(
-        "credential files",
-      );
+      writeFileSync(join(workspace, name), "DATABASE_URL=");
+      expect(() =>
+        validateContainedWorkspace(workspace, session, ""),
+      ).not.toThrow();
     },
   );
+  it.each([
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.example.local",
+    ".aws",
+    ".ssh",
+    ".netrc",
+    ".git-credentials",
+  ])("refuses local credential path %s", (name) => {
+    const { workspace, session } = fixture();
+    writeFileSync(join(workspace, name), "secret");
+    expect(() => validateContainedWorkspace(workspace, session, "")).toThrow(
+      "credential files",
+    );
+  });
   it("refuses configuration inside the writable checkout", () => {
     const { workspace } = fixture();
     const session = join(workspace, "session");

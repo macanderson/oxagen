@@ -16,6 +16,19 @@ const CREDENTIAL_PATHS = new Set([
   ".git-credentials",
 ]);
 
+/**
+ * `.env`, `.env.local`, `.env.production` and the like hold a developer's
+ * secrets. The conventional templates (`.env.example`, `.env.sample`,
+ * `.env.template`) are committed on purpose and hold none, and refusing them
+ * would refuse most repositories.
+ */
+function isEnvFile(entry: string): boolean {
+  return (
+    /^\.env(?:\.|$)/.test(entry) &&
+    !/^\.env\.(?:example|sample|template)$/.test(entry)
+  );
+}
+
 /** Bind mounts carry Unix sockets and nested mounts too; inspect before launch. */
 export function validateContainedWorkspace(
   workspace: string,
@@ -39,7 +52,7 @@ export function validateContainedWorkspace(
   }
   const visit = (directory: string): void => {
     for (const entry of readdirSync(directory)) {
-      if (CREDENTIAL_PATHS.has(entry) || /^\.env(?:\.|$)/.test(entry))
+      if (CREDENTIAL_PATHS.has(entry) || isEnvFile(entry))
         throw new Error(
           "Remove local credential files from the contained checkout before launch",
         );
