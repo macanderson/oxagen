@@ -118,6 +118,16 @@ interface SubagentLink {
   open: boolean;
 }
 
+/**
+ * `turnReply` in a form `JSON.stringify` can carry: `bytes` is a
+ * `Uint8Array`, which serializes as a numeric-keyed object rather than a
+ * string, and never round-trips back through `JSON.parse` as bytes.
+ */
+interface PersistedDraftContent {
+  content_type: string;
+  bytes_base64: string;
+}
+
 /** Everything a recorder needs to continue its chain after a restart. */
 export interface RecorderState {
   /** Absent in legacy states, whose UUID uses the original unscoped seed. */
@@ -133,6 +143,14 @@ export interface RecorderState {
   anthropic: Anthropic;
   harnessVersion?: string;
   envSnapshot?: Record<string, string>;
+  /**
+   * The agent's reply on the open turn, held over a restart the same way the
+   * chain position and sticky context are. Missing this let a restart during
+   * an open Cursor turn lose the `afterAgentResponse` text the next
+   * `turn_end` needed, and the reply that followed the restart read as
+   * unanswered even though the harness had already reported it.
+   */
+  turnReply?: PersistedDraftContent;
   totals: Partial<TranscriptTotals>;
   /** Model calls already sealed, keyed as `llm-call-dedupe.ts` keys them. */
   llmCalls?: LlmCallLedgerState;
@@ -173,6 +191,8 @@ export interface ChainMark {
   promptId: string | undefined;
   started: boolean;
   stopped: boolean;
+  /** The open turn's reply at mark time; see `RecorderState.turnReply`. */
+  turnReply: DraftContent | undefined;
   llmCalls: LlmCallLedgerState;
   toolCalls: ToolCallLedgerState;
   /** One mark per subagent chain open at the time, by subagent id. */
@@ -197,6 +217,65 @@ function compact<T extends Record<string, unknown>>(value: T): T {
     if (member !== undefined) out[key] = member;
   }
   return out as T;
+}
+
+/** The `.max()` length a schema field carries, or undefined for an unbounded one. */
+function maxLengthOf(field: z.ZodTypeAny): number | undefined {
+  const inner: z.ZodTypeAny =
+    field instanceof z.ZodOptional ? (field.unwrap() as z.ZodTypeAny) : field;
+  if (!(inner instanceof z.ZodString)) return undefined;
+  for (const check of inner._def.checks) {
+    if (check.kind === "max") return check.value;
+  }
+  return undefined;
+}
+
+/**
+ * Fit a set of absorbed context or host facts to the envelope's own bounds,
+ * before they ever reach `this.context`/`this.host`.
+ *
+ * `absorbContext`/`absorbHost` write straight onto that sticky state, and
+ * every seal after theirs reads it back. A field over its schema's `.max()`
+ * — a git branch name, a `cwd`, an `app_version` a harness or an ambient git
+ * read reported oversized — used to merge in unclipped, and the next
+ * `seal()` (which validates the full envelope) then threw on every frame the
+ * session went on to produce. `rollbackChain` cannot repair it either: an
+ * absorbed fact is not a chain position, so it is deliberately left as
+ * observed on rollback (see that method's doc comment), and the poisoned
+ * value survived a restart too, because `restore()` copied it back in
+ * unchanged. Clipping a string to the field's bound, and dropping a member
+ * that fails its type outright, here — on the way in, on every path that
+ * absorbs (a hook draft, a transcript line, a collector-observed git fact)
+ * and on `restore()` — keeps one out-of-bounds value from silencing a
+ * session for good.
+ */
+function clipToSchema<Shape extends z.ZodRawShape>(
+  schema: z.ZodObject<Shape>,
+  facts: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(facts)) {
+    // An explicit `undefined` is a fact too: it clears the sticky value
+    // (`compact` drops it after the merge), which is how a git branch that is
+    // no longer reported stops being claimed.
+    if (value === undefined) {
+      out[key] = undefined;
+      continue;
+    }
+    const field = (schema.shape as Record<string, z.ZodTypeAny | undefined>)[
+      key
+    ];
+    if (field === undefined) continue;
+    if (typeof value === "string") {
+      const max = maxLengthOf(field);
+      out[key] =
+        max !== undefined && value.length > max ? value.slice(0, max) : value;
+      continue;
+    }
+    const parsed = field.safeParse(value);
+    if (parsed.success) out[key] = parsed.data;
+  }
+  return out;
 }
 
 /**
@@ -276,6 +355,14 @@ export class SessionRecorder {
   private turnSeq = 0;
   private turnOpen = false;
   private promptId: string | undefined;
+  /**
+   * The agent's last message in the open turn, as a harness that reports it
+   * separately from the turn's end handed it over (Cursor's
+   * `afterAgentResponse`). The turn's `turn_end` carries it when the stop
+   * that closes the turn does not, which is every Cursor stop. One per
+   * session, released when the turn closes.
+   */
+  private turnReply: DraftContent | undefined;
   private started = false;
   private stopped = false;
   private envSnapshot: Record<string, string> | undefined;
@@ -325,8 +412,18 @@ export class SessionRecorder {
     this.promptId = state.promptId;
     this.started = state.started;
     this.stopped = state.stopped;
-    this.context = { ...state.context };
-    this.host = { ...state.host };
+    // Clamped on restore too, not only on the way in: a state file a
+    // pre-fix build persisted may already hold a context or host fact past
+    // its schema bound, and copying it back unclipped would poison every
+    // seal for the rest of this run as well.
+    this.context = clipToSchema(
+      contextSchema,
+      state.context as unknown as Record<string, unknown>,
+    ) as Context;
+    this.host = clipToSchema(
+      hostSchema,
+      state.host as unknown as Record<string, unknown>,
+    ) as Host;
     // Scrubbed on the way IN, not only on the way out. A collector upgraded
     // mid-session restores a daemon-state file the PREVIOUS build wrote, and
     // that file still carries `anthropic.user_email` in plaintext. Spreading it
@@ -337,6 +434,15 @@ export class SessionRecorder {
     this.anthropic = withoutAddressMembers({ ...state.anthropic });
     this.harnessVersion = state.harnessVersion ?? this.harnessVersion;
     this.envSnapshot = state.envSnapshot;
+    this.turnReply =
+      state.turnReply === undefined
+        ? undefined
+        : {
+            content_type: state.turnReply.content_type,
+            bytes: new Uint8Array(
+              Buffer.from(state.turnReply.bytes_base64, "base64"),
+            ),
+          };
     Object.assign(this.totals, state.totals);
     this.llmCalls = new LlmCallLedger(state.llmCalls);
     this.toolCalls = new ToolCallLedger(state.toolCalls);
@@ -398,6 +504,16 @@ export class SessionRecorder {
       ...(this.envSnapshot !== undefined
         ? { envSnapshot: this.envSnapshot }
         : {}),
+      ...(this.turnReply !== undefined
+        ? {
+            turnReply: {
+              content_type: this.turnReply.content_type,
+              bytes_base64: Buffer.from(this.turnReply.bytes).toString(
+                "base64",
+              ),
+            },
+          }
+        : {}),
       totals: { ...this.totals },
       llmCalls: this.llmCalls.state(),
       toolCalls: this.toolCalls.state(),
@@ -428,6 +544,7 @@ export class SessionRecorder {
       promptId: this.promptId,
       started: this.started,
       stopped: this.stopped,
+      turnReply: this.turnReply,
       llmCalls: this.llmCalls.state(),
       toolCalls: this.toolCalls.state(),
       children,
@@ -446,8 +563,11 @@ export class SessionRecorder {
    * commits to an event no verifier can read, and the record is neither
    * gap-free nor tamper-evident. This puts the cursor, the sealed events, the
    * bodies waiting to be written beside them, the turn and lifecycle flags a
-   * seal sets, and the model-call and tool-call ledgers back where the mark
-   * found them.
+   * seal sets (including the reply an `AgentResponse` draft handed to
+   * `turnReply`, which is undone the same way `turnSeq`/`turnOpen` are — a
+   * retry must see the same pending reply the failed attempt did, not one
+   * the failed attempt already consumed), and the model-call and tool-call
+   * ledgers back where the mark found them.
    *
    * Facts absorbed from a source are not chain positions and are left alone:
    * the git context, host and `anthropic` blocks, the transcript totals, the
@@ -477,6 +597,7 @@ export class SessionRecorder {
     this.turnSeq = mark.turnSeq;
     this.turnOpen = mark.turnOpen;
     this.promptId = mark.promptId;
+    this.turnReply = mark.turnReply;
     this.started = mark.started;
     this.stopped = mark.stopped;
     this.llmCalls = new LlmCallLedger(mark.llmCalls);
@@ -594,6 +715,50 @@ export class SessionRecorder {
 
   get sealedEvents(): readonly TachoEvent[] {
     return this.events;
+  }
+
+  /**
+   * Drop sealed events and OTel metric points older than the most recent
+   * `keep`, on this chain and every subagent chain under it, so a
+   * long-lived session's in-memory history does not grow for the whole
+   * daemon's lifetime — `events` and `metrics` otherwise hold everything a
+   * session ever sealed, for as long as the process runs.
+   *
+   * **Call this only between ingests, with no {@link ChainMark} outstanding
+   * for this recorder or any of its children.** `markChain`/`rollbackChain`
+   * index into `this.events` by length (`this.events.splice(mark.events)`),
+   * and the daemon holds a mark across the `await` of its WAL write —
+   * trimming inside that window shortens the array the mark's saved length
+   * was taken against, and the next rollback (or the next seal, which reads
+   * `this.events.length` implicitly through the same splice) lands at the
+   * wrong position instead of the one the mark recorded. The daemon must
+   * call this once a batch has committed or been rolled back and the mark
+   * is gone — for instance, right after `persistState()`/a checkpoint
+   * succeeds for a session — never while a write for that session is still
+   * in flight.
+   *
+   * `everySealed`'s own bookkeeping is unaffected regardless of when this
+   * runs between ticks: it snapshots `recorder.events.length` immediately
+   * before a synchronous `run()` and reads it again immediately after, with
+   * no `await` anywhere in between, so nothing can trim mid-call.
+   *
+   * A verifier that expects genesis (`verifyChain(events, { expectGenesis:
+   * true })`, the default) needs the first event ever sealed; trimming
+   * necessarily makes that check fail for the events it dropped. This is
+   * why the method is opt-in rather than automatic — a caller that still
+   * needs full-history verification must not call it, or must verify before
+   * trimming.
+   */
+  trimSealedEvents(keep: number): void {
+    if (this.events.length > keep) {
+      this.events.splice(0, this.events.length - keep);
+    }
+    if (this.metrics.length > keep) {
+      this.metrics.splice(0, this.metrics.length - keep);
+    }
+    for (const link of this.children.values()) {
+      link.recorder.trimSealedEvents(keep);
+    }
   }
 
   private now(): string {
@@ -786,11 +951,17 @@ export class SessionRecorder {
   }
 
   private absorbContext(context: Record<string, unknown>): void {
-    this.context = compact({ ...this.context, ...context }) as Context;
+    this.context = compact({
+      ...this.context,
+      ...clipToSchema(contextSchema, context),
+    }) as Context;
   }
 
   private absorbHost(host: Record<string, unknown>): void {
-    this.host = compact({ ...this.host, ...host }) as Host;
+    this.host = compact({
+      ...this.host,
+      ...clipToSchema(hostSchema, host),
+    }) as Host;
     if (this.harnessVersion === undefined) {
       this.harnessVersion = harnessVersionFromExecPath(
         this.host.claude_execpath,
@@ -975,18 +1146,38 @@ export class SessionRecorder {
     }
     if (draft.kind === "turn_start") {
       if (this.turnOpen) {
+        const reply = this.turnReply;
         out.push(
           this.seal(
             "turn_end",
             {},
-            { ts, source: "collector", hook_event_name: "UserPromptSubmit" },
+            {
+              ts,
+              source: "collector",
+              hook_event_name: "UserPromptSubmit",
+              ...(reply !== undefined ? { content: reply } : {}),
+            },
           ),
         );
       }
+      this.turnReply = undefined;
       this.turnSeq += 1;
       this.turnOpen = true;
       this.promptId = draft.turn?.prompt_id;
     }
+    if (
+      draft.kind === "oxagen:message" &&
+      draft.hook_event_name === "AgentResponse" &&
+      draft.content !== undefined
+    ) {
+      this.turnReply = draft.content;
+    }
+    // A stop that names no message closes the turn with the one the harness
+    // reported on its own, so the turn reads with its reply on every harness.
+    const content =
+      draft.kind === "turn_end" && draft.content === undefined
+        ? this.turnReply
+        : draft.content;
     if (draft.kind === "subagent_start" && draft.subagent === undefined) {
       // The parent-side view of a spawn (no agent_id on the payload).
       body = { ...body };
@@ -1008,17 +1199,19 @@ export class SessionRecorder {
         ? { hook_source_kind: draft.hook_source_kind }
         : {}),
       attrs: { ...draft.attrs, ...duplicate },
-      ...(draft.content !== undefined ? { content: draft.content } : {}),
+      ...(content !== undefined ? { content } : {}),
       raw_source_digest: draft.raw_source_digest,
       turn: draft.turn ?? {},
     });
     sighting.commit();
     if (draft.kind === "turn_end") {
       this.turnOpen = false;
+      this.turnReply = undefined;
     }
     if (draft.kind === "agent_stop") {
       this.stopped = true;
       this.turnOpen = false;
+      this.turnReply = undefined;
     }
     out.push(event);
     return out;

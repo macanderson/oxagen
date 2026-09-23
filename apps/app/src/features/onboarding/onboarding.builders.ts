@@ -122,6 +122,7 @@ export function onboardingSource(reads: Reads): {
     billing: {
       plan: refuse("billing.plan"),
       usageCredits: refuse("billing.usageCredits"),
+      retention: refuse("billing.retention"),
       bucket: refuse("billing.bucket"),
       contractRate: refuse("billing.contractRate"),
       invoices: refuse("billing.invoices"),

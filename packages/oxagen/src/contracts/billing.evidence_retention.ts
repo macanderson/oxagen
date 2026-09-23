@@ -26,7 +26,7 @@ export const billingEvidenceRetention = registerCapability({
     "Evidence-retention posture and its price (ADR-052 §4.3): the included window, the organisation's effective retention window from its pinned retention policy, whether it has opted into paying for retention beyond the included months, the per-GB-month rate, and retention credits charged so far. Extended retention never accrues without an explicit opt-in.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
