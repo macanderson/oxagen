@@ -14,7 +14,7 @@ locals {
   config = merge({
     DATABASE_URL              = "postgres://oxagen:${random_password.postgres.result}@${aws_rds_cluster.postgres.endpoint}:5432/oxagen?sslmode=require"
     CLICKHOUSE_URL            = "http://127.0.0.1:8123"
-    CLICKHOUSE_USERNAME       = "default"
+    CLICKHOUSE_USERNAME       = "oxagen"
     CLICKHOUSE_PASSWORD       = data.aws_ssm_parameter.clickhouse.value
     CLICKHOUSE_DATABASE       = "oxagen"
     NEO4J_URI                 = "bolt://127.0.0.1:7687"
