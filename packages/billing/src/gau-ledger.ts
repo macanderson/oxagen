@@ -1,5 +1,5 @@
 /**
- * gau-ledger.ts — the itemised record behind the month bucket (ADR-158).
+ * gau-ledger.ts: the itemised record behind the month bucket (ADR-158).
  *
  * `billing.gau_buckets.used_gau` is the balance the gate reads. On its own it
  * is a number nobody can cite: a customer disputing an invoice line, or asking
@@ -168,7 +168,7 @@ export interface LedgerDebitResult {
  *   1. `ensureCurrentBucket` with zero deltas: the lazy create, and the row
  *      lock that serialises this organisation's concurrent debits.
  *   2. INSERT the rows ON CONFLICT (org_id, idempotency_key) DO NOTHING
- *      RETURNING units — only what inserted comes back.
+ *      RETURNING units. Only what inserted comes back.
  *   3. UPDATE used_gau by exactly that sum.
  *
  * Entries sharing a key within one call are collapsed to the first, as a

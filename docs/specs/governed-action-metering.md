@@ -113,6 +113,30 @@ principal, and — where the caller supplied one — a `runId`, so a customer ca
 attribute a line to a team, a workspace or an agent. `runId` is metadata for
 grouping, never a billing unit.
 
+**Amended 2026-09-23 (ADR-158).** The attribution is now stored, not only
+carried. Before this amendment the billing bootstrap passed four fields to the
+recorder, which counted the action in `billing.gau_buckets` and logged the rest.
+Every billed action is now a row in `billing.gau_ledger`, written in the same
+transaction as the bucket debit. Each row records:
+
+- the source (`kernel`, `tacho` or `external_tool`);
+- the capability or tool, and the MCP server;
+- the surface and the harness;
+- the workspace, the agent, the principal and the operator;
+- the run, the session, the tool call and the request;
+- the units, when the action happened (`occurred_at`) and when it was billed
+  (`billed_at`).
+
+A field the source did not know is null, never invented. Statements
+(`get_billing_statement`, `export_billing_statement`) read these rows, so an
+invoice line reconciles to the actions behind it by addition.
+
+The retry exclusion in §3.2 is implemented by the ledger's
+`(org_id, idempotency_key)` unique index. The key is taken from the tool-call id,
+the Tacho tool-use id or the lifecycle idempotency key, and a row that is
+already on the ledger debits nothing. An invocation with no stable name for its
+logical action gets a key of its own and is not deduplicated.
+
 ### 3.4 Runs, for quoting
 
 Customers estimate in runs. The published conversion, to be re-derived from
@@ -521,6 +545,13 @@ was never changed. What is built:
   an estimate and is never billed on.
 - **Tacho ingest.** `ingest_tacho_events` is `noBillingGate: true`: recording
   a run is not a governed action.
+  **Amended 2026-09-23 (ADR-158, maintainer decision).** Recording a run is
+  still not a governed action, and the admission gate never refuses one. Each
+  tool call in the batch that a wrapped harness made and Tacho allowed is now one
+  governed action. The ingest records it on the ledger with source `tacho`, keyed
+  on the session and the tool-use id, so a re-sent batch bills nothing new.
+  Denials stay free. External MCP tool calls that Oxagen authorises bill one
+  governed action each with source `external_tool`.
 
 A contract that later declares a `meter` block must name a validated output
 field carrying a count of work already done. The original text follows.

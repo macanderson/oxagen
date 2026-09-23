@@ -1,11 +1,11 @@
 -- ADR-158: every billed governed action is a ledger row, and an enterprise
 -- order paid in advance is a prepaid order.
 --
--- 1. billing.gau_ledger — one row per billed governed action, written in the
+-- 1. billing.gau_ledger: one row per billed governed action, written in the
 --    same transaction that adds its units to billing.gau_buckets.used_gau.
 --    The unique (org_id, idempotency_key) index is what makes a retried action
 --    bill once. Append-only: the app role gets SELECT and INSERT only.
--- 2. billing.prepaid_orders — an order invoiced in advance on a Stripe
+-- 2. billing.prepaid_orders: an order invoiced in advance on a Stripe
 --    invoice: the platform licence for a period, prepaid governed action
 --    units and prepaid usage credits, granted when the invoice is paid.
 --

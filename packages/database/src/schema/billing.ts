@@ -1204,9 +1204,9 @@ export const gauLedger = billingSchema.table(
       .references(() => gauBuckets.id),
     idempotencyKey: text("idempotency_key").notNull(),
     // CHECK: source IN ('kernel','tacho','external_tool').
-    //   kernel        — a top-level kernel invoke() (ADR-052 §3.1)
-    //   tacho         — a tool call a wrapped harness made and Tacho allowed
-    //   external_tool — an external MCP tool call Oxagen authorised
+    //   kernel: a top-level kernel invoke() (ADR-052 §3.1)
+    //   tacho: a tool call a wrapped harness made and Tacho allowed
+    //   external_tool: an external MCP tool call Oxagen authorised
     source: text("source").notNull(),
     /** Canonical capability name, for a kernel action. */
     capability: text("capability"),

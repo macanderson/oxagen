@@ -296,8 +296,8 @@ export interface RecordActionsArgs {
  *   b. Debit: `debitWithLedger` writes one `billing.gau_ledger` row per entry
  *      that is not already there and adds exactly those units to the month
  *      bucket, in one transaction of its own, so the count lands whatever
- *      happens after it. Duplicates — a retried tool call, a re-sent Tacho
- *      batch — insert nothing and debit nothing.
+ *      happens after it. Duplicates (a retried tool call, a re-sent Tacho
+ *      batch) insert nothing and debit nothing.
  *   c. Prepaid, at `remaining ≤ 0`, with auto top-up on and a saved default
  *      card: claim at most one auto top-up episode (`claimAutoTopup`, its own
  *      transaction, committed before any provider call), then run the
