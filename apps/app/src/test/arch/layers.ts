@@ -295,9 +295,10 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/server/tenancy-lookups.ts": {
     "@oxagen/billing": ["canAccessSSO", "resolveOrgTier"],
   },
-  // Browser controls read the shared ceiling without loading the contract registry.
-  "src/features/fleet/run-row-controls.tsx": {
-    "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
+  // Browser controls read the shared ceiling without loading the contract registry:
+  // Steer the fleet caps its text at the limit dispatch_command enforces.
+  "src/features/fleet/steer-fleet.tsx": {
+    "@oxagen/oxagen/tacho/command-limits": ["STEER_TEXT_MAX"],
   },
   "src/ui/command-failure.ts": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],

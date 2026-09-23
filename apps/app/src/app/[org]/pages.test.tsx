@@ -41,7 +41,6 @@ const {
   AgentSource,
   Steering,
   Spend,
-  FleetSpendTiles,
   Roles,
   Workspaces,
   CostCenters,
@@ -63,11 +62,14 @@ const {
     Audit: vi.fn((_props: Record<string, unknown>) => null),
     Billing: vi.fn((_props: Record<string, unknown>) => null),
     BillingActions: vi.fn((_props: Record<string, unknown>) => null),
-    Fleet: vi.fn(
-      (props: Record<string, unknown> & { spendTiles?: ReactNode }) => (
-        <>{props.spendTiles}</>
-      ),
-    ),
+    // Fleet draws its own h1 (so a not-loaded state can replace the whole
+    // body); the stand-in draws the same one and the banners it is handed.
+    Fleet: vi.fn((props: Record<string, unknown> & { banners?: ReactNode }) => (
+      <>
+        <h1>Fleet</h1>
+        {props.banners}
+      </>
+    )),
     Agents: vi.fn((_props: Record<string, unknown>) => null),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
     AgentSource: vi.fn((_props: Record<string, unknown>) => null),
@@ -76,9 +78,6 @@ const {
     )),
     Spend: vi.fn((props: { searchParams: Record<string, string> }) => (
       <p data-testid="spend-body" data-tab={props.searchParams.tab} />
-    )),
-    FleetSpendTiles: vi.fn((_props: Record<string, unknown>) => (
-      <p data-testid="fleet-spend" />
     )),
     Run: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="run-body" />
@@ -115,7 +114,7 @@ vi.mock("@/server/viewer", () => ({
 }));
 vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
 vi.mock("@/features/billing", () => ({ Billing, BillingActions }));
-vi.mock("@/features/fleet", () => ({ Fleet, FleetRegister: () => null }));
+vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/run", () => ({ Run }));
 vi.mock("@/features/agents", () => ({
   Agents,
@@ -129,7 +128,7 @@ vi.mock("@/features/steering", () => ({
     <p data-testid="steering-create" data-tab={props.searchParams.tab} />
   ),
 }));
-vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
+vi.mock("@/features/spend", () => ({ Spend }));
 // People stays real, so the organization page still renders a roster; the two
 // sections the #2964 lane adds are stubbed to show what each route hands them.
 vi.mock("@/features/organization", async (importOriginal) => ({
@@ -382,7 +381,7 @@ describe("the Skills route", () => {
 });
 
 describe("the Fleet page", () => {
-  it("resolves the workspace viewer, names the page once and hands the viewer, the data source and the runs cursor to Fleet", async () => {
+  it("resolves the workspace viewer, names the page once and hands the viewer, the data source, the runs cursor and the onboarding banners to Fleet", async () => {
     const ctx = { wsSlug: "core-platform" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
@@ -396,15 +395,9 @@ describe("the Fleet page", () => {
       ctx,
       source,
       cursor: "c2",
-      spendTiles: <FleetSpendTiles ctx={ctx} source={source} embedded />,
+      banners: <OnboardingGate ctx={ctx} source={source} />,
     });
-    expect(FleetSpendTiles).toHaveBeenCalledOnce();
-    expect(FleetSpendTiles.mock.calls[0]?.[0]).toEqual({
-      ctx,
-      source,
-      embedded: true,
-    });
-    expect(screen.getByTestId("fleet-spend")).toBeInTheDocument();
+    expect(screen.getByTestId("onboarding-gate")).toBeInTheDocument();
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 

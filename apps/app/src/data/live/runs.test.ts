@@ -114,6 +114,7 @@ describe("runs.list", () => {
             steps: 3,
             frames: 9,
             cost: null,
+            reportedCost: null,
             model: viewModel,
             harness: null,
             machine,
@@ -136,7 +137,7 @@ describe("runs.list", () => {
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runList,
-      input: {},
+      input: { limit: 100 },
       page: "fleet",
     });
     expect(captureError).not.toHaveBeenCalled();
@@ -147,7 +148,7 @@ describe("runs.list", () => {
     await runs.list(ctx, { cursor: "c2" });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runList,
-      input: { cursor: "c2" },
+      input: { limit: 100, cursor: "c2" },
       page: "fleet",
     });
   });
