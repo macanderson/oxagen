@@ -11,19 +11,24 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("welcomeWrap") };
 }
 
+type WelcomeWrapPageProps = PageProps<"/welcome/[org]/[ws]/wrap">;
+
 // Onboarding step 2, Wrap an agent, in the gate shell rather than the app
 // shell: the operator console does not open until the first frame arrives.
-// `?agent=` names the identity the step enrols.
-export default async function WelcomeWrapPage({
-  params,
-  searchParams,
-}: PageProps<"/welcome/[org]/[ws]/wrap">) {
+// `?agent=` names the identity the step enrols. The route params, the viewer
+// and the query are request data, so they are read inside <Suspense> (Cache
+// Components) and the loading state is the prerendered shell.
+export default function WelcomeWrapPage(props: WelcomeWrapPageProps) {
+  return (
+    <Suspense fallback={<WelcomeLoading step="wrap" />}>
+      <WelcomeWrapStep {...props} />
+    </Suspense>
+  );
+}
+
+async function WelcomeWrapStep({ params, searchParams }: WelcomeWrapPageProps) {
   const { org, ws } = await params;
   const ctx = await requireViewer(org, ws);
   const agent = firstParam((await searchParams).agent) ?? null;
-  return (
-    <Suspense fallback={<WelcomeLoading step="wrap" />}>
-      <WelcomeWrap ctx={ctx} source={dataSource()} agent={agent} />
-    </Suspense>
-  );
+  return <WelcomeWrap ctx={ctx} source={dataSource()} agent={agent} />;
 }

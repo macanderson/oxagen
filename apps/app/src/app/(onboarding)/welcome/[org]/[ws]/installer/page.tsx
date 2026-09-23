@@ -11,18 +11,26 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("installer") };
 }
 
+type WelcomeInstallerPageProps = PageProps<"/welcome/[org]/[ws]/installer">;
+
 // The installer package's own screens, opened from Start a run. They sit in
-// the auth shell with no rail: the package, not Oxagen, renders them.
-export default async function WelcomeInstallerPage({
+// the auth shell with no rail: the package, not Oxagen, renders them. The
+// route params, the viewer and the query are request data, so they are read
+// inside <Suspense> (Cache Components).
+export default function WelcomeInstallerPage(props: WelcomeInstallerPageProps) {
+  return (
+    <Suspense>
+      <WelcomeInstallerStep {...props} />
+    </Suspense>
+  );
+}
+
+async function WelcomeInstallerStep({
   params,
   searchParams,
-}: PageProps<"/welcome/[org]/[ws]/installer">) {
+}: WelcomeInstallerPageProps) {
   const { org, ws } = await params;
   const ctx = await requireViewer(org, ws);
   const agent = firstParam((await searchParams).agent) ?? null;
-  return (
-    <Suspense>
-      <WelcomeInstaller ctx={ctx} source={dataSource()} agent={agent} />
-    </Suspense>
-  );
+  return <WelcomeInstaller ctx={ctx} source={dataSource()} agent={agent} />;
 }
