@@ -86,7 +86,11 @@ function instantAfterRead(): Date {
   return new Date();
 }
 
-/** The trace line's time as the design prints it: `2026-09-11 09:16:04Z`. */
+/**
+ * The trace line's time as the design prints it: `2026-09-11 09:16:04Z`.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function traceTime(at: Date): string {
   return `${at.toISOString().slice(0, 19).replace("T", " ")}Z`;
 }
@@ -178,7 +182,7 @@ export async function Billing({
   ];
   const failures = reads.filter((read): read is Failed => !read.ok);
   const denied = failures.find((read) => read.reason === "denied");
-  if (denied !== undefined && denied.reason === "denied") {
+  if (denied !== undefined) {
     return (
       <BillingDenied
         org={ctx.orgName}
@@ -189,7 +193,7 @@ export async function Billing({
     );
   }
   const pending = failures.find((read) => read.reason === "pending_approval");
-  if (pending !== undefined && pending.reason === "pending_approval") {
+  if (pending !== undefined) {
     return <BillingPending request={pending.accessRequestId} />;
   }
   // A failure of any read the design draws from is the error state: the

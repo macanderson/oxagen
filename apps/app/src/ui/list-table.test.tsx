@@ -25,7 +25,7 @@ const rowsOf = (n: number): ListRow[] =>
     cells: [
       `OXA-${String(i + 1).padStart(3, "0")}`,
       `$${String((i + 1) * 3)},000.00`,
-      <a key="link" href={`https://invoice.stripe.com/${String(i)}`}>
+      <a key="link" href="https://invoice.stripe.com/">
         Open in Stripe ↗
       </a>,
     ],
@@ -44,7 +44,7 @@ const visible = () =>
   within(screen.getByRole("table"))
     .getAllByRole("row")
     .slice(1)
-    .filter((tr) => (tr as HTMLElement).style.display !== "none")
+    .filter((tr) => tr.style.display !== "none")
     .map((tr) => tr.querySelector("td")?.textContent);
 
 const pager = () => screen.getByRole("navigation", { name: "Invoices pages" });
