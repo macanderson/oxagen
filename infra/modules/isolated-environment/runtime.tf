@@ -35,6 +35,13 @@ locals {
     INNGEST_EVENT_KEY   = random_id.secrets["inngest-event"].hex
     INNGEST_SIGNING_KEY = random_id.secrets["inngest-signing"].hex
     INNGEST_DEV         = "1"
+    } : {}, var.capture_email ? {
+    SMTP_HOST       = "127.0.0.1"
+    SMTP_PORT       = "1025"
+    SMTP_USERNAME   = "staging-capture"
+    SMTP_PASSWORD   = "staging-capture"
+    SMTP_FROM_EMAIL = "no-reply@${var.domain}"
+    SMTP_FROM_NAME  = "Oxagen staging"
   } : {})
 }
 resource "aws_ssm_parameter" "config" {
@@ -66,7 +73,7 @@ resource "aws_s3_object" "node_script" {
 resource "aws_s3_object" "node_env" {
   bucket  = aws_s3_bucket.deploy.id
   key     = "_bin/node.env"
-  content = "DEPLOY_BUCKET=${local.bucket}\nREGION=${var.region}\nLOG_DRIVER=awslogs\nLOG_GROUP_PREFIX=/${local.node_name}\n"
+  content = "DEPLOY_BUCKET=${local.bucket}\nREGION=${var.region}\nLOG_DRIVER=awslogs\nLOG_GROUP_PREFIX=/${local.node_name}\n${var.capture_email ? "EXTRA_CA_CERT=/opt/oxagen/mailpit/cert.pem\n" : ""}"
 }
 resource "aws_s3_object" "caddy" {
   bucket  = aws_s3_bucket.deploy.id
@@ -113,7 +120,7 @@ resource "aws_ssm_document" "deploy" {
     mainSteps = [{
       action = "aws:runShellScript"
       name   = "deployService"
-      inputs = { runCommand = ["/opt/oxagen/bin/deploy-service.sh '{{ service }}'"], timeoutSeconds = "900" }
+      inputs = { runCommand = ["aws s3 sync s3://${local.bucket}/_bin/ /opt/oxagen/bin/ --region ${var.region} --only-show-errors", "chmod +x /opt/oxagen/bin/deploy-service.sh", "/opt/oxagen/bin/deploy-service.sh '{{ service }}'"], timeoutSeconds = "900" }
     }]
   })
 }
@@ -168,6 +175,45 @@ resource "aws_ssm_association" "inngest" {
           inngest dev -u http://127.0.0.1:4000/api/inngest
       fi
       docker inspect -f '{{.State.Running}}' oxagen-local-inngest
+    SCRIPT
+  }
+}
+
+resource "aws_ssm_association" "email_capture" {
+  count            = var.capture_email ? 1 : 0
+  name             = "AWS-RunShellScript"
+  association_name = "${local.name}-email-capture"
+  depends_on       = [aws_s3_object.node_env, aws_s3_object.node_script]
+  targets {
+    key    = "InstanceIds"
+    values = [module.app.instance_id]
+  }
+  parameters = {
+    commands = <<-SCRIPT
+      set -eu
+      cloud-init status --wait
+      install -d -m 700 /opt/oxagen/mailpit
+      if [ ! -s /opt/oxagen/mailpit/cert.pem ]; then
+        openssl req -x509 -newkey rsa:3072 -nodes -days 365 \
+          -subj /CN=oxagen-staging-mail \
+          -addext 'subjectAltName=IP:127.0.0.1,DNS:localhost' \
+          -keyout /opt/oxagen/mailpit/key.pem -out /opt/oxagen/mailpit/cert.pem
+        chmod 600 /opt/oxagen/mailpit/key.pem
+        chmod 644 /opt/oxagen/mailpit/cert.pem
+      fi
+      if ! docker inspect oxagen-email-capture >/dev/null 2>&1; then
+        docker run -d --name oxagen-email-capture --restart unless-stopped --network host \
+          --read-only --tmpfs /tmp --memory 128m \
+          -v /opt/oxagen/mailpit:/certs:ro \
+          -e MP_SMTP_BIND_ADDR=127.0.0.1:1025 -e MP_UI_BIND_ADDR=127.0.0.1:8025 \
+          -e MP_SMTP_TLS_CERT=/certs/cert.pem -e MP_SMTP_TLS_KEY=/certs/key.pem \
+          -e MP_SMTP_REQUIRE_STARTTLS=true -e MP_SMTP_AUTH_ACCEPT_ANY=true \
+          -e MP_MAX_MESSAGES=500 \
+          axllent/mailpit@sha256:e427cc84ef7b68b656a80093f677767d5eafdde67ec871238a670f0bd4d89ad2
+      fi
+      aws s3 sync s3://${local.bucket}/_bin/ /opt/oxagen/bin/ --region ${var.region} --only-show-errors
+      chmod +x /opt/oxagen/bin/deploy-service.sh
+      docker inspect -f '{{.State.Running}}' oxagen-email-capture
     SCRIPT
   }
 }

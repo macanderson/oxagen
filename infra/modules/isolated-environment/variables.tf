@@ -27,3 +27,9 @@ variable "local_inngest" {
   type        = bool
   default     = false
 }
+
+variable "capture_email" {
+  description = "Capture test email in a private local inbox without outbound delivery."
+  type        = bool
+  default     = false
+}

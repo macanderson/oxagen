@@ -1,5 +1,6 @@
 module "environment" {
   local_inngest      = true
+  capture_email      = true
   source             = "../../modules/isolated-environment"
   environment        = "staging"
   account_id         = var.account_id

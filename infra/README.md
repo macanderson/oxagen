@@ -450,3 +450,13 @@ Confirm the SNS subscription before relying on notification delivery. Verify
 `TachoIngress5xx` under `Oxagen/API`, then inspect the alarm state history and
 confirm an alert arrives during a controlled canary. A filter-pattern test
 validates selection without creating log records or changing alarm state.
+
+Staging email is captured by Mailpit on the node. It has no outbound relay.
+SMTP and the inbox bind only to loopback. STARTTLS remains required, and Node
+trusts the staging certificate through a read-only certificate mount rather
+than disabling TLS verification. Use an SSM port-forwarding session to port
+8025 to read verification links. The inbox is capped at 500 messages and is
+lost when its container is recreated. The local certificate lasts 365 days;
+replace its certificate and key, restart Mailpit, and redeploy the services
+before it expires. Customer stacks keep `capture_email = false` and supply
+an operational SMTP provider.

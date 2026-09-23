@@ -312,12 +312,21 @@ start_container() {
     log_args=(--log-opt max-size=10m --log-opt max-file=3)
   fi
 
+  local tls_args=()
+  if [[ -n ${EXTRA_CA_CERT:-} ]]; then
+    [[ $EXTRA_CA_CERT == /* && $EXTRA_CA_CERT != *,* && -f $EXTRA_CA_CERT && -r $EXTRA_CA_CERT ]] \
+      || fail "EXTRA_CA_CERT must name a readable absolute certificate file"
+    tls_args=(--mount "type=bind,source=$EXTRA_CA_CERT,target=/opt/oxagen/extra-ca.pem,readonly" \
+      -e NODE_EXTRA_CA_CERTS=/opt/oxagen/extra-ca.pem)
+  fi
+
   docker run -d \
     --name "$CONTAINER" \
     --restart unless-stopped \
     --network host \
     --memory "$memory" \
     "${log_args[@]}" \
+    "${tls_args[@]}" \
     -e NODE_ENV=production \
     -e PORT="$port" \
     -e HOSTNAME=127.0.0.1 \
