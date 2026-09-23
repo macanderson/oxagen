@@ -924,9 +924,22 @@ export function renderChain(
   opts: { perRow?: number } = {},
 ): string {
   const perRow = opts.perRow ?? 5;
-  const w = 150;
-  const h = 44;
   const gx = 34;
+  // Every box in a chain shares one width, wide enough for its longest label,
+  // sub or exit, so no text spills past its box or into the next exit.
+  const w = Math.ceil(
+    Math.max(
+      150,
+      ...steps.map((s) =>
+        Math.max(
+          textWidth(s.label, 12) + 20,
+          s.sub ? textWidth(s.sub, 9.5, true) + 16 : 0,
+          s.exit ? textWidth(s.exit, 9.5) - gx + 8 : 0,
+        ),
+      ),
+    ),
+  );
+  const h = 44;
   const gy = 64;
   const rows = Math.ceil(steps.length / perRow);
   const W = 24 + Math.min(perRow, steps.length) * (w + gx) - gx;
