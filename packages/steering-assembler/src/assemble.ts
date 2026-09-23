@@ -171,20 +171,27 @@ export function compareCandidates(
   return a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0;
 }
 
-/**
- * The newest candidate per lineage wins; the rest are superseded by it.
- * Input is already ranked, so the first of a lineage is its winner.
- */
+/** Pick the newest version before applying delivery tiers. */
 function supersede(
   ranked: readonly SteeringCandidate[],
 ): Map<SteeringCandidate, string> {
-  const winners = new Map<string, string>();
+  const winners = new Map<string, SteeringCandidate>();
+  for (const candidate of ranked) {
+    const lineage = `${candidate.kind}:${candidate.lineage ?? candidate.id}`;
+    const winner = winners.get(lineage);
+    if (
+      winner === undefined ||
+      instantOf(candidate.recordedAt) > instantOf(winner.recordedAt)
+    ) {
+      winners.set(lineage, candidate);
+    }
+  }
   const losers = new Map<SteeringCandidate, string>();
   for (const candidate of ranked) {
-    const lineage = candidate.lineage ?? candidate.id;
-    const winner = winners.get(lineage);
-    if (winner === undefined) winners.set(lineage, candidate.id);
-    else losers.set(candidate, winner);
+    const winner = winners.get(
+      `${candidate.kind}:${candidate.lineage ?? candidate.id}`,
+    )!;
+    if (candidate !== winner) losers.set(candidate, winner.id);
   }
   return losers;
 }

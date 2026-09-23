@@ -195,16 +195,60 @@ describe("assembleSteering", () => {
     expect(text).not.toContain("Old dup.");
     expect(byOutcome(manifest.items, "cut")).toEqual([
       expect.objectContaining({
-        id: "no-force-push@1",
-        reason: "superseded",
-        superseded_by: "no-force-push@2",
-      }),
-      expect.objectContaining({
         id: "dup",
         reason: "superseded",
         superseded_by: "dup",
       }),
+      expect.objectContaining({
+        id: "no-force-push@1",
+        reason: "superseded",
+        superseded_by: "no-force-push@2",
+      }),
     ]);
+  });
+
+  it("supersedes an older must record when its newest version lowers its force", () => {
+    const candidates = [
+      record({
+        id: "old",
+        lineage: "policy",
+        force: "must",
+        body: "Old rule.",
+      }),
+      record({
+        id: "new",
+        lineage: "policy",
+        force: "info",
+        body: "Current fact.",
+        recordedAt: "2026-09-05T00:00:00Z",
+      }),
+    ];
+    const result = assembleSteering(run(candidates), 4096);
+    expect(result.text).toBeNull();
+    expect(result.manifest.items).toEqual([
+      expect.objectContaining({
+        id: "old",
+        reason: "superseded",
+        superseded_by: "new",
+      }),
+      expect.objectContaining({ id: "new", reason: "tier" }),
+    ]);
+    expect(assembleSteering(run([...candidates].reverse()), 4096)).toEqual(
+      result,
+    );
+  });
+
+  it("keeps a record and an operator steer with the same source id", () => {
+    const result = assembleSteering(
+      run([
+        record({ id: "shared", body: "Published rule." }),
+        record({ id: "shared", kind: "steer", body: "Operator message." }),
+      ]),
+      4096,
+    );
+    expect(result.manifest.included).toBe(2);
+    expect(result.text).toContain("Published rule.");
+    expect(result.text).toContain("Operator message.");
   });
 
   it("names budget as the reason for every cut when a workspace holds more must records than the budget, and includes the same set twice", () => {
