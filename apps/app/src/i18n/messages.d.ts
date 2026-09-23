@@ -3727,6 +3727,8 @@ type Messages = {
       speed: string;
       transportNote: string;
       frameHead: string;
+      subagent: string;
+      subagentTyped: string;
       fidelity: {
         full: string;
         digest_only: string;
@@ -4309,6 +4311,24 @@ type Messages = {
     denied: string;
     saveFailed: string;
     ownerRequired: string;
+    providersTitle: string;
+    loadProviders: string;
+    loadingProviders: string;
+    providerFailed: string;
+    providerConsent: string;
+    providerOwner: string;
+    githubTitle: string;
+    githubConnected: string;
+    githubUnconfigured: string;
+    githubConnect: string;
+    githubInstall: string;
+    linearTitle: string;
+    linearConnect: string;
+    linearConnecting: string;
+    linearUnconfigured: string;
+    linearConnected: string;
+    linearEmpty: string;
+    authorizationFailed: string;
   };
   shell: {
     skipToContent: string;

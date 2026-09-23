@@ -220,6 +220,13 @@ type TranscriptBlock = z.infer<typeof TranscriptBlock>;
 
 export const TranscriptBody = z.object({
   seq: z.string().regex(/^\d+$/),
+  /**
+   * The subagent chain the frame was recorded on; absent on the run's own
+   * chain. A subagent's chain is numbered from 0 like the run's, so `seq`
+   * names a frame only together with this, and `get_run_frame_body`, which
+   * reads the run's own chain, cannot open it.
+   */
+  chainRef: z.string().optional(),
   type: z.string(),
   /** sha256 over the redacted bytes; null when the frame carried no content. */
   digest: z.string().nullable(),
@@ -248,6 +255,8 @@ export type TranscriptBody = z.infer<typeof TranscriptBody>;
 /** A decision a rule or a person made about the call the entry records. */
 export const TranscriptDecision = z.object({
   seq: z.string().regex(/^\d+$/),
+  /** The subagent chain the decision was recorded on; absent on the run's own. */
+  chainRef: z.string().optional(),
   decision: z.string(),
   type: z.string(),
   at: z.iso.datetime({ offset: true }),
@@ -268,6 +277,14 @@ export const TranscriptEntry = z.object({
   seq: z.string().regex(/^\d+$/),
   /** The last frame folded into it; equals `seq` for a single frame. */
   endSeq: z.string().regex(/^\d+$/),
+  /**
+   * The subagent whose chain the opening frame was recorded on; absent on the
+   * run's own chain. `chainRef` is that chain's session uuid, which a
+   * subagent's `seq` needs beside it to name one frame (`entryKey`).
+   */
+  subagent: z
+    .object({ chainRef: z.string(), type: z.string().nullable() })
+    .optional(),
   at: z.iso.datetime({ offset: true }),
   /** Milliseconds from the run's recorded start; never negative. */
   elapsedMs: z.number().int().nonnegative(),
