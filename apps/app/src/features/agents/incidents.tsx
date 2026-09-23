@@ -95,7 +95,7 @@ export function IncidentsSection({
           cursor === null
             ? null
             : {
-                to: routes.agent(org, ws, agent, { tab: "incidents" }),
+                to: routes.agent(org, ws, agent, { tab: "activity" }),
                 text: t("first"),
               }
         }
@@ -104,7 +104,7 @@ export function IncidentsSection({
             ? null
             : {
                 to: routes.agent(org, ws, agent, {
-                  tab: "incidents",
+                  tab: "activity",
                   cursor: page.nextCursor,
                 }),
                 text: t("next"),

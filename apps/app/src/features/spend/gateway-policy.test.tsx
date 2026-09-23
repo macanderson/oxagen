@@ -20,6 +20,7 @@ import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GatewayPolicyForm } from "./forms";
 import type { GatewayPolicy } from "@/data/contracts/spend";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import spend from "../../../messages/spend.json";
@@ -75,15 +76,82 @@ afterEach(async () => {
 });
 
 describe("the gateway policy section", () => {
-  it("offers no mode switch and says the policy is not applied", () => {
-    // Nothing reads this policy: no bundle carries a `models` clause and the
-    // handler refuses `enforced`. A select that offered it would be a switch
-    // for an enforcer that is not there.
-    renderSection();
-    expect(screen.queryByLabelText(/^Mode$/)).toBeNull();
+  it("preserves an empty allowlist on save until explicitly cleared", async () => {
+    const user = userEvent.setup();
+    renderSection({
+      ...OBSERVED,
+      mode: "enforced",
+      modelAllow: [],
+      modelDeny: ["gpt-4o"],
+    });
     expect(
-      screen.getByText(spend.spend.gateway.notApplied),
+      screen.getByLabelText(spend.spend.gateway.permitNoModels),
+    ).toBeChecked();
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    await waitFor(() => {
+      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[0]?.[1])
+        .modelAllow,
+    ).toEqual([]);
+    await user.click(screen.getByLabelText(spend.spend.gateway.permitNoModels));
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    await waitFor(() => {
+      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(2);
+    });
+    expect(
+      GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[1]?.[1])
+        .modelAllow,
+    ).toBeNull();
+  });
+
+  it("switches from permit-none to a typed allowlist and back explicitly", async () => {
+    const user = userEvent.setup();
+    renderSection({ ...OBSERVED, mode: "enforced", modelAllow: [] });
+    await user.type(
+      screen.getByLabelText(spend.spend.gateway.modelAllow),
+      "gpt-5",
+    );
+    expect(
+      screen.getByLabelText(spend.spend.gateway.permitNoModels),
+    ).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    await waitFor(() => {
+      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[0]?.[1])
+        .modelAllow,
+    ).toEqual(["gpt-5"]);
+    await user.click(screen.getByLabelText(spend.spend.gateway.permitNoModels));
+    expect(screen.getByLabelText(spend.spend.gateway.modelAllow)).toHaveValue(
+      "",
+    );
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    await waitFor(() => {
+      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(2);
+    });
+    expect(
+      GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[1]?.[1])
+        .modelAllow,
+    ).toEqual([]);
+  });
+
+  it("qualifies saved enforcement until host support is known", () => {
+    renderSection({ ...OBSERVED, mode: "enforced", modelDeny: ["*"] }, false);
+    expect(
+      screen.getByText(spend.spend.gateway.enforcementRequested),
     ).toBeTruthy();
+    expect(screen.getByText(spend.spend.gateway.reach.unknown)).toBeTruthy();
+    expect(screen.queryByText(spend.spend.gateway.enforced)).toBeNull();
+  });
+
+  it("offers an explicit model switch and starts with lists disabled", () => {
+    renderSection();
+    expect(screen.getByLabelText(spend.spend.gateway.mode)).toHaveValue(
+      "observed",
+    );
   });
 
   it("refuses a model pattern the host could not apply, on its own field", async () => {
@@ -121,9 +189,7 @@ describe("the gateway policy section", () => {
   });
 
   it("says a saved list reaches no enrolled machine", async () => {
-    // The whole reason the write returns reach: no bundle carries a `models`
-    // clause, so every enrolled host keeps calling any model it likes. A
-    // footer that reported only the save would read as an applied policy.
+    // Reach names hosts that support enforcement, not proof of receipt.
     setGatewayPolicyAction.mockResolvedValue({
       ok: true,
       value: { hosts: 3, hostsEnforcingModels: 1 },
@@ -137,7 +203,9 @@ describe("the gateway policy section", () => {
     await user.click(screen.getByRole("button", { name: /save the policy/i }));
     const reach = await screen.findByTestId("gateway-reach");
     expect(reach.textContent).toContain("3");
-    expect(reach.textContent).toMatch(/none of them reads these lists yet/i);
+    expect(reach.textContent).toMatch(
+      /1 of 3 enrolled machines support these lists/i,
+    );
   });
 
   it("reports a refusal without claiming the policy changed", async () => {
@@ -230,23 +298,19 @@ describe("the gateway policy section", () => {
     ).toBeTruthy();
   });
 
-  it("sends observed for a row that still reads enforced", async () => {
-    // A row written before `enforced` was refused still says so. The form
-    // sends `observed` whatever the row holds, so saving an old policy cannot
-    // rewrite the mode nothing reads back into the record.
+  it("submits an explicit enabled model decision", async () => {
     const user = userEvent.setup();
-    renderSection({
-      mode: "enforced",
-      sessionLimit: { micros: "5000000", currency: "USD" },
-      sessionLimitUsd: 5,
-      modelAllow: null,
-      modelDeny: [],
-    });
+    renderSection();
+    await user.selectOptions(
+      screen.getByLabelText(spend.spend.gateway.mode),
+      "enforced",
+    );
+    await user.type(screen.getByLabelText(spend.spend.gateway.modelDeny), "*");
     await user.click(screen.getByRole("button", { name: /save the policy/i }));
     await waitFor(() => {
       expect(setGatewayPolicyAction).toHaveBeenCalledWith(
         at,
-        expect.objectContaining({ mode: "observed" }),
+        expect.objectContaining({ mode: "enforced", modelDeny: "*" }),
       );
     });
   });
@@ -298,4 +362,22 @@ describe("the gateway policy section", () => {
     );
     expect(screen.getByText(spend.spend.gateway.noAllowlist)).toBeTruthy();
   });
+});
+
+it("names the mode error when enabled lists are blank", async () => {
+  const user = userEvent.setup();
+  renderSection();
+  await user.selectOptions(
+    screen.getByLabelText(spend.spend.gateway.mode),
+    "enforced",
+  );
+  await user.click(screen.getByRole("button", { name: /save the policy/i }));
+  expect(
+    await screen.findByText(spend.spend.gateway.errors.modelListRequired),
+  ).toBeVisible();
+  expect(screen.getByLabelText(spend.spend.gateway.mode)).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  expect(setGatewayPolicyAction).not.toHaveBeenCalled();
 });

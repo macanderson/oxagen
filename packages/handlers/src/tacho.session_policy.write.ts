@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { tachoSessionPolicyWrite } from "@oxagen/oxagen/contracts/tacho.session_policy.write";
-import { BUNDLE_FEATURE_MODEL_ALLOWLIST } from "@oxagen/tacho";
+import { BUNDLE_FEATURE_INDEPENDENT_MODELS } from "@oxagen/tacho";
 import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, ne } from "drizzle-orm";
@@ -15,13 +15,9 @@ import { logger } from "./logger";
 /**
  * Set the workspace's wrapped-session policy, and say how far it reaches.
  *
- * **It reaches no machine today, and `enforced` is refused for that reason.**
- * No bundle carries a `models` clause, and `budget.mode` is set from the
- * agent's own mandate budget (#3710), so a policy saved here records a
- * decision and governs nothing. Accepting `enforced` would put a word in the
- * record that no enforcer reads, which is the defect the gateway audit found
- * wearing a switch. The write stays open so the decision can be recorded and
- * read back before the clause exists.
+ * Workspace Owners and Admins arm model lists independently of agent budgets.
+ * Only hosts advertising the independent model clause receive the lists.
+ * The legacy workspace ceiling remains recorded and does not arm a budget.
  *
  * The reach is part of the answer, not a nicety. `models` rides a gated bundle
  * field — a daemon built before the field never receives one, because the
@@ -76,15 +72,15 @@ export const tachoSessionPolicyWriteHandler: CapabilityHandler<
       modelDeny: input.modelDeny ?? current.modelDeny,
     };
 
-    // Nothing enforces this policy yet, so nothing may claim to. The database
-    // carries the weaker rule — enforced with no clause to enforce — and this
-    // is the stronger one: enforced with no reader at all. Refusing it here is
-    // what lets the person read why, instead of a constraint name.
-    if (next.mode === "enforced") {
+    if (
+      next.mode === "enforced" &&
+      next.modelAllow === null &&
+      next.modelDeny.length === 0
+    ) {
       throw new CapabilityError(
         "update_tacho_session_policy",
         "invalid_input",
-        "Enforced is not available yet. The gateway does not read this policy, so every enrolled machine keeps calling any model whatever it says. Save the lists as metered and they apply when the gateway reads them.",
+        "Set an allowed or denied model list before enforcing it. Run budgets are set on the agent mandate.",
       );
     }
 
@@ -117,7 +113,7 @@ export const tachoSessionPolicyWriteHandler: CapabilityHandler<
       columns: { bundleFeatures: true },
     });
     const hostsEnforcingModels = hosts.filter((host) =>
-      (host.bundleFeatures ?? []).includes(BUNDLE_FEATURE_MODEL_ALLOWLIST),
+      (host.bundleFeatures ?? []).includes(BUNDLE_FEATURE_INDEPENDENT_MODELS),
     ).length;
 
     logger.info(
