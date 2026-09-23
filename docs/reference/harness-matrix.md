@@ -11,11 +11,11 @@ Each source abbreviation below links to the implementation. “Metered” and �
 | Harness | Recorded | Metered | Can deny | Can ask | Enforced budget | Contained |
 |---|---|---|---|---|---|---|
 | Claude Code | 33 configured events: 5 command hooks and 28 HTTP events [C] | Routed Anthropic calls [M] | PreToolUse denial [H] | Native permission prompt via `ask` [H] | Routed session ceiling when the mandate enables it [B] | No contained tier [T] |
-| Codex | 12 command events [X]; hooks must be trusted [O] | Routed OpenAI calls [M] | PreToolUse denial [H, O] | Unsupported: the current client forwards `ask`, which Codex ignores after reporting a hook error [H, O] | Routed session ceiling [B] | No contained tier [T] |
+| Codex | 12 command events [X]; hooks must be trusted [O] | Routed OpenAI calls [M] | PreToolUse denial [H], [O] | Unsupported: the current client forwards `ask`, which Codex ignores after reporting a hook error [H], [O] | Routed session ceiling [B] | No contained tier [T] |
 | Cursor | 10 configured events [U] | No configured model route [M] | Tool, prompt, and subagent refusals [U] | Converted to deny with an explanation [U] | None through the current model proxy [M] | No contained tier [T] |
-| Stella | 8 command events; no SessionEnd [S] | Anthropic provider route only [M] | Native deny [A] | Native `require_approval` [A] | Routed Anthropic session ceiling [B, M] | No contained tier [T] |
+| Stella | 8 command events; no SessionEnd [S] | Anthropic provider route only [M] | Native deny [A] | Native `require_approval` [A] | Routed Anthropic session ceiling only with exactly one live Stella session [B], [M] | No contained tier [T] |
 | Gemini CLI, not verified by enrollment | No Oxagen adapter [W]; vendor has hooks [G] | No Oxagen route [M]; API-key base-URL extension exists [GC] | Not implemented; vendor BeforeTool can refuse [G] | No native ask in the documented decision schema [G] | Not implemented; BeforeModel can refuse a call [G] | No Oxagen contained tier [T] |
-| Aider, not verified by enrollment | No Oxagen adapter [W]; history files offer an extension point [AI] | No Oxagen route [M]; OpenAI base-URL option exists [AI] | No pre-action hook documented in its options [AI] | No documented pre-action approval adapter [AI] | Not implemented; a future proxy route could gate model calls [AI, B] | No Oxagen contained tier [T] |
+| Aider, not verified by enrollment | No Oxagen adapter [W]; history files offer an extension point [AI] | No Oxagen route [M]; OpenAI base-URL option exists [AI] | No pre-action hook documented in its options [AI] | No documented pre-action approval adapter [AI] | Not implemented; a future proxy route could gate model calls [AI], [B] | No Oxagen contained tier [T] |
 
 [C]: ../../packages/tacho/src/host/settings-writer.ts
 [X]: ../../packages/tacho/src/host/codex-writer.ts
@@ -40,7 +40,7 @@ The current enrollment writer installs hooks but does not persist their trust. C
 
 ### Cursor and Stella
 
-Cursor's adapter refuses an ask because its pre-tool protocol cannot provide the requested approval behavior. Enrollment writes no Cursor model route, so its recorded tool activity does not establish metered spend or a budget ceiling. Stella's writer routes its Anthropic provider; another provider can bypass that route. Stella has no SessionEnd hook, so the collector uses process lifecycle evidence to close its sessions. See the adapters above and [the collector](../../packages/tacho/src/collector/daemon.ts).
+Cursor's adapter refuses an ask because its pre-tool protocol cannot provide the requested approval behavior. Enrollment writes no Cursor model route, so its recorded tool activity does not establish metered spend or a budget ceiling. Stella's writer routes its Anthropic provider; another provider can bypass that route. Stella supplies no session identifier. The proxy attributes a request only when exactly one Stella session is live on the host. With two or more, it records the call as unattributed and skips the session ceiling in the audited revision. Operators cannot rely on a per-session ceiling for concurrent Stella processes. Stella has no SessionEnd hook, so the collector uses process lifecycle evidence to close its sessions. See the adapters above and [the collector](../../packages/tacho/src/collector/daemon.ts).
 
 ### Gemini CLI extension
 
@@ -64,6 +64,7 @@ This inventory uses registered capability names. Their source files retain dotte
 | `propose_record`, `revise_context_record`, `publish_context_record`, `set_governance_mode`, `get_steering_freshness` | Branch/file changes and merge history | Route through a provider-neutral version of the steering port |
 | `list_proposals`, `dismiss_proposal`, `list_context_records`, `promote_context_record` | Local proposal and record state | Keep local semantics; audit any provider-specific downstream side effects |
 | `commit_agent_definition`, `propose_agent`, `propose_skill`, `update_skill_config`, `propose_configuration_clone` | Repository commits and merge requests | Move direct GitHub calls behind provider dispatch |
+| `create_workspace` | Create a workspace with a GitLab main project | Replace the `mainRepo.provider` GitHub literal, GitHub App installation lookup, and GitHub source-connection write; a workspace requires a main repository |
 | `bind_main_repository`, `link_repository`, `list_repositories`, `unlink_repository`, `set_production_branch` | Projects, branches, binding lifecycle | Add provider support and nested project paths; preserve tenant scope |
 | `get_main_repository`, `get_repository_tree`, `open_init_pr` | Project metadata, repository tree, merge requests | Replace GitHub-specific output fields and refusals deliberately |
 | `attach_github_installation`, `list_github_installations`, `list_installation_repositories` | Token or OAuth connection and project discovery | Separate connect flow; a GitLab token is not an App installation |
@@ -73,4 +74,4 @@ This inventory uses registered capability names. Their source files retain dotte
 
 The implementation starting point is [the steering repository port](../../packages/handlers/src/context.steering.github.ts). Its GitHub provider filters, check-run model, and credential lookup need explicit dispatch. GitLab provides [merge requests](https://docs.gitlab.com/api/merge_requests/), [project access tokens](https://docs.gitlab.com/api/project_access_tokens/), [commit statuses](https://docs.gitlab.com/api/commits/), and [webhooks](https://docs.gitlab.com/user/project/integrations/webhooks/); their identifiers and authentication differ from GitHub's.
 
-The complete GitLab handoff is [#3762](https://github.com/macanderson/oxagen/issues/3762), under the innovation pillar. It requires a real project exercise from binding through an approved merge and steering publication, alongside tenant, credential, and duplicate-webhook regression coverage. Estimate: 3 to 4 engineer-weeks for gitlab.com. Self-managed hosts need an explicit server and network policy before support is claimed.
+The complete GitLab handoff is [#3762](https://github.com/macanderson/oxagen/issues/3762), under the innovation pillar. It requires a real project exercise from workspace creation and binding through an approved merge and steering publication, alongside tenant, credential, and duplicate-webhook regression coverage. Estimate: 3 to 4 engineer-weeks for gitlab.com. Self-managed hosts need an explicit server and network policy before support is claimed.
