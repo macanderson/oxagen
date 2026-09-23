@@ -331,6 +331,8 @@ export async function seedMandate(
 ): Promise<{ id: string }> {
   const status = over.status ?? "active";
   const now = Date.now();
+  // tenancy: test fixture seeding outside any request. The mandate row is scoped
+  // to the seeded tenant's orgId and workspaceId, and cleanupTenants removes it.
   return withSystemDb(async (tx) => {
     const [row] = await tx
       .insert(schema.mandates)
@@ -378,6 +380,8 @@ export async function seedSession(
   },
 ): Promise<void> {
   const sessionUuid = crypto.randomUUID();
+  // tenancy: test fixture seeding outside any request. The session row is scoped
+  // to the seeded tenant's orgId and workspaceId, and cleanupTenants removes it.
   await withSystemDb(async (tx) => {
     await tx.insert(schema.tachoSessions).values({
       orgId: tenant.orgId,
@@ -449,6 +453,8 @@ export async function seedLedgerRun(
 export async function cleanupTenants(orgIds: readonly string[]): Promise<void> {
   if (orgIds.length === 0) return;
   const ids = [...orgIds];
+  // tenancy: test teardown outside any request. Every delete is filtered by
+  // orgId to the seeded test organizations and touches no other tenant.
   await withSystemDb(async (tx) => {
     await tx.delete(schema.mandates).where(inArray(schema.mandates.orgId, ids));
     await tx
