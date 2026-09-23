@@ -14,7 +14,9 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
     target: ["es2022", "safari15"],
-    minify: "esbuild",
+    // Vite 8 minifies with Oxc. Its esbuild option is deprecated and needs
+    // esbuild installed beside it, so the default stands.
+    minify: "oxc",
     sourcemap: false,
   },
 });
