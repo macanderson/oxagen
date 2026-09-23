@@ -12,11 +12,6 @@ import {
 } from "./worktree-snapshot";
 import { jsonContent } from "../evidence/frame-body";
 import {
-  readWorktreeSnapshot,
-  type WorktreeSnapshot,
-} from "./worktree-snapshot";
-import { jsonContent } from "../evidence/frame-body";
-import {
   existsSync,
   readdirSync,
   readFileSync,
