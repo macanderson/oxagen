@@ -12,7 +12,11 @@ import type { ReactNode } from "react";
 type TableColumn = {
   label: string;
   numeric?: boolean;
-  /** The header names the column to assistive tech and the phone card, and draws nothing (a link column). */
+  /**
+   * The header names the column to assistive tech through aria-label and draws
+   * nothing (a link column). It carries no text, so the phone card that
+   * features/shell/card-tables.ts builds leaves the cell unlabelled.
+   */
   hidden?: boolean;
 };
 
@@ -51,13 +55,10 @@ export function Table({
               <th
                 key={column.label}
                 scope="col"
+                aria-label={column.hidden === true ? column.label : undefined}
                 className={`${headCell} ${column.numeric === true ? "text-right" : "text-left"}`}
               >
-                {column.hidden === true ? (
-                  <span className="sr-only">{column.label}</span>
-                ) : (
-                  column.label
-                )}
+                {column.hidden === true ? null : column.label}
               </th>
             ))}
           </tr>

@@ -980,9 +980,6 @@ type Messages = {
     };
   };
   billing: {
-    units: {
-      governed: string;
-    };
     range: string;
     notRecorded: string;
     header: {
@@ -1000,10 +997,6 @@ type Messages = {
       build: string;
       scale: string;
       enterprise: string;
-    };
-    intervals: {
-      month: string;
-      year: string;
     };
     chargeBasis: {
       blocks: string;
@@ -1034,19 +1027,16 @@ type Messages = {
       lines: {
         governed: string;
         governedNone: string;
-        plan: string;
         tokens: string;
         retention: string;
         discount: string;
         total: string;
       };
       basis: {
-        plan: string;
         tokens: string;
         retention: string;
         retentionExtended: string;
         heldNotRecorded: string;
-        held: string;
         discount: string;
         total: string;
       };
@@ -1068,16 +1058,6 @@ type Messages = {
       inApp: string;
       free: string;
       note: string;
-      overdrawn: string;
-      exhaustedNoCard: string;
-    };
-    mode: {
-      prepaid: string;
-      prepaidNoCard: string;
-      invoice: string;
-      uninvoiced: string;
-      invoiced: string;
-      pastDue: string;
     };
     invoices: {
       title: string;
@@ -1197,8 +1177,6 @@ type Messages = {
       perYear: string;
       enterpriseOption: string;
       note: string;
-      checkout: string;
-      enterprise: string;
       submit: string;
       submitting: string;
       cancel: string;
@@ -1238,6 +1216,7 @@ type Messages = {
         signedIn: string;
         needed: string;
         decidedBy: string;
+        signedInValue: string;
         decidedByValue: string;
       };
       pending: {
@@ -6100,6 +6079,17 @@ type Messages = {
       name: string;
       hint: string;
       invalid: string;
+    };
+    listTable: {
+      search: string;
+      rows: string;
+      all: string;
+      noMatch: string;
+      range: string;
+      rangeNone: string;
+      previous: string;
+      next: string;
+      pages: string;
     };
   };
 };

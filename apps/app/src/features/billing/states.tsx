@@ -10,7 +10,9 @@
 //     Open an incident, then the trace line. The read path carries no trace id
 //     and no region, so the line says so and prints the instant of the read.
 //   - denied: the permission the read needed, Request access and Back to
-//     Fleet, then who is signed in, what was needed, and what decided it.
+//     Fleet, then who is signed in (name and role), what was needed, and what
+//     decided it. A refusal carries no policy version yet (#3846), so the
+//     Decided by line says the version is not recorded.
 //   - pending: an access request the kernel parked for approval.
 import { CircleAlert, Lock, PanelsTopLeft } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -181,12 +183,15 @@ export function BillingError({
 export function BillingDenied({
   org,
   permission,
+  name,
   role,
 }: {
   /** The organization's display name. */
   org: string;
   /** The permission the read was refused on. */
   permission: string;
+  /** The signed-in person's name; null when the session carries none. */
+  name: string | null;
   /** The signed-in person's role on the organization. */
   role: OrgRole;
 }) {
@@ -220,11 +225,23 @@ export function BillingDenied({
       after={
         <dl className="mt-4 grid w-full max-w-[420px] grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-left text-[12.5px]">
           <dt className={term}>{t("signedIn")}</dt>
-          <dd className={mono}>{roles(role)}</dd>
+          <dd data-fact="signed-in" className={mono}>
+            {name === null
+              ? roles(role)
+              : t("signedInValue", { name, role: roles(role) })}
+          </dd>
           <dt className={term}>{t("needed")}</dt>
           <dd className={mono}>{permission}</dd>
           <dt className={term}>{t("decidedBy")}</dt>
-          <dd>{t("decidedByValue")}</dd>
+          <dd data-fact="decided-by">
+            {t.rich("decidedByValue", {
+              policy: (chunks) => (
+                <span data-recorded="false" className="text-muted-foreground">
+                  {chunks}
+                </span>
+              ),
+            })}
+          </dd>
         </dl>
       }
     />

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
 import { Billing } from "@/features/billing";
+import { getAuthUser } from "@/server/session";
 import { requireViewer } from "@/server/viewer";
 import { firstParam } from "@/shared/safe-path";
 
@@ -21,7 +22,10 @@ export default async function BillingPage({
   const { org } = await params;
   const ctx = await requireViewer(org);
   const { checkout, cursor } = await searchParams;
-  const t = await getTranslations("pages");
+  const [t, user] = await Promise.all([
+    getTranslations("pages"),
+    getAuthUser(),
+  ]);
   return (
     <main
       id="main"
@@ -31,6 +35,7 @@ export default async function BillingPage({
         ctx={ctx}
         source={dataSource()}
         title={t("billing")}
+        viewerName={user === null || user.name === "" ? null : user.name}
         checkout={firstParam(checkout) ?? null}
         cursor={firstParam(cursor) ?? null}
       />

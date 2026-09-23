@@ -180,22 +180,8 @@ export type BillingReads = {
   usageCredits: Read<UsageCredits>;
 };
 
-/**
- * A DataSource answering the six Billing reads; `calls` records their
- * arguments. `newestInvoices`, apart from `BillingReads`, is what the page's
- * second `invoices(ctx, { cursor: null })` read answers when the URL asks for
- * an older page than the newest: the tiles and This month roll up that
- * second read, never the page on screen (billing.tsx). Only the first call to
- * `billing.invoices` answers `invoices`; every call after it answers
- * `newestInvoices` (defaulting to `invoices`, as when only one page exists),
- * since the page never reads a third page.
- */
-export function billingSource(
-  overrides: Partial<BillingReads> & {
-    newestInvoices?: Read<InvoicePage>;
-  } = {},
-) {
-  const { newestInvoices, ...readOverrides } = overrides;
+/** A DataSource answering the six Billing reads; `calls` records their arguments. */
+export function billingSource(overrides: Partial<BillingReads> = {}) {
   const reads: BillingReads = {
     plan: readOk({ subscription: SUBSCRIPTION }),
     bucket: readOk(prepaidBucket()),
@@ -203,7 +189,7 @@ export function billingSource(
     retention: readOk(evidenceRetention()),
     invoices: invoicePage([invoiceRow()]),
     usageCredits: readOk(usageCredits()),
-    ...readOverrides,
+    ...overrides,
   };
   const calls: Record<keyof BillingReads, unknown[][]> = {
     plan: [],
@@ -252,11 +238,7 @@ export function billingSource(
       },
       invoices: (...args) => {
         calls.invoices.push(args);
-        const value =
-          calls.invoices.length === 1
-            ? reads.invoices
-            : (newestInvoices ?? reads.invoices);
-        return Promise.resolve(value);
+        return Promise.resolve(reads.invoices);
       },
       usageCredits: (...args) => {
         calls.usageCredits.push(args);

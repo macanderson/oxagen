@@ -1,20 +1,20 @@
 // This period (pages/billing.md): the statement for the bucket month, one line
-// each for the governed actions past the included allowance, the plan when
-// the organization has a subscription, tokens, evidence retention and the
-// onboarding discount, then the total. The figures are statement.ts's, the
-// same derivation the tiles print, so the tiles are rollups of these rows.
-// The onboarding discount has no store yet (spec §20, deferred): its amount
-// says "not recorded" and nothing is subtracted for it. One of the files money
-// renders in (INV-25).
+// each for the governed actions the meter priced, tokens, evidence retention
+// and the onboarding discount, then the total. The figures are statement.ts's,
+// the same derivation the tiles print, so the tiles are rollups of these rows.
+// The onboarding discount has no store yet (spec §20, deferred; #3845): its
+// basis says so, its amount says "not recorded", and the total, the sum after
+// the discount, says "not recorded" with it. The table carries the design's
+// list controls (@/ui/list-table). One of the files money renders in (INV-25).
 import { useLocale, useTranslations } from "next-intl";
-import type { ReactNode } from "react";
 import type { EvidenceRetention } from "@/data/contracts/billing";
 import type { Money as MoneyValue } from "@/data/contracts/money";
 import type { Read } from "@/data/read";
 import { Badge } from "@/ui/badge";
+import { type ListRow, ListTable } from "@/ui/list-table";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
-import { cell, numericCell, Table } from "@/ui/table";
+import { cell } from "@/ui/table";
 import { BillingReadFailure } from "./read-failure";
 import { NotRecordedValue, Section } from "./section";
 import type { GovernedCharge, Statement } from "./statement";
@@ -63,28 +63,6 @@ export function StatementAmount({ value }: { value: MoneyValue | null }) {
   return <Money value={value} />;
 }
 
-function Line({
-  name,
-  line,
-  basis,
-  amount,
-  strong = false,
-}: {
-  name: string;
-  line: ReactNode;
-  basis: ReactNode;
-  amount: ReactNode;
-  strong?: boolean;
-}) {
-  return (
-    <tr data-line={name} className={strong ? "font-semibold" : undefined}>
-      <td className={cell}>{line}</td>
-      <td className={`${cell} font-normal text-muted-foreground`}>{basis}</td>
-      <td className={numericCell}>{amount}</td>
-    </tr>
-  );
-}
-
 export function ThisPeriod({
   statement,
   retention,
@@ -107,82 +85,82 @@ export function ThisPeriod({
   const s = statement.value;
   const r = retention.value;
   const count = (n: number) => formatCount(n, locale);
+  const notRecorded = <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>;
+  const line = (
+    name: string,
+    cells: ListRow["cells"],
+    strong = false,
+  ): ListRow => ({
+    key: name,
+    cells,
+    data: { "data-line": name },
+    className: strong ? "font-semibold" : undefined,
+  });
+  const rows: ListRow[] = [
+    line("governed", [
+      s.pricedCount > 0
+        ? t("thisPeriod.lines.governed", { count: count(s.pricedCount) })
+        : t("thisPeriod.lines.governedNone"),
+      <ChargeBasis key="basis" charge={s.charge} included={s.includedGau} />,
+      <Money key="amount" value={s.governedAmount} />,
+    ]),
+    line("tokens", [
+      t("thisPeriod.lines.tokens"),
+      t("thisPeriod.basis.tokens"),
+      <Money key="amount" value={s.tokensAmount} />,
+    ]),
+    line("retention", [
+      t("thisPeriod.lines.retention"),
+      t(
+        r.extendedRetentionEnabled
+          ? "thisPeriod.basis.retentionExtended"
+          : "thisPeriod.basis.retention",
+        {
+          months: count(r.includedMonths),
+          held: t("thisPeriod.basis.heldNotRecorded"),
+        },
+      ),
+      <StatementAmount key="amount" value={s.retentionAmount} />,
+    ]),
+    line("discount", [
+      t("thisPeriod.lines.discount"),
+      t("thisPeriod.basis.discount"),
+      s.discountAmount === null ? (
+        notRecorded
+      ) : (
+        <Money key="amount" value={s.discountAmount} />
+      ),
+    ]),
+    line(
+      "total",
+      [
+        t("thisPeriod.lines.total"),
+        t("thisPeriod.basis.total"),
+        s.total === null ? (
+          notRecorded
+        ) : (
+          <span key="amount">
+            <Money value={s.total} /> {s.currency.toUpperCase()}
+          </span>
+        ),
+      ],
+      true,
+    ),
+  ];
   return (
     <Section id="billing-this-period" title={title} badge={badge} flush>
-      <Table
+      <ListTable
         label={title}
         columns={[
           { label: t("thisPeriod.columns.line") },
-          { label: t("thisPeriod.columns.basis") },
+          {
+            label: t("thisPeriod.columns.basis"),
+            className: `${cell} font-normal text-muted-foreground`,
+          },
           { label: t("thisPeriod.columns.amount"), numeric: true },
         ]}
-      >
-        <Line
-          name="governed"
-          line={
-            s.aboveIncluded > 0
-              ? t("thisPeriod.lines.governed", {
-                  count: count(s.aboveIncluded),
-                })
-              : t("thisPeriod.lines.governedNone")
-          }
-          basis={<ChargeBasis charge={s.charge} included={s.includedGau} />}
-          amount={<Money value={s.governedAmount} />}
-        />
-        {s.plan === null ? null : (
-          <Line
-            name="plan"
-            line={t("thisPeriod.lines.plan")}
-            basis={t("thisPeriod.basis.plan", {
-              plan: t(`tiers.${s.plan.tier}`),
-              interval: t(`intervals.${s.plan.subscription.billingInterval}`),
-              count: s.plan.invoices,
-            })}
-            amount={<StatementAmount value={s.plan.amount} />}
-          />
-        )}
-        <Line
-          name="tokens"
-          line={t("thisPeriod.lines.tokens")}
-          basis={t("thisPeriod.basis.tokens")}
-          amount={<Money value={s.tokensAmount} />}
-        />
-        <Line
-          name="retention"
-          line={t("thisPeriod.lines.retention")}
-          basis={t(
-            r.extendedRetentionEnabled
-              ? "thisPeriod.basis.retentionExtended"
-              : "thisPeriod.basis.retention",
-            {
-              months: count(r.includedMonths),
-              held: t("thisPeriod.basis.heldNotRecorded"),
-            },
-          )}
-          amount={<StatementAmount value={s.retentionAmount} />}
-        />
-        <Line
-          name="discount"
-          line={t("thisPeriod.lines.discount")}
-          basis={t("thisPeriod.basis.discount")}
-          amount={<NotRecordedValue>{t("notRecorded")}</NotRecordedValue>}
-        />
-        <Line
-          name="total"
-          strong
-          line={t("thisPeriod.lines.total")}
-          basis={t("thisPeriod.basis.total")}
-          amount={
-            s.total === null ? (
-              <StatementAmount value={null} />
-            ) : (
-              <span>
-                <Money value={s.total} /> {s.currency.toUpperCase()}
-              </span>
-            )
-          }
-        />
-      </Table>
+        rows={rows}
+      />
     </Section>
   );
 }

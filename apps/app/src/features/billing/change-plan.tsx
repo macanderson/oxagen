@@ -1,6 +1,7 @@
 "use client";
 // Change plan (pages/billing.md, the page's one gold action and the `plan`
-// dialog): a Plan select, the design's note, and Change plan in the footer.
+// dialog): a Plan select, the design's note, and Change plan in the footer,
+// and nothing more.
 // The select offers Build and Scale, each billed monthly or yearly at its
 // price, and Enterprise, which is negotiated per organization and so is
 // listed but not selectable. Change plan continues to Stripe Checkout through
@@ -128,9 +129,6 @@ function PlanForm({
       <input type="hidden" name="interval" value={interval} />
       <p className="border-l-2 border-gold/60 pl-3 text-[12.5px] text-muted-foreground">
         {t("changePlan.note")}
-      </p>
-      <p className="text-xs text-muted-foreground">
-        {t("changePlan.checkout")} {t("changePlan.enterprise")}
       </p>
     </SafeForm>
   );

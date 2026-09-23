@@ -4,8 +4,12 @@
 // figure and one basis line, and each figure is a rollup of a section below
 // it: the governed actions and the amount due are statement.ts's, the same
 // derivation This period prints, and the retained evidence is the figure the
-// Retained evidence meter prints. One of the files money renders in (INV-25):
-// the block price in the governed-action basis and the amount due.
+// Retained evidence meter prints. What is due is the total after the
+// onboarding discount, and the discount has no store yet (#3845), so the Due
+// tile says "not recorded" under the design's basis rather than a sum that
+// left the discount out. Its date is the period's end as an ISO day, the way
+// the design prints it. One of the files money renders in (INV-25): the block
+// price in the governed-action basis and the amount due.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {

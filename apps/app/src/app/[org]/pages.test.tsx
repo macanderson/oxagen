@@ -117,6 +117,11 @@ vi.mock("@/server/viewer", () => ({
 }));
 vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
 vi.mock("@/features/billing", () => ({ Billing }));
+// Billing names the signed-in person on its denied state; the session is Better
+// Auth's, so the stub answers with the name alone.
+vi.mock("@/server/session", () => ({
+  getAuthUser: () => Promise.resolve({ name: "Marcus Bell" }),
+}));
 vi.mock("@/features/fleet", () => ({ Fleet, FleetRegister: () => null }));
 vi.mock("@/features/run", () => ({ Run }));
 vi.mock("@/features/agents", () => ({
@@ -265,7 +270,7 @@ describe("the Audit page", () => {
 });
 
 describe("the Billing page", () => {
-  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the checkout outcome and the invoices cursor to Billing", async () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the signed-in name, the checkout outcome and the invoices cursor to Billing", async () => {
     const ctx = { orgSlug: "acme", orgName: "Acme Robotics" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
@@ -281,6 +286,7 @@ describe("the Billing page", () => {
       ctx,
       source,
       title: title("billing"),
+      viewerName: "Marcus Bell",
       checkout: "success",
       cursor: "c2",
     });

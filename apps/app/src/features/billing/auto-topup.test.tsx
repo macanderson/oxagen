@@ -231,9 +231,9 @@ describe("Auto top-up", () => {
   });
 
   it.each([
-    ["paid", "Last top-up Sep 14, 2026: paid"],
-    ["open", "Last top-up Sep 14, 2026: open, its invoice is under Invoices"],
-    ["failed", "Last top-up Sep 14, 2026: failed"],
+    ["paid", "Last top-up 2026-09-14: paid"],
+    ["open", "Last top-up 2026-09-14: open, its invoice is under Invoices"],
+    ["failed", "Last top-up 2026-09-14: failed"],
   ] as const)("prints a %s last attempt", (status, text) => {
     const { region } = renderControl({
       bucket: readOk(

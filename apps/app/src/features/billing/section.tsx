@@ -3,6 +3,7 @@
 // heading, a body, the term-and-value list its facts print in, and the one
 // date style the page uses. A panel whose body is a table sets `flush`, so the
 // table meets the panel's edges the way the mockup draws it.
+import { useTranslations } from "next-intl";
 import type { ComponentProps, ReactNode } from "react";
 import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
@@ -96,8 +97,51 @@ export function NotRecordedValue({ children }: { children: ReactNode }) {
   );
 }
 
-/** An RFC 3339 instant as a medium date in the viewer's locale and time zone. */
+/**
+ * An RFC 3339 instant as the design prints a date, its UTC calendar day,
+ * `2026-10-01`. A period ends at a UTC midnight, so printing it in the
+ * viewer's zone would move the day for anyone west of Greenwich.
+ */
+export function isoDate(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
 export function useDate(): (iso: string) => string {
+  return isoDate;
+}
+
+/** Whether [start, end) is one whole UTC calendar month. */
+function calendarMonth(start: Date, end: Date): boolean {
+  if (
+    start.getUTCDate() !== 1 ||
+    start.getUTCHours() !== 0 ||
+    start.getUTCMinutes() !== 0 ||
+    start.getUTCSeconds() !== 0
+  ) {
+    return false;
+  }
+  const next = Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1);
+  return end.getTime() === next;
+}
+
+/**
+ * A billing period as the design prints it: the month ("August 2026") when
+ * the period is one whole UTC calendar month, and the two dates otherwise, so
+ * a period that straddles two months never reads as one of them.
+ */
+export function usePeriod(): (start: string, end: string) => string {
   const format = useFormatter();
-  return (iso) => format.dateTime(new Date(iso), { dateStyle: "medium" });
+  const t = useTranslations("billing");
+  return (start, end) => {
+    const from = new Date(start);
+    const to = new Date(end);
+    if (calendarMonth(from, to)) {
+      return format.dateTime(from, {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+    }
+    return t("range", { start: isoDate(start), end: isoDate(end) });
+  };
 }

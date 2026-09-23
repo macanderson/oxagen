@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 // The Billing page (oxagen-roadmap mockups/pages/billing.md) over a fake
-// DataSource: the six reads it makes (and the newest invoices page when the
-// URL is on an older one), the header and its one gold action, the four tiles
-// and how they reconcile with This period, the five meters, Invoices, the
-// price list, Billable units, the controls that buy through Stripe, the
-// checkout banner, and the empty, error, denied and pending states with the
-// design's copy verbatim, with an axe check in every one (INV-26). The
+// DataSource: the six reads it makes, the header and its one gold action, the
+// four tiles and how they reconcile with This period, the five meters,
+// Invoices, the list controls on those three tables, the price list, Billable
+// units, the controls that buy through Stripe (#3858), the checkout banner,
+// and the empty, error, denied and pending states with the design's copy
+// verbatim, with an axe check in every one (INV-26). The
 // controls' own interactions have their own test files (auto-topup,
 // purchase-form, usage-credits, change-plan); this file covers the page-level
 // derivations that feed them.
@@ -105,11 +105,10 @@ const LOADED: Partial<BillingReads> = {
 };
 
 async function renderBilling(
-  reads: Partial<BillingReads> & {
-    newestInvoices?: BillingReads["invoices"];
-  } = LOADED,
+  reads: Partial<BillingReads> = LOADED,
   options: {
     role?: OrgRole;
+    viewerName?: string | null;
     checkout?: string | null;
     cursor?: string | null;
   } = {},
@@ -120,6 +119,8 @@ async function renderBilling(
     ctx,
     source,
     title: "Billing",
+    viewerName:
+      options.viewerName === undefined ? "Marcus Bell" : options.viewerName,
     checkout: options.checkout ?? null,
     cursor: options.cursor ?? null,
   });
@@ -170,26 +171,9 @@ describe("reads", () => {
     expect(calls.invoices).toEqual([[ctx, { cursor: null }]]);
   });
 
-  it("also reads the newest invoices page when the URL asks for an older one, and rolls the statement up from it", async () => {
-    const { ctx, calls } = await renderBilling(
-      {
-        ...LOADED,
-        invoices: invoicePage([
-          invoiceRow({
-            kind: "subscription",
-            periodStart: "2026-07-01T00:00:00.000Z",
-            periodEnd: "2026-08-01T00:00:00.000Z",
-          }),
-        ]),
-        newestInvoices: LOADED.invoices,
-      },
-      { cursor: "c2" },
-    );
-    expect(calls.invoices).toEqual([
-      [ctx, { cursor: "c2" }],
-      [ctx, { cursor: null }],
-    ]);
-    expect(row("data-line", "plan")).toHaveTextContent("$199.00");
+  it("reads only the invoices page the URL asks for", async () => {
+    const { ctx, calls } = await renderBilling(LOADED, { cursor: "c2" });
+    expect(calls.invoices).toEqual([[ctx, { cursor: "c2" }]]);
   });
 });
 
@@ -302,10 +286,11 @@ describe("summary tiles", () => {
     ).not.toBeNull();
   });
 
-  it("prints what is due at the period's end, in its currency, after the onboarding discount", async () => {
+  it("dates Due by the period's end as an ISO day, and says the amount is not recorded while the onboarding discount has no store", async () => {
     await renderBilling();
+    expect(tile("due").querySelector("[data-recorded=false]")).not.toBeNull();
     expect(tile("due")).toHaveTextContent(
-      "Due Oct 1, 2026$5,302.90USD · after the onboarding discount",
+      "Due 2026-10-01not recordedUSD · after the onboarding discount",
     );
   });
 
@@ -324,14 +309,16 @@ describe("summary tiles", () => {
 describe("figures reconcile", () => {
   it("rolls the tiles up from the lines of This period", async () => {
     await renderBilling();
-    // The governed tile is the count on the first line.
+    // The line is labelled with the count it priced: 159 blocks of 10,000.
     expect(row("data-line", "governed")).toHaveTextContent(
-      "Governed actions 1 – 1,587,838",
+      "Governed actions 1 – 1,590,000",
     );
     // Blocks × block price is the line's amount: 159 × $32.10 = $5,103.90.
     expect(row("data-line", "governed")).toHaveTextContent("$5,103.90");
-    // Due is the Total.
-    expect(row("data-line", "total")).toHaveTextContent("$5,302.90 USD");
+    // Due is the Total, the sum after the discount; neither is printed while
+    // the discount is not recorded (#3845).
+    expect(row("data-line", "total")).toHaveTextContent("not recorded");
+    expect(tile("due")).toHaveTextContent("not recorded");
     // Retention reads the same on the tile, the line and the meter.
     expect(row("data-line", "retention")).toHaveTextContent(
       "12 months included · GB held not recorded",
@@ -354,38 +341,28 @@ describe("This period", () => {
     ]);
   });
 
-  it("lists governed actions, the plan, tokens, evidence retention, the onboarding discount and the total", async () => {
+  it("lists governed actions, tokens, evidence retention, the onboarding discount and the total, and no plan line", async () => {
     await renderBilling();
     const lines = [...section("This period").querySelectorAll("tbody tr")].map(
       (tr) => tr.getAttribute("data-line"),
     );
     expect(lines).toEqual([
       "governed",
-      "plan",
       "tokens",
       "retention",
       "discount",
       "total",
     ]);
-    expect(row("data-line", "plan")).toHaveTextContent(
-      "PlanBuild, billed monthly · 1 Stripe invoice$199.00",
-    );
     expect(row("data-line", "tokens")).toHaveTextContent(
       "Tokensreported at zero · the customer’s own model spend is on Spend$0.00",
     );
     expect(row("data-line", "retention")).toHaveTextContent("$0.00");
     expect(row("data-line", "discount")).toHaveTextContent(
-      "Onboarding discountno onboarding offer is recorded for this organizationnot recorded",
+      "Onboarding discountthe onboarding offer is not recorded yet (spec §20, deferred)not recorded",
     );
     expect(row("data-line", "total")).toHaveTextContent(
-      "Totalrounded to cents once, half-even$5,302.90 USD",
+      "Totalrounded to cents once, half-evennot recorded",
     );
-  });
-
-  it("leaves the plan line off for an organization with no subscription", async () => {
-    await renderBilling({ ...LOADED, plan: readOk({ subscription: null }) });
-    expect(document.querySelector('[data-line="plan"]')).toBeNull();
-    expect(row("data-line", "total")).toHaveTextContent("$5,103.90 USD");
   });
 
   it("names the line plainly when nothing is past the allowance", async () => {
@@ -454,51 +431,22 @@ describe("Meters", () => {
     );
   });
 
-  it("states the prepaid rule for an organization with a saved card", async () => {
-    await renderBilling();
-    expect(section("Meters").querySelector("[data-mode]")).toHaveTextContent(
-      "Prepaid. Governed actions stop when this period's allowance runs out, unless auto top-up buys more.",
-    );
-  });
-
-  it("states invoice billing with the cap and this period's counts, and a past-due invoice", async () => {
-    await renderBilling({
-      ...LOADED,
-      bucket: readOk(invoiceBucket({ pastDue: true })),
-    });
-    const meters = section("Meters");
-    expect(meters.querySelector("[data-mode=invoice]")).toHaveTextContent(
-      "Invoice billing. Governed actions are never capped. Overage is invoiced at period end, or once 100,000 governed actions accrue.",
-    );
-    expect(meters.querySelector("[data-fact=uninvoiced]")).toHaveTextContent(
-      "Not invoiced yet this period: 12,500 governed actions. Invoiced this period: 100,000 governed actions.",
-    );
-    expect(meters.querySelector("[data-past-due]")).toBeInTheDocument();
-    expect(meters.querySelector("[data-overdrawn]")).toHaveTextContent(
-      "112,500 past what this period holds",
-    );
-  });
-
-  it("links a Free organization spent to zero with no card to the purchase form", async () => {
+  it("draws the design's note and nothing else under the table: no billing mode, overdraft or exhausted line (negative)", async () => {
     await renderBilling({
       ...LOADED,
       plan: readOk({ subscription: null }),
       bucket: readOk(freeNoCardBucket()),
     });
-    const line = section("Meters").querySelector("[data-exhausted]");
-    expect(line).toHaveTextContent(
-      "Add a payment method to keep governing this month, or your allowance renews on Oct 1, 2026",
-    );
-    expect(
-      within(line as HTMLElement).getByRole("link", {
-        name: "Add a payment method",
-      }),
-    ).toHaveAttribute("href", "#billing-buy");
-  });
-
-  it("shows no exhausted line while a period still has room (negative)", async () => {
-    await renderBilling();
-    expect(section("Meters").querySelector("[data-exhausted]")).toBeNull();
+    const meters = section("Meters");
+    expect(meters.querySelector("[data-mode]")).toBeNull();
+    expect(meters.querySelector("[data-overdrawn]")).toBeNull();
+    expect(meters.querySelector("[data-exhausted]")).toBeNull();
+    cleanup();
+    await renderBilling({
+      ...LOADED,
+      bucket: readOk(invoiceBucket({ pastDue: true })),
+    });
+    expect(section("Meters").querySelector("[data-mode]")).toBeNull();
   });
 
   it("shows the retention read's error in its row (negative)", async () => {
@@ -520,16 +468,21 @@ describe("Invoices", () => {
       "Amount",
       "Status",
       "Paid",
-      "Open in Stripe",
+      "",
     ]);
+    // The link column names itself to assistive tech and draws no text, so its
+    // phone card carries no label (card-tables.ts reads the header's text).
+    expect(
+      within(table).getByRole("columnheader", { name: "Open in Stripe" }),
+    ).toHaveTextContent("");
     const [, first, second] = within(table).getAllByRole("row");
     if (first === undefined || second === undefined)
       throw new Error("expected two invoice rows");
     expect(first).toHaveTextContent(
-      "OXA-0043Sep 1, 2026 – Oct 1, 2026not recorded$199.00paid$199.00Open in Stripe ↗",
+      "OXA-0043September 2026not recorded$199.00paidnot recordedOpen in Stripe ↗",
     );
     expect(second).toHaveAttribute("data-status", "open");
-    expect(second).toHaveTextContent("open$0.00");
+    expect(second).toHaveTextContent("opennot recorded");
     const link = within(first).getByRole("link", {
       name: "Open invoice OXA-0043 on stripe.com in a new tab",
     });
@@ -539,6 +492,40 @@ describe("Invoices", () => {
     );
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("prints a period that is not one calendar month as its two ISO days", async () => {
+    await renderBilling({
+      ...LOADED,
+      invoices: invoicePage([
+        invoiceRow({
+          periodStart: "2026-08-15T00:00:00.000Z",
+          periodEnd: "2026-09-15T00:00:00.000Z",
+        }),
+      ]),
+    });
+    expect(section("Invoices")).toHaveTextContent("2026-08-15 – 2026-09-15");
+  });
+
+  it("carries the design's list controls on This period, Meters and Invoices", async () => {
+    await renderBilling();
+    for (const name of ["This period", "Meters", "Invoices"]) {
+      const panel = section(name);
+      expect(
+        within(panel).getByRole("searchbox", { name: "Search this list" }),
+      ).toBeInTheDocument();
+      expect(within(panel).getByRole("combobox", { name: "Rows" })).toHaveValue(
+        "10",
+      );
+      expect(
+        within(panel).getByRole("navigation", { name: `${name} pages` }),
+      ).toBeInTheDocument();
+    }
+    expect(
+      within(section("Invoices")).getByRole("navigation", {
+        name: "Invoices pages",
+      }),
+    ).toHaveTextContent("1–2 of 2");
   });
 
   it("links no page for an invoice Stripe has not published or a URL off invoice.stripe.com (negative)", async () => {
@@ -560,7 +547,7 @@ describe("Invoices", () => {
     await renderBilling({ ...LOADED, invoices: invoicePage([]) });
     expect(section("Invoices")).toHaveTextContent("No invoices yet.");
     expect(within(section("Invoices")).queryByRole("table")).toBeNull();
-    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(within(section("Invoices")).queryByRole("navigation")).toBeNull();
   });
 
   it("links the next page of older invoices from the newest page, and back", async () => {
@@ -770,10 +757,15 @@ describe("empty", () => {
     expect(screen.queryByRole("region", { name: "This period" })).toBeNull();
   });
 
-  it("keeps Change plan and the purchase form, so a new organization can still subscribe or buy", async () => {
+  it("draws the design's panel alone, with no header, no Change plan and no gold, then only the purchase form the pay journey buys through (#3858)", async () => {
     await renderBilling(EMPTY);
-    expect(gold().map((el) => el.textContent)).toEqual(["Change plan"]);
-    expect(section("Buy governed actions")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(gold()).toEqual([]);
+    expect(
+      screen
+        .getAllByRole("region")
+        .map((region) => region.getAttribute("aria-labelledby")),
+    ).toEqual(["billing-empty-title", "billing-buy"]);
   });
 
   it("is not the empty state once a governed action is used (negative)", async () => {
@@ -827,7 +819,7 @@ describe("error", () => {
 });
 
 describe("access denied", () => {
-  it("replaces the page with the denied state, naming the permission, the role and what decided it", async () => {
+  it("replaces the page with the denied state, naming the permission, the person and role, and what decided it", async () => {
     await renderBilling(
       {
         plan: DENIED,
@@ -844,18 +836,33 @@ describe("access denied", () => {
       within(state).getByRole("heading", { name: "You cannot see billing" }),
     ).toBeInTheDocument();
     expect(state).toHaveTextContent(
-      "Your roles on Acme Robotics do not include org.billing (plan and invoices are readable only by a finance role). An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include org.billing (plan and invoices are readable only by a finance role). An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
     );
-    expect(state).toHaveTextContent("Signed in asmember");
+    expect(state).toHaveTextContent("Signed in asMarcus Bell · member");
     expect(state).toHaveTextContent("Neededorg.billing");
+    // A refusal carries no policy version yet (#3846).
     expect(state).toHaveTextContent(
-      "Decided bythe organization's roles · deny wins over every allow",
+      "Decided bypolicy version not recorded · deny wins over every allow",
     );
+    expect(
+      state.querySelector("[data-fact=decided-by] [data-recorded=false]"),
+    ).toHaveTextContent("policy version not recorded");
     expect(
       within(state).getByRole("link", { name: "Back to Fleet" }),
     ).toHaveAttribute("href", "/");
     expect(gold().map((el) => el.textContent)).toEqual(["Request access"]);
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+  });
+
+  it("names the role alone when the session carries no name", async () => {
+    await renderBilling(
+      { ...LOADED, plan: DENIED },
+      { role: "compliance", viewerName: null },
+    );
+    const state = document.querySelector("[data-state=denied]") as HTMLElement;
+    expect(state.querySelector("[data-fact=signed-in]")).toHaveTextContent(
+      /^compliance$/,
+    );
   });
 
   it("opens the request-access dialog, which says what asking would do and that it is not built yet", async () => {

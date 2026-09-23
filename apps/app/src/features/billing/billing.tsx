@@ -3,18 +3,20 @@
 // tiles summarise the plan, the governed actions past the included allowance,
 // the evidence retained and what is due. Below, two columns: This period,
 // Meters and Invoices on the left; the price list and Billable units on the
-// right, then the controls that buy through Stripe (auto top-up, buying
-// governed actions, and the token balance), stacking into one column on a
-// phone. Every tile is a rollup of a section beneath it (statement.ts).
+// right, stacking into one column on a phone. Every tile is a rollup of a
+// section beneath it (statement.ts).
 //
-// The page makes six reads, plus the newest invoices page when the URL asks
-// for an older one, since the statement always sums the newest page. A
-// refusal on any of them is the denied state and replaces the body, header
-// included; a failed plan or bucket read is the error state; an organization
-// with no subscription, no invoice and no governed action yet is the empty
-// state. The empty state keeps the header's Change plan and the purchase
-// controls beneath it, because a new organization must still be able to
-// subscribe or buy before its first governed action.
+// Beneath Billable units sit three panels the design does not draw: auto
+// top-up, buying governed actions and the token balance. They are the only
+// way to pay Oxagen in prepaid mode today, and the pay journey
+// (e2e/pay.spec.ts) buys through the second. Whether they stay is a
+// maintainer decision (#3858).
+//
+// The page makes six reads. A refusal on any of them is the denied state and
+// replaces the body, header included; a failed plan or bucket read is the
+// error state; an organization with no subscription, no invoice and no
+// governed action yet is the empty state, the design's panel alone, followed
+// only by the governed-action purchase a new organization pays through.
 import {
   canTierBuyCredits,
   CREDIT_TOPUP_PRESETS_USD,
@@ -28,8 +30,6 @@ import type {
   ContractRate,
   EvidenceRetention,
   GauBucket,
-  InvoicePage,
-  PlanCard,
   UsageCredits,
 } from "@/data/contracts/billing";
 import { type Money as MoneyValue, mulMicros } from "@/data/contracts/money";
@@ -84,25 +84,21 @@ function instantAfterRead(): Date {
 
 /** The statement, or the first read that stopped it. */
 function statementRead(reads: {
-  plan: Read<PlanCard>;
   bucket: Read<GauBucket>;
   rate: Read<ContractRate>;
   retention: Read<EvidenceRetention>;
-  invoices: Read<InvoicePage>;
 }): Read<Statement> {
-  const { plan, bucket, rate, retention, invoices } = reads;
-  if (!plan.ok) return plan;
+  const { bucket, rate, retention } = reads;
   if (!bucket.ok) return bucket;
   if (!rate.ok) return rate;
   if (!retention.ok) return retention;
-  if (!invoices.ok) return invoices;
   return readOk(
     statementFor({
-      plan: plan.value,
       bucket: bucket.value,
       rate: rate.value,
       retention: retention.value,
-      invoices: invoices.value.items,
+      // No store records the onboarding offer yet (spec §20, deferred; #3845).
+      discount: null,
     }),
   );
 }
@@ -161,6 +157,7 @@ export async function Billing({
   ctx,
   source,
   title,
+  viewerName,
   checkout,
   cursor,
 }: {
@@ -168,29 +165,27 @@ export async function Billing({
   source: DataSource;
   /** The translated `pages.billing`, the same string generateMetadata returns. */
   title: string;
+  /** The signed-in person's name, for the denied state; null when the session has none. */
+  viewerName: string | null;
   /** `?checkout=` as the URL carried it, after a Stripe Checkout round trip. */
   checkout: string | null;
   /** The invoices page the URL asked for; null is the newest. */
   cursor: string | null;
 }) {
-  const [plan, bucket, rate, retention, invoices, credits, newest] =
-    await Promise.all([
-      source.billing.plan(ctx),
-      source.billing.bucket(ctx),
-      source.billing.contractRate(ctx),
-      source.billing.retention(ctx),
-      source.billing.invoices(ctx, { cursor }),
-      source.billing.usageCredits(ctx),
-      cursor === null ? null : source.billing.invoices(ctx, { cursor: null }),
-    ]);
-  const newestInvoices = newest ?? invoices;
+  const [plan, bucket, rate, retention, invoices, credits] = await Promise.all([
+    source.billing.plan(ctx),
+    source.billing.bucket(ctx),
+    source.billing.contractRate(ctx),
+    source.billing.retention(ctx),
+    source.billing.invoices(ctx, { cursor }),
+    source.billing.usageCredits(ctx),
+  ]);
   const reads: Read<unknown>[] = [
     plan,
     bucket,
     rate,
     retention,
     invoices,
-    newestInvoices,
     credits,
   ];
   const failures = reads.filter((read): read is Failed => !read.ok);
@@ -200,6 +195,7 @@ export async function Billing({
       <BillingDenied
         org={ctx.orgName}
         permission={denied.permission}
+        name={viewerName}
         role={ctx.orgRole}
       />
     );
@@ -224,6 +220,35 @@ export async function Billing({
   }
 
   const buys = buysFor(ctx);
+  const banner = <CheckoutBanner outcome={checkoutOutcome(checkout)} />;
+
+  const empty =
+    plan.ok &&
+    plan.value.subscription === null &&
+    bucket.ok &&
+    bucket.value.usedGau === 0 &&
+    bucket.value.purchasedGau === 0 &&
+    cursor === null &&
+    invoices.ok &&
+    invoices.value.items.length === 0;
+  if (empty) {
+    return (
+      <Page state="empty">
+        {banner}
+        <BillingEmpty />
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <PurchaseForm
+            org={ctx.orgSlug}
+            bucket={bucket}
+            rate={rate}
+            maxGau={PURCHASE_GAU_MAX}
+            allowed={buys}
+          />
+        </div>
+      </Page>
+    );
+  }
+
   let blocked: PlanChangeBlock | null = null;
   if (!buys) blocked = { kind: "role" };
   else if (plan.ok && plan.value.subscription !== null)
@@ -232,52 +257,21 @@ export async function Billing({
       plan: plan.value.subscription.plan,
       tier: rate.ok ? rate.value.tier : null,
     };
-  const header = (
-    <Header
-      title={title}
-      org={ctx.orgName}
-      action={
-        <ChangePlan org={ctx.orgSlug} plans={PLAN_OPTIONS} blocked={blocked} />
-      }
-    />
-  );
-  const banner = <CheckoutBanner outcome={checkoutOutcome(checkout)} />;
-  const payment = (
-    <PaymentControls
-      ctx={ctx}
-      bucket={bucket}
-      rate={rate}
-      credits={credits}
-      buys={buys}
-    />
-  );
-
-  const empty =
-    plan.ok &&
-    plan.value.subscription === null &&
-    bucket.ok &&
-    bucket.value.usedGau === 0 &&
-    bucket.value.purchasedGau === 0 &&
-    newestInvoices.ok &&
-    newestInvoices.value.items.length === 0;
-  if (empty) {
-    return (
-      <Page state="empty" header={header} banner={banner}>
-        <BillingEmpty />
-        <div className="grid items-start gap-4 lg:grid-cols-2">{payment}</div>
-      </Page>
-    );
-  }
-
-  const statement = statementRead({
-    plan,
-    bucket,
-    rate,
-    retention,
-    invoices: newestInvoices,
-  });
+  const statement = statementRead({ bucket, rate, retention });
   return (
-    <Page state="loaded" header={header} banner={banner}>
+    <Page state="loaded">
+      <Header
+        title={title}
+        org={ctx.orgName}
+        action={
+          <ChangePlan
+            org={ctx.orgSlug}
+            plans={PLAN_OPTIONS}
+            blocked={blocked}
+          />
+        }
+      />
+      {banner}
       <SummaryTiles
         plan={plan}
         rate={rate}
@@ -294,7 +288,13 @@ export async function Billing({
         <div className="flex min-w-0 flex-col gap-4">
           <PriceList retention={retention} />
           <BillableUnits />
-          {payment}
+          <PaymentControls
+            ctx={ctx}
+            bucket={bucket}
+            rate={rate}
+            credits={credits}
+            buys={buys}
+          />
         </div>
       </div>
     </Page>
@@ -324,19 +324,13 @@ function Header({
 
 function Page({
   state,
-  header,
-  banner,
   children,
 }: {
   state: "loaded" | "empty";
-  header: ReactNode;
-  banner: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div data-page-state={state} className="flex flex-col gap-4">
-      {header}
-      {banner}
       {children}
     </div>
   );
