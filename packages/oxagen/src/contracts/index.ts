@@ -1,3 +1,6 @@
+import { runOutcomesSettingsGet } from "./run.outcomes.settings.get";
+import { runOutcomesSettingsSet } from "./run.outcomes.settings.set";
+import { runOutcomesAccessSet } from "./run.outcomes.access.set";
 import { configurationCloneGet } from "./configuration.clone.get";
 import { configurationClonePropose } from "./configuration.clone.propose";
 // contracts/index.ts — canonical per-package contracts array.
@@ -95,6 +98,7 @@ import { repositoryInstallationAttach } from "./repository.installation.attach";
 import { repositoryGitlabAttach } from "./repository.gitlab.attach";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
+import { runWorkGet } from "./run.work.get";
 import { runOutputsGet } from "./run.outputs.get";
 import { runTokenIssue } from "./run.token.issue";
 import { runFramesIngest } from "./run.frames.ingest";
@@ -724,6 +728,7 @@ export {
   userProfileUpdate,
   runCostGet,
   runOutputsGet,
+  runWorkGet,
   runProofGet,
   runTokenIssue,
   runFramesIngest,
@@ -979,6 +984,10 @@ export {
 // Annotated wide on purpose: the inferred tuple type of ~350 contracts exceeds
 // what the compiler will serialize into a declaration file.
 export const contracts: readonly CapabilityDeclaration[] = [
+  runOutcomesSettingsGet,
+  runOutcomesSettingsSet,
+  runOutcomesAccessSet,
+
   apiKeyCreate,
   apiKeyList,
   apiKeyRevoke,
@@ -1102,6 +1111,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   userProfileUpdate,
   runCostGet,
   runOutputsGet,
+  runWorkGet,
   runProofGet,
   runTokenIssue,
   runFramesIngest,
@@ -1346,3 +1356,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   routerStatsList,
   routerDecisionPreview,
 ] as const;
+
+export * from "./run.outcomes.settings.get";
+export * from "./run.outcomes.settings.set";
+export * from "./run.outcomes.access.set";

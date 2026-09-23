@@ -2,11 +2,10 @@
   "steering": {
     "tabs": {
       "label": "Steering views",
-      "records": "Records",
-      "skills": "Skills",
       "proposals": "Proposals",
-      "prs": "Context PRs",
       "settings": "Settings",
+      "library": "Library",
+      "freshness": "Freshness",
       "deliveries": "Delivery"
     },
     "failure": {
@@ -191,6 +190,20 @@
       "skill": "Add a skill",
       "record": "Write a context record"
     },
+    "library": {
+      "label": "Library shelves",
+      "all": "All",
+      "records": "Records",
+      "skills": "Skills",
+      "memory": "Memory"
+    },
+    "proposalSections": {
+      "label": "Proposal views",
+      "candidates": "Candidates",
+      "prs": "Context PRs"
+    },
+    "description": "Published records, observed skills, proposals, checkout freshness and steering delivery for this workspace.",
+    "governance": "Governance in Context PRs",
     "deliveries": {
       "title": "Steering delivery",
       "lead": "The latest verified manifest for each recorded run in the last 7 days.",

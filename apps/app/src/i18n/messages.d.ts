@@ -20,7 +20,6 @@ type Messages = {
     cliAuthorize: string;
     cliComplete: string;
     workspaceEyebrow: string;
-    organizationEyebrow: string;
     fleet: string;
     run: string;
     agents: string;
@@ -39,6 +38,7 @@ type Messages = {
     audit: string;
     modelFunding: string;
     sso: string;
+    organizationEyebrow: string;
   };
   unrecorded: {
     run: {
@@ -1865,6 +1865,7 @@ type Messages = {
         none: string;
         more: string;
         moreBasis: string;
+        open: string;
       };
     };
     approvals: {
@@ -2372,6 +2373,9 @@ type Messages = {
       roles: string;
       apiKeys: string;
       modelFunding: string;
+      invitations: string;
+      workspaces: string;
+      costCenters: string;
       sso: string;
     };
     roles: {
@@ -3020,6 +3024,10 @@ type Messages = {
         none: string;
         hint: string;
       };
+    };
+    header: {
+      eyebrow: string;
+      description: string;
     };
   };
   record: {
@@ -4253,6 +4261,66 @@ type Messages = {
       noSpend: string;
       callCount: string;
     };
+    workCi: {
+      title: string;
+      basis: string;
+      failedChecks: string;
+      stale: string;
+      checkouts: string;
+      onMachine: string;
+      machineMissing: string;
+      locationMissing: string;
+      repoMissing: string;
+      branchMissing: string;
+      copyLocation: string;
+      copied: string;
+      copyFailed: string;
+      pullRequests: string;
+      prMissing: string;
+      ciMissing: string;
+      association: {
+        recorded: string;
+        head_commit: string;
+        branch: string;
+      };
+      ci: {
+        passing: string;
+        failing: string;
+        pending: string;
+        neutral: string;
+        unknown: string;
+      };
+      checkCounts: string;
+      checksPartial: string;
+      diffFiles: string;
+      diffComplete: string;
+      diffPartial: string;
+      evidence: string;
+      diffBasis: string;
+      diffMissing: string;
+      frame: string;
+      capture: {
+        complete: string;
+        partial: string;
+        not_retained: string;
+        not_captured: string;
+      };
+      incomplete: string;
+      loading: string;
+    };
+  };
+  runOutcomes: {
+    title: string;
+    description: string;
+    platformDisabled: string;
+    enabled: string;
+    disabled: string;
+    enable: string;
+    disable: string;
+    saving: string;
+    denied: string;
+    saveFailed: string;
+    ownerRequired: string;
   };
   shell: {
     skipToContent: string;
@@ -4511,6 +4579,25 @@ type Messages = {
       denied: string;
       failed: string;
       photoPlaceholder: string;
+    };
+    activity: {
+      notifications: string;
+      approvals: string;
+      unread: string;
+      loading: string;
+      refresh: string;
+      failed: string;
+      allApprovals: string;
+      empty: string;
+      partial: string;
+      resolved: string;
+      resolvedTitle: string;
+      noWorkspaces: string;
+      noNotifications: string;
+      open: string;
+      markRead: string;
+      archive: string;
+      notificationsPartial: string;
     };
   };
   skills: {
@@ -5105,11 +5192,10 @@ type Messages = {
   steering: {
     tabs: {
       label: string;
-      records: string;
-      skills: string;
       proposals: string;
-      prs: string;
       settings: string;
+      library: string;
+      freshness: string;
       deliveries: string;
     };
     failure: {
@@ -5294,6 +5380,20 @@ type Messages = {
       skill: string;
       record: string;
     };
+    library: {
+      label: string;
+      all: string;
+      records: string;
+      skills: string;
+      memory: string;
+    };
+    proposalSections: {
+      label: string;
+      candidates: string;
+      prs: string;
+    };
+    description: string;
+    governance: string;
     deliveries: {
       title: string;
       lead: string;

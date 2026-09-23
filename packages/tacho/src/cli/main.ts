@@ -1,5 +1,5 @@
 /**
- * `tacho` entry: enroll, status, unenroll, export, verify, daemon.
+ * `tacho` entry: enroll, status, unenroll, export, verify, run, daemon.
  * `oxagen tacho <command>` in the platform CLI delegates here with its own
  * credentials.
  */
@@ -23,6 +23,7 @@ import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand } from "./export";
 import { runMcpStdio } from "./mcp-stdio";
 import { reassign } from "./reassign";
+import { runContained } from "./run";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
 import { verify } from "./verify";
@@ -323,6 +324,64 @@ export function buildTachoProgram(): Command {
         );
       if (!result.ok) process.exitCode = 1;
     });
+
+  program
+    .command("run")
+    .description(
+      "Start one agent run under the contained launcher: `tacho run --contained -- claude -p <task>` (Linux and Docker; ADR-152)",
+    )
+    .requiredOption(
+      "--contained",
+      "Run inside the measured container, whose only exits are the gateway and the Oxagen API",
+    )
+    .option("--image <ref>", "The contained image (or OXAGEN_CONTAINED_IMAGE)")
+    .option(
+      "--workspace <dir>",
+      "The repository root to mount at /workspace (default: the current directory)",
+    )
+    .option(
+      "--github-repository <owner/name>",
+      "The one repository the run may reach, with a token in OXAGEN_CONTAINED_GITHUB_TOKEN",
+    )
+    .argument("<agent>", "claude or codex")
+    .argument("[args...]", "Arguments for the agent, after --")
+    .action(
+      async (
+        agent: string,
+        args: string[],
+        opts: {
+          image?: string;
+          workspace?: string;
+          githubRepository?: string;
+        },
+      ) => {
+        const controller = new AbortController();
+        for (const signal of ["SIGINT", "SIGTERM"] as const)
+          process.once(signal, () => controller.abort());
+        process.exitCode = await runContained(
+          {
+            agent,
+            args,
+            ...(opts.image !== undefined ? { image: opts.image } : {}),
+            ...(opts.workspace !== undefined
+              ? { workspace: opts.workspace }
+              : {}),
+            ...(opts.githubRepository !== undefined
+              ? { githubRepository: opts.githubRepository }
+              : {}),
+          },
+          {
+            ...deps,
+            cwd: process.cwd(),
+            signal: controller.signal,
+            write: (stream, text) =>
+              (stream === "stdout" ? process.stdout : process.stderr).write(
+                text,
+              ),
+          },
+        );
+      },
+    );
 
   program
     .command("detect")
