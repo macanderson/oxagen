@@ -10,6 +10,8 @@ import {
   createPoller,
   describeInstallResult,
   describeRemoval,
+  uninstallFinished,
+  uninstallToast,
   isEnrolled,
   isRetired,
   statusBanner,
@@ -254,5 +256,28 @@ describe("the tacho status banner", () => {
       "some other error",
     );
     expect(statusBanner(null, null, { ok: true })).toBeNull();
+  });
+});
+
+describe("a finished uninstall", () => {
+  it("is finished only when nothing was left on the machine", () => {
+    expect(uninstallFinished({ removed: ["~/.config/oxagen"], left: [] })).toBe(
+      true,
+    );
+    expect(uninstallFinished({ removed: [], left: [] })).toBe(true);
+    expect(
+      uninstallFinished({
+        removed: ["~/.local/bin/oxagen"],
+        left: ["~/.config/oxagen/tacho: permission denied"],
+      }),
+    ).toBe(false);
+  });
+
+  it("says what happened, then the step the app cannot take", () => {
+    expect(
+      uninstallToast("Drag Oxagen from Applications to the Trash to finish."),
+    ).toBe(
+      "Oxagen was removed from this machine. Drag Oxagen from Applications to the Trash to finish.",
+    );
   });
 });

@@ -23,6 +23,9 @@ import {
   isEnrolled,
   isRetired,
   statusBanner,
+  TOAST_MS,
+  uninstallFinished,
+  uninstallToast,
 } from "./machine-state";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
@@ -139,6 +142,10 @@ export function App() {
   const [log, setLog] = useState<LogLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Set once an uninstall has left nothing behind: the Uninstall panel has
+  // nothing more to offer and goes away until the machine is set up again.
+  const [uninstalled, setUninstalled] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   // Bumped after every sign-in so the org listing runs again: config.json's
   // `logged_in` is presence-only and stays true across an expired session
@@ -274,6 +281,16 @@ export function App() {
   // and not a reason to refuse an uninstall. See `isEnrolled`.
   const rawHost = state?.host ?? null;
   const host = isEnrolled(rawHost) ? rawHost : null;
+  // A machine enrolled again, from here or from a terminal, has something to
+  // uninstall again.
+  useEffect(() => {
+    if (host !== null) setUninstalled(false);
+  }, [host]);
+  useEffect(() => {
+    if (toast === null) return;
+    const timer = setTimeout(() => setToast(null), TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [toast]);
   const retiredHost = isRetired(rawHost) ? rawHost : null;
   const hostHarnesses = (host?.harnesses ?? []) as Harness[];
   const configToken = state?.config.logged_in ?? false;
@@ -735,6 +752,10 @@ export function App() {
         ...report.left.map((note) => ({ text: `left: ${note}`, err: true })),
       ]);
       setNotice(describeRemoval(report, uninstallHint));
+      if (uninstallFinished(report)) {
+        setUninstalled(true);
+        setToast(uninstallToast(uninstallHint));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -857,6 +878,7 @@ export function App() {
   }
 
   const restartWizard = () => {
+    setUninstalled(false);
     setFirstRun(true);
     setTargetChosen(false);
     setDetected(null);
@@ -1830,12 +1852,16 @@ export function App() {
 
       {activity}
 
-      {uninstallPanel}
+      {!uninstalled && uninstallPanel}
     </>
   ) : (
     <>
       <section className="panel">
-        <p className="headline">Oxagen is no longer set up on this machine</p>
+        <p className="headline">
+          {uninstalled
+            ? "Oxagen was removed from this machine"
+            : "Oxagen is no longer set up on this machine"}
+        </p>
         <p className="sub">
           {notice ?? "Run the setup again to register your agents."}
         </p>
@@ -1853,7 +1879,7 @@ export function App() {
         </div>
       </section>
       {activity}
-      {uninstallPanel}
+      {!uninstalled && uninstallPanel}
     </>
   );
 
@@ -1928,6 +1954,21 @@ export function App() {
           manage
         )}
       </main>
+      {toast && (
+        <div className="toast" role="status" aria-live="polite">
+          <span className="toast-glyph" aria-hidden="true">
+            ✓
+          </span>
+          <span>{toast}</span>
+          <button
+            type="button"
+            className="quiet"
+            onClick={() => setToast(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
     </>
   );
 }

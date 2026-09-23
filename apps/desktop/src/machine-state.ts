@@ -41,6 +41,23 @@ export function describeRemoval(report: RemovalReport, hint: string): string {
   return `${removed} Still on this machine: ${report.left.join(". ")}. ${hint}`;
 }
 
+/**
+ * Whether an uninstall left nothing behind. Only then is there nothing more
+ * the Uninstall panel can do, so it goes away; anything still on the machine
+ * keeps it on screen so the person can try again.
+ */
+export function uninstallFinished(report: RemovalReport): boolean {
+  return report.left.length === 0;
+}
+
+/** The toast after a finished uninstall: what happened, then the one step left to the person. */
+export function uninstallToast(hint: string): string {
+  return `Oxagen was removed from this machine. ${hint}`;
+}
+
+/** How long the uninstall toast stays up before it dismisses itself. */
+export const TOAST_MS = 8_000;
+
 /** What the Rust shell's `install_cli` reports. */
 export interface InstallResult {
   /** "linked", "already" or "skipped". */
