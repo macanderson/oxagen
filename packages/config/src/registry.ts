@@ -1397,6 +1397,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
 
   // ── Linear (capability provenance) ───────────────────────────────────────────
+  LINEAR_OAUTH_CLIENT_ID: {
+    group: "Linear",
+    description:
+      "Linear OAuth application client ID for customer-authorized Run follow-through. Uses PKCE with the app callback URL.",
+    secret: false,
+    clientExposed: false,
+    services: ["app", "api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   LINEAR_API_KEY: {
     group: "Linear",
     description:

@@ -371,7 +371,14 @@ export interface RunOutcomesPolicyChangeDetail {
   reason: string | null;
 }
 
+export interface RunIssueAuthorizationDetail {
+  feature: "run_outcomes";
+  provider: "linear";
+  connectionId: string;
+}
+
 export type SecurityEventDetail =
+  | RunIssueAuthorizationDetail
   | RunOutcomesPolicyChangeDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail;

@@ -2437,6 +2437,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "app": true,
         "unit": true,
         "docs": true
@@ -2456,6 +2457,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "app": true,
         "unit": true,
         "docs": true
@@ -4717,6 +4719,54 @@
       }
     },
     {
+      "name": "start_issue_authorization",
+      "file": "run.issue.authorization.begin.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "authorize_issue_provider",
+      "file": "run.issue.authorization.complete.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run_issue_providers",
+      "file": "run.issue.providers.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "list_runs",
       "file": "run.list.ts",
       "domain": "run",
@@ -4732,6 +4782,50 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "set_run_outcomes_access",
+      "file": "run.outcomes.access.set.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run_outcomes_settings",
+      "file": "run.outcomes.settings.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_run_outcomes_settings",
+      "file": "run.outcomes.settings.set.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": false,
+        "docs": true
       }
     },
     {

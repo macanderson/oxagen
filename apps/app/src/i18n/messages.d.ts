@@ -3942,6 +3942,22 @@ type Messages = {
     denied: string;
     saveFailed: string;
     ownerRequired: string;
+    providersTitle: string;
+    loadProviders: string;
+    loadingProviders: string;
+    providerFailed: string;
+    providerConsent: string;
+    providerOwner: string;
+    githubConnected: string;
+    githubUnconfigured: string;
+    githubConnect: string;
+    githubInstall: string;
+    linearConnect: string;
+    linearConnecting: string;
+    linearUnconfigured: string;
+    linearConnected: string;
+    linearEmpty: string;
+    authorizationFailed: string;
   };
   shell: {
     skipToContent: string;

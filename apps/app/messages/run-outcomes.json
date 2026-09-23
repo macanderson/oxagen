@@ -10,6 +10,22 @@
     "saving": "Saving",
     "denied": "An organization owner or admin must change this setting.",
     "saveFailed": "The setting could not be saved. Try again.",
-    "ownerRequired": "Ask an organization owner or admin to change this setting."
+    "ownerRequired": "Ask an organization owner or admin to change this setting.",
+    "providersTitle": "Issue connections",
+    "loadProviders": "Check issue connections",
+    "loadingProviders": "Checking connections",
+    "providerFailed": "The connections could not be read. Try again.",
+    "providerConsent": "Enable Run follow-through before authorizing an issue provider.",
+    "providerOwner": "An organization owner or admin can authorize issue providers.",
+    "githubConnected": "The workspace GitHub installation is connected. Issue creation also requires its Issues write permission.",
+    "githubUnconfigured": "GitHub authorization is not configured for this deployment.",
+    "githubConnect": "Authorize GitHub",
+    "githubInstall": "Install the GitHub app",
+    "linearConnect": "Authorize Linear",
+    "linearConnecting": "Opening Linear",
+    "linearUnconfigured": "Linear authorization is not configured for this deployment.",
+    "linearConnected": "Connected Linear workspace: {name}",
+    "linearEmpty": "No Linear issue connection is recorded.",
+    "authorizationFailed": "Authorization could not start. Check consent and try again."
   }
 }

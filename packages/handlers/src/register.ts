@@ -12,6 +12,21 @@ import {
 // Wrapped in `registerHandlersOnce` so a dev bundler re-evaluating this module
 // on hot reload is a no-op instead of tripping the kernel's duplicate guard.
 registerHandlersOnce("@oxagen/handlers", () => {
+  registerHandler("get_run_issue_providers", () =>
+    import("./run.issue.providers.get").then(
+      (m) => m.handler as CapabilityHandlerFn,
+    ),
+  );
+  registerHandler("authorize_issue_provider", () =>
+    import("./run.issue.authorization.complete").then(
+      (m) => m.handler as CapabilityHandlerFn,
+    ),
+  );
+  registerHandler("start_issue_authorization", () =>
+    import("./run.issue.authorization.begin").then(
+      (m) => m.handler as CapabilityHandlerFn,
+    ),
+  );
   registerHandler("get_run_outcomes_settings", () =>
     import("./run.outcomes.settings.get").then(
       (m) => m.runOutcomesSettingsGetHandler as CapabilityHandlerFn,

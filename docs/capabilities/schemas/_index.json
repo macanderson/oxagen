@@ -1,5 +1,5 @@
 {
-  "generatedCount": 355,
+  "generatedCount": 361,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -144,6 +144,16 @@
       "name": "authorize_cli",
       "domain": "auth",
       "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "authorize_issue_provider",
+      "domain": "run",
+      "surfaces": [
+        "api"
+      ],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1525,6 +1535,26 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run_issue_providers",
+      "domain": "run",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run_outcomes_settings",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3569,6 +3599,24 @@
       "consumes": []
     },
     {
+      "name": "set_run_outcomes_access",
+      "domain": "run",
+      "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_run_outcomes_settings",
+      "domain": "run",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_secret_value",
       "domain": "secret",
       "surfaces": [
@@ -3612,6 +3660,16 @@
         "mcp",
         "cli",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "start_issue_authorization",
+      "domain": "run",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

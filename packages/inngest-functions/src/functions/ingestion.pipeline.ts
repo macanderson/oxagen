@@ -128,6 +128,16 @@ export const [ingestionPipeline] = createFunction(
         if (!row) return { kind: "skipped" as const };
 
         const deliveryConfig = row.delivery_config ?? null;
+        if (
+          (deliveryConfig as Record<string, unknown> | null)?.[
+            "runOutcomesOnly"
+          ] === true
+        ) {
+          return {
+            kind: "filtered" as const,
+            reason: "issue_connection_not_ingestible",
+          };
+        }
 
         // ── Stage 1 gate: record-type allow-list ──────────────────────────────
         const typeFilter = applyRecordTypeFilter(

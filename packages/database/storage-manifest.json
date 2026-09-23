@@ -135,6 +135,15 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "authorize_issue_provider",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "bind_agent_environment",
       "reads": [],
@@ -1390,6 +1399,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_issue_providers",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3318,6 +3336,15 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "start_issue_authorization",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "start_subscription_upgrade",
       "reads": [],
@@ -3784,7 +3811,7 @@
       "writes": []
     }
   ],
-  "contentHash": "ada1c0423fb2669093fc878dc0787e6e61cc621fecd9e1ea954d78c8ca209805",
+  "contentHash": "80cfe9ea36df405d97403264ecd465485cf6501531f7aa34b26ae20a693d3aba",
   "domains": [
     {
       "name": "agent",

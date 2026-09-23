@@ -270,6 +270,7 @@ export const baseEnvSchema = z.object({
   SMTP_FROM_NAME: z.string().min(1).optional(),
 
   LINEAR_API_KEY: z.string().optional(),
+  LINEAR_OAUTH_CLIENT_ID: z.string().optional(),
 
   // ── CRM (Attio) ──────────────────────────────────────────────────────────
   // Optional: when set, every lead captured by /v1/cms/leads is also upserted
