@@ -230,7 +230,7 @@ function FrameHalf({
         >
           {t("truncated")}{" "}
           <SafeLink
-            to={routes.run(org, ws, runId, { tab: "frames", body: seq })}
+            to={routes.run(org, ws, runId, { tab: "actions", body: seq })}
             className={linkText}
           >
             {t("openFrame", { seq })}
@@ -355,7 +355,7 @@ function FrameDetail({
         )}
         {headline?.truncated === true ? null : (
           <SafeLink
-            to={routes.run(org, ws, runId, { tab: "frames", body: frame.seq })}
+            to={routes.run(org, ws, runId, { tab: "actions", body: frame.seq })}
             className={`${linkText} self-start text-[11px]`}
           >
             {t("envelope", { seq: frame.seq })}

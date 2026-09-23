@@ -187,7 +187,7 @@ export const runChainGet = registerCapability({
        */
       seals: z.array(chainSealSchema),
       /** Where the run's actions were observed from (spec §8.4). */
-      enforcementTier: z.enum(["gateway", "harness", "observe"]),
+      enforcementTier: z.enum(["contained", "gateway", "harness", "observe"]),
       /**
        * The grade the seal recorded; null while the run is live or its seal
        * predates the recorder. The ladder below is computed from what the read

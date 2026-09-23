@@ -23,7 +23,7 @@ import {
   type RegisterableMcpTransport,
 } from "@/data/contracts/tools";
 import { routes } from "@/shared/safe-path";
-import { buttonPrimary, inputBase, mono } from "@/ui/control-styles";
+import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -115,7 +115,7 @@ export function RegisterServer({ at }: { at: ToolsAt }) {
       <button
         type="button"
         data-testid={`${TESTID}-open`}
-        className={buttonPrimary}
+        className={buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}

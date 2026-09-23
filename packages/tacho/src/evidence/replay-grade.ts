@@ -42,6 +42,7 @@ export type CompletenessGapKind = (typeof COMPLETENESS_GAP_KINDS)[number];
 
 /** The enforcement tiers the ladder distinguishes (spec §8.4). */
 export const GRADE_ENFORCEMENT_TIERS = [
+  "contained",
   "gateway",
   "harness",
   "observe",
@@ -223,7 +224,8 @@ export function explainReplayGrade(
       ? viewBlock
       : gaps.has("tool_bodies")
         ? "tool_bodies"
-        : input.enforcementTier !== "gateway"
+        : input.enforcementTier !== "gateway" &&
+            input.enforcementTier !== "contained"
           ? `enforcement_tier:${input.enforcementTier}`
           : null;
   const retryBlock =

@@ -9,11 +9,7 @@
 // registry attribute `list_tool_versions` does carry and filter on — the
 // version's consequence tags.
 //
-// Under the registry sits the servers section (`./servers.tsx`): a tool
-// version came from a server, the import control picks one from that roster,
-// and registering one is where a row there starts. A registry read that is
-// refused replaces the whole tab, servers included, because a reader denied
-// the registry is denied the roster on the same clause.
+// Provider registration lives beside connections and grants on Providers.
 import { useLocale, useTranslations } from "next-intl";
 import type {
   McpServerList,
@@ -38,7 +34,6 @@ import {
   type Tone,
 } from "./parts";
 import { ToolsReadFailure } from "./read-failure";
-import { Servers } from "./servers";
 import { ToolDialog } from "./tool-dialog";
 import {
   type ToolNameStyle,
@@ -317,7 +312,6 @@ export function Registry({
   cursor,
   canImport,
   canClassify,
-  canRegister,
   read,
   servers,
 }: {
@@ -328,8 +322,6 @@ export function Registry({
   cursor: string | null;
   canImport: boolean;
   canClassify: boolean;
-  /** An org Owner or Admin: what `register_mcp_server` declares. */
-  canRegister: boolean;
   read: Read<ToolVersionPage>;
   /** list_mcp_servers: the servers the import control picks from. */
   servers: Read<McpServerList>;
@@ -354,14 +346,6 @@ export function Registry({
       servers={servers.ok ? servers.value.servers : null}
     />
   ) : null;
-  const serversSection = (
-    <Servers
-      at={at}
-      orgRole={orgRole}
-      canRegister={canRegister}
-      read={servers}
-    />
-  );
 
   if (items.length === 0 && category === null && cursor === null) {
     return (
@@ -373,7 +357,6 @@ export function Registry({
           actions={importAction}
           data-state="empty"
         />
-        {serversSection}
       </div>
     );
   }
@@ -457,7 +440,6 @@ export function Registry({
           {t("gateNote")}
         </p>
       </Section>
-      {serversSection}
     </div>
   );
 }

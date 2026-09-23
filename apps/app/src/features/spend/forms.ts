@@ -83,12 +83,19 @@ export type GatewayPolicyFormValues = {
   sessionLimit: string;
   /** One model pattern per line; blank means no allowlist at all. */
   modelAllow: string;
+  permitNoModels?: boolean;
   modelDeny: string;
 };
 
-type GatewayFormErrorKey = "sessionLimitInvalid" | "modelPatternInvalid";
+type GatewayFormErrorKey =
+  | "sessionLimitInvalid"
+  | "modelPatternInvalid"
+  | "modelListRequired";
 export type GatewayFieldErrors = Partial<
-  Record<"sessionLimit" | "modelAllow" | "modelDeny", GatewayFormErrorKey>
+  Record<
+    "mode" | "sessionLimit" | "modelAllow" | "modelDeny",
+    GatewayFormErrorKey
+  >
 >;
 
 /**
@@ -115,18 +122,15 @@ function lines(value: string): string[] {
  * This one tells the person which field to fix while they are still looking
  * at it, rather than saving a rule that silently matches nothing.
  *
- * `mode` is always `observed`. Nothing reads this policy yet, so the handler
- * refuses `enforced` and the panel offers no switch; the field stays on the
- * form's shape because the contract still carries it.
- *
  * An allowlist box left blank means *no allowlist*, so every model is
- * permitted. To permit nothing, deny `*`.
+ * permitted unless the explicit permit-no-models control is selected.
  */
 export const GatewayPolicyForm = z
   .object({
     mode: z.enum(["observed", "enforced"]),
     sessionLimit: z.string(),
     modelAllow: z.string(),
+    permitNoModels: z.boolean().optional(),
     modelDeny: z.string(),
   })
   .transform((form, ctx) => {
@@ -161,12 +165,21 @@ export const GatewayPolicyForm = z
     }
     // Blank is no allowlist, which is not the same as one that permits
     // nothing. The two reach the contract as null and [].
-    const modelAllow = allow.length > 0 ? allow : null;
+    const modelAllow = form.permitNoModels
+      ? []
+      : allow.length > 0
+        ? allow
+        : null;
+    if (form.mode === "enforced" && modelAllow === null && deny.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mode"],
+        message: "modelListRequired",
+      });
+      return z.NEVER;
+    }
     return {
-      // Always `observed`. The handler refuses `enforced` while no bundle
-      // carries the clauses it would name, so the panel offers no choice and
-      // the form states the one value the contract accepts.
-      mode: "observed" as const,
+      mode: form.mode,
       sessionLimitUsd,
       modelAllow,
       modelDeny: deny,
@@ -184,6 +197,7 @@ export function gatewayFieldErrors(
       errors.sessionLimit = "sessionLimitInvalid";
     if (head === "modelAllow") errors.modelAllow = "modelPatternInvalid";
     if (head === "modelDeny") errors.modelDeny = "modelPatternInvalid";
+    if (head === "mode") errors.mode = "modelListRequired";
   }
   return errors;
 }

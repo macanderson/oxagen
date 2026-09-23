@@ -236,6 +236,10 @@ beforeEach(() => {
 
 describe("resolveDeliveryMode on the gateway tier", () => {
   it("delivers interrupt as interrupt where the model proxy can cut the call", () => {
+    expect(resolveDeliveryMode("interrupt", "contained")).toEqual({
+      deliveryMode: "interrupt",
+      degradedReason: null,
+    });
     expect(resolveDeliveryMode("interrupt", "gateway")).toEqual({
       deliveryMode: "interrupt",
       degradedReason: null,

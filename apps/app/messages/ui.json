@@ -71,6 +71,7 @@
       }
     },
     "enforcementTier": {
+      "contained": "contained by the registered launcher",
       "gateway": "observed at the gateway",
       "harness": "observed at the harness",
       "observe": "observed from the side"
