@@ -235,10 +235,24 @@ describe("the hub", () => {
       "data-agent",
       "release-manager",
     );
-    expect(screen.getByTestId("compiler-not-backed")).toHaveTextContent(
+    const gap = screen.getByTestId("compiler-not-backed");
+    expect(gap).toHaveTextContent(
       "Not recorded yet: one assembly for one agent and one prompt",
     );
+    expect(gap).toHaveTextContent("Tracked in #3297");
+    expect(gap).toHaveAttribute("data-issue", "3297");
   });
+
+  it.each(["memory", "ontology", "instructions"])(
+    "names what the %s shelf waits on and draws no figure",
+    async (shelf) => {
+      const calls = await renderSteering(`/${shelf}`);
+      const gap = screen.getByTestId(`${shelf}-not-backed`);
+      expect(gap).toHaveTextContent("Not recorded yet:");
+      expect(gap).toHaveAttribute("data-issue", "3830");
+      expect(calls.proposals).toEqual([]);
+    },
+  );
 
   it("keeps the freshness gates on Gates and reads them there only", async () => {
     const calls = await renderSteering("/gates");
@@ -419,6 +433,9 @@ describe("the Library, All shelf", () => {
     );
     expect(screen.getByTestId("library-gap")).toHaveTextContent(
       "Only records are read into this list today.",
+    );
+    expect(screen.getByTestId("library-gap")).toHaveTextContent(
+      "tracked in #3830",
     );
   });
 

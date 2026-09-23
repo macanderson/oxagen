@@ -7,16 +7,12 @@
       "gates": "Gates",
       "proposals": "Proposals",
       "compiler": "Compiler",
-      "records": "Records",
-      "settings": "Freshness gates",
-      "deliveries": "Delivery",
       "candidates": "Candidates",
       "prs": "Context PRs",
       "segments": "Proposals or pull requests"
     },
     "hub": {
-      "description": "Everything that can steer an agent in this workspace competes in one assembler.",
-      "count": "{count} waiting"
+      "description": "Everything that can steer an agent in this workspace competes in one assembler."
     },
     "shelves": {
       "label": "Library shelves",
@@ -87,7 +83,6 @@
       "grants": "Carry a grant",
       "grantsNote": "these compile to a gate as well as to text",
       "notRecorded": "not recorded",
-      "tok": "tok",
       "kindRecord": "record",
       "lead": "A shelf is a filter on this list, never a second list. The assembler reads exactly these items, in this order, and decides per run which of them a given agent is shown. Assignments says who receives what; the compiler shows one decision in full.",
       "planes": "Steering is what the model reads: advisory, ranked, budgeted, and it may be dropped. Gating is what gets refused: deterministic, never budgeted, never ranked. The Library, Assignments, and the Compiler are the text plane. Gates is the gate plane.",

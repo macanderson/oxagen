@@ -5081,16 +5081,12 @@ type Messages = {
       gates: string;
       proposals: string;
       compiler: string;
-      records: string;
-      settings: string;
-      deliveries: string;
       candidates: string;
       prs: string;
       segments: string;
     };
     hub: {
       description: string;
-      count: string;
     };
     shelves: {
       label: string;
@@ -5161,7 +5157,6 @@ type Messages = {
       grants: string;
       grantsNote: string;
       notRecorded: string;
-      tok: string;
       kindRecord: string;
       lead: string;
       planes: string;

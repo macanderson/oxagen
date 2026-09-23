@@ -29,6 +29,7 @@ import {
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { cell, numericCell, Table } from "@/ui/table";
+import { STEERING_GAPS } from "./gaps";
 import { Pager } from "./section";
 import { type SteeringAt, steeringLink } from "./view";
 
@@ -39,9 +40,6 @@ const FORCE_ORDER: Record<RecordForce, number> = {
   may: 2,
   info: 3,
 };
-
-/** The issue that tracks the steering registry the other shelves wait on. */
-export const LIBRARY_REGISTRY_ISSUE = 0;
 
 const note =
   "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground";
@@ -231,7 +229,7 @@ export function LibraryAll({
           />
           <p className={note}>{t("planes")}</p>
           <p className={note} data-testid="library-gap">
-            {t("gap", { issue: String(LIBRARY_REGISTRY_ISSUE) })}
+            {t("gap", { issue: String(STEERING_GAPS.registry) })}
           </p>
         </div>
       </section>
