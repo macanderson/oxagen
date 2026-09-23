@@ -22,6 +22,7 @@ import {
   providerCostUsdMicros,
   solveMeterMarkup,
   derivePricing,
+  FALLBACK_RATE_MODEL,
 } from "./pricing";
 import {
   ACTION_RATE_BANDS,
@@ -47,31 +48,77 @@ describe("resolveRate", () => {
 
   it("falls back to the configured fallback model for an unknown id", () => {
     expect(resolveRate("mistral-large-2")).toBe(
-      PROVIDER_RATE_CARD["claude-sonnet-5"],
+      PROVIDER_RATE_CARD[FALLBACK_RATE_MODEL],
     );
+    // The fallback floor stays at the $3/$15 it has always charged.
+    expect(resolveRate("mistral-large-2").outputPer1M).toBe(15.0);
   });
 
-  it("prices Claude Fable 5 at the Opus tier, not the Sonnet fallback", () => {
+  it("prices Claude Fable 5 at its own $10/$50 rate, not the Sonnet fallback", () => {
     // Fable is Anthropic's most capable model; without an explicit row it would
-    // resolve to the Sonnet fallback and under-charge. Both the bare and gateway
-    // (creator/model) forms must land on the Opus-tier $15/$75 rate.
+    // resolve to the Sonnet fallback and under-charge. The bare and gateway
+    // (creator/model) forms land on the same row.
     expect(resolveRate("claude-fable-5")).toBe(
       PROVIDER_RATE_CARD["claude-fable-5"],
     );
     expect(resolveRate("anthropic/claude-fable-5")).toBe(
-      PROVIDER_RATE_CARD["anthropic/claude-fable-5"],
+      PROVIDER_RATE_CARD["claude-fable-5"],
     );
-    expect(resolveRate("claude-fable-5").outputPer1M).toBe(75.0);
+    expect(resolveRate("claude-fable-5").outputPer1M).toBe(50.0);
+    expect(resolveRate("claude-fable-5").cachedInputPer1M).toBe(1.0);
   });
 
-  it("prices Claude Sonnet 5 explicitly at the Sonnet tier", () => {
+  it("prices Claude Fable 5.1 cache reads at its own $0.25 rate", () => {
+    for (const id of [
+      "claude-fable-5-1",
+      "anthropic/claude-fable-5-1",
+      "anthropic/claude-fable-5.1",
+    ]) {
+      expect(resolveRate(id), id).toBe(PROVIDER_RATE_CARD["claude-fable-5-1"]);
+    }
+    expect(resolveRate("claude-fable-5-1").cachedInputPer1M).toBe(0.25);
+  });
+
+  it("prices Claude Sonnet 5 explicitly at its $2/$10 rate", () => {
     expect(resolveRate("claude-sonnet-5")).toBe(
       PROVIDER_RATE_CARD["claude-sonnet-5"],
     );
     expect(resolveRate("anthropic/claude-sonnet-5")).toBe(
       PROVIDER_RATE_CARD["anthropic/claude-sonnet-5"],
     );
-    expect(resolveRate("claude-sonnet-5").outputPer1M).toBe(15.0);
+    expect(resolveRate("claude-sonnet-5").outputPer1M).toBe(10.0);
+  });
+
+  it("prices each Opus release at its own list price, whatever its spelling", () => {
+    // The `claude-opus-4` row prefixes every 4.x release, and until 2026-09-23
+    // it priced Opus 4.5 through 4.8 at the Opus 4 rate, three times their list
+    // price. The gateway's dotted spelling hyphenates onto the same rows.
+    const cases: ReadonlyArray<readonly [string, number, number]> = [
+      ["claude-opus-4-20250514", 15.0, 75.0],
+      ["claude-opus-4-1", 15.0, 75.0],
+      ["anthropic/claude-opus-4.1", 15.0, 75.0],
+      ["claude-opus-4-5-20251101", 5.0, 25.0],
+      ["claude-opus-4-6", 5.0, 25.0],
+      ["claude-opus-4-7", 5.0, 25.0],
+      ["claude-opus-4-8", 5.0, 25.0],
+      ["anthropic/claude-opus-4-8", 5.0, 25.0],
+      ["anthropic/claude-opus-4.8", 5.0, 25.0],
+      ["claude-opus-5", 5.0, 25.0],
+      ["anthropic/claude-opus-5", 5.0, 25.0],
+      ["claude-opus-5-5", 4.0, 20.0],
+      ["anthropic/claude-opus-5.5", 4.0, 20.0],
+    ];
+    for (const [id, input, output] of cases) {
+      const rate = resolveRate(id);
+      expect(rate.inputPer1M, id).toBe(input);
+      expect(rate.outputPer1M, id).toBe(output);
+    }
+    expect(resolveRate("claude-opus-5-5").cachedInputPer1M).toBe(0.2);
+  });
+
+  it("leaves the dotted names of other vendors' models alone", () => {
+    // gpt-5.5 and gpt-5 are separately priced products, keyed dotted.
+    expect(resolveRate("gpt-5.5")).toBe(PROVIDER_RATE_CARD["gpt-5.5"]);
   });
 
   it("matches the longest prefix for a versioned/date-stamped Sonnet 5 id", () => {
@@ -95,16 +142,15 @@ describe("providerCostUsd", () => {
     ).toBeCloseTo(0.06, 10);
   });
 
-  it("prices input + output at the Sonnet rate for claude-sonnet-5", () => {
-    // Same $3/$15 Sonnet-tier rate as claude-sonnet-4-6:
-    // 10k input @ $3/1M + 2k output @ $15/1M = 0.03 + 0.03 = $0.06
+  it("prices input + output at the Sonnet 5 rate", () => {
+    // 10k input @ $2/1M + 2k output @ $10/1M = 0.02 + 0.02 = $0.04
     expect(
       providerCostUsd({
         model: "claude-sonnet-5",
         inputTokens: 10_000,
         outputTokens: 2_000,
       }),
-    ).toBeCloseTo(0.06, 10);
+    ).toBeCloseTo(0.04, 10);
   });
 
   it("bills cached-input tokens at the cheaper cached rate", () => {

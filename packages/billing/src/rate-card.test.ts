@@ -30,13 +30,19 @@ describe("familyOf", () => {
 });
 
 describe("rateFor", () => {
-  it("prices Opus at the frontier rate", () => {
+  it("prices Opus 4.8 at its $5/$25 list price", () => {
     expect(rateFor("anthropic/claude-opus-4.8")).toEqual({
-      inputPer1M: 15.0,
-      outputPer1M: 75.0,
-      cachedInputPer1M: 1.5,
-      cacheWritePer1M: 18.75,
+      inputPer1M: 5.0,
+      outputPer1M: 25.0,
+      cachedInputPer1M: 0.5,
+      cacheWritePer1M: 6.25,
     });
+  });
+
+  it("prices Opus 4.1 at the original $15/$75, dotted or hyphenated", () => {
+    for (const slug of ["anthropic/claude-opus-4.1", "claude-opus-4-1"]) {
+      expect(rateFor(slug).outputPer1M, slug).toBe(75.0);
+    }
   });
 
   it("prices Sonnet distinctly from Opus", () => {
@@ -212,20 +218,22 @@ describe("entryFor", () => {
 
 describe("estimateCostUsd", () => {
   it("prices input and output tokens at the family rate", () => {
-    // 1M in @ $15 + 1M out @ $75 = $90 on Opus.
+    // 1M in @ $5 + 1M out @ $25 = $30 on Opus 4.8.
     expect(
       estimateCostUsd("anthropic/claude-opus-4.8", {
         inputTokens: 1_000_000,
         outputTokens: 1_000_000,
       }),
-    ).toBe(90);
+    ).toBe(30);
   });
 
   it("treats a missing direction as zero tokens", () => {
     expect(
-      estimateCostUsd("anthropic/claude-sonnet-5", { inputTokens: 1_000_000 }),
+      estimateCostUsd("anthropic/claude-sonnet-4.6", {
+        inputTokens: 1_000_000,
+      }),
     ).toBe(3);
-    expect(estimateCostUsd("anthropic/claude-sonnet-5", {})).toBe(0);
+    expect(estimateCostUsd("anthropic/claude-sonnet-4.6", {})).toBe(0);
   });
 
   it("prices cached-read tokens at the discounted rate, not the fresh-input rate", () => {
@@ -318,7 +326,7 @@ describe("projectCost", () => {
   it("prices the cached subset at the cache-read rate (does not overstate)", () => {
     // Anthropic Sonnet: fresh input 3/1M, cache-read 0.3/1M. Half the input
     // tokens are cache reads → 0.5M×3 + 0.5M×0.3 = 1.5 + 0.15 = 1.65.
-    const p = projectCost("anthropic/claude-sonnet-5", {
+    const p = projectCost("anthropic/claude-sonnet-4.6", {
       inputTokens: 1_000_000,
       cachedTokens: 500_000,
     });
@@ -328,7 +336,7 @@ describe("projectCost", () => {
   });
 
   it("omitting cachedTokens reproduces the full-price (pre-cache) number", () => {
-    const p = projectCost("anthropic/claude-sonnet-5", {
+    const p = projectCost("anthropic/claude-sonnet-4.6", {
       inputTokens: 1_000_000,
     });
     expect(p.cachedTokens).toBe(0);
@@ -341,7 +349,7 @@ describe("projectCost", () => {
       outputTokens: 120_000,
       cachedTokens: 600_000,
     };
-    const model = "anthropic/claude-sonnet-5";
+    const model = "anthropic/claude-sonnet-4.6";
     expect(projectCost(model, usage).totalUsd).toBeCloseTo(
       estimateCostUsd(model, usage),
       8,

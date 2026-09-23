@@ -95,8 +95,10 @@ describe("rate-card parity: the prices #1412 measured", () => {
   // existed. Every row but the three controls was metered at the Sonnet
   // fallback's $18.00.
   const MEASURED: ReadonlyArray<readonly [string, number]> = [
-    ["anthropic/claude-opus-4-8", 90.0],
-    ["anthropic/claude-sonnet-5", 18.0],
+    // The two Anthropic rows moved on 2026-09-23 to the list prices: Opus 4.8
+    // is $5/$25 and Sonnet 5 $2/$10.
+    ["anthropic/claude-opus-4-8", 30.0],
+    ["anthropic/claude-sonnet-5", 12.0],
     ["openai/gpt-4o", 12.5],
     ["openai/gpt-5", 11.25],
     ["openai/gpt-5-mini", 2.25],

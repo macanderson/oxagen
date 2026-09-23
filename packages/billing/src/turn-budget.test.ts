@@ -127,7 +127,7 @@ describe("evaluateTurnBudget", () => {
 describe("turnCostUsd", () => {
   it("prices cumulative usage via the rate card", () => {
     // 1M output tokens on a $75/1M output model = $75.
-    const cost = turnCostUsd("claude-opus-4-8", { outputTokens: 1_000_000 });
+    const cost = turnCostUsd("claude-opus-4-1", { outputTokens: 1_000_000 });
     expect(cost).toBeCloseTo(75, 5);
   });
 
@@ -136,7 +136,7 @@ describe("turnCostUsd", () => {
   // turnCostUsd could not accept the field, so it handed the same tokens over
   // as fresh input and the guard believed the turn cost less than the customer
   // was charged. A ceiling was permeable by exactly that gap.
-  const MODEL = "claude-opus-4-8";
+  const MODEL = "claude-opus-4-1";
   const charged = (usage: Parameters<typeof providerCostUsd>[0]) =>
     providerCostUsd(usage);
 
@@ -199,10 +199,10 @@ describe("createTurnBudgetGuard", () => {
 
   it("returns undefined when the budget is off", () => {
     expect(
-      createTurnBudgetGuard(policy({ enabled: false }), "claude-opus-4-8"),
+      createTurnBudgetGuard(policy({ enabled: false }), "claude-opus-4-1"),
     ).toBeUndefined();
     expect(
-      createTurnBudgetGuard(policy({ limitUsd: 0 }), "claude-opus-4-8"),
+      createTurnBudgetGuard(policy({ limitUsd: 0 }), "claude-opus-4-1"),
     ).toBeUndefined();
   });
 
@@ -210,7 +210,7 @@ describe("createTurnBudgetGuard", () => {
     const onStop = vi.fn();
     const guard = createTurnBudgetGuard(
       policy({ mode: "enforce", limitUsd: 10 }),
-      "claude-opus-4-8",
+      "claude-opus-4-1",
       { onStop },
     )!;
     expect(await guard({ outputTokens: 100_000 })).toBe("continue"); // $7.5 < $10
@@ -226,7 +226,7 @@ describe("createTurnBudgetGuard", () => {
     const onPause = vi.fn().mockResolvedValue(true);
     const guard = createTurnBudgetGuard(
       policy({ mode: "prompt", limitUsd: 50 }),
-      "claude-opus-4-8",
+      "claude-opus-4-1",
       { onPause },
     )!;
     // $75 > $50 → pause; approval grants another $50 window (ceiling → 75+50=125)
@@ -242,7 +242,7 @@ describe("createTurnBudgetGuard", () => {
     const onStop = vi.fn();
     const guard = createTurnBudgetGuard(
       policy({ mode: "prompt", limitUsd: 50 }),
-      "claude-opus-4-8",
+      "claude-opus-4-1",
       { onPause, onStop },
     )!;
     expect(await guard(million)).toBe("stop");
@@ -254,7 +254,7 @@ describe("createTurnBudgetGuard", () => {
     const onPause = vi.fn().mockResolvedValue(true);
     const guard = createTurnBudgetGuard(
       policy({ mode: "prompt", limitUsd: 50 }),
-      "claude-opus-4-8",
+      "claude-opus-4-1",
       { onTick, onPause },
     )!;
     await guard({ outputTokens: 100_000 }); // $7.5, continue
@@ -272,7 +272,7 @@ describe("createTurnBudgetGuard", () => {
     // limit $70, +25% cushion → hard ceiling $87.50
     const guard = createTurnBudgetGuard(
       policy({ mode: "grace", limitUsd: 70, graceOveragePct: 0.25 }),
-      "claude-opus-4-8",
+      "claude-opus-4-1",
       { onWithinGrace, onStop },
     )!;
     expect(await guard(million)).toBe("continue"); // $75: over $70, within $87.50

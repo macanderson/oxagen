@@ -59,7 +59,8 @@ describe("cost projection", () => {
     });
     const p = JSON.parse(out) as { totalUsd: number; vendor: string };
     expect(p.vendor).toBe("anthropic");
-    expect(p.totalUsd).toBeCloseTo(15);
+    // Opus 4.8 lists at $5 per million input tokens.
+    expect(p.totalUsd).toBeCloseTo(5);
   });
 
   it("errors when no token counts are given", () => {

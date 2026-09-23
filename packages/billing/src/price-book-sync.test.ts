@@ -103,7 +103,7 @@ describe("syncPriceBookFromSources", () => {
     expect(write.seeds.length).toBeGreaterThan(0);
     expect(
       seedFor(write.seeds, "claude-sonnet-5", "input_uncached"),
-    ).toMatchObject({ microsPerMillion: 3_000_000n, provider: "anthropic" });
+    ).toMatchObject({ microsPerMillion: 2_000_000n, provider: "anthropic" });
     expect(report.models).toBe(CARD_MODELS);
     expect(report.counts.in_code_card).toBe(CARD_MODELS);
     expect(report.failures.map((f) => f.source).sort()).toEqual([
@@ -253,7 +253,7 @@ describe("syncPriceBookFromSources", () => {
     expect(report.models).toBe(CARD_MODELS);
     expect(write.seeds.length).toBeGreaterThan(0);
     expect(seedFor(write.seeds, "claude-fable-5", "output")).toMatchObject({
-      microsPerMillion: 75_000_000n,
+      microsPerMillion: 50_000_000n,
     });
   });
 
@@ -300,7 +300,7 @@ describe("syncPriceBookFromSources", () => {
       write: write.write,
     });
 
-    // The operator's rate, not the card's $3 and not the catalog's $9.
+    // The operator's rate, not the card's $2 and not the catalog's $9.
     expect(
       seedFor(write.seeds, "claude-sonnet-5", "input_uncached")
         ?.microsPerMillion,
