@@ -258,6 +258,16 @@ describe("the spine", () => {
     await expectNoAxe(container);
   });
 
+  it("does not claim absence when the empty read was cut", () => {
+    renderSpine(readOk(runOutputs([], { complete: false })));
+    expect(screen.getByTestId("run-outputs")).toHaveTextContent(
+      "the spine ends early",
+    );
+    expect(screen.getByTestId("run-outputs")).not.toHaveTextContent(
+      "No file or output evidence was captured",
+    );
+  });
+
   it("says the spine ends early when the read was cut", () => {
     renderSpine(readOk(runOutputs([runOutputNode()], { complete: false })));
     expect(screen.getByTestId("run-outputs")).toHaveTextContent(

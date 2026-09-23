@@ -15,8 +15,10 @@ import { isFindingId } from "./forms";
  */
 export const SPEND_TABS = [
   "findings",
+  "tokens",
   "operator",
   "agent",
+  "model",
   "tool",
   "task",
   "cost_center",

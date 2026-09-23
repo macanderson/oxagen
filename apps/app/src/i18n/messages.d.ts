@@ -2666,6 +2666,7 @@ type Messages = {
       empty: string;
       catalog: {
         title: string;
+        open: string;
         lead: string;
         covers: string;
       };
@@ -4502,6 +4503,8 @@ type Messages = {
       waste: string;
       budgets: string;
       pricing: string;
+      model: string;
+      tokens: string;
     };
     actions: {
       exportReport: string;
@@ -4941,6 +4944,24 @@ type Messages = {
         failed: string;
       };
     };
+    tokens: {
+      title: string;
+      note: string;
+      class: string;
+      count: string;
+      share: string;
+      input_uncached: string;
+      cache_read: string;
+      cache_write: string;
+      output: string;
+      reasoning: string;
+      total: string;
+      cacheHit: string;
+      cacheNote: string;
+      byModel: string;
+      model: string;
+      basis: string;
+    };
   };
   steering: {
     tabs: {
@@ -4950,6 +4971,7 @@ type Messages = {
       proposals: string;
       prs: string;
       settings: string;
+      deliveries: string;
     };
     failure: {
       denied: string;
@@ -5129,6 +5151,30 @@ type Messages = {
     create: {
       skill: string;
       record: string;
+    };
+    deliveries: {
+      title: string;
+      lead: string;
+      empty: string;
+      sample: string;
+      truncated: string;
+      run: string;
+      included: string;
+      cut: string;
+      budgetCuts: string;
+      tokens: string;
+      unreached: string;
+      unreachedLead: string;
+      record: string;
+      runs: string;
+      reason: string;
+      noUnreached: string;
+      reasons: {
+        budget: string;
+        tier: string;
+        superseded: string;
+        unknown: string;
+      };
     };
   };
   tools: {

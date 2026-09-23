@@ -1,3 +1,4 @@
+import { HarnessLabel } from "@/ui/harness-icon";
 import { useLocale, useTranslations } from "next-intl";
 import type { RunMachine, RunModel, RunRow } from "@/data/contracts/runs";
 import type { OrgRole, WsRole } from "@/server/viewer";
@@ -307,7 +308,11 @@ export function RunHeader({
         />
         <Fact
           label={t("facts.harness")}
-          value={run.harness?.name || <NoValue />}
+          value={
+            <HarnessLabel harness={run.harness?.name}>
+              {run.harness?.name || <NoValue />}
+            </HarnessLabel>
+          }
           detail={
             run.harness?.version
               ? t("facts.harnessVersion", { version: run.harness.version })

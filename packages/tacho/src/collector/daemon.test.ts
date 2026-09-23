@@ -1366,6 +1366,31 @@ describe("tachod", () => {
     },
   );
 
+  it("does not grow the guessed backoff while the server names the wait", async () => {
+    // A wait the server names is its answer, not a failure of our guess.
+    // Doubling on it would leave the next unhinted outage starting at 4 s.
+    const plane = fakeControlPlane("etag-429-then-503");
+    let clock = 1_000_000;
+    const { handle, log } = await boot(plane, scratchPaths(), {
+      now: () => clock,
+    });
+    const lastFailure = () =>
+      log.filter((l) => l.includes("command poll failed")).at(-1);
+
+    plane.refuseCommandsWith({
+      status: 429,
+      body: '{"error":"rate_limited"}',
+      headers: { "retry-after": "20" },
+    });
+    await handle.tick();
+    expect(lastFailure()).toMatch(/retrying in 20s/);
+
+    plane.refuseCommandsWith({ status: 503, body: "unavailable" });
+    clock += 21_000;
+    await handle.tick();
+    expect(lastFailure()).toMatch(/2 in a row, retrying in 2s/);
+  });
+
   it("parks the command poll for 15 minutes on a wire mismatch and keeps shipping events", async () => {
     // The regression this guards: on 2026-09-18 a daemon sending
     // `tacho.commands.v1` polled a control plane that requires v2. Every poll

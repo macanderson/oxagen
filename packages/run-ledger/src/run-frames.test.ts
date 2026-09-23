@@ -159,6 +159,7 @@ describe("run frame projection", () => {
 
   it("names a stage for every wrapped kind and reads the ClickHouse timestamp as UTC", () => {
     expect(tachoStage("llm_call")).toBe("model");
+    expect(tachoStage("steering.manifest")).toBe("model");
     expect(tachoStage("policy_decision")).toBe("policy");
     expect(tachoStage("oxagen:compaction")).toBe("control");
     expect(tachoStage("telemetry_gap")).toBe("chain");

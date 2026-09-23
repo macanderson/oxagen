@@ -58,7 +58,18 @@ const OperatorFacts = z.object({
 });
 type OperatorFacts = z.infer<typeof OperatorFacts>;
 
+/** Normalized token classes already returned by get_spend. */
+const SpendTokens = z.object({
+  input_uncached: Count,
+  cache_read: Count,
+  cache_write_5m: Count,
+  cache_write_1h: Count,
+  output: Count,
+  reasoning: Count,
+});
+
 const SpendRow = SpendFigure.extend({
+  tokens: SpendTokens,
   /** A principal public id, an agent key, a model id, a tool name, a task reference or a cost-center label. */
   key: z.string().min(1),
   /** The model's provider on a model row; null elsewhere. */

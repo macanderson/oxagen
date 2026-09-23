@@ -400,6 +400,7 @@ export function tachoStage(kind: string): string {
     case "model.request":
     case "model.response":
     case "context.assembled":
+    case "steering.manifest":
       return "model";
     case "tool_requested":
     case "tool_call":
@@ -648,6 +649,9 @@ const RECALL_TYPES: ReadonlySet<string> = new Set([
   "context.frames_selected",
   "context.instructions_applied",
   "context.assembled",
+  // What the assembler put in front of a wrapped agent at its start, and
+  // what it cut (ADR-093).
+  "steering.manifest",
 ]);
 /** Tool outcomes that record a call that did not do what it was asked to. */
 const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
