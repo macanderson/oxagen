@@ -168,6 +168,7 @@ export function toolsSource(reads: ToolsReads) {
         : Promise.resolve(read);
     };
   const source: DataSource = {
+    runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: { context: refuse, preferences: refuse },
     billing: {

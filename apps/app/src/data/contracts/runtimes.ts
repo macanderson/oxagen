@@ -18,17 +18,11 @@ import { PublicId } from "./common";
 const Instant = z.iso.datetime({ offset: true });
 const Count = z.number().int().nonnegative();
 
-export const RuntimePlatform = z.enum(["darwin", "linux", "win32"]);
+const RuntimePlatform = z.enum(["darwin", "linux", "win32"]);
 export type RuntimePlatform = z.infer<typeof RuntimePlatform>;
 
 /** The enrollment's recorded status. `expired` is not a stored value: the page judges it from `expiresAt`. */
-export const RuntimeStatus = z.enum([
-  "active",
-  "paused",
-  "suspended",
-  "revoked",
-]);
-export type RuntimeStatus = z.infer<typeof RuntimeStatus>;
+const RuntimeStatus = z.enum(["active", "paused", "suspended", "revoked"]);
 
 /**
  * Where the harness sends its model calls, as the daemon last reported its
@@ -37,7 +31,7 @@ export type RuntimeStatus = z.infer<typeof RuntimeStatus>;
  * daemon reported nothing, which is a daemon older than the report, never a
  * harness that has not drifted.
  */
-export const ModelRoute = z.enum(["loopback", "direct"]);
+const ModelRoute = z.enum(["loopback", "direct"]);
 export type ModelRoute = z.infer<typeof ModelRoute>;
 
 export const RuntimeEnrollment = z.object({

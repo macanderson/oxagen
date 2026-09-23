@@ -341,7 +341,7 @@ function RollbackPanel({
 }
 
 /** The loaded detail, below the page header. */
-export function RuntimeLoaded({
+function RuntimeLoaded({
   host,
   agents,
   org,

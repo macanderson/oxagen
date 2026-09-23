@@ -790,6 +790,24 @@
         }
       ]
     },
+    "list_tacho_hosts": {
+      "route": "/[org]/[ws]/runtimes",
+      "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
+      "entry": "/[org]/[ws]/runtimes — the Enrolled hosts table, the stat tiles and one runtime's host panel (data/live/runtimes.ts, features/runtimes/runtimes.tsx, features/runtimes/runtime.tsx)",
+      "testid": "runtime-row",
+      "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
+      "verifiedAt": "2026-09-23",
+      "verifiedBy": "session_01Hrw12deH1TbfC8FY9cKSre runtimes lane",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runtimes/[runtime]",
+          "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
+          "entry": "/[org]/[ws]/runtimes/[runtime] — the host panel of one enrollment (features/runtimes/runtime.tsx)",
+          "testid": "fact-collector",
+          "proof": "apps/app/src/features/runtimes/runtimes.test.tsx"
+        }
+      ]
+    },
     "list_tool_versions": {
       "route": "/[org]/[ws]/tools",
       "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
@@ -1046,7 +1064,16 @@
       "testid": "revoke-host",
       "proof": "apps/app/src/features/agents/enrollment-controls.test.tsx",
       "verifiedAt": "2026-09-20",
-      "verifiedBy": "mc-3-enrollment"
+      "verifiedBy": "mc-3-enrollment",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runtimes/[runtime]",
+          "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
+          "entry": "/[org]/[ws]/runtimes/[runtime] — Unenroll on the Rollback panel, confirmed in a dialog naming the host and the agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
+          "testid": "runtime-unenroll",
+          "proof": "apps/app/src/features/runtimes/runtimes.test.tsx"
+        }
+      ]
     },
     "rotate_agent_credential": {
       "route": "/[org]/[ws]/agents/[agent]",

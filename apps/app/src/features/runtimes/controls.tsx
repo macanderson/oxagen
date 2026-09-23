@@ -8,7 +8,8 @@
 // prints the command. Three controls the design draws have no capability behind
 // them: Request access, Open an incident and Run a smoke session. Each opens a
 // dialog that says what the product would do and that nothing records it yet,
-// rather than a button that silently does nothing.
+// rather than a button that silently does nothing: Request access is #3820,
+// Open an incident #3821, Run a smoke session #3819.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import { routes } from "@/shared/safe-path";
@@ -175,7 +176,9 @@ export function SmokeSession({ hostname }: { hostname: string }) {
       title={t("stub.smokeTitle")}
       testId="runtime-smoke"
     >
-      <p data-not-backed="smoke">{t("stub.smokeBody", { hostname })}</p>
+      <p data-not-backed="smoke" data-gap="#3819">
+        {t("stub.smokeBody", { hostname })}
+      </p>
     </DialogButton>
   );
 }

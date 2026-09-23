@@ -27,21 +27,21 @@ import {
  * issue on macanderson/oxagen, carried as `data-gap` so a reader of the DOM
  * can find the change that fills it.
  */
-export const GAPS = {
+const GAPS = {
   /** A host row per machine, and the host kind: enrollment is per agent. */
-  host: "#3811",
+  host: "#3816",
   /** The tier rolled up per host from the per-run values. */
-  tier: "#3812",
+  tier: "#3817",
   /** The collector's telemetry gap count over 24 hours. */
-  gaps: "#3813",
+  gaps: "#3818",
   /** The settings file the installer wrote, read back at check-in. */
-  hooks: "#3813",
+  hooks: "#3818",
   /** The frame chain's last checkpoint per host. */
-  checkpoint: "#3812",
+  checkpoint: "#3817",
   /** Starting a smoke session on a host from the console. */
-  smoke: "#3814",
+  smoke: "#3819",
 } as const;
-export type GapKey = keyof typeof GAPS;
+type GapKey = keyof typeof GAPS;
 
 /** A value no store records yet, with the gap that would record it. */
 export function NotBacked({
@@ -175,7 +175,7 @@ export function Sub({
   );
 }
 
-export type Health = RuntimeEnrollment["status"] | "expired";
+type Health = RuntimeEnrollment["status"] | "expired";
 
 /**
  * The enrollment's recorded status, or `expired` when its expiry has passed
