@@ -27,6 +27,7 @@ const ctx = unsafeMint(OrgCtx, {
 const context = vi.fn();
 const preferences = vi.fn();
 const source = {
+  runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context, preferences },
   billing: {
@@ -86,6 +87,7 @@ const source = {
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),
+    hub: vi.fn(),
     deliveries: vi.fn(),
   },
   tools: {
@@ -96,6 +98,7 @@ const source = {
     connections: vi.fn(),
     mcpServers: vi.fn(),
   },
+  runtimes: { list: vi.fn(), agents: vi.fn() },
 };
 const listed = readOk({
   orgs: [{ slug: "acme", name: "Acme Robotics" }],

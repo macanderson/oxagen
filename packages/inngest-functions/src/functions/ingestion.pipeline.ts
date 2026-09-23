@@ -32,11 +32,11 @@ import { logger } from "../logger";
  *                              A record dropped by any filter short-circuits the
  *                              pipeline (no dedup / upsert / embed / infer).
  * Step 2: dedup-pass-a        exact naturalKey MATCH in Neo4j
- * Step 3: dedup-pass-b        embedding similarity (stub: always created_principal until
- *                              vector index is queryable from ingestion context)
+ * Step 3: dedup-pass-b        embedding similarity on entity_node_embedding_index;
+ *                              a match writes an ALIAS_OF edge to the principal
  * Step 4: upsert-node         MERGE :EntityNode in Neo4j
  * Step 5: embed               embed text and store the vector on the node.
- * Step 6: schedule-event      fire ingestion/entity.created or entity.updated
+ * Step 6: schedule-change-event  fire ingestion/entity.created or entity.updated
  *                              for downstream trigger matching.
  *
  * Neither embedding call can fail the run. Steps 3 and 5 both talk to the

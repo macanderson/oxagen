@@ -1,7 +1,7 @@
 # ADR-019: Unified agent engine — one brain across CLI and platform
 
 **Status:** Accepted (2026-06-27)
-**Supersedes (in part):** the narrow "share only the inner loop + tools" scope of `docs/superpowers/plans/2026-06-27-in-app-coding-agent-phase1.md`
+**Supersedes (in part):** the narrow "share only the inner loop + tools" scope of `docs/superpowers/plans/2026-06-27-in-app-coding-agent-phase1.md` (removed 2026-09-23, #3895; git history keeps it)
 **Related:** ADR-007 (docker sandbox), ADR-011 (Vercel sandbox driver), ADR-009 (unified capability-tool model), ADR-010 (subagent fan-out via Inngest), ADR-016 (CLI daemon live code-graph)
 
 ## Context

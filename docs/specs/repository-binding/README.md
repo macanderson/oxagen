@@ -6,7 +6,7 @@
 | **Date** | 2026-09-17 |
 | **Surface** | `apps/app` · `apps/api` · `apps/mcp` · `apps/cli` · `packages/handlers` · `packages/oxagen` |
 | **Design** | `macanderson/tmp-oxagen-mockups` → `mockups/pages/repositories.md`, `mockups/src/engine.js` → `pRepos()` / `wzInit()`; rendered in `mockups/missioncontrol.html#/a-intel/core-platform/repositories` |
-| **Builds on** | ADR-043 (Oxagen governs, it does not run) · ADR-061 (Context PRs) · ADR-020 (the token chain) · MC spec §10 (the repository, steering and Context PRs), §11.2 (GitHub events and the code graph) · `docs/specs/steering/README.md` · `docs/specs/oxagen-workspace-config/design.md` |
+| **Builds on** | ADR-043 (Oxagen governs, it does not run) · ADR-061 (Context PRs) · ADR-020 (the token chain) · MC spec §10 (the repository, steering and Context PRs), §11.2 (GitHub events and the code graph) · `docs/specs/steering/README.md` · `oxagen-roadmap:docs/oxagen/specs/oxagen-workspace-config/design.md` |
 | **Job it serves** | `govern` — the mandate's Record clause. What is in force is what a named reviewer merged. |
 
 ## 1. The problem
@@ -53,7 +53,7 @@ write a file into `.oxagen/` but cannot account for the directory it writes into
 
 There is also a **file-name collision** waiting in the tree. MC spec §10.1 says the
 committed configuration file is `.oxagen/workspace.toml`;
-`docs/specs/oxagen-workspace-config/design.md` specifies a CLI-local
+`oxagen-roadmap:docs/oxagen/specs/oxagen-workspace-config/design.md` specifies a CLI-local
 `.oxagen/workspace.json` carrying the tenant link and resolved settings, and
 `apps/cli/src/commands/workspace-link.ts` already writes it. Two files one name apart,
 one reviewed and one not, and nothing today says which is which.
@@ -273,7 +273,7 @@ Each phase is shippable and leaves the gate green.
 
 **Not in scope.** Ontology pull requests (`v2/propose_ontology_version` is an inert
 descriptor). The `oxagen config` interview from
-`docs/specs/oxagen-workspace-config/design.md` phases 4–6 — that document's `workspace.json`
+`oxagen-roadmap:docs/oxagen/specs/oxagen-workspace-config/design.md` phases 4–6 — that document's `workspace.json`
 is the gitignored local file, and §2.1 fixes which is which, but its resolver and interview
 agent are their own body of work.
 

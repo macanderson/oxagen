@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
+import { getAuthUser } from "@/features/auth";
 import { Billing } from "@/features/billing";
-import { getAuthUser } from "@/server/session";
 import { requireViewer } from "@/server/viewer";
 import { firstParam } from "@/shared/safe-path";
 

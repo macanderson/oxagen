@@ -58,6 +58,7 @@ async function renderRoles(
   const roles = vi.fn<Read>().mockResolvedValue(read);
   const sso = vi.fn<SsoRead>().mockResolvedValue(ssoRead);
   const source = {
+    runtimes: { list: vi.fn(), agents: vi.fn() },
     pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
     shell: { context: vi.fn(), preferences: vi.fn() },
     billing: {
@@ -117,6 +118,7 @@ async function renderRoles(
       proposals: vi.fn(),
       contextPr: vi.fn(),
       freshness: vi.fn(),
+      hub: vi.fn(),
       deliveries: vi.fn(),
     },
     tools: {
@@ -127,6 +129,7 @@ async function renderRoles(
       connections: vi.fn(),
       mcpServers: vi.fn(),
     },
+    runtimes: { list: vi.fn(), agents: vi.fn() },
   };
   const view = render(
     <IntlProvider>{await Roles({ ctx, source })}</IntlProvider>,
