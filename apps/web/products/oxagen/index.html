@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Oxagen: agent control plane and agent fleet management</title>
-<meta name="description" content="See which agent spent what, and on whose behalf. Oxagen prices the model calls routed through it and attributes each one to the operator, answers an agent's request for a system or an action with the decision rules you wrote, routes matching requests to a person, and records every run frame by frame. The agent never receives a connection credential.">
+<title>Oxagen: the agent control plane</title>
+<meta name="description" content="See which agent spent what, and on whose behalf. A rule you wrote answers each agent request routed through Oxagen, and Oxagen records each run step by step. Works with Claude Code, Codex, Cursor, and Stella.">
 <link rel="canonical" href="https://oxagen.sh/products/oxagen">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090B">
@@ -13,12 +13,12 @@
 <meta property="og:url" content="https://oxagen.sh/products/oxagen">
 <meta property="og:site_name" content="Oxagen">
 <meta property="og:title" content="See which agent spent what, and on whose behalf.">
-<meta property="og:description" content="A request routed through Oxagen meets the rules you wrote. Every recorded run kept frame by frame. Routed spend attributed and reconciled to the cent.">
+<meta property="og:description" content="A rule you wrote answers each request routed through Oxagen. Oxagen records each run step by step and adds up spend by person, agent, and run.">
 <meta property="og:image" content="https://oxagen.sh/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@oxagenai">
 <meta name="twitter:title" content="See which agent spent what, and on whose behalf.">
-<meta name="twitter:description" content="The agent asks, a rule you wrote answers, and the connection credential never moves. Every dollar routed through Oxagen is attributed and reconciled to the cent.">
+<meta name="twitter:description" content="An agent asks. A rule you wrote answers. Oxagen records the answer and the cost. Works with Claude Code, Codex, Cursor, and Stella.">
 <meta name="twitter:image" content="https://oxagen.sh/og.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any">
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
@@ -55,7 +55,6 @@
 .hero-sub{margin:20px 0 30px;color:var(--ink-3);font-size:clamp(16px,1.7vw,18.5px);max-width:52ch}
 .hero-sub strong{color:var(--ink);font-weight:560}
 .hero-ctas{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-.hero-note{margin-top:15px;font-size:13.5px;color:var(--ink-3)}
 
 /* hero: an approval, with the four hops behind it */
 .p-appr{border:1px dashed var(--ink-3)}
@@ -169,13 +168,17 @@
 .p-ask{display:grid;gap:8px;padding:12px 14px;border:1px solid var(--rule);border-radius:var(--r);background:var(--panel)}
 .p-ask p{font-size:15px}
 
+/* supported agents */
+#support .matrix-wrap{margin-top:4px}
+
 /* the rest of the list */
 .p-more{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
 @media (max-width:1060px){.p-more{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:620px){.p-more{grid-template-columns:1fr}}
 .p-more .card{display:flex;flex-direction:column;padding:20px}
 .p-more .card h3{font-size:16.5px;margin:10px 0 8px}
-.p-mini{margin-top:auto;padding-top:16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--faint)}
+.p-mini{margin-top:auto;padding-top:16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--ink-3)}
+.p-next{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .p-nest{margin-top:auto;padding-top:16px}
 .p-nest span{display:block;padding:5px 6px 0;border:1px solid var(--rule);border-radius:7px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--ink-3)}
 .p-nest span span{margin-top:5px}
@@ -190,7 +193,7 @@
 <header class="nav" id="nav">
   <div class="nav-in">
     <a class="brand" href="/" aria-label="Oxagen home">
-      <svg viewBox="0 0 453.868 93.246" role="img" aria-label="oxagen"><path d="M33.9083 68.758Q24.1657 68.758 16.4786 64.7737Q8.79142 60.7894 4.39571 53.2965Q0 45.8035 0 35.3862V33.3718Q0 22.9544 4.39571 15.4615Q8.79142 7.96854 16.4786 3.98427Q24.1657 0 33.9083 0Q43.6509 0 51.3381 3.98427Q59.0252 7.96854 63.4209 15.4615Q67.8166 22.9544 67.8166 33.3718V35.3862Q67.8166 45.8035 63.4209 53.2965Q59.0252 60.7894 51.3381 64.7737Q43.6509 68.758 33.9083 68.758ZM33.9083 55.3486Q42.1895 55.3486 47.4689 50.0198Q52.7484 44.691 52.7484 35.0142V33.7437Q52.7484 24.067 47.5233 18.7382Q42.2981 13.4094 33.9083 13.4094Q25.6502 13.4094 20.3592 18.7382Q15.0683 24.067 15.0683 33.7437V35.0142Q15.0683 44.691 20.3592 50.0198Q25.6502 55.3486 33.9083 55.3486Z M176.569 68.758Q169.637 68.758 164.119 66.3453Q158.601 63.9327 155.387 59.2935Q152.173 54.6542 152.173 48.0088Q152.173 41.3403 155.387 36.8558Q158.601 32.3712 164.27 30.1017Q169.94 27.8323 177.174 27.8323H196.047V23.8925Q196.047 18.7316 192.874 15.5274Q189.701 12.3232 182.99 12.3232Q176.411 12.3232 173.049 15.3842Q169.686 18.4452 168.627 23.3593L154.691 18.7315Q156.27 13.6133 159.748 9.39702Q163.225 5.18071 169.049 2.59035Q174.874 0 183.208 0Q195.972 0 203.326 6.42816Q210.681 12.8563 210.681 24.9392V50.4707Q210.681 54.4204 214.368 54.4204H219.795V66.9148H209.197Q204.464 66.9148 201.442 64.5334Q198.42 62.1521 198.42 58.1563V57.8864H196.126Q195.392 59.6967 193.399 62.2985Q191.406 64.9004 187.388 66.8292Q183.369 68.758 176.569 68.758ZM179.05 56.4348Q186.581 56.4348 191.314 52.1592Q196.047 47.8837 196.047 40.6031V39.2405H178.175Q173.175 39.2405 170.208 41.3881Q167.241 43.5358 167.241 47.5513Q167.241 51.5668 170.34 54.0008Q173.439 56.4348 179.05 56.4348Z M227.767 34.6423V32.6279Q227.767 22.3817 231.86 15.0863Q235.953 7.79081 242.768 3.8954Q249.582 0 257.706 0Q266.935 0 271.762 3.33256Q276.589 6.66512 278.81 10.4107H281.042V1.8432H295.801V79.33Q295.801 85.6989 292.104 89.4725Q288.408 93.2462 282.079 93.2462H238.369V80.0541H277.023Q280.779 80.0541 280.779 76.1043V57.2775H278.547Q277.161 59.5683 274.665 61.8904Q272.168 64.2125 268.057 65.7414Q263.946 67.2702 257.706 67.2702Q249.582 67.2702 242.756 63.3748Q235.93 59.4794 231.848 52.1724Q227.767 44.8655 227.767 34.6423ZM261.938 54.0781Q270.151 54.0781 275.573 48.8612Q280.996 43.6443 280.996 34.2704V32.9999Q280.996 23.4943 275.627 18.3432Q270.259 13.1921 261.938 13.1921Q253.749 13.1921 248.315 18.3432Q242.881 23.4943 242.881 32.9999V34.2704Q242.881 43.6443 248.315 48.8612Q253.749 54.0781 261.938 54.0781Z M344.764 68.758Q334.998 68.758 327.583 64.6108Q320.167 60.4636 316.031 52.9048Q311.896 45.346 311.896 35.1689V33.589Q311.896 23.3889 315.977 15.8416Q320.059 8.2944 327.397 4.1472Q334.735 0 344.385 0Q353.881 0 360.956 4.1867Q368.031 8.37341 371.981 15.8515Q375.931 23.3297 375.931 33.2895V38.6974H327.181Q327.468 46.3334 332.587 50.9496Q337.707 55.5658 345.198 55.5658Q352.522 55.5658 356.101 52.3534Q359.681 49.141 361.553 45.0629L373.985 51.4813Q372.119 55.0656 368.63 59.1042Q365.141 63.1428 359.394 65.9504Q353.648 68.758 344.764 68.758ZM327.313 27.2892H360.622Q360.095 20.7986 355.7 16.9954Q351.304 13.1921 344.277 13.1921Q337.055 13.1921 332.691 16.9954Q328.327 20.7986 327.313 27.2892Z M391.548 66.9148V1.8432H406.353V10.9769H408.585Q410.303 7.25429 414.832 3.99908Q419.361 0.743866 428.435 0.743866Q435.956 0.743866 441.695 4.12911Q447.434 7.51435 450.651 13.5903Q453.868 19.6663 453.868 27.9442V66.9148H438.8V29.1226Q438.8 21.1969 434.891 17.3492Q430.983 13.5015 423.9 13.5015Q415.872 13.5015 411.244 18.8237Q406.617 24.146 406.617 33.9445V66.9148Z" fill="currentColor"/><path d="M73.9979 66.9148 98.2261 34.0696 74.3764 1.8432H91.9626L107.9 24.3499H110.131L126.068 1.8432H143.654L119.805 34.0696L144.033 66.9148H126.206L110.131 44.0065H107.9L91.8244 66.9148Z" fill="#D4AF37"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 604.125 115.625" role="img" aria-label="oxagen"><g transform="translate(21.575,22.616) scale(3.437130)"><g data-mark="hive"><path d="M0.000 -6.080L5.800 -3.040L5.800 3.040L0.000 6.080L-5.800 3.040L-5.800 -3.040Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M13.080 -6.080L18.880 -3.040L18.880 3.040L13.080 6.080L7.280 3.040L7.280 -3.040Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M6.540 4.160L12.340 7.200L12.340 13.280L6.540 16.320L0.740 13.280L0.740 7.200Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M19.620 3.660L25.897 6.950L25.897 13.530L19.620 16.820L13.343 13.530L13.343 6.950Z" fill="#D4AF37"/><path d="M0.000 13.900L6.277 17.190L6.277 23.770L0.000 27.060L-6.277 23.770L-6.277 17.190Z" fill="#D4AF37" opacity="0.55"/><path d="M13.080 14.400L18.880 17.440L18.880 23.520L13.080 26.560L7.280 23.520L7.280 17.440Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/></g></g><g transform="translate(150.257,11.190)"><path class="letters" d="M33.9083 68.758Q24.1657 68.758 16.4786 64.7737Q8.79142 60.7894 4.39571 53.2965Q0 45.8035 0 35.3862V33.3718Q0 22.9544 4.39571 15.4615Q8.79142 7.96854 16.4786 3.98427Q24.1657 0 33.9083 0Q43.6509 0 51.3381 3.98427Q59.0252 7.96854 63.4209 15.4615Q67.8166 22.9544 67.8166 33.3718V35.3862Q67.8166 45.8035 63.4209 53.2965Q59.0252 60.7894 51.3381 64.7737Q43.6509 68.758 33.9083 68.758ZM33.9083 55.3486Q42.1895 55.3486 47.4689 50.0198Q52.7484 44.691 52.7484 35.0142V33.7437Q52.7484 24.067 47.5233 18.7382Q42.2981 13.4094 33.9083 13.4094Q25.6502 13.4094 20.3592 18.7382Q15.0683 24.067 15.0683 33.7437V35.0142Q15.0683 44.691 20.3592 50.0198Q25.6502 55.3486 33.9083 55.3486Z M176.569 68.758Q169.637 68.758 164.119 66.3453Q158.601 63.9327 155.387 59.2935Q152.173 54.6542 152.173 48.0088Q152.173 41.3403 155.387 36.8558Q158.601 32.3712 164.27 30.1017Q169.94 27.8323 177.174 27.8323H196.047V23.8925Q196.047 18.7316 192.874 15.5274Q189.701 12.3232 182.99 12.3232Q176.411 12.3232 173.049 15.3842Q169.686 18.4452 168.627 23.3593L154.691 18.7315Q156.27 13.6133 159.748 9.39702Q163.225 5.18071 169.049 2.59035Q174.874 0 183.208 0Q195.972 0 203.326 6.42816Q210.681 12.8563 210.681 24.9392V50.4707Q210.681 54.4204 214.368 54.4204H219.795V66.9148H209.197Q204.464 66.9148 201.442 64.5334Q198.42 62.1521 198.42 58.1563V57.8864H196.126Q195.392 59.6967 193.399 62.2985Q191.406 64.9004 187.388 66.8292Q183.369 68.758 176.569 68.758ZM179.05 56.4348Q186.581 56.4348 191.314 52.1592Q196.047 47.8837 196.047 40.6031V39.2405H178.175Q173.175 39.2405 170.208 41.3881Q167.241 43.5358 167.241 47.5513Q167.241 51.5668 170.34 54.0008Q173.439 56.4348 179.05 56.4348Z M227.767 34.6423V32.6279Q227.767 22.3817 231.86 15.0863Q235.953 7.79081 242.768 3.8954Q249.582 0 257.706 0Q266.935 0 271.762 3.33256Q276.589 6.66512 278.81 10.4107H281.042V1.8432H295.801V79.33Q295.801 85.6989 292.104 89.4725Q288.408 93.2462 282.079 93.2462H238.369V80.0541H277.023Q280.779 80.0541 280.779 76.1043V57.2775H278.547Q277.161 59.5683 274.665 61.8904Q272.168 64.2125 268.057 65.7414Q263.946 67.2702 257.706 67.2702Q249.582 67.2702 242.756 63.3748Q235.93 59.4794 231.848 52.1724Q227.767 44.8655 227.767 34.6423ZM261.938 54.0781Q270.151 54.0781 275.573 48.8612Q280.996 43.6443 280.996 34.2704V32.9999Q280.996 23.4943 275.627 18.3432Q270.259 13.1921 261.938 13.1921Q253.749 13.1921 248.315 18.3432Q242.881 23.4943 242.881 32.9999V34.2704Q242.881 43.6443 248.315 48.8612Q253.749 54.0781 261.938 54.0781Z M344.764 68.758Q334.998 68.758 327.583 64.6108Q320.167 60.4636 316.031 52.9048Q311.896 45.346 311.896 35.1689V33.589Q311.896 23.3889 315.977 15.8416Q320.059 8.2944 327.397 4.1472Q334.735 0 344.385 0Q353.881 0 360.956 4.1867Q368.031 8.37341 371.981 15.8515Q375.931 23.3297 375.931 33.2895V38.6974H327.181Q327.468 46.3334 332.587 50.9496Q337.707 55.5658 345.198 55.5658Q352.522 55.5658 356.101 52.3534Q359.681 49.141 361.553 45.0629L373.985 51.4813Q372.119 55.0656 368.63 59.1042Q365.141 63.1428 359.394 65.9504Q353.648 68.758 344.764 68.758ZM327.313 27.2892H360.622Q360.095 20.7986 355.7 16.9954Q351.304 13.1921 344.277 13.1921Q337.055 13.1921 332.691 16.9954Q328.327 20.7986 327.313 27.2892Z M391.548 66.9148V1.8432H406.353V10.9769H408.585Q410.303 7.25429 414.832 3.99908Q419.361 0.743866 428.435 0.743866Q435.956 0.743866 441.695 4.12911Q447.434 7.51435 450.651 13.5903Q453.868 19.6663 453.868 27.9442V66.9148H438.8V29.1226Q438.8 21.1969 434.891 17.3492Q430.983 13.5015 423.9 13.5015Q415.872 13.5015 411.244 18.8237Q406.617 24.146 406.617 33.9445V66.9148Z" fill="currentColor"/><path class="accent" d="M73.9979 66.9148 98.2261 34.0696 74.3764 1.8432H91.9626L107.9 24.3499H110.131L126.068 1.8432H143.654L119.805 34.0696L144.033 66.9148H126.206L110.131 44.0065H107.9L91.8244 66.9148Z" fill="#D4AF37"/></g><style>:root{color:#09090B}@media(prefers-color-scheme:dark){:root{color:#FFFFFF}}</style></svg>
     </a>
     <nav class="nav-links" aria-label="Primary">
       <a href="/products/oxagen">Product</a>
@@ -200,7 +203,7 @@
     </nav>
     <div class="nav-cta">
       <a class="login ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Log in</a>
-      <a class="btn btn-primary btn-sm" href="#demo">Get a demo</a>
+      <a class="btn btn-ghost btn-sm" href="#demo">Get a demo</a>
       <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Menu"><i></i></button>
     </div>
   </div>
@@ -211,6 +214,11 @@
     <h5>Product</h5>
     <a href="/products/oxagen">Oxagen, the agent control plane</a>
     <h5>More</h5>
+    <a href="#keys">Access</a>
+    <a href="#recorder">Record</a>
+    <a href="#dollars">Budget and rules</a>
+    <a href="#graph">Equipment</a>
+    <a href="#support">Supported agents</a>
     <a href="/#field-manual">Field manual</a>
     <a href="/blog">Research</a>
     <a href="https://docs.oxagen.sh">Docs</a>
@@ -228,71 +236,79 @@
         <p class="eyebrow">Product · Oxagen</p>
         <h1>See which agent spent what,<br><span class="gold">and on whose behalf.</span></h1>
         <p class="hero-sub">
-          Oxagen prices every model call routed through it by token class and <strong>attributes
-          it to the person, the agent, the run, the turn, and the step</strong>. Findings name the
-          waste and who can fix it. Approval rules you wrote route matching requests to a person,
-          and the record keeps every run frame by frame. <strong>Every charge traces back to the
-          call that made it.</strong>
+          When an agent asks to act through Oxagen, a rule you wrote answers. Some rules send the
+          request to a person first. Oxagen records each step and prices each model call that goes
+          through it. Then it adds the cost up by person, agent, run, turn, and step.
+          <strong>Each charge links back to the call that made it.</strong>
         </p>
         <div class="hero-ctas">
           <a class="btn btn-primary" href="#demo">Get a demo <span class="arr">→</span></a>
-          <a class="btn btn-ghost ext" href="https://docs.oxagen.sh/install" target="_blank" rel="noopener">Wrap Claude Code</a>
+          <a class="btn btn-ghost" href="#support">See supported agents</a>
         </div>
-        <p class="hero-note">Claude Code, Codex, and any harness with a base URL. The agent never receives a connection credential.</p>
+        <div class="works-with">
+          <span>Works with</span>
+          <ul class="logo-row" aria-label="Supported agents">
+            <li class="logo-chip"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z"/></svg>Claude Code</li>
+            <li class="logo-chip"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M9.064 3.344a4.578 4.578 0 012.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 00.043 0 4.55 4.55 0 013.046.275l.047.022.116.057a4.581 4.581 0 012.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 01-.134 1.223.123.123 0 00.03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 01-2.201 1.388.123.123 0 00-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 00-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 01-1.945-.466 4.544 4.544 0 01-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 01-.37-.961 4.582 4.582 0 01-.014-2.298.124.124 0 00.006-.056.085.085 0 00-.027-.048 4.467 4.467 0 01-1.034-1.651 3.896 3.896 0 01-.251-1.192 5.189 5.189 0 01.141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 00.065-.066 4.51 4.51 0 01.829-1.615 4.535 4.535 0 011.837-1.388zm3.482 10.565a.637.637 0 000 1.272h3.636a.637.637 0 100-1.272h-3.636zM8.462 9.23a.637.637 0 00-1.106.631l1.272 2.224-1.266 2.136a.636.636 0 101.095.649l1.454-2.455a.636.636 0 00.005-.64L8.462 9.23z"/></svg>Codex</li>
+            <li class="logo-chip"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M22.106 5.68L12.5.135a.998.998 0 00-.998 0L1.893 5.68a.84.84 0 00-.419.726v11.186c0 .3.16.577.42.727l9.607 5.547a.999.999 0 00.998 0l9.608-5.547a.84.84 0 00.42-.727V6.407a.84.84 0 00-.42-.726zm-.603 1.176L12.228 22.92c-.063.108-.228.064-.228-.061V12.34a.59.59 0 00-.295-.51l-9.11-5.26c-.107-.062-.063-.228.062-.228h18.55c.264 0 .428.286.296.514z"/></svg>Cursor</li>
+            <li class="logo-chip"><svg viewBox="14 14 68 68" aria-hidden="true"><g transform="translate(13.423,109.664) scale(0.98160)"><path class="mark" d="M5.88507 -58.2714V-67.369H16.3847L25.7719 -65.7956L26.4302 -67.4381L18.669 -72.8821L11.2665 -80.3931L17.6519 -86.7785L25.163 -79.3761L30.607 -71.6149L32.2494 -72.2732L30.6761 -81.6604V-92.16H39.7737V-81.6604L38.2004 -72.2732L39.8428 -71.6149L45.2868 -79.3761L52.7978 -86.7785L59.1832 -80.3931L51.7808 -72.8821L44.0196 -67.4381L44.6779 -65.7956L54.0651 -67.369H64.5647V-58.2714H54.0651L44.6779 -59.8447L44.0196 -58.2023L51.7808 -52.7583L59.1832 -45.2472L52.7978 -38.8618L45.2868 -46.2642L39.8428 -54.0254L38.2004 -53.3672L39.7737 -43.98V-33.4804H30.6761V-43.98L32.2494 -53.3672L30.607 -54.0254L25.163 -46.2642L17.6519 -38.8618L11.2665 -45.2472L18.669 -52.7583L26.4302 -58.2023L25.7719 -59.8447L16.3847 -58.2714Z" fill="#D4AF37"/></g></svg>Stella</li>
+          </ul>
+        </div>
       </div>
 
-      <figure class="dg p-appr reveal" data-live role="img" aria-label="Illustration: a request for a 180 dollar refund, routed to a person. It shows the operator who started the run, the agent that asked, the exact call with its input digest, and the rule that routed it, with Allow for this run and Deny.">
-        <div class="dg-bar"><span class="dg-dot wait dg-loop"></span><b>Waiting on you</b> routed request<span class="end">times out in 9:41</span></div>
+      <figure class="dg p-appr reveal" data-live role="img" aria-label="Illustration: a request for a 180 dollar refund, waiting for a person. It shows the person who started the run, the agent that asked, the exact call, and the rule that sent it to a person, with buttons to allow it for this run or deny it with a reason.">
+        <div class="dg-bar"><span class="dg-dot wait dg-loop"></span><b>Waiting on you</b> a request for a person<span class="end">times out in 9:41</span></div>
         <div class="dg-body">
           <ol class="p-hops">
             <li class="dg-in" style="--i:0"><span class="dg-k">operator</span><b>ada@acme</b><small>started the run</small></li>
             <li class="dg-in" style="--i:1"><span class="dg-k">agent</span><b>support-refunds</b><small>asked for the call</small></li>
-            <li class="dg-in" style="--i:2"><span class="dg-k">call</span><b class="dg-m">stripe.create_refund</b><small>amount $180 · input sha256:4c1f…9e02</small></li>
+            <li class="dg-in" style="--i:2"><span class="dg-k">call</span><b class="dg-m">stripe.create_refund</b><small>amount $180</small></li>
             <li class="dg-in" style="--i:3"><span class="dg-k">rule</span><b>Moves money above $100</b><small>mandate finance-refunds · $1,340 of $2,000 used this month</small></li>
           </ol>
           <div class="p-decide dg-in" style="--i:4"><span class="p-btn">Allow for this run</span><span class="p-btn">Deny with a reason</span></div>
         </div>
-        <div class="dg-foot">Allowing it lets this one call through, bound to this agent, run, and expiry. The agent never receives the connection credential.</div>
+        <div class="dg-foot">If you allow it, only this one call goes through, for this agent and this run, before the time runs out. The agent does not receive the connection key.</div>
       </figure>
     </div>
   </section>
 
-  <!-- ================= FOUR PROMISES ================= -->
+  <!-- ================= FOUR CLAUSES ================= -->
   <section class="sec">
     <div class="wrap">
       <div class="sec-head reveal">
-        <p class="eyebrow">One mandate, four clauses</p>
-        <h2>Every feature belongs to one clause of the mandate</h2>
-        <p>Security sets access. FinOps sets the budget and the rules. Engineering sets the
-        equipment. The platform keeps the record and enforces all four on every call.</p>
+        <p class="eyebrow">One mandate, four parts</p>
+        <h2>Every feature belongs to one part of the mandate</h2>
+        <p>Security sets access. Finance sets the budget and the rules. Engineering sets the tools
+        and skills. Oxagen keeps the record and checks all four on the actions routed through
+        it.</p>
       </div>
       <div class="p-four reveal">
         <div>
           <h3>Access</h3>
           <p>Don't hand your agents the keys.</p>
           <ol>
-            <li><a href="#top">Requests routed to a person</a></li>
-            <li><a href="#keys">The connection credential never moves</a></li>
-            <li><a href="#steer">Run your agents as a fleet</a></li>
-            <li><a href="#mandates">Mandates for anything that matters</a></li>
-            <li><a href="#more">Kill switches, simulation, taint</a></li>
+            <li><a href="#top">Requests sent to a person</a></li>
+            <li><a href="#keys">The key stays in Oxagen</a></li>
+            <li><a href="#steer">Manage the workforce from one console</a></li>
+            <li><a href="#mandates">Limits for actions with real effects</a></li>
+            <li><a href="#more">Stop switches and rule tests</a></li>
           </ol>
         </div>
         <div>
           <h3>Record</h3>
-          <p>Any answer, walked back to the frame.</p>
+          <p>Follow the action back to its authority.</p>
           <ol>
-            <li><a href="#iam">Agent IAM</a></li>
-            <li><a href="#recorder">The flight recorder</a></li>
-            <li><a href="#more">An audit archive your auditor can verify</a></li>
-            <li><a href="#more">One accountable operator per run</a></li>
+            <li><a href="#iam">A definition and an identity for each agent</a></li>
+            <li><a href="#recorder">Play back any run</a></li>
+            <li><a href="#more">An archive your auditor can check</a></li>
+            <li><a href="#more">One accountable person per run</a></li>
           </ol>
         </div>
         <div>
           <h3>Budget and rules</h3>
-          <p>Every dollar routed through Oxagen, reconciled to the cent.</p>
+          <p>See which agent spent what, and on whose behalf.</p>
           <ol>
-            <li><a href="#dollars">Every dollar, every operator</a></li>
+            <li><a href="#dollars">Every dollar, every person</a></li>
             <li><a href="#mandates">Limits read from the call</a></li>
           </ol>
         </div>
@@ -301,7 +317,8 @@
           <p>Give agents the business context their work requires.</p>
           <ol>
             <li><a href="#graph">A map of your business</a></li>
-            <li><a href="#more">It learned. You approved. It changed.</a></li>
+            <li><a href="#more">Notes a person approves</a></li>
+            <li><a href="#support">Supported agents</a></li>
           </ol>
         </div>
       </div>
@@ -314,59 +331,58 @@
       <div class="dg-copy reveal">
         <p class="eyebrow">Access</p>
         <h2>Don't hand your agents the keys</h2>
-        <p class="lede">An agent under Oxagen holds an identity and a mandate. It does not hold
-        a token to GitHub, a password to the database, or a standing grant to anything. When a
-        task needs one of those, the agent asks. The request carries who started the task,
-        which agent is asking, which tool it wants, and which data it would reach.</p>
+        <p class="lede">An agent under Oxagen has an identity and a mandate. It does not hold a
+        GitHub token, a database password, or a standing grant. When a task needs one of those,
+        the agent asks. The request says who started the task, which agent is asking, which tool
+        it wants, and what data it would reach.</p>
         <ul>
-          <li><strong>A rule you wrote answers.</strong> The team that owns the system writes the rule. Reads of the public repo: allowed. A push to main: denied. A push to a release branch: routed to the release owner, who sees the request with the diff beside it and answers from the Access page. Allowed and denied requests settle inside the same call. Routed requests wait for the person, and the run waits with them.</li>
-          <li><strong>The connection credential never moves.</strong> It stays in Oxagen, encrypted under a key you own. Oxagen uses it on the agent's behalf and closes the connection when the action is done. The agent never receives it, though it still holds its own identity. The record shows every use: the request, the rule that answered it, and the person who signed it.</li>
-          <li>Each connection has a named owner and a review date, and Oxagen audits every read. For each call Oxagen uses the narrowest credential the provider allows, such as a Stripe restricted key or an AWS credential scoped to one bucket, for the call plus a margin and never more than an hour. Revoke a connection and Oxagen stops using it at the agent's next request.</li>
+          <li><strong>A rule you wrote answers.</strong> The team that owns the system writes the rule. For example, one rule allows reads of the public repo. Another denies a push to main. A third sends a push to a release branch to the release owner. That person sees the change and answers from the Access page. If a rule allows or denies, the answer comes back in the same call. If a person decides, the run waits for them.</li>
+          <li><strong>The key stays in Oxagen.</strong> Oxagen keeps each connection key encrypted under a key you own. When the agent needs the connection, Oxagen uses the key for it and then closes the connection. The agent does not receive the key. It keeps only its own identity. The record shows each use: the request, the rule that answered, and the person who approved it.</li>
+          <li>Each connection has a named owner and a review date. Oxagen records every read of the key. For each call, Oxagen uses the smallest key the provider offers, such as a Stripe restricted key or an AWS key for one bucket. The key lasts for the call plus a margin, and never more than an hour. When you revoke a connection, Oxagen stops using it at the agent's next request.</li>
         </ul>
       </div>
 
-      <figure class="dg reveal reveal-d1" data-live role="img" aria-label="Illustration: the agent holds only its identity and asks for a tool. Oxagen reads the vault and uses an AWS credential scoped to one bucket for fifteen minutes, bound to the call. The tool server returns the result to the agent. The agent's identity sent straight to the tool server is rejected.">
+      <figure class="dg reveal reveal-d1" data-live role="img" aria-label="Illustration: the agent has only its identity and asks for a tool. Oxagen takes a key from its vault that works on one bucket for fifteen minutes and only for this call. The tool server sends the result back to the agent. When the agent tries the tool server directly with no key, the server says no.">
         <div class="dg-bar"><b>One request</b> the key stays in Oxagen<span class="end">call c_81</span></div>
         <div class="dg-body p-lanes">
           <div class="p-node dg-in" style="--i:0"><span class="dg-k">agent</span><b>support-refunds</b><span class="dg-tag">identity only</span></div>
           <div class="p-wire dg-in" style="--i:1"><span class="p-lbl">asks for s3.get_object on invoices</span><span class="p-pkt dg-loop"></span></div>
-          <div class="p-node p-vault dg-in" style="--i:2"><span class="dg-k">connection</span><b>Oxagen vault</b><span class="dg-tag">every read audited</span></div>
-          <div class="p-wire late dg-in" style="--i:3"><span class="p-lbl">AWS credential · bucket invoices · 15 min · bound to c_81</span><span class="p-pkt dg-loop"></span></div>
+          <div class="p-node p-vault dg-in" style="--i:2"><span class="dg-k">connection</span><b>Oxagen vault</b><span class="dg-tag">every read recorded</span></div>
+          <div class="p-wire late dg-in" style="--i:3"><span class="p-lbl">AWS key · bucket invoices · 15 min · this call only</span><span class="p-pkt dg-loop"></span></div>
           <div class="p-node dg-in" style="--i:4"><span class="dg-k">tool server</span><b>s3</b><span class="dg-tag">accepts Oxagen only</span></div>
         </div>
         <div class="p-note dg-in" style="--i:5"><span class="dg-tag is-ok">result</span> goes back to the agent. The key does not.</div>
-        <div class="p-note dg-in" style="--i:6"><span class="dg-tag is-no">rejected</span> The agent's identity sent straight to the tool server, with no credential behind it.</div>
+        <div class="p-note dg-in" style="--i:6"><span class="dg-tag is-no">refused</span> The agent tried the tool server directly with no key.</div>
       </figure>
     </div>
   </section>
 
-  <!-- ================= STEER ================= -->
+  <!-- ================= FLEET ================= -->
   <section class="sec" id="steer">
     <div class="wrap split split-flip">
       <div class="dg-copy reveal reveal-d1">
         <p class="eyebrow">Fleet</p>
-        <h2>Run your agents as a fleet</h2>
-        <p class="lede">Every agent your organization runs is on one page, whoever built it:
-        Claude Code on a laptop, an Agent SDK service, a custom loop. Beside each one is the
-        mandate it runs under, the requests it has open, what it has spent this month against
-        its budget, and its last run with the record.</p>
+        <h2>Manage the workforce from one console</h2>
+        <p class="lede">Every agent enrolled in Oxagen is on the Fleet page, whoever built it.
+        Next to each one you see its mandate, its open requests, its spend this month against its
+        budget, and its last run.</p>
         <ul>
-          <li><strong>Operate it from one chair.</strong> The operator answers routed requests, raises or lowers a budget, holds an agent, or stops it, from the same page. Each of those is a governed action with a row in the record: who did it, to which agent, under which rule.</li>
-          <li><strong>Spend is on the fleet page.</strong> The budget an agent runs under, the meter that prices each governed action, the rule that stops it, and the bill per agent, run, and person are beside the agent, not in a separate finance tool. The finance lead and the operator read the same rows.</li>
-          <li>Steer every active run in a workspace with @agents. The steer lands as context on the agent's next model request, so no work is discarded, and the delivery report names the frame in each run where the model saw it. When the next step is too late, interrupt: the agent gets your text at once.</li>
-          <li>Holding or stopping an agent works because Oxagen stops answering its requests, not because the agent cooperates. An irreversible call in flight is not abandoned, because nobody can un-send a payment, and the record says so.</li>
+          <li><strong>Act from one page.</strong> You can answer requests, change a budget, pause an agent, or stop it. Each action is saved in the record: who did it, to which agent, and under which rule.</li>
+          <li><strong>Spend sits next to the agent.</strong> The budget, the price of each action, the rule that stops the agent, and the bill per agent, run, and person are on the same page. Finance and the operator read the same numbers.</li>
+          <li>Type @agents to message every running agent in a workspace. Each agent gets the message with its next model request, so no work is thrown away. The delivery report shows the step in each run where the model read it. If that is too late, interrupt, and the agent gets your text at once. Cursor and Stella get messages when a session starts.</li>
+          <li>To pause or stop an agent, Oxagen stops answering its requests. The agent does not have to cooperate. A payment that has been sent cannot be taken back. So if a call like that is already under way, it finishes, and the record says so.</li>
         </ul>
       </div>
 
-      <figure class="dg reveal" role="img" aria-label="Illustration: the Fleet page with four live runs, one paused. A message to every active agent says to freeze deploys to production until 14:00, and the delivery report shows the frame in each run where the model saw it.">
-        <div class="dg-bar"><b>Fleet</b> 12 runs live<span class="end">workspace payments</span></div>
-        <div class="p-run head"><span>run</span><span>agent</span><span>state</span><span style="text-align:right">saw the steer</span></div>
-        <div class="p-run dg-in" style="--i:0"><span class="dg-m">run_01J9AB3K</span><span class="who">ci-fixer</span><span class="dg-tag">running</span><span class="seen dg-in" style="--i:6">frame 213</span></div>
-        <div class="p-run dg-in" style="--i:1"><span class="dg-m">run_01JA2C7M</span><span class="who">support-refunds</span><span class="dg-tag is-wait">paused</span><span class="seen dg-in" style="--i:7">frame 88</span></div>
-        <div class="p-run dg-in" style="--i:2"><span class="dg-m">run_01JB0Q4T</span><span class="who">triage</span><span class="dg-tag">running</span><span class="seen dg-in" style="--i:8">frame 41</span></div>
-        <div class="p-run dg-in" style="--i:3"><span class="dg-m">run_01JC9W1E</span><span class="who">docs-writer</span><span class="dg-tag">running</span><span class="seen dg-in" style="--i:9">frame 19</span></div>
-        <div class="p-steer dg-in" style="--i:4"><span class="dg-k">steer to @agents from ada@acme</span><p>Freeze deploys to production until 14:00.</p></div>
-        <div class="p-report dg-in" style="--i:10"><span class="dg-tag is-ok">delivered to 12 of 12</span>each run names the frame that saw it</div>
+      <figure class="dg reveal" role="img" aria-label="Illustration: the Fleet page with four runs, one paused. A message to every running agent says to freeze deploys to production until 14:00. The delivery report shows the step in each run where the model read it.">
+        <div class="dg-bar"><b>Fleet</b> 12 runs going<span class="end">workspace payments</span></div>
+        <div class="p-run head"><span>run</span><span>agent</span><span>state</span><span style="text-align:right">read it at</span></div>
+        <div class="p-run dg-in" style="--i:0"><span class="dg-m">run_01J9AB3K</span><span class="who">ci-fixer</span><span class="dg-tag">running</span><span class="seen dg-in" style="--i:6">step 213</span></div>
+        <div class="p-run dg-in" style="--i:1"><span class="dg-m">run_01JA2C7M</span><span class="who">support-refunds</span><span class="dg-tag is-wait">paused</span><span class="seen dg-in" style="--i:7">step 88</span></div>
+        <div class="p-run dg-in" style="--i:2"><span class="dg-m">run_01JB0Q4T</span><span class="who">triage</span><span class="dg-tag">running</span><span class="seen dg-in" style="--i:8">step 41</span></div>
+        <div class="p-run dg-in" style="--i:3"><span class="dg-m">run_01JC9W1E</span><span class="who">docs-writer</span><span class="dg-tag">running</span><span class="seen dg-in" style="--i:9">step 19</span></div>
+        <div class="p-steer dg-in" style="--i:4"><span class="dg-k">message to @agents from ada@acme</span><p>Freeze deploys to production until 14:00.</p></div>
+        <div class="p-report dg-in" style="--i:10"><span class="dg-tag is-ok">delivered to 12 of 12</span>each run shows the step that read it</div>
       </figure>
     </div>
   </section>
@@ -376,49 +392,50 @@
     <div class="wrap split">
       <div class="dg-copy reveal">
         <p class="eyebrow">Budget and rules</p>
-        <h2>Mandates for anything that matters</h2>
-        <p class="lede">Moving money, destroying data, changing production, emailing customers,
-        changing access: none of it rides on a role. A person you name sets bounded, expiring
-        limits, and the rule reads them from the call itself.</p>
+        <h2>Limits for actions with real effects</h2>
+        <p class="lede">Some actions have real effects: moving money, deleting data, changing
+        production, emailing customers, or changing access. A role alone does not allow them. A
+        person you name sets limits that expire. Then the rule checks each call against those
+        limits.</p>
         <ul>
-          <li>Tools are tagged by consequence. The rule denies a call carrying a tag before dispatch unless the tag is in the agent's mandate.</li>
-          <li>Remaining authority is a ledger, so two concurrent calls cannot both fit under the same limit.</li>
-          <li>Every consequential receipt records the external effect id and the mandate it drew on. The reconciler matches it against the payment processor's own statement, and an effect with no receipt is a critical exception.</li>
+          <li>Each tool carries tags for its effects. If a call has a tag that is not in the agent's mandate, the rule denies the call before it runs.</li>
+          <li>Oxagen tracks what is left under each limit, like a bank balance. So two calls at the same moment cannot both use the same room under a limit.</li>
+          <li>Each call with a real effect leaves a receipt. The receipt names the outside system's ID for the effect and the mandate it used. Oxagen checks receipts against the payment processor's own statement. An effect with no receipt opens a critical exception.</li>
         </ul>
       </div>
 
-      <figure class="dg reveal reveal-d1" role="img" aria-label="Illustration: a mandate named finance-refunds, set by a finance lead until December 31. This call uses 180 of a 250 dollar per-call limit, the month is at 1,340 of 2,000 dollars, and 17 of 50 calls are used today. The rule routes anything above 100 dollars to a person.">
+      <figure class="dg reveal reveal-d1" role="img" aria-label="Illustration: a mandate named finance-refunds, set by a finance lead until December 31. This call uses 180 of a 250 dollar limit per call. The month is at 1,340 of 2,000 dollars. 17 of 50 calls are used today. Anything above 100 dollars goes to a person.">
         <div class="dg-bar"><b>Mandate</b> finance-refunds<span class="end">expires Dec 31</span></div>
         <div class="dg-body">
           <div class="p-grant dg-in" style="--i:0"><span class="dg-k">set by</span>dana@acme, finance lead. Two people sign a change.</div>
           <div class="p-limit dg-in" style="--i:1"><div class="p-lr"><span>Per call</span><span class="dg-m">$180 of $250</span></div><div class="dg-track"><div class="dg-fill" style="--w:.72;--i:1"></div></div></div>
           <div class="p-limit dg-in" style="--i:2"><div class="p-lr"><span>This month</span><span class="dg-m">$1,340 of $2,000</span></div><div class="dg-track"><div class="dg-fill" style="--w:.67;--i:2"></div></div></div>
           <div class="p-limit dg-in" style="--i:3"><div class="p-lr"><span>Calls today</span><span class="dg-m">17 of 50</span></div><div class="dg-track"><div class="dg-fill" style="--w:.34;--i:3"></div></div></div>
-          <div class="p-chips dg-in" style="--i:4"><span class="dg-tag">counterparties on the list</span><span class="dg-tag is-wait">a person above $100</span><span class="dg-tag is-wait">a person for anything destructive</span></div>
-          <div class="p-chips dg-in" style="--i:5"><span class="dg-k">consequence tags</span><span class="dg-tag">moves money</span><span class="dg-tag">destroys data</span><span class="dg-tag">alters production</span><span class="dg-tag">communicates externally</span><span class="dg-tag">changes access</span></div>
+          <div class="p-chips dg-in" style="--i:4"><span class="dg-tag">payees on the list</span><span class="dg-tag is-wait">a person above $100</span><span class="dg-tag is-wait">a person for any delete</span></div>
+          <div class="p-chips dg-in" style="--i:5"><span class="dg-k">effect tags</span><span class="dg-tag">moves money</span><span class="dg-tag">deletes data</span><span class="dg-tag">changes production</span><span class="dg-tag">emails outside</span><span class="dg-tag">changes access</span></div>
         </div>
       </figure>
     </div>
   </section>
 
-  <!-- ================= AGENT IAM ================= -->
+  <!-- ================= AGENT IDENTITY ================= -->
   <section class="sec" id="iam">
     <div class="wrap split split-flip">
       <div class="dg-copy reveal reveal-d1">
         <p class="eyebrow">Access and record</p>
-        <h2>Agent IAM: the definition in git, the identity in Oxagen</h2>
-        <p class="lede">You would not deploy a service without a definition in source control.
-        Every agent has one identity, one principal id that never changes, and one definition
-        file in your repo. Change it through a pull request.</p>
+        <h2>A definition and an identity for each agent</h2>
+        <p class="lede">Each agent has one identity in Oxagen, with an ID that does not change. It
+        also has one definition file in your repo. You change the file with a pull request, like
+        any other code.</p>
         <ul>
-          <li>Oxagen generates the Claude Code and Codex agent files from that one source in the same pull request, so every harness runs the same agent.</li>
-          <li>Role-based access goes down to the tool version. An agent can never do more than the person it acts for, and subagents can only narrow.</li>
-          <li>The harness's own shell and file tools sit in the same belt under the same rules. What it cannot call, it cannot see or search for.</li>
+          <li>From that one file, Oxagen writes the agent files for Claude Code and Codex in the same pull request. So both tools run the same agent.</li>
+          <li>Access is set by role, down to the tool version. An agent can never do more than the person it works for. A helper agent it starts can only have less.</li>
+          <li>The agent's own shell and file tools follow the same rules. If the agent may not call a tool, it cannot see the tool or search for it.</li>
         </ul>
       </div>
 
-      <figure class="dg reveal" role="img" aria-label="Illustration: one agent in two halves. In git, a definition file lists its purpose, the tools it may call and may never call, its side-effect ceiling, model tier, and budget. In Oxagen, its identity holds the principal, roles, and mandates, and the credentials stay with Oxagen. Every run records the definition's digest.">
-        <div class="dg-bar"><b>support-refunds</b> one agent, two halves<span class="end">definition 7d0e…a4c2</span></div>
+      <figure class="dg reveal" role="img" aria-label="Illustration: one agent in two parts. In git, a definition file lists its purpose, the tools it may call and may never call, its highest effect, its model size, and its budget. In Oxagen, its identity holds its ID, roles, and mandates, and Oxagen holds the keys. Each run records which version of the definition it used.">
+        <div class="dg-bar"><b>support-refunds</b> one agent, two parts<span class="end">definition 7d0e…a4c2</span></div>
         <div class="p-halves">
           <div class="p-half dg-in" style="--i:0">
             <span class="dg-k">in git</span>
@@ -427,8 +444,8 @@
               <div><dt>purpose</dt><dd>Refund duplicate charges</dd></div>
               <div><dt>may call</dt><dd>stripe.create_refund, zendesk.reply</dd></div>
               <div><dt>may never</dt><dd>stripe.delete_customer</dd></div>
-              <div><dt>ceiling</dt><dd>moves money</dd></div>
-              <div><dt>model tier</dt><dd>light</dd></div>
+              <div><dt>highest effect</dt><dd>moves money</dd></div>
+              <div><dt>model size</dt><dd>light</dd></div>
               <div><dt>budget</dt><dd>$0.50 per run</dd></div>
             </dl>
             <span class="dg-tag">changed by pull request</span>
@@ -437,40 +454,41 @@
             <span class="dg-k">in Oxagen</span>
             <b>Identity</b>
             <dl class="p-kv">
-              <div><dt>principal</dt><dd>agt_4Q9K2M</dd></div>
-              <div><dt>credentials</dt><dd>held by Oxagen, never by the agent</dd></div>
+              <div><dt>id</dt><dd>agt_4Q9K2M</dd></div>
+              <div><dt>keys</dt><dd>held by Oxagen, not the agent</dd></div>
               <div><dt>roles</dt><dd>refunds-agent</dd></div>
               <div><dt>mandates</dt><dd>finance-refunds</dd></div>
-              <div><dt>acts for</dt><dd>its operator, never more</dd></div>
+              <div><dt>acts for</dt><dd>its operator, no more</dd></div>
             </dl>
             <span class="dg-tag">revocable in one second</span>
           </div>
         </div>
-        <div class="dg-foot">Every run records the digest of the definition it ran from.</div>
+        <div class="dg-foot">Each run records which version of the definition it used.</div>
       </figure>
     </div>
   </section>
 
-  <!-- ================= FLIGHT RECORDER ================= -->
+  <!-- ================= PLAYBACK ================= -->
   <section class="sec sec-alt" id="recorder">
     <div class="wrap split">
       <div class="dg-copy reveal">
         <p class="eyebrow">Record</p>
-        <h2>The flight recorder</h2>
-        <p class="lede">A run you cannot replay is a run you cannot explain. Every run is a
-        hash-chained recording you can play back, fork, bisect, and export signed.</p>
+        <h2>Play back any run</h2>
+        <p class="lede">Oxagen records every run so you can play it back. Each saved step is
+        linked to the one before it, so a change to any step shows. You can also start again from
+        a step, compare two runs, and export a signed copy.</p>
         <ul>
-          <li>Play a run at up to four times speed, with idle time compressed, so a forty-second tool call does not cost you forty seconds. Cost accumulates left to right.</li>
-          <li>Fork starts a new run from any frame with the recorded tool results served as a cassette, so a failure becomes a test case and a question about a rule gets an answer.</li>
-          <li>Bisect narrows two runs of the same task to the step where they split. At seal, the run gets a Merkle root and a signature your auditor can verify offline.</li>
+          <li>Play a run at up to four times speed. Oxagen skips idle time, so a forty-second tool call does not take forty seconds to watch. The cost adds up as it plays.</li>
+          <li>Start a new run from any step. Oxagen replays the recorded tool results. So you can turn a failure into a test, or check what a different rule would have done.</li>
+          <li>Compare two runs of the same task to find the step where they split. When a run ends, Oxagen signs it. Your auditor can check the signature on their own computer.</li>
         </ul>
       </div>
 
-      <figure class="dg p-rec reveal reveal-d1" data-live role="img" aria-label="Illustration: two runs of the same task drawn as rows of model calls, tool calls, and rule decisions. They match until step 17, where they split. A playhead moves across while the cost line of the first run rises to 1.84 dollars.">
-        <div class="dg-bar"><b>Bisect</b> two runs of one task<span class="end">4× · idle compressed</span></div>
+      <figure class="dg p-rec reveal reveal-d1" data-live role="img" aria-label="Illustration: two runs of the same task drawn as rows of model calls, tool calls, and rule decisions. They match until step 17, where they split. A playhead moves across while the cost of the first run rises to 1.84 dollars.">
+        <div class="dg-bar"><b>Compare</b> two runs of one task<span class="end">4× · idle time skipped</span></div>
         <div class="dg-body">
           <div class="dg-in" style="--i:0"><svg viewBox="0 0 520 150" aria-hidden="true"><text class="k" x="0" y="18">RUN A</text><text class="k" x="0" y="54">RUN B</text><text class="k" x="0" y="124">COST</text><rect class="sm" x="52" y="4" width="7" height="19" rx="1.5"/><rect class="st" x="67" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="82" y="4" width="7" height="19" rx="1.5"/><rect class="sp" x="97.5" y="9.5" width="6" height="8" rx="1"/><rect class="st" x="112" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="127" y="4" width="7" height="19" rx="1.5"/><rect class="st" x="142" y="13" width="7" height="10" rx="1.5"/><rect class="st" x="157" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="172" y="4" width="7" height="19" rx="1.5"/><rect class="sp" x="187.5" y="9.5" width="6" height="8" rx="1"/><rect class="sm" x="202" y="4" width="7" height="19" rx="1.5"/><rect class="st" x="217" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="232" y="4" width="7" height="19" rx="1.5"/><rect class="st" x="247" y="13" width="7" height="10" rx="1.5"/><rect class="st" x="262" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="277" y="4" width="7" height="19" rx="1.5"/><rect class="st" x="292" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="307" y="4" width="7" height="19" rx="1.5"/><rect class="sp" x="322.5" y="9.5" width="6" height="8" rx="1"/><rect class="st" x="337" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="352" y="4" width="7" height="19" rx="1.5"/><rect class="st" x="367" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="382" y="4" width="7" height="19" rx="1.5"/><rect class="st" x="397" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="412" y="4" width="7" height="19" rx="1.5"/><rect class="st" x="427" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="442" y="4" width="7" height="19" rx="1.5"/><rect class="sp" x="457.5" y="9.5" width="6" height="8" rx="1"/><rect class="st" x="472" y="13" width="7" height="10" rx="1.5"/><rect class="sm" x="487" y="4" width="7" height="19" rx="1.5"/><rect class="sm" x="52" y="40" width="7" height="19" rx="1.5"/><rect class="st" x="67" y="49" width="7" height="10" rx="1.5"/><rect class="sm" x="82" y="40" width="7" height="19" rx="1.5"/><rect class="sp" x="97.5" y="45.5" width="6" height="8" rx="1"/><rect class="st" x="112" y="49" width="7" height="10" rx="1.5"/><rect class="sm" x="127" y="40" width="7" height="19" rx="1.5"/><rect class="st" x="142" y="49" width="7" height="10" rx="1.5"/><rect class="st" x="157" y="49" width="7" height="10" rx="1.5"/><rect class="sm" x="172" y="40" width="7" height="19" rx="1.5"/><rect class="sp" x="187.5" y="45.5" width="6" height="8" rx="1"/><rect class="sm" x="202" y="40" width="7" height="19" rx="1.5"/><rect class="st" x="217" y="49" width="7" height="10" rx="1.5"/><rect class="sm" x="232" y="40" width="7" height="19" rx="1.5"/><rect class="st" x="247" y="49" width="7" height="10" rx="1.5"/><rect class="st" x="262" y="49" width="7" height="10" rx="1.5"/><rect class="sm" x="277" y="40" width="7" height="19" rx="1.5"/><rect class="sb" x="292" y="49" width="7" height="10" rx="1.5"/><rect class="sb" x="307" y="49" width="7" height="10" rx="1.5"/><rect class="sb" x="322" y="49" width="7" height="10" rx="1.5"/><rect class="sb" x="337" y="49" width="7" height="10" rx="1.5"/><rect class="sb" x="352" y="40" width="7" height="19" rx="1.5"/><rect class="sb" x="367" y="49" width="7" height="10" rx="1.5"/><rect class="sb" x="382" y="49" width="7" height="10" rx="1.5"/><rect class="sb" x="397" y="49" width="7" height="10" rx="1.5"/><rect class="sp" x="412.5" y="45.5" width="6" height="8" rx="1"/><rect class="sb" x="427" y="49" width="7" height="10" rx="1.5"/><rect class="sb" x="442" y="49" width="7" height="10" rx="1.5"/><rect class="sb" x="457" y="40" width="7" height="19" rx="1.5"/><line class="cut" x1="288" y1="0" x2="288" y2="66"/><text class="k" x="294" y="78">SPLIT AT STEP 17</text><line class="axis" x1="52" y1="140" x2="502" y2="140"/><polyline class="cost" points="52,140 55.5,136.9 70.5,136.6 85.5,133.5 100.5,133.5 115.5,133.2 130.5,130.1 145.5,129.8 160.5,129.6 175.5,126.5 190.5,126.5 205.5,123.4 220.5,123.1 235.5,120.0 250.5,119.7 265.5,119.4 280.5,116.3 295.5,116.0 310.5,112.9 325.5,112.9 340.5,112.6 355.5,109.5 370.5,109.3 385.5,106.2 400.5,105.9 415.5,102.8 430.5,102.5 445.5,99.4 460.5,99.4 475.5,99.1 490.5,96.0"/><text class="v" x="518" y="90" text-anchor="end">$1.84</text><g class="ph dg-loop"><line x1="50" y1="0" x2="50" y2="146"/></g></svg></div>
-          <div class="p-transport dg-in" style="--i:1"><span class="dg-tag">model call</span><span class="dg-tag">tool call</span><span class="dg-tag">rule decision</span><span class="dg-tag is-ok">sealed</span></div>
+          <div class="p-transport dg-in" style="--i:1"><span class="dg-tag">model call</span><span class="dg-tag">tool call</span><span class="dg-tag">rule decision</span><span class="dg-tag is-ok">signed</span></div>
         </div>
       </figure>
     </div>
@@ -481,23 +499,23 @@
     <div class="wrap split split-flip">
       <div class="dg-copy reveal reveal-d1">
         <p class="eyebrow">Budget and rules</p>
-        <h2>Every dollar, every operator</h2>
-        <p class="lede">Your provider bill says how much. It does not say who, for what, or
-        whether it was worth it.</p>
+        <h2>Every dollar, every person</h2>
+        <p class="lede">Oxagen shows who spent each dollar, through which agent, and in which
+        run.</p>
         <ul>
-          <li>The proxy prices every model call routed through it by token class, including cache reads, cache writes, and reasoning tokens, in micro-dollars, with the price entry it used.</li>
-          <li>Every cost record hangs on a frame, and every frame knows its step, turn, run, agent, operator, and workspace, so attribution is arithmetic.</li>
-          <li>The reconciler matches your ledger to provider usage exports by request id, then by key and day, then by invoice line. Budgets are enforced at the proxy before the call, not reported after.</li>
+          <li>Oxagen prices each model call that goes through it. It counts each kind of token: input, output, cache reads, cache writes, and reasoning. It saves the price in millionths of a dollar, with the price list it used.</li>
+          <li>Each cost is saved with its step. Each step belongs to a turn, a run, an agent, a person, and a workspace. So adding up spend is simple arithmetic.</li>
+          <li>Oxagen checks each budget before the call goes out. Later, it matches its records to the provider's usage export: by request first, then by key and day, then by invoice line.</li>
         </ul>
       </div>
 
-      <figure class="dg reveal" role="img" aria-label="Illustration: the reconciler matches Oxagen's ledger to the provider export by request, by key and day, and by invoice line. Three rows match and one invoice line opens an exception for a three cent variance. Below, spend per run for one agent falling over eight weeks.">
-        <div class="dg-bar"><b>Reconciler</b> ledger against provider export<span class="end">Sep 1 to 15</span></div>
+      <figure class="dg reveal" role="img" aria-label="Illustration: Oxagen matches its records to the provider's export by request, by key and day, and by invoice line. Three rows match. One invoice line opens an exception for a three cent difference. Below, spend per run for one agent falls over eight weeks.">
+        <div class="dg-bar"><b>Matching</b> Oxagen's records and the provider's<span class="end">Sep 1 to 15</span></div>
         <div class="p-row head"><span>matched on</span><span>Oxagen</span><span>provider</span><span>result</span></div>
         <div class="p-row dg-in" style="--i:0"><span class="dg-m">request req_8f2a</span><span>$0.1400</span><span>$0.1400</span><span class="dg-tag is-ok">matched</span></div>
         <div class="p-row dg-in" style="--i:1"><span class="dg-m">key ops · Sep 14</span><span>$41.22</span><span>$41.22</span><span class="dg-tag is-ok">matched</span></div>
         <div class="p-row dg-in" style="--i:2"><span class="dg-m">invoice line 6</span><span>$612.08</span><span>$612.08</span><span class="dg-tag is-ok">matched</span></div>
-        <div class="p-row dg-in" style="--i:3"><span class="dg-m">invoice line 7</span><span>$1,902.40</span><span>$1,902.43</span><span class="dg-tag is-no">exception $0.03</span></div>
+        <div class="p-row dg-in" style="--i:3"><span class="dg-m">invoice line 7</span><span>$1,902.40</span><span>$1,902.43</span><span class="dg-tag is-no">off by $0.03</span></div>
         <div class="dg-body p-outcome">
           <div class="p-spark dg-in" style="--i:4">
             <span class="dg-k">spend per run, agent ci-fixer, 8 weeks</span>
@@ -509,90 +527,127 @@
     </div>
   </section>
 
-  <!-- ================= ONTOLOGY ================= -->
-  <section class="sec" id="graph">
-    <div class="wrap split split-flip">
-      <div class="dg-copy reveal reveal-d1">
+  <!-- ================= BUSINESS MAP ================= -->
+  <section class="sec sec-alt" id="graph">
+    <div class="wrap split">
+      <div class="dg-copy reveal">
         <p class="eyebrow">Equipment</p>
         <h2>Give agents the business context their work requires</h2>
-        <p class="lede">Your agents do not know your business because nothing gave them a map.
-        Oxagen builds one knowledge graph per organization, isolated in its own database, from
-        GitHub, Linear, and Postgres.</p>
+        <p class="lede">An agent does not know your business until something tells it. Oxagen
+        builds a knowledge graph for each organization, in its own database, from GitHub,
+        Linear, and Postgres. A knowledge graph is a map of things like teams and services, and
+        how they connect.</p>
         <ul>
-          <li>Every entity carries provenance back to its source record. Ask in plain English and see the Cypher query and the citations behind the answer.</li>
-          <li>The ontology is inferred from your data, then proposed, reviewed, and activated as a versioned object that lives in git.</li>
-          <li>Every run draws its context from this graph under a token budget, with a usage report on the frame.</li>
+          <li>Each fact links back to the record it came from. Ask a question in plain English. Oxagen shows the answer, the query it ran, and the sources.</li>
+          <li>Oxagen suggests the kinds of things in the map, based on your data. A person reviews them and turns them on. The result is versioned and saved in git.</li>
+          <li>Each run gets its context from this map, within a token budget. The run records how much it used.</li>
         </ul>
       </div>
 
-      <figure class="dg p-graph reveal" role="img" aria-label="Illustration: a knowledge graph with a team, a service, a repository, a refund policy, an issue, and a table, linked by ownership and use. A plain English question about who owns the refund policy is answered with the query and three citations.">
-        <div class="dg-bar"><b>Ontology</b> acme, version 14<span class="end">6 classes shown</span></div>
+      <figure class="dg p-graph reveal reveal-d1" role="img" aria-label="Illustration: a map with a team, a service, a repository, a refund policy, an issue, and a table, linked by who owns and uses what. A plain English question about who owns the refund policy is answered with the query and three sources.">
+        <div class="dg-bar"><b>Business map</b> acme, version 14<span class="end">6 kinds shown</span></div>
         <div class="dg-body">
           <div class="p-ask dg-in" style="--i:0">
             <span class="dg-k">asked in plain English</span>
             <p>Who owns the refund policy?</p>
-            <div class="p-chips"><span class="dg-tag is-ok">team payments</span><span class="dg-tag">query shown</span><span class="dg-tag">3 citations</span></div>
+            <div class="p-chips"><span class="dg-tag is-ok">team payments</span><span class="dg-tag">query shown</span><span class="dg-tag">3 sources</span></div>
           </div>
-          <div class="dg-in" style="--i:1"><svg viewBox="0 0 520 214" aria-hidden="true"><line class="e" x1="92" y1="40" x2="272" y2="34"/><text class="el" x="170" y="27">owns</text><line class="e" x1="272" y1="34" x2="440" y2="70"/><text class="el" x="356" y="44">built from</text><line class="e" x1="92" y1="40" x2="118" y2="150"/><text class="el" x="113" y="95">owns</text><line class="e" x1="118" y1="150" x2="330" y2="138"/><text class="el" x="212" y="137">cited by</text><line class="e" x1="272" y1="34" x2="444" y2="176"/><text class="el" x="368" y="105">writes</text><g class="nd"><rect x="28" y="21" width="128" height="38" rx="8"/><text class="l" x="40" y="36">TEAM</text><text class="t" x="40" y="52">payments</text></g><g class="nd"><rect x="204" y="15" width="136" height="38" rx="8"/><text class="l" x="216" y="30">SERVICE</text><text class="t" x="216" y="46">refunds-api</text></g><g class="nd"><rect x="372" y="51" width="136" height="38" rx="8"/><text class="l" x="384" y="66">REPOSITORY</text><text class="t" x="384" y="82">acme/billing</text></g><g class="nd"><rect class="ring" x="29" y="127" width="178" height="46" rx="11"/><rect x="33" y="131" width="170" height="38" rx="8"/><text class="l" x="45" y="146">POLICY</text><text class="t" x="45" y="162">refunds above $100</text></g><g class="nd"><rect x="274" y="119" width="112" height="38" rx="8"/><text class="l" x="286" y="134">ISSUE</text><text class="t" x="286" y="150">PAY-212</text></g><g class="nd"><rect x="374" y="157" width="140" height="38" rx="8"/><text class="l" x="386" y="172">TABLE</text><text class="t" x="386" y="188">stripe_refunds</text></g><text class="el" x="33" y="192">source: github acme/billing@a91c</text><text class="el" x="33" y="206">source: linear PAY-212</text></svg></div>
+          <div class="dg-in" style="--i:1"><svg viewBox="0 0 520 214" aria-hidden="true"><line class="e" x1="92" y1="40" x2="272" y2="34"/><text class="el" x="170" y="27">owns</text><line class="e" x1="272" y1="34" x2="440" y2="70"/><text class="el" x="356" y="44">built from</text><line class="e" x1="92" y1="40" x2="118" y2="150"/><text class="el" x="113" y="95">owns</text><line class="e" x1="118" y1="150" x2="308" y2="138"/><text class="el" x="212" y="136">cites</text><line class="e" x1="272" y1="34" x2="444" y2="176"/><text class="el" x="372" y="110">writes</text><g class="nd"><rect x="28" y="21" width="128" height="38" rx="8"/><text class="l" x="40" y="36">TEAM</text><text class="t" x="40" y="52">payments</text></g><g class="nd"><rect x="204" y="15" width="136" height="38" rx="8"/><text class="l" x="216" y="30">SERVICE</text><text class="t" x="216" y="46">refunds-api</text></g><g class="nd"><rect x="372" y="51" width="136" height="38" rx="8"/><text class="l" x="384" y="66">REPOSITORY</text><text class="t" x="384" y="82">acme/billing</text></g><g class="nd"><rect class="ring" x="29" y="127" width="178" height="46" rx="11"/><rect x="33" y="131" width="170" height="38" rx="8"/><text class="l" x="45" y="146">POLICY</text><text class="t" x="45" y="162">refunds above $100</text></g><g class="nd"><rect x="252" y="119" width="112" height="38" rx="8"/><text class="l" x="264" y="134">ISSUE</text><text class="t" x="264" y="150">PAY-212</text></g><g class="nd"><rect x="374" y="157" width="140" height="38" rx="8"/><text class="l" x="386" y="172">TABLE</text><text class="t" x="386" y="188">stripe_refunds</text></g><text class="el" x="33" y="192">source: github acme/billing@a91c</text><text class="el" x="33" y="206">source: linear PAY-212</text></svg></div>
         </div>
       </figure>
     </div>
   </section>
 
-  <!-- ================= THE REST ================= -->
+  <!-- ================= SUPPORTED AGENTS ================= -->
+  <section class="sec" id="support">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">Supported agents</p>
+        <h2>What Oxagen can do with each agent</h2>
+        <p>Oxagen supports four agents as equals: Claude Code, Codex, Cursor, and Stella. Each
+        agent gives Oxagen different hooks, so a few controls work differently. This table shows
+        each one.</p>
+      </div>
+      <div class="reveal">
+      <div class="matrix-wrap">
+        <table class="matrix">
+          <caption class="sr-only">What Oxagen can do with each supported agent</caption>
+          <thead><tr><th scope="col">What Oxagen can do</th><th scope="col"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z"/></svg>Claude Code</span></th><th scope="col"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M9.064 3.344a4.578 4.578 0 012.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 00.043 0 4.55 4.55 0 013.046.275l.047.022.116.057a4.581 4.581 0 012.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 01-.134 1.223.123.123 0 00.03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 01-2.201 1.388.123.123 0 00-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 00-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 01-1.945-.466 4.544 4.544 0 01-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 01-.37-.961 4.582 4.582 0 01-.014-2.298.124.124 0 00.006-.056.085.085 0 00-.027-.048 4.467 4.467 0 01-1.034-1.651 3.896 3.896 0 01-.251-1.192 5.189 5.189 0 01.141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 00.065-.066 4.51 4.51 0 01.829-1.615 4.535 4.535 0 011.837-1.388zm3.482 10.565a.637.637 0 000 1.272h3.636a.637.637 0 100-1.272h-3.636zM8.462 9.23a.637.637 0 00-1.106.631l1.272 2.224-1.266 2.136a.636.636 0 101.095.649l1.454-2.455a.636.636 0 00.005-.64L8.462 9.23z"/></svg>Codex</span></th><th scope="col"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M22.106 5.68L12.5.135a.998.998 0 00-.998 0L1.893 5.68a.84.84 0 00-.419.726v11.186c0 .3.16.577.42.727l9.607 5.547a.999.999 0 00.998 0l9.608-5.547a.84.84 0 00.42-.727V6.407a.84.84 0 00-.42-.726zm-.603 1.176L12.228 22.92c-.063.108-.228.064-.228-.061V12.34a.59.59 0 00-.295-.51l-9.11-5.26c-.107-.062-.063-.228.062-.228h18.55c.264 0 .428.286.296.514z"/></svg>Cursor</span></th><th scope="col"><span><svg viewBox="14 14 68 68" aria-hidden="true"><g transform="translate(13.423,109.664) scale(0.98160)"><path class="mark" d="M5.88507 -58.2714V-67.369H16.3847L25.7719 -65.7956L26.4302 -67.4381L18.669 -72.8821L11.2665 -80.3931L17.6519 -86.7785L25.163 -79.3761L30.607 -71.6149L32.2494 -72.2732L30.6761 -81.6604V-92.16H39.7737V-81.6604L38.2004 -72.2732L39.8428 -71.6149L45.2868 -79.3761L52.7978 -86.7785L59.1832 -80.3931L51.7808 -72.8821L44.0196 -67.4381L44.6779 -65.7956L54.0651 -67.369H64.5647V-58.2714H54.0651L44.6779 -59.8447L44.0196 -58.2023L51.7808 -52.7583L59.1832 -45.2472L52.7978 -38.8618L45.2868 -46.2642L39.8428 -54.0254L38.2004 -53.3672L39.7737 -43.98V-33.4804H30.6761V-43.98L32.2494 -53.3672L30.607 -54.0254L25.163 -46.2642L17.6519 -38.8618L11.2665 -45.2472L18.669 -52.7583L26.4302 -58.2023L25.7719 -59.8447L16.3847 -58.2714Z" fill="#D4AF37"/></g></svg>Stella</span></th></tr></thead>
+          <tbody>
+          <tr><th scope="row">Add it from the Agents page</th><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span><small>The Cursor app and cursor-agent share one setup.</small></td><td><span class="sup y">Yes</span></td></tr>
+          <tr><th scope="row">Record each tool call</th><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td></tr>
+          <tr><th scope="row">Let a rule allow or deny a tool call</th><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td></tr>
+          <tr><th scope="row">Send a tool call to a person</th><td><span class="sup p">Partly</span><small>Claude Code asks you on your own machine.</small></td><td><span class="sup n">No</span><small>Oxagen denies the call and says why.</small></td><td><span class="sup n">No</span><small>Oxagen denies the call and says why.</small></td><td><span class="sup p">Partly</span><small>Stella asks you before the call runs.</small></td></tr>
+          <tr><th scope="row">Record model calls and their cost</th><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup n">No</span><small>Cursor sends model calls to its own servers.</small></td><td><span class="sup y">Yes</span><small>For Anthropic models.</small></td></tr>
+          <tr><th scope="row">Send a message to a running agent</th><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup p">Partly</span><small>Only when a session starts.</small></td><td><span class="sup p">Partly</span><small>Only when a session starts.</small></td></tr>
+          <tr><th scope="row">Stop a run</th><td><span class="sup y">Yes</span></td><td><span class="sup p">Partly</span><small>Oxagen blocks the next tool call and ends the model call in progress.</small></td><td><span class="sup p">Partly</span><small>Oxagen blocks the next tool call.</small></td><td><span class="sup y">Yes</span></td></tr>
+          <tr><th scope="row">Load your skills and rules</th><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td><td><span class="sup y">Yes</span></td></tr>
+          <tr><th scope="row">Keep the model key in Oxagen</th><td><span class="sup y">Yes</span></td><td><span class="sup p">Partly</span><small>With an API key. Not with a ChatGPT sign-in.</small></td><td><span class="sup n">No</span></td><td><span class="sup n">No</span><small>Stella keeps its own key.</small></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="matrix-key" aria-hidden="true"><span class="sup y">Yes</span><span class="sup p">Partly</span><span class="sup n">No</span></p>
+      <p class="matrix-note">Claude Desktop connects in a different way. It calls Oxagen's own
+      tools, and Oxagen checks and records those calls only. If you built your own agent, it can
+      send its events to Oxagen with the <code>tacho hook</code> command.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MORE ================= -->
   <section class="sec sec-alt" id="more">
     <div class="wrap">
       <div class="sec-head reveal">
-        <p class="eyebrow">The rest of the list</p>
-        <h2>What else an agent control plane does</h2>
+        <p class="eyebrow">More</p>
+        <h2>What else Oxagen does</h2>
       </div>
       <div class="p-more">
         <article class="card reveal">
-          <span class="dg-k">govern</span>
-          <h3>Kill switches at every level</h3>
-          <p>Deny a tool version, a server, a connection, an agent, a workspace, or your whole organization in one action. Or a class: everything that moves money, everywhere, now.</p>
+          <span class="dg-k">access</span>
+          <h3>Stop switches at every level</h3>
+          <p>In one action, deny a tool version, a server, a connection, an agent, a workspace, or your whole organization. You can also deny one kind of action everywhere, such as everything that moves money.</p>
           <div class="p-nest" aria-hidden="true"><span>organization<span>workspace<span class="off">agent triage · denied</span></span></span></div>
         </article>
         <article class="card reveal reveal-d1">
-          <span class="dg-k">govern and explain</span>
-          <h3>Simulate a rule before you switch it on</h3>
-          <p>Rules are written in Cedar: deterministic, versioned, and tested. Before activation, Oxagen replays a rule against your recent real tool calls and reports what would change.</p>
+          <span class="dg-k">access</span>
+          <h3>Test a rule before you turn it on</h3>
+          <p>Rules are written in Cedar, a policy language. A rule gives the same answer every time, and it is versioned and tested. Before a rule goes live, Oxagen runs it against your recent tool calls. Then it shows what would change.</p>
           <ul class="p-delta" aria-hidden="true"><li><b>+14</b>calls now denied</li><li><b>+3</b>calls now wait for a person</li><li><b>2</b>calls newly allowed</li></ul>
         </article>
         <article class="card reveal reveal-d2">
-          <span class="dg-k">govern</span>
-          <h3>Prompt injection stops at the tool call</h3>
-          <p>Tool output is data, never instruction. An argument derived from a document, a web page, or another agent's message is marked tainted, and taint on a write routes the request to a person.</p>
-          <div class="p-mini" aria-hidden="true"><span class="dg-tag">web page</span>→<span class="dg-tag">argument tainted</span>→<span class="dg-tag is-wait">routed</span></div>
+          <span class="dg-k">access</span>
+          <h3>Outside text is marked</h3>
+          <p>Oxagen treats tool output as data, not as instructions. If an argument comes from a document, a web page, or another agent's message, Oxagen marks it. If a marked argument would write something, the request goes to a person.</p>
+          <div class="p-mini" aria-hidden="true"><span class="dg-tag">web page</span><span class="p-next">→ <span class="dg-tag">marked</span></span><span class="p-next">→ <span class="dg-tag is-wait">asks a person</span></span></div>
         </article>
         <article class="card reveal reveal-d3">
-          <span class="dg-k">explain and govern</span>
-          <h3>An audit archive your auditor can verify</h3>
-          <p>Full bodies, seven years, written once at seal time, encrypted under your own keys. Legal holds, crypto-shredding erasure, and an export bundle with a verifier script.</p>
-          <div class="p-mini" aria-hidden="true"><span class="dg-tag">write once</span><span class="dg-tag">7 years</span><span class="dg-tag is-ok">verifies offline</span></div>
+          <span class="dg-k">record</span>
+          <h3>An archive your auditor can check</h3>
+          <p>Oxagen writes full records once, when a run ends. It keeps them for seven years, encrypted under your own keys. It supports legal holds. To erase a record, you delete its key. Each export comes with a script that checks it.</p>
+          <div class="p-mini" aria-hidden="true"><span class="dg-tag">written once</span><span class="dg-tag">7 years</span><span class="dg-tag is-ok">checks offline</span></div>
         </article>
         <article class="card reveal">
-          <span class="dg-k">explain and govern</span>
-          <h3>One accountable operator per run</h3>
-          <p>Every run has exactly one human operator, even when a schedule or a webhook started it. Spend and progress roll up operator by operator.</p>
-          <div class="p-mini" aria-hidden="true"><span class="dg-tag">webhook</span>→<span class="dg-tag">trigger owner</span>→<span class="dg-tag is-ok">operator</span></div>
+          <span class="dg-k">record</span>
+          <h3>One accountable person per run</h3>
+          <p>Each run has exactly one person in charge, even when a schedule or a webhook started it. Spend and progress add up person by person.</p>
+          <div class="p-mini" aria-hidden="true"><span class="dg-tag">webhook</span><span class="p-next">→ <span class="dg-tag">its owner</span></span><span class="p-next">→ <span class="dg-tag is-ok">operator</span></span></div>
         </article>
         <article class="card reveal reveal-d1">
-          <span class="dg-k">learn and explain</span>
-          <h3>It learned. You approved. It changed.</h3>
-          <p>When an agent learns something, it proposes a context record. You review it as a pull request on your own repo. Nothing steers a run until it is merged.</p>
-          <div class="p-mini" aria-hidden="true"><span class="dg-tag">record</span>→<span class="dg-tag is-wait">Context PR</span>→<span class="dg-tag">next run</span></div>
+          <span class="dg-k">equipment</span>
+          <h3>Notes a person approves</h3>
+          <p>When an agent learns something, it writes a note. You review the note as a pull request in your own repo. The note affects no run until it is merged.</p>
+          <div class="p-mini" aria-hidden="true"><span class="dg-tag">note</span><span class="p-next">→ <span class="dg-tag is-wait">pull request</span></span><span class="p-next">→ <span class="dg-tag">next run</span></span></div>
         </article>
         <article class="card reveal reveal-d2">
-          <span class="dg-k">govern</span>
-          <h3>Sixty seconds to wrapped</h3>
-          <p>Wrap Claude Code or Codex with one click from a signed installer. The page flips to connected when the first frame arrives. Any model, any harness with a base URL.</p>
-          <div class="p-mini" aria-hidden="true"><span class="dg-tag">installer</span>→<span class="dg-tag">first frame</span>→<span class="dg-tag is-ok">connected</span></div>
+          <span class="dg-k">equipment</span>
+          <h3>Add an agent from one page</h3>
+          <p>Pick Claude Code, Codex, Cursor, or Stella on the Agents page. Oxagen makes a signed installer. When the agent's first event arrives, the page shows it as connected.</p>
+          <div class="p-mini" aria-hidden="true"><span class="dg-tag">installer</span><span class="p-next">→ <span class="dg-tag">first event</span></span><span class="p-next">→ <span class="dg-tag is-ok">connected</span></span></div>
         </article>
         <article class="card reveal reveal-d3">
-          <span class="dg-k">govern</span>
+          <span class="dg-k">access</span>
           <h3>Allowed by rule</h3>
-          <p>A rule that allows is a decision someone wrote down, with conditions: an amount under a threshold, a counterparty on your list, business hours. When it allows a request, the receipt says allowed by rule, names the rule, and records that no person looked.</p>
+          <p>A rule that allows is a decision someone wrote down. It can have conditions, such as an amount under a limit, a payee on your list, or business hours. When the rule allows a request, the receipt names the rule and records that no person looked.</p>
           <div class="p-mini" aria-hidden="true"><span class="dg-tag">under $50</span><span class="dg-tag">listed payee</span><span class="dg-tag is-ok">allowed by rule</span></div>
         </article>
       </div>
@@ -606,22 +661,22 @@
         <p class="eyebrow">The short version</p>
         <h2 style="font-size:clamp(28px,3.8vw,40px);margin:14px 0">What the control plane holds</h2>
         <p style="color:var(--ink-3);font-size:17px">
-          Oxagen sits beside your agents rather than inside them. It governs the runs, and you
-          keep running the agents you chose.
+          Oxagen works beside your agents, not inside them. You keep running the agents you chose.
+          Oxagen sets the rules and keeps the record.
         </p>
         <p style="margin-top:22px">
           <a class="btn btn-ghost ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Read the docs <span class="arr">→</span></a>
         </p>
       </div>
       <dl class="spec reveal reveal-d1">
-        <div><dt>Access</dt><dd>The agent asks, a rule you wrote answers: allowed, denied, or routed to a person. The credential stays in Oxagen. No model in the decision.</dd></div>
-        <div><dt>Record</dt><dd>Every run a chain of hash-linked frames, sealed with a signature, kept seven years in write-once storage by default.</dd></div>
-        <div><dt>Budget and rules</dt><dd>Priced per call by token class, rolled up to the operator, reconciled to the cent against provider statements.</dd></div>
-        <div><dt>Equipment</dt><dd>A knowledge graph from your own sources. Context records reviewed as pull requests.</dd></div>
+        <div><dt>Access</dt><dd>The agent asks. A rule you wrote answers: allow, deny, or ask a person. The key stays in Oxagen. No AI model makes the choice.</dd></div>
+        <div><dt>Record</dt><dd>Each run saved step by step, each step linked to the one before, signed at the end, and kept seven years by default.</dd></div>
+        <div><dt>Budget and rules</dt><dd>Each model call priced, added up to the person, and checked to the cent against the provider's bill.</dd></div>
+        <div><dt>Equipment</dt><dd>A knowledge graph from your own sources. Notes reviewed as pull requests.</dd></div>
         <div><dt>Fleet</dt><dd>Every agent on one page, with its mandate, its open requests, its spend, and its last run.</dd></div>
-        <div><dt>Harnesses</dt><dd>Claude Code and Codex with one click, on macOS, Windows, and Linux. Any harness with a base URL setting.</dd></div>
-        <div><dt>Models</dt><dd>The Anthropic Messages API and the OpenAI Chat Completions and Responses APIs, so any vendor's model routes through.</dd></div>
-        <div><dt>SDKs</dt><dd>The OpenAI Agents SDK, the Claude Agent SDK, and custom agents in TypeScript, Python, or Go.</dd></div>
+        <div><dt>Agents</dt><dd>Claude Code, Codex, Cursor, and Stella. The table above shows what each one supports.</dd></div>
+        <div><dt>Models</dt><dd>Model calls through the Anthropic and OpenAI APIs, from Claude Code, Codex, and Stella.</dd></div>
+        <div><dt>Your own agent</dt><dd>Send its events to Oxagen with the <code>tacho hook</code> command.</dd></div>
       </dl>
     </div>
   </section>
@@ -631,15 +686,16 @@
     <div class="wrap split">
       <div class="reveal">
         <p class="eyebrow">Get a demo</p>
-        <h2>One denied request, one routed request, in twenty minutes</h2>
+        <h2>See Oxagen on your own code in twenty minutes</h2>
         <p style="color:var(--ink-3);font-size:17.5px;margin-top:14px;max-width:48ch">
-          Bring a repo. Wrap one machine, run one task, watch one request denied and one routed
-          to you, and read what it cost by operator, agent, run, turn, and step.
+          Bring a repo. Together you add one machine and run one task. You watch a rule deny one
+          request and send another to you. Then you read what the run cost by person, agent, run,
+          turn, and step.
         </p>
         <ul style="list-style:none;padding:0;margin:24px 0 0;display:grid;gap:9px">
-          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="gold mono">→</span>Live walkthrough on your use case, not a canned deck</li>
-          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="gold mono">→</span>Straight answers on rollout, pricing, and security review</li>
-          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="gold mono">→</span>You keep the run record</li>
+          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="mono" style="color:var(--ink-3)">→</span>A live walkthrough of your use case, with no slides</li>
+          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="mono" style="color:var(--ink-3)">→</span>Clear answers on rollout, pricing, and security review</li>
+          <li style="display:flex;gap:10px;font-size:14.8px;color:var(--ink-2)"><span class="mono" style="color:var(--ink-3)">→</span>You keep the run record</li>
         </ul>
       </div>
 
@@ -686,7 +742,7 @@
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="/" aria-label="Oxagen home">
-      <svg viewBox="0 0 453.868 93.246" role="img" aria-label="oxagen"><path d="M33.9083 68.758Q24.1657 68.758 16.4786 64.7737Q8.79142 60.7894 4.39571 53.2965Q0 45.8035 0 35.3862V33.3718Q0 22.9544 4.39571 15.4615Q8.79142 7.96854 16.4786 3.98427Q24.1657 0 33.9083 0Q43.6509 0 51.3381 3.98427Q59.0252 7.96854 63.4209 15.4615Q67.8166 22.9544 67.8166 33.3718V35.3862Q67.8166 45.8035 63.4209 53.2965Q59.0252 60.7894 51.3381 64.7737Q43.6509 68.758 33.9083 68.758ZM33.9083 55.3486Q42.1895 55.3486 47.4689 50.0198Q52.7484 44.691 52.7484 35.0142V33.7437Q52.7484 24.067 47.5233 18.7382Q42.2981 13.4094 33.9083 13.4094Q25.6502 13.4094 20.3592 18.7382Q15.0683 24.067 15.0683 33.7437V35.0142Q15.0683 44.691 20.3592 50.0198Q25.6502 55.3486 33.9083 55.3486Z M176.569 68.758Q169.637 68.758 164.119 66.3453Q158.601 63.9327 155.387 59.2935Q152.173 54.6542 152.173 48.0088Q152.173 41.3403 155.387 36.8558Q158.601 32.3712 164.27 30.1017Q169.94 27.8323 177.174 27.8323H196.047V23.8925Q196.047 18.7316 192.874 15.5274Q189.701 12.3232 182.99 12.3232Q176.411 12.3232 173.049 15.3842Q169.686 18.4452 168.627 23.3593L154.691 18.7315Q156.27 13.6133 159.748 9.39702Q163.225 5.18071 169.049 2.59035Q174.874 0 183.208 0Q195.972 0 203.326 6.42816Q210.681 12.8563 210.681 24.9392V50.4707Q210.681 54.4204 214.368 54.4204H219.795V66.9148H209.197Q204.464 66.9148 201.442 64.5334Q198.42 62.1521 198.42 58.1563V57.8864H196.126Q195.392 59.6967 193.399 62.2985Q191.406 64.9004 187.388 66.8292Q183.369 68.758 176.569 68.758ZM179.05 56.4348Q186.581 56.4348 191.314 52.1592Q196.047 47.8837 196.047 40.6031V39.2405H178.175Q173.175 39.2405 170.208 41.3881Q167.241 43.5358 167.241 47.5513Q167.241 51.5668 170.34 54.0008Q173.439 56.4348 179.05 56.4348Z M227.767 34.6423V32.6279Q227.767 22.3817 231.86 15.0863Q235.953 7.79081 242.768 3.8954Q249.582 0 257.706 0Q266.935 0 271.762 3.33256Q276.589 6.66512 278.81 10.4107H281.042V1.8432H295.801V79.33Q295.801 85.6989 292.104 89.4725Q288.408 93.2462 282.079 93.2462H238.369V80.0541H277.023Q280.779 80.0541 280.779 76.1043V57.2775H278.547Q277.161 59.5683 274.665 61.8904Q272.168 64.2125 268.057 65.7414Q263.946 67.2702 257.706 67.2702Q249.582 67.2702 242.756 63.3748Q235.93 59.4794 231.848 52.1724Q227.767 44.8655 227.767 34.6423ZM261.938 54.0781Q270.151 54.0781 275.573 48.8612Q280.996 43.6443 280.996 34.2704V32.9999Q280.996 23.4943 275.627 18.3432Q270.259 13.1921 261.938 13.1921Q253.749 13.1921 248.315 18.3432Q242.881 23.4943 242.881 32.9999V34.2704Q242.881 43.6443 248.315 48.8612Q253.749 54.0781 261.938 54.0781Z M344.764 68.758Q334.998 68.758 327.583 64.6108Q320.167 60.4636 316.031 52.9048Q311.896 45.346 311.896 35.1689V33.589Q311.896 23.3889 315.977 15.8416Q320.059 8.2944 327.397 4.1472Q334.735 0 344.385 0Q353.881 0 360.956 4.1867Q368.031 8.37341 371.981 15.8515Q375.931 23.3297 375.931 33.2895V38.6974H327.181Q327.468 46.3334 332.587 50.9496Q337.707 55.5658 345.198 55.5658Q352.522 55.5658 356.101 52.3534Q359.681 49.141 361.553 45.0629L373.985 51.4813Q372.119 55.0656 368.63 59.1042Q365.141 63.1428 359.394 65.9504Q353.648 68.758 344.764 68.758ZM327.313 27.2892H360.622Q360.095 20.7986 355.7 16.9954Q351.304 13.1921 344.277 13.1921Q337.055 13.1921 332.691 16.9954Q328.327 20.7986 327.313 27.2892Z M391.548 66.9148V1.8432H406.353V10.9769H408.585Q410.303 7.25429 414.832 3.99908Q419.361 0.743866 428.435 0.743866Q435.956 0.743866 441.695 4.12911Q447.434 7.51435 450.651 13.5903Q453.868 19.6663 453.868 27.9442V66.9148H438.8V29.1226Q438.8 21.1969 434.891 17.3492Q430.983 13.5015 423.9 13.5015Q415.872 13.5015 411.244 18.8237Q406.617 24.146 406.617 33.9445V66.9148Z" fill="currentColor"/><path d="M73.9979 66.9148 98.2261 34.0696 74.3764 1.8432H91.9626L107.9 24.3499H110.131L126.068 1.8432H143.654L119.805 34.0696L144.033 66.9148H126.206L110.131 44.0065H107.9L91.8244 66.9148Z" fill="#D4AF37"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 604.125 115.625" role="img" aria-label="oxagen"><g transform="translate(21.575,22.616) scale(3.437130)"><g data-mark="hive"><path d="M0.000 -6.080L5.800 -3.040L5.800 3.040L0.000 6.080L-5.800 3.040L-5.800 -3.040Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M13.080 -6.080L18.880 -3.040L18.880 3.040L13.080 6.080L7.280 3.040L7.280 -3.040Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M6.540 4.160L12.340 7.200L12.340 13.280L6.540 16.320L0.740 13.280L0.740 7.200Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M19.620 3.660L25.897 6.950L25.897 13.530L19.620 16.820L13.343 13.530L13.343 6.950Z" fill="#D4AF37"/><path d="M0.000 13.900L6.277 17.190L6.277 23.770L0.000 27.060L-6.277 23.770L-6.277 17.190Z" fill="#D4AF37" opacity="0.55"/><path d="M13.080 14.400L18.880 17.440L18.880 23.520L13.080 26.560L7.280 23.520L7.280 17.440Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/></g></g><g transform="translate(150.257,11.190)"><path class="letters" d="M33.9083 68.758Q24.1657 68.758 16.4786 64.7737Q8.79142 60.7894 4.39571 53.2965Q0 45.8035 0 35.3862V33.3718Q0 22.9544 4.39571 15.4615Q8.79142 7.96854 16.4786 3.98427Q24.1657 0 33.9083 0Q43.6509 0 51.3381 3.98427Q59.0252 7.96854 63.4209 15.4615Q67.8166 22.9544 67.8166 33.3718V35.3862Q67.8166 45.8035 63.4209 53.2965Q59.0252 60.7894 51.3381 64.7737Q43.6509 68.758 33.9083 68.758ZM33.9083 55.3486Q42.1895 55.3486 47.4689 50.0198Q52.7484 44.691 52.7484 35.0142V33.7437Q52.7484 24.067 47.5233 18.7382Q42.2981 13.4094 33.9083 13.4094Q25.6502 13.4094 20.3592 18.7382Q15.0683 24.067 15.0683 33.7437V35.0142Q15.0683 44.691 20.3592 50.0198Q25.6502 55.3486 33.9083 55.3486Z M176.569 68.758Q169.637 68.758 164.119 66.3453Q158.601 63.9327 155.387 59.2935Q152.173 54.6542 152.173 48.0088Q152.173 41.3403 155.387 36.8558Q158.601 32.3712 164.27 30.1017Q169.94 27.8323 177.174 27.8323H196.047V23.8925Q196.047 18.7316 192.874 15.5274Q189.701 12.3232 182.99 12.3232Q176.411 12.3232 173.049 15.3842Q169.686 18.4452 168.627 23.3593L154.691 18.7315Q156.27 13.6133 159.748 9.39702Q163.225 5.18071 169.049 2.59035Q174.874 0 183.208 0Q195.972 0 203.326 6.42816Q210.681 12.8563 210.681 24.9392V50.4707Q210.681 54.4204 214.368 54.4204H219.795V66.9148H209.197Q204.464 66.9148 201.442 64.5334Q198.42 62.1521 198.42 58.1563V57.8864H196.126Q195.392 59.6967 193.399 62.2985Q191.406 64.9004 187.388 66.8292Q183.369 68.758 176.569 68.758ZM179.05 56.4348Q186.581 56.4348 191.314 52.1592Q196.047 47.8837 196.047 40.6031V39.2405H178.175Q173.175 39.2405 170.208 41.3881Q167.241 43.5358 167.241 47.5513Q167.241 51.5668 170.34 54.0008Q173.439 56.4348 179.05 56.4348Z M227.767 34.6423V32.6279Q227.767 22.3817 231.86 15.0863Q235.953 7.79081 242.768 3.8954Q249.582 0 257.706 0Q266.935 0 271.762 3.33256Q276.589 6.66512 278.81 10.4107H281.042V1.8432H295.801V79.33Q295.801 85.6989 292.104 89.4725Q288.408 93.2462 282.079 93.2462H238.369V80.0541H277.023Q280.779 80.0541 280.779 76.1043V57.2775H278.547Q277.161 59.5683 274.665 61.8904Q272.168 64.2125 268.057 65.7414Q263.946 67.2702 257.706 67.2702Q249.582 67.2702 242.756 63.3748Q235.93 59.4794 231.848 52.1724Q227.767 44.8655 227.767 34.6423ZM261.938 54.0781Q270.151 54.0781 275.573 48.8612Q280.996 43.6443 280.996 34.2704V32.9999Q280.996 23.4943 275.627 18.3432Q270.259 13.1921 261.938 13.1921Q253.749 13.1921 248.315 18.3432Q242.881 23.4943 242.881 32.9999V34.2704Q242.881 43.6443 248.315 48.8612Q253.749 54.0781 261.938 54.0781Z M344.764 68.758Q334.998 68.758 327.583 64.6108Q320.167 60.4636 316.031 52.9048Q311.896 45.346 311.896 35.1689V33.589Q311.896 23.3889 315.977 15.8416Q320.059 8.2944 327.397 4.1472Q334.735 0 344.385 0Q353.881 0 360.956 4.1867Q368.031 8.37341 371.981 15.8515Q375.931 23.3297 375.931 33.2895V38.6974H327.181Q327.468 46.3334 332.587 50.9496Q337.707 55.5658 345.198 55.5658Q352.522 55.5658 356.101 52.3534Q359.681 49.141 361.553 45.0629L373.985 51.4813Q372.119 55.0656 368.63 59.1042Q365.141 63.1428 359.394 65.9504Q353.648 68.758 344.764 68.758ZM327.313 27.2892H360.622Q360.095 20.7986 355.7 16.9954Q351.304 13.1921 344.277 13.1921Q337.055 13.1921 332.691 16.9954Q328.327 20.7986 327.313 27.2892Z M391.548 66.9148V1.8432H406.353V10.9769H408.585Q410.303 7.25429 414.832 3.99908Q419.361 0.743866 428.435 0.743866Q435.956 0.743866 441.695 4.12911Q447.434 7.51435 450.651 13.5903Q453.868 19.6663 453.868 27.9442V66.9148H438.8V29.1226Q438.8 21.1969 434.891 17.3492Q430.983 13.5015 423.9 13.5015Q415.872 13.5015 411.244 18.8237Q406.617 24.146 406.617 33.9445V66.9148Z" fill="currentColor"/><path class="accent" d="M73.9979 66.9148 98.2261 34.0696 74.3764 1.8432H91.9626L107.9 24.3499H110.131L126.068 1.8432H143.654L119.805 34.0696L144.033 66.9148H126.206L110.131 44.0065H107.9L91.8244 66.9148Z" fill="#D4AF37"/></g><style>:root{color:#09090B}@media(prefers-color-scheme:dark){:root{color:#FFFFFF}}</style></svg>
     </a>
         <p>See which agent spent what,<br>and on whose behalf.</p>
         <div class="socials">
@@ -711,7 +767,7 @@
           <li><a class="ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Customer login</a></li>
           <li><a href="/#field-manual">Field manual</a></li>
           <li><a href="/blog">Research</a></li>
-          <li><a href="/story">Oxagen Story</a></li>
+          <li><a href="/story">The Oxagen story</a></li>
           <li><a class="ext" href="https://github.com/oxagenai" target="_blank" rel="noopener">GitHub</a></li>
         </ul>
       </nav>

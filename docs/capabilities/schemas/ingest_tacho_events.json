@@ -30594,9 +30594,7 @@
           ]
         },
         "minItems": 1,
-        "maxItems": 200,
-        "x-server-validated": true,
-        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+        "maxItems": 200
       },
       "bodies": {
         "type": "array",
@@ -30792,6 +30790,27 @@
                 "retention_class_excluded",
                 "no_content_digest"
               ]
+            }
+          },
+          "required": [
+            "event_id_idem",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 200
+      },
+      "proof_rejections": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "event_id_idem": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string",
+              "maxLength": 256
             }
           },
           "required": [

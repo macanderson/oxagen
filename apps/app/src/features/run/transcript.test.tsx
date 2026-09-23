@@ -104,6 +104,12 @@ afterEach(() => {
   refresh.mockReset();
 });
 
+/** The app's body fixture without the app-only `chainRef`, as the server sends it. */
+function serverBody() {
+  const { chainRef: _appChainRef, ...body } = transcriptBody();
+  return body;
+}
+
 describe("assembled model responses", () => {
   it("renders mapped message blocks and keeps the full-frame link for shortened input", () => {
     const block = {
@@ -114,8 +120,11 @@ describe("assembled model responses", () => {
       cost: null,
     };
     const page = runTranscript({ entries: [transcriptEntry()] });
-    const entry = page.entries[0];
-    if (!entry) throw new Error("Missing transcript fixture entry");
+    const first = page.entries[0];
+    if (!first) throw new Error("Missing transcript fixture entry");
+    // The app's entry names its chain as `subagent.chainRef`; the server's
+    // names it differently, so the app-only member is left out of the input.
+    const { subagent: _appSubagent, ...entry } = first;
     const mapped = RunTranscript.parse(
       toRunTranscript({
         ...page,
@@ -127,7 +136,7 @@ describe("assembled model responses", () => {
             cumulativeCost: null,
             request: null,
             response: {
-              ...transcriptBody(),
+              ...serverBody(),
               text: null,
               assembly: {
                 blocks: [
@@ -196,6 +205,109 @@ describe("assembled model responses", () => {
     expect(within(half).getByRole("link").getAttribute("href")).toContain(
       "body=",
     );
+  });
+});
+
+describe("a subagent's frames", () => {
+  // A subagent records on a chain of its own, numbered from 0 like the run's.
+  // The Frames tab reads the run's chain, so a link by seq from a subagent's
+  // frame would open a different frame with the same number.
+  it("names the subagent and links no frame of its chain (negative: the run's own frame still links)", () => {
+    const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c1";
+    const page = runTranscript({ entries: [transcriptEntry()] });
+    const first = page.entries[0];
+    if (!first) throw new Error("Missing transcript fixture entry");
+    // The app's entry names its chain as `subagent.chainRef`; the server's
+    // names it differently, so the app-only member is left out of the input.
+    const { subagent: _appSubagent, ...entry } = first;
+    const server = {
+      ...entry,
+      callId: null,
+      cost: null,
+      cumulativeCost: null,
+      request: null,
+      response: {
+        ...serverBody(),
+        text: "Looked through the repository.",
+        truncated: true,
+        assembly: null,
+      },
+    };
+    const mapped = RunTranscript.parse(
+      toRunTranscript({
+        ...page,
+        entries: [
+          {
+            ...server,
+            seq: "3",
+            endSeq: "3",
+            subagent: { sessionUuid: CHAIN, id: "agent-1", type: "Explore" },
+            response: { ...server.response, seq: "3", sessionUuid: CHAIN },
+          },
+          {
+            ...server,
+            seq: "4",
+            endSeq: "4",
+            response: { ...server.response, seq: "4" },
+          },
+        ],
+      }),
+    );
+    expect(mapped.entries[0]?.subagent).toEqual({
+      chainRef: CHAIN,
+      type: "Explore",
+    });
+    expect(mapped.entries[0]?.response?.chainRef).toBe(CHAIN);
+    renderSection({ read: readOk(mapped), zoom: "everything" });
+    const [sub, own] = screen.getAllByTestId("transcript-frame");
+    if (sub === undefined || own === undefined)
+      throw new Error("both frames are drawn");
+    expect(within(sub).getByTestId("transcript-subagent")).toHaveTextContent(
+      "subagent Explore",
+    );
+    expect(within(sub).queryAllByRole("link")).toHaveLength(0);
+    expect(within(own).queryByTestId("transcript-subagent")).toBeNull();
+    expect(
+      within(own)
+        .getAllByRole("link")
+        .some((link) => link.getAttribute("href")?.includes("body=4")),
+    ).toBe(true);
+  });
+});
+
+describe("a decision on a subagent's chain", () => {
+  it("names the decision's chain when the server names one, and leaves it off otherwise", () => {
+    const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c2";
+    const page = runTranscript({ entries: [transcriptEntry()] });
+    const first = page.entries[0];
+    if (!first) throw new Error("Missing transcript fixture entry");
+    const { subagent: _appSubagent, ...entry } = first;
+    const decided = (seq: string, sessionUuid?: string) => ({
+      ...entry,
+      seq,
+      endSeq: seq,
+      callId: null,
+      cost: null,
+      cumulativeCost: null,
+      request: null,
+      response: null,
+      decision: {
+        seq,
+        ...(sessionUuid === undefined ? {} : { sessionUuid }),
+        decision: "deny",
+        type: "policy_decision",
+        at: entry.at,
+      },
+    });
+    const mapped = RunTranscript.parse(
+      toRunTranscript({
+        ...page,
+        entries: [decided("5", CHAIN), decided("6")],
+      }),
+    );
+    expect(mapped.entries[0]?.decision?.chainRef).toBe(CHAIN);
+    expect(mapped.entries[1]?.decision).not.toHaveProperty("chainRef");
+    expect(mapped.entries[1]?.decision?.decision).toBe("deny");
   });
 });
 

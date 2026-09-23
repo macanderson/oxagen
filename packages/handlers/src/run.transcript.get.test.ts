@@ -6,9 +6,11 @@ import {
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import { digestBytes } from "@oxagen/tacho";
 import type { TachoFrameRow } from "@oxagen/telemetry";
+import { tachoFrame as tachoFrameOf } from "@oxagen/run-ledger";
 import { describe, expect, it, vi } from "vitest";
 import {
   createRunTranscriptGetHandler,
+  cursorPosition,
   decodeTranscriptCursor,
   elapsedMs,
   encodeTranscriptCursor,
@@ -49,6 +51,7 @@ const input = (over: Record<string, unknown>) =>
 function harness(
   rows: TachoFrameRow[],
   session?: Partial<{ outcome: string; sealedAt: Date | null }>,
+  subagentRows: TachoFrameRow[] = [],
 ) {
   const stores = memoryStores(
     [],
@@ -73,10 +76,45 @@ function harness(
     readRunRollups: stores.readRunRollups,
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames(SESSION_UUID, rows),
+    tachoSubagentFrames: memorySubagentFrames(SESSION_UUID, subagentRows),
     bodies: { getBody, getAssembly: () => Promise.resolve(null) },
     priceBook: () => Promise.resolve([]),
   };
-  return { transcript: createRunTranscriptGetHandler(deps), getBody };
+  return { transcript: createRunTranscriptGetHandler(deps), getBody, deps };
+}
+
+/**
+ * An in-memory `selectTachoSubagentEvents`: every chain under the root, in
+ * (session, seq) order, strictly after the position, at most `limit`.
+ */
+function memorySubagentFrames(root: string, rows: TachoFrameRow[]) {
+  const ordered = [...rows].sort((a, b) =>
+    a.sessionUuid === b.sessionUuid
+      ? a.seq - b.seq
+      : (a.sessionUuid ?? "") < (b.sessionUuid ?? "")
+        ? -1
+        : 1,
+  );
+  return (args: {
+    rootSessionUuid: string;
+    after: { sessionUuid: string; seq: number } | null;
+    limit: number;
+  }) =>
+    Promise.resolve(
+      args.rootSessionUuid !== root
+        ? []
+        : ordered
+            .filter((r) => {
+              const after = args.after;
+              if (after === null) return true;
+              const session = r.sessionUuid ?? "";
+              return (
+                session > after.sessionUuid ||
+                (session === after.sessionUuid && r.seq > after.seq)
+              );
+            })
+            .slice(0, args.limit),
+    );
 }
 
 const rows = [
@@ -858,5 +896,284 @@ describe("get_run_transcript reassembly", () => {
     // rather than drawn as a zero.
     expect(assembly?.blocks.every((b) => b.cost === null)).toBe(true);
     expect(assembly?.blocks.reduce((sum, b) => sum + b.tokens, 0)).toBe(400);
+  });
+});
+
+describe("get_run_transcript and one unreadable body", () => {
+  // One body the store could not answer (a missing object, an unknown key id,
+  // a transient failure) used to reject the whole page, and with it the
+  // Policy, Context and stats tabs that read the same page.
+  it("answers the page with that half unread and every other half read", async () => {
+    const { transcript, getBody } = harness([
+      tachoRow(0, {
+        kind: "turn_start",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+        ...stored("Fix the build."),
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        turnSeq: 1,
+        contentDigest: `sha256:${"5".repeat(64)}`,
+        bytesRef: `evb:v1:k:${"5".repeat(64)}`,
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(getBody).toHaveBeenCalledTimes(2);
+    expect(out.entries.map((e) => e.request?.text ?? null)).toEqual([
+      "Fix the build.",
+      null,
+    ]);
+    const unread = out.entries[1]?.response;
+    expect(unread?.text).toBeNull();
+    expect(unread?.assembly).toBeNull();
+    expect(unread?.digest).toBe(`sha256:${"5".repeat(64)}`);
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+  });
+
+  it("answers the page when the stored reassembly cannot be read", async () => {
+    const wire = stored(modelStream(["Done."]), "text/event-stream");
+    const { deps } = harness([
+      tachoRow(0, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        ...wire,
+      }),
+    ]);
+    const handler = createRunTranscriptGetHandler({
+      ...deps,
+      bodies: {
+        getBody: deps.bodies.getBody,
+        getAssembly: () => Promise.reject(new Error("store unavailable")),
+      },
+    });
+    const out = await handler(input({ zoom: "everything" }), ctx());
+    expect(out.entries[0]?.response?.text).toBeNull();
+    expect(out.entries[0]?.response?.assembly).toBeNull();
+  });
+});
+
+describe("get_run_transcript cost in a proxy-metered session", () => {
+  it("counts an observed call once: the harness's own report after it carries no cost", async () => {
+    const observed = {
+      kind: "llm_call",
+      toolName: "",
+      toolStatus: "",
+      source: "collector",
+      fidelity: "proxy",
+      attrs: { "oxagen.metering": "observed" },
+      body: JSON.stringify({ input_tokens: 10, output_tokens: 5 }),
+    };
+    const { transcript } = harness([
+      tachoRow(0, { ...observed, costUsdMicros: 500 }),
+      // The harness's OTel record of the same call.
+      tachoRow(1, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        source: "otel_log",
+        body: JSON.stringify({ input_tokens: 10, output_tokens: 5 }),
+        costUsdMicros: 500,
+      }),
+      // A later sighting the host stamped.
+      tachoRow(2, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        source: "transcript",
+        attrs: { "oxagen.llm_call_duplicate_of": "collector" },
+        costUsdMicros: 500,
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(out.entries.map((e) => e.cost?.micros ?? null)).toEqual([
+      "500",
+      null,
+      null,
+    ]);
+    expect(out.entries.at(-1)?.cumulativeCost?.micros).toBe("500");
+  });
+});
+
+describe("get_run_transcript and subagent chains", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+  const child = (seq: number, over: Partial<TachoFrameRow>): TachoFrameRow =>
+    tachoRow(seq, {
+      sessionUuid: CHILD,
+      rootSessionUuid: SESSION_UUID,
+      parentSessionUuid: SESSION_UUID,
+      subagentId: "agent-1",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_task",
+      ts: `2026-09-11 09:00:${String(10 + seq).padStart(2, "0")}.000`,
+      ...over,
+    });
+  const root = [
+    tachoRow(0, {
+      kind: "turn_start",
+      toolName: "",
+      toolStatus: "",
+      turnSeq: 1,
+    }),
+    tachoRow(1, {
+      kind: "tool_requested",
+      toolName: "Task",
+      toolUseId: "toolu_task",
+      turnSeq: 1,
+    }),
+    tachoRow(2, {
+      kind: "subagent_start",
+      toolName: "",
+      toolStatus: "",
+      toolUseId: "toolu_task",
+      turnSeq: 1,
+    }),
+    tachoRow(3, {
+      kind: "tool_call",
+      toolName: "Task",
+      toolUseId: "toolu_task",
+      turnSeq: 1,
+      ts: "2026-09-11 09:00:30.000",
+    }),
+    tachoRow(4, {
+      kind: "turn_end",
+      toolName: "",
+      toolStatus: "",
+      turnSeq: 1,
+      ts: "2026-09-11 09:00:31.000",
+    }),
+  ];
+  const children = [
+    child(0, { kind: "turn_start", toolName: "", toolStatus: "", turnSeq: 1 }),
+    child(1, {
+      kind: "llm_call",
+      toolName: "",
+      toolStatus: "",
+      costUsdMicros: 300,
+      ...stored("Looking at the repository."),
+    }),
+    child(2, {
+      kind: "tool_requested",
+      toolName: "Grep",
+      toolUseId: "toolu_g",
+    }),
+    child(3, { kind: "tool_call", toolName: "Grep", toolUseId: "toolu_g" }),
+  ];
+
+  it("shows the subagent's work where it was spawned, named as the subagent's", async () => {
+    // A subagent records on its own chain. The transcript read only the
+    // root's, so none of this reached the Run page.
+    const { transcript } = harness(root, undefined, children);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(
+      out.entries.map((e) =>
+        e.subagent ? `${e.subagent.id}:${e.seq}` : e.seq,
+      ),
+    ).toEqual([
+      "0",
+      "1",
+      "2",
+      "agent-1:0",
+      "agent-1:1",
+      "agent-1:2",
+      "agent-1:3",
+      "3",
+      "4",
+    ]);
+    const model = out.entries[4];
+    expect(model?.response?.text).toBe("Looking at the repository.");
+    expect(model?.response?.sessionUuid).toBe(CHILD);
+    expect(model?.cost?.micros).toBe("300");
+    // The subagent's turn_start is inside the run's first turn.
+    expect(out.entries.map((e) => e.turn)).toEqual(Array(9).fill(1));
+    // Negative: the run's own frames name no subagent.
+    expect(out.entries[0]?.subagent).toBeUndefined();
+  });
+
+  it("steps: the parent's Task call pairs with its result across the subagent's steps", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    const task = out.entries.find(
+      (e) => e.label.startsWith("Task") && e.subagent === undefined,
+    );
+    expect(task?.request?.seq).toBe("1");
+    expect(task?.response?.seq).toBe("3");
+    const grep = out.entries.find((e) => e.label.startsWith("Grep"));
+    expect(grep?.subagent?.sessionUuid).toBe(CHILD);
+    expect([grep?.request?.seq, grep?.response?.seq]).toEqual(["2", "3"]);
+  });
+
+  it("pages one entry at a time through both chains and returns each entry once", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const seen: string[] = [];
+    let after: string | undefined;
+    for (let i = 0; i < 20; i += 1) {
+      const page = await transcript(
+        input({
+          zoom: "everything",
+          limit: 1,
+          ...(after === undefined ? {} : { after }),
+        }),
+        ctx(),
+      );
+      for (const e of page.entries) seen.push(e.subagent ? `c${e.seq}` : e.seq);
+      if (page.cursor === null) break;
+      after = page.cursor;
+    }
+    expect(seen).toEqual(["0", "1", "2", "c0", "c1", "c2", "c3", "3", "4"]);
+  });
+
+  it("reads a cursor of either form, and refuses a malformed chain cursor (negative)", () => {
+    const composite = encodeTranscriptCursor(`${CHILD}:2`);
+    expect(decodeTranscriptCursor(composite)).toBe(`${CHILD}:2`);
+    expect(decodeTranscriptCursor(encodeTranscriptCursor("7"))).toBe("7");
+    expect(
+      decodeTranscriptCursor(encodeTranscriptCursor("not-a-uuid:2")),
+    ).toBeNull();
+  });
+
+  it("resumes a cursor whose frame is no longer shown before the next frame of its chain", () => {
+    const frames = [0, 1, 3].map((seq) =>
+      tachoFrameOf(tachoRow(seq, { kind: "turn_end" })),
+    );
+    expect(cursorPosition(frames, "2")).toBe(1);
+    expect(cursorPosition(frames, "3")).toBe(2);
+    expect(cursorPosition(frames, "-1")).toBe(-1);
+    expect(cursorPosition(frames, "9")).toBe(2);
+  });
+});
+
+describe("get_run_transcript and one model call seen twice", () => {
+  it("shows a proxied call once when its later sighting carries no body", async () => {
+    const body = JSON.stringify({ request_id: "req_1", input_tokens: 3 });
+    const { transcript } = harness([
+      tachoRow(0, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        source: "collector",
+        body,
+        costUsdMicros: 80,
+        ...stored("The reply."),
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        source: "otel_log",
+        body,
+        attrs: { "oxagen.llm_call_duplicate_of": "collector" },
+        costUsdMicros: 80,
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(out.entries).toHaveLength(1);
+    expect(out.entries[0]?.response?.text).toBe("The reply.");
+    expect(out.entries[0]?.cost?.micros).toBe("80");
   });
 });
