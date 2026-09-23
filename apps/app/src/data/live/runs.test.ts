@@ -109,7 +109,6 @@ describe("runs.list", () => {
             operatorKind: "human",
             operatorName: "Ada Lovelace",
             status: "live",
-            reportedCost: null,
             outcome: "running",
             turns: null,
             steps: 3,
