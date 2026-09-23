@@ -24,6 +24,8 @@ import { translator } from "@/test/intl";
 import {
   expectPageTitle,
   type PageModule,
+  type RouteProps,
+  renderPage,
   routeProps,
 } from "@/test/render-page";
 
@@ -481,9 +483,21 @@ describe("the Run page", () => {
     requireViewer.mockResolvedValue(ctx);
   });
 
+  // The spec (pages/run.md) makes the run's id the h1 and "Run" the eyebrow,
+  // so the tab title and the h1 differ here, unlike every other page.
+  async function expectRunTitle(props: RouteProps<typeof SEGMENTS>) {
+    const page = await RUN();
+    const metadata = await page.generateMetadata(props);
+    const container = await renderPage(await page.default(props));
+    const headings = [...container.querySelectorAll("h1")];
+    expect(headings.map((h) => h.textContent)).toEqual(["arun_1"]);
+    expect(headings[0]?.className).toContain("font-mono");
+    expect(container).toHaveTextContent(title("run"));
+    expect(metadata.title).toBe(title("run"));
+  }
+
   it("hands the run, the tab, the zoom, the chips, the frames cursor and the spine's folds the URL names to Run", async () => {
-    await expectPageTitle(
-      await RUN(),
+    await expectRunTitle(
       routeProps(SEGMENTS, {
         tab: "frames",
         zoom: "turns",
@@ -492,7 +506,6 @@ describe("the Run page", () => {
         reads: "hide",
         spine: "0,3",
       }),
-      title("run"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
     expect(Run.mock.calls.at(-1)?.[0]).toEqual({
@@ -511,7 +524,7 @@ describe("the Run page", () => {
   });
 
   it("hands nulls, not empty strings, when the URL carries no query (negative)", async () => {
-    await expectPageTitle(await RUN(), routeProps(SEGMENTS), title("run"));
+    await expectRunTitle(routeProps(SEGMENTS));
     expect(Run.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: null,
       zoom: null,

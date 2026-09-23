@@ -11,8 +11,15 @@ import type { ReactNode } from "react";
 import { eyebrow as eyebrowStyle } from "./control-styles";
 
 export type PageHeaderProps = {
-  /** The translated `pages.*` title; the same string the page's generateMetadata returns. */
+  /**
+   * The translated `pages.*` title; the same string the page's
+   * generateMetadata returns. A record page whose spec names the record's id
+   * as its h1 (the Run page) passes that id and moves the `pages.*` word to
+   * the eyebrow.
+   */
   title: string;
+  /** Sets the h1 in the mono face, for a title that is an identifier. */
+  mono?: boolean;
   /** The scope line: `Workspace · <name>` on a workspace page, `Organization` on an organization page. */
   eyebrow?: ReactNode;
   description?: ReactNode;
@@ -25,6 +32,7 @@ export type PageHeaderProps = {
 
 export function PageHeader({
   title,
+  mono = false,
   eyebrow,
   description,
   meta,
@@ -36,7 +44,9 @@ export function PageHeader({
       <div className="flex min-w-0 flex-col gap-1">
         {eyebrow ? <p className={`${eyebrowStyle} mb-1`}>{eyebrow}</p> : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 className="min-w-0 text-2xl font-bold leading-tight tracking-[-0.015em] text-foreground">
+          <h1
+            className={`min-w-0 text-2xl font-bold leading-tight text-foreground ${mono ? "break-all font-mono tracking-normal" : "tracking-[-0.015em]"}`}
+          >
             {title}
           </h1>
           {figure}

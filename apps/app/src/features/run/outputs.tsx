@@ -190,7 +190,7 @@ function Frame({ seq, place }: { seq: string | null; place: Place }) {
   return (
     <SafeLink
       to={routes.run(place.org, place.ws, place.runId, {
-        tab: "frames",
+        tab: "actions",
         body: seq,
       })}
       title={t("frameTitle")}
@@ -256,7 +256,7 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
           <p className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
             <SafeLink
               to={routes.run(place.org, place.ws, place.runId, {
-                tab: "approvals",
+                tab: "actions",
               })}
               className={`${linkQuiet} font-medium text-info`}
             >
