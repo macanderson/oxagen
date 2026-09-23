@@ -1308,4 +1308,4 @@ The shell drawers reuse the typed data ports in `features/shell/activity-actions
 
 `features/fleet/client.ts` is the public client entry for the shared approvals panel. Client drawers import it instead of the server barrel. The entry exports only client-compatible components.
 
-`features/shell/client.ts` is the shell's public client entry. Fleet's waiting tile imports `openApprovals` from it to open the approvals drawer. The shell barrel re-exports the landing redirect and the export route, which reach the database, so a client import of the barrel would put them in the browser bundle.
+`features/shell/client.ts` is the shell's public client entry. It exports `openApprovals`, which Fleet's waiting tile calls to open the approvals drawer. The shell barrel reaches server modules, so a client component that imports it pulls `next/headers` into the browser bundle and fails the build.

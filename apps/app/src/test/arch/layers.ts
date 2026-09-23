@@ -45,12 +45,6 @@ const featurePage = (file: string): string | null =>
 const isFeatureBarrel = (target: string): boolean =>
   /^features\/[^/]+\/index$/.test(target);
 
-/** A lane's public client entry: what a "use client" module imports instead of the server barrel. */
-const CLIENT_ENTRIES: ReadonlySet<string> = new Set([
-  "features/fleet/client",
-  "features/shell/client",
-]);
-
 /** Every binding of the edge is in `names`; a side-effect import or a namespace binds more than that. */
 const onlyNames = (edge: ImportEdge, names: readonly string[]): boolean =>
   edge.names.length > 0 && edge.names.every((name) => names.includes(name));
@@ -94,7 +88,12 @@ const ALLOWED: Record<
   features: (from, target, edge) => {
     const page = featurePage(from.file);
     if (page !== null && under(target, `features/${page}`)) return true;
-    if (isFeatureBarrel(target) || CLIENT_ENTRIES.has(target)) return true;
+    if (
+      isFeatureBarrel(target) ||
+      target === "features/fleet/client" ||
+      target === "features/shell/client"
+    )
+      return true;
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
     if (target === "data/source")
