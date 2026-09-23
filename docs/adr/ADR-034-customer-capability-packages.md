@@ -4,7 +4,7 @@
 **Date:** 2026-07-18
 **Relates to:** ADR-009 (unified capability/tool model), ADR-013 (Oxagen Plugins as capability packs), ADR-025 (verb-first snake naming), ADR-007/ADR-011 (sandbox drivers), ADR-002 (Inngest), ADR-004 (env vars)
 **Supersedes:** ADR-013 Phase 3 (the unbuilt `plugin.capability_catalog` table and out-of-process partner handler protocol)
-**Spec:** `docs/specs/customer-capabilities/spec.md`
+**Spec:** `oxagen-roadmap:docs/oxagen/specs/customer-capabilities/spec.md`
 
 ## Context
 

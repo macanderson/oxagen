@@ -355,6 +355,7 @@ export function agentsSource(reads: AgentReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      hub: refuse,
       deliveries: refuse,
     },
     tools: {

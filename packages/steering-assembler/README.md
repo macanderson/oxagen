@@ -3,6 +3,61 @@
 The one function where everything that could steer an agent competes for
 Oxagen's slice of its context (ADR-093, ADR-144).
 
+## Boundary
+
+- **Owns:** ranking steering candidates by force and recency, fitting them to
+  a token budget, and the manifest that names every candidate as `included`
+  or `cut` with its reason.
+- **Does not own:** reading context records or steer commands from a store,
+  or building the policy bundle
+  ([`@oxagen/handlers`](../handlers/README.md),
+  `packages/handlers/src/lib/tacho-steering.ts`); sealing the manifest into a
+  run's chain ([`@oxagen/tacho`](../tacho/README.md) on the host,
+  [`@oxagen/run-ledger`](../run-ledger/README.md) for the frame kind); counting
+  delivered manifests ([`@oxagen/telemetry`](../telemetry/README.md),
+  `src/steering-deliveries.ts`).
+- **Depends on:** No `@oxagen/*` runtime dependencies. It imports
+  `budgetTokens` from `@contextgraphprotocol/typescript-sdk` for the token
+  unit and `node:crypto` for digests.
+- **Used by:** `@oxagen/handlers` (`src/lib/tacho-steering.ts`,
+  `assembleWorkspaceSteering`).
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| `assembleSteering(run, budgetTokens)` | export | `packages/steering-assembler/src/assemble.ts` | `packages/handlers/src/lib/tacho-steering.ts` |
+| `SteeringCandidate`, `SteeringManifest` types | port | `packages/steering-assembler/src/assemble.ts` | `packages/handlers/src/lib/tacho-steering.ts` maps context records to candidates |
+| `STEERING_MANIFEST_SCHEMA` (`oxagen.steering.manifest/1`) | boundary | `packages/steering-assembler/src/assemble.ts` | Copied, not imported, as the same constant in `packages/tacho/src/wire.ts` |
+
+## Entry points
+
+- `.` → `src/index.ts`: `assembleSteering`, `compareCandidates`, the force and
+  kind vocabularies, `STEERING_HEADER`, `STEERING_MANIFEST_SCHEMA`, and the
+  types.
+
+## Rules
+
+- The same candidate set assembles the same text in any input order, because
+  the text is part of the policy bundle etag (ADR-093).
+- A candidate that does not fit is skipped and the walk continues, and every
+  cut is named in the manifest (ADR-093).
+- The package takes no `@oxagen/*` runtime dependency and does no I/O
+  (ADR-144).
+- `STEERING_MANIFEST_SCHEMA` here and in `packages/tacho/src/wire.ts` must stay
+  equal. No test holds the two together, so change both in one commit.
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/steering-assembler test:unit src/assemble.test.ts
+```
+
+Never put `--` before the filename. The tests live beside the source in
+`src/assemble.test.ts`.
+
+## How it works
+
 ```ts
 import { assembleSteering } from "@oxagen/steering-assembler";
 

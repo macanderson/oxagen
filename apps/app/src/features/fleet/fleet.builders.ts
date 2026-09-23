@@ -238,6 +238,7 @@ export function fleetSource(reads: FleetReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      hub: refuse,
       deliveries: refuse,
     },
     tools: {
