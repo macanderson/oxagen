@@ -76,16 +76,28 @@ function escapeRegex(value: string): string {
   return value.replace(/[.+^${}()|[\]\\]/g, "\\$&");
 }
 
-/** A shell-style glob: `**` crosses separators, `*` and `?` do not. */
+/**
+ * A shell-style glob: `**` crosses separators, `*` and `?` do not.
+ *
+ * `**` followed by a separator is zero or more whole segments, so `**` then
+ * `/.env` matches `.env` and `a/b/.env` but not `foo.env`. It compiled to a
+ * bare `.*` before, which let an allow rule on one file reach every name
+ * ending in it. These are the semantics of `@oxagen/glob`, written out here
+ * because this package takes no `@oxagen/*` runtime dependency.
+ */
 export function globToRegex(glob: string, anchored = true): RegExp {
   let out = "";
   for (let i = 0; i < glob.length; i += 1) {
     const ch = glob[i];
     if (ch === "*") {
       if (glob[i + 1] === "*") {
-        out += ".*";
         i += 1;
-        if (glob[i + 1] === "/") i += 1;
+        if (glob[i + 1] === "/") {
+          out += "(?:.*/)?";
+          i += 1;
+        } else {
+          out += ".*";
+        }
       } else {
         out += "[^/]*";
       }
@@ -244,6 +256,11 @@ export interface EvaluationInput {
    * freshness by `expires_at` alone.
    */
   mandateConfirmedAt?: number;
+  /**
+   * The mandate requires the contained tier and the launcher did not start
+   * this session (ADR-152). Set by the caller, which knows the session.
+   */
+  containmentUnmet?: boolean;
   now: number;
   context?: MatchContext;
 }
@@ -400,6 +417,17 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     return deny(
       "bundle_unverified",
       "The cached policy bundle did not verify and enforce mode fails closed.",
+    );
+  }
+
+  // 1b. A mandate that requires the contained tier refuses every tool in a
+  // session the launcher did not start (ADR-152). Read only from a verified
+  // bundle, so a forged requirement cannot deny, and a forged absence is
+  // what an unverified bundle already fails closed on above.
+  if (input.containmentUnmet === true && bundle.mode === "enforce") {
+    return deny(
+      "containment_required",
+      "This agent's mandate requires the contained tier. Start it with `tacho run --contained`.",
     );
   }
 

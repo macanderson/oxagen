@@ -16,7 +16,7 @@
 ARG NODE_VERSION=24.21.0
 FROM node:${NODE_VERSION}-bookworm AS base
 
-ARG PNPM_VERSION=11.7.0
+ARG PNPM_VERSION=12.6.0
 ARG ATLAS_VERSION=v0.38.0
 
 # GitHub Actions container jobs run with HOME=/github/home, not /root, so

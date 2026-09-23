@@ -229,8 +229,57 @@ describe("Waterfall", () => {
       readOk(runTranscript({ entries: [] })),
     );
     expect(screen.getByTestId("waterfall-cut")).toHaveTextContent(
-      "The run has more turns than one read carries, so this stops short of the end.",
+      "This stops short of the end of the run: the run is still recording, or it has more turns and steps than these reads carry.",
     );
+  });
+
+  it("says it is partial when the steps read has a page past the last one read", () => {
+    // `complete` means the read's frame cap; another page waiting is a
+    // cursor. The waterfall used to read the first page of steps and never
+    // said its later turns were drawn without theirs.
+    renderWaterfall(
+      readOk(runTranscript({ entries: [transcriptEntry()] })),
+      readOk(runTranscript({ entries: [], cursor: "dDo5" })),
+    );
+    expect(screen.getByTestId("waterfall-cut")).toBeInTheDocument();
+  });
+
+  it("puts a subagent's step in the turn it was recorded in, whatever its own seq", () => {
+    // A subagent's chain is numbered from 0 like the run's, so its seq falls
+    // in whichever turn's range it happens to; its `turn` says where it ran.
+    const turnA = transcriptEntry({
+      seq: "0",
+      endSeq: "5",
+      turn: 1,
+      label: "turn-a",
+      cost: usd("1000000"),
+      cumulativeCost: usd("1000000"),
+    });
+    const turnB = transcriptEntry({
+      seq: "6",
+      endSeq: "10",
+      turn: 2,
+      label: "turn-b",
+      cost: usd("1000000"),
+      cumulativeCost: usd("2000000"),
+    });
+    const sub = transcriptEntry({
+      seq: "3",
+      endSeq: "3",
+      turn: 2,
+      label: "sub",
+      subagent: {
+        chainRef: "0192d4a8-7c1e-7a00-8000-0000000000c1",
+        type: null,
+      },
+    });
+    renderWaterfall(
+      readOk(runTranscript({ entries: [turnA, turnB] })),
+      readOk(runTranscript({ entries: [sub] })),
+    );
+    const [barA, barB] = screen.getAllByTestId("waterfall-bar");
+    expect(barA).toHaveTextContent("0 steps");
+    expect(barB).toHaveTextContent("1 steps");
   });
 
   it("renders the ReadFailure treatment when the turns read is refused", () => {

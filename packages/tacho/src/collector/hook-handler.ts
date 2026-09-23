@@ -36,7 +36,12 @@ import {
   evaluatePreToolUse,
   type MatchContext,
 } from "../host/bundle";
-import type { SessionRecord, SessionRegistry } from "./registry";
+import {
+  rememberHookId,
+  sawHookId,
+  type SessionRecord,
+  type SessionRegistry,
+} from "./registry";
 
 export interface PolicyView {
   bundle: PolicyBundle;
@@ -50,7 +55,34 @@ export interface PolicyView {
    * `isStale` in host/bundle.ts for why the two are not the same thing.
    */
   mandateConfirmedAt?: number;
+  /**
+   * Whether this session was started by the contained launcher (ADR-152).
+   * Absent answers no. A mandate that requires the contained tier refuses a
+   * session the launcher did not start.
+   */
+  launchedContained?: (harnessSessionId: string) => boolean;
 }
+
+/**
+ * The mandate requires `contained` and this session is not one the launcher
+ * started. Read only from a verified bundle, so a requirement written into
+ * the host file cannot refuse a session. Enforce mode only: an observe host
+ * records and never refuses.
+ */
+export function containmentUnmet(
+  view: PolicyView,
+  record: Pick<SessionRecord, "harnessSessionId">,
+): boolean {
+  return (
+    view.verified &&
+    view.bundle.mode === "enforce" &&
+    view.bundle.containment?.required === true &&
+    view.launchedContained?.(record.harnessSessionId) !== true
+  );
+}
+
+export const CONTAINMENT_REQUIRED_REASON =
+  "This agent's mandate requires the contained tier. Start it with `tacho run --contained`.";
 
 export interface HookHandlerDeps {
   registry: SessionRegistry;
@@ -171,29 +203,40 @@ export function pidFromEnv(
 function operatorBlock(
   view: PolicyView,
   record: SessionRecord,
-): { code: string; reason: string } | undefined {
+): { code: string; reason: string; source: "human" | "bundle" } | undefined {
   if (view.hostStatus === "suspended" || view.hostStatus === "revoked") {
     return {
       code: `host_${view.hostStatus}`,
       reason: `This host is ${view.hostStatus} by its Oxagen operator.`,
+      source: "human",
     };
   }
   if (view.hostStatus === "paused") {
     return {
       code: "host_paused",
       reason: "This host is paused by its Oxagen operator.",
+      source: "human",
     };
   }
   if (record.control.cancelled !== null) {
     return {
       code: "session_cancelled",
       reason: `This session was cancelled by its Oxagen operator: ${record.control.cancelled}`,
+      source: "human",
     };
   }
   if (record.control.paused !== null) {
     return {
       code: "session_paused",
       reason: `This session is paused by its Oxagen operator: ${record.control.paused}`,
+      source: "human",
+    };
+  }
+  if (containmentUnmet(view, record)) {
+    return {
+      code: "containment_required",
+      reason: CONTAINMENT_REQUIRED_REASON,
+      source: "bundle",
     };
   }
   return undefined;
@@ -332,6 +375,14 @@ function drainMessages(
  * Map one hook payload to its events and its answer. `agent` names a custom
  * agent (`tacho hook --agent <name>`): its payload is Claude Code's shape and
  * its session is labelled `runtime: "custom"`, `harness: <name>`.
+ *
+ * `hookId` names one hook invocation, the same id `tacho-hook` sends on both
+ * its live request and the spool file it falls back to when that request
+ * times out on the client's own side (see `HookRunDeps.hookId` in
+ * `claude-code/hook-client.ts`). A client timeout does not mean the daemon
+ * never received the hook — this function may already have run for it —
+ * so a replay carrying an id this session already recorded is dropped
+ * rather than sealing everything a second time.
  */
 export async function handleHookEvent(
   raw: unknown,
@@ -340,8 +391,17 @@ export async function handleHookEvent(
   replay?: HookReplay,
   harness?: TachoHarness,
   agent?: string,
+  hookId?: string,
 ): Promise<HookOutcome> {
-  const outcome = await routeHook(raw, env, deps, replay, harness, agent);
+  const outcome = await routeHook(
+    raw,
+    env,
+    deps,
+    replay,
+    harness,
+    agent,
+    hookId,
+  );
   // Drained after the route, whichever branch returned: every event the
   // route sealed is in `events` by now, so every body is pending on the
   // recorder, and taking them here is what keeps the two lists paired.
@@ -376,6 +436,7 @@ function evaluationRequestFor(
     ...(toolInput !== undefined ? { toolInput } : {}),
     hostStatus: view.hostStatus,
     session: record.control,
+    ...(containmentUnmet(view, record) ? { containmentUnmet: true } : {}),
     latestDenyGeneration: view.denyGeneration,
     controlReachable: view.controlReachable,
     ...(view.mandateConfirmedAt !== undefined
@@ -426,6 +487,7 @@ async function routeHook(
   replay?: HookReplay,
   harness?: TachoHarness,
   agent?: string,
+  hookId?: string,
 ): Promise<RoutedOutcome> {
   const input = hookInputSchema.parse(raw);
   // The daemon checks again: anything holding the local token can post an
@@ -453,6 +515,20 @@ async function routeHook(
   });
   if (inferredCwd && record.cwd === undefined && input.cwd !== undefined) {
     record.cwd = input.cwd;
+  }
+  // A replay of a hook this session already recorded — the client's own
+  // request timed out and it fell back to a spool file, but the daemon had
+  // already processed the live request before that timeout fired. Sealing
+  // it again would open a second turn, a second tool_call, or (for
+  // `UserPromptSubmit`) a phantom prompt nobody sent twice. Nothing new is
+  // sealed for the replay; the answer is empty, which is safe here because a
+  // replay is fed back into the daemon for its record only, not read by a
+  // harness waiting on stdout.
+  if (hookId !== undefined) {
+    if (sawHookId(record, hookId)) {
+      return { events: [], response: {}, record };
+    }
+    rememberHookId(record, hookId);
   }
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
@@ -511,7 +587,7 @@ async function routeHook(
             "policy_decision",
             {
               policy_decision: "deny",
-              policy_source: "human",
+              policy_source: block.source,
               policy_reason_code: block.code,
               policy_reason_digest: digestText(block.reason),
               bundle_version: view.bundle.version,
@@ -573,7 +649,7 @@ async function routeHook(
             body: {
               ...draft.body,
               policy_decision: block === undefined ? "allow" : "deny",
-              policy_source: block === undefined ? "bundle" : "human",
+              policy_source: block?.source ?? "bundle",
               policy_reason_code: block?.code ?? "boundary_clear",
               bundle_version: view.bundle.version,
               bundle_mode: view.bundle.mode,
@@ -782,7 +858,7 @@ async function routeHook(
               ...(block !== undefined
                 ? {
                     policy_decision: "deny",
-                    policy_source: "human",
+                    policy_source: block.source,
                     policy_reason_code: block.code,
                     policy_reason_digest: digestText(block.reason),
                   }

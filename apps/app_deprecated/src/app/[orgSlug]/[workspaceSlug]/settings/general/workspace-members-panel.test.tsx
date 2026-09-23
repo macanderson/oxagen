@@ -13,7 +13,7 @@
  *   (b) Marks the viewer's own row with "(you)".
  *   (c) Empty roster → "No members in this workspace yet."
  *   (d) DB failure degrades to an inline ErrorState notice instead of throwing
- *       (docs/web-app-2.0/workspace/settings/general/spec.md fix-in-place item).
+ *       (docs/web-app-2.0/workspace/settings/general/spec.md, removed 2026-09-23; git history keeps it fix-in-place item).
  */
 
 import * as React from "react";

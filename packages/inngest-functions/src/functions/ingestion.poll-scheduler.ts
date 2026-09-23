@@ -50,6 +50,7 @@ export const [ingestionPollScheduler] = createFunction(
     // ── Step 1: Claim due connections (fetch + lease next_poll_at forward) ────
     // The claim UPDATE and the SELECT run in one statement via RETURNING so a
     // connection is atomically marked scheduled and returned for fan-out.
+    // tenancy: the global scheduler leases due connections across organizations.
     const due = await step.run("claim-due-connections", () =>
       withSystemDb(async (tx) => {
         const rows = await tx.execute(sql`
@@ -58,6 +59,7 @@ export const [ingestionPollScheduler] = createFunction(
             FROM   ingestion.source_connections
             WHERE  status = 'connected'
             AND    deleted_at IS NULL
+            AND    (delivery_config->>'runOutcomesOnly') IS DISTINCT FROM 'true'
             AND    connector_id = ANY(${sql.param(pollableConnectorIds)}::text[])
             AND    (next_poll_at IS NULL OR next_poll_at <= NOW())
             ORDER  BY next_poll_at ASC NULLS FIRST

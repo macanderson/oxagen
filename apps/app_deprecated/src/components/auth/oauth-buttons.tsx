@@ -1,6 +1,6 @@
 "use client";
 import type { JSX } from "react";
-import { Github } from "lucide-react";
+import { GithubIcon } from "@/components/brand/github-icon";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@oxagen/auth/client";
 
@@ -35,7 +35,7 @@ export function OAuthButtons({
         className={outlineCta}
         onClick={handle("github")}
       >
-        <Github className="h-4 w-4" /> Continue with GitHub
+        <GithubIcon className="h-4 w-4" /> Continue with GitHub
       </Button>
     </div>
   );

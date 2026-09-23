@@ -1,4 +1,4 @@
-# Oxagen CLI
+# @oxagen/cli
 
 The governance-operations CLI for the Oxagen control plane: spend ceilings and
 cost, run traces, knowledge-graph grounding, agent memory,
@@ -13,6 +13,72 @@ entry point stays registered as a stub that prints exactly that, so a stale
 script fails with guidance instead of an unknown-command error.
 
 Full reference: **https://docs.oxagen.sh/docs/cli**
+
+## Boundary
+
+- **Owns:** the `oxagen` command tree (`src/program.ts`), the browser login
+  with PKCE and a loopback listener (`src/auth/`), the local config and
+  workspace binding (`src/lib/config.ts`, `.oxagen/workspace.json`), the HTTP
+  client for the platform API (`src/lib/api.ts`), output formatting, the
+  retirement stubs for the former coding-agent commands, and anonymous usage
+  telemetry (`src/telemetry/usage.ts`).
+- **Does not own:** any capability logic. Every command that reads or changes
+  platform state calls [`apps/api`](../api/README.md) over HTTP, and the
+  kernel runs there. It also does not own the Tacho host commands
+  ([`@oxagen/tacho`](../../packages/tacho/README.md), `@oxagen/tacho/cli`),
+  the steering freshness check
+  ([`@oxagen/steering-freshness`](../../packages/steering-freshness/README.md)),
+  or the consent page it opens (`/cli/authorize` in
+  [`apps/app`](../app/README.md)).
+- **Depends on:** `@oxagen/tacho` (the `oxagen tacho` commands and
+  `oxagen agent enroll`), `@oxagen/steering-freshness` (`oxagen steering`),
+  and `@oxagen/billing` (`formatUsd` and the rate card from
+  `@oxagen/billing/rate-card`, for display).
+- **Used by:** no workspace package imports it. It is published as the
+  `oxagen` binary.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| Platform API client (`/v1/{org}/{workspace}/…`, `/v1/user/…`, bearer token) | boundary | `apps/cli/src/lib/api.ts` | Commands in `apps/cli/src/commands/`. Served by `apps/api/src/app.ts` |
+| Browser login (`/cli/authorize`, then `POST /v1/auth/cli/token`) | boundary | `apps/cli/src/auth/loopback-login.ts`, `pkce.ts` | `oxagen login` |
+| `CliDeps` from `defaultCliDeps` | adapter | `apps/cli/src/commands/tacho.ts` | `oxagen tacho …`. The work lives in `@oxagen/tacho/cli` |
+| `evaluateGate`, `renderGate`, `installHook` | adapter | `apps/cli/src/commands/steering.ts` | `oxagen steering …`, and each harness's prompt-submit hook |
+| Usage telemetry (`POST /v1/telemetry/usage`) | boundary | `apps/cli/src/telemetry/usage.ts` | Every command, unless `oxagen telemetry off` or `DO_NOT_TRACK=1` |
+| Retired command stubs | registry | `apps/cli/src/commands/retired.ts` | `apps/cli/src/program.ts` |
+
+The CLI bootstraps no kernel gate and registers no handler. Contracts that
+declare the `cli` surface are served through the API, and
+`pnpm check:manifest` counts the `cli` layer as met when a command file exists
+for the capability or a command file names it.
+
+## Entry points
+
+- `bin.oxagen` → `dist/index.js`, built by `tsc` from `src/index.ts`, which
+  installs the fatal-error handlers and hands off to `buildProgram()` in
+  `src/program.ts`.
+- `pnpm bundle` → `scripts/bundle.mjs`: the standalone single-file bundle.
+- `pnpm compile` → a single executable, built by `tools/sea/compile.mjs` (see
+  [`tools/sea`](../../tools/sea/README.md)).
+
+## Rules
+
+- The CLI governs agents and runs none (ADR-043). A former coding-agent
+  command stays registered as a stub that points to `stella`.
+- Commands reach platform state through the API only, never through a
+  database client or the kernel.
+- Telemetry never carries code, prompts, file contents, paths, model slugs,
+  or keys.
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/cli test:unit src/commands/steering.test.ts
+```
+
+Never put `--` before the filename. Tests live in `src/**/__tests__/` and
+beside their sources as `*.test.ts`.
 
 ## Installation
 
@@ -190,7 +256,7 @@ Other workflows:
 pnpm -C apps/cli dev -- graph search -q "workspace context" --limit 1
 pnpm -C apps/cli build                  # compile to dist/ once
 pnpm -C apps/cli bundle                 # standalone single-file bundle
-pnpm -C apps/cli test:unit              # run unit tests
+pnpm -C apps/cli test:unit src/commands/steering.test.ts   # one file; CI runs the suite
 pnpm -C apps/cli lint                   # lint (zero warnings enforced)
 pnpm -C apps/cli typecheck              # type-check
 ```

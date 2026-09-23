@@ -30,7 +30,7 @@ describe("messages/shell.json", () => {
   it("names every nav key", () => {
     for (const key of [...WORKSPACE_NAV, ...ORG_NAV, ...ORG_PAGE_NAV])
       expect(messages.nav).toHaveProperty(key);
-    expect(messages.nav.agents).toBe("Agent IAM");
+    expect(messages.nav.agents).toBe("Agents");
     expect(Object.keys(messages.mobileNav.slots)).toEqual([...THUMB_SLOTS]);
   });
 
@@ -42,13 +42,14 @@ describe("messages/shell.json", () => {
   });
 
   it("carries no catalog for the chrome rev1 does not render", () => {
-    // Notifications, nav counts and the command menu's runs, actions and
-    // questions (ARCHITECTURE.md §1.2). The Account dialog and the assistant
-    // are no longer on that list: spec App. F folds the four account pages
-    // into the dialog, and #2968 is the lane that puts the in-app agent back —
-    // both render, and both write (update_profile, ask_assistant).
+    // Nav counts and the command menu's runs, actions and questions
+    // (ARCHITECTURE.md §1.2). The Account dialog, the assistant and now the
+    // activity layer are no longer on that list: spec App. F folds the four
+    // account pages into the dialog, #2968 is the lane that puts the in-app
+    // agent back, and this lane puts notifications and approvals in the shell.
     expect(Object.keys(messages).sort()).toEqual([
       "account",
+      "activity",
       "assistant",
       "avatar",
       "commands",

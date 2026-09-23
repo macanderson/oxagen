@@ -6,15 +6,20 @@ contract, handler, route, tool, page, component and package stay exactly where
 they are, keep compiling, and keep their tests. What it loses is reach: it is no
 longer offered to a user, an agent or an API caller.
 
-This file is the reference for that distinction. `docs/specs/mission-control/spec.md`
+This file is the reference for that distinction. `oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md`
 Appendix E decides *which* features come off the surfaces for rev1; this file
 records *what that means for the code* and where the code is, so a later session
 reshaping the product can find a capability it needs rather than rebuild one that
 already exists.
 
 **Status:** opened 2026-09-16, ahead of the rev1 app cutover
-(`docs/specs/mission-control/plan.md`, integration branch `app-rebuild`). Every
+(`oxagen-roadmap:docs/oxagen/specs/mission-control/plan.md`, integration branch `app-rebuild`). Every
 path below exists on `main` today.
+
+A path written `oxagen-roadmap:<path>` is in
+https://github.com/macanderson/oxagen-roadmap. The rev1 spec and plan moved
+there from this repository's `docs/` on 2026-09-23 (#3895), and the copies this
+file cites are kept there unchanged.
 
 ---
 

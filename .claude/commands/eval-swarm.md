@@ -41,11 +41,11 @@ The workflow sandbox has no filesystem access, so **you scout the slices first, 
 
 3. **Report back.** When the workflow returns, summarize:
    - the P0/P1 counts and the repo-wide findings count,
-   - per package: what `break-fix` changed, the branch it committed to, and the report path under `docs/audits/eval-swarm/`,
+   - per package: what `break-fix` changed, the branch it committed to, and the report path under `verifications/audits/eval-swarm/`,
    - anything left unfixed and why.
 
 ## Output artifacts
-- **Per-agent / per-package reports** under `docs/audits/<agent-name>/` and `docs/audits/eval-swarm/`, each filename prefixed with the UTC timestamp at write.
+- **Per-agent / per-package reports** under `verifications/audits/<agent-name>/` and `verifications/audits/eval-swarm/`, each filename prefixed with the UTC timestamp at write.
 - **Memories** under `.oxagen/memories/` for any durable instinct, with `_index.md` updated when the agent judges it important.
 - **Committed-but-unpushed fix branches** — one per package domain. Per the repo's hard no-push rule, the swarm never pushes; Mac reviews each branch and pushes/PRs them one at a time so the pre-push test gate never runs as a concurrent herd.
 

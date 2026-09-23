@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { dataSource } from "@/data/source";
 import { ModelFunding } from "@/features/organization";
 import { requireViewer } from "@/server/viewer";
-import { PageHeader } from "@/ui/page-header";
+import { OrganizationHeader } from "@/features/organization";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("pages");
@@ -18,16 +18,12 @@ export default async function ModelFundingPage({
 }: PageProps<"/[org]/model-funding">) {
   const { org } = await params;
   const ctx = await requireViewer(org);
-  const t = await getTranslations("pages");
   return (
     <main
       id="main"
       className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader
-        eyebrow={t("organizationEyebrow", { organization: ctx.orgName })}
-        title={t("modelFunding")}
-      />
+      <OrganizationHeader ctx={ctx} source={dataSource()} />
       <ModelFunding ctx={ctx} source={dataSource()} />
     </main>
   );

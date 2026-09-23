@@ -128,7 +128,7 @@ and the sentence naming 2026-09-06 says what replaced it and when.
 **In effect:** `main` is the only long-lived branch. `pipeline.yml` deploys
 `deploy-web` and `deploy-node` on every push to it. Oxagen has run an
 integration branch before, for one cutover: `app-rebuild`, named in
-`docs/specs/mission-control/plan.md`.
+`oxagen-roadmap:docs/oxagen/specs/mission-control/plan.md`.
 
 **Why now:** an integration branch buys a place to prove a set of changes
 together before anyone sees them. With nobody live, `main` already is that

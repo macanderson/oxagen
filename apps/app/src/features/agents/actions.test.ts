@@ -13,6 +13,7 @@ const { invoke, requireViewer, kernelRead } = vi.hoisted(() => ({
   kernelRead: vi.fn(),
 }));
 import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
+import { agentRoleList } from "@oxagen/oxagen/contracts/agent.role.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 
 vi.mock("@oxagen/oxagen", async (importOriginal) => ({
@@ -20,6 +21,14 @@ vi.mock("@oxagen/oxagen", async (importOriginal) => ({
   invoke,
 }));
 vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
+// registerAgent drafts the wizard's file with the catalog's comment lines.
+vi.mock("next-intl/server", async () => {
+  const { translator } = await import("@/test/intl");
+  return {
+    getTranslations: (namespace: string) =>
+      Promise.resolve(translator(namespace)),
+  };
+});
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
@@ -44,8 +53,10 @@ const {
   commitAgentDefinition,
   issueAgentEnrollmentToken,
   pauseAgent,
+  readAgentRoleNames,
   readAssignableRoles,
   readCostCenters,
+  registerAgent,
   setAgentCostCenter,
   requestMandate,
   retireAgent,
@@ -527,6 +538,80 @@ describe("commitAgentDefinition", () => {
   });
 });
 
+describe("registerAgent", () => {
+  const OPENED = {
+    slug: "perf-watch",
+    agentKey: "acme.core.perf-watch",
+    path: ".oxagen/agents/perf-watch.toml",
+    generatedPath: ".claude/agents/perf-watch.md",
+    branch: "agents/perf-watch",
+    repository: "acme/platform",
+    baseRef: "main",
+    digest: `sha256:${"a".repeat(64)}`,
+    checks: [],
+    commitSha: "c0ffee",
+    pullRequest: {
+      number: 526,
+      url: "https://github.com/acme/platform/pull/526",
+    },
+  };
+  const draft = { slug: " perf-watch ", harness: "cursor", tier: "light" };
+
+  it("opens the Context PR with the wizard's file for the slug, harness and tier, and returns the pull request", async () => {
+    invoke.mockResolvedValue(OPENED);
+    expect(await registerAgent("acme", "core-platform", draft)).toEqual({
+      ok: true,
+      value: {
+        path: ".oxagen/agents/perf-watch.toml",
+        pullRequest: {
+          number: 526,
+          url: "https://github.com/acme/platform/pull/526",
+        },
+      },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    const [name, input, context] = invoke.mock.calls[0] ?? [];
+    expect(name).toBe("propose_agent");
+    expect(context).toEqual(expect.objectContaining(TENANT));
+    expect(input).toMatchObject({ slug: "perf-watch", harness: "cursor" });
+    const source =
+      typeof input === "object" &&
+      input !== null &&
+      "source" in input &&
+      typeof input.source === "string"
+        ? input.source
+        : "";
+    expect(source).toContain('slug = "perf-watch"');
+    expect(source).toContain('model_tier = "light"');
+    expect(source).toContain("[harness.cursor]");
+    expect(source).toContain("# .oxagen/agents/perf-watch.toml");
+  });
+
+  it.each([
+    ["a slug with capitals", { slug: "Perf-Watch" }, "slug"],
+    ["a slug over 18 characters", { slug: "a-very-long-agent-slug" }, "slug"],
+    ["a harness off the list", { harness: "vim" }, "harness"],
+    ["a tier off the list", { tier: "heavy" }, "tier"],
+  ])(
+    "refuses %s before the kernel runs (negative)",
+    async (_what, change, field) => {
+      expect(
+        await registerAgent("acme", "core-platform", { ...draft, ...change }),
+      ).toEqual({ ok: false, reason: "invalid", code: "invalid_input", field });
+      expect(invoke).not.toHaveBeenCalled();
+      expect(requireViewer).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("propose_agent"));
+    expect(await registerAgent("acme", "core-platform", draft)).toMatchObject({
+      ok: false,
+      reason: "denied",
+    });
+  });
+});
+
 describe("a person the workspace refuses", () => {
   it.each([
     [
@@ -535,6 +620,15 @@ describe("a person the workspace refuses", () => {
     ],
     ["setAgentSuspended", () => setAgentSuspended("acme", "x", "agt_a", true)],
     ["retireAgent", () => retireAgent("acme", "x", "agt_a")],
+    [
+      "registerAgent",
+      () =>
+        registerAgent("acme", "x", {
+          slug: "perf-watch",
+          harness: "cursor",
+          tier: "light",
+        }),
+    ],
     [
       "commitAgentDefinition",
       () =>
@@ -1017,11 +1111,12 @@ const roleRow = (
     kind: "human" | "agent";
     scopeKind: "org" | "workspace";
     isSystemDefault: boolean;
+    description: string | null;
   }> = {},
 ) => ({
   id: `rol_${name.toLowerCase().replaceAll(" ", "_")}`,
   name,
-  description: null,
+  description: null as string | null,
   scopeKind: "org" as const,
   kind: "agent" as const,
   isSystemDefault: false,
@@ -1055,7 +1150,10 @@ describe("readAssignableRoles", () => {
   it("offers the roles an agent may hold and drops the human ones", async () => {
     kernelRead.mockResolvedValue(
       catalogue([
-        roleRow("Agent Contributor", { isSystemDefault: true }),
+        roleRow("Agent Contributor", {
+          isSystemDefault: true,
+          description: "Opens branches and pull requests",
+        }),
         roleRow("Release deputy", { scopeKind: "workspace" }),
         roleRow("Owner", { kind: "human", isSystemDefault: true }),
       ]),
@@ -1064,8 +1162,18 @@ describe("readAssignableRoles", () => {
       ok: true,
       value: {
         roles: [
-          { name: "Agent Contributor", scope: "org", builtIn: true },
-          { name: "Release deputy", scope: "workspace", builtIn: false },
+          {
+            name: "Agent Contributor",
+            description: "Opens branches and pull requests",
+            scope: "org",
+            builtIn: true,
+          },
+          {
+            name: "Release deputy",
+            description: null,
+            scope: "workspace",
+            builtIn: false,
+          },
         ],
         enforced: true,
         tier: "enterprise",
@@ -1109,6 +1217,56 @@ describe("readAssignableRoles", () => {
       reason: "denied",
       code: "org.admin",
     });
+  });
+});
+
+describe("readAgentRoleNames", () => {
+  const assignment = (roleName: string) => ({
+    assignmentId: `pra_${roleName}`,
+    roleId: `rol_${roleName}`,
+    roleName,
+    scopeKind: "org" as const,
+    isSystemDefault: false,
+    assignedAt: "2026-09-01T00:00:00.000Z",
+    assignedBy: null,
+    expiresAt: null,
+    workspaceId: null,
+  });
+
+  it("reads the roles the agent holds through list_agent_roles, each name once", async () => {
+    kernelRead.mockResolvedValue({
+      ok: true,
+      value: {
+        agentId: "agt_releasebot",
+        roles: [
+          assignment("Agent Observer"),
+          assignment("Release deputy"),
+          // A second assignment of one role (a workspace and an org scope)
+          // is still one role held.
+          assignment("Agent Observer"),
+        ],
+        total: 3,
+      },
+    });
+    expect(
+      await readAgentRoleNames("acme", "core-platform", "agt_releasebot"),
+    ).toEqual({ ok: true, value: ["Agent Observer", "Release deputy"] });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: agentRoleList,
+      input: { agentId: "agt_releasebot" },
+      page: "agents",
+    });
+  });
+
+  it("carries a refused read across as denied (negative)", async () => {
+    kernelRead.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      permission: "org.admin",
+    });
+    expect(
+      await readAgentRoleNames("acme", "core-platform", "agt_releasebot"),
+    ).toEqual({ ok: false, reason: "denied", code: "org.admin" });
   });
 });
 
@@ -1247,6 +1405,44 @@ describe("assignAgentRole", () => {
       value: { roleName: "Agent Contributor", alreadyAssigned: false },
     });
     expect(invoke).toHaveBeenCalledWith(
+      "assign_agent_role",
+      { agentId: "agt_releasebot", roleName: "Agent Contributor" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("sends the reason, trimmed, into the capability's input, and leaves a blank one out", async () => {
+    invoke.mockResolvedValue({
+      assigned: true,
+      alreadyAssigned: false,
+      agentId: "agt_releasebot",
+      roleId: "rol_contributor",
+      roleName: "Agent Contributor",
+    });
+    await assignAgentRole(
+      "acme",
+      "core-platform",
+      "agt_releasebot",
+      "Agent Contributor",
+      "  Cuts the September release  ",
+    );
+    expect(invoke).toHaveBeenLastCalledWith(
+      "assign_agent_role",
+      {
+        agentId: "agt_releasebot",
+        roleName: "Agent Contributor",
+        reason: "Cuts the September release",
+      },
+      expect.objectContaining(TENANT),
+    );
+    await assignAgentRole(
+      "acme",
+      "core-platform",
+      "agt_releasebot",
+      "Agent Contributor",
+      "   ",
+    );
+    expect(invoke).toHaveBeenLastCalledWith(
       "assign_agent_role",
       { agentId: "agt_releasebot", roleName: "Agent Contributor" },
       expect.objectContaining(TENANT),

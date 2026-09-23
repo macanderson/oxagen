@@ -1367,6 +1367,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   },
 
   // ── Linear (capability provenance) ───────────────────────────────────────────
+  LINEAR_OAUTH_CLIENT_ID: {
+    group: "Linear",
+    description:
+      "Linear OAuth application client ID for customer-authorized Run follow-through. Uses PKCE with the app callback URL.",
+    secret: false,
+    clientExposed: false,
+    services: ["app", "api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   LINEAR_API_KEY: {
     group: "Linear",
     description:
@@ -2200,6 +2210,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "12",
+  },
+  DEPLOYMENT_FAILURE_RUN_ID: {
+    group: "Operator scripts",
+    description:
+      "The CI run on main that deployment-failure-issue.mjs records. deployment-failure.yml sets it from the workflow_run event, or from the run_id input on a manual replay.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "35930652260",
   },
   SCR_OWNER: {
     group: "Operator scripts",

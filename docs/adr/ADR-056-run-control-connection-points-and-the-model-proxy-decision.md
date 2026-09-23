@@ -5,7 +5,7 @@
 - **Owners:** platform
 - **Related:** issue #2953 (run controls: pause, resume, cancel, steer with a
   delivery mode on every run), ADR-043 (Oxagen governs agents and does not
-  run them), the Mission Control spec `docs/specs/mission-control/spec.md`
+  run them), the Mission Control spec `oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md`
   §7.3 (steering into the loop), §7.4 (halting and commands), §7.6 (messages
   and mass steering), §8.2 (the `control.command` and `control.steer`
   frames), Appendix A.6 (`control.commands`) and Appendix E
@@ -190,7 +190,7 @@ second connection point beside the hook adapter:
   opens. The token names the organisation, workspace, run and attempt. It is
   stored as a hash and is short-lived: at most fifteen minutes, refreshed on
   the ingest response, per the run-token rule of the Mission Control spec
-  (`docs/specs/mission-control/spec.md:338`).
+  (`oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md:338`).
 - **Cancel revokes the token.** A `cancel` addressed to a ledger run revokes
   the run token in the same transaction that writes the command row. Every
   later ingest call under that token is refused, so a halt holds even if the

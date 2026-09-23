@@ -357,7 +357,9 @@ export const [runEnrichmentSweep] = createFunction(
                 workspaceId: table.workspaceId,
                 runPublicId: table.publicId,
                 revision: sql<string>`${table.updatedAt}::text`,
-                observedAt: sql<string | null>`${table.summaryObservedAt}::text`,
+                observedAt: sql<
+                  string | null
+                >`${table.summaryObservedAt}::text`,
               })
               .from(table)
               .innerJoin(

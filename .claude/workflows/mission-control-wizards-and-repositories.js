@@ -31,7 +31,7 @@ SOURCE OF TRUTH (build it EXACTLY as specified; where the roadmap mockup and the
 - ~/Projects/oxagen-roadmap/docs/creation-spec.md (§1 one shape, entry points; §2 wizard shell; §4 skill; §5 context record; §6 never-do list). The agent wizard is described there too (wzAgent) and in mockups/pages/agents.md.
 - ~/Projects/oxagen-roadmap/mockups/src/engine.js: DLG_EXT.create, DLG_EXT.wz, wzSteps, wzDescIn, wzSkill, wzAgent, wzRecord, pRecord, pSkillSource (the reference implementation — mirror its steps, copy, validation and states), rendered in mockups/missioncontrol.html; styles in mockups/src/engine.css.
 - ~/Projects/oxagen-roadmap/mockups/pages/{agents,skills,steering,record,skill-source,steering-proposals}.md and any *.audit-prompt.md beside them.
-- ~/Projects/oxagen/docs/specs/mission-control/spec.md §10 (context & steering, main repo, Context PRs, .oxagen/ layout), §14 (Mission Control pages).
+- ~/Projects/oxagen-roadmap/docs/mission-control-spec.md §10 (context & steering, main repo, Context PRs, .oxagen/ layout), §14 (Mission Control pages).
 - Core invariant: every wizard ends by opening a pull request against the workspace's main repo (the thing exists on merge). No wizard writes a row or has a Save-to-database button. The drafting turn is oxagen.assistant's, billed to Oxagen, never shown in Fleet/Spend, and every drafting step says the operator can change every line.
 The app is apps/app (features under apps/app/src/features/*, routes under apps/app/src/app/[org]/[ws]/*, UI kit apps/app/src/ui/*, data contracts apps/app/src/data/contracts/*). Check what backend capabilities already exist (e.g. drafting, opening a Context PR via the GitHub App) under packages/oxagen/src/contracts and packages/handlers before adding any; reuse, and wire a missing one through the full parity chain.
 `
@@ -93,7 +93,7 @@ async function reposTrack() {
   return agent(`${RULES}\n
 SOURCE OF TRUTH:
 - ~/Projects/oxagen-roadmap/mockups/pages/repositories.md and repositories.audit-prompt.md (the page, build it exactly), plus how it renders in mockups/missioncontrol.html via mockups/src/engine.js/engine.css (search for the repositories page code).
-- ~/Projects/oxagen/docs/specs/mission-control/spec.md §10.1 (one main repo, linked repos, production branch, role, issues), §11 (ingestion, production branch §11.4), the wrk.repositories table, and the GitHub event handling table (renames, default-branch change, uninstall each prompt, never silently alter a binding).
+- ~/Projects/oxagen-roadmap/docs/mission-control-spec.md §10.1 (one main repo, linked repos, production branch, role, issues), §11 (ingestion, production branch §11.4), the wrk.repositories table, and the GitHub event handling table (renames, default-branch change, uninstall each prompt, never silently alter a binding).
 - Already merged: PR #3326 (workspace born with its main repository; a second repository links and unlinks). Reuse its contracts/handlers (apps/app/src/data/contracts/repository.ts, packages/oxagen/src/contracts, packages/handlers) — add only what is missing, through the full parity chain.
 TASK (one PR):
 1. RESUMING (third interruption). The worktree ~/Projects/.worktrees/oxagen/repositories-page on mc/repositories-page already has, pushed: repository tree / production branch / init PR capabilities through contract, API, MCP, CLI; the Repositories page with four tabs, a repository dialog and an init wizard; tests, capability docs and UI-map bindings (all WIP commits; ~79 files). Do NOT recreate anything. Read git log origin/main..HEAD and the diff, audit it against repositories.md, check whether the workspace-menu Settings removal (step 2) is done, finish what is missing, then open the PR. Commit+push after every step (sessions have been dying; unpushed work is lost).
@@ -122,6 +122,6 @@ function review(pr, name, specHint) {
 
 const [wiz, repos] = await parallel([
   () => wizardsTrack().then(async pr => ({ pr, review: await review(pr, 'wizards', '~/Projects/oxagen-roadmap/docs/creation-spec.md, mockups/src/engine.js (wz*), mockups/pages/{skills,agents,steering,record}.md') })),
-  () => reposTrack().then(async pr => ({ pr, review: await review(pr, 'repositories', '~/Projects/oxagen-roadmap/mockups/pages/repositories.md and oxagen docs/specs/mission-control/spec.md §10.1/§11') })),
+  () => reposTrack().then(async pr => ({ pr, review: await review(pr, 'repositories', '~/Projects/oxagen-roadmap/mockups/pages/repositories.md and oxagen-roadmap docs/mission-control-spec.md §10.1/§11') })),
 ])
 return { wizards: wiz, repositories: repos }
