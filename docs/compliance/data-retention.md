@@ -23,7 +23,7 @@ Your retention review needs the deletion mechanism beside the period. These are 
 | Wrapped-run events | No timed deletion established here | [0027](../../packages/telemetry/src/migrations/0027_tacho_events.sql). Do not apply another telemetry table's TTL by analogy. |
 | Expired credential grants | 90 days after expiry or revocation | Weekly [grant retention](../../packages/inngest-functions/src/functions/mcp.credential-grant-retention.ts). |
 | Deleted-server tool snapshots | 365 days after server deletion | Monthly [snapshot retention](../../packages/inngest-functions/src/functions/mcp.tool-snapshot-retention.ts). |
-| Authentication cookies | 30-day expiry, one-day refresh interval | [Auth configuration](../../packages/auth/src/auth.ts). Expiry of a cookie is not an account-deletion policy. |
+| Authentication sessions | 30 days after creation or last extension, extended on use after one day | [Auth configuration](../../packages/auth/src/auth.ts). Session expiry is not an account-deletion policy. |
 | Application logs | 30 days searchable, archived for 5,110 days | [CloudWatch and S3 lifecycle](../../infra/stacks-new/oxagen/observability.tf). Archives transition storage class before expiration. This is longer than seven years. |
 | Aurora backups | 35 days | [Cluster configuration](../../infra/stacks-new/oxagen/data-services.tf). Final snapshots have a separate lifecycle. |
 | Neo4j volume snapshots | Hourly, seven-day module default | [DLM policy](../../infra/modules/app-node/backup.tf), [variables](../../infra/modules/app-node/variables.tf). Verify stack overrides and actual snapshots. |
