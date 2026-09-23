@@ -7,18 +7,28 @@ const state = vi.hoisted(() => ({
   writes: [] as Record<string, unknown>[],
   call: vi.fn(),
   bodies: new Map<string, Uint8Array>(),
+  configs: new Map<string, import("@oxagen/functions").DurableFunctionConfig>(),
   handlers: new Map<string, (ctx: unknown) => Promise<unknown>>(),
 }));
-vi.mock("../create-function", () => ({
-  createFunction: (
-    _opts: unknown,
-    trigger: { event?: string },
-    handler: (ctx: unknown) => Promise<unknown>,
-  ) => {
-    state.handlers.set(trigger.event ?? "sweep", handler);
-    return [handler];
-  },
+vi.mock("../inngest", () => ({
+  inngest: { createFunction: vi.fn(() => ({})) },
 }));
+vi.mock("../create-function", async (original) => {
+  const actual = await original<typeof import("../create-function")>();
+  return {
+    ...actual,
+    createFunction: (
+      opts: import("@oxagen/functions").DurableFunctionConfig,
+      trigger: { event?: string },
+      handler: (ctx: unknown) => Promise<unknown>,
+    ) => {
+      actual.createFunction(opts, trigger as never, handler as never);
+      state.configs.set(opts.id, opts);
+      state.handlers.set(trigger.event ?? "sweep", handler);
+      return [handler];
+    },
+  };
+});
 vi.mock("@oxagen/database", async (original) => {
   const actual = await original<typeof import("@oxagen/database")>();
   return {
@@ -148,4 +158,11 @@ describe("automatic run enrichment", () => {
     await expect(run()).rejects.toThrow("credit gate refused");
     expect(state.writes).toHaveLength(0);
   });
+});
+
+it("registers enrichment under the adapter limits and serializes each organization's work", () => {
+  const config = state.configs.get("run.enrich")!;
+  expect(config.batchEvents?.maxSize).toBeLessThanOrEqual(5);
+  expect(config.concurrency).toEqual({ limit: 1, key: "event.data.orgId" });
+  expect(config.batchEvents?.key).toContain("event.data.runPublicId");
 });

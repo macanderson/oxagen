@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { runGovernedTurn } from "@oxagen/agent";
-import { resolveModelFundingSource, selectModelForOrg } from "@oxagen/ai";
+import { resolveModelFundingSource, selectModelFromFunding } from "@oxagen/ai";
 import { evaluateTurnCreditGate } from "@oxagen/billing";
 import type { RunFrame } from "@oxagen/run-ledger";
 import { digestBytes } from "@oxagen/tacho";
@@ -77,7 +77,9 @@ export async function runNarrativeTurn(
   instruction: string,
 ): Promise<{ text: string; model: string }> {
   const funding = await resolveModelFundingSource(scope.orgId);
-  const selection = await selectModelForOrg(scope.orgId, { tier: "fast" });
+  const selection = selectModelFromFunding(scope.orgId, funding, {
+    tier: "fast",
+  });
   const gate = await evaluateTurnCreditGate(scope.orgId, {
     fundedBy: selection.fundedBy,
   });

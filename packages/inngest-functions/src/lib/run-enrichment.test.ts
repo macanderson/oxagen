@@ -4,11 +4,12 @@ import { digestBytes } from "@oxagen/tacho";
 vi.mock("@oxagen/agent", () => ({ runGovernedTurn: vi.fn() }));
 vi.mock("@oxagen/ai", () => ({
   resolveModelFundingSource: vi.fn(),
-  selectModelForOrg: vi.fn(),
+  selectModelFromFunding: vi.fn(),
 }));
 vi.mock("@oxagen/billing", () => ({ evaluateTurnCreditGate: vi.fn() }));
 import {
   collectRunText,
+  runNarrativeTurn,
   ENRICHMENT_CHUNK_CHARS,
   uniqueRunName,
 } from "./run-enrichment";
@@ -95,4 +96,56 @@ describe("the full recorded input", () => {
       uniqueRunName("x".repeat(100), "tse_12345678").length,
     ).toBeLessThanOrEqual(80);
   });
+});
+
+it("uses the same resolved funding for the selected model, credit gate and Stella credential", async () => {
+  const { resolveModelFundingSource, selectModelFromFunding } = await import(
+    "@oxagen/ai"
+  );
+  const { runGovernedTurn } = await import("@oxagen/agent");
+  const { evaluateTurnCreditGate } = await import("@oxagen/billing");
+  vi.clearAllMocks();
+  const funding = {
+    fundedBy: "org" as const,
+    keyHint: "test",
+    modelKey: {
+      provider: "openrouter" as const,
+      apiKey: "test-key",
+      digest: "digest",
+      baseUrl: null,
+      modelMap: {},
+    },
+  };
+  const model = { modelId: "test-model" };
+  vi.mocked(resolveModelFundingSource).mockResolvedValue(funding);
+  vi.mocked(selectModelFromFunding).mockReturnValue({
+    model: model as never,
+    fundedBy: "org",
+  });
+  vi.mocked(evaluateTurnCreditGate).mockResolvedValue({ ok: true } as never);
+  vi.mocked(runGovernedTurn).mockResolvedValue({
+    fullStream: (async function* () {})(),
+    finalText: Promise.resolve("Recorded work"),
+    modelId: "test-model",
+  } as never);
+  await expect(runNarrativeTurn(scope, "summarize")).resolves.toEqual({
+    text: "Recorded work",
+    model: "test-model",
+  });
+  expect(resolveModelFundingSource).toHaveBeenCalledOnce();
+  expect(resolveModelFundingSource).toHaveBeenCalledWith(scope.orgId);
+  expect(selectModelFromFunding).toHaveBeenCalledWith(scope.orgId, funding, {
+    tier: "fast",
+  });
+  expect(evaluateTurnCreditGate).toHaveBeenCalledWith(scope.orgId, {
+    fundedBy: "org",
+  });
+  expect(runGovernedTurn).toHaveBeenCalledWith(
+    expect.objectContaining({
+      model,
+      fundedBy: "org",
+      credential: funding.modelKey,
+      tools: {},
+    }),
+  );
 });

@@ -5,7 +5,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { and, asc, eq, gt, isNull, like, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { digestBytes } from "@oxagen/tacho";
-import { createFunction } from "../create-function";
+import { createFunction, MAX_BATCH_SIZE } from "../create-function";
 import {
   collectRunText,
   runNarrativeTurn,
@@ -32,10 +32,10 @@ export const [runEnrich] = createFunction(
     retries: 2,
     concurrency: {
       limit: 1,
-      key: "event.data.orgId + ':' + event.data.runPublicId",
+      key: "event.data.orgId",
     },
     batchEvents: {
-      maxSize: 100,
+      maxSize: MAX_BATCH_SIZE,
       timeout: "30s",
       key: "event.data.orgId + ':' + event.data.runPublicId",
     },

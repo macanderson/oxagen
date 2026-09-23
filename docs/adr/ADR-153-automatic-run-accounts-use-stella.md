@@ -18,3 +18,5 @@ The schema adds nullable `summary_input_digest` and `summary_observed_at` column
 The sweep processes up to five hundred rows per store per pass. A backlog takes multiple passes. Derived accounts expose their generation time. They do not claim to cover actions or messages the recorder never retained.
 
 The previous `run.summarize.ts` implementation and its tests remain preserved. The registered `run.summarize` function now forwards queued legacy events into the Stella job. Re-enabling enrichment resets observation cursors but retains input digests, so unchanged generated accounts do not incur another charge.
+
+Enrichment runs serialize per organization. This also excludes concurrent work on one run and bounds credit admission while historical runs catch up. Event batches use the durable adapter's five-event maximum. Model construction, runtime credentials and the credit gate use one funding snapshot per turn.
