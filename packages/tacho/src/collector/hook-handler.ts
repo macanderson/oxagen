@@ -13,6 +13,10 @@ import {
 } from "../claude-code/hooks";
 import { digestText } from "../claude-code/context";
 import type { TachoEvent } from "../envelope";
+import {
+  type DeliveredPrompt,
+  steeringManifestFrame,
+} from "./steering-manifest";
 import type { FrameBody } from "../evidence/frame-body";
 import { toProtocolTimestamp } from "../timestamp";
 import {
@@ -255,8 +259,8 @@ function drainMessages(
   record: SessionRecord,
   deps: HookHandlerDeps,
   events: TachoEvent[],
-): string[] {
-  const texts: string[] = [];
+): DeliveredPrompt[] {
+  const delivered: DeliveredPrompt[] = [];
   const now = deps.now();
   for (const message of record.control.messages.splice(0)) {
     if (message.expiresAt !== null && Date.parse(message.expiresAt) < now) {
@@ -268,7 +272,12 @@ function drainMessages(
       });
       continue;
     }
-    texts.push(message.text);
+    delivered.push({
+      id: message.id,
+      text: message.text,
+      command: message.command ?? "message",
+      issuedAt: message.issuedAt ?? toProtocolTimestamp(now),
+    });
     const event = record.recorder.sealCollectorEvent(
       "oxagen:command_applied",
       {
@@ -302,7 +311,7 @@ function drainMessages(
       applied_at_seq: event.seq,
     });
   }
-  return texts;
+  return delivered;
 }
 
 /**
@@ -461,7 +470,22 @@ async function routeHook(
           record,
         };
       }
-      const additional = [context ?? "", ...messages].filter(
+      // What the agent was shown at this start, sealed into its chain beside
+      // the start event (ADR-093): the bundle's manifest, and every steer
+      // delivered with the prefix. A bundle from a control plane that signs
+      // no manifest seals no frame, and the start event's context digest is
+      // still the record of the text.
+      const manifest = view.bundle.context.manifest;
+      if (manifest !== undefined) {
+        events.push(
+          record.recorder.sealCollectorEvent(
+            "steering.manifest",
+            steeringManifestFrame(manifest, view.bundle, messages),
+            { hook_event_name: "SessionStart", attrs: replayed },
+          ),
+        );
+      }
+      const additional = [context ?? "", ...messages.map((m) => m.text)].filter(
         (s) => s.length > 0,
       );
       return {
@@ -515,7 +539,7 @@ async function routeHook(
             ? {
                 hookSpecificOutput: {
                   hookEventName: "UserPromptSubmit",
-                  additionalContext: messages.join("\n\n"),
+                  additionalContext: messages.map((m) => m.text).join("\n\n"),
                 },
               }
             : {},

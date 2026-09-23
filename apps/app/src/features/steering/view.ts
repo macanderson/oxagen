@@ -19,6 +19,7 @@ export const STEERING_TABS = [
   "proposals",
   "prs",
   "settings",
+  "deliveries",
 ] as const;
 export type SteeringTab = (typeof STEERING_TABS)[number];
 

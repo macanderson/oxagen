@@ -21,6 +21,14 @@ name: Open store tunnels
 description: Port-forward production ClickHouse and Neo4j over SSM and export their connection settings.
 
 inputs:
+  node-name:
+    description: Name tag of the node that owns the stores.
+    required: false
+    default: oxagen-app
+  parameter-prefix:
+    description: Parameter Store prefix for the target environment.
+    required: false
+    default: /oxagen/production
   clickhouse-port:
     description: Local port to forward ClickHouse's 8123 to.
     required: false
@@ -91,14 +99,16 @@ runs:
     - name: Find the node
       id: node
       shell: bash
+      env:
+        NODE_NAME: ${{ inputs.node-name }}
       run: |
         set -euo pipefail
         INSTANCE=$(aws ec2 describe-instances \
-          --filters "Name=tag:Name,Values=oxagen-app" \
+          --filters "Name=tag:Name,Values=$NODE_NAME" \
                     "Name=instance-state-name,Values=running" \
           --query 'Reservations[].Instances[].InstanceId' --output text)
         if [ "$(printf '%s' "$INSTANCE" | wc -w)" -ne 1 ]; then
-          echo "::error::expected exactly one running instance tagged Name=oxagen-app, got: $INSTANCE"
+          echo "::error::expected exactly one running instance tagged Name=$NODE_NAME, got: $INSTANCE"
           exit 1
         fi
         echo "instance=$INSTANCE" >> "$GITHUB_OUTPUT"
@@ -147,8 +157,10 @@ runs:
         echo "--- tunnel logs ---"
         tail -3 /tmp/tunnel-*.log || true
 
-    - name: Read the production store config
+    - name: Read the target store config
       shell: bash
+      env:
+        PARAMETER_PREFIX: ${{ inputs.parameter-prefix }}
       run: |
         set -euo pipefail
         # Written to the environment file rather than echoed: these are
@@ -160,7 +172,7 @@ runs:
         # default and reported "0 present" about a database nothing migrates.
         for key in CLICKHOUSE_URL CLICKHOUSE_USERNAME CLICKHOUSE_PASSWORD CLICKHOUSE_DATABASE \
                    NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD NEO4J_DATABASE; do
-          value=$(aws ssm get-parameter --name "/oxagen/production/$key" \
+          value=$(aws ssm get-parameter --name "$PARAMETER_PREFIX/$key" \
             --with-decryption --query Parameter.Value --output text)
           echo "::add-mask::$value"
           echo "$key=$value" >> "$GITHUB_ENV"

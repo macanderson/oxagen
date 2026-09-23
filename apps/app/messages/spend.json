@@ -19,7 +19,9 @@
       "cost_center": "By cost center",
       "waste": "Wasted spend",
       "budgets": "Budgets",
-      "pricing": "Pricing"
+      "pricing": "Pricing",
+      "model": "By model",
+      "tokens": "Tokens"
     },
     "actions": {
       "exportReport": "Export report",
@@ -458,6 +460,24 @@
         "denied": "Your role cannot change this policy. An organization or workspace owner or admin sets it.",
         "failed": "The policy could not be confirmed. Reload the tab to see what is set; saving it again replaces it."
       }
+    },
+    "tokens": {
+      "title": "By token class",
+      "note": "Recorded token counts for this period. The spend rollup does not split cost by token class.",
+      "class": "Class",
+      "count": "Tokens",
+      "share": "Share",
+      "input_uncached": "Uncached input",
+      "cache_read": "Cache read",
+      "cache_write": "Cache write",
+      "output": "Output",
+      "reasoning": "Reasoning",
+      "total": "Total recorded tokens",
+      "cacheHit": "Cache hit rate",
+      "cacheNote": "Cache reads divided by uncached input and cache reads.",
+      "byModel": "By model",
+      "model": "Model",
+      "basis": "Recorded spend"
     }
   }
 }

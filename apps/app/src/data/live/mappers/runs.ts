@@ -49,6 +49,7 @@ export function toRunRow(
             tier: run.model.tier,
           },
     machine: run.machine,
+    harness: run.harness ?? null,
     taskRef: run.taskRef,
     name: run.name,
     summary:

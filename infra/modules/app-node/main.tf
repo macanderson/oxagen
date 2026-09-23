@@ -167,7 +167,7 @@ data "aws_iam_policy_document" "logs" {
       "logs:PutLogEvents",
       "logs:DescribeLogStreams",
     ]
-    resources = ["arn:aws:logs:${var.region}:${var.account_id}:log-group:/oxagen-app/*"]
+    resources = ["arn:aws:logs:${var.region}:${var.account_id}:log-group:/${var.name}/*"]
   }
 }
 
@@ -244,6 +244,7 @@ resource "aws_volume_attachment" "neo4j_data" {
 # ---------------------------------------------------------------------------
 
 resource "aws_instance" "node" {
+  depends_on           = [aws_iam_role_policy.bootstrap_artifacts]
   ami                  = var.ami_id
   instance_type        = var.instance_type
   subnet_id            = var.subnet_id
@@ -314,4 +315,14 @@ resource "aws_instance" "node" {
   user_data_replace_on_change = true
 
   tags = merge(local.tags, { Name = var.name })
+}
+
+resource "aws_iam_role_policy" "bootstrap_artifacts" {
+  count = var.bootstrap_artifact_access ? 1 : 0
+  name  = "${var.name}-bootstrap-artifacts"
+  role  = aws_iam_role.node.id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["s3:GetObject"], Resource = "arn:aws:s3:::${var.deploy_bucket}/*" },
+    { Effect = "Allow", Action = ["s3:ListBucket"], Resource = "arn:aws:s3:::${var.deploy_bucket}" }
+  ] })
 }
