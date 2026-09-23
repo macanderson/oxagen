@@ -208,21 +208,26 @@ describe("header", () => {
     expect(screen.queryByText("$0.00")).toBeNull();
   });
 
-  it("leaves the generated name out when automatic names are disabled", async () => {
+  it("leaves out the generated name when automatic names are disabled", async () => {
     await renderRun({
       detail: ok(
         runDetail({
           run: runRow({
             enrichmentEnabled: false,
             name: "Old generated name",
+            taskRef: "A derived project label",
             summary: null,
           }),
         }),
       ),
       transcript: ok(runTranscript()),
     });
-    const when = within(screen.getByTestId("run-when"));
-    expect(when.queryByText("Old generated name")).toBeNull();
+    expect(screen.queryByText("Old generated name")).toBeNull();
+    expect(
+      within(screen.getByTestId("run-when")).getByText(
+        "A derived project label",
+      ),
+    ).toBeTruthy();
     expect(
       screen.getByRole("checkbox", {
         name: "Automatic run names and summaries",

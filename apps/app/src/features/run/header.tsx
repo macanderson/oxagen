@@ -239,10 +239,8 @@ function When({ run }: { run: RunRow }) {
           ))}
       </OperatorName>
     );
-  // With automatic names off the page's h1 already carries the run id, so the
-  // line adds no title of its own.
   const title =
-    run.enrichmentEnabled === false ? null : (run.name ?? run.taskRef);
+    (run.enrichmentEnabled === false ? null : run.name) ?? run.taskRef;
   return (
     <p
       data-testid="run-when"
