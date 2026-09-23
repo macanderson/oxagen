@@ -42,10 +42,12 @@ Every figure is counted from a store that exists or is `null` with the reason on
 | `items[].beltSize` | `null` | Computed per agent by `get_agent_toolbelt`. |
 | `items[].runs30d` | `number` | Ledger runs plus root wrapped sessions started in the last 30 days. |
 | `items[].spend30d` | `Cost \| null` | `{ micros, currency, basis: "client_attested" }` or null when no priced session is in the window. |
+| `items[].tokens30d` | `object \| null` | `{ total, input, cacheRead, cacheReadRate, sessions }` over the root wrapped sessions started in the last 30 days, as the harness reported usage (`tacho.sessions`). `input` is fresh input plus cache read plus cache written; `total` adds the output; `cacheReadRate` is cache read over input, null when no input was reported. Null when no session in the window reported a token. Ledger runs' tokens are metered in ClickHouse and are not in this total. |
 | `items[].proven30d` | `null` | No verification store. |
 | `items[].mandates` | `number \| null` | Active mandates the principal holds; null only on a row with no principal. |
 | `items[].incidents` | `number` | Open `tacho.incidents` rows on the agent's hosts. |
-| `items[].tamperIncidents` | `number` | Those of a tamper kind, the set `totals.tamperIncidents` counts. |
+| `items[].tamperIncidents` | `number` | Those of a tamper kind, the set `totals.tamperIncidents` sums. |
+| `items[].tamperIncidentsRecorded` | `number` | Every incident of a tamper kind on the agent's hosts that the store keeps, open or resolved; the set `totals.tamper.recorded` sums. |
 | `items[].credentials` | `number` | Active long-lived credentials. |
 | `items[].hosts` | `number` | Live (active or paused) hosts under the agent key. |
 | `items[].host` | `string \| null` | The hostname of the live host seen most recently; null when none is live. |
@@ -54,7 +56,8 @@ Every figure is counted from a store that exists or is `null` with the reason on
 | `totals.identities` | `number` | Live agents in the workspace. |
 | `totals.enrolled` | `number` | Of those, `enrolled`. |
 | `totals.holdingMandate` | `number` | Live agents in the workspace whose principal holds at least one active mandate. |
-| `totals.tamperIncidents` | `number` | Open incidents of a tamper kind (`hooks_removed`, `config_change`, `chain_break`, `checkpoint_lapse`, `token_replay`, `spoofed_event`) on the workspace's hosts. |
+| `totals.tamperIncidents` | `number` | Open incidents of a tamper kind (`hooks_removed`, `config_change`, `chain_break`, `checkpoint_lapse`, `token_replay`, `spoofed_event`), summed over the workspace's agents through the hosts enrolled under each agent key. An incident on a host no listed agent holds is not in it. |
+| `totals.tamper` | `object` | `{ recorded, open, newest }`: every tamper incident the store keeps summed over the same agents, how many are open, and the newest as `{ agentKey, kind, detectedAt }` (null when there is none). The Agents page's Tamper incidents tile. |
 
 ## Roles
 

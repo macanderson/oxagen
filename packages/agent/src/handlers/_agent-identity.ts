@@ -292,6 +292,48 @@ export interface RunWindowFigures {
    * the window; null when no wrapped session was recorded.
    */
   latestTier: string | null;
+  /**
+   * The tokens the agent's root wrapped sessions in the window reported, as
+   * the harness counted them; null when no session in the window reported
+   * a token. Ledger runs' tokens are metered in ClickHouse and are not rolled
+   * up per agent, so they are not in this total.
+   */
+  tokens?: WrappedTokenFigures | null;
+}
+
+/**
+ * A wrapped-session token rollup. `input` is every input token the model
+ * read, fresh, cache read and cache written, because the harness reports
+ * `input_tokens` without the cached classes (Anthropic usage semantics), and
+ * `total` adds the output. `cacheReadRate` is cache read over that input;
+ * null when no input was reported.
+ */
+export interface WrappedTokenFigures {
+  total: number;
+  input: number;
+  cacheRead: number;
+  cacheReadRate: number | null;
+  /** Root sessions in the window that reported at least one token. */
+  sessions: number;
+}
+
+/** The rollup from the four summed columns; null when no session reported a token. */
+export function wrappedTokenFigures(sums: {
+  sessions: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheCreation: number;
+}): WrappedTokenFigures | null {
+  if (sums.sessions === 0) return null;
+  const input = sums.input + sums.cacheRead + sums.cacheCreation;
+  return {
+    total: input + sums.output,
+    input,
+    cacheRead: sums.cacheRead,
+    cacheReadRate: input === 0 ? null : sums.cacheRead / input,
+    sessions: sums.sessions,
+  };
 }
 
 /**
@@ -331,6 +373,10 @@ export async function runFiguresByAgent(
     .groupBy(schema.agentRuns.agentId);
 
   const s = schema.tachoSessions;
+  const inWindow = sql`${s.startedAt} >= ${since}`;
+  // A session that reported no token at all is a harness that does not
+  // report usage, not a session that used none.
+  const reported = sql`(${s.inputTokens} + ${s.outputTokens} + ${s.cacheReadTokens} + ${s.cacheCreationTokens}) > 0`;
   const priced = sql`${s.costBasis} is not null and ${s.costBasis} <> 'unknown' and coalesce(${s.hasUnknownModelCost}, false) = false and ${s.startedAt} >= ${since}`;
   const wrapped =
     keys.length === 0
@@ -347,6 +393,11 @@ export async function runFiguresByAgent(
             latestTier: sql<
               string | null
             >`(array_agg(${s.enforcementTier} order by ${s.startedAt} desc nulls last))[1]`,
+            tokenSessions: sql<number>`count(*) filter (where ${inWindow} and ${reported})::int`,
+            inputTokens: sql<string>`coalesce(sum(${s.inputTokens}) filter (where ${inWindow}), 0)::text`,
+            outputTokens: sql<string>`coalesce(sum(${s.outputTokens}) filter (where ${inWindow}), 0)::text`,
+            cacheReadTokens: sql<string>`coalesce(sum(${s.cacheReadTokens}) filter (where ${inWindow}), 0)::text`,
+            cacheCreationTokens: sql<string>`coalesce(sum(${s.cacheCreationTokens}) filter (where ${inWindow}), 0)::text`,
           })
           .from(s)
           .where(
@@ -375,6 +426,15 @@ export async function runFiguresByAgent(
           ? null
           : new Date(Math.min(...starts.map((d) => d.getTime()))),
       latestTier: w?.latestTier ?? null,
+      tokens: w
+        ? wrappedTokenFigures({
+            sessions: w.tokenSessions,
+            input: Number(w.inputTokens),
+            output: Number(w.outputTokens),
+            cacheRead: Number(w.cacheReadTokens),
+            cacheCreation: Number(w.cacheCreationTokens),
+          })
+        : null,
     });
   }
   return out;
@@ -418,4 +478,85 @@ export async function openIncidentsByAgentKey(
     )
     .groupBy(schema.tachoHosts.agentKey);
   return new Map(rows.map((r) => [r.agentKey, r.count]));
+}
+
+/** Tamper incidents on one agent key's hosts: every one the store keeps, and the open ones. */
+export interface TamperCounts {
+  recorded: number;
+  open: number;
+}
+
+/**
+ * Tamper incidents per agent key, through the hosts enrolled under it: every
+ * incident of a tamper kind the store keeps (its retention window), and how
+ * many of them are open. The Incidents column, the Health cell and the
+ * Tamper incidents tile all read this one set, so the tile is the sum of the
+ * rows.
+ */
+export async function tamperIncidentsByAgentKey(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  agentKeys: readonly string[],
+): Promise<Map<string, TamperCounts>> {
+  if (agentKeys.length === 0) return new Map();
+  const rows = await tx
+    .select({
+      agentKey: schema.tachoHosts.agentKey,
+      recorded: sql<number>`count(*)::int`,
+      open: sql<number>`count(*) filter (where ${schema.tachoIncidents.resolvedAt} is null)::int`,
+    })
+    .from(schema.tachoIncidents)
+    .innerJoin(
+      schema.tachoHosts,
+      and(
+        eq(schema.tachoHosts.id, schema.tachoIncidents.hostId),
+        eq(schema.tachoHosts.orgId, schema.tachoIncidents.orgId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.tachoIncidents.orgId, scope.orgId),
+        eq(schema.tachoIncidents.workspaceId, scope.workspaceId),
+        inArray(schema.tachoHosts.agentKey, [...agentKeys]),
+        inArray(schema.tachoIncidents.kind, [...TAMPER_INCIDENT_KINDS]),
+      ),
+    )
+    .groupBy(schema.tachoHosts.agentKey);
+  return new Map(
+    rows.map((r) => [r.agentKey, { recorded: r.recorded, open: r.open }]),
+  );
+}
+
+/** The newest tamper incident on any of these agent keys' hosts; null when there is none. */
+export async function newestTamperIncident(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  agentKeys: readonly string[],
+): Promise<{ agentKey: string; kind: string; detectedAt: Date } | null> {
+  if (agentKeys.length === 0) return null;
+  const [row] = await tx
+    .select({
+      agentKey: schema.tachoHosts.agentKey,
+      kind: schema.tachoIncidents.kind,
+      detectedAt: schema.tachoIncidents.detectedAt,
+    })
+    .from(schema.tachoIncidents)
+    .innerJoin(
+      schema.tachoHosts,
+      and(
+        eq(schema.tachoHosts.id, schema.tachoIncidents.hostId),
+        eq(schema.tachoHosts.orgId, schema.tachoIncidents.orgId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.tachoIncidents.orgId, scope.orgId),
+        eq(schema.tachoIncidents.workspaceId, scope.workspaceId),
+        inArray(schema.tachoHosts.agentKey, [...agentKeys]),
+        inArray(schema.tachoIncidents.kind, [...TAMPER_INCIDENT_KINDS]),
+      ),
+    )
+    .orderBy(desc(schema.tachoIncidents.detectedAt))
+    .limit(1);
+  return row ?? null;
 }

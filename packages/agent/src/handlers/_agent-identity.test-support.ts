@@ -368,6 +368,13 @@ export async function seedSession(
     costBasis?: string | null;
     hasUnknownModelCost?: boolean;
     child?: boolean;
+    /** Usage as the harness reported it; every class defaults to zero. */
+    tokens?: {
+      input?: number;
+      output?: number;
+      cacheRead?: number;
+      cacheCreation?: number;
+    };
   },
 ): Promise<void> {
   const sessionUuid = crypto.randomUUID();
@@ -387,6 +394,10 @@ export async function seedSession(
       totalCostMicros: over.costMicros ?? 0,
       costBasis: over.costBasis ?? null,
       hasUnknownModelCost: over.hasUnknownModelCost ?? null,
+      inputTokens: over.tokens?.input ?? 0,
+      outputTokens: over.tokens?.output ?? 0,
+      cacheReadTokens: over.tokens?.cacheRead ?? 0,
+      cacheCreationTokens: over.tokens?.cacheCreation ?? 0,
     });
   });
 }

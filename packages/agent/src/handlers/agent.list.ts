@@ -1,16 +1,14 @@
 // list_agents — the identities table, one page by slug, with the counts and
 // 30-day figures the stores record. Row semantics and every null's reason
 // are on the contract (packages/oxagen/src/contracts/agent.list.ts).
-import { schema, withTenantDb } from "@oxagen/database";
+import { withTenantDb } from "@oxagen/database";
 import {
   type AgentListInput,
   type AgentListItem,
   type AgentListOutput,
   agentEnforcementTierSchema,
 } from "@oxagen/oxagen/contracts/agent.list";
-import { TAMPER_INCIDENT_KINDS } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import { microsString } from "@oxagen/oxagen/contracts/spend.shared";
-import { and, eq, isNull, sql } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import {
   activeCredentialsByAgent,
@@ -20,8 +18,10 @@ import {
   latestLiveHostByAgentKey,
   listAgentIdentities,
   liveHostsByAgentKey,
+  newestTamperIncident,
   openIncidentsByAgentKey,
   runFiguresByAgent,
+  tamperIncidentsByAgentKey,
   type AgentIdentityRow,
   type RunWindowFigures,
 } from "./_agent-identity";
@@ -51,6 +51,8 @@ export function toAgentListItem(
     hosts: number;
     incidents: number;
     tamperIncidents: number;
+    /** Tamper incidents on the agent's hosts the store keeps, open or resolved. */
+    tamperIncidentsRecorded?: number;
     /** Active mandates held by the principal; null when the row has no principal. */
     mandates: number | null;
     host: string | null;
@@ -80,10 +82,13 @@ export function toAgentListItem(
             basis: "client_attested",
           }
         : null,
+    tokens30d: facts.figures?.tokens ?? null,
     proven30d: null,
     mandates: facts.mandates,
     incidents: facts.incidents,
     tamperIncidents: facts.tamperIncidents,
+    tamperIncidentsRecorded:
+      facts.tamperIncidentsRecorded ?? facts.tamperIncidents,
     credentials: facts.credentials,
     hosts: facts.hosts,
     host: facts.host,
@@ -124,7 +129,7 @@ export async function agentListHandler(
     );
     const hosts = await liveHostsByAgentKey(tx, scope, agentKeys);
     const incidents = await openIncidentsByAgentKey(tx, scope, agentKeys);
-    const tamper = await openIncidentsByAgentKey(tx, scope, agentKeys, true);
+    const tamper = await tamperIncidentsByAgentKey(tx, scope, agentKeys);
     const liveHost = await latestLiveHostByAgentKey(tx, scope, agentKeys);
     const mandates = await activeMandatesByPrincipal(
       tx,
@@ -140,7 +145,9 @@ export async function agentListHandler(
 
     // The tiles cover the whole workspace, so they are counted apart from
     // the page: every live agent, how many hold a credential or a host, and
-    // the open tamper incidents on every host in the workspace.
+    // the tamper incidents on the hosts enrolled under their agent keys. The
+    // tamper figures are sums over the same per-agent set the rows read, so
+    // the tile is the rollup of the Incidents column, never a second count.
     const all = await listAgentIdentities(tx, scope, {
       limit: 10_000,
       afterSlug: undefined,
@@ -155,20 +162,14 @@ export async function agentListHandler(
       all.map((r) => r.publicId),
     );
     const allHosts = await liveHostsByAgentKey(tx, scope, allAgentKeys);
-    const [tamperTotal] = await tx
-      .select({ tamperIncidents: sql<number>`count(*)::int` })
-      .from(schema.tachoIncidents)
-      .where(
-        and(
-          eq(schema.tachoIncidents.orgId, scope.orgId),
-          eq(schema.tachoIncidents.workspaceId, scope.workspaceId),
-          isNull(schema.tachoIncidents.resolvedAt),
-          sql`${schema.tachoIncidents.kind} in (${sql.join(
-            TAMPER_INCIDENT_KINDS.map((k) => sql`${k}`),
-            sql`, `,
-          )})`,
-        ),
-      );
+    const allTamper = await tamperIncidentsByAgentKey(tx, scope, allAgentKeys);
+    let tamperRecorded = 0;
+    let tamperOpen = 0;
+    for (const counts of allTamper.values()) {
+      tamperRecorded += counts.recorded;
+      tamperOpen += counts.open;
+    }
+    const newest = await newestTamperIncident(tx, scope, allAgentKeys);
 
     const allMandates = await activeMandatesByPrincipal(
       tx,
@@ -200,7 +201,10 @@ export async function agentListHandler(
           credentials: credentials.get(row.publicId) ?? 0,
           hosts: agentKey ? (hosts.get(agentKey) ?? 0) : 0,
           incidents: agentKey ? (incidents.get(agentKey) ?? 0) : 0,
-          tamperIncidents: agentKey ? (tamper.get(agentKey) ?? 0) : 0,
+          tamperIncidents: agentKey ? (tamper.get(agentKey)?.open ?? 0) : 0,
+          tamperIncidentsRecorded: agentKey
+            ? (tamper.get(agentKey)?.recorded ?? 0)
+            : 0,
           mandates:
             row.principalId === null
               ? null
@@ -215,7 +219,19 @@ export async function agentListHandler(
         identities: all.length,
         enrolled,
         holdingMandate,
-        tamperIncidents: tamperTotal?.tamperIncidents ?? 0,
+        tamperIncidents: tamperOpen,
+        tamper: {
+          recorded: tamperRecorded,
+          open: tamperOpen,
+          newest:
+            newest === null
+              ? null
+              : {
+                  agentKey: newest.agentKey,
+                  kind: newest.kind,
+                  detectedAt: newest.detectedAt.toISOString(),
+                },
+        },
       },
     };
   });

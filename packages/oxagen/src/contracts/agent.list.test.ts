@@ -18,10 +18,12 @@ const item = {
   beltSize: null,
   runs30d: 12,
   spend30d: { micros: "1250000", currency: "USD", basis: "client_attested" },
+  tokens30d: null,
   proven30d: null,
   mandates: null,
   incidents: 1,
   tamperIncidents: 0,
+  tamperIncidentsRecorded: 0,
   credentials: 1,
   hosts: 2,
   host: null,
@@ -62,7 +64,33 @@ describe("list_agents contract", () => {
     expect(parsed.beltSize).toBeNull();
     expect(parsed.proven30d).toBeNull();
     expect(parsed.mandates).toBeNull();
+    expect(parsed.tokens30d).toBeNull();
     expect(parsed.spend30d).toEqual(item.spend30d);
+  });
+
+  it("carries the wrapped-session token rollup and refuses a cache rate above one", () => {
+    const tokens30d = {
+      total: 1_200_000,
+      input: 1_000_000,
+      cacheRead: 640_000,
+      cacheReadRate: 0.64,
+      sessions: 9,
+    };
+    expect(agentListItem.parse({ ...item, tokens30d }).tokens30d).toEqual(
+      tokens30d,
+    );
+    expect(
+      agentListItem.safeParse({
+        ...item,
+        tokens30d: { ...tokens30d, cacheReadRate: 1.2 },
+      }).success,
+    ).toBe(false);
+    expect(
+      agentListItem.safeParse({
+        ...item,
+        tokens30d: { ...tokens30d, cacheReadRate: null },
+      }).success,
+    ).toBe(true);
   });
 
   it("carries the recorded enforcement tier, the mandate count and the live host, and refuses a tier off the ladder", () => {
@@ -118,14 +146,38 @@ describe("list_agents contract", () => {
         enrolled: 1,
         holdingMandate: null,
         tamperIncidents: 0,
+        tamper: { recorded: 0, open: 0, newest: null },
       },
     });
     expect(out.totals.holdingMandate).toBeNull();
+    const newest = {
+      agentKey: "acme.core.release-bot",
+      kind: "hooks_removed",
+      detectedAt: "2026-09-11T09:16:04.000Z",
+    };
+    expect(
+      agentList.output.parse({
+        items: [item],
+        nextCursor: null,
+        totals: {
+          identities: 3,
+          enrolled: 1,
+          holdingMandate: 1,
+          tamperIncidents: 1,
+          tamper: { recorded: 2, open: 1, newest },
+        },
+      }).totals.tamper.newest,
+    ).toEqual(newest);
     expect(
       agentList.output.safeParse({
         items: [item],
         nextCursor: null,
-        totals: { identities: 3, enrolled: 1, tamperIncidents: 0 },
+        totals: {
+          identities: 3,
+          enrolled: 1,
+          tamperIncidents: 0,
+          tamper: { recorded: 0, open: 0, newest: null },
+        },
       }).success,
     ).toBe(false);
   });
