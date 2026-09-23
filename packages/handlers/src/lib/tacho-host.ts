@@ -4,6 +4,8 @@
  * building the control envelope every machine response carries.
  */
 import { CapabilityError } from "@oxagen/oxagen/kernel";
+import { isHandlerError } from "@oxagen/oxagen/handler-error";
+import { logger } from "../logger";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import {
   type PolicyBundle,
@@ -50,6 +52,7 @@ import {
 } from "./tacho-gateway-columns";
 import {
   type AgentBudgetDoc,
+  budgetDocFromVersion,
   deriveBundleBudget,
   mapMandateToBundlePermissions,
 } from "./tacho-mandate";
@@ -339,6 +342,7 @@ function modelPrices(host: TachoHostRow): {
 
 /** The tool-RBAC-and-budget half of a host's mandate, resolved for the wire. */
 export interface HostMandate {
+  invalidDefinition?: true;
   permissions: PolicyBundle["permissions"];
   budget: PolicyBundle["budget"];
 }
@@ -381,9 +385,9 @@ function steeringManifest(
 
 /**
  * The agent-definition `budget` table off the host's agent's ACTIVE version
- * config (`agent.propose.ts`'s own reading of the same doc), or `undefined`
- * when the host names no agent, the agent has no published version, or the
- * config carries no `budget` table at all.
+ * definition source, with config as a fallback for legacy versions. It is
+ * undefined when the host names no agent, has no active version, or declares
+ * no budget.
  */
 async function readAgentBudgetDoc(
   tx: TachoTx,
@@ -397,21 +401,9 @@ async function readAgentBudgetDoc(
   if (!agent?.activeVersionId) return undefined;
   const version = (await tx.query.agentVersions.findFirst({
     where: eq(schema.agentVersions.id, agent.activeVersionId),
-    columns: { config: true },
-  })) as { config: unknown } | undefined;
-  const config = version?.config;
-  const budgetTable =
-    typeof config === "object" && config !== null
-      ? (config as Record<string, unknown>)["budget"]
-      : undefined;
-  if (typeof budgetTable !== "object" || budgetTable === null) return undefined;
-  const table = budgetTable as Record<string, unknown>;
-  const perRunMicros = table["per_run_micros"];
-  const perDayMicros = table["per_day_micros"];
-  return {
-    ...(typeof perRunMicros === "number" ? { perRunMicros } : {}),
-    ...(typeof perDayMicros === "number" ? { perDayMicros } : {}),
-  };
+    columns: { config: true, definitionSource: true },
+  })) as { config: unknown; definitionSource: string | null } | undefined;
+  return version === undefined ? undefined : budgetDocFromVersion(version);
 }
 
 /**
@@ -427,7 +419,7 @@ async function readAgentBudgetDoc(
  * `register_agent` runs), the workspace's decision rules still apply either
  * way (they govern the workspace, not one agent's own grants), and the
  * budget stays `observed` when the host names no agent, the agent has no
- * published version, or its config carries no budget table.
+ * published version, or its active definition carries no budget table.
  */
 export async function resolveHostMandate(
   tx: TachoTx,
@@ -461,9 +453,28 @@ export async function resolveHostMandate(
     mcpRules,
     externalToolRules: ruleSet?.rules ?? [],
   });
-  const budgetDoc = await readAgentBudgetDoc(tx, host.agentId);
-  const budget = deriveBundleBudget(budgetDoc);
-  return { permissions, budget };
+  try {
+    const budgetDoc = await readAgentBudgetDoc(tx, host.agentId);
+    const budget = deriveBundleBudget(budgetDoc);
+    return { permissions, budget };
+  } catch (error) {
+    if (
+      !isHandlerError(error) ||
+      !["invalid_definition_source", "invalid_definition_budget"].includes(
+        error.reason,
+      )
+    )
+      throw error;
+    logger.warn(
+      { host: host.publicId, agentId: host.agentId, reason: error.reason },
+      "Invalid active definition suspends governed actions while evidence intake continues",
+    );
+    return {
+      permissions,
+      budget: { mode: "observed" },
+      invalidDefinition: true,
+    };
+  }
 }
 
 /**
@@ -504,7 +515,11 @@ export function unsignedBundle(
   mandate: HostMandate,
   now: Date = new Date(),
 ): Omit<PolicyBundle, "signature"> {
-  const status = tachoHostStatusSchema.parse(host.status);
+  const status = tachoHostStatusSchema.parse(
+    mandate.invalidDefinition && host.status === "active"
+      ? "suspended"
+      : host.status,
+  );
   const mode = tachoBundleModeSchema.parse(host.mode);
   // Version and etag cover the policy content only, never the timestamps, so
   // an unchanged bundle answers not_modified across polls.
@@ -676,7 +691,7 @@ export async function controlEnvelope(
   );
   const commands = await drainCommands(tx, host, now);
   return controlEnvelopeSchema.parse({
-    host_status: tachoHostStatusSchema.parse(host.status),
+    host_status: bundle.host_status,
     deny_generation: denyGeneration,
     bundle_etag: bundle.etag,
     commands,

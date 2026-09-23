@@ -1,3 +1,4 @@
+import { evaluatePreToolUse } from "@oxagen/tacho/host";
 /**
  * What the policy bundle has to carry for the local MCP gateway to serve a
  * connected app honestly (ADR-078 §4).
@@ -13,13 +14,19 @@
  * `tool_ceiling` counted forbidden tools toward the limit.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { generateKeyPairSync } from "node:crypto";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { bundleSignerFromPem, verifyBundle } from "./tacho-bundle-signing";
 
 const gatewayMandateTools = vi.fn(() => undefined as string[] | undefined);
 vi.mock("@oxagen/iam/machine-key-scope", () => ({
   gatewayMandateTools: () => gatewayMandateTools(),
 }));
 
-const { unsignedBundle } = await import("./tacho-host");
+const { resolveHostMandate, signBundle, unsignedBundle } = await import(
+  "./tacho-host"
+);
 const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
 const {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
@@ -331,5 +338,137 @@ describe("the wrapped-session policy on the bundle", () => {
         signature: { key_id: "k", alg: "ed25519", sig: "s" },
       }),
     ).toThrow();
+  });
+});
+
+describe("the active definition budget on the signed bundle", () => {
+  function budgetTransaction(
+    definitionSource: string,
+    activeVersionId: string | null = "version-active",
+  ) {
+    const findVersion = vi.fn(async (args: unknown) => {
+      const { columns } = args as { columns: Record<string, boolean> };
+      const row: Record<string, unknown> = { config: {}, definitionSource };
+      return Object.fromEntries(
+        Object.keys(columns).map((key) => [key, row[key]]),
+      );
+    });
+    const tx = {
+      query: {
+        agents: { findFirst: vi.fn(async () => ({ activeVersionId })) },
+        agentVersions: { findFirst: findVersion },
+        workspaces: { findFirst: vi.fn(async () => undefined) },
+      },
+    } as unknown as Parameters<typeof resolveHostMandate>[0];
+    return { tx, findVersion };
+  }
+
+  const ctx = { orgId: "org-1", workspaceId: "workspace-1" };
+  const governedHost = () => ({
+    ...host(),
+    agentId: "agent-1",
+    agentPrincipalId: null,
+  });
+
+  it("signs the editor's TOML budget from the selected active version", async () => {
+    // The form writes this inline table. The commit handler preserves config
+    // and stores the text as definitionSource; publishing selects this row.
+    const { tx, findVersion } = budgetTransaction(
+      'schema = "agent-definition/v0.1"\nslug = "review"\nbudget = { per_run_micros = 2500000 }\n[instructions]\nbody = "Review."\n',
+    );
+    const mandate = await resolveHostMandate(tx, ctx, governedHost());
+    const lookup = findVersion.mock.calls[0]?.[0] as { where: SQL };
+    expect(new PgDialect().sqlToQuery(lookup.where).params).toEqual([
+      "version-active",
+    ]);
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const signer = bundleSignerFromPem(
+      privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    );
+    const signed = signBundle(
+      signer,
+      unsignedBundle(
+        governedHost(),
+        { org: 1, workspace: 1 },
+        { mode: "digest_only", classes: [] },
+        null,
+        mandate,
+        NOW,
+      ),
+    );
+    expect(policyBundleSchema.parse(signed).budget).toEqual({
+      mode: "enforced",
+      session_limit_usd: 2.5,
+    });
+    expect(verifyBundle(signed, signer.publicKeyPem)).toBe(true);
+    expect(
+      verifyBundle(
+        { ...signed, budget: { mode: "observed" } },
+        signer.publicKeyPem,
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    "[budget",
+    "budget = { per_run_micros = nan }",
+    "budget = { per_run_micros = 1.5 }",
+  ])(
+    "signs a suspension for an invalid persisted definition: %s",
+    async (source) => {
+      const { tx } = budgetTransaction(source);
+      const mandate = await resolveHostMandate(tx, ctx, governedHost());
+      const { privateKey } = generateKeyPairSync("ed25519");
+      const signer = bundleSignerFromPem(
+        privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+      );
+      const signed = signBundle(
+        signer,
+        unsignedBundle(
+          governedHost(),
+          { org: 1, workspace: 1 },
+          { mode: "digest_only", classes: [] },
+          null,
+          mandate,
+          NOW,
+        ),
+      );
+      expect(policyBundleSchema.parse(signed).host_status).toBe("suspended");
+      expect(verifyBundle(signed, signer.publicKeyPem)).toBe(true);
+      expect(
+        verifyBundle({ ...signed, host_status: "active" }, signer.publicKeyPem),
+      ).toBe(false);
+      expect(governedHost().status).toBe("active");
+      expect(
+        evaluatePreToolUse({
+          bundle: signed,
+          bundleVerified: true,
+          hostStatus: signed.host_status,
+          session: {},
+          controlReachable: true,
+          now: NOW.getTime(),
+          toolName: "Bash",
+          toolInput: { command: "git push" },
+        }).decision,
+      ).toBe("deny");
+    },
+  );
+
+  it("does not arm an unpublished definition when there is no active version", async () => {
+    const { tx, findVersion } = budgetTransaction(
+      "budget = { per_run_micros = 2500000 }",
+      null,
+    );
+    expect((await resolveHostMandate(tx, ctx, governedHost())).budget).toEqual({
+      mode: "observed",
+    });
+    expect(findVersion).not.toHaveBeenCalled();
+  });
+
+  it("keeps a daily-only declaration observed without inventing a session limit", async () => {
+    const { tx } = budgetTransaction("budget = { per_day_micros = 20000000 }");
+    expect((await resolveHostMandate(tx, ctx, governedHost())).budget).toEqual({
+      mode: "observed",
+    });
   });
 });
