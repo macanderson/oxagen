@@ -1118,31 +1118,6 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0)
 
-  packages/context-provider:
-    dependencies:
-      '@contextgraphprotocol/typescript-sdk':
-        specifier: 0.1.0
-        version: 0.1.0
-      '@oxagen/engram':
-        specifier: workspace:*
-        version: link:../engram
-    devDependencies:
-      '@types/node':
-        specifier: 25.9.1
-        version: 25.9.1
-      '@vitest/coverage-v8':
-        specifier: 2.1.9
-        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0))
-      tsx:
-        specifier: 4.22.3
-        version: 4.22.3
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: 2.1.9
-        version: 2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0)
-
   packages/crypto:
     dependencies:
       '@aws-sdk/client-kms':
@@ -1213,35 +1188,6 @@ importers:
       vitest:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0)
-
-  packages/engram:
-    dependencies:
-      '@anthropic-ai/tokenizer':
-        specifier: 0.0.4
-        version: 0.0.4
-      '@oxagen/ai':
-        specifier: workspace:*
-        version: link:../ai
-      tiktoken:
-        specifier: 1.0.22
-        version: 1.0.22
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
-    devDependencies:
-      '@vitest/coverage-v8':
-        specifier: 2.1.9
-        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0))
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: 2.1.9
-        version: 2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0)
-    optionalDependencies:
-      duckdb:
-        specifier: 1.3.0
-        version: 1.3.0(encoding@0.1.13)
 
   packages/functions:
     devDependencies:
@@ -1351,6 +1297,9 @@ importers:
       '@oxagen/run-ledger':
         specifier: workspace:*
         version: link:../run-ledger
+      '@oxagen/steering-assembler':
+        specifier: workspace:*
+        version: link:../steering-assembler
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../storage
@@ -1838,6 +1787,28 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0)
 
+  packages/steering-assembler:
+    dependencies:
+      '@contextgraphprotocol/typescript-sdk':
+        specifier: 0.1.0
+        version: 0.1.0
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.1
+        version: 25.9.1
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0))
+      eslint:
+        specifier: 9.39.4
+        version: 9.39.4(jiti@2.7.0)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(terser@5.48.0)
+
   packages/steering-freshness:
     dependencies:
       zod:
@@ -2125,9 +2096,6 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@oxagen/engram':
-        specifier: workspace:*
-        version: link:../../packages/engram
       '@oxagen/handlers':
         specifier: workspace:*
         version: link:../../packages/handlers
@@ -2220,9 +2188,6 @@ packages:
 
   '@antfu/install-pkg@1.1.0':
     resolution: {integrity: sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ==}
-
-  '@anthropic-ai/tokenizer@0.0.4':
-    resolution: {integrity: sha512-EHRKbxlxlc8W4KCBEseByJ7YwyYCmgu9OyN59H9+IYIGPoKv8tXyQXinkeGDI+cI8Tiuz9wk2jZb/kK7AyvL7g==}
 
   '@asamuzakjp/css-color@3.2.0':
     resolution: {integrity: sha512-K1A6z8tS3XsmCMM86xoWdn7Fkdn9m6RSVtocUrJYIwZnFVkng/PvkEoWtOWmP+Scc6saYWHWZYbndEEXxl24jw==}
@@ -6863,9 +6828,6 @@ packages:
 
   '@types/node@12.20.55':
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==}
-
-  '@types/node@18.19.130':
-    resolution: {integrity: sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==}
 
   '@types/node@22.19.21':
     resolution: {integrity: sha512-VMeFBSCKQKmm2swI2kW51SFusDqekC6q9trBCvJ/JliDchFSuoYYKN7yVNjPthP1HKZcx3U1gI/wTcEBjEFKTA==}
@@ -11750,7 +11712,7 @@ packages:
 
   serialize-error-cjs@0.1.4:
     resolution: {integrity: sha512-6a6dNqipzbCPlTFgztfNP2oG+IGcflMe/01zSzGrQcxGMKbIjOemBBD85pH92klWaJavAUWxAh9Z0aU28zxW6A==}
-    deprecated: Rolling release, please update to 0.2.0
+    deprecated: Rolling release, please update to 0.3.0
 
   serve-static@2.2.1:
     resolution: {integrity: sha512-xRXBn0pPqQTVQiC8wyQrKs2MOlX24zQ0POGaj0kultvoOCstBQM5yvOhAVSUwOMjQtTvsPWoNCHfPGwaaQJhTw==}
@@ -12180,9 +12142,6 @@ packages:
     resolution: {integrity: sha512-nt6AMGKW1p/70DF/hGBdJB57B8Tspmbp5gfJ8ilhLnt7kkr2ye7hzD6NVG8GGErk2HWF34igrL2CXmNIkzKqKw==}
     engines: {node: '>=18'}
 
-  tiktoken@1.0.22:
-    resolution: {integrity: sha512-PKvy1rVF1RibfF3JlXBSP0Jrcw2uq3yXdgcEXtKTYn3QJ/cBRBHDnrJ5jHky+MENZ6DIPwNUGWpkVx+7joCpNA==}
-
   tiny-inflate@1.0.3:
     resolution: {integrity: sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==}
 
@@ -12423,9 +12382,6 @@ packages:
 
   uncrypto@0.1.3:
     resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
-
-  undici-types@5.26.5:
-    resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
@@ -13090,11 +13046,6 @@ snapshots:
     dependencies:
       package-manager-detector: 1.6.0
       tinyexec: 1.3.0
-
-  '@anthropic-ai/tokenizer@0.0.4':
-    dependencies:
-      '@types/node': 18.19.130
-      tiktoken: 1.0.22
 
   '@asamuzakjp/css-color@3.2.0':
     dependencies:
@@ -17778,10 +17729,6 @@ snapshots:
       '@types/node': 25.9.1
 
   '@types/node@12.20.55': {}
-
-  '@types/node@18.19.130':
-    dependencies:
-      undici-types: 5.26.5
 
   '@types/node@22.19.21':
     dependencies:
@@ -24345,8 +24292,6 @@ snapshots:
 
   throttleit@2.1.0: {}
 
-  tiktoken@1.0.22: {}
-
   tiny-inflate@1.0.3: {}
 
   tiny-invariant@1.3.3: {}
@@ -24612,8 +24557,6 @@ snapshots:
 
   uncrypto@0.1.3:
     optional: true
-
-  undici-types@5.26.5: {}
 
   undici-types@6.21.0: {}
 

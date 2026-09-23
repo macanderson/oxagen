@@ -96,7 +96,6 @@ const nextConfig = {
   // so webpack doesn't try to bundle their .node binaries into the client.
   serverExternalPackages: [
     "@oxagen/agent",
-    "@oxagen/engram",
     "blake3",
     "duckdb",
     "@mapbox/node-pre-gyp",
@@ -151,9 +150,9 @@ const nextConfig = {
   // parse error even though they're in serverExternalPackages. Aliasing them
   // to a throwing stub prevents Turbopack from ever resolving into these
   // packages. At runtime:
-  //   - blake3: dynamic import in @oxagen/engram/hash.ts catches and falls
-  //     back to SHA-256
-  //   - duckdb: only used server-side via @oxagen/engram store (external)
+  //   - blake3 and duckdb: were reached only through @oxagen/engram, which
+  //     ADR-142 deleted; the aliases stay because this app is kept only for
+  //     the parity gates and is not rebuilt
   turbopack: {
     resolveAlias: {
       blake3: "./src/lib/native-addon-stub.js",

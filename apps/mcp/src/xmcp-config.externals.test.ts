@@ -7,11 +7,8 @@ import xmcpConfig from "../xmcp.config";
  * rspack cannot statically bundle the `duckdb` addon or its
  * `@mapbox/node-pre-gyp` -> `node-gyp` toolchain: that toolchain ships
  * C#/HTML/`s3_setup.js` assets rspack cannot parse, and it dynamically
- * require()s aws-sdk / mock-aws-s3 / nock. duckdb reaches this build
- * transitively:
- *   src/middleware.ts -> @oxagen/agent register/handlers
- *   -> agent.trace.get.ts -> @oxagen/engram barrel
- *   -> store/index.ts -> store/duckdb-adapter.ts.
+ * require()s aws-sdk / mock-aws-s3 / nock. duckdb is a dependency this app
+ * declares directly (until ADR-142 it also arrived through @oxagen/engram).
  * So the bundler config externalizes the whole chain and it resolves from
  * node_modules at runtime. Dropping any entry below breaks `xmcp build` with
  * `Module parse failed` / `Module not found`, which this test catches first.

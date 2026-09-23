@@ -59,10 +59,8 @@ const config: XmcpConfig = {
     // and docx are no longer pulled in by anything under apps/mcp and were
     // dropped from this list and from package.json.
     const heavyPackages = [
-      // duckdb is a native CJS addon, pulled into this build transitively:
-      //   src/middleware.ts -> @oxagen/agent register/handlers
-      //   -> agent.trace.get.ts -> @oxagen/engram barrel
-      //   -> store/index.ts -> store/duckdb-adapter.ts.
+      // duckdb is a native CJS addon this app declares directly (it reached
+      // the build through @oxagen/engram until ADR-142 deleted that package).
       // Its node-pre-gyp/node-gyp toolchain ships non-JS assets rspack cannot
       // parse (C# Find-VisualStudio.cs, HTML, s3_setup.js) and dynamically
       // require()s aws-sdk/mock-aws-s3/nock. Externalize the whole chain so it
