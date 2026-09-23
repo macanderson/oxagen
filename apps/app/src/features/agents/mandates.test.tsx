@@ -71,6 +71,7 @@ async function renderMandates(
   const { source, calls } = agentsSource({
     get: readOk(agentDetail({ identity: { status } })),
     mandates,
+    budgets: readOk([]),
   });
   const element = await Agent({
     ctx: as === "owner" ? ctx : viewer(as),

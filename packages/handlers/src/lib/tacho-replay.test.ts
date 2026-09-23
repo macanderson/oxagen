@@ -164,12 +164,15 @@ describe("sealTachoSession", () => {
     enforcementTier: "gateway",
   };
 
-  it("grades fork on a gateway session with every body, a tool result body among them", () => {
-    expect(sealTachoSession(clean)).toEqual({
-      completenessGaps: [],
-      replayGrade: "fork",
-    });
-  });
+  it.each(["gateway", "contained"])(
+    "grades fork on a %s run with every body",
+    (enforcementTier) => {
+      expect(sealTachoSession({ ...clean, enforcementTier })).toEqual({
+        completenessGaps: [],
+        replayGrade: "fork",
+      });
+    },
+  );
 
   it("grades view with tool_bodies on a gateway session whose tool calls kept no result body (negative)", () => {
     expect(

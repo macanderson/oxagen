@@ -11,8 +11,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("run") };
 }
 
-// The Run page (WL-35, ARCHITECTURE.md §1.2): the run's header and one section
-// chosen by `?tab=`. The tab, the transcript's zoom level and filter chips,
+// The Run page (WL-35, ARCHITECTURE.md §1.2, roadmap `mockups/pages/run.md`):
+// the eyebrow says "Run" and the h1 is the run's id in mono, then the run's
+// header, the stat row and one section chosen by `?tab=`. The tab, the transcript's zoom level and filter chips,
 // the frames cursor, the open frame body, and the spine's read fold and open
 // groups are query values, so the run keeps one route.
 export default async function RunPage({
@@ -26,12 +27,9 @@ export default async function RunPage({
   return (
     <main
       id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
+      className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-10"
     >
-      <PageHeader
-        eyebrow={t("workspaceEyebrow", { workspace: ctx.wsName })}
-        title={t("run")}
-      />
+      <PageHeader eyebrow={t("run")} title={run} mono />
       <Run
         ctx={ctx}
         source={dataSource()}
