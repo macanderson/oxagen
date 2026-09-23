@@ -152,8 +152,12 @@ export function FirstFrameStep({
   // The server waits up to 20 seconds after enrollment. Before enrollment it
   // answers immediately, so a short delay keeps that path from a tight loop.
   useEffect(() => {
-    const timer = setTimeout(() => navigate.refresh(), 2_000);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      navigate.refresh();
+    }, 2_000);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [pollRevision, navigate]);
 
   function again() {

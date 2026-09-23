@@ -56,7 +56,15 @@ export function TokensSection({ report }: { report: SpendReport }) {
             { label: t("share") },
           ]}
         >
-          {(Object.keys(classes) as (keyof typeof classes)[]).map((key) => (
+          {(
+            [
+              "input_uncached",
+              "cache_read",
+              "cache_write",
+              "output",
+              "reasoning",
+            ] as const
+          ).map((key) => (
             <tr key={key} data-token-class={key}>
               <th scope="row" className={cell}>
                 {t(key)}
