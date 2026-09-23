@@ -103,6 +103,10 @@ When telemetry is disabled, the CLI does not generate an install id and does
 not open a network connection for telemetry purposes — it is a complete
 no-op, not a "collect but don't send" mode.
 
+`oxagen verify` sends no event and writes no install id, whatever the setting.
+It is the offline check an auditor runs on a run export, so it opens no
+network connection.
+
 ## How it's sent
 
 - One event, sent as a single JSON POST to `<api-url>/v1/telemetry/usage`
