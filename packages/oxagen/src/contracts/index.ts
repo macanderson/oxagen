@@ -92,6 +92,7 @@ import { repositoryInstallationCandidates } from "./repository.installation.cand
 import { repositoryInstallationAttach } from "./repository.installation.attach";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
+import { runWorkGet } from "./run.work.get";
 import { runOutputsGet } from "./run.outputs.get";
 import { runTokenIssue } from "./run.token.issue";
 import { runFramesIngest } from "./run.frames.ingest";
@@ -688,6 +689,7 @@ export {
   userProfileUpdate,
   runCostGet,
   runOutputsGet,
+  runWorkGet,
   runProofGet,
   runTokenIssue,
   runFramesIngest,
@@ -1055,6 +1057,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   userProfileUpdate,
   runCostGet,
   runOutputsGet,
+  runWorkGet,
   runProofGet,
   runTokenIssue,
   runFramesIngest,

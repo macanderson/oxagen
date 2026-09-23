@@ -582,6 +582,16 @@ export function runSource(reads: RunReads) {
     shell: { context: refuse, preferences: refuse },
     runs: {
       list: refuse,
+      work: async (_ctx, runId) =>
+        readOk({
+          runId,
+          machine: null,
+          checkouts: [],
+          diffs: [],
+          pullRequests: [],
+          complete: false,
+          warnings: ["checkout_context_not_recorded"],
+        }),
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
       cost: answer("cost", reads.cost),

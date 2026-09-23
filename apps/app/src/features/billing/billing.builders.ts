@@ -208,6 +208,7 @@ export function billingSource(
       transcript: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {

@@ -3932,6 +3932,52 @@ type Messages = {
     };
     summaryTitle: string;
     summaryFrames: string;
+    work: {
+      title: string;
+      basis: string;
+      failedChecks: string;
+      stale: string;
+      checkouts: string;
+      onMachine: string;
+      machineMissing: string;
+      locationMissing: string;
+      repoMissing: string;
+      branchMissing: string;
+      copyLocation: string;
+      copied: string;
+      copyFailed: string;
+      pullRequests: string;
+      prMissing: string;
+      ciMissing: string;
+      association: {
+        recorded: string;
+        head_commit: string;
+        branch: string;
+      };
+      ci: {
+        passing: string;
+        failing: string;
+        pending: string;
+        neutral: string;
+        unknown: string;
+      };
+      checkCounts: string;
+      checksPartial: string;
+      diffFiles: string;
+      diffComplete: string;
+      diffPartial: string;
+      evidence: string;
+      diffBasis: string;
+      diffMissing: string;
+      frame: string;
+      capture: {
+        complete: string;
+        partial: string;
+        not_retained: string;
+        not_captured: string;
+      };
+      incomplete: string;
+    };
   };
   shell: {
     skipToContent: string;

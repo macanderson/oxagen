@@ -17,6 +17,7 @@ import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
 import { RunSummary } from "./summary";
 import { RunHeader } from "./header";
+import { RunWorkSection } from "./work";
 import { OutputsSpine } from "./outputs";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import { kindsParam, TranscriptSection } from "./transcript";
@@ -181,6 +182,11 @@ export async function Run({
     .catch(() =>
       readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
     );
+  const work = source.runs
+    .work(ctx, detail.run.id)
+    .catch(() =>
+      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+    );
   let section: ReactNode;
   switch (selected) {
     case "transcript":
@@ -265,6 +271,7 @@ export async function Run({
         org={place.org}
         ws={place.ws}
       />
+      <RunWorkSection read={await work} {...place} />
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-6">
           <RunSummary run={detail.run} org={place.org} ws={place.ws} />

@@ -19,6 +19,8 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
+import { RunWork } from "@/data/contracts/run-work";
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import {
   runTranscriptGet,
@@ -70,6 +72,15 @@ function view<S extends z.ZodType>(
 }
 
 export const runs: DataSource["runs"] = {
+  async work(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runWorkGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(ctx.orgId, RunWork, read.value, "runs.work");
+  },
   async list(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: runList,

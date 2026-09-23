@@ -1,0 +1,125 @@
+import type { CapabilityHandler } from "@oxagen/oxagen";
+import {
+  runWorkGet,
+  type RunWorkGetOutput,
+} from "@oxagen/oxagen/contracts/run.work.get";
+import {
+  defaultRunReadDeps,
+  resolveRun,
+  type RunReadDeps,
+} from "./lib/run-read";
+import {
+  capturedDiffOf,
+  checkoutOf,
+  connectedRunRepositories,
+  readWorkContexts,
+  readWorkDiffs,
+  WORK_CONTEXT_CAP,
+  WORK_DIFF_CAP,
+} from "./lib/run-work";
+import { readWorkPullRequests, type RecordedRunPr } from "./lib/run-work-prs";
+import { runScope } from "./run.list";
+
+export type RunWorkDeps = RunReadDeps & {
+  contexts: typeof readWorkContexts;
+  diffs: typeof readWorkDiffs;
+  repositories: typeof connectedRunRepositories;
+  pullRequests: typeof readWorkPullRequests;
+};
+export function createRunWorkGetHandler(
+  deps: RunWorkDeps,
+): CapabilityHandler<typeof runWorkGet> {
+  return async (input, ctx): Promise<RunWorkGetOutput> => {
+    const scope = runScope(ctx);
+    const run = await resolveRun(deps, ctx, input.runId);
+    if (run.source !== "tacho") {
+      const receipts: RecordedRunPr[] = [];
+      let cursor = "0";
+      let complete = false;
+      for (let page = 0; page < 20; page++) {
+        const events = await deps.store.readAttemptEventsSince(
+          run.runId,
+          cursor,
+          500,
+        );
+        for (const event of events) {
+          if (
+            event.eventType !== "provider_publish.pull_request_opened" ||
+            typeof event.payload !== "object" ||
+            event.payload === null
+          )
+            continue;
+          const payload = event.payload as Record<string, unknown>;
+          if (
+            typeof payload.provider_repository_id !== "string" ||
+            typeof payload.pull_request_number !== "number"
+          )
+            continue;
+          receipts.push({
+            repositoryId: payload.provider_repository_id,
+            number: payload.pull_request_number,
+            headSha:
+              typeof payload.head_commit_sha === "string"
+                ? payload.head_commit_sha
+                : null,
+          });
+        }
+        if (events.length < 500) {
+          complete = true;
+          break;
+        }
+        cursor = events.at(-1)!.runSeq;
+      }
+      const repositories = await deps.repositories(scope);
+      const prs = await deps.pullRequests(
+        scope,
+        [],
+        repositories,
+        undefined,
+        receipts,
+      );
+      return {
+        runId: input.runId,
+        machine: null,
+        checkouts: [],
+        diffs: [],
+        pullRequests: prs.pullRequests,
+        complete: false,
+        warnings: [
+          "checkout_context_not_recorded",
+          ...prs.warnings,
+          ...(complete ? [] : ["ledger_event_limit"]),
+        ],
+      };
+    }
+    const [contexts, diffs, repositories] = await Promise.all([
+      deps.contexts(run.sessionUuid),
+      deps.diffs(run.sessionUuid),
+      deps.repositories(scope),
+    ]);
+    const checkouts = contexts
+      .slice(0, WORK_CONTEXT_CAP)
+      .map((row) => checkoutOf(row, repositories));
+    const prs = await deps.pullRequests(scope, checkouts, repositories);
+    const warnings = [...prs.warnings];
+    if (contexts.length > WORK_CONTEXT_CAP) warnings.push("checkout_limit");
+    if (diffs.length > WORK_DIFF_CAP) warnings.push("captured_diff_limit");
+    if (!contexts.length) warnings.push("checkout_context_not_recorded");
+    return {
+      runId: input.runId,
+      machine: run.row.host?.hostname ? { name: run.row.host.hostname } : null,
+      checkouts,
+      diffs: diffs.slice(0, WORK_DIFF_CAP).map(capturedDiffOf),
+      pullRequests: prs.pullRequests,
+      complete: warnings.length === 0,
+      warnings,
+    };
+  };
+}
+export const runWorkGetHandler = createRunWorkGetHandler({
+  ...defaultRunReadDeps(),
+  contexts: readWorkContexts,
+  diffs: readWorkDiffs,
+  repositories: connectedRunRepositories,
+  pullRequests: readWorkPullRequests,
+});

@@ -49,6 +49,7 @@ import type {
   TranscriptKind,
   TranscriptZoom,
 } from "./contracts/run";
+import type { RunWork } from "./contracts/run-work";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
@@ -183,6 +184,7 @@ export interface DataSource {
      * — caller features/run/run.tsx.
      */
     outputs(ctx: WsCtx, runId: string): Promise<Read<RunOutputs>>;
+    work(ctx: WsCtx, runId: string): Promise<Read<RunWork>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {

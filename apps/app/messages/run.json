@@ -514,6 +514,52 @@
       }
     },
     "summaryTitle": "Summary",
-    "summaryFrames": "Check against recorded frames"
+    "summaryFrames": "Check against recorded frames",
+    "work": {
+      "title": "Work and CI",
+      "basis": "Recorded checkouts and connected pull requests. Branch matches show related work, not authorship.",
+      "failedChecks": "{count, plural, one {# failing check} other {# failing checks}}",
+      "stale": "Head moved or could not be verified",
+      "checkouts": "Checkout locations",
+      "onMachine": "On {name}",
+      "machineMissing": "Machine not recorded",
+      "locationMissing": "No checkout location was recorded.",
+      "repoMissing": "Repository not identified",
+      "branchMissing": "Branch not recorded",
+      "copyLocation": "Copy location",
+      "copied": "Copied",
+      "copyFailed": "Copy failed. Select the path to copy it.",
+      "pullRequests": "Pull requests",
+      "prMissing": "No connected pull request was found in the available evidence.",
+      "ciMissing": "CI could not be read",
+      "association": {
+        "recorded": "PR receipt recorded",
+        "head_commit": "Matches recorded commit",
+        "branch": "Matches recorded branch"
+      },
+      "ci": {
+        "passing": "Passing",
+        "failing": "Failing",
+        "pending": "Pending",
+        "neutral": "No failing checks in the returned results",
+        "unknown": "No checks recorded"
+      },
+      "checkCounts": "{passed} passed · {failed} failed · {pending} pending",
+      "checksPartial": "Check list is incomplete",
+      "diffFiles": "{count, plural, one {# diff file} other {# diff files}}",
+      "diffComplete": "Patch read complete",
+      "diffPartial": "Some patch content is unavailable",
+      "evidence": "Captured diff evidence ({count})",
+      "diffBasis": "A snapshot compares the observed working tree with its recorded baseline. It can include changes made before the run.",
+      "diffMissing": "No patch bytes were captured in the available frames. File observations may still appear in Outputs.",
+      "frame": "Frame {seq}",
+      "capture": {
+        "complete": "Retained patch",
+        "partial": "Partial retained patch",
+        "not_retained": "Digest recorded; bytes not retained",
+        "not_captured": "Patch not captured"
+      },
+      "incomplete": "Some work or provider evidence is unavailable or outside this read’s limits."
+    }
   }
 }

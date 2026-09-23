@@ -112,6 +112,7 @@ export function onboardingSource(reads: Reads): {
       transcript: refuse("runs.transcript"),
       chain: refuse("runs.transcript"),
       outputs: refuse("runs.transcript"),
+      work: refuse("runs.transcript"),
     },
     approvals: {
       pending: refuse("approvals.pending"),

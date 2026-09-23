@@ -123,6 +123,7 @@ export function fleetSource(reads: FleetReads) {
       cost: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
       transcript: refuse,
     },
     approvals: {
