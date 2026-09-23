@@ -54,6 +54,35 @@ describe("the full recorded input", () => {
       expect(got.chunks.join("")).toContain(`turn-${i}:`);
     expect(got.chunks.join("")).toContain("FINAL CORRECTION");
   });
+  it("includes repeated bodies once while retaining every frame in order", async () => {
+    const text = "one retained patch";
+    const get = vi.fn(async () => ({ bytes: new TextEncoder().encode(text) }));
+    const got = await collectRunText(
+      scope,
+      [frame(0, text), frame(1, text), frame(2, text)],
+      get,
+    );
+    const account = got.chunks.join("");
+    expect(get).toHaveBeenCalledTimes(3);
+    expect(account.split(text)).toHaveLength(2);
+    expect(account).toMatch(/Frame 0:[\s\S]*Frame 1:[\s\S]*Frame 2:/);
+    expect(account.match(/Same retained body as frame 0/g)).toHaveLength(2);
+    expect(got).toMatchObject({ retained: 3, missing: 0, frames: 3 });
+  });
+  it("verifies each repeated body before referring to an earlier frame", async () => {
+    const text = "verified body";
+    const got = await collectRunText(
+      scope,
+      [frame(1, text), frame(2, text)],
+      async (_scope, ref) => ({
+        bytes: new TextEncoder().encode(ref === "body-1" ? text : "tampered"),
+      }),
+    );
+    expect(got).toMatchObject({ retained: 1, missing: 1, unavailable: 1 });
+    expect(got.chunks.join("")).not.toContain("Same retained body");
+    expect(got.chunks.join("")).not.toContain("tampered");
+    expect(got.chunks.join("")).toContain("Body unavailable");
+  });
   it("does not use bytes whose digest disagrees and marks missing evidence", async () => {
     const got = await collectRunText(
       scope,

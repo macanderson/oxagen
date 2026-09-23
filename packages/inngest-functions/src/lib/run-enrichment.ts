@@ -21,6 +21,7 @@ export async function collectRunText(
   let missing = 0;
   let unavailable = 0;
   const fingerprint = createHash("sha256");
+  const firstBodyFrame = new Map<string, RunFrame["seq"]>();
   function append(text: string) {
     while (text.length > 0) {
       const room = ENRICHMENT_CHUNK_CHARS - buffer.length;
@@ -51,7 +52,14 @@ export async function collectRunText(
       const { bytes } = await getBody(scope, bodyRef);
       if (digestBytes(bytes) !== bodyDigest)
         throw new Error("body digest mismatch");
-      append(decoder.decode(bytes));
+      const text = decoder.decode(bytes);
+      const firstSeq = firstBodyFrame.get(bodyDigest);
+      if (firstSeq === undefined) {
+        append(text);
+        firstBodyFrame.set(bodyDigest, frame.seq);
+      } else {
+        append(`[Same retained body as frame ${firstSeq}.]\n`);
+      }
       retained += 1;
       fingerprint.update("retained");
     } catch {
