@@ -1010,7 +1010,9 @@ async function initializeDaemon(
       });
       record(result.events);
       pendingAcks.push(...result.acknowledgements);
-      interruptModelCalls(control.commands);
+      // Only the commands that took effect: an expired or refused kill must
+      // not cut a session's model calls.
+      interruptModelCalls(result.applied);
     }
   }
 
