@@ -467,7 +467,7 @@
     "loading": "Loading this run",
     "outputs": {
       "label": "What this run produced",
-      "title": "What this run produced, in the order it happened",
+      "title": "Outputs",
       "artifacts": "{count, plural, one {# artifact} other {# artifacts}}",
       "reads": "{count, plural, one {# read} other {# reads}}",
       "gates": "{count, plural, one {# gate} other {# gates}}",

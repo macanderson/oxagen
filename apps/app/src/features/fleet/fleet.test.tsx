@@ -178,9 +178,11 @@ describe("stat strip", () => {
     });
     // Two tiles of its own; the spend tiles are the page's (#2962).
     expect(screen.getAllByTestId("tile")).toHaveLength(2);
+    // Counted over the page the runs table drew, and the copy says so.
     expect(tile("Live runs")).toHaveTextContent(
-      "Live runs2of 2 agents in this workspace",
+      "Live runs2of the runs on this page from 2 agents",
     );
+    expect(tile("Live runs")).not.toHaveTextContent("workspace");
     expect(tile("Waiting on a human")).toHaveTextContent(
       "Waiting on a human2oldest approval has waited 2:30 of 10:00",
     );
@@ -189,7 +191,7 @@ describe("stat strip", () => {
   it("counts an empty workspace as zero and says nothing is parked", async () => {
     await renderFleet({ runs: NO_RUNS, approvals: NO_APPROVALS });
     expect(tile("Live runs")).toHaveTextContent(
-      "Live runs0of 0 agents in this workspace",
+      "Live runs0of the runs on this page from 0 agents",
     );
     expect(tile("Waiting on a human")).toHaveTextContent(
       "Waiting on a human0nothing is parked",
@@ -542,8 +544,8 @@ describe("runs table", () => {
   it("counts the rows with no recorded cost and links to Spend", async () => {
     await renderFleet({
       runs: runPage([
-        runRow({ id: "arun_c1", cost: null }),
-        runRow({ id: "arun_c2", cost: null }),
+        runRow({ id: "arun_c1", status: "sealed", cost: null }),
+        runRow({ id: "arun_c2", status: "halted", cost: null }),
         runRow({ id: "arun_c3" }),
       ]),
       approvals: NO_APPROVALS,
@@ -559,7 +561,7 @@ describe("runs table", () => {
 
   it("counts one such run in the singular", async () => {
     await renderFleet({
-      runs: runPage([runRow({ cost: null })]),
+      runs: runPage([runRow({ status: "sealed", cost: null })]),
       approvals: NO_APPROVALS,
     });
     expect(
@@ -570,6 +572,56 @@ describe("runs table", () => {
   it("draws no cost caveat when every row carries a figure (negative)", async () => {
     await renderFleet({ runs: runPage([runRow()]), approvals: NO_APPROVALS });
     expect(within(runsSection()).queryByTestId("runs-unpriced")).toBeNull();
+  });
+
+  // A wrapped run's rollup lands after the fact; until then the Run page shows
+  // the agent-reported cost as provisional, and so does this column.
+  it("shows the reported cost as provisional where no rollup is recorded yet", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          source: "tacho",
+          status: "sealed",
+          cost: null,
+          reportedCost: { micros: "1250000", currency: "USD", basis: null },
+        }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const [row] = within(runsSection()).getAllByTestId("run-row");
+    const cells = within(row ?? runsSection()).getAllByRole("cell");
+    expect(cells[5]).toHaveTextContent(
+      /^\$1\.25Agent reported\. Provisional until finalized\.$/,
+    );
+    // A figure is shown, so a total over the column is not missing it.
+    expect(within(runsSection()).queryByTestId("runs-unpriced")).toBeNull();
+  });
+
+  it("prefers the rolled-up cost to the reported one (negative)", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          reportedCost: { micros: "1250000", currency: "USD", basis: null },
+        }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const [row] = within(runsSection()).getAllByTestId("run-row");
+    const cells = within(row ?? runsSection()).getAllByRole("cell");
+    expect(cells[5]).toHaveTextContent(/^\$4\.13gateway_observed$/);
+  });
+
+  it("leaves a live run out of the no-cost count, since its cost is not rolled up yet", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({ id: "arun_d1", status: "live", cost: null }),
+        runRow({ id: "arun_d2", status: "sealed", cost: null }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    expect(
+      within(runsSection()).getByTestId("runs-unpriced"),
+    ).toHaveTextContent("1 run on this page has no cost recorded");
   });
 
   it("tells an empty workspace how its first run arrives, with the enroll command and no table", async () => {

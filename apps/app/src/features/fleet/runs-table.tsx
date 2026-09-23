@@ -54,6 +54,7 @@ function RunsPageView({
   canCommand: boolean;
 } & Place) {
   const t = useTranslations("fleet.runs");
+  const tr = useTranslations("run");
   const format = useFormatter();
   const locale = useLocale();
   const notRecorded = (
@@ -62,7 +63,12 @@ function RunsPageView({
   // A run whose record holds no cost is one no total over this column covers
   // (#3304). The page counts the rows it drew rather than naming a harness:
   // the row says whether a figure was recorded, not who failed to report one.
-  const unpriced = page.runs.filter((run) => run.cost === null).length;
+  // A row showing the agent's reported cost carries a figure, and a live run
+  // has not had its cost rolled up yet, so neither is counted.
+  const unpriced = page.runs.filter(
+    (run) =>
+      run.status !== "live" && (run.cost ?? run.reportedCost ?? null) === null,
+  ).length;
   const columns = [
     { label: t("columns.run") },
     { label: t("columns.agent") },
@@ -157,15 +163,24 @@ function RunsPageView({
               <EnforcementTierBadge tier={run.enforcementTier} />
             </td>
             <td className={`${numericCell} whitespace-nowrap`}>
-              {run.cost === null ? (
-                notRecorded
-              ) : (
+              {run.cost !== null ? (
                 <>
                   <Money value={run.cost} />
                   <span className="block font-mono text-[10.5px] text-muted-foreground">
                     {run.cost.basis ?? t("basisNotRecorded")}
                   </span>
                 </>
+              ) : run.reportedCost ? (
+                // No finalized rollup yet: the agent-reported cost, marked
+                // provisional as the Run page marks it.
+                <>
+                  <Money value={run.reportedCost} />
+                  <span className="block whitespace-normal font-mono text-[10.5px] text-muted-foreground">
+                    {tr("costReportedProvisional")}
+                  </span>
+                </>
+              ) : (
+                notRecorded
               )}
             </td>
             <td className={`${numericCell} whitespace-nowrap`}>

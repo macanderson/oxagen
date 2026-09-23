@@ -8,7 +8,7 @@
       "label": "Fleet summary",
       "live": {
         "title": "Live runs",
-        "basis": "of {agents, plural, one {{count} agent} other {{count} agents}} in this workspace"
+        "basis": "of the runs on this page from {agents, plural, one {{count} agent} other {{count} agents}}"
       },
       "waiting": {
         "title": "Waiting on a human",

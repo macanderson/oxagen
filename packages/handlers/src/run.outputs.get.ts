@@ -4,9 +4,10 @@
 // The two stores answer the one node shape:
 //
 //   tse_…  a wrapped session, read from `tacho.session_files`: one row per
-//          path the session touched, already carrying its counters, its diff
-//          stat, git's word for what happened to it, and the frames that
-//          touched it. The row names a path, so the node names a file.
+//          path the session or one of its subagents touched, already carrying
+//          its counters, its diff stat, git's word for what happened to it,
+//          and the frames that touched it. The row names a path, so the node
+//          names a file.
 //   arun_… an evidence-ledger run, read from its `change.recorded` and
 //          `provider_publish.*` receipts. Those carry a payload, and a
 //          `RunFrame` does not, so they are read through the store's own

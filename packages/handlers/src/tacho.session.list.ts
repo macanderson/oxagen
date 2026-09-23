@@ -1,4 +1,5 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { tachoSessionList } from "@oxagen/oxagen/contracts/tacho.session.list";
 import type { TachoSessionListOutput } from "@oxagen/oxagen/contracts/tacho.session.list";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -15,15 +16,35 @@ function encodeCursor(row: SessionRow): string {
   ).toString("base64url");
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The cursor a previous page returned, or undefined for the first page.
+ *
+ * A cursor this handler did not mint is `invalid_input`. Its id is compared
+ * with a uuid column, so one that is not a uuid reached Postgres and failed
+ * there as a 500; and one that did not decode read as the first page, which
+ * sends a pager round the same page again.
+ */
 function decodeCursor(
   cursor: string | undefined,
 ): { startedAt: Date; id: string } | undefined {
   if (!cursor) return undefined;
-  const [startedAt, id] = Buffer.from(cursor, "base64url")
+  const [startedAt, id, rest] = Buffer.from(cursor, "base64url")
     .toString("utf8")
     .split("|");
-  if (!startedAt || !id || Number.isNaN(Date.parse(startedAt)))
-    return undefined;
+  if (
+    !startedAt ||
+    !id ||
+    rest !== undefined ||
+    Number.isNaN(Date.parse(startedAt)) ||
+    !UUID.test(id)
+  )
+    throw new CapabilityError(
+      "list_tacho_sessions",
+      "invalid_input",
+      "invalid_cursor",
+    );
   return { startedAt: new Date(startedAt), id };
 }
 

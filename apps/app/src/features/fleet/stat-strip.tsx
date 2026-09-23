@@ -15,6 +15,11 @@ import { ApprovalsEntry } from "./approvals-entry";
 import { ReadFailure } from "@/ui/read-failure";
 import { Clock } from "./clock";
 
+/**
+ * Live runs among the rows the runs table drew, and the agents behind those
+ * rows. The figure is this page's and says so: a workspace-wide count needs
+ * `list_runs` to answer totals, which it does not yet.
+ */
 function LiveRuns({ page }: { page: RunPage }) {
   const t = useTranslations("fleet.stats.live");
   const locale = useLocale();

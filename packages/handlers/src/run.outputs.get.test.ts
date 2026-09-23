@@ -5,15 +5,20 @@
  * comes from `tacho.session_files` and a ledger run's from its receipts, and
  * the read-versus-write split decides which rows become durable nodes and
  * which become the reads the tally counts apart. The queries are injected, so
- * what is asserted is what the handler makes of the rows; their SQL is the
- * Postgres suite's job.
+ * most cases assert what the handler makes of the rows. The files query is
+ * also rendered through `drizzle.mock`, because the column it filters on
+ * holds a row id and not the uuid the run resolves to, and a stub keyed on
+ * the uuid hid exactly that.
  */
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { schema } from "@oxagen/database";
 import { RUN_OUTPUT_NODE_MAX } from "@oxagen/oxagen/contracts/run.outputs.get";
-import type {
-  RunApprovalRow,
-  RunOutputQueries,
-  SessionFileRow,
+import {
+  postgresRunOutputQueries,
+  type RunApprovalRow,
+  type RunOutputQueries,
+  type SessionFileRow,
 } from "./lib/run-outputs";
 import {
   createRunOutputsGetHandler,
@@ -29,15 +34,51 @@ import {
   tachoSession,
 } from "./run.test-support";
 
+const mocks = vi.hoisted(() => ({
+  /** What the shipped files query hands back, and the SQL it was asked. */
+  rows: [] as Record<string, unknown>[],
+  statements: [] as { sql: string; params: unknown[] }[],
+}));
+
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  const db = drizzle.mock({ schema: real.schema });
+  return {
+    ...real,
+    withTenantDb: (fn: (tx: typeof db) => { toSQL(): unknown }) => {
+      const query = fn(db).toSQL() as { sql: string; params: unknown[] };
+      mocks.statements.push(query);
+      return Promise.resolve(mocks.rows);
+    },
+  };
+});
+
+beforeEach(() => {
+  mocks.rows = [];
+  mocks.statements = [];
+});
+
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const SESSION_UUID = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+/** The `tacho.sessions` row id, which is what `session_files.session_id` holds. */
+const SESSION_ROW_ID = "0192d4a8-7c1e-7000-8000-0000000051d0";
+const CHILD_UUID = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+const CHILD_ROW_ID = "0192d4a8-7c1e-7000-8000-0000000051d1";
 const LEDGER_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
 const RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 
-function file(
-  over: Partial<SessionFileRow> & { path: string },
-): SessionFileRow {
+/** `tacho.sessions` as the files query joins it: the run's root and one subagent. */
+const SESSION_ROWS = [
+  { id: SESSION_ROW_ID, sessionUuid: SESSION_UUID, root: SESSION_UUID },
+  { id: CHILD_ROW_ID, sessionUuid: CHILD_UUID, root: SESSION_UUID },
+];
+
+/** A `session_files` row as stored: keyed on the session's row id. */
+type StoredFile = Omit<SessionFileRow, "ownChain"> & { sessionId: string };
+
+function file(over: Partial<StoredFile> & { path: string }): StoredFile {
   return {
+    sessionId: SESSION_ROW_ID,
     repoRelativePath: over.path,
     language: null,
     reads: 0,
@@ -56,7 +97,7 @@ function file(
 }
 
 function harness(opts: {
-  files?: SessionFileRow[];
+  files?: StoredFile[];
   events?: ReturnType<typeof event>[];
   approvals?: RunApprovalRow[];
 }) {
@@ -65,10 +106,25 @@ function harness(opts: {
     [tachoSession({ publicId: TACHO_ID })],
   );
   const outputs: RunOutputQueries = {
-    sessionFiles: (_scope, sessionUuid, limit) =>
-      Promise.resolve(
-        sessionUuid === SESSION_UUID ? (opts.files ?? []).slice(0, limit) : [],
-      ),
+    // The stored rows name the session's row id, so the uuid the handler
+    // passes finds them only through the sessions it resolves to, as the
+    // shipped query does.
+    sessionFiles: (_scope, sessionUuid, limit) => {
+      const chains = new Map(
+        SESSION_ROWS.filter(
+          (row) => row.sessionUuid === sessionUuid || row.root === sessionUuid,
+        ).map((row) => [row.id, row.sessionUuid]),
+      );
+      return Promise.resolve(
+        (opts.files ?? [])
+          .filter((row) => chains.has(row.sessionId))
+          .map(({ sessionId, ...row }) => ({
+            ...row,
+            ownChain: chains.get(sessionId) === sessionUuid,
+          }))
+          .slice(0, limit),
+      );
+    },
     runApprovals: (_scope, _runId, limit) =>
       Promise.resolve((opts.approvals ?? []).slice(0, limit)),
   };
@@ -173,6 +229,29 @@ describe("get_run_outputs — a wrapped session", () => {
     expect((await outputs({ runId: TACHO_ID }, ctx())).nodes[0]?.kind).toBe(
       "media",
     );
+  });
+
+  it("reads a subagent's paths after the run's own, with no frame of the run's", async () => {
+    const outputs = harness({
+      files: [
+        file({ path: "src/a.ts", writes: 1, lastSeq: 40 }),
+        file({
+          sessionId: CHILD_ROW_ID,
+          path: "src/b.ts",
+          edits: 1,
+          lastSeq: 3,
+        }),
+      ],
+    });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    expect(out.nodes.map((n) => [n.name, n.seq])).toEqual([
+      ["src/a.ts", "40"],
+      // Frame 3 is the subagent chain's, and the run's frame 3 is another.
+      ["src/b.ts", null],
+    ]);
+    expect(out.tally.artifacts).toBe(2);
   });
 
   it("says a spine cut at its cap is a prefix", async () => {
@@ -358,5 +437,54 @@ describe("get_run_outputs — a governed gate", () => {
 
     expect(out.nodes).toEqual([]);
     expect(out.tally.gates).toBe(0);
+  });
+});
+
+describe("get_run_outputs — the files query", () => {
+  const scope = {
+    orgId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+    workspaceId: "0192d4a8-7c1e-7a00-8000-0000000000f2",
+  };
+
+  it("finds the run's files through tacho.sessions, never by the uuid on session_id", async () => {
+    await postgresRunOutputQueries.sessionFiles(scope, SESSION_UUID, 10);
+
+    const [query] = mocks.statements;
+    // `session_files.session_id` holds the sessions row id. Comparing it to
+    // the run's session uuid matched nothing, so every wrapped run read empty.
+    expect(query?.sql).not.toMatch(/"session_files"\."session_id" = \$\d+/);
+    expect(query?.sql).toMatch(
+      /inner join "tacho"\."sessions" on \("tacho"\."sessions"\."id" = "tacho"\."session_files"\."session_id"/,
+    );
+    expect(query?.sql).toMatch(
+      /\("tacho"\."sessions"\."session_uuid" = \$\d+ or "tacho"\."sessions"\."root_session_uuid" = \$\d+\)/,
+    );
+    // Both tables are fenced to the workspace, not left to RLS.
+    for (const table of ["sessions", "session_files"]) {
+      expect(query?.sql).toContain(`"tacho"."${table}"."org_id" = $`);
+      expect(query?.sql).toContain(`"tacho"."${table}"."workspace_id" = $`);
+    }
+    expect(query?.params).toContain(SESSION_UUID);
+    expect(query?.params).toContain(scope.orgId);
+    expect(query?.params).toContain(scope.workspaceId);
+  });
+
+  it("tells the run's own chain from a subagent's", async () => {
+    mocks.rows = [
+      { ...file({ path: "src/a.ts" }), chain: SESSION_UUID },
+      { ...file({ path: "src/b.ts" }), chain: CHILD_UUID },
+    ];
+
+    const rows = await postgresRunOutputQueries.sessionFiles(
+      scope,
+      SESSION_UUID,
+      10,
+    );
+
+    expect(rows.map((row) => [row.path, row.ownChain])).toEqual([
+      ["src/a.ts", true],
+      ["src/b.ts", false],
+    ]);
+    expect(rows[0]).not.toHaveProperty("chain");
   });
 });
