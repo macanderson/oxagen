@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runWorkGet,
@@ -30,6 +31,11 @@ export function createRunWorkGetHandler(
   deps: RunWorkDeps,
 ): CapabilityHandler<typeof runWorkGet> {
   return async (input, ctx): Promise<RunWorkGetOutput> => {
+    const userId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId },
+      { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
+    );
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
     if (run.source !== "tacho") {

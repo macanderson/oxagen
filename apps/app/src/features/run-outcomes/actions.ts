@@ -1,7 +1,8 @@
 "use server";
 import { runOutcomesSettingsSet } from "@oxagen/oxagen/contracts/run.outcomes.settings.set";
-import type { RunOutcomesPolicy } from "@oxagen/oxagen/run-outcomes";
-import { kernelWrite, type ActionResult } from "@/server/kernel";
+import type { RunOutcomesPolicy } from "@/data/contracts/run-work";
+import { kernelWrite } from "@/server/kernel";
+import type { ActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export async function setRunOutcomesConsentAction(

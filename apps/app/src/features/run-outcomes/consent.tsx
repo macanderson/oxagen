@@ -1,5 +1,5 @@
 "use client";
-import type { RunOutcomesPolicy } from "@oxagen/oxagen/run-outcomes";
+import type { RunOutcomesPolicy } from "@/data/contracts/run-work";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { Read } from "@/data/read";

@@ -363,6 +363,47 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .orgModelCredentialVerifyHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_sso_providers",
+    async () =>
+      (await import("./org.sso.list")).orgSsoListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "create_sso_provider",
+    async () =>
+      (await import("./org.sso.create"))
+        .orgSsoCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "update_sso_provider",
+    async () =>
+      (await import("./org.sso.update"))
+        .orgSsoUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "delete_sso_provider",
+    async () =>
+      (await import("./org.sso.delete"))
+        .orgSsoDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "verify_sso_domain",
+    async () =>
+      (await import("./org.sso.verify_domain"))
+        .orgSsoVerifyDomainHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_sso_policy",
+    async () =>
+      (await import("./org.sso.policy.set"))
+        .orgSsoPolicySetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_sso_group_roles",
+    async () =>
+      (await import("./org.sso.group_roles.set"))
+        .orgSsoGroupRolesSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_org_settings",
     async () =>
       (await import("./org.settings.read"))

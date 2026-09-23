@@ -43,6 +43,8 @@ export function ShellActivityProvider({
   children: ReactNode;
 }) {
   const { ws } = useSidebarSections(data);
+  const { approvalsOpen, notificationsOpen } = useShellState();
+  const isOpen = approvalsOpen || notificationsOpen;
   const [result, setResult] = useState<{ key: string; read: Activity } | null>(
     null,
   );
@@ -61,22 +63,12 @@ export function ShellActivityProvider({
     }
   }, [data.org.slug, ws, key]);
   useEffect(() => {
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      await refresh();
-      if (!stopped)
-        timer = setTimeout(() => {
-          void poll();
-        }, 30_000);
-    };
-    void poll();
+    if (!isOpen) return;
+    void refresh();
     return () => {
-      stopped = true;
       generation.current += 1;
-      clearTimeout(timer);
     };
-  }, [refresh]);
+  }, [refresh, isOpen]);
   const read = result?.key === key ? result.read : null;
   return (
     <ActivityContext value={{ read, failed, refresh }}>

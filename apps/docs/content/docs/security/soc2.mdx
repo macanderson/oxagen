@@ -11,7 +11,9 @@ Capability calls enter `invoke()`, which checks the declared surface, input, IAM
 
 Use **Organization → Roles** to inspect permissions. Owners and Admins can manage custom roles. Use **Organization → API keys** to rotate or revoke workspace keys.
 
-The auth package registers Better Auth's TOTP two-factor plugin. The app supports the `/two-factor` challenge. The app's viewer gate requires TOTP enrollment for Owners and Admins when the organization policy requires MFA and its grace period has expired. That gate does not apply to every role or every API credential. SSO and SCIM are not available.
+The auth package registers Better Auth's TOTP two-factor plugin. The app supports the `/two-factor` challenge. The app's viewer gate requires TOTP enrollment for Owners and Admins when the organization policy requires MFA and its grace period has expired. That gate does not apply to every role or every API credential.
+
+An Owner or Admin can register an OIDC or SAML 2.0 identity provider, map IdP groups to organization roles, and require SSO for members other than Owners. See [Single sign-on](/docs/governance/sso). SCIM provisioning is not available yet, so removing someone from the IdP stops their next SSO sign-in but does not end an existing session or revoke their API keys.
 
 ## Tenant isolation
 

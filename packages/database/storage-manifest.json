@@ -357,6 +357,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "create_sso_provider",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "telemetry",
       "name": "create_stella_enrollment",
       "reads": [],
@@ -574,6 +584,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "delete_sso_provider",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1431,6 +1451,15 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "get_run_work",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "get_schema_registry",
       "reads": [],
@@ -2264,6 +2293,16 @@
     {
       "domain": "skill",
       "name": "list_skills",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "list_sso_providers",
       "reads": [],
       "surfaces": [
         "api",
@@ -3296,6 +3335,26 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "set_sso_group_roles",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "set_sso_policy",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tool",
       "name": "set_tool_classification",
       "reads": [],
@@ -3628,6 +3687,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "update_sso_provider",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tacho",
       "name": "update_tacho_session_policy",
       "reads": [],
@@ -3773,6 +3842,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "verify_sso_domain",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "write_memory",
       "reads": [],
@@ -3784,7 +3863,7 @@
       "writes": []
     }
   ],
-  "contentHash": "ada1c0423fb2669093fc878dc0787e6e61cc621fecd9e1ea954d78c8ca209805",
+  "contentHash": "246e7de3812111324e7e1676432ee8f1b1a64f1b312cfbfeb7bcfea0a248b758",
   "domains": [
     {
       "name": "agent",
@@ -3852,6 +3931,7 @@
         "postgres:auth.api_keys",
         "postgres:auth.rate_limit",
         "postgres:auth.sessions",
+        "postgres:auth.sso_providers",
         "postgres:auth.two_factor",
         "postgres:auth.user_preferences",
         "postgres:auth.users",
@@ -4070,7 +4150,8 @@
         "postgres:org.onboarding_state",
         "postgres:org.org_slug_history",
         "postgres:org.org_users",
-        "postgres:org.organizations"
+        "postgres:org.organizations",
+        "postgres:org.sso_group_roles"
       ]
     },
     {
@@ -4235,7 +4316,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 141
+      "tableCount": 143
     },
     {
       "domains": [
@@ -9417,6 +9498,12 @@
           "type": "text"
         },
         {
+          "name": "auth_method",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "created_at",
           "nullable": false,
           "primaryKey": false,
@@ -9432,6 +9519,105 @@
       "domain": "auth",
       "id": "postgres:auth.sessions",
       "name": "sessions",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "text"
+        },
+        {
+          "name": "issuer",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "oidc_config",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "saml_config",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "provider_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "organization_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "domain",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "domain_verified",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "protocol",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "display_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "groups_claim",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "domain_verification_token",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "auth",
+      "id": "postgres:auth.sso_providers",
+      "name": "sso_providers",
       "store": "postgres",
       "tenantScoped": false
     },
@@ -17621,6 +17807,78 @@
           "type": "uuid"
         },
         {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "provider_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:auth.sso_providers",
+          "type": "text"
+        },
+        {
+          "name": "idp_group",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "role",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.sso_group_roles",
+      "name": "sso_group_roles",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
           "name": "deleted_at",
           "nullable": true,
           "primaryKey": false,
@@ -18746,6 +19004,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "integer"
+        },
+        {
+          "name": "sso_required",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
         },
         {
           "name": "updated_by_id",

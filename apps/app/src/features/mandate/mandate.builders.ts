@@ -59,6 +59,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      sso: refuse,
     },
     skills: { inventory: refuse, configuration: refuse },
     audit: { events: refuse, exportEvents: refuse },

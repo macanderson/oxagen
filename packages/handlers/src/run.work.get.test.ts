@@ -1,11 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRunWorkGetHandler, type RunWorkDeps } from "./run.work.get";
 import {
   ctx,
   memoryStores,
   tachoSession,
   OTHER_WORKSPACE,
+  roleTx,
 } from "./run.test-support";
+const role = vi.hoisted(() => ({ current: "Owner" as string | null }));
+vi.mock("@oxagen/database", async (original) => ({
+  ...(await original<typeof import("@oxagen/database")>()),
+  withOrgDb: (fn: (tx: ReturnType<typeof roleTx>) => unknown) => fn(roleTx(role.current)),
+  withTenantDb: (fn: (tx: ReturnType<typeof roleTx>) => unknown) =>
+    fn(roleTx(role.current)),
+}));
+beforeEach(() => {
+  role.current = "Owner";
+});
 const RUN_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 function setup() {
   const stores = memoryStores([], [tachoSession({ publicId: RUN_ID })]);
@@ -40,6 +51,14 @@ function setup() {
   return { deps, handler: createRunWorkGetHandler(deps) };
 }
 describe("get_run_work", () => {
+  it("denies viewers before reading checkout or provider evidence", async () => {
+    role.current = "Viewer";
+    const { handler, deps } = setup();
+    await expect(handler({ runId: RUN_ID }, ctx())).rejects.toMatchObject({ code: "forbidden" });
+    expect(deps.contexts).not.toHaveBeenCalled();
+    expect(deps.repositories).not.toHaveBeenCalled();
+    expect(deps.pullRequests).not.toHaveBeenCalled();
+  });
   it("resolves workspace access before reading any checkout or provider evidence", async () => {
     const { handler, deps } = setup();
     await expect(

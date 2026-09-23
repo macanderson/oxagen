@@ -30,6 +30,8 @@ import type { FetchLike } from "../host/control-client";
 import type { Exec } from "../host/service";
 import {
   bundleSigner,
+  type FakeCodexAppServer,
+  fakeCodexAppServer,
   TEST_ENROLLMENT,
   unsignedBundle,
 } from "../host/test-support";
@@ -320,6 +322,12 @@ export class RigKill extends Error {
 export interface Rig {
   home: string;
   deps: CliDeps;
+  /**
+   * The Codex config this rig stands in for. Its `trusted` map is the only
+   * place an enrollment's trust records live here, because Codex keeps them
+   * in its own `config.toml` and writes them itself.
+   */
+  codexServer: FakeCodexAppServer;
   /** Every `exec` the CLI made, service manager calls included. */
   execs: Array<{ command: string; args: string[] }>;
   /** Every control-plane request. */
@@ -364,8 +372,12 @@ export const RIG_GATEWAY_PORT = 47124;
 
 /**
  * The real `defaultCliDeps` — real path resolution, real file writers, the
- * real launchd / systemd manager — with the three things that would reach
- * outside the scratch HOME replaced: `exec`, `fetch` and the daemon probe.
+ * real launchd / systemd manager — with the four things that would reach
+ * outside the scratch HOME replaced: `exec`, `fetch`, the daemon probe, and
+ * `codex app-server`. The last one is a real child process: left alone it
+ * spawns the machine's own Codex, which answers about the machine's own
+ * hooks and writes its state directory into the scratch HOME, so the tree
+ * this rig exists to compare is no longer Tacho's doing.
  */
 export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
   const { home, platform } = seed;
@@ -486,6 +498,7 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
     wrapperVersion: TACHO_VERSION,
     ...options.overrides,
   });
+  const codexServer = fakeCodexAppServer(real.paths.codexHooks);
   const guarded =
     <A extends unknown[], R>(point: string, port: (...args: A) => R) =>
     (...args: A): R => {
@@ -511,10 +524,12 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
       real.writeClaudeDesktopConfig,
     ),
     daemonGet: guarded("daemonGet", real.daemonGet),
+    codexAppServer: guarded("codexAppServer", codexServer.server),
   };
   return {
     home,
     deps,
+    codexServer,
     execs,
     requests,
     lines,

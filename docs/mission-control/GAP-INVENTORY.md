@@ -184,7 +184,8 @@ Feature: `apps/app/src/features/organization/`.
 | Model funding (BYOK) | **Built** | Test / save / remove |
 | Set model route | **Partial** | The wrapped-harness allowlist is on Spend › Budgets (`update_tacho_session_policy`). Routing for the in-app assistant is still unbuilt. |
 | Data plane UI | **Missing** | Effectively cut for rev1 |
-| SSO / SCIM | **Cut** | |
+| SSO (OIDC, SAML) and IdP group mapping | **Built** | `/{org}/sso` and Roles › IdP group mappings (ADR-145) |
+| SCIM provisioning | **Missing** | #3734 |
 
 ---
 
@@ -258,7 +259,7 @@ Feature: `apps/app/src/features/audit/`. Export at `/{org}/audit/export`.
 
 **Do not build (cut)**
 
-Ontology engine, SSO/SCIM, policy simulation, assurance suite, two-person mandates, steering effect and retirement, legal holds, crypto-shredding, Spend reconciliation.
+Ontology engine, SCIM, policy simulation, assurance suite, two-person mandates, steering effect and retirement, legal holds, crypto-shredding, Spend reconciliation.
 
 ---
 
