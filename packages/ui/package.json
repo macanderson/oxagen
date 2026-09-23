@@ -9,7 +9,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./styles/globals.css": "./src/styles/globals.css",
-    "./styles/tokens.css": "./src/styles/tokens.css",
     "./styles/house-tokens.css": "./src/styles/house-tokens.css",
     "./styles/fonts/space-grotesk.css": "./src/styles/fonts/space-grotesk.css",
     "./lib/motion": "./src/lib/motion.ts",

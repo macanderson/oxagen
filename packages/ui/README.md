@@ -49,8 +49,6 @@ Import Convention).
 - `./styles/globals.css`, `./styles/house-tokens.css`,
   `./styles/fonts/space-grotesk.css` → the token and font stylesheets.
 - `./lib/motion` → `src/lib/motion.ts`: motion helpers.
-- `./styles/tokens.css` is declared in `package.json` but no file exists at
-  `src/styles/tokens.css`. Do not import it.
 
 ## Rules
 
