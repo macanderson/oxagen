@@ -320,3 +320,57 @@ export const SteeringHub = z.object({
   proposalsWaiting: Count.nullable(),
 });
 export type SteeringHub = z.infer<typeof SteeringHub>;
+
+/**
+ * The Library's Memory shelf (roadmap pages/steering-memory.md), from
+ * `list_memories`: the `:AgentMemory` nodes the workspace holds, newest first.
+ *
+ * `memoryClass` is the class the node records (OBSERVATION, RULE or FACT),
+ * printed as recorded rather than mapped onto the design's class names. The
+ * node carries no force, no scope, no run or frame, and no recall counter, so
+ * the view model has no field for any of them and the shelf prints each as
+ * not recorded. Neither of its two identifiers is a public id Oxagen mints
+ * in the `prefix_value` form, so both are `…Ref` (INV-11): `ref` is the node
+ * id `update_memory` takes, and `publicRef` is the identifier a reader sees.
+ */
+export const MemoryItem = z.object({
+  ref: z.string().min(1),
+  publicRef: z.string().min(1),
+  body: z.string(),
+  memoryClass: z.enum(["OBSERVATION", "RULE", "FACT"]),
+  /** The provenance label the writer set: user, feature, fix, and so on. */
+  source: z.string(),
+  /** Who wrote it: a person, an agent or the system. */
+  writtenBy: z.enum(["person", "agent", "system"]),
+  /** When the node was written, which is when it came into force. */
+  createdAt: z.string().min(1),
+});
+export type MemoryItem = z.infer<typeof MemoryItem>;
+
+export const MemoryPage = z.object({
+  memories: z.array(MemoryItem),
+  /** Every active memory in the workspace, ignoring the page. */
+  total: Count,
+});
+export type MemoryPage = z.infer<typeof MemoryPage>;
+
+/**
+ * The `.oxagen/` tree on the main repository's production branch, as
+ * `get_repository_tree` read it from GitHub for the Records shelf's On disk
+ * panel. `unbound` is a workspace with no main repository.
+ */
+export const OxagenTree = z.discriminatedUnion("state", [
+  z.object({
+    state: z.literal("read"),
+    /** `owner/name`. */
+    repository: z.string().min(1),
+    branch: z.string().min(1),
+    /** The branch's head commit; null when the branch is gone. */
+    head: z.string().min(1).nullable(),
+    /** Every path under `.oxagen/`, relative to it, sorted. */
+    files: z.array(z.string().min(1)),
+    mode: DeclaredGovernanceMode,
+  }),
+  z.object({ state: z.literal("unbound") }),
+]);
+export type OxagenTree = z.infer<typeof OxagenTree>;
