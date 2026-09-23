@@ -22,7 +22,6 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/tacho": "workspace:*",
-    "ai": "7.0.111",
     "drizzle-orm": "0.45.3",
     "typescript": "6.0.3",
     "zod": "3.25.76"

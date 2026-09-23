@@ -18,12 +18,10 @@
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
-    "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/run-ledger": "workspace:*",
     "@oxagen/notifications": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
-    "@oxagen/run-evidence": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.3",

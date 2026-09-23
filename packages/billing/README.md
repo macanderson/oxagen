@@ -28,7 +28,6 @@
   - `@oxagen/run-ledger`: step kinds for the cost rollup (`src/cost-rollup-store.ts`).
   - `@oxagen/notifications`: auto-reload, dunning, and receipt email.
   - `@oxagen/config`: env readers.
-  - `@oxagen/crypto` and `@oxagen/run-evidence` are declared in `package.json`, but nothing in `src/` or `integration/` imports them.
 - **Used by:** `apps/api`, `apps/app`, `apps/cli`, `apps/mcp`, `apps/app_deprecated`, `@oxagen/agent`, `@oxagen/ai`, `@oxagen/auth`, `@oxagen/handlers`, `@oxagen/iam`, `@oxagen/inngest-functions`, and `tools/scripts`.
 
 ## Seams

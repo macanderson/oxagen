@@ -16,8 +16,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@aws-sdk/client-kms": "^3.1138.0",
-    "drizzle-orm": "0.45.3"
+    "@aws-sdk/client-kms": "^3.1138.0"
   },
   "devDependencies": {
     "@types/node": "25.9.8",
