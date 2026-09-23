@@ -86,7 +86,11 @@ function instantAfterRead(): Date {
   return new Date();
 }
 
-/** The trace line's time as the design prints it: `2026-09-11 09:16:04Z`. */
+/**
+ * The trace line's time as the design prints it: `2026-09-11 09:16:04Z`.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function traceTime(at: Date): string {
   return `${at.toISOString().slice(0, 19).replace("T", " ")}Z`;
 }
