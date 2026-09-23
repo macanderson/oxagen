@@ -17,7 +17,7 @@ import { mulMicros, sumMoney } from "@/data/contracts/money";
 import type { Read } from "@/data/read";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
-import { ReadFailure } from "./read-failure";
+import { BillingReadFailure } from "./read-failure";
 import { useDate } from "./section";
 
 function Tile({
@@ -33,11 +33,7 @@ function Tile({
   children: ReactNode;
 } & Record<`data-${string}`, string | number>) {
   return (
-    <div
-      data-tile={name}
-      className={statTile}
-      {...data}
-    >
+    <div data-tile={name} className={statTile} {...data}>
       <dt className={statTerm}>{term}</dt>
       <dd className={statValue}>{children}</dd>
       <dd className={statNote}>{note}</dd>
@@ -57,7 +53,7 @@ function PlanTile({
   if (!plan.ok) {
     return (
       <Tile name="plan" term={term} note={null}>
-        <ReadFailure read={plan} section={term} />
+        <BillingReadFailure read={plan} section={term} />
       </Tile>
     );
   }
@@ -93,7 +89,7 @@ function GauTile({ bucket }: { bucket: Read<GauBucket> }) {
   if (!bucket.ok) {
     return (
       <Tile name="gau" term={term} note={null}>
-        <ReadFailure read={bucket} section={term} />
+        <BillingReadFailure read={bucket} section={term} />
       </Tile>
     );
   }
@@ -125,7 +121,7 @@ function RateTile({ rate }: { rate: Read<ContractRate> }) {
   if (!rate.ok) {
     return (
       <Tile name="rate" term={term} note={null}>
-        <ReadFailure read={rate} section={term} />
+        <BillingReadFailure read={rate} section={term} />
       </Tile>
     );
   }
@@ -166,7 +162,7 @@ function DueTile({
   if (!invoices.ok) {
     return (
       <Tile name="due" term={term} note={null}>
-        <ReadFailure read={invoices} section={term} />
+        <BillingReadFailure read={invoices} section={term} />
       </Tile>
     );
   }

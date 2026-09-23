@@ -96,9 +96,11 @@ async function ledgerNodes(
       const node = ledgerNode(event);
       if (node === null) continue;
       nodes.push(node);
-      // The spine is full: everything after it is unread, so say so.
-      if (nodes.length >= RUN_OUTPUT_NODE_MAX) {
-        return { nodes, complete: false };
+      // One past the cap, so a spine that ends exactly at the cap is told
+      // apart from one that was cut: the extra node is the proof something
+      // was left unread, and it is dropped from the answer.
+      if (nodes.length > RUN_OUTPUT_NODE_MAX) {
+        return { nodes: nodes.slice(0, RUN_OUTPUT_NODE_MAX), complete: false };
       }
     }
     const last = page.at(-1);

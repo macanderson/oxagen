@@ -35,12 +35,17 @@ function principalLabel(ctx: CapabilityContext): string {
   return `surface:${ctx.surface}`;
 }
 
+/**
+ * `createOnly` refuses a lineage that already has a proposal instead of
+ * reusing it; a clone must land on a fresh row.
+ */
 export function createProposal(
   store: Pick<SteeringStore, "insertProposal">,
   ctx: CapabilityContext,
   input: CreateProposalInput,
+  options?: { createOnly: boolean },
 ): Promise<ProposalRow> {
-  return store.insertProposal({
+  const values = {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     lineageId: input.lineageId,
@@ -57,5 +62,10 @@ export function createProposal(
     supportingRecordIds: input.support.recordIds,
     evidenceLinks: input.support.evidenceLinks,
     createdById: ctx.userId ?? null,
-  });
+  };
+  // One argument when no option is set, so the store sees the call it
+  // always saw.
+  return options
+    ? store.insertProposal(values, options)
+    : store.insertProposal(values);
 }

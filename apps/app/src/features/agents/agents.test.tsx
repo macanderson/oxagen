@@ -89,7 +89,9 @@ describe("Agents", () => {
     expect(cells.map((c) => c.textContent)).toEqual([
       "reacme.core.release-botRelease bot",
       "Claude Code",
-      "Operator",
+      // The list carries the operator's id and no name yet, so the id is
+      // the label and never a literal "Operator".
+      "usr_marcusbell",
       "enrolled",
       "42",
       "$12.50client_attested",

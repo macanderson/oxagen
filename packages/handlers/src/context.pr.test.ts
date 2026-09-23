@@ -164,6 +164,27 @@ describe("open_context_pr", () => {
     expect(() => contextPrOpen.output.parse(out)).not.toThrow();
   });
 
+  it("opens the PR with the no-issue label and quotes every line of the statement, so the dod check passes and the block quote holds", async () => {
+    const h = harness();
+    const proposalId = await proposed(h, {
+      record: {
+        lineageId: LINEAGE,
+        kind: "rule",
+        force: "should",
+        sharingScope: "workspace",
+        statement: "Do not re-read CHANGELOG.md.\nCache the first read.\n",
+      },
+    });
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+
+    expect(h.github.pulls).toHaveLength(1);
+    expect(h.github.pulls[0]!.labels).toEqual(["no-issue"]);
+    expect(h.github.pulls[0]!.body).toContain(
+      "> Do not re-read CHANGELOG.md.\n> Cache the first read.\n",
+    );
+    expect(h.github.pulls[0]!.body).not.toContain("\nCache the first read.");
+  });
+
   it("records each check's outcome on the row before the next one starts, so a poll sees the state machine move", async () => {
     const h = harness();
     const proposalId = await proposed(h);

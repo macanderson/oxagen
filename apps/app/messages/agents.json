@@ -453,6 +453,8 @@
         "reason": "Reason",
         "confirm": "Stop this agent",
         "pending": "Stopping",
+        "needsRole": "The kill switch needs an organization Owner or Admin role.",
+        "reread": "Re-read the agent",
         "unchanged": "This agent's kill switch was already on. The pause below still ran.",
         "outcome": {
           "paused": "{count, plural, one {One live run paused.} other {# live runs paused.}} Every new tool call is denied.",

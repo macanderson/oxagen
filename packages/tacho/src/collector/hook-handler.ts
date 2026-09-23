@@ -60,10 +60,28 @@ export interface HookHandlerDeps {
 }
 
 export interface HookReplay {
-  /** The time `tacho-hook` recorded the event while the daemon was down. */
+  /**
+   * When the event was received: by `tacho-hook` while the daemon was down,
+   * or by the daemon itself when it deferred the event to a later tick. The
+   * frame's `ts` is this, not the time the deferred work finished.
+   */
   receivedAt: string;
   /** The decision `tacho-hook` made from the cached bundle. */
   evaluation?: Evaluation;
+  /**
+   * The daemon received the hook live and deferred it (a SessionEnd waiting
+   * for its git read). The frame carries `hook.received_at` and not
+   * `hook.replayed`, which means a spool replay and nothing else.
+   */
+  deferred?: boolean;
+}
+
+function replayAttrs(replay: HookReplay | undefined): Record<string, string> {
+  if (replay === undefined) return {};
+  return {
+    ...(replay.deferred === true ? {} : { "hook.replayed": "1" }),
+    "hook.received_at": replay.receivedAt,
+  };
 }
 
 export interface HookOutcome {
@@ -112,9 +130,7 @@ function policyAttrs(
     "policy.evaluated": evaluation.evaluated,
     "policy.read_only": evaluation.read_only ? "1" : "0",
     "policy.stale": evaluation.stale ? "1" : "0",
-    ...(replay !== undefined
-      ? { "hook.replayed": "1", "hook.received_at": replay.receivedAt }
-      : {}),
+    ...replayAttrs(replay),
   };
 }
 
@@ -390,16 +406,13 @@ async function routeHook(
   const payload = invocationToolUseId(raw, input, record);
   const view = deps.policy();
   const events: TachoEvent[] = [];
-  const replayAttrs: Record<string, string> =
-    replay !== undefined
-      ? { "hook.replayed": "1", "hook.received_at": replay.receivedAt }
-      : {};
+  const replayed = replayAttrs(replay);
   const withReplay = (draft: HookDraft): HookDraft => ({
     ...draft,
     ...(inferredCwd && record.cwd !== undefined
       ? { context: { ...draft.context, cwd: record.cwd } }
       : {}),
-    attrs: { ...draft.attrs, ...replayAttrs },
+    attrs: { ...draft.attrs, ...replayed },
   });
 
   switch (input.hook_event_name) {
@@ -439,7 +452,7 @@ async function routeHook(
               bundle_version: view.bundle.version,
               bundle_mode: view.bundle.mode,
             },
-            { hook_event_name: "SessionStart", attrs: replayAttrs },
+            { hook_event_name: "SessionStart", attrs: replayed },
           ),
         );
         return {

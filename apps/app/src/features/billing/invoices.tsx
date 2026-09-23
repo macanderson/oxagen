@@ -11,7 +11,7 @@ import { linkText } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { HostedInvoiceLink, SafeLink } from "@/ui/navigation";
 import { cell, numericCell, Table } from "@/ui/table";
-import { ReadFailure } from "./read-failure";
+import { BillingReadFailure } from "./read-failure";
 import { Section, useDate } from "./section";
 
 function InvoiceLine({ row }: { row: InvoiceRow }) {
@@ -66,7 +66,7 @@ export function Invoices({
   if (!invoices.ok) {
     return (
       <Section id="billing-invoices" title={title}>
-        <ReadFailure read={invoices} section={title} />
+        <BillingReadFailure read={invoices} section={title} />
       </Section>
     );
   }

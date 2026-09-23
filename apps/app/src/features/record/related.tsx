@@ -12,7 +12,7 @@ import type { Read } from "@/data/read";
 import { buttonSecondary } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { RecordCard } from "@/ui/record-card";
-import { ReadFailure } from "./read-failure";
+import { RecordReadFailure } from "./read-failure";
 import { Section } from "./section";
 import { recordLink, type RecordAt } from "./view";
 
@@ -44,7 +44,7 @@ export function Related({
   if (!read.ok) {
     return (
       <Section id="record-related" title={title}>
-        <ReadFailure read={read} section={title} />
+        <RecordReadFailure read={read} section={title} />
       </Section>
     );
   }

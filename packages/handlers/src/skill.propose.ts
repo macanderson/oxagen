@@ -35,6 +35,7 @@ import {
   createSteeringGitHub,
   type SteeringGitHub,
 } from "./context.steering.github";
+import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import { checkSkill, readSkillFrontmatter } from "./skill-validation";
 import { sha256Hex } from "./registry-digest";
 
@@ -226,6 +227,7 @@ export function createProposeSkillHandler(
       : await deps.github.openPullRequest(repo, {
           head: branch,
           base,
+          labels: OXAGEN_PR_LABELS,
           ...metadata,
         });
 

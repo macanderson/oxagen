@@ -12,15 +12,22 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { writeSensitiveFileAtomic } from "./fs";
 import {
   applyModelCredentials,
   hasOrphanedModelCredential,
   helperCommandFor,
   isTachoHelper,
   modelCredentialBackupPath,
+  peekModelCredentials,
+  readCodexApiKeyMember,
   readModelCredentialState,
   restoreModelCredentials,
+  STATIC_TOKEN_RENEW_WINDOW_MS,
+  staticTokenRenewWindowMs,
+  staticTokenStillGood,
 } from "./model-credential";
+import { generateRunTokenKey, mintRunToken } from "./run-token";
 
 const KEY = "sk-ant-api03-FAKE-TAKEN-INTO-CUSTODY-1234";
 const OPENAI_KEY = "sk-proj-FAKE-OPENAI-KEY-5678";
@@ -304,6 +311,50 @@ describe("apply", () => {
       reason: "no_token",
     });
     expect(readFileSync(authPath(), "utf8")).toBe(AUTH);
+  });
+
+  it("takes neither member when Claude Code sets both a key and a bearer, and says why", async () => {
+    // Custody holds one credential per provider, so taking both would keep
+    // the second and lose the first at unenroll. Nothing moves until the
+    // person picks one.
+    const both = JSON.stringify(
+      {
+        env: { ANTHROPIC_API_KEY: KEY, ANTHROPIC_AUTH_TOKEN: "bearer-FAKE" },
+      },
+      null,
+      2,
+    );
+    seed(settingsPath(), both);
+    expect(
+      await peekModelCredentials({
+        home,
+        harnesses: ["claude-code"],
+        helperCommand: HELPER,
+      }),
+    ).toEqual([]);
+    const applied = await applyModelCredentials(
+      { home, harnesses: ["claude-code"], helperCommand: HELPER },
+      internals(),
+    );
+    expect(applied.taken).toEqual([]);
+    expect(applied.harnesses[0]).toMatchObject({
+      brokered: false,
+      changed: false,
+      reason: "two_credentials",
+    });
+    expect(readFileSync(settingsPath(), "utf8")).toBe(both);
+    expect(existsSync(modelCredentialBackupPath("claude-code", home))).toBe(
+      false,
+    );
+    // A read names the same reason, so status says what enroll said.
+    const read = await readModelCredentialState(
+      { home, harnesses: ["claude-code"], helperCommand: HELPER },
+      internals(),
+    );
+    expect(read.harnesses[0]).toMatchObject({
+      brokered: false,
+      reason: "two_credentials",
+    });
   });
 
   it("refuses to rewrite a symlinked file, and reports a managed helper that shadows ours", async () => {
@@ -628,5 +679,72 @@ describe("read and orphans", () => {
     );
     expect(managed.harnesses[0]).toMatchObject({ brokered: true });
     expect(managed.harnesses[0]!.shadowedBy).toBeUndefined();
+  });
+
+  it("reads Codex's key member the way the CLI and the daemon both do", () => {
+    expect(readCodexApiKeyMember(home)).toBeUndefined();
+    seed(authPath(), AUTH);
+    expect(readCodexApiKeyMember(home)).toBe(OPENAI_KEY);
+    seed(authPath(), JSON.stringify({ tokens: {} }));
+    expect(readCodexApiKeyMember(home)).toBeUndefined();
+    seed(authPath(), "{ broken");
+    expect(readCodexApiKeyMember(home)).toBeUndefined();
+  });
+});
+
+describe("the static token renewal window", () => {
+  const DAY = 24 * 60 * 60_000;
+  const now = Date.parse("2026-09-22T12:00:00.000Z");
+
+  it("is the full week while the enrollment has more than two weeks left", () => {
+    const host = { expires_at: new Date(now + 60 * DAY).toISOString() };
+    expect(staticTokenRenewWindowMs(host, now)).toBe(
+      STATIC_TOKEN_RENEW_WINDOW_MS,
+    );
+    expect(staticTokenRenewWindowMs({}, now)).toBe(
+      STATIC_TOKEN_RENEW_WINDOW_MS,
+    );
+    expect(staticTokenRenewWindowMs({ expires_at: "never" }, now)).toBe(
+      STATIC_TOKEN_RENEW_WINDOW_MS,
+    );
+  });
+
+  it("halves what is left of the enrollment inside its last two weeks, so a token clamped to that expiry is never re-minted", () => {
+    const host = { expires_at: new Date(now + 4 * DAY).toISOString() };
+    expect(staticTokenRenewWindowMs(host, now)).toBe(2 * DAY);
+    // The token expires with the enrollment: four days left is more than
+    // the two-day window, so it stands rather than being re-minted hourly
+    // for a token with the same expiry.
+    const key = generateRunTokenKey();
+    const keyPath = join(home, "run-token.key");
+    writeSensitiveFileAtomic(keyPath, `${key.bytes.toString("hex")}\n`);
+    const clamped = mintRunToken({
+      key,
+      host: "tch_0123456789abcdefghjkmn",
+      harness: "codex",
+      provider: "openai",
+      placement: "static",
+      now,
+      notAfter: now + 4 * DAY,
+    });
+    const enrollment = {
+      host_enrollment_id: "tch_0123456789abcdefghjkmn",
+      ...host,
+    };
+    expect(staticTokenStillGood(clamped.token, enrollment, keyPath, now)).toBe(
+      true,
+    );
+    expect(
+      staticTokenStillGood(
+        clamped.token,
+        enrollment,
+        keyPath,
+        now + 3 * DAY + 12 * 60 * 60_000,
+      ),
+    ).toBe(true);
+    // Past the expiry the token no longer verifies, so it is due.
+    expect(
+      staticTokenStillGood(clamped.token, enrollment, keyPath, now + 5 * DAY),
+    ).toBe(false);
   });
 });

@@ -27,6 +27,10 @@ import {
   readConfigurationSource,
 } from "./configuration-clone-source";
 
+// The GitHub seams have no option for a create-only proposal, so the two
+// methods that decide reuse are overridden here. The store does
+// (`insertProposal(values, { createOnly })`), and the record path passes it
+// through `createProposeRecordHandler` instead of wrapping the store.
 function overrideMethods<T extends object>(
   target: T,
   overrides: Partial<T>,
@@ -181,12 +185,10 @@ export function createConfigurationCloneProposeHandler(deps: {
         reason: "clone_identity_mismatch",
         message: "The draft name and lineage must match the proposed source",
       });
-    const store = overrideMethods(deps.store, {
-      insertProposal: (
-        values: Parameters<SteeringStore["insertProposal"]>[0],
-      ) => deps.store.insertProposal(values, { createOnly: true }),
-    });
-    const proposal = await createProposeRecordHandler({ store })(record, ctx);
+    const proposal = await createProposeRecordHandler({
+      store: deps.store,
+      createOnly: true,
+    })(record, ctx);
     return {
       slug: input.slug,
       proposalId: proposal.proposalId,

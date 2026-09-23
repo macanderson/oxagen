@@ -1252,6 +1252,41 @@ describe("the loopback model proxy", () => {
     ]);
   });
 
+  it("files a call that names a sealed session on the host's chain, never after the session's terminal", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, frames } = await boot(fake.url);
+    // No cwd, so the end seals on the spot with no git read to wait for.
+    await handle.api.handleHook({
+      payload: {
+        hook_event_name: "SessionStart",
+        session_id: "sess-closed",
+        source: "startup",
+      },
+    });
+    const uuid = handle.registry.get("sess-closed")!.recorder.sessionUuid;
+    await handle.api.handleHook({
+      payload: {
+        hook_event_name: "SessionEnd",
+        session_id: "sess-closed",
+        reason: "other",
+      },
+    });
+    expect(handle.registry.get("sess-closed")?.sealed).toBe(true);
+    const before = handle.wal.read(uuid).length;
+    await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Claude-Code-Session-Id", "sess-closed"],
+      body: JSON.stringify({ model: "m" }),
+    });
+    expect(handle.wal.read(uuid)).toHaveLength(before);
+    expect(
+      frames(handle.hostRecorder.sessionUuid).map(
+        (f) => f.attrs["oxagen.correlation"],
+      ),
+    ).toEqual(["session_closed"]);
+    expect(fake.requests.map((r) => r.url)).toEqual(["/v1/messages"]);
+  });
+
   it("files a call on Stella's prefix under the live Stella session, never a Claude Code one", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const { port, session, frames } = await boot(fake.url);

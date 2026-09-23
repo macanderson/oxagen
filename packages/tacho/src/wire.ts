@@ -300,6 +300,124 @@ export type WrappedHarness = (typeof WRAPPED_HARNESSES)[number];
 export const CONNECTED_HARNESSES = ["claude-desktop"] as const;
 export type ConnectedHarness = (typeof CONNECTED_HARNESSES)[number];
 
+/**
+ * The executable each wrapped harness is launched by: what `tacho verify`
+ * runs for a headless turn, what an ARP transfer hands the next machine,
+ * and the one name the dependency probe trusts. Cursor's is its
+ * `cursor-agent` alias and never a bare `agent`, which any binary could be.
+ */
+export const HARNESS_BINARY = {
+  "claude-code": "claude",
+  codex: "codex",
+  cursor: "cursor-agent",
+  stella: "stella",
+} as const satisfies Record<WrappedHarness, string>;
+
+/** The model vendors the loopback gateway forwards to and holds keys for. */
+export const MODEL_GATEWAY_PROVIDERS = ["anthropic", "openai"] as const;
+export type ModelGatewayProvider = (typeof MODEL_GATEWAY_PROVIDERS)[number];
+
+/**
+ * How one harness reaches the model gateway (ADR-094, ADR-138).
+ *
+ * `prefix` is the path the loopback proxy answers for it, and `baseUrlFile`
+ * the documented location of the file its base URL is written into:
+ * `modelBaseUrlFile` in `host/model-base-url.ts` resolves the real path,
+ * which `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `STELLA_HOME` and Stella's legacy
+ * `settings.json` can move. `brokerable` says whether the gateway takes the
+ * harness's vendor key into custody and hands it a run token; Stella keeps
+ * its own key, which crosses the proxy as it is.
+ */
+export interface ModelHarnessRoute {
+  harness: WrappedHarness;
+  provider: ModelGatewayProvider;
+  prefix: string;
+  brokerable: boolean;
+  baseUrlFile: string;
+}
+
+/**
+ * The one table of harnesses the gateway routes. The proxy's correlation,
+ * the credential seam, the run token issuer, and enroll, status and unenroll
+ * all read it, so a harness added here reaches every one of those surfaces
+ * and a harness missing from one of them cannot happen.
+ */
+export const MODEL_HARNESS_ROUTES = [
+  {
+    harness: "claude-code",
+    provider: "anthropic",
+    prefix: "/anthropic",
+    brokerable: true,
+    baseUrlFile: "~/.claude/settings.json",
+  },
+  {
+    harness: "codex",
+    provider: "openai",
+    prefix: "/backend-api/codex",
+    brokerable: true,
+    baseUrlFile: "~/.codex/config.toml",
+  },
+  {
+    harness: "stella",
+    provider: "anthropic",
+    prefix: "/stella/anthropic",
+    brokerable: false,
+    baseUrlFile: "$STELLA_HOME/stella.toml",
+  },
+] as const satisfies readonly ModelHarnessRoute[];
+
+type ModelHarnessRow = (typeof MODEL_HARNESS_ROUTES)[number];
+type BrokerableRow = Extract<ModelHarnessRow, { brokerable: true }>;
+
+/** A harness whose model calls the gateway routes: it gets a base URL. */
+export type ModelRoutedHarness = ModelHarnessRow["harness"];
+/** A routed harness whose vendor key the gateway takes into custody. */
+export type BrokerableHarness = BrokerableRow["harness"];
+
+export const MODEL_ROUTED_HARNESSES: readonly ModelRoutedHarness[] =
+  MODEL_HARNESS_ROUTES.map((row) => row.harness);
+
+export const BROKERABLE_HARNESSES: readonly BrokerableHarness[] =
+  MODEL_HARNESS_ROUTES.filter(
+    (row): row is BrokerableRow => row.brokerable,
+  ).map((row) => row.harness);
+
+export function isModelRoutedHarness(
+  harness: string,
+): harness is ModelRoutedHarness {
+  return (MODEL_ROUTED_HARNESSES as readonly string[]).includes(harness);
+}
+
+export function isBrokerableHarness(
+  harness: string,
+): harness is BrokerableHarness {
+  return (BROKERABLE_HARNESSES as readonly string[]).includes(harness);
+}
+
+/** The vendor each brokerable harness's run token is spent at. */
+export const BROKERABLE_HARNESS_PROVIDER = Object.fromEntries(
+  MODEL_HARNESS_ROUTES.filter((row) => row.brokerable).map((row) => [
+    row.harness,
+    row.provider,
+  ]),
+) as Record<BrokerableHarness, ModelGatewayProvider>;
+
+/**
+ * The harness a call on a bare provider prefix is filed under when nothing
+ * on the request names one: the brokerable harness for that vendor.
+ */
+export function defaultHarnessForProvider(
+  provider: ModelGatewayProvider,
+): BrokerableHarness {
+  const row = MODEL_HARNESS_ROUTES.find(
+    (candidate): candidate is BrokerableRow =>
+      candidate.brokerable && candidate.provider === provider,
+  );
+  if (row === undefined)
+    throw new Error(`no brokerable harness routes ${provider}`);
+  return row.harness;
+}
+
 export function isWrappedHarness(harness: string): harness is WrappedHarness {
   return (WRAPPED_HARNESSES as readonly string[]).includes(harness);
 }

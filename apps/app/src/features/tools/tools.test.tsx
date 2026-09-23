@@ -692,7 +692,7 @@ describe("Tools › write gates", () => {
   // asserts `{ org: ["Owner","Admin"], workspace: ["Owner","Member","Viewer"] }`
   // and resolves the workspace half from `iam.principal_role_assignments`,
   // which holds nothing for a human principal, so the read is denied and
-  // `Registry` answers `ReadFailure` before any control is reached. A suite
+  // `Registry` answers `ToolsReadFailure` before any control is reached. A suite
   // that only ever hands this viewer an `ok` read passes on a world where
   // `assertOrgRole` does not exist.
   it("answers a workspace Owner holding org member the denied read, not a control, because the registry read refuses them first", async () => {

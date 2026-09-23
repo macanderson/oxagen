@@ -13,7 +13,7 @@ import { routes } from "@/shared/safe-path";
 import { SafeLink } from "@/ui/navigation";
 import { CloneButton } from "@/ui/clone-button";
 import { RecordCard } from "@/ui/record-card";
-import { ReadFailure } from "./read-failure";
+import { SteeringReadFailure } from "./read-failure";
 import { Fact, Facts, Pager, Section, useDate } from "./section";
 import { type SteeringAt, steeringLink } from "./view";
 
@@ -65,7 +65,7 @@ export function Records({
   if (!read.ok) {
     return (
       <Section id="steering-records" title={title}>
-        <ReadFailure read={read} section={title} />
+        <SteeringReadFailure read={read} section={title} />
       </Section>
     );
   }

@@ -154,6 +154,35 @@ describe("issuing a run token", () => {
     expect(recorded).toEqual([]);
   });
 
+  it("answers a static mint past the enrollment's expiry with 403 host_expired, and mints nothing", () => {
+    store.take(
+      "openai",
+      { kind: "bearer", secret: "sk-proj-FAKE" },
+      "codex:auth.json",
+      NOW,
+    );
+    const expired = deps({
+      host: () => ({
+        host_enrollment_id: HOST,
+        host_status: "active",
+        expires_at: new Date(NOW - 1).toISOString(),
+      }),
+    });
+    expect(
+      issueRunToken({ harness: "codex", placement: "static" }, expired),
+    ).toEqual({
+      status: 403,
+      body: {
+        error: expect.stringContaining("enrollment expired"),
+        code: "host_expired",
+      },
+    });
+    expect(recorded).toEqual([]);
+    // A helper token is not bounded by the enrollment, so it still mints;
+    // the proxy checks host status on every call it is spent on.
+    expect(issueRunToken({ harness: "codex" }, expired).status).toBe(200);
+  });
+
   it("refuses a host that is not active, naming the status, and mints nothing", () => {
     holdAnthropic();
     for (const status of ["paused", "suspended", "revoked"]) {

@@ -18,6 +18,16 @@ describe("update_tacho_session_policy capability", () => {
     );
   });
 
+  it("waits for a person when an agent asks to change the policy", () => {
+    // The sibling governance writes (mandate limits, kill switches, approval
+    // rules) all park an agent-initiated change behind an approval. A session
+    // ceiling and a model allowlist are the same kind of decision.
+    expect(tachoSessionPolicyWrite.agent).toMatchObject({
+      requiresApproval: true,
+      riskLevel: "high",
+    });
+  });
+
   it("parses an empty update, which changes nothing", () => {
     expect(tachoSessionPolicyWrite.input.parse({})).toEqual({});
   });

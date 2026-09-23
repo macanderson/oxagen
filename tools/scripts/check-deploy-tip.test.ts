@@ -59,6 +59,42 @@ describe("readMainTip", () => {
     ).resolves.toEqual({ tip: NEWER });
   });
 
+  it("passes an abort signal so a hung API call cannot hold the job", async () => {
+    let seen: unknown;
+    const fetchImpl = async (
+      _url: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      seen = init?.signal;
+      return {
+        ok: true,
+        json: async () => ({ commit: { sha: NEWER } }),
+      } as never;
+    };
+    await readMainTip({ repository: "o/r", token: "t", fetchImpl });
+    expect(seen).toBeInstanceOf(AbortSignal);
+  });
+
+  it("fails open when the API does not answer in time", async () => {
+    // A fetch that only ever settles when its signal aborts, the way a real
+    // fetch does against a socket that never replies.
+    const hang = (_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<never>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(init.signal?.reason),
+        );
+      });
+    const verdict = await readMainTip({
+      repository: "o/r",
+      token: "t",
+      fetchImpl: hang as never,
+      timeoutMs: 5,
+    });
+    expect(verdict.tip).toBeNull();
+    expect(verdict.error).toMatch(/timeout|abort/i);
+    expect(decide({ sha: OLDER, ...verdict }).deploy).toBe(true);
+  });
+
   it("never throws: a non-2xx or a network error becomes tip: null", async () => {
     const rejected = async () => ({ ok: false, status: 502 }) as never;
     await expect(

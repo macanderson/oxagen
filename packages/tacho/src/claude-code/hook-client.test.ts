@@ -385,10 +385,12 @@ describe("runTachoHook", () => {
         }),
         now,
       ).response,
-    ).toMatchObject({
+    ).toEqual({
       hookSpecificOutput: {
         hookEventName: "PermissionRequest",
-        permissionDecision: "deny",
+        // The PermissionRequest shape, not PreToolUse's `permissionDecision`:
+        // Claude Code ignores the latter here, and the deny never lands.
+        decision: { behavior: "deny", message: expect.any(String) },
       },
     });
     // A tool the mandate never mentions still fails open, and to Claude

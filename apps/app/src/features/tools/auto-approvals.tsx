@@ -29,7 +29,7 @@ import { formatCount } from "@/ui/money-format";
 import { cell, numericCell, Table } from "@/ui/table";
 import { RuleDelete, RuleEditor, RuleToggle } from "./approval-rule-controls";
 import { Chip, Section, StateDot, useDate } from "./parts";
-import { ReadFailure } from "./read-failure";
+import { ToolsReadFailure } from "./read-failure";
 import { type ToolsAt, toolsLink, weekdayKey } from "./view";
 
 const MINUTE_MS = 60_000;
@@ -250,7 +250,7 @@ export function AutoApprovals({
   const t = useTranslations("tools.autoApprovals");
   if (!read.ok) {
     return (
-      <ReadFailure
+      <ToolsReadFailure
         at={at}
         orgRole={orgRole}
         read={read}

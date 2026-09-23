@@ -27,6 +27,7 @@ import {
   TACHO_ENFORCEMENT_TIER_ATTR,
   TACHO_GATEWAY_TIER,
   TACHO_RUN_TOKEN_ATTR,
+  isBrokerableHarness,
 } from "../wire";
 
 export interface IssueRunTokenRequest {
@@ -66,7 +67,7 @@ export interface CredentialIssuerDeps {
 export function providerForHarness(
   harness: unknown,
 ): RunTokenProvider | undefined {
-  return harness === "claude-code" || harness === "codex"
+  return typeof harness === "string" && isBrokerableHarness(harness)
     ? HARNESS_PROVIDER[harness]
     : undefined;
 }
@@ -133,6 +134,17 @@ export function issueRunToken(
     };
   const now = deps.now();
   const notAfter = Date.parse(host.expires_at);
+  // A static token is clamped to the enrollment's expiry, so past it there is
+  // nothing to mint: answered as a refusal the harness and the renewal tick
+  // can read, not as a thrown mint the socket route turns into a 500.
+  if (placement === "static" && Number.isFinite(notAfter) && notAfter <= now)
+    return {
+      status: 403,
+      body: {
+        error: `this host's enrollment expired at ${host.expires_at}, so no static run token is issued; run \`tacho enroll\` again`,
+        code: "host_expired",
+      },
+    };
   const key = deps.key();
   const minted = mintRunToken({
     key,

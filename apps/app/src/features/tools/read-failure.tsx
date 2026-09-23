@@ -14,7 +14,7 @@ import type { ToolsAt } from "./view";
 
 type Failure = Exclude<Read<unknown>, { ok: true }>;
 
-export function ReadFailure({
+export function ToolsReadFailure({
   at,
   orgRole,
   read,

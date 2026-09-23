@@ -349,8 +349,12 @@ const capabilityNameSchema = z
  * The contributor types whose tools a run may be allowed. Both spell their
  * tools `<prefix>.<server>.<tool>`; `mcp` names the server by its internal
  * UUID and `file-mcp` by its configured name.
+ *
+ * `@oxagen/rules` restates this list, because neither package depends on
+ * the other. `@oxagen/agent` depends on both and holds the copies equal in
+ * `packages/agent/src/runtime/external-tool-prefixes.test.ts`.
  */
-const EXTERNAL_TOOL_PREFIXES = ["mcp", "file-mcp"] as const;
+export const EXTERNAL_TOOL_PREFIXES = ["mcp", "file-mcp"] as const;
 
 /**
  * The longest one segment of an external tool identity may be — the server

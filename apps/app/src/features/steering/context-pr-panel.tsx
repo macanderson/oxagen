@@ -10,9 +10,9 @@ import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { linkText, mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { PullRequestLink } from "@/ui/navigation";
-import { ReadFailure } from "./read-failure";
+import { SteeringReadFailure } from "./read-failure";
 import { Fact, Facts, Section, useDate } from "./section";
-import { StatusBadge } from "./status";
+import { ProposalStatusBadge } from "./status";
 import type { SteeringAt } from "./view";
 import { MergeContextPr, ProposalWrites } from "./write-controls";
 
@@ -117,7 +117,7 @@ export function ContextPrPanel({
     const heading = t("heading");
     return (
       <Section id="steering-pr" title={heading}>
-        <ReadFailure read={read} section={heading} />
+        <SteeringReadFailure read={read} section={heading} />
       </Section>
     );
   }
@@ -134,7 +134,7 @@ export function ContextPrPanel({
       data-status={status}
     >
       <div className="flex flex-wrap items-center gap-3">
-        <StatusBadge status={status} />
+        <ProposalStatusBadge status={status} />
         {pr !== null && url !== null ? (
           <PullRequestLink to={url} className={linkText}>
             {t("goToPr", { number: String(pr.number) })}

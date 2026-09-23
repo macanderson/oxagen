@@ -29,6 +29,23 @@ export type { ModelFundingSource, TurnFunding } from "./funding-source";
 export { selectModelForOrg } from "./select-model-for-org";
 export type { OrgModelSelection } from "./select-model-for-org";
 
+// The vendor's spend refusal on a minted key, as one named error a surface
+// can show (ADR-131 §3). There is no fallback to the shared key on the call
+// path; see the module comment.
+export {
+  AssistantModelKeyLimitError,
+  ASSISTANT_MODEL_KEY_LIMIT_CODE,
+  isSpendRefusal,
+} from "./assistant-model-key-limit";
+
+// Which provider serves the platform's own language-model calls, and so
+// whether a minted key can serve here at all (ADR-131 §9).
+export {
+  platformLanguageProvider,
+  mintedKeysServeHere,
+} from "./platform-provider";
+export type { PlatformLanguageProvider } from "./platform-provider";
+
 // The ledger reasons a caller needs to satisfy `chargeReason`, re-exported
 // from `@oxagen/billing` rather than left to be imported past this package.
 //

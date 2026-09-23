@@ -56,6 +56,7 @@ import {
   serviceManagerFor,
 } from "../host/service";
 import { TACHO_VERSION } from "../version";
+import { HARNESS_BINARY } from "../wire";
 
 export interface Credentials {
   token: string;
@@ -581,7 +582,7 @@ export function claudeDesktopFacts(
 }
 
 /** Only this alias identifies Cursor without trusting a generic executable name. */
-export const CURSOR_CLI_NAMES = ["cursor-agent"] as const;
+export const CURSOR_CLI_NAMES = [HARNESS_BINARY.cursor] as const;
 
 /**
  * What a Cursor probe found. `path` and `version` describe the `cursor-agent`

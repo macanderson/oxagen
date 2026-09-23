@@ -216,6 +216,12 @@ export interface GitHubClient {
 
   /**
    * Open a pull request.
+   *
+   * `labels` are applied right after the pull request exists, through the
+   * issues endpoint, because GitHub's create-pull-request call takes none.
+   * A pull request that must carry a label from its first check run (the
+   * SCR-003 `dod` gate reads `no-issue`) passes it here rather than in a
+   * second call a caller can forget.
    */
   openPullRequest(args: {
     owner: string;
@@ -225,7 +231,13 @@ export interface GitHubClient {
     base: string;
     body?: string;
     draft?: boolean;
-  }): Promise<{ number: number; htmlUrl: string }>;
+    labels?: readonly string[];
+  }): Promise<{
+    number: number;
+    htmlUrl: string;
+    /** Set when the pull request opened but the labels call failed. */
+    labelError?: string;
+  }>;
 
   /** Refresh submission metadata without changing the pull request identity or branches. */
   updatePullRequest(args: {
@@ -470,3 +482,15 @@ export interface GitHubClientOptions {
    */
   sleep?: (ms: number) => Promise<void>;
 }
+
+/**
+ * The labels every pull request Oxagen opens carries.
+ *
+ * Oxagen opens a pull request to publish one thing: a steering record, an
+ * agent, a skill, a governance mode, a skill configuration, or the `.oxagen`
+ * tree itself. None closes an issue, and the SCR-003 `dod` check fails a
+ * pull request that neither closes one nor says so. `no-issue` is the waiver
+ * for a change too small to need an issue (`tools/scripts/scr-dod-check.mjs`
+ * in the oxagen repository). A repository without that check ignores it.
+ */
+export const OXAGEN_PR_LABELS: readonly string[] = ["no-issue"];

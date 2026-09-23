@@ -8,9 +8,9 @@ import { linkText, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { cell, Table } from "@/ui/table";
 import { ContextPrPanel } from "./context-pr-panel";
-import { ReadFailure } from "./read-failure";
+import { SteeringReadFailure } from "./read-failure";
 import { Pager, Section } from "./section";
-import { StatusBadge } from "./status";
+import { ProposalStatusBadge } from "./status";
 import { type SteeringAt, steeringLink } from "./view";
 
 export function ContextPrs({
@@ -33,7 +33,7 @@ export function ContextPrs({
   const title = t("title");
   let body: ReactNode;
   if (!read.ok) {
-    body = <ReadFailure read={read} section={title} />;
+    body = <SteeringReadFailure read={read} section={title} />;
   } else {
     const rows = read.value.proposals.flatMap((proposal) =>
       proposal.pr === null ? [] : [{ proposal, pr: proposal.pr }],
@@ -80,7 +80,7 @@ export function ContextPrs({
                 </td>
                 <td className={cell}>{record(`kinds.${proposal.kind}`)}</td>
                 <td className={cell}>
-                  <StatusBadge status={proposal.status} />
+                  <ProposalStatusBadge status={proposal.status} />
                 </td>
               </tr>
             ))}

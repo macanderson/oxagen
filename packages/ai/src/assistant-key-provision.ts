@@ -34,6 +34,12 @@
  * before ADR-131 — so a bad minute at OpenRouter costs reconciliation
  * granularity for those organisations and nothing else. Making signup fail
  * because a vendor's key API was down would be a far worse trade.
+ *
+ * NOTHING IS MINTED ON A GATEWAY DEPLOYMENT. A minted key is an OpenRouter
+ * key, and `resolveModelFundingSource` consults it only where the platform
+ * provider is already OpenRouter (ADR-131 §9). Minting one anywhere else
+ * would hold a spendable secret that no turn can ever use, so the platform
+ * provider is checked before the management key is.
  */
 import {
   createAssistantKey,
@@ -47,6 +53,7 @@ import {
   recordAssistantModelKey,
   logAssistantModelKeyFailure,
 } from "@oxagen/database/assistant-model-key";
+import { mintedKeysServeHere } from "./platform-provider";
 
 /** What the caller needs to name the key. Both are point-in-time facts. */
 export interface EnsureAssistantModelKeyArgs {
@@ -64,8 +71,10 @@ export interface EnsureAssistantModelKeyResult {
   readonly provisioned: boolean;
   /**
    * Why not, when `provisioned` is false. `already` and `race` are ordinary
-   * outcomes; `disabled` means the feature is off in this environment; `error`
-   * is the only one worth an alert.
+   * outcomes; `disabled` means the feature is off in this environment, either
+   * because no management key is set or because the platform provider is the
+   * gateway, where a minted key cannot serve; `error` is the only one worth
+   * an alert.
    */
   readonly reason?: "already" | "race" | "disabled" | "error";
 }
@@ -99,6 +108,7 @@ function dailyLimitUsd(): number {
 export async function ensureAssistantModelKey(
   args: EnsureAssistantModelKeyArgs,
 ): Promise<EnsureAssistantModelKeyResult> {
+  if (!mintedKeysServeHere()) return { provisioned: false, reason: "disabled" };
   const management = managementKey();
   if (!management) return { provisioned: false, reason: "disabled" };
 

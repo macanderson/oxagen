@@ -257,7 +257,7 @@ export async function rollupFiles(
       const cleared = [...completeSnapshots.values()].some(
         ({ root, seen }) =>
           repoRelativePathOf(row.path, root) !== undefined &&
-          (row.path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(row.path)) &&
+          isAbsoluteStoredPath(row.path) &&
           !seen.has(identity.key),
       );
       if (!cleared) continue;

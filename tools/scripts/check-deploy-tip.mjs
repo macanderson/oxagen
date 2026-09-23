@@ -63,8 +63,21 @@ export function decide({ sha, tip, error }) {
   };
 }
 
+/**
+ * How long one GitHub API call may take before it is treated as no answer.
+ * The header promises that an unreachable API fails open; a call that never
+ * returns is not unreachable to `fetch`, it is a job that sits until the
+ * runner's own timeout kills it, and a killed step is a failure, not a skip.
+ */
+export const API_TIMEOUT_MS = 15_000;
+
 /** Ask the GitHub API for the head sha of `main`. Never throws. */
-export async function readMainTip({ repository, token, fetchImpl = fetch }) {
+export async function readMainTip({
+  repository,
+  token,
+  fetchImpl = fetch,
+  timeoutMs = API_TIMEOUT_MS,
+}) {
   try {
     const res = await fetchImpl(
       `https://api.github.com/repos/${repository}/branches/main`,
@@ -74,6 +87,9 @@ export async function readMainTip({ repository, token, fetchImpl = fetch }) {
           Accept: "application/vnd.github+json",
           "X-GitHub-Api-Version": "2022-11-28",
         },
+        // The abort surfaces as a rejection and lands in the catch below,
+        // which is the fail-open path.
+        signal: AbortSignal.timeout(timeoutMs),
       },
     );
     if (!res.ok) return { tip: null, error: `HTTP ${res.status}` };

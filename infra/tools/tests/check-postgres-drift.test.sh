@@ -94,7 +94,9 @@ expect_code 1 "$CODE" "a store behind the repository is behind"
 contains "$OUT" "::error::" "being behind is annotated as an error"
 contains "$OUT" "behind this repository" "the message names the condition"
 contains "$OUT" "20260919120000_add_durable_token_usage.sql" "the message names the pending file"
-contains "$OUT" "run-db-migrations.sh packages/database" "the message names the path that reaches production"
+contains "$OUT" "run-db-migrations.sh packages/database --apply" \
+  "the message names the script that reaches Aurora"
+contains "$OUT" "DB Migrate (manual)" "the message names the dispatch that runs the same script"
 
 # The pending list is a convenience, not the verdict. A version of Atlas that
 # prints no file names must still block.
@@ -124,7 +126,7 @@ OUT=$(classify_atlas_status "$WORK/virgin.txt" 188); CODE=$?
 expect_code 1 "$CODE" "an unstamped store blocks like any other behind store"
 contains "$OUT" "revision table is empty" "the message names the real cause"
 contains "$OUT" "do NOT apply" "the message refuses the apply that would break it"
-lacks "$OUT" "run it again in apply mode" \
+lacks "$OUT" "apply with infra/tools/run-db-migrations.sh" \
   "an unstamped store is not told to apply — that is the opposite of the right move"
 
 # --- output that answers nothing -------------------------------------------
@@ -209,9 +211,11 @@ contains "$OUT" "revision table is empty" "the tailed output still names the emp
 
 # Comments are stripped first. The header discusses `--apply` at length — that
 # prose is the point, and asserting over it would match the documentation
-# rather than the code.
+# rather than the code. The `echo` lines go too: the behind verdict names the
+# apply command for the operator to run by hand, and an echo applies nothing.
 CODE_ONLY=$(sed 's/#.*$//' "$TOOLS/check-postgres-drift.sh")
-lacks "$CODE_ONLY" "--apply" "the drift check never passes --apply"
+CODE_COMMANDS=$(printf '%s\n' "$CODE_ONLY" | awk '$1 != "echo"')
+lacks "$CODE_COMMANDS" "--apply" "the drift check never passes --apply"
 lacks "$CODE_ONLY" "migrate apply" "the drift check never invokes atlas migrate apply"
 contains "$CODE_ONLY" "run-db-migrations.sh" "the drift check reaches production the one way that works"
 

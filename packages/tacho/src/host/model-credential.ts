@@ -46,6 +46,7 @@ import {
   writeSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { BROKERABLE_HARNESS_PROVIDER, type BrokerableHarness } from "../wire";
 import type { CredentialKind, HeldCredential } from "./credential-store";
 import { claudeManagedSettingsPath } from "./model-base-url";
 import {
@@ -56,16 +57,13 @@ import {
   verifyRunToken,
 } from "./run-token";
 
-export type ModelCredentialHarness = "claude-code" | "codex";
+export type ModelCredentialHarness = BrokerableHarness;
 
-/** The provider each harness's credential is for. */
+/** The provider each harness's credential is for, read off the route table. */
 export const HARNESS_PROVIDER: Record<
   ModelCredentialHarness,
   RunTokenProvider
-> = {
-  "claude-code": "anthropic",
-  codex: "openai",
-};
+> = BROKERABLE_HARNESS_PROVIDER;
 
 export interface ModelCredentialOptions {
   /** The user's home directory; `~/.claude` and `~/.codex` are read under it. */
@@ -100,14 +98,17 @@ export interface ModelCredentialHarnessState {
   /**
    * Why the harness is not brokered when it is not: a ChatGPT login Codex
    * keeps in `auth.json`, a file that is a symlink apply will not rewrite, a
-   * file that does not exist and nothing to write into it.
+   * file that does not exist and nothing to write into it, or a Claude Code
+   * `env` block that sets both a key and a bearer (`two_credentials`), which
+   * custody holds one of per provider and so refuses to take either.
    */
   reason?:
     | "subscription_login"
     | "symlink"
     | "no_file"
     | "no_token"
-    | "foreign_key_present";
+    | "foreign_key_present"
+    | "two_credentials";
   /**
    * Restore only: whether the released secret the caller supplied was written
    * back into the file. False when the caller supplied none, and when the
@@ -315,6 +316,20 @@ function envOf(settings: JsonObject): JsonObject | undefined {
     : undefined;
 }
 
+function isSecret(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+/**
+ * Whether Claude Code's `env` block sets both a key and a bearer. Custody
+ * holds one credential per provider, so taking both would keep the second
+ * and lose the first: apply takes neither and says so, and the person picks
+ * which one the gateway should hold.
+ */
+function holdsBothClaudeMembers(env: JsonObject): boolean {
+  return isSecret(env[CLAUDE_API_KEY]) && isSecret(env[CLAUDE_AUTH_TOKEN]);
+}
+
 /** Serialize the way the file was written: its indent and its final newline. */
 function serializeLike(text: string | undefined, value: JsonObject): string {
   const indent = /\n([ \t]+)"/.exec(text ?? "")?.[1] ?? "  ";
@@ -386,6 +401,7 @@ function describe(
       isTachoHelper(current) &&
       typeof env[CLAUDE_API_KEY] !== "string" &&
       typeof env[CLAUDE_AUTH_TOKEN] !== "string";
+    if (!brokered && holdsBothClaudeMembers(env)) why ??= "two_credentials";
     shadow = managedHelperShadow(
       internals.managedSettingsFile ?? claudeManagedSettingsPath(),
       options.helperCommand ?? "",
@@ -435,6 +451,11 @@ function applyClaude(
   const settings = parseObject(text, file);
   const existing = readSidecar(backup);
   const env = envOf(settings);
+  // Both members set: nothing is taken and the file is left as it is. The
+  // store keys custody by provider, so the second take would replace the
+  // first and unenroll could give back only one of the two.
+  if (env !== undefined && holdsBothClaudeMembers(env))
+    return { changed: false, reason: "two_credentials" };
   const rest: JsonObject = { ...(env ?? {}) };
   const took: Sidecar["taken"] = [];
   for (const [member, kind] of [
@@ -442,7 +463,7 @@ function applyClaude(
     [CLAUDE_AUTH_TOKEN, "bearer"],
   ] as const) {
     const value = rest[member];
-    if (typeof value === "string" && value.length > 0) {
+    if (isSecret(value)) {
       taken.push({
         harness: "claude-code",
         provider: "anthropic",
@@ -768,12 +789,15 @@ export async function peekModelCredentials(
     const document = parseObject(text, file);
     if (harness === "claude-code") {
       const env = envOf(document) ?? {};
+      // The same refusal apply makes, so nothing is sealed that apply will
+      // then leave in the file.
+      if (holdsBothClaudeMembers(env)) continue;
       for (const [member, kind] of [
         [CLAUDE_API_KEY, "api_key"],
         [CLAUDE_AUTH_TOKEN, "bearer"],
       ] as const) {
         const value = env[member];
-        if (typeof value === "string" && value.length > 0)
+        if (isSecret(value))
           taken.push({
             harness,
             provider: "anthropic",
@@ -837,13 +861,29 @@ export function hasOrphanedModelCredential(
 export const STATIC_TOKEN_RENEW_WINDOW_MS = 7 * 24 * 60 * 60_000;
 
 /**
+ * How close to its expiry a static token is re-minted: the renewal window,
+ * or half of what is left of the enrollment when that is shorter. A static
+ * token is clamped to the enrollment's expiry, so inside the last week of an
+ * enrollment a fixed window would call every token due, re-mint it hourly,
+ * and get back one with the same expiry each time.
+ */
+export function staticTokenRenewWindowMs(
+  host: { expires_at?: string },
+  now: number,
+): number {
+  const notAfter = Date.parse(host.expires_at ?? "");
+  if (!Number.isFinite(notAfter)) return STATIC_TOKEN_RENEW_WINDOW_MS;
+  return Math.min(STATIC_TOKEN_RENEW_WINDOW_MS, (notAfter - now) / 2);
+}
+
+/**
  * Whether the run token a Codex file holds is one this host's gateway will
  * still honour for a while: signed by the key on disk, bound to this
  * enrollment, and not inside the renewal window. Anything else is re-minted.
  */
 export function staticTokenStillGood(
   token: string | undefined,
-  host: { host_enrollment_id: string },
+  host: { host_enrollment_id: string; expires_at?: string },
   keyPath: string,
   now: number,
 ): boolean {
@@ -856,5 +896,26 @@ export function staticTokenStillGood(
     provider: "openai",
     now,
   });
-  return verdict.ok && verdict.claims.exp - now > STATIC_TOKEN_RENEW_WINDOW_MS;
+  return (
+    verdict.ok && verdict.claims.exp - now > staticTokenRenewWindowMs(host, now)
+  );
+}
+
+/**
+ * The `OPENAI_API_KEY` member of `~/.codex/auth.json` under `home`, whatever
+ * it holds: a vendor key, a static run token, or nothing. The one reader the
+ * CLI and the daemon share, on the same file apply edits.
+ */
+export function readCodexApiKeyMember(home: string): string | undefined {
+  const file = fileFor("codex", home);
+  try {
+    const text = readTextIfExists(file);
+    if (text === undefined) return undefined;
+    const value = parseObject(text, file)[CODEX_KEY];
+    return typeof value === "string" ? value : undefined;
+  } catch {
+    // Unreadable or not JSON reads as "no token", which re-mints: the same
+    // answer a missing file gives.
+    return undefined;
+  }
 }

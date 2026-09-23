@@ -126,16 +126,16 @@ describe("external decision admission", () => {
     });
     expect(mocks.create).not.toHaveBeenCalled();
   });
-  it.each(["denied", "expired"])(
-    "does not release a %s human decision",
-    async (resolution) => {
-      rule("require_approval");
-      mocks.wait.mockResolvedValue({ resolution });
-      await expect(check()()).rejects.toMatchObject({
-        code: "decision_rule_approval_required",
-      });
-    },
-  );
+  it.each([
+    ["denied", "decision_rule_denied"],
+    ["expired", "decision_rule_approval_required"],
+  ])("does not release a %s human decision", async (resolution, code) => {
+    // Neither releases the call. A person's no is a denial that names the
+    // rule; an expiry is still a request nobody answered.
+    rule("require_approval");
+    mocks.wait.mockResolvedValue({ resolution });
+    await expect(check()()).rejects.toMatchObject({ code });
+  });
   it("refuses a new deny published during the approval wait", async () => {
     rule("require_approval");
     mocks.wait.mockImplementation(async () => {
@@ -227,12 +227,35 @@ describe("external decision admission", () => {
     expect(mocks.external).toHaveBeenCalledTimes(2);
     expect(event).toHaveBeenCalledOnce();
     expect(mocks.wait).not.toHaveBeenCalled();
+    // A person's no is a denial in the same shape a deny rule produces,
+    // not a second request for the approval they just refused.
     mocks.external.mockResolvedValue({
       approvalId: "approval-1",
       expiresAt,
       status: "refused",
     });
     await expect(rebuild()()).rejects.toMatchObject({
+      code: "decision_rule_denied",
+      verdict: { effect: "deny", ruleId: "external-rule" },
+    });
+    // The refusal is final for this invocation: no card is re-raised.
+    expect(event).toHaveBeenCalledOnce();
+  });
+  it("turns a person's refusal in the wait flow into a denial that names the rule", async () => {
+    rule("require_approval");
+    mocks.wait.mockResolvedValueOnce({ resolution: "denied", note: null });
+    const err: unknown = await check()().catch((e: unknown) => e);
+    expect(err).toMatchObject({
+      code: "decision_rule_denied",
+      verdict: { effect: "deny", ruleId: "external-rule" },
+    });
+    expect((err as Error).message).toMatch(/refused by decision rule/);
+    expect((err as Error).message).toMatch(/a person refused/);
+  });
+  it("keeps an expired wait as approval required, since nobody answered", async () => {
+    rule("require_approval");
+    mocks.wait.mockResolvedValueOnce({ resolution: "expired", note: null });
+    await expect(check()()).rejects.toMatchObject({
       code: "decision_rule_approval_required",
     });
   });
@@ -391,8 +414,10 @@ describe("external decision admission", () => {
     await admit();
     vi.advanceTimersByTime(5 * 60_000 + 1);
     mocks.wait.mockResolvedValue({ resolution: "denied" });
+    // A second request was made, so the proof did not carry over; the
+    // person then refused it, which is a denial.
     await expect(admit()).rejects.toMatchObject({
-      code: "decision_rule_approval_required",
+      code: "decision_rule_denied",
     });
     expect(mocks.create).toHaveBeenCalledTimes(2);
   });

@@ -12,6 +12,7 @@ import {
   invoke,
   authorizeExternalCapability,
   emitExternalCapabilityOutcome,
+  type ExternalRefusalCode,
   type KernelSecurityOutcome,
 } from "@oxagen/oxagen/kernel";
 import {
@@ -322,6 +323,33 @@ export function isMutatingCapability(cap: AnyCapability): boolean {
 const APPROVAL_TTL_MS = 5 * 60 * 1000;
 /** The entitled set for a contract no plugin claims: the gate never consults it. */
 const NO_PLUGINS: ReadonlySet<string> = new Set();
+/**
+ * A refusal an external tool gate returned to the model as text. Not thrown:
+ * the model reads the message and carries on. It exists so the boundary's one
+ * audit row (`emitExternalCapabilityOutcome`) records which gate said no,
+ * instead of every text refusal collapsing to `authz_denied`.
+ */
+class ExternalToolRefusal {
+  constructor(
+    readonly code: ExternalRefusalCode | "authz_denied",
+    readonly message: string,
+  ) {}
+}
+
+/**
+ * The code an IAM refusal is audited under. `authorizeExternalCapability`
+ * makes two denials of its own with no policy verdict behind them, and each
+ * keeps its code; everything else is the policy's deny.
+ */
+function iamRefusalCode(
+  reason: string | null,
+): ExternalRefusalCode | "authz_denied" {
+  if (reason === "iam_check_error") return "authz_check_error";
+  if (reason === "decision_not_persisted")
+    return "authz_decision_not_persisted";
+  return "authz_denied";
+}
+
 // HITL window the consent card is answerable in (same as the approval card).
 const CONSENT_PROMPT_TTL_MS = 5 * 60 * 1000;
 
@@ -868,6 +896,15 @@ export async function materializeTools(
             let outcome: KernelSecurityOutcome = "deny";
             let auditError: unknown;
             let parked = false;
+            // A gate that answers the model with text instead of a throw still
+            // owes the audit boundary its code.
+            const refuse = (
+              code: ExternalRefusalCode | "authz_denied",
+              message: string,
+            ): string => {
+              auditError = new ExternalToolRefusal(code, message);
+              return message;
+            };
             try {
               // ── Kill switch (spec §6.11) ────────────────────────────────────
               // A switch on this version, its server, the connection it was
@@ -912,7 +949,7 @@ export async function materializeTools(
                 } catch {
                   /* telemetry must never fail the call */
                 }
-                return denied.message;
+                return refuse("kill_switch_denied", denied.message);
               };
               const killedBeforeGates = await refuseIfKilled();
               if (killedBeforeGates !== null) return killedBeforeGates;
@@ -964,7 +1001,10 @@ export async function materializeTools(
               if (!iamResult.allowed) {
                 await recordIamDenial();
                 const reason = iamResult.reason ?? iamResult.outcome;
-                return `Tool blocked by workspace policy: ${reason}`;
+                return refuse(
+                  iamRefusalCode(iamResult.reason),
+                  `Tool blocked by workspace policy: ${reason}`,
+                );
               }
               // ── End IAM gate ────────────────────────────────────────────────
               const admitExternalDecision = externalDecisionCheck({
@@ -1072,7 +1112,10 @@ export async function materializeTools(
                     "[agent-rbac] MCP tool call with agentRun but no resolution — failing closed",
                   );
                   await meterRbacBlock("McpRuleDenied");
-                  return `Tool blocked: agent run carries no IAM resolution for ${capturedKey}`;
+                  return refuse(
+                    "agent_rule_denied",
+                    `Tool blocked: agent run carries no IAM resolution for ${capturedKey}`,
+                  );
                 }
                 const callScope = effectiveMcpScopeForRun(
                   callAgentRun,
@@ -1095,7 +1138,10 @@ export async function materializeTools(
                     effect: "deny",
                   });
                   await meterRbacBlock("McpRuleDenied");
-                  return `Tool blocked by agent role policy: mcp rule deny for ${serverTool}`;
+                  return refuse(
+                    "agent_rule_denied",
+                    `Tool blocked by agent role policy: mcp rule deny for ${serverTool}`,
+                  );
                 }
                 if (effect === "ask") {
                   const agentSubjectId = callAgentRun.agentPrincipal.id;
@@ -1112,7 +1158,10 @@ export async function materializeTools(
                       effect: "ask",
                     });
                     await meterRbacBlock("ConsentRequired");
-                    return `Tool blocked: agent consent required for ${serverTool}, but this server supports no durable consent`;
+                    return refuse(
+                      "consent_unavailable",
+                      `Tool blocked: agent consent required for ${serverTool}, but this server supports no durable consent`,
+                    );
                   }
                   const agentDecision = await runInTenantScope(
                     { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
@@ -1127,7 +1176,10 @@ export async function materializeTools(
                   );
                   if (agentDecision?.status === "denied") {
                     await meterRbacBlock("ConsentDenied");
-                    return `Tool blocked: agent consent denied for ${capturedKey}`;
+                    return refuse(
+                      "consent_denied",
+                      `Tool blocked: agent consent denied for ${capturedKey}`,
+                    );
                   }
                   if (agentDecision === null) {
                     // Ask-escalation: audit it, then solicit through the SAME
@@ -1144,7 +1196,10 @@ export async function materializeTools(
                       // render a consent card — fail closed, no row written, so
                       // an interactive surface can grant it later.
                       await meterRbacBlock("ConsentRequired");
-                      return `Tool blocked: agent consent required for ${serverTool} (no interactive surface to ask)`;
+                      return refuse(
+                        "consent_unavailable",
+                        `Tool blocked: agent consent required for ${serverTool} (no interactive surface to ask)`,
+                      );
                     }
                     const askExpiresAt = new Date(
                       Date.now() + CONSENT_PROMPT_TTL_MS,
@@ -1197,7 +1252,10 @@ export async function materializeTools(
                     });
                     if (!askGranted) {
                       await meterRbacBlock("ConsentDenied");
-                      return `Tool blocked: agent consent ${askResolution.resolution} for ${capturedKey}`;
+                      return refuse(
+                        "consent_denied",
+                        `Tool blocked: agent consent ${askResolution.resolution} for ${capturedKey}`,
+                      );
                     }
                   }
                   // An active or freshly-granted agent consent covers this
@@ -1259,7 +1317,10 @@ export async function materializeTools(
                   } catch {
                     /* telemetry must never fail the call */
                   }
-                  return `Tool blocked: consent denied for ${capturedKey}`;
+                  return refuse(
+                    "consent_denied",
+                    `Tool blocked: consent denied for ${capturedKey}`,
+                  );
                 }
                 if (decision === null) {
                   // No active grant — solicit consent via the HITL approval row,
@@ -1332,7 +1393,10 @@ export async function materializeTools(
                     } catch {
                       /* telemetry must never fail the call */
                     }
-                    return `Tool blocked: consent ${resolution.resolution} for ${capturedKey}`;
+                    return refuse(
+                      "consent_denied",
+                      `Tool blocked: consent ${resolution.resolution} for ${capturedKey}`,
+                    );
                   }
                 }
               }
@@ -1354,7 +1418,10 @@ export async function materializeTools(
               );
               if (!freshIam.allowed) {
                 await recordIamDenial();
-                return `Tool blocked by workspace policy: ${freshIam.reason ?? freshIam.outcome}`;
+                return refuse(
+                  iamRefusalCode(freshIam.reason),
+                  `Tool blocked by workspace policy: ${freshIam.reason ?? freshIam.outcome}`,
+                );
               }
               // No interactive wait follows the final IAM check.
               await checkDecisionRules({
