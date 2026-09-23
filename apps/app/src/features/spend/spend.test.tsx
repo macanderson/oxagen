@@ -877,9 +877,9 @@ describe("Spend › Findings", () => {
     expect(
       screen.getByText("Calls the counterfactual prices").closest("div"),
     ).toHaveTextContent("2,980 of 3,106");
-    expect(screen.getByText("Tokens").closest("div")).toHaveTextContent(
-      "41,200 measured · 1,900 counterfactual",
-    );
+    expect(
+      screen.getByText("Tokens", { selector: "dt" }).closest("div"),
+    ).toHaveTextContent("41,200 measured · 1,900 counterfactual");
     expect(
       screen.getByText("What the cited calls cost").closest("div"),
     ).toHaveTextContent("$1,030.40");

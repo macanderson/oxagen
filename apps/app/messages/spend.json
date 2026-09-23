@@ -477,8 +477,7 @@
       "cacheNote": "Cache reads divided by uncached input and cache reads.",
       "byModel": "By model",
       "model": "Model",
-      "basis": "Recorded spend",
-      "empty": "No token counts were recorded in this period."
+      "basis": "Recorded spend"
     }
   }
 }

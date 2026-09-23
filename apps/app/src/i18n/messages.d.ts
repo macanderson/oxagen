@@ -4769,7 +4769,6 @@ type Messages = {
       byModel: string;
       model: string;
       basis: string;
-      empty: string;
     };
   };
   steering: {
