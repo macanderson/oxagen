@@ -6,11 +6,11 @@
 //
 // The roster is `list_mcp_servers`, so every row is reached over MCP today; a
 // provider reached over `http`, `sdk` or a harness hook has nowhere to live
-// until providers are stored apart from their transport (#3862).
+// until providers are stored apart from their transport (#3917).
 //
 // The warning the design draws under the table counts connections with an
 // expired token or a passed review date. Neither is recorded on a connection
-// (#3863), so the page says it cannot count them rather than printing none.
+// (#3918), so the page says it cannot count them rather than printing none.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {

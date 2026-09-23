@@ -1,7 +1,7 @@
 // Policy (mockup `tools.md`, Policy tab): what decides a tool call before it
 // leaves. The design's policy versions (G2) have no store: nothing holds a
 // version, its rules or its tests, so the panel keeps its heading, the store
-// name and Draft a version, and says the versions are not recorded (#3864).
+// name and Draft a version, and says the versions are not recorded (#3920).
 // Where a version lives, the conditions a rule may test and the sequence rule
 // describe that store as it is specified, and say so in one line.
 //

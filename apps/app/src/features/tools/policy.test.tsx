@@ -105,9 +105,10 @@ describe("Tools › policy", () => {
   it("is the tab that is selected, with the rules as its one gold action", async () => {
     await renderPolicy({});
     const tabs = screen.getByRole("tablist", { name: "Tools sections" });
-    expect(
-      within(tabs).getByRole("tab", { name: "Policy" }),
-    ).toHaveAttribute("aria-selected", "true");
+    expect(within(tabs).getByRole("tab", { name: "Policy" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     // New tool yields the gold on a tab that carries its own primary.
     expect(screen.getByTestId("tools-new-tool-open").className).not.toContain(
       "bg-button-primary-bg",
@@ -126,12 +127,16 @@ describe("Tools › policy", () => {
     expect(within(panel).getByText("tools.policy_versions")).toBeVisible();
     expect(
       within(panel).getByTestId("tools-policy-versions-not-backed"),
-    ).toHaveAttribute("data-gap", "#3864");
+    ).toHaveAttribute("data-gap", "#3920");
     expect(within(panel).queryByRole("table")).not.toBeInTheDocument();
     fireEvent.click(within(panel).getByTestId("tools-policy-draft-open"));
     const dialog = await screen.findByTestId("tools-policy-draft");
-    expect(within(dialog).getByTestId("tools-policy-draft-confirm")).toBeDisabled();
-    expect(within(dialog).getByText(/Drafting a policy version is not built yet/)).toBeVisible();
+    expect(
+      within(dialog).getByTestId("tools-policy-draft-confirm"),
+    ).toBeDisabled();
+    expect(
+      within(dialog).getByText(/Drafting a policy version is not built yet/),
+    ).toBeVisible();
   });
 
   it("draws where a version lives, the conditions a rule may test and the sequence rule with its plain sentence", async () => {
@@ -162,7 +167,9 @@ describe("Tools › policy", () => {
 
   it("offers a member no draft and no rule write", async () => {
     await renderPolicy({}, viewer("member"));
-    expect(screen.queryByTestId("tools-policy-draft-open")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("tools-policy-draft-open"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId("rule-create-open")).not.toBeInTheDocument();
   });
 });

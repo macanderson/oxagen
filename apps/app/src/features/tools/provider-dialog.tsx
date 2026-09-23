@@ -8,11 +8,11 @@
 // Every row in the roster is an MCP server today, so the transport is `mcp`
 // and the wire is the one the row records. What the record does not hold is
 // said, not filled: the system's description, the last import, the belts and
-// agents it reaches (#3852, #3862), and its authorization, which has no token
-// lifecycle behind it yet (#3863).
+// agents it reaches (#3852, #3917), and its authorization, which has no token
+// lifecycle behind it yet (#3918).
 //
 // The footer's writes: Remove is `delete_mcp_server`, Re-import tools is
-// `import_tools` on this provider. Edit has no write (#3862) and says so.
+// `import_tools` on this provider. Edit has no write (#3917) and says so.
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import type { McpServer, ToolVersion } from "@/data/contracts/tools";

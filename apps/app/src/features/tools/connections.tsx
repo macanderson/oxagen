@@ -6,7 +6,7 @@
 //
 // The log's Tool version and Agent columns have no field on the grant record,
 // which carries the provider the credential was presented to and the run
-// (#3867). Each says so, with the provider it does carry beneath.
+// (#3923). Each says so, with the provider it does carry beneath.
 //
 // The mockup's Connections table above the log is here now, over
 // `list_connections`. Three of its columns are not: Owner, Reviewed and Next
