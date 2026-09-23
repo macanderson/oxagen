@@ -1,8 +1,12 @@
+import { lstat } from "node:fs/promises";
+import { join } from "node:path";
 import type { ExecAsync } from "../host/service";
 
 export const WORKTREE_PATCH_MAX_BYTES = 256 * 1024;
 export const WORKTREE_UNTRACKED_MAX = 32;
 const HASH = /^[a-f0-9]{40,64}$/i;
+/** Changed paths whose size and times join the fingerprint; past this, status alone is compared. */
+export const WORKTREE_FINGERPRINT_STAT_MAX = 512;
 
 export interface WorktreeSnapshot {
   version: 1;
@@ -36,6 +40,50 @@ export function safeRepositoryUrl(remote: string): string | null {
   }
 }
 
+/** The path of one `git status --porcelain=v2 -z` record, or null for a record with none. */
+function statusPath(record: string): string | null {
+  // Ordinary changes carry 8 fields before the path, unmerged ones 10, and
+  // untracked or ignored entries only their marker (`--no-renames` rules out
+  // the rename record and its second path).
+  const fields = record.startsWith("1 ")
+    ? 8
+    : record.startsWith("u ")
+      ? 10
+      : record.startsWith("? ") || record.startsWith("! ")
+        ? 1
+        : null;
+  if (fields === null) return null;
+  const parts = record.split(" ");
+  return parts.length > fields ? parts.slice(fields).join(" ") : null;
+}
+
+/**
+ * The worktree state a capture reads: every changed and untracked path, with
+ * the size and change times of each. `git status` alone misses a second edit
+ * to a file that was already modified, so the file times carry that. A
+ * missing file stats as absent, which is itself state.
+ */
+async function worktreeFingerprint(
+  status: string | undefined,
+  root: string,
+): Promise<string | undefined> {
+  if (status === undefined) return undefined;
+  const records = status.split("\0").filter(Boolean);
+  const stats = await Promise.all(
+    records.slice(0, WORKTREE_FINGERPRINT_STAT_MAX).map(async (record) => {
+      const path = statusPath(record);
+      if (path === null) return "";
+      try {
+        const info = await lstat(join(root, path));
+        return `${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+      } catch {
+        return "absent";
+      }
+    }),
+  );
+  return JSON.stringify([records, stats]);
+}
+
 /** Snapshot bytes describe the observed tree, including changes present before the run. */
 export async function readWorktreeSnapshot(
   exec: ExecAsync,
@@ -66,6 +114,15 @@ export async function readWorktreeSnapshot(
   const root = (await read(["rev-parse", "--show-toplevel"]))?.trim();
   if (!root) return undefined;
   directory = root;
+  const readStatus = () =>
+    read([
+      "status",
+      "--porcelain=v2",
+      "-z",
+      "--untracked-files=all",
+      "--no-renames",
+    ]);
+  const stateBefore = await worktreeFingerprint(await readStatus(), root);
   const [headRaw, remote, untracked] = await Promise.all([
     read(["rev-parse", "HEAD"]),
     read(["remote", "get-url", "origin"]),
@@ -133,6 +190,13 @@ export async function readWorktreeSnapshot(
   }
   const headAfter = (await read(["rev-parse", "HEAD"]))?.trim();
   if (headAfter !== head) limitations.push("head_changed_during_capture");
+  // The patch is several reads, so an edit between them (a formatter, a
+  // concurrent subagent) can splice two worktree states into one patch.
+  const stateAfter = await worktreeFingerprint(await readStatus(), root);
+  if (stateBefore === undefined || stateAfter === undefined)
+    limitations.push("worktree_state_unverified");
+  else if (stateAfter !== stateBefore)
+    limitations.push("worktree_changed_during_capture");
   if (patch.includes("Binary files "))
     limitations.push("binary_content_not_captured");
   return {
