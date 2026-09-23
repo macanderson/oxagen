@@ -51,10 +51,12 @@ const item = {
   beltSize: null,
   runs30d: 0,
   spend30d: null,
+  tokens30d: null,
   proven30d: null,
   mandates: null,
   incidents: 0,
   tamperIncidents: 0,
+  tamperIncidentsRecorded: 0,
   credentials: 0,
   hosts: 0,
   host: null,
@@ -68,6 +70,7 @@ const listOut = {
     enrolled: 0,
     holdingMandate: null,
     tamperIncidents: 0,
+    tamper: { recorded: 0, open: 0, newest: null },
   },
 };
 const getOut = {

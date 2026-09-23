@@ -33,9 +33,11 @@ export function agentRow(overrides: Partial<AgentRow> = {}): AgentRow {
     enforcementTier: "gateway",
     runs30d: 42,
     spend30d: { micros: "12500000", currency: "USD", basis: "client_attested" },
+    tokens30d: { total: 1_840_000, cacheReadRate: 0.62, sessions: 40 },
     mandates: 0,
     incidents: 1,
     tamperIncidents: 0,
+    tamperIncidentsRecorded: 0,
     ...overrides,
   };
 }
@@ -53,6 +55,15 @@ export function agentPage(
       enrolled: 2,
       holdingMandate: 1,
       tamperIncidents: 3,
+      tamper: {
+        recorded: 4,
+        open: 3,
+        newest: {
+          agentKey: "acme.core.release-bot",
+          kind: "hooks_removed",
+          detectedAt: "2026-09-11T09:16:04.000Z",
+        },
+      },
       ...totals,
     },
   });

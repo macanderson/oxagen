@@ -330,20 +330,24 @@ export async function readAssignableRoles(
  * refuses a role whose grants exceed the assigner's own (the delegation
  * ceiling), so an assignment can never widen what the person doing it holds.
  * `alreadyAssigned` comes back true when the agent held the role already, and
- * nothing was written.
+ * nothing was written. The reason, when the person gave one, rides the
+ * capability's input into the audit event; a blank one is left out.
  */
 export async function assignAgentRole(
   org: string,
   ws: string,
   agentId: string,
   roleName: string,
+  reason = "",
 ): Promise<ActionResult<{ roleName: string; alreadyAssigned: boolean }>> {
   const name = roleName.trim();
   if (name === "") return refuseField("roleName");
+  const why = reason.trim();
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, agentRoleAssign, {
     agentId,
     roleName: name,
+    ...(why === "" ? {} : { reason: why }),
   });
   return result.ok
     ? {

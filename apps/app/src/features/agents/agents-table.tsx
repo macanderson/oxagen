@@ -8,12 +8,17 @@
 // which columns render and never which agents are listed: the search, the
 // facets that are still in view, the sort and the page survive a switch.
 //
-// **A column no store backs says so in every row.** Steering, Toolbelt, Belt
-// and Tokens 30d have no per-agent record yet, so each cell prints the
-// not-recorded words rather than a count someone typed. The Tier, Health and
-// Incidents cells read the tier the agent's latest wrapped session recorded
-// and the open tamper incidents on its hosts, and show that and nothing
-// stronger: an enrolled agent with no recorded tier has no health verdict.
+// **A column no store backs says so in every row.** Steering, Toolbelt and
+// Belt have no per-agent record yet, and no store records a runtime's kind, so
+// each prints the not-recorded words, naming the missing store on hover,
+// rather than a count someone typed. Every header still sorts, as the design's
+// list controls do; a column with nothing recorded sorts as a tie. Tokens 30d
+// is the wrapped sessions' reported usage and says so on hover. The Tier and
+// Health cells read the tier the agent's latest wrapped session recorded and
+// the open tamper incidents on its hosts, and show that and nothing stronger:
+// an enrolled agent with no recorded tier has no health verdict. The
+// Incidents column counts every tamper incident the store keeps on the
+// agent's hosts, the set the Tamper incidents tile sums.
 //
 // **The controls work over the rows in hand.** The read asks for the
 // contract's largest page; a workspace with more agents than that pages the
@@ -36,7 +41,7 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
-import { formatCount } from "@/ui/money-format";
+import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
 import { cell, headCell, numericCell } from "@/ui/table";
@@ -152,6 +157,34 @@ function TierWord({ row }: { row: AgentRow }) {
   );
 }
 
+/** The sort key of a column no store records: every row ties. */
+const notRecorded = (): null => null;
+
+/**
+ * Tokens 30d: the wrapped sessions' reported total over the share of input
+ * read from cache. The basis is on hover, because ledger runs' tokens are not
+ * in the total and a bare number would claim they were.
+ */
+function Tokens({ row }: { row: AgentRow }) {
+  const t = useTranslations("agents.list.cells");
+  const locale = useLocale();
+  const tokens = row.tokens30d;
+  if (tokens === null) return <NotRecordedValue gap="tokens" />;
+  return (
+    <span
+      data-basis="wrapped_sessions"
+      title={t("tokensBasis", { count: tokens.sessions })}
+    >
+      {formatCount(tokens.total, locale)}
+      <Sub>
+        {tokens.cacheReadRate === null
+          ? t("cacheNotRecorded")
+          : t("cached", { rate: formatRatio(tokens.cacheReadRate, locale) })}
+      </Sub>
+    </span>
+  );
+}
+
 function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
   const t = useTranslations("agents");
   const locale = useLocale();
@@ -210,11 +243,13 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
       {
         key: "steering",
         label: t("list.columns.steering"),
+        sort: notRecorded,
         render: () => <NotRecordedValue gap="steering" />,
       },
       {
         key: "toolbelt",
         label: t("list.columns.toolbelt"),
+        sort: notRecorded,
         render: () => <NotRecordedValue gap="toolbelt" />,
       },
       {
@@ -227,6 +262,8 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
               {row.host ?? t("list.cells.none")}
             </span>
             <span className="block text-[10px] text-muted-foreground">
+              <NotRecordedValue gap="runtimeKind" />
+              {" · "}
               {row.enforcementTier === null ? (
                 <NotRecordedValue gap="tier" />
               ) : (
@@ -305,7 +342,8 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
       key: "belt",
       label: t("list.columns.belt"),
       numeric: true,
-      render: () => <NotRecordedValue gap="toolbelt" />,
+      sort: notRecorded,
+      render: () => <NotRecordedValue gap="belt" />,
     },
     {
       key: "runs",
@@ -334,7 +372,8 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
       key: "tokens",
       label: t("list.columns.tokens"),
       numeric: true,
-      render: () => <NotRecordedValue gap="tokens" />,
+      sort: (row) => row.tokens30d?.total ?? null,
+      render: (row) => <Tokens row={row} />,
     },
     {
       key: "mandates",
@@ -352,12 +391,12 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
     {
       key: "incidents",
       label: t("list.columns.incidents"),
-      sort: (row) => row.tamperIncidents,
+      sort: (row) => row.tamperIncidentsRecorded,
       render: (row) =>
-        row.tamperIncidents === 0 ? (
+        row.tamperIncidentsRecorded === 0 ? (
           <span className="text-muted-foreground">{count(0)}</span>
         ) : (
-          <Badge tone="critical">{count(row.tamperIncidents)}</Badge>
+          <Badge tone="critical">{count(row.tamperIncidentsRecorded)}</Badge>
         ),
     },
     actions,
@@ -396,6 +435,8 @@ function RowActions({
             ws={ws}
             agentId={row.id}
             agentSlug={row.slug}
+            agentKey={row.agentKey ?? row.slug}
+            operatorName={row.operatorName}
             label={t("roles")}
             after={routes.agents(org, ws)}
           />
@@ -404,6 +445,12 @@ function RowActions({
             ws={ws}
             agentId={row.id}
             name={row.agentKey ?? row.name}
+            slug={row.slug}
+            holds={{
+              mandates: row.mandates ?? 0,
+              credentials: row.credentials,
+              hosts: row.hosts,
+            }}
             after={routes.agents(org, ws)}
             danger
           />
@@ -624,14 +671,19 @@ export function AgentsTable({
                   <th
                     key={column.key}
                     scope="col"
+                    // The action column's header is empty, as the design
+                    // draws it, so a phone card shows its buttons with no
+                    // label; the name is for assistive technology alone.
+                    aria-label={
+                      column.key === "actions" ? column.label : undefined
+                    }
                     aria-sort={
                       column.sort === undefined ? undefined : (sorted ?? "none")
                     }
                     className={`${headCell} ${align}`}
                   >
-                    {column.key === "actions" ? (
-                      <span className="sr-only">{column.label}</span>
-                    ) : column.sort === undefined ? (
+                    {column.key === "actions" ? null : column.sort ===
+                      undefined ? (
                       column.label
                     ) : (
                       <button

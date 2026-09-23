@@ -36,6 +36,7 @@ function renderActions(suspended = false) {
         ws="core-platform"
         agentId="agt_releasebot"
         name="Release bot"
+        slug="release-bot"
         suspended={suspended}
         here={HERE}
         list={LIST}
@@ -48,6 +49,21 @@ async function confirm(open: string, testId: string, action: string) {
   await userEvent.click(screen.getByRole("button", { name: open }));
   const dialog = screen.getByTestId(testId);
   await userEvent.click(within(dialog).getByRole("button", { name: action }));
+  return dialog;
+}
+
+/** Deregister waits on the "cannot be undone" checkbox, as the design draws it. */
+async function deregister() {
+  await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
+  const dialog = screen.getByTestId("retire-agent");
+  await userEvent.click(
+    within(dialog).getByRole("checkbox", {
+      name: /I understand this cannot be undone/,
+    }),
+  );
+  await userEvent.click(
+    within(dialog).getByRole("button", { name: "Deregister" }),
+  );
   return dialog;
 }
 
@@ -132,7 +148,7 @@ describe("AgentActions", () => {
       value: { retiredAt: "2026-09-15T09:00:00.000Z" },
     });
     renderActions();
-    await confirm("Deregister", "retire-agent", "Deregister");
+    await deregister();
     expect(retireAgent).toHaveBeenCalledWith(
       "acme",
       "core-platform",
@@ -208,7 +224,7 @@ describe("AgentActions", () => {
       code: "org_role_required",
     });
     renderActions();
-    await confirm("Deregister", "retire-agent", "Deregister");
+    await deregister();
     expect(
       await screen.findByTestId("retire-agent-failure"),
     ).toBeInTheDocument();
@@ -230,17 +246,81 @@ describe("RetireAgent", () => {
           org="acme"
           ws="core-platform"
           agentId="agt_other"
-          name="Other"
+          name="acme.core.other"
+          slug="other"
+          holds={{ mandates: 1, credentials: 2, hosts: 1 }}
           after={LIST}
         />
       </IntlProvider>,
     );
-    await confirm("Deregister", "retire-agent", "Deregister");
+    await deregister();
     expect(retireAgent).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       "agt_other",
     );
     expect(router.replace).toHaveBeenCalledWith(LIST);
+  });
+
+  it("draws the design's dialog: the key, what is kept and what ends, and no pull request it cannot open", async () => {
+    render(
+      <IntlProvider>
+        <RetireAgent
+          org="acme"
+          ws="core-platform"
+          agentId="agt_other"
+          name="acme.core.other"
+          slug="other"
+          holds={{ mandates: 1, credentials: 2, hosts: 1 }}
+          after={LIST}
+          danger
+        />
+      </IntlProvider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
+    const dialog = screen.getByTestId("retire-agent");
+    expect(
+      within(dialog).getByRole("heading", { name: "Deregister agent" }),
+    ).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("acme.core.other");
+    expect(
+      within(dialog)
+        .getAllByRole("definition")
+        .map((dd) => dd.textContent),
+    ).toEqual([
+      "every run, frame and receipt. The record is never deleted.",
+      "1 mandate, 2 credentials, 1 host enrollment",
+    ]);
+    const pr = dialog.querySelector("[data-not-backed]");
+    expect(pr).toHaveAttribute("data-gap", "#3855");
+    expect(pr).toHaveTextContent(".oxagen/agents/other.toml");
+  });
+
+  it("keeps Deregister disabled until the person says they understand (negative)", async () => {
+    render(
+      <IntlProvider>
+        <RetireAgent
+          org="acme"
+          ws="core-platform"
+          agentId="agt_other"
+          name="acme.core.other"
+          slug="other"
+          after={LIST}
+        />
+      </IntlProvider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Deregister" }));
+    const dialog = screen.getByTestId("retire-agent");
+    const confirmButton = within(dialog).getByRole("button", {
+      name: "Deregister",
+    });
+    expect(confirmButton).toBeDisabled();
+    await userEvent.click(confirmButton);
+    expect(retireAgent).not.toHaveBeenCalled();
+    expect(dialog).toHaveTextContent(
+      "its mandates, credentials and host enrollments",
+    );
+    await userEvent.click(within(dialog).getByRole("checkbox"));
+    expect(confirmButton).toBeEnabled();
   });
 });

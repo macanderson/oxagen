@@ -108,10 +108,12 @@ export function Instant({ at }: { at: string }) {
 type ListGap =
   | "steering"
   | "toolbelt"
+  | "belt"
   | "tokens"
   | "commit"
   | "organization"
-  | "tier";
+  | "tier"
+  | "runtimeKind";
 
 /**
  * A value the store did not record. With `gap`, the cell names the missing

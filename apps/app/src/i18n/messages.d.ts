@@ -83,17 +83,21 @@ type Messages = {
           title: string;
           notYet: string;
           observe: string;
+          mixed: string;
         };
         mandate: {
           title: string;
           holder: string;
           more: string;
           none: string;
+          scope: string;
         };
         tamper: {
           title: string;
           open: string;
+          resolved: string;
           none: string;
+          scope: string;
         };
       };
       title: string;
@@ -134,6 +138,9 @@ type Messages = {
         runs30d: string;
         principalPending: string;
         none: string;
+        cached: string;
+        cacheNotRecorded: string;
+        tokensBasis: string;
       };
       health: {
         tamper: string;
@@ -191,6 +198,8 @@ type Messages = {
         open: string;
         close: string;
         invalidSlug: string;
+        design: string;
+        designNote: string;
       };
       states: {
         loading: string;
@@ -198,7 +207,10 @@ type Messages = {
           title: string;
           body: string;
           retry: string;
-          readAt: string;
+          incident: string;
+          trace: string;
+          traceUnrecorded: string;
+          regionUnrecorded: string;
         };
         denied: {
           title: string;
@@ -210,6 +222,8 @@ type Messages = {
           neededValue: string;
           decidedBy: string;
           decidedByValue: string;
+          request: string;
+          policyUnrecorded: string;
         };
         pending: {
           title: string;
@@ -223,6 +237,18 @@ type Messages = {
         commit: string;
         organization: string;
         tier: string;
+        runtimeKind: string;
+        belt: string;
+        policy: string;
+        trace: string;
+      };
+      stubs: {
+        requestTitle: string;
+        requestRole: string;
+        requestBody: string;
+        requestLink: string;
+        incidentTitle: string;
+        incidentBody: string;
       };
     };
     detail: {
@@ -271,8 +297,8 @@ type Messages = {
         assign: {
           open: string;
           title: string;
-          body: string;
           field: string;
+          hint: string;
           builtIn: string;
           loading: string;
           empty: string;
@@ -280,6 +306,11 @@ type Messages = {
           partial: string;
           confirm: string;
           pending: string;
+          why: string;
+          whyPlaceholder: string;
+          note: string;
+          noteNoOperator: string;
+          cancel: string;
         };
         revoke: {
           open: string;
@@ -637,6 +668,14 @@ type Messages = {
         open: string;
         title: string;
         body: string;
+        pullRequest: string;
+        kept: string;
+        keptValue: string;
+        ends: string;
+        endsValue: string;
+        endsUnknown: string;
+        understand: string;
+        understandHint: string;
         confirm: string;
         pending: string;
       };

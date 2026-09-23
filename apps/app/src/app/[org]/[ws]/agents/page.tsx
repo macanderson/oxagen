@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { dataSource } from "@/data/source";
 import { Agents, AgentsCreate, AgentsLoading } from "@/features/agents";
+import { getAuthUser } from "@/features/auth";
 import { requireViewer } from "@/server/viewer";
 import { firstParam } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
@@ -28,6 +29,9 @@ export default async function AgentsPage({
   const ctx = await requireViewer(org, ws);
   const { cursor } = await searchParams;
   const t = await getTranslations();
+  // The denied state names who is signed in; the session requireViewer read.
+  const user = await getAuthUser();
+  const viewerName = user === null ? "" : user.name || user.email;
   return (
     <main
       id="main"
@@ -38,6 +42,7 @@ export default async function AgentsPage({
           ctx={ctx}
           source={dataSource()}
           cursor={firstParam(cursor) ?? null}
+          viewerName={viewerName}
           header={
             <PageHeader
               eyebrow={ctx.wsName}

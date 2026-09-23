@@ -10,9 +10,10 @@
 // Claude Code is not this either: it leaves the page for the Register Agent
 // gate, which wraps an agent that already runs.
 //
-// The definition carries no avatar field, so the Avatar row shows the initials
-// the agent will show and says so, rather than offering a designer whose
-// choice nothing would store.
+// The definition carries no avatar field (#3855), so the Avatar row shows the
+// initials the agent will show. Its Design button, which the design draws,
+// says what designing would need rather than opening a designer whose choice
+// nothing would store.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
@@ -57,6 +58,7 @@ export function RegisterAgent({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
+  const [designing, setDesigning] = useState(false);
 
   const slugOk = slug.length <= SLUG_MAX && SLUG.test(slug);
   const path = `.oxagen/agents/${slug === "" ? "<slug>" : slug}.toml`;
@@ -114,6 +116,7 @@ export function RegisterAgent({
             setFailure(null);
             setOpened(null);
             setSlug("");
+            setDesigning(false);
           }
         }}
         title={t("title")}
@@ -156,7 +159,12 @@ export function RegisterAgent({
                 id={`${TEST_ID}-slug-hint`}
                 className="text-xs text-muted-foreground"
               >
-                {slug !== "" && !slugOk ? t("invalidSlug") : t("slugHint")}
+                {slug !== "" && !slugOk
+                  ? t("invalidSlug")
+                  : t.rich("slugHint", {
+                      slug: slug === "" ? "<slug>" : slug,
+                      mono: (chunks) => <span className={mono}>{chunks}</span>,
+                    })}
               </p>
             </div>
             <div className="flex flex-col gap-1">
@@ -168,10 +176,31 @@ export function RegisterAgent({
                   size={44}
                   shape="agent"
                 />
-                <span className="text-xs text-muted-foreground">
+                <span className="min-w-0 text-xs text-muted-foreground">
                   {t("avatarHint")}
                 </span>
+                <button
+                  type="button"
+                  aria-expanded={designing}
+                  data-touch-target=""
+                  className={`${buttonSecondary} ml-auto flex-none`}
+                  onClick={() => {
+                    setDesigning((was) => !was);
+                  }}
+                >
+                  {t("design")}
+                </button>
               </span>
+              {designing ? (
+                <p
+                  role="status"
+                  data-not-backed=""
+                  data-gap="#3855"
+                  className="text-xs text-muted-foreground"
+                >
+                  {t("designNote")}
+                </p>
+              ) : null}
             </div>
             <div className="flex flex-col gap-1">
               <label htmlFor={`${TEST_ID}-harness`}>{t("harness")}</label>

@@ -1345,6 +1345,44 @@ describe("assignAgentRole", () => {
     );
   });
 
+  it("sends the reason, trimmed, into the capability's input, and leaves a blank one out", async () => {
+    invoke.mockResolvedValue({
+      assigned: true,
+      alreadyAssigned: false,
+      agentId: "agt_releasebot",
+      roleId: "rol_contributor",
+      roleName: "Agent Contributor",
+    });
+    await assignAgentRole(
+      "acme",
+      "core-platform",
+      "agt_releasebot",
+      "Agent Contributor",
+      "  Cuts the September release  ",
+    );
+    expect(invoke).toHaveBeenLastCalledWith(
+      "assign_agent_role",
+      {
+        agentId: "agt_releasebot",
+        roleName: "Agent Contributor",
+        reason: "Cuts the September release",
+      },
+      expect.objectContaining(TENANT),
+    );
+    await assignAgentRole(
+      "acme",
+      "core-platform",
+      "agt_releasebot",
+      "Agent Contributor",
+      "   ",
+    );
+    expect(invoke).toHaveBeenLastCalledWith(
+      "assign_agent_role",
+      { agentId: "agt_releasebot", roleName: "Agent Contributor" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
   it("reports a role the agent already held, which wrote nothing", async () => {
     invoke.mockResolvedValue({
       assigned: true,

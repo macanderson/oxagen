@@ -105,9 +105,26 @@ describe("Register an agent", () => {
     expect(dialog).toHaveTextContent(
       "This does not write Postgres. It opens a Context PR that adds .oxagen/agents/perf-watch.toml and the generated harness file beside it.",
     );
+    expect(dialog).toHaveTextContent(
+      "The agent key ends in .perf-watch and is immutable.",
+    );
     expect(
       within(dialog).getByRole("button", { name: "Cancel" }),
     ).toBeInTheDocument();
+  });
+
+  it("offers Design on the avatar and says what designing needs, since the definition stores no avatar", () => {
+    mount();
+    const dialog = openRegister();
+    const design = within(dialog).getByRole("button", { name: "Design" });
+    expect(design).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(design);
+    expect(design).toHaveAttribute("aria-expanded", "true");
+    const note = dialog.querySelector("[data-not-backed]");
+    expect(note).toHaveAttribute("data-gap", "#3855");
+    expect(note).toHaveTextContent(
+      "Designing an avatar needs an avatar field on the definition",
+    );
   });
 
   it("opens the Context PR with the slug, harness and tier chosen, and links the pull request", async () => {

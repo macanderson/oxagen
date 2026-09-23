@@ -52,11 +52,25 @@ const AgentRow = z.object({
   runs30d: Count,
   /** Priced wrapped sessions in the last 30 days, with the basis the harness reported. */
   spend30d: Cost.nullable(),
+  /**
+   * The tokens the agent's wrapped sessions reported over the last 30 days,
+   * with cache read over input; null when no session reported a token.
+   * Ledger runs' tokens are not in it.
+   */
+  tokens30d: z
+    .object({
+      total: Count,
+      cacheReadRate: z.number().min(0).max(1).nullable(),
+      sessions: Count,
+    })
+    .nullable(),
   /** Active mandates the principal holds; null on a row with no principal. */
   mandates: Count.nullable(),
   incidents: Count,
-  /** Open incidents of a tamper kind: the set the tile and the Audit page count. */
+  /** Open incidents of a tamper kind, which is what the Health cell reads. */
   tamperIncidents: Count,
+  /** Every tamper incident on the agent's hosts the store keeps: the Incidents column. */
+  tamperIncidentsRecorded: Count,
 });
 
 export const AgentPage = z.object({
@@ -69,6 +83,18 @@ export const AgentPage = z.object({
     /** Agents in the workspace holding at least one active mandate. */
     holdingMandate: Count.nullable(),
     tamperIncidents: Count,
+    /** The Tamper incidents tile: sums over the agents' records, and the newest incident. */
+    tamper: z.object({
+      recorded: Count,
+      open: Count,
+      newest: z
+        .object({
+          agentKey: z.string().min(1),
+          kind: z.string().min(1),
+          detectedAt: Instant,
+        })
+        .nullable(),
+    }),
   }),
 });
 export type AgentPage = z.infer<typeof AgentPage>;

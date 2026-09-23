@@ -38,10 +38,18 @@ const recorded: Item = {
   beltSize: null,
   runs30d: 42,
   spend30d: { micros: "0012500000", currency: "USD", basis: "client_attested" },
+  tokens30d: {
+    total: 1_400,
+    input: 1_000,
+    cacheRead: 600,
+    cacheReadRate: 0.6,
+    sessions: 3,
+  },
   proven30d: null,
   mandates: 2,
   incidents: 1,
   tamperIncidents: 1,
+  tamperIncidentsRecorded: 2,
   credentials: 1,
   hosts: 1,
   host: "build-01",
@@ -60,14 +68,25 @@ const bare: Item = {
   enforcementTier: null,
   runs30d: 0,
   spend30d: null,
+  tokens30d: null,
   mandates: null,
   incidents: 0,
   tamperIncidents: 0,
+  tamperIncidentsRecorded: 0,
   host: null,
 };
 
 describe("toAgentPage", () => {
   it("carries each row and the workspace totals, with spend in canonical micros and its basis", () => {
+    const tamper = {
+      recorded: 3,
+      open: 2,
+      newest: {
+        agentKey: "acme.core.release-bot",
+        kind: "hooks_removed",
+        detectedAt: "2026-09-11T09:16:04.000Z",
+      },
+    };
     const page = toAgentPage({
       items: [recorded, bare],
       nextCursor: "c2",
@@ -76,6 +95,7 @@ describe("toAgentPage", () => {
         enrolled: 5,
         holdingMandate: 1,
         tamperIncidents: 2,
+        tamper,
       },
     });
     expect(page).toEqual({
@@ -101,9 +121,11 @@ describe("toAgentPage", () => {
             currency: "USD",
             basis: "client_attested",
           },
+          tokens30d: { total: 1_400, cacheReadRate: 0.6, sessions: 3 },
           mandates: 2,
           incidents: 1,
           tamperIncidents: 1,
+          tamperIncidentsRecorded: 2,
         },
         {
           id: "agt_legacy",
@@ -122,9 +144,11 @@ describe("toAgentPage", () => {
           enforcementTier: null,
           runs30d: 0,
           spend30d: null,
+          tokens30d: null,
           mandates: null,
           incidents: 0,
           tamperIncidents: 0,
+          tamperIncidentsRecorded: 0,
         },
       ],
       nextCursor: "c2",
@@ -133,6 +157,7 @@ describe("toAgentPage", () => {
         enrolled: 5,
         holdingMandate: 1,
         tamperIncidents: 2,
+        tamper,
       },
     });
     expect(AgentPage.safeParse(page).success).toBe(true);

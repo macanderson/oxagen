@@ -10,15 +10,26 @@
 // still assignable, and the dialog says the assignment governs nothing until
 // the tier enforces it rather than leaving the reader to assume it does.
 //
+// Assign follows the design's `assignrole` dialog: the agent key under the
+// title, the role picker with the note that only agent-kind roles are listed
+// and a link to manage them, a Why field whose words ride the capability's
+// input into the audit event, and the note that a role cannot lift an agent
+// above its operator's grants (the delegation ceiling the handler enforces).
+//
 // Revoke names the role in its confirming sentence, because the button sits on
 // a row and a row is easy to mistake for its neighbour.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
 import { routes, type SafePath } from "@/shared/safe-path";
-import { buttonSecondary, inputBase } from "@/ui/control-styles";
+import {
+  buttonSecondary,
+  inputBase,
+  linkText,
+  mono,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
-import { useNavigate } from "@/ui/navigation";
+import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import {
@@ -57,9 +68,15 @@ export function AssignRole({
   ws,
   agentId,
   agentSlug,
+  agentKey,
+  operatorName,
   label,
   after,
 }: RoleTarget & {
+  /** The agent key the dialog is about, under its title; the slug when the key is not recorded. */
+  agentKey?: string;
+  /** The person the agent acts for, whose grants cap the agent's; null when none is recorded. */
+  operatorName?: string | null;
   /** The trigger's words where the page names it differently: the list's row action reads "Roles". */
   label?: string;
   /** Where to reload once the role is assigned; the agent's Permissions tab by default. */
@@ -101,10 +118,12 @@ export function AssignRole({
     const form = new FormData(event.currentTarget);
     const chosen = form.get("roleName");
     const roleName = typeof chosen === "string" ? chosen : "";
+    const why = form.get("reason");
+    const reason = typeof why === "string" ? why : "";
     setPending(true);
     setFailure(null);
     try {
-      const result = await assignAgentRole(org, ws, agentId, roleName);
+      const result = await assignAgentRole(org, ws, agentId, roleName, reason);
       if (result.ok) {
         setOpen(false);
         navigate.replace(
@@ -140,10 +159,11 @@ export function AssignRole({
           if (!next) setFailure(null);
         }}
         title={t("title")}
+        subtitle={agentKey ?? agentSlug}
+        closeLabel={t("cancel")}
         testId={ASSIGN}
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
           {catalogue.state === "loading" ? (
             <p data-state="loading" className="text-sm text-muted-foreground">
               {t("loading")}
@@ -176,6 +196,18 @@ export function AssignRole({
                   </option>
                 ))}
               </select>
+              <p
+                data-testid={`${ASSIGN}-hint`}
+                className="text-xs text-muted-foreground"
+              >
+                {t.rich("hint", {
+                  link: (chunks) => (
+                    <SafeLink to={routes.roles(org)} className={linkText}>
+                      {chunks}
+                    </SafeLink>
+                  ),
+                })}
+              </p>
               {offered.enforced ? null : (
                 <p
                   data-state="not-enforced"
@@ -193,6 +225,34 @@ export function AssignRole({
                 </p>
               ) : null}
             </div>
+          ) : null}
+          {offered !== null && !empty ? (
+            <>
+              <div className="flex flex-col gap-1 text-sm text-foreground">
+                <label htmlFor={`${ASSIGN}-reason`}>{t("why")}</label>
+                <input
+                  id={`${ASSIGN}-reason`}
+                  name="reason"
+                  maxLength={500}
+                  autoComplete="off"
+                  placeholder={t("whyPlaceholder")}
+                  className={inputBase}
+                />
+              </div>
+              <p
+                data-testid={`${ASSIGN}-note`}
+                className="border-l-2 border-gold pl-3 text-xs text-muted-foreground"
+              >
+                {operatorName
+                  ? t.rich("note", {
+                      operator: operatorName,
+                      mono: (chunks) => <span className={mono}>{chunks}</span>,
+                    })
+                  : t.rich("noteNoOperator", {
+                      mono: (chunks) => <span className={mono}>{chunks}</span>,
+                    })}
+              </p>
+            </>
           ) : null}
           {failure === null ? null : (
             <FormAlert testId={`${ASSIGN}-failure`}>{failure}</FormAlert>

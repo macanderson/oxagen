@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
+import { phoneWidth } from "@/test/phone";
 import { buttonDanger, buttonPrimary } from "@/ui/control-styles";
 import { agentPage, agentRow, agentsSource } from "./agents.builders";
 
@@ -69,10 +70,20 @@ const HEADER = <h1>Agents</h1>;
 async function renderAgents(
   reads: Parameters<typeof agentsSource>[0],
   cursor: string | null = null,
+  container?: HTMLElement,
 ) {
   const { source, calls } = agentsSource(reads);
-  const element = await Agents({ ctx, source, cursor, header: HEADER });
-  render(<IntlProvider>{element}</IntlProvider>);
+  const element = await Agents({
+    ctx,
+    source,
+    cursor,
+    header: HEADER,
+    viewerName: "Marcus Bell",
+  });
+  render(
+    <IntlProvider>{element}</IntlProvider>,
+    container === undefined ? undefined : { container },
+  );
   return calls;
 }
 
@@ -106,7 +117,9 @@ const COMPOSITION = [
   "Principal",
   "Health",
   "Activity",
-  "Row actions",
+  // The action column's header is empty, as the design draws it; its name is
+  // on aria-label (see the phone-width test).
+  "",
 ];
 const OPERATIONS = [
   "Agent",
@@ -120,7 +133,7 @@ const OPERATIONS = [
   "Tokens 30d",
   "Mandates",
   "Incidents",
-  "Row actions",
+  "",
 ];
 
 beforeEach(() => {
@@ -159,12 +172,25 @@ describe("Agents, loaded", () => {
       "Agents here7organization count not recorded · 7 listed below",
       "Enrolled25 not yet enrolled",
       "Holding a mandate1acme.core.release-bot · in Core platform",
-      "Tamper incidents33 open in Core platform",
+      // Every tamper incident the store keeps on the agents' hosts, and the
+      // newest as <scope> · <kind>, <date> with how many are open.
+      "Tamper incidents4acme.core.release-bot · hooks_removed, 2026-09-11 · 3 open",
     ]);
     expect(tiles()[3]?.querySelector("[data-critical]")).not.toBeNull();
+    // The design scopes the last two to the organization; the read answers
+    // for the workspace and says so.
+    expect(
+      [...document.querySelectorAll('[data-gap="organization"]')].map((el) =>
+        el.getAttribute("title"),
+      ),
+    ).toEqual([
+      "No organization-wide rollup of agents is recorded yet.",
+      "Counted over the agents in Core platform. No organization-wide rollup is recorded yet.",
+      "Summed over the agents in Core platform. No organization-wide rollup is recorded yet.",
+    ]);
   });
 
-  it("names the observe tier on Enrolled when every agent is enrolled, and says when nobody holds a mandate or an incident is open", async () => {
+  it("says the rest are on harness when they are, and says when nobody holds a mandate or no incident was recorded", async () => {
     await renderAgents({
       list: agentPage(
         [
@@ -172,16 +198,54 @@ describe("Agents, loaded", () => {
           agentRow({ id: "agt_b", slug: "b", enforcementTier: "harness" }),
         ],
         null,
-        { identities: 2, enrolled: 2, holdingMandate: 0, tamperIncidents: 0 },
+        {
+          identities: 2,
+          enrolled: 2,
+          holdingMandate: 0,
+          tamperIncidents: 0,
+          tamper: { recorded: 0, open: 0, newest: null },
+        },
       ),
     });
     expect(tiles().map((tile) => tile.textContent)).toEqual([
       "Agents here2organization count not recorded · 2 listed below",
-      "Enrolled21 listed here on the observe tier",
+      "Enrolled21 listed here on the observe tier, the rest on harness",
       "Holding a mandate0no agent holds one",
-      "Tamper incidents0none open in Core platform",
+      "Tamper incidents0none in the retention window",
     ]);
     expect(tiles()[3]?.querySelector("[data-critical]")).toBeNull();
+  });
+
+  it("counts each recorded tier on Enrolled when not every other agent is on harness, and says all resolved when none is open", async () => {
+    await renderAgents({
+      list: agentPage(
+        [
+          agentRow({ enforcementTier: "observe" }),
+          agentRow({ id: "agt_b", slug: "b", enforcementTier: "harness" }),
+          agentRow({ id: "agt_c", slug: "c", enforcementTier: null }),
+        ],
+        null,
+        {
+          identities: 3,
+          enrolled: 3,
+          tamper: {
+            recorded: 2,
+            open: 0,
+            newest: {
+              agentKey: "acme.core.c",
+              kind: "chain_break",
+              detectedAt: "2026-09-02T23:59:00.000Z",
+            },
+          },
+        },
+      ),
+    });
+    expect(tiles()[1]?.textContent).toBe(
+      "Enrolled31 listed here on the observe tier, 1 on harness, 1 on another tier or none recorded",
+    );
+    expect(tiles()[3]?.textContent).toBe(
+      "Tamper incidents2acme.core.c · chain_break, 2026-09-02 · all resolved",
+    );
   });
 
   it("names the holders it has and counts the rest", async () => {
@@ -243,7 +307,8 @@ describe("Agents, loaded", () => {
       "MBMarcus Bell",
       "not recorded",
       "not recorded",
-      "build-01gateway",
+      // The host over "<kind> · <tier>": no store records the kind.
+      "build-01not recorded · gateway",
       "prn_91",
       "healthyframes arriving, chain intact",
       "42runs 30d",
@@ -262,6 +327,10 @@ describe("Agents, loaded", () => {
       [
         "toolbelt",
         "No store records toolbelts or their assignments to agents yet.",
+      ],
+      [
+        "runtimeKind",
+        "No store records a runtime's kind yet. A host row is one enrollment, not a machine.",
       ],
     ]);
   });
@@ -292,19 +361,24 @@ describe("Agents, loaded", () => {
     ]);
     const pending = rows()[1];
     if (pending === undefined) throw new Error("no row");
-    expect(cellsOf(pending)[5]).toBe("—not recorded");
+    expect(cellsOf(pending)[5]).toBe("—not recorded · not recorded");
     expect(cellsOf(pending)[6]).toBe("prn_pending");
   });
 
   it("switches to Operations over the same agents, with its subtext and columns", async () => {
     await renderAgents({
       list: agentPage([
-        agentRow({ mandates: 2, tamperIncidents: 1 }),
+        agentRow({
+          mandates: 2,
+          tamperIncidents: 1,
+          tamperIncidentsRecorded: 3,
+        }),
         agentRow({
           id: "agt_b",
           slug: "b",
           agentKey: "acme.core.b",
           spend30d: null,
+          tokens30d: null,
           mandates: 0,
           enforcementTier: null,
         }),
@@ -334,11 +408,22 @@ describe("Agents, loaded", () => {
       "not recorded",
       "42",
       "$12.50client_attested",
-      "not recorded",
+      "1,840,00062% cached",
       "2",
-      "1",
+      // Every tamper incident recorded on its hosts, open or resolved.
+      "3",
       "EditRolesDeregister",
     ]);
+    const tokens = first.querySelector("[data-basis]");
+    expect(tokens).toHaveAttribute("data-basis", "wrapped_sessions");
+    expect(tokens).toHaveAttribute(
+      "title",
+      "40 wrapped sessions, as the harness reported them. Ledger runs' tokens are not in this total.",
+    );
+    expect(first.querySelector('[data-gap="belt"]')).toHaveAttribute(
+      "title",
+      "No store records the width of each agent's belt yet. The agent's own page computes its belt.",
+    );
     expect(cellsOf(second).slice(4, 11)).toEqual([
       "not recorded",
       "not recorded",
@@ -400,11 +485,11 @@ describe("Agents list controls", () => {
   it("pages ten rows at a time with a range and numbered pages, and Rows changes the page size", async () => {
     await renderAgents({ list: many() });
     expect(rows()).toHaveLength(10);
-    expect(screen.getByText("1-10 of 12")).toBeInTheDocument();
+    expect(screen.getByText("1–10 of 12")).toBeInTheDocument();
     const pager = screen.getByRole("navigation", { name: "Pages" });
     fireEvent.click(within(pager).getByRole("button", { name: "Page 2" }));
     expect(rows()).toHaveLength(2);
-    expect(screen.getByText("11-12 of 12")).toBeInTheDocument();
+    expect(screen.getByText("11–12 of 12")).toBeInTheDocument();
     const size = screen.getByRole("combobox", { name: "Rows" });
     expect(
       within(size)
@@ -439,11 +524,31 @@ describe("Agents list controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sort by Activity" }));
     expect(header()).toHaveAttribute("aria-sort", "descending");
     expect(rows()[0]?.dataset.agent).toBe("agent-11");
+    // Every header sorts, as the design's list controls do, the unbacked
+    // ones included; only the action column does not.
     expect(
       screen
         .getAllByRole("columnheader")
-        .find((th) => th.textContent === "Steering"),
-    ).not.toHaveAttribute("aria-sort");
+        .map((th) => th.hasAttribute("aria-sort")),
+    ).toEqual([true, true, true, true, true, true, true, true, true, false]);
+  });
+
+  it("sorts Operations by the token total, an agent with none recorded last", async () => {
+    await renderAgents({
+      list: agentPage([
+        agentRow({ id: "agt_a", slug: "a", tokens30d: null }),
+        agentRow({
+          id: "agt_b",
+          slug: "b",
+          tokens30d: { total: 10, cacheReadRate: null, sessions: 1 },
+        }),
+        agentRow({ id: "agt_c", slug: "c" }),
+      ]),
+    });
+    operations();
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Tokens 30d" }));
+    expect(rows().map((row) => row.dataset.agent)).toEqual(["b", "c", "a"]);
+    expect(cellsOf(only(rows()))[8]).toBe("10cache rate not recorded");
   });
 
   it("derives its facets from the columns in view, so they change with the column set", async () => {
@@ -458,11 +563,11 @@ describe("Agents list controls", () => {
       screen.getByRole("combobox", { name: "Filter by Owner" }),
       { target: { value: "Sana Moreau" } },
     );
-    expect(screen.getByText("1-6 of 6")).toBeInTheDocument();
+    expect(screen.getByText("1–6 of 6")).toBeInTheDocument();
     operations();
     expect(facets()).toEqual(["Filter by Operator", "Filter by Status"]);
     // The Owner facet left the view, so it no longer filters.
-    expect(screen.getByText("1-10 of 12")).toBeInTheDocument();
+    expect(screen.getByText("1–10 of 12")).toBeInTheDocument();
   });
 
   it("links the agents beyond the read's page by its cursor", async () => {
@@ -510,7 +615,7 @@ describe("Agents, not loaded", () => {
       }),
     ).toBeInTheDocument();
     expect(empty).toHaveTextContent(
-      "An agent's identity lives in Postgres. Its definition is a file in .oxagen/agents/ in the main repo. Registering one opens a Context PR, and nothing is written to Postgres first.",
+      "An agent's identity lives in Postgres; its definition is a file in .oxagen/agents/ in the main repo. Registering one opens a Context PR — nothing is written to Postgres first.",
     );
     expect(
       [...empty.querySelectorAll("button, a")].map((el) => el.textContent),
@@ -534,11 +639,38 @@ describe("Agents, not loaded", () => {
     expect(error).toHaveTextContent(
       "The control plane answered 503 iam_principals_unavailable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
     );
-    expect(error).toHaveTextContent(/read at /);
+    // trace · region · instant: the read carries only the instant.
+    expect(screen.getByTestId("agents-trace").textContent).toMatch(
+      /^trace not recorded · region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
+    );
     expect(
-      within(error).getByRole("link", { name: "Try again" }),
-    ).toHaveAttribute("href", "/acme/core-platform/agents");
+      [...error.querySelectorAll('[data-gap="trace"]')].map((el) =>
+        el.getAttribute("title"),
+      ),
+    ).toEqual([
+      "A failed read does not carry its trace id or region yet.",
+      "A failed read does not carry its trace id or region yet.",
+    ]);
+    const retry = within(error).getByRole("button", { name: "Try again" });
+    expect(retry.className).toBe(buttonPrimary);
+    expect(
+      [...error.querySelectorAll("button, a")].map((el) => el.textContent),
+    ).toEqual(["Try again", "Open an incident"]);
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    fireEvent.click(
+      within(error).getByRole("button", { name: "Open an incident" }),
+    );
+    const incident = await screen.findByTestId("agents-incident-dialog");
+    expect(
+      within(incident).getByRole("heading", { name: "Open an incident" }),
+    ).toBeInTheDocument();
+    expect(incident).toHaveTextContent(
+      "An incident would record this failure, the code 503 iam_principals_unavailable, and when it happened",
+    );
+    expect(incident.querySelector("[data-gap]")).toHaveAttribute(
+      "data-gap",
+      "#3847",
+    );
   });
 
   it("names the missing permission when denied, with who is signed in and what decided it", async () => {
@@ -552,7 +684,7 @@ describe("Agents, not loaded", () => {
       }),
     ).toBeInTheDocument();
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include agent.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include agent.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied)
@@ -564,13 +696,40 @@ describe("Agents, not loaded", () => {
         .getAllByRole("definition")
         .map((dd) => dd.textContent),
     ).toEqual([
-      "workspace.member · core-platform",
+      "Marcus Bell · workspace.member · core-platform",
       "agent.read on core-platform",
-      "the workspace's decision rules · deny wins over every allow",
+      "policy not recorded · deny wins over every allow",
     ]);
+    expect(denied.querySelector('[data-gap="policy"]')).toHaveAttribute(
+      "title",
+      "The read's refusal does not name the policy that decided it.",
+    );
+    expect(
+      [...denied.querySelectorAll("button, a")].map((el) => el.textContent),
+    ).toEqual(["Request access", "Back to Fleet"]);
+    expect(
+      within(denied).getByRole("button", { name: "Request access" }).className,
+    ).toBe(buttonPrimary);
     expect(
       within(denied).getByRole("link", { name: "Back to Fleet" }),
     ).toHaveAttribute("href", "/acme/core-platform");
+    fireEvent.click(
+      within(denied).getByRole("button", { name: "Request access" }),
+    );
+    const request = await screen.findByTestId("agents-request-access-dialog");
+    expect(within(request).getByLabelText("Role requested")).toHaveValue(
+      "agent.read on core-platform",
+    );
+    expect(request).toHaveTextContent(
+      "No capability records a request yet, so ask an owner directly.",
+    );
+    expect(
+      within(request).getByRole("link", { name: "Open Roles" }),
+    ).toHaveAttribute("href", "/acme/roles");
+    expect(request.querySelector("[data-gap]")).toHaveAttribute(
+      "data-gap",
+      "#3820",
+    );
   });
 
   it("names the access request a parked read is waiting on", async () => {
@@ -596,5 +755,36 @@ describe("Agents, not loaded", () => {
     expect(loading).toHaveAttribute("aria-busy", "true");
     expect(loading).toHaveTextContent("Loading agents");
     expect(loading.textContent).not.toMatch(/\d/);
+  });
+});
+
+describe("Agents at phone width", () => {
+  it("keeps the Columns toggle on one row, leaves the action cells unlabelled, and makes every control a 44px target", async () => {
+    const phone = phoneWidth();
+    try {
+      await renderAgents(
+        { list: agentPage([agentRow()]) },
+        null,
+        phone.container,
+      );
+      const group = within(phone.container).getByRole("group", {
+        name: "Columns",
+      });
+      expect(group.className).toContain("flex-nowrap");
+      // The action header is empty, so the card-table labelling the shell
+      // runs (features/shell/card-tables.ts) gives its cells no label; the
+      // header keeps its name for assistive technology.
+      const actionsHeader = within(phone.container)
+        .getAllByRole("columnheader")
+        .at(-1);
+      expect(actionsHeader?.textContent).toBe("");
+      expect(actionsHeader).toHaveAttribute("aria-label", "Row actions");
+      const targets = phone.container.querySelectorAll("[data-touch-target]");
+      expect(targets.length).toBeGreaterThan(1);
+      for (const target of targets)
+        expect(getComputedStyle(target).minHeight).toBe("44px");
+    } finally {
+      phone.restore();
+    }
   });
 });

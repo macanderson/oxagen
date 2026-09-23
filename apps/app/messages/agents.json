@@ -26,18 +26,22 @@
         "enrolled": {
           "title": "Enrolled",
           "notYet": "{count} not yet enrolled",
-          "observe": "{count} listed here on the observe tier"
+          "observe": "{count} listed here on the observe tier, the rest on harness",
+          "mixed": "{observe} listed here on the observe tier, {harness} on harness, {other} on another tier or none recorded"
         },
         "mandate": {
           "title": "Holding a mandate",
           "holder": "{key} · in {workspace}",
           "more": "{count} more in {workspace}",
-          "none": "no agent holds one"
+          "none": "no agent holds one",
+          "scope": "Counted over the agents in {workspace}. No organization-wide rollup is recorded yet."
         },
         "tamper": {
           "title": "Tamper incidents",
-          "open": "{count} open in {workspace}",
-          "none": "none open in {workspace}"
+          "open": "{key} · {kind}, {date} · {count} open",
+          "resolved": "{key} · {kind}, {date} · all resolved",
+          "none": "none in the retention window",
+          "scope": "Summed over the agents in {workspace}. No organization-wide rollup is recorded yet."
         }
       },
       "title": "Registered in {workspace}",
@@ -77,7 +81,10 @@
       "cells": {
         "runs30d": "runs 30d",
         "principalPending": "prn_pending",
-        "none": "—"
+        "none": "—",
+        "cached": "{rate} cached",
+        "cacheNotRecorded": "cache rate not recorded",
+        "tokensBasis": "{count, plural, one {# wrapped session} other {# wrapped sessions}}, as the harness reported them. Ledger runs' tokens are not in this total."
       },
       "health": {
         "tamper": "tamper",
@@ -95,7 +102,7 @@
         "facetLabel": "Filter by {column}",
         "rows": "Rows",
         "all": "All",
-        "range": "{from}-{to} of {total}",
+        "range": "{from}–{to} of {total}",
         "pager": "Pages",
         "previous": "Previous page",
         "next": "Next page",
@@ -112,7 +119,7 @@
       "footer": "An agent has one principal and runs on one runtime. Its steering, its toolbelts and its tools are workspace objects it refers to, so changing one changes every agent that refers to it.",
       "empty": {
         "title": "No agent registered in {workspace}",
-        "body": "An agent's identity lives in Postgres. Its definition is a file in <mono>.oxagen/agents/</mono> in the main repo. Registering one opens a Context PR, and nothing is written to Postgres first."
+        "body": "An agent's identity lives in Postgres; its definition is a file in <mono>.oxagen/agents/</mono> in the main repo. Registering one opens a Context PR — nothing is written to Postgres first."
       },
       "create": {
         "newAgent": "New agent",
@@ -122,7 +129,7 @@
       "register": {
         "title": "Register an agent",
         "slug": "Slug",
-        "slugHint": "Lowercase words joined by hyphens, at most 18 characters. It becomes the last part of the agent key and never changes.",
+        "slugHint": "The agent key ends in <mono>.{slug}</mono> and is immutable.",
         "avatar": "Avatar",
         "avatarHint": "The definition carries no avatar yet, so the agent shows these initials.",
         "harness": "Harness",
@@ -134,7 +141,9 @@
         "done": "Pull request #{number} opened. The agent exists when it merges.",
         "open": "Open the pull request",
         "close": "Close",
-        "invalidSlug": "Use lowercase letters, digits and single hyphens, at most 18 characters."
+        "invalidSlug": "Use lowercase letters, digits and single hyphens, at most 18 characters.",
+        "design": "Design",
+        "designNote": "Designing an avatar needs an avatar field on the definition, and the definition carries none yet. The agent shows these initials until it does."
       },
       "states": {
         "loading": "Loading agents",
@@ -142,18 +151,23 @@
           "title": "Agents could not be loaded",
           "body": "The control plane answered <mono>{status} {code}</mono>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
           "retry": "Try again",
-          "readAt": "read at {at}"
+          "incident": "Open an incident",
+          "trace": "trace <trace></trace> · <region></region> · {at}",
+          "traceUnrecorded": "not recorded",
+          "regionUnrecorded": "region not recorded"
         },
         "denied": {
           "title": "You cannot see the agents in this workspace",
-          "body": "Your roles on <strong>{org}</strong> do not include <mono>{permission} on {ws}</mono>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
+          "body": "Your roles on <strong>{org}</strong> do not include <mono>{permission} on {ws}</mono>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
           "back": "Back to Fleet",
           "signedIn": "Signed in as",
-          "signedInValue": "workspace.{role} · {ws}",
+          "signedInValue": "{name} · workspace.{role} · {ws}",
           "needed": "Needed",
           "neededValue": "{permission} on {ws}",
           "decidedBy": "Decided by",
-          "decidedByValue": "the workspace's decision rules · deny wins over every allow"
+          "decidedByValue": "<policy></policy> · deny wins over every allow",
+          "request": "Request access",
+          "policyUnrecorded": "policy not recorded"
         },
         "pending": {
           "title": "Access to the agents in this workspace is waiting for approval",
@@ -163,10 +177,22 @@
       "gaps": {
         "steering": "No store records the steering assembled for each agent yet.",
         "toolbelt": "No store records toolbelts or their assignments to agents yet.",
-        "tokens": "No per-agent token rollup or cache rate is recorded yet.",
+        "tokens": "No wrapped session of this agent reported its token usage in the last 30 days. Ledger runs' tokens are not rolled up per agent.",
         "commit": "The commit of .oxagen/agents/ is not recorded on this read.",
         "organization": "No organization-wide rollup of agents is recorded yet.",
-        "tier": "No wrapped session has recorded an enforcement tier for this agent yet."
+        "tier": "No wrapped session has recorded an enforcement tier for this agent yet.",
+        "runtimeKind": "No store records a runtime's kind yet. A host row is one enrollment, not a machine.",
+        "belt": "No store records the width of each agent's belt yet. The agent's own page computes its belt.",
+        "policy": "The read's refusal does not name the policy that decided it.",
+        "trace": "A failed read does not carry its trace id or region yet."
+      },
+      "stubs": {
+        "requestTitle": "Request access",
+        "requestRole": "Role requested",
+        "requestBody": "A request would ask an organization owner for this role and land in the audit record with the granter's name, your name, and your reason. No capability records a request yet, so ask an owner directly. Owners grant roles on the Roles page.",
+        "requestLink": "Open Roles",
+        "incidentTitle": "Open an incident",
+        "incidentBody": "An incident would record this failure, the code {code}, and when it happened, for the people who run this workspace. No capability opens an incident from the console yet. Send the code to your organization owner."
       }
     },
     "detail": {
@@ -215,15 +241,20 @@
         "assign": {
           "open": "Assign a role",
           "title": "Assign a role",
-          "body": "The role attaches to this agent's own principal. You cannot assign a role that grants more than you hold yourself.",
           "field": "Role",
+          "hint": "Only agent-kind roles are listed. <link>Manage roles</link>",
           "builtIn": "{name} (seeded)",
           "loading": "Reading the role catalogue.",
           "empty": "This organization has no role an agent may hold. Write one on the Roles page, then assign it here.",
           "notEnforced": "On the {tier} tier the kernel allows every capability, so this role records intent and governs nothing until the organization moves to a tier that enforces it.",
           "partial": "This organization has more roles than the 200 listed here. Assign one of the rest over the API.",
           "confirm": "Assign",
-          "pending": "Assigning"
+          "pending": "Assigning",
+          "why": "Why",
+          "whyPlaceholder": "Kept in the audit record with this assignment",
+          "note": "Effective permission stays <mono>roles ∩ {operator}'s grants</mono>. A role cannot lift an agent above its operator.",
+          "noteNoOperator": "Effective permission stays <mono>roles ∩ the operator's grants</mono>. A role cannot lift an agent above its operator.",
+          "cancel": "Cancel"
         },
         "revoke": {
           "open": "Revoke {role}",
@@ -579,8 +610,16 @@
       },
       "retire": {
         "open": "Deregister",
-        "title": "Deregister {name}",
-        "body": "The principal is retired, never deleted, so its runs keep their identity. Every credential and host enrollment is revoked. Removing the definition file is a pull request.",
+        "title": "Deregister agent",
+        "body": "This ends the agent's identity. Its credentials and host enrollments are revoked, and its active mandates end.",
+        "pullRequest": "This dialog does not open the pull request that archives <mono>.oxagen/agents/{slug}.toml</mono> yet. Remove the file in a pull request of your own.",
+        "kept": "Kept",
+        "keptValue": "every run, frame and receipt. The record is never deleted.",
+        "ends": "Ends",
+        "endsValue": "{mandates, plural, one {# mandate} other {# mandates}}, {credentials, plural, one {# credential} other {# credentials}}, {hosts, plural, one {# host enrollment} other {# host enrollments}}",
+        "endsUnknown": "its mandates, credentials and host enrollments",
+        "understand": "I understand this cannot be undone",
+        "understandHint": "Re-registering creates a new principal.",
         "confirm": "Deregister",
         "pending": "Deregistering"
       },

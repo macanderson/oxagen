@@ -44,9 +44,18 @@ export function toAgentPage(out: AgentListOutput): z.input<typeof AgentPage> {
               ...moneyFromMicros(item.spend30d.micros, item.spend30d.currency),
               basis: item.spend30d.basis,
             },
+      tokens30d:
+        item.tokens30d === null
+          ? null
+          : {
+              total: item.tokens30d.total,
+              cacheReadRate: item.tokens30d.cacheReadRate,
+              sessions: item.tokens30d.sessions,
+            },
       mandates: item.mandates,
       incidents: item.incidents,
       tamperIncidents: item.tamperIncidents,
+      tamperIncidentsRecorded: item.tamperIncidentsRecorded,
     })),
     nextCursor: out.nextCursor,
     totals: {
@@ -54,6 +63,7 @@ export function toAgentPage(out: AgentListOutput): z.input<typeof AgentPage> {
       enrolled: out.totals.enrolled,
       holdingMandate: out.totals.holdingMandate,
       tamperIncidents: out.totals.tamperIncidents,
+      tamper: out.totals.tamper,
     },
   };
 }

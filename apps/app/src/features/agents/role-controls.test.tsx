@@ -6,6 +6,7 @@
 // person who lacks the organization role sees.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -19,6 +20,11 @@ const { router, assignAgentRole, readAssignableRoles, revokeAgentRole } =
     revokeAgentRole: vi.fn(),
   }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("next/link", () => ({
+  default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
+    <a {...rest}>{children}</a>
+  ),
+}));
 vi.mock("./actions", () => ({
   assignAgentRole,
   readAssignableRoles,
@@ -103,9 +109,62 @@ describe("AssignRole", () => {
       "core-platform",
       "agt_releasebot",
       "Release deputy",
+      "",
     );
     expect(router.replace).toHaveBeenCalledWith(HERE);
     expect(screen.queryByTestId("assign-role")).toBeNull();
+  });
+
+  it("draws the design's dialog: the key, the agent-kind hint, a Why field it sends, and the operator's ceiling", async () => {
+    assignAgentRole.mockResolvedValue({
+      ok: true,
+      value: { roleName: "Agent Observer", alreadyAssigned: false },
+    });
+    render(
+      <IntlProvider>
+        <AssignRole
+          {...TARGET}
+          agentKey="acme.core.release-bot"
+          operatorName="Marcus Bell"
+        />
+      </IntlProvider>,
+    );
+    const dialog = await openAssign();
+    expect(dialog).toHaveTextContent("acme.core.release-bot");
+    await within(dialog).findByLabelText("Role");
+    const hint = within(dialog).getByTestId("assign-role-hint");
+    expect(hint).toHaveTextContent(
+      "Only agent-kind roles are listed. Manage roles",
+    );
+    expect(
+      within(hint).getByRole("link", { name: "Manage roles" }),
+    ).toHaveAttribute("href", "/acme/roles");
+    expect(within(dialog).getByTestId("assign-role-note")).toHaveTextContent(
+      "Effective permission stays roles ∩ Marcus Bell's grants. A role cannot lift an agent above its operator.",
+    );
+    await userEvent.type(
+      within(dialog).getByLabelText("Why"),
+      "Reads the September runs",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Assign" }),
+    );
+    expect(assignAgentRole).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "agt_releasebot",
+      "Agent Observer",
+      "Reads the September runs",
+    );
+  });
+
+  it("names no operator in the note when none is recorded", async () => {
+    renderAssign();
+    const dialog = await openAssign();
+    await within(dialog).findByLabelText("Role");
+    expect(within(dialog).getByTestId("assign-role-note")).toHaveTextContent(
+      "Effective permission stays roles ∩ the operator's grants.",
+    );
   });
 
   it("marks a seeded role and offers no role an agent may not hold", async () => {

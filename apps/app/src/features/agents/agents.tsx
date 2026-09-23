@@ -7,17 +7,17 @@
 // **The tiles are rollups of records.** Agents here and Enrolled come from the
 // workspace's own count on `list_agents`; Holding a mandate counts the agents
 // whose principal holds an active mandate in `tools.mandates`; Tamper
-// incidents counts the open incidents of a tamper kind on the workspace's
-// hosts, the same set the Audit page and the Incidents column read. The
-// design scopes the last two to the organization; `list_agents` answers for
-// the workspace, so the basis lines name the workspace, and the organization
-// count on Agents here prints as not recorded until an organization rollup
-// exists.
+// incidents sums the tamper incidents recorded on each agent's hosts, the set
+// the Incidents column reads, and names the newest. The design scopes the
+// last two to the organization; `list_agents` answers for the workspace, so
+// each says so on hover, and the organization count on Agents here prints as
+// not recorded until an organization rollup exists (#3854).
 //
-// **Two controls the design asks for are not drawn, and neither is stubbed.**
-// *Request access* (denied) and *Open an incident* (error) have no contract:
-// no capability lets a person ask for a role or file an incident. The copy
-// names the route that does exist, as the Mandate and Record pages do.
+// **Two controls the design asks for have no capability yet.** *Request
+// access* (denied, #3820) and *Open an incident* (error, #3847) open dialogs
+// that say what they would do (./state-actions.tsx). The trace id, region and
+// deciding policy are not on a failed read, so those words print as not
+// recorded beside the facts the read does carry.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { AgentPage } from "@/data/contracts/agents";
@@ -33,12 +33,12 @@ import {
   statTile,
 } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
-import { useFormatter } from "@/ui/formatter";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { AgentsTable } from "./agents-table";
 import { RegisterAnAgent, WrapClaudeCode } from "./create-actions";
 import { NotRecordedValue, Tile } from "./parts";
+import { OpenIncident, RequestAccess, TryAgain } from "./state-actions";
 
 type Place = { org: string; ws: string };
 type Failure = Exclude<Read<unknown>, { ok: true }>;
@@ -54,6 +54,18 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
   const { totals, agents } = page;
   const notEnrolled = totals.identities - totals.enrolled;
   const observe = agents.filter((a) => a.enforcementTier === "observe").length;
+  const harness = agents.filter((a) => a.enforcementTier === "harness").length;
+  const otherTier = agents.length - observe - harness;
+  const { tamper } = totals;
+  const newest =
+    tamper.newest === null
+      ? null
+      : {
+          key: tamper.newest.agentKey,
+          kind: tamper.newest.kind,
+          // The day as the record stamps it (UTC), as the design prints it.
+          date: tamper.newest.detectedAt.slice(0, 10),
+        };
   const holders = agents.filter((a) => (a.mandates ?? 0) > 0);
   const named = holders.slice(0, HOLDERS_NAMED);
   const unnamed =
@@ -77,7 +89,13 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
         basis={
           notEnrolled > 0
             ? t("enrolled.notYet", { count: count(notEnrolled) })
-            : t("enrolled.observe", { count: count(observe) })
+            : otherTier === 0
+              ? t("enrolled.observe", { count: count(observe) })
+              : t("enrolled.mixed", {
+                  observe: count(observe),
+                  harness: count(harness),
+                  other: count(otherTier),
+                })
         }
       />
       <Tile
@@ -92,31 +110,48 @@ function Tiles({ page, workspace }: { page: AgentPage; workspace: string }) {
         basis={
           totals.holdingMandate === null ? (
             <NotRecordedValue />
-          ) : totals.holdingMandate === 0 ? (
-            t("mandate.none")
           ) : (
-            [
-              ...named.map((a) =>
-                t("mandate.holder", { key: a.agentKey ?? a.slug, workspace }),
-              ),
-              ...(unnamed > 0
-                ? [t("mandate.more", { count: count(unnamed), workspace })]
-                : []),
-            ].join(", ")
+            <span
+              data-gap="organization"
+              title={t("mandate.scope", { workspace })}
+            >
+              {totals.holdingMandate === 0
+                ? t("mandate.none")
+                : [
+                    ...named.map((a) =>
+                      t("mandate.holder", {
+                        key: a.agentKey ?? a.slug,
+                        workspace,
+                      }),
+                    ),
+                    ...(unnamed > 0
+                      ? [
+                          t("mandate.more", {
+                            count: count(unnamed),
+                            workspace,
+                          }),
+                        ]
+                      : []),
+                  ].join(", ")}
+            </span>
           )
         }
       />
       <Tile
         title={t("tamper.title")}
-        value={count(totals.tamperIncidents)}
-        critical={totals.tamperIncidents > 0}
+        value={count(tamper.recorded)}
+        critical={tamper.recorded > 0}
         basis={
-          totals.tamperIncidents > 0
-            ? t("tamper.open", {
-                count: count(totals.tamperIncidents),
-                workspace,
-              })
-            : t("tamper.none", { workspace })
+          <span
+            data-gap="organization"
+            title={t("tamper.scope", { workspace })}
+          >
+            {newest === null
+              ? t("tamper.none")
+              : tamper.open > 0
+                ? t("tamper.open", { ...newest, count: count(tamper.open) })
+                : t("tamper.resolved", newest)}
+          </span>
         }
       />
     </section>
@@ -147,25 +182,51 @@ function Empty({ workspace, org, ws }: { workspace: string } & Place) {
 function Denied({
   read,
   ctx,
+  viewerName,
 }: {
   read: Extract<Failure, { reason: "denied" }>;
   ctx: WsCtx;
+  viewerName: string;
 }) {
   const t = useTranslations("agents.list.states.denied");
+  const gaps = useTranslations("agents.list.gaps");
+  const needed = t("neededValue", {
+    permission: read.permission,
+    ws: ctx.wsSlug,
+  });
   const facts: readonly [string, ReactNode][] = [
     [
       t("signedIn"),
-      <span key="who" className={mono}>
-        {t("signedInValue", { role: ctx.wsRole, ws: ctx.wsSlug })}
+      <span key="who">
+        {t("signedInValue", {
+          name: viewerName,
+          role: ctx.wsRole,
+          ws: ctx.wsSlug,
+        })}
       </span>,
     ],
     [
       t("needed"),
       <span key="needed" className={mono}>
-        {t("neededValue", { permission: read.permission, ws: ctx.wsSlug })}
+        {needed}
       </span>,
     ],
-    [t("decidedBy"), t("decidedByValue")],
+    [
+      t("decidedBy"),
+      <span key="decided">
+        {t.rich("decidedByValue", {
+          policy: () => (
+            <span
+              data-gap="policy"
+              title={gaps("policy")}
+              className={`${mono} text-muted-foreground`}
+            >
+              {t("policyUnrecorded")}
+            </span>
+          ),
+        })}
+      </span>,
+    ],
   ];
   return (
     <OutcomePanel
@@ -173,12 +234,15 @@ function Denied({
       testId="agents-denied"
       title={t("title")}
       actions={
-        <SafeLink
-          to={routes.fleet(ctx.orgSlug, ctx.wsSlug)}
-          className={buttonSecondary}
-        >
-          {t("back")}
-        </SafeLink>
+        <>
+          <RequestAccess org={ctx.orgSlug} permission={needed} />
+          <SafeLink
+            to={routes.fleet(ctx.orgSlug, ctx.wsSlug)}
+            className={buttonSecondary}
+          >
+            {t("back")}
+          </SafeLink>
+        </>
       }
     >
       <span className="flex flex-col gap-3">
@@ -210,27 +274,24 @@ function Denied({
 
 function ReadError({
   read,
-  ctx,
   readAt,
 }: {
   read: Extract<Failure, { reason: "error" }>;
-  ctx: WsCtx;
   readAt: Date;
 }) {
   const t = useTranslations("agents.list.states.error");
-  const format = useFormatter();
+  const gaps = useTranslations("agents.list.gaps");
+  const code = `${String(read.status)} ${read.code}`;
   return (
     <OutcomePanel
       tone="neutral"
       testId="agents-error"
       title={t("title")}
       actions={
-        <SafeLink
-          to={routes.agents(ctx.orgSlug, ctx.wsSlug)}
-          className={buttonSecondary}
-        >
-          {t("retry")}
-        </SafeLink>
+        <>
+          <TryAgain />
+          <OpenIncident code={code} />
+        </>
       }
     >
       <span className="flex flex-col gap-2">
@@ -241,12 +302,20 @@ function ReadError({
             mono: (chunks) => <span className={mono}>{chunks}</span>,
           })}
         </span>
-        <span className={`${mono} text-xs`}>
-          {t("readAt", {
-            at: format.dateTime(readAt, {
-              dateStyle: "medium",
-              timeStyle: "long",
-            }),
+        <span data-testid="agents-trace" className={`${mono} text-xs`}>
+          {t.rich("trace", {
+            // The design's stamp: the instant the read failed, in UTC.
+            at: `${readAt.toISOString().slice(0, 19).replace("T", " ")}Z`,
+            trace: () => (
+              <span data-gap="trace" title={gaps("trace")}>
+                {t("traceUnrecorded")}
+              </span>
+            ),
+            region: () => (
+              <span data-gap="trace" title={gaps("trace")}>
+                {t("regionUnrecorded")}
+              </span>
+            ),
           })}
         </span>
       </span>
@@ -277,9 +346,12 @@ export async function Agents({
   source,
   cursor,
   header,
+  viewerName,
 }: {
   ctx: WsCtx;
   source: DataSource;
+  /** The signed-in person's name, or their email when the account has none; the denied state names them. */
+  viewerName: string;
   /** The agents page the URL asked for; null is the first. */
   cursor: string | null;
   /** The page header, drawn only when the page has agents to show. */
@@ -291,11 +363,11 @@ export async function Agents({
   if (!read.ok) {
     switch (read.reason) {
       case "denied":
-        return <Denied read={read} ctx={ctx} />;
+        return <Denied read={read} ctx={ctx} viewerName={viewerName} />;
       case "pending_approval":
         return <Pending request={read.accessRequestId} />;
       case "error":
-        return <ReadError read={read} ctx={ctx} readAt={readAt} />;
+        return <ReadError read={read} readAt={readAt} />;
     }
   }
   const page = read.value;

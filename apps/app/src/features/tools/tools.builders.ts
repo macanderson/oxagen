@@ -88,9 +88,11 @@ export function agentPageRow(
     enforcementTier: null,
     runs30d: 0,
     spend30d: null,
+    tokens30d: null,
     mandates: null,
     incidents: 0,
     tamperIncidents: 0,
+    tamperIncidentsRecorded: 0,
   };
 }
 
@@ -107,6 +109,7 @@ export function agentPage(
       enrolled: agents.filter((agent) => agent.status === "enrolled").length,
       holdingMandate: 0,
       tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
     },
   };
 }
