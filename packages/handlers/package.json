@@ -24,6 +24,7 @@
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/github": "workspace:*",
+    "@oxagen/gitlab": "workspace:*",
     "@oxagen/iam": "workspace:*",
     "@oxagen/ingestion": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
