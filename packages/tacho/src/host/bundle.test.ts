@@ -348,7 +348,7 @@ describe("PreToolUse evaluation", () => {
     });
   });
 
-  it("applies deny, then allow, then ask, then falls through", () => {
+  it("applies deny, then ask, then allow, then falls through", () => {
     expect(
       evaluatePreToolUse({
         ...base,
