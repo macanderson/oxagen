@@ -285,15 +285,11 @@ describe("the context-record wizard: statement", () => {
     });
     fireEvent.click(primary());
     await screen.findByTestId("pr-opened");
-    expect(proposeRecord).toHaveBeenCalledWith(
-      "acme",
-      "core-platform",
-      expect.objectContaining({
-        record: expect.objectContaining({
-          statement: "Read CHANGELOG.md once per run, then stop.",
-        }),
-      }),
-    );
+    const call: unknown[] = proposeRecord.mock.calls[0] ?? [];
+    expect(call.slice(0, 2)).toEqual(["acme", "core-platform"]);
+    expect(call[2]).toMatchObject({
+      record: { statement: "Read CHANGELOG.md once per run, then stop." },
+    });
   });
 
   it("filters force by kind: a preference is never must, a fact is info (negative)", async () => {
