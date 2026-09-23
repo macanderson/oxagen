@@ -1,7 +1,7 @@
 /**
  * The workspace's steering, assembled into the text the policy bundle carries
  * as `context.system` and the manifest it carries as `context.manifest`
- * (ADR-091, ADR-093, ADR-142).
+ * (ADR-091, ADR-093, ADR-143).
  *
  * A context record merged through a Context PR is published with a `force`.
  * Every active record is a candidate; `@oxagen/steering-assembler` ranks the

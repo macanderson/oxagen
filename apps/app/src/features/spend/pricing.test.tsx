@@ -96,6 +96,7 @@ const source: DataSource = {
     roles: vi.fn(),
     workspaces: vi.fn(),
     apiKeys: vi.fn(),
+    costCenters: vi.fn(),
     modelCredential: vi.fn(),
   },
   mandates: { list: vi.fn(), get: vi.fn() },

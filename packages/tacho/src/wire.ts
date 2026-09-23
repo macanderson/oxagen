@@ -199,7 +199,7 @@ export const BUNDLE_FEATURE_HOOK_FAIL_OPEN = "hook_fail_open" as const;
 /**
  * The host can parse `context.manifest`: the assembler's account of every
  * steering candidate the bundle's `context.system` was assembled from, and
- * why each was included or cut (ADR-093, ADR-142). Gated for the same reason
+ * why each was included or cut (ADR-093, ADR-143). Gated for the same reason
  * `gateway_tools` is: `context` is strict, so a host built before the field
  * would reject the whole mandate. A host that advertises it seals the
  * manifest into each session's chain as a `steering.manifest` frame at

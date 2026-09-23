@@ -51,7 +51,7 @@ const nextConfig: NextConfig = {
   // with native addons (ssh2, dockerode) and the lazy-loaded heavy workspace
   // package reached through instrumentation.ts and the kernel. Drop an entry
   // only once no imported package needs it. blake3 and duckdb left with
-  // @oxagen/engram (ADR-142); nothing this app imports declares either.
+  // @oxagen/engram (ADR-143); nothing this app imports declares either.
   //
   // The @oxagen/* entry does not need a direct dependency here. A workspace
   // package resolves through its symlink to packages/<name>/src (TypeScript,

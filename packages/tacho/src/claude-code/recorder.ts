@@ -267,6 +267,8 @@ export class SessionRecorder {
    */
   private pendingBodies: FrameBody[] = [];
   private readonly otelRefusals: string[] = [];
+  /** Events `everySealed` had to add back, drained by the daemon's log. */
+  private readonly sealRepairs: string[] = [];
   private context: Context = {};
   private host: Host = {};
   private anthropic: Anthropic = {};
@@ -851,6 +853,15 @@ export class SessionRecorder {
     at?: string,
     rewrite?: (draft: HookDraft) => HookDraft,
   ): TachoEvent[] {
+    return this.everySealed(() => this.sealHook(raw, env, at, rewrite));
+  }
+
+  private sealHook(
+    raw: unknown,
+    env: Record<string, string | undefined>,
+    at?: string,
+    rewrite?: (draft: HookDraft) => HookDraft,
+  ): TachoEvent[] {
     const drafts = normalizeHook(raw, env, {
       sessionUuid: this.sessionUuid,
     }).map((draft) => (rewrite ? rewrite(draft) : draft));
@@ -924,18 +935,23 @@ export class SessionRecorder {
     }
     const out: TachoEvent[] = [];
     for (const draft of drafts) {
-      const sealed = this.sealHookDraft(draft, env, ts);
-      if (sealed !== undefined) out.push(sealed);
+      out.push(...this.sealHookDraft(draft, env, ts));
     }
     return out;
   }
 
-  /** The event this draft seals, or undefined for a call the chain holds. */
+  /**
+   * The events this draft seals, in chain order. Empty for a call the chain
+   * already holds. A `turn_start` on an open turn first seals the `turn_end`
+   * that closes it; that event must be returned too, or its seq is spent on
+   * an event that never reaches the WAL and the chain has a gap.
+   */
   private sealHookDraft(
     draft: HookDraft,
     env: Record<string, string | undefined>,
     ts: string,
-  ): TachoEvent | undefined {
+  ): TachoEvent[] {
+    const out: TachoEvent[] = [];
     this.absorbContext(draft.context);
     this.absorbHost(draft.host);
     if (this.envSnapshot === undefined) {
@@ -959,10 +975,12 @@ export class SessionRecorder {
     }
     if (draft.kind === "turn_start") {
       if (this.turnOpen) {
-        this.seal(
-          "turn_end",
-          {},
-          { ts, source: "collector", hook_event_name: "UserPromptSubmit" },
+        out.push(
+          this.seal(
+            "turn_end",
+            {},
+            { ts, source: "collector", hook_event_name: "UserPromptSubmit" },
+          ),
         );
       }
       this.turnSeq += 1;
@@ -980,7 +998,7 @@ export class SessionRecorder {
     const duplicate = sighting.attrs;
     if (duplicate === undefined) {
       sighting.commit();
-      return undefined;
+      return out;
     }
     const event = this.seal(draft.kind, body, {
       ts,
@@ -1002,11 +1020,16 @@ export class SessionRecorder {
       this.stopped = true;
       this.turnOpen = false;
     }
-    return event;
+    out.push(event);
+    return out;
   }
 
   /** Ingest one OTLP/HTTP JSON payload. Records for other sessions are ignored. */
   ingestOtlp(payload: OtlpPayload): TachoEvent[] {
+    return this.everySealed(() => this.sealOtlp(payload));
+  }
+
+  private sealOtlp(payload: OtlpPayload): TachoEvent[] {
     const { drafts, metrics } = normalizeOtlp(payload);
     const out: TachoEvent[] = [];
     for (const metric of metrics) {
@@ -1048,6 +1071,64 @@ export class SessionRecorder {
           `${draft.kind}: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}`,
         );
       }
+    }
+    return out;
+  }
+
+  /**
+   * Run one ingest and return every event it sealed, on this chain or on a
+   * subagent's, in chain order.
+   *
+   * The daemon writes only the events an ingest returns. An event that is
+   * sealed and not returned spends its seq without reaching the WAL, and the
+   * control plane then reports a chain break that nothing can repair. A
+   * dropped `turn_end` did this before every prompt that landed on an open
+   * turn. Rather than trust every path to return what it seals, the guard
+   * compares what was sealed with what came back and adds anything missing.
+   * Child genesis events still waiting in `pendingChildGenesis` are left to
+   * the ingest that drains them, so nothing is written twice. Each addition
+   * is kept for `takeSealRepairs`, because an addition is a bug to fix.
+   */
+  private everySealed(run: () => TachoEvent[]): TachoEvent[] {
+    const before = new Map<SessionRecorder, number>();
+    for (const recorder of this.family()) {
+      before.set(recorder, recorder.events.length);
+    }
+    const out = run();
+    const accounted = new Set(out.map((event) => event.event_id));
+    for (const recorder of this.family()) {
+      for (const event of recorder.pendingChildGenesis) {
+        accounted.add(event.event_id);
+      }
+    }
+    const missed: TachoEvent[] = [];
+    for (const recorder of this.family()) {
+      for (const event of recorder.events.slice(before.get(recorder) ?? 0)) {
+        if (!accounted.has(event.event_id)) missed.push(event);
+      }
+    }
+    if (missed.length === 0) return out;
+    for (const event of missed) {
+      this.sealRepairs.push(`${event.session_uuid}#${event.seq} ${event.kind}`);
+    }
+    return inChainOrder([...out, ...missed]);
+  }
+
+  /** This recorder and every subagent recorder under it. */
+  private *family(): Generator<SessionRecorder> {
+    yield this;
+    for (const link of this.children.values()) yield* link.recorder.family();
+  }
+
+  /**
+   * Events the ingest guard added back because the path that sealed them did
+   * not return them, across this chain and its subagents. Drained by the
+   * daemon's log. Anything here is a recorder bug.
+   */
+  takeSealRepairs(): string[] {
+    const out: string[] = [];
+    for (const recorder of this.family()) {
+      out.push(...recorder.sealRepairs.splice(0));
     }
     return out;
   }
@@ -1208,6 +1289,10 @@ export class SessionRecorder {
 
   /** Ingest one transcript line (parent transcript or a subagent's). */
   ingestTranscriptLine(line: string, subagentId?: string): TachoEvent[] {
+    return this.everySealed(() => this.sealTranscriptLine(line, subagentId));
+  }
+
+  private sealTranscriptLine(line: string, subagentId?: string): TachoEvent[] {
     if (subagentId !== undefined && !this.options.parent) {
       const child = this.child(subagentId, undefined, undefined);
       return [
@@ -1262,6 +1347,10 @@ export class SessionRecorder {
 
   /** Ingest one record of the `-p` JSON stream (`system.init`, `result`, ...). */
   ingestResultRecord(record: unknown): TachoEvent[] {
+    return this.everySealed(() => this.sealResultRecord(record));
+  }
+
+  private sealResultRecord(record: unknown): TachoEvent[] {
     const inventory = inventoryFromInit(record);
     if (Object.keys(inventory).length > 0) {
       const { model, permission_mode, session_id: _sid, ...body } = inventory;
@@ -1325,6 +1414,13 @@ export class SessionRecorder {
     outcome: "completed" | "aborted" | "crashed" = "crashed",
     at?: string,
   ): TachoEvent[] {
+    return this.everySealed(() => this.sealFinal(outcome, at));
+  }
+
+  private sealFinal(
+    outcome: "completed" | "aborted" | "crashed",
+    at?: string,
+  ): TachoEvent[] {
     const out: TachoEvent[] = [];
     for (const link of this.children.values()) {
       out.push(...link.recorder.finalize(outcome, at));
@@ -1377,4 +1473,27 @@ export class SessionRecorder {
       metrics: [...this.metrics],
     };
   }
+}
+
+/**
+ * The same events with each session's events in seq order. Events keep the
+ * slots their session already held, so the order across sessions is kept.
+ */
+function inChainOrder(events: readonly TachoEvent[]): TachoEvent[] {
+  const slots = new Map<string, number[]>();
+  events.forEach((event, index) => {
+    const taken = slots.get(event.session_uuid) ?? [];
+    taken.push(index);
+    slots.set(event.session_uuid, taken);
+  });
+  const out = [...events];
+  for (const taken of slots.values()) {
+    const ordered = taken
+      .map((index) => events[index] as TachoEvent)
+      .sort((a, b) => a.seq - b.seq);
+    taken.forEach((slot, k) => {
+      out[slot] = ordered[k] as TachoEvent;
+    });
+  }
+  return out;
 }

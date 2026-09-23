@@ -18,6 +18,8 @@ export const SPEND_TABS = [
   "operator",
   "agent",
   "tool",
+  "task",
+  "cost_center",
   "waste",
   "budgets",
   "pricing",

@@ -89,6 +89,17 @@ import {
  */
 const BODY_READ_SLICE = 32;
 
+/**
+ * An event written with a seq more than one past the session's last. Only
+ * sessions this process has already read or written are checked.
+ */
+export interface WalChainGap {
+  session_uuid: string;
+  after_seq: number;
+  seq: number;
+  kind: string;
+}
+
 export interface WalBodyFailure {
   session_uuid: string;
   operation: "append" | "read" | "cleanup";
@@ -138,6 +149,8 @@ export class Wal {
     private readonly reportBodyFailure: (failure: WalBodyFailure) => void = (
       failure,
     ) => console.warn("WAL body unavailable", failure),
+    private readonly reportChainGap: (gap: WalChainGap) => void = (gap) =>
+      console.warn("WAL chain gap", gap),
   ) {
     this.dir = dir;
     ensureDir(dir);
@@ -230,7 +243,27 @@ export class Wal {
       const lines = bySession.get(event.session_uuid) ?? [];
       lines.push(JSON.stringify(event));
       bySession.set(event.session_uuid, lines);
+      if (
+        lines.length === 1 &&
+        !this.lastSeq.has(event.session_uuid) &&
+        !existsSync(this.fileFor(event.session_uuid))
+      ) {
+        // A session this write creates: its file will hold exactly these
+        // events, so the last seq is known without a read.
+        this.lastSeq.set(event.session_uuid, event.seq - 1);
+      }
       const known = this.lastSeq.get(event.session_uuid);
+      if (known !== undefined && event.seq > known + 1) {
+        // The control plane refuses this chain from here on. Say so at the
+        // moment of writing, on this machine, rather than only in the ingest
+        // response the daemon cannot act on.
+        this.reportChainGap({
+          session_uuid: event.session_uuid,
+          after_seq: known,
+          seq: event.seq,
+          kind: event.kind,
+        });
+      }
       if (known !== undefined && event.seq > known)
         this.lastSeq.set(event.session_uuid, event.seq);
       if (event.kind === "agent_stop") {

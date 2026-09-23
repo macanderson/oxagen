@@ -1,0 +1,84 @@
+{
+  "name": "set_cost_center",
+  "domain": "spend",
+  "description": "Charge this workspace, or one of its agents, back to a cost-center label from the organization's list, or clear the label. An agent's label wins over its workspace's.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "target": {
+        "type": "string",
+        "enum": [
+          "workspace",
+          "agent"
+        ]
+      },
+      "agent": {
+        "type": "string",
+        "minLength": 1
+      },
+      "costCenter": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "target",
+      "costCenter"
+    ],
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "target": {
+        "type": "string",
+        "enum": [
+          "workspace",
+          "agent"
+        ]
+      },
+      "id": {
+        "type": "string"
+      },
+      "costCenter": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "target",
+      "id",
+      "costCenter"
+    ],
+    "additionalProperties": false
+  }
+}

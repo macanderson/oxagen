@@ -120,6 +120,7 @@ const source: DataSource = {
     roles: vi.fn(),
     workspaces: vi.fn(),
     apiKeys: vi.fn(),
+    costCenters: vi.fn(),
     modelCredential: vi.fn(),
   },
   skills: { inventory: read, configuration: config },

@@ -1,7 +1,7 @@
 # @oxagen/steering-assembler
 
 The one function where everything that could steer an agent competes for
-Oxagen's slice of its context (ADR-093, ADR-142).
+Oxagen's slice of its context (ADR-093, ADR-143).
 
 ```ts
 import { assembleSteering } from "@oxagen/steering-assembler";

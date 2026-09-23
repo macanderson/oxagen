@@ -712,7 +712,7 @@ export const KIND_BODIES = {
   // plane's ingest contract applies, so this leaf package holds no copy.
   "proof.observed": z.object({}).catchall(json),
   // What the assembler put in front of the agent at a session start and what
-  // it cut (ADR-093, ADR-142): the bundle's `context.manifest` plus the
+  // it cut (ADR-093, ADR-143): the bundle's `context.manifest` plus the
   // steers delivered beside it. The chain carries the body as the host
   // sealed it; its schema is `steeringManifestFrameSchema` in `wire.ts`.
   "steering.manifest": z.object({}).catchall(json),

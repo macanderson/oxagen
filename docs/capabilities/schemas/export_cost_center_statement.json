@@ -1,0 +1,183 @@
+{
+  "name": "export_cost_center_statement",
+  "domain": "spend",
+  "description": "Export this organization's monthly chargeback statement as CSV: one line per cost center, and one for spend with no cost center, with runs, cost in micros and in cents, the basis, and the run ids that make up each line, plus the organization total they sum to.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "month": {
+        "type": "string"
+      },
+      "format": {
+        "type": "string",
+        "enum": [
+          "csv"
+        ],
+        "default": "csv"
+      }
+    },
+    "required": [
+      "month"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "month": {
+        "type": "string"
+      },
+      "filename": {
+        "type": "string"
+      },
+      "mediaType": {
+        "const": "text/csv"
+      },
+      "content": {
+        "type": "string"
+      },
+      "lines": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "costCenter": {
+              "type": "string"
+            },
+            "runs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unpricedRuns": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cost": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "basis": {
+                      "type": "string",
+                      "enum": [
+                        "gateway_observed",
+                        "client_attested",
+                        "mixed",
+                        "estimated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "costCenter",
+            "runs",
+            "unpricedRuns",
+            "cost",
+            "runIds"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unpricedRuns": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "micros": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "basis": {
+                    "type": "string",
+                    "enum": [
+                      "gateway_observed",
+                      "client_attested",
+                      "mixed",
+                      "estimated"
+                    ]
+                  }
+                },
+                "required": [
+                  "micros",
+                  "currency",
+                  "basis"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "runs",
+          "unpricedRuns",
+          "cost"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "month",
+      "filename",
+      "mediaType",
+      "content",
+      "lines",
+      "total"
+    ],
+    "additionalProperties": false
+  }
+}
