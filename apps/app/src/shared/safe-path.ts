@@ -74,29 +74,6 @@ const AGENT_SECTION_ALIASES: Readonly<Record<string, string>> = {
   runs: "activity",
 };
 
-/**
- * The path segments each Steering tab or shelf id lands on, old ids included
- * (roadmap pages/steering.md, "Old URLs still land").
- */
-const STEERING_SEGMENTS: Readonly<Record<string, readonly string[]>> = {
-  library: ["library"],
-  records: ["records"],
-  instructions: ["instructions"],
-  skills: ["skills"],
-  memory: ["memory"],
-  ontology: ["ontology"],
-  assignments: ["assignments"],
-  deliveries: ["assignments"],
-  gates: ["gates"],
-  policy: ["gates"],
-  settings: ["gates"],
-  freshness: ["gates"],
-  proposals: ["proposals"],
-  prs: ["proposals", "prs"],
-  compiler: ["compiler"],
-  preview: ["compiler"],
-};
-
 /** Every route the app navigates to; each builder returns a SafePath. */
 export const routes = {
   root: (): SafePath => ROOT,
@@ -331,12 +308,12 @@ export const routes = {
       finding: view.finding,
     }),
   /**
-   * Skills, the Skills shelf of the Steering library (roadmap pages/skills.md);
-   * `cursor` opens a later page of the inventory. `/{org}/{ws}/skills`
-   * redirects here.
+   * Skills, the Skills tab of Steering (MC spec §10.7); `cursor` opens a later
+   * page of the inventory. `/{org}/{ws}/skills` redirects here.
    */
   skills: (org: string, ws: string, q?: { cursor: string }): SafePath =>
-    withQuery(pathOf(org, ws, "steering", "skills"), {
+    withQuery(pathOf(org, ws, "steering"), {
+      tab: "skills",
       cursor: q?.cursor,
     }),
   /**
@@ -376,24 +353,14 @@ export const routes = {
   /** One runtime, addressed by its enrollment's public id (`tch_…`). */
   runtime: (org: string, ws: string, runtime: string): SafePath =>
     pathOf(org, ws, "runtimes", runtime),
-  /**
-   * Steering (roadmap pages/steering.md): the five tabs and the Library
-   * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`, and
-   * the Context PRs segment of Proposals is `/steering/proposals/prs`. A tab
-   * id written before the rename still maps to where it lives now: `policy`,
-   * `settings` and `freshness` are Gates, `deliveries` is Assignments,
-   * `preview` is the Compiler and `prs` is the Context PRs segment. Filters, a
-   * page offset, a selected proposal and a Skills cursor stay query values.
-   */
+  /** Steering filters, a selected proposal, and a Skills inventory cursor. */
   steering: (
     org: string,
     ws: string,
     q: {
       tab?: string;
-      /** The agent the Compiler assembles for; only with `tab: "compiler"`. */
-      agent?: string;
-      /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
-      skill?: string;
+      shelf?: string;
+      section?: string;
       kind?: string;
       offset?: string;
       proposal?: string;
@@ -401,22 +368,22 @@ export const routes = {
       view?: string;
     } = {},
   ): SafePath => {
-    const segments =
-      q.tab !== undefined && Object.hasOwn(STEERING_SEGMENTS, q.tab)
-        ? [...(STEERING_SEGMENTS[q.tab] ?? [])]
-        : [];
-    if (segments[0] === "compiler" && q.agent !== undefined) {
-      segments.push(q.agent);
-    }
-    if (segments[0] === "skills" && q.skill !== undefined) {
-      segments.push(q.skill, "source");
-    }
+    const canonical =
+      q.tab !== undefined &&
+      ["library", "proposals", "freshness", "deliveries"].includes(q.tab)
+        ? q.tab
+        : null;
+    const segments = canonical === null ? [] : [canonical];
+    if (q.tab === "library" && q.shelf && q.shelf !== "all")
+      segments.push(q.shelf);
     return withQuery(pathOf(org, ws, "steering", ...segments), {
+      tab: canonical === null ? q.tab : undefined,
       kind: q.kind,
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,
       view: q.view,
+      section: q.section,
     });
   },
   /**

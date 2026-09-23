@@ -70,9 +70,9 @@ export function SheetDialog({
   closeLabel?: string;
   /**
    * The mockup's header close (`.dlg-h .iconbtn.x`, aria-label "Close"): an x
-   * beside the title that dismisses like the footer button. Beside a footer
-   * button that also reads "Close", the x reads "Close the dialog", so no
-   * dialog carries two controls with one name.
+   * beside the title that dismisses like the footer button. Opt-in while the
+   * pages that pair it with a footer button already named "Close" move their
+   * footer to "Cancel", so no dialog carries two controls with one name.
    */
   headerClose?: boolean;
   /** The mockup's dialog width (600px) for editors that need two columns. */
@@ -84,12 +84,6 @@ export function SheetDialog({
 }) {
   const t = useTranslations("ui.dialog");
   const [slot, setSlot] = useState<HTMLElement | null>(null);
-  // The header x is the mockup's "Close". When the footer button already says
-  // "Close", the x takes "Close the dialog" instead, so no dialog carries two
-  // controls with one accessible name.
-  const footerCloseLabel = closeLabel ?? t("close");
-  const headerCloseLabel =
-    footerCloseLabel === t("close") ? t("dismiss") : t("close");
   return (
     <Dialog.Root
       open={open}
@@ -128,7 +122,7 @@ export function SheetDialog({
             </div>
             {headerClose ? (
               <Dialog.Close
-                aria-label={headerCloseLabel}
+                aria-label={t("close")}
                 disabled={!dismissible}
                 data-touch-target=""
                 data-header-close=""
@@ -162,7 +156,7 @@ export function SheetDialog({
               data-touch-target=""
               className={buttonSecondary}
             >
-              {footerCloseLabel}
+              {closeLabel ?? t("close")}
             </Dialog.Close>
             {footer}
             <div

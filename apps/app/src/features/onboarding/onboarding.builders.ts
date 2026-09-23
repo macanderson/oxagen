@@ -5,6 +5,7 @@
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { FirstFrame, OnboardingGate } from "@/data/contracts/onboarding";
 import type { RunChain, RunDetail } from "@/data/contracts/run";
+import type { RunPage } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 
@@ -89,6 +90,8 @@ type Reads = {
   state?: Read<OnboardingGate>;
   firstFrame?: Read<FirstFrame>;
   agent?: Read<AgentDetail>;
+  /** The newest runs page, which the gate reads for the first-run banner. */
+  runs?: Read<RunPage>;
   run?: Read<RunDetail>;
   chain?: Read<RunChain>;
 };
@@ -97,6 +100,7 @@ type Calls = {
   state: Parameters<DataSource["onboarding"]["state"]>[];
   firstFrame: Parameters<DataSource["onboarding"]["firstFrame"]>[];
   agent: Parameters<DataSource["agents"]["get"]>[];
+  runs: Parameters<DataSource["runs"]["list"]>[];
   run: Parameters<DataSource["runs"]["get"]>[];
   chain: Parameters<DataSource["runs"]["chain"]>[];
 };
@@ -110,6 +114,7 @@ export function onboardingSource(reads: Reads): {
     state: [],
     firstFrame: [],
     agent: [],
+    runs: [],
     run: [],
     chain: [],
   };
@@ -161,7 +166,10 @@ export function onboardingSource(reads: Reads): {
       preferences: refuse("shell.preferences"),
     },
     runs: {
-      list: refuse("runs.list"),
+      list: (...args: Parameters<DataSource["runs"]["list"]>) => {
+        calls.runs.push(args);
+        return Promise.resolve(answer(reads.runs, "runs.list"));
+      },
       get: (...args: Parameters<DataSource["runs"]["get"]>) => {
         calls.run.push(args);
         return Promise.resolve(answer(reads.run, "runs.get"));
@@ -224,7 +232,6 @@ export function onboardingSource(reads: Reads): {
       proposals: refuse("steering.proposals"),
       contextPr: refuse("steering.contextPr"),
       freshness: refuse("steering.freshness"),
-      hub: refuse("steering.hub"),
       deliveries: refuse("steering.deliveries"),
     },
     tools: {
