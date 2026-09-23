@@ -2,8 +2,11 @@
 // A dialog (ARCHITECTURE.md §1.2, the phone shell): a centred modal on a wide
 // screen and, below the md breakpoint, a sheet risen from the bottom edge with
 // a drag handle, over a scrim, closed by a full-width footer button
-// (src/ui/phone.css keys on the data attributes set here).
+// (src/ui/phone.css keys on the data attributes set here). The header carries
+// the mockup's ✕ (`.dlg-h .iconbtn.x`) as well, named for the dialog it
+// closes, and it follows `dismissible` like the footer's Close.
 import { Dialog } from "@base-ui/react/dialog";
+import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { createContext, type ReactNode, use, useState } from "react";
 import { createPortal } from "react-dom";
@@ -83,16 +86,27 @@ export function SheetDialog({
         >
           <SheetHandle />
           <div
-            className={`border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
+            className={`flex items-start gap-3 border-b border-border px-4 pt-4 ${tabs ? "pb-0" : "pb-3"}`}
           >
-            <Dialog.Title className="text-base font-semibold">
-              {title}
-            </Dialog.Title>
-            {subtitle ? (
-              <Dialog.Description className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-                {subtitle}
-              </Dialog.Description>
-            ) : null}
+            <div className="min-w-0 flex-1">
+              <Dialog.Title className="text-base font-semibold">
+                {title}
+              </Dialog.Title>
+              {subtitle ? (
+                <Dialog.Description className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                  {subtitle}
+                </Dialog.Description>
+              ) : null}
+            </div>
+            <Dialog.Close
+              disabled={!dismissible}
+              data-touch-target=""
+              data-dialog-dismiss=""
+              aria-label={t("dismiss", { title })}
+              className="grid size-8 flex-none place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
+            >
+              <X aria-hidden="true" className="size-3.5" />
+            </Dialog.Close>
           </div>
           {tabs ? <div className="px-4">{tabs}</div> : null}
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">

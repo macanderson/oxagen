@@ -4,7 +4,8 @@
       "home": "Oxagen home"
     },
     "dialog": {
-      "close": "Close"
+      "close": "Close",
+      "dismiss": "Close {title}"
     },
     "record": {
       "kinds": {

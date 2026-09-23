@@ -61,7 +61,6 @@
       "security": "Security and sessions",
       "privacy": "Privacy and data",
       "switchTheme": "Switch theme",
-      "themeNow": "now {theme, select, light {Paper} dark {Ink} other {system}}",
       "signOut": "Sign out",
       "signingOut": "Signing out…",
       "signOutFailed": "Sign-out did not go through, so this session is still open. Try again."

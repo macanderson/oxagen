@@ -203,6 +203,7 @@ const AGENTS: Load = () => import("./[ws]/agents/page");
 const AGENT: Load = () => import("./[ws]/agents/[agent]/page");
 const AGENT_SOURCE: Load = () => import("./[ws]/agents/[agent]/source/page");
 const SPEND: Load = () => import("./[ws]/spend/page");
+const RUNTIMES: Load = () => import("./[ws]/runtimes/page");
 
 const RUN: Load = () => import("./[ws]/runs/[run]/page");
 const API_KEYS: Load = () => import("./api-keys/page");
@@ -350,6 +351,34 @@ describe("the Spend page", () => {
       "waste",
     );
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+});
+
+describe("the Runtimes page", () => {
+  it("resolves the workspace viewer, names the page once and says what the record does not hold yet", async () => {
+    const viewer = {
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+      wsName: "Core platform",
+    };
+    requireViewer.mockResolvedValue(viewer);
+    const page = await expectPageTitle(
+      await RUNTIMES(),
+      routeProps(SEGMENTS),
+      title("runtimes"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(page).toHaveTextContent("Workspace Core platform");
+    expect(page).toHaveTextContent(
+      "The hosts agents run on, and what each host's seam earns.",
+    );
+    const gap = screen.getByTestId("runtimes-not-backed");
+    expect(gap).toHaveAttribute("data-gap", "#3816");
+    expect(gap.querySelector("a")?.getAttribute("href")).toBe(
+      "/acme/core-platform/agents",
+    );
+    // No figure is invented for a store that does not exist.
+    expect(gap.textContent).not.toMatch(/\d/);
   });
 });
 
@@ -732,6 +761,7 @@ describe("a person requireViewer refuses", () => {
     ["agent", AGENT] as const,
     ["agentSource", AGENT_SOURCE] as const,
     ["spend", SPEND] as const,
+    ["runtimes", RUNTIMES] as const,
     ["run", RUN] as const,
     ["people", () => import("./page")] as const,
     ["roles", () => import("./roles/page")] as const,

@@ -4,6 +4,7 @@
 // active slot, the More sheet as a bottom-sheet dialog, the drawer's scrim, and
 // a list table on the page labelled as cards.
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -315,6 +316,10 @@ describe("More sheet", () => {
     expect(style(sheet).width).toBe("100%");
     const close = within(sheet).getByRole("button", { name: "Close" });
     expect(close.parentElement).toHaveAttribute("data-sheet-footer");
+    // The mockup's header ✕ sits beside the title as well.
+    expect(
+      within(sheet).getByRole("button", { name: "Close More" }),
+    ).toHaveAttribute("data-dialog-dismiss");
     expect(style(close).flexGrow).toBe("1");
     expect(style(close).minHeight).toBe("44px");
     expect(document.querySelector("[data-scrim]")).not.toBeNull();
@@ -412,6 +417,38 @@ describe("the other dialogs on a phone", () => {
         .getByRole("navigation", { name: "Main" })
         .querySelectorAll("a"),
     ).toHaveLength(10);
+  });
+
+  it("the drawer closes when the window widens past the breakpoint, so no invisible modal holds focus", async () => {
+    const listeners: ((e: { matches: boolean }) => void)[] = [];
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: (_: string, fn: (e: { matches: boolean }) => void) => {
+        listeners.push(fn);
+      },
+      removeEventListener: () => undefined,
+    }));
+    try {
+      const user = userEvent.setup();
+      renderPhone(shellData());
+      await user.click(screen.getByRole("button", { name: "Open navigation" }));
+      await screen.findByTestId("nav-drawer");
+      expect(listeners.length).toBeGreaterThan(0);
+      act(() => {
+        for (const fn of listeners) fn({ matches: true });
+      });
+      await waitFor(() => {
+        expect(screen.queryByTestId("nav-drawer")).toBeNull();
+      });
+    } finally {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }));
+    }
   });
 
   // The rail that carries the launcher is `hidden md:flex`, so without this a

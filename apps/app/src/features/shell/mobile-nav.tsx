@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   isMoreCurrent,
   isNavItemCurrent,
@@ -408,10 +408,19 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
   );
 }
 
+/** Tailwind's md breakpoint, where the rail replaces the drawer. */
+export const WIDE_QUERY = "(min-width: 48rem)";
+
 /**
  * The phone drawer: the whole sidebar over a scrim, opened from the top bar's
  * menu button, the rail's foot included, so the assistant launcher a phone
  * cannot reach in the `hidden md:flex` rail is reachable here (ADR-026).
+ *
+ * The drawer is a modal whose popup and scrim are `md:hidden`, so a window
+ * widened past the breakpoint with it open would keep an invisible modal
+ * holding focus and scroll. Crossing to wide closes it, as the mockup's
+ * `S.side=false` does (audit-prompt check 15); everything else the shell
+ * holds (the route, an open dialog, the drawer's own state) is left alone.
  */
 export function NavDrawer({ data }: { data: ShellData }) {
   const t = useTranslations("shell.drawer");
@@ -419,6 +428,21 @@ export function NavDrawer({ data }: { data: ShellData }) {
   const close = () => {
     setDrawerOpen(false);
   };
+  useEffect(() => {
+    if (!drawerOpen || typeof window.matchMedia !== "function") return;
+    const wide = window.matchMedia(WIDE_QUERY);
+    if (wide.matches) {
+      setDrawerOpen(false);
+      return;
+    }
+    const onChange = (e: MediaQueryListEvent) => {
+      if (e.matches) setDrawerOpen(false);
+    };
+    wide.addEventListener("change", onChange);
+    return () => {
+      wide.removeEventListener("change", onChange);
+    };
+  }, [drawerOpen, setDrawerOpen]);
   return (
     <Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
       <Dialog.Portal>

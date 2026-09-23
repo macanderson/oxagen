@@ -31,6 +31,10 @@ type Messages = {
     record: string;
     steering: string;
     repositories: string;
+    runtimes: string;
+    runtimesDescription: string;
+    runtimesNotBacked: string;
+    runtimesAgentsLink: string;
     spend: string;
     people: string;
     roles: string;
@@ -4287,7 +4291,6 @@ type Messages = {
       security: string;
       privacy: string;
       switchTheme: string;
-      themeNow: string;
       signOut: string;
       signingOut: string;
       signOutFailed: string;
@@ -6039,6 +6042,7 @@ type Messages = {
     };
     dialog: {
       close: string;
+      dismiss: string;
     };
     record: {
       kinds: {

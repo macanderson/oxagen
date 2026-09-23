@@ -53,6 +53,7 @@ describe("messages/shell.json", () => {
       "assistant",
       "avatar",
       "commands",
+      "denied",
       "drawer",
       "loading",
       "mobileNav",
@@ -84,7 +85,6 @@ describe("messages/shell.json", () => {
       "signOutFailed",
       "signingOut",
       "switchTheme",
-      "themeNow",
     ]);
   });
 });

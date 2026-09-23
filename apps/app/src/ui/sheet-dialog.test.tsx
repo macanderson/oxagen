@@ -26,6 +26,9 @@ describe("SheetDialog dismissal", () => {
     const close = screen.getByRole("button", { name: "Close" });
     expect(close).toBeDisabled();
     await user.click(close);
+    const dismiss = screen.getByRole("button", { name: "Close Held" });
+    expect(dismiss).toBeDisabled();
+    await user.click(dismiss);
     await user.keyboard("{Escape}");
     const backdrop = document.querySelector<HTMLElement>("[data-scrim]");
     if (!backdrop) throw new Error("Missing dialog backdrop");
@@ -43,6 +46,21 @@ describe("SheetDialog dismissal", () => {
       </IntlProvider>,
     );
     await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(change).toHaveBeenCalledWith(false);
+  });
+  it("closes from the header's ✕, named for the dialog it closes", async () => {
+    const change = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <SheetDialog open onOpenChange={change} title="More" testId="more">
+          <p>Tiles</p>
+        </SheetDialog>
+      </IntlProvider>,
+    );
+    const dismiss = screen.getByRole("button", { name: "Close More" });
+    expect(dismiss).toHaveAttribute("data-dialog-dismiss");
+    await user.click(dismiss);
     expect(change).toHaveBeenCalledWith(false);
   });
 });
