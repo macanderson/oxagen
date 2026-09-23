@@ -220,6 +220,7 @@ describe("inbox", () => {
     expect(record.control.messages[1]).toEqual({
       id: "st",
       text: "use staging",
+      issuedAt: "2026-09-10T10:00:00.000Z",
       command: "steer",
       requestedMode: "interrupt",
       deliveryMode: "next_step",

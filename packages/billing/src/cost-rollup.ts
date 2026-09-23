@@ -96,7 +96,7 @@ export interface RunMeta {
   /** Null when the frames hide the turn index. */
   turns: number | null;
   retries: number | null;
-  enforcementTier: "gateway" | "harness" | "observe" | null;
+  enforcementTier: "contained" | "gateway" | "harness" | "observe" | null;
   replayGrade: "inspect" | "view" | "fork" | "retry" | null;
 }
 

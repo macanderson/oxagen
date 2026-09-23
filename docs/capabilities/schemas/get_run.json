@@ -244,6 +244,7 @@
           "enforcementTier": {
             "type": "string",
             "enum": [
+              "contained",
               "gateway",
               "harness",
               "observe"
@@ -406,6 +407,47 @@
                   "osVersion",
                   "arch",
                   "nodeVersion"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "harness": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "runtime": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "version",
+                  "runtime"
                 ],
                 "additionalProperties": false
               },

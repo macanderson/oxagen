@@ -60,6 +60,11 @@ import { recordSpend } from "@oxagen/billing";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { writeAssembly } from "@oxagen/run-ledger";
+import {
+  containedLaunchesFor,
+  containedTierOf,
+  promotedTier,
+} from "./lib/tacho-containment";
 import { machineSnapshotOf } from "./lib/machine-facts";
 import { rollupFiles } from "./lib/file-facts-rollup";
 import { unlockOnboardingGate } from "./lib/onboarding";
@@ -1005,6 +1010,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       await gatewayInvocationColumnReady(tx, true),
     );
 
+    const containedLaunches = await containedLaunchesFor(tx, host.id, [
+      ...bySession.keys(),
+    ]);
+
     for (const [sessionUuid, events] of bySession) {
       events.sort((a, b) => a.seq - b.seq);
       const first = events[0] as TachoEvent;
@@ -1147,7 +1156,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         : first.seq === 0
           ? first.hash
           : null;
-      const derivedTier = enforcementTierOf(
+      const gatewayTier = enforcementTierOf(
         chainRecord,
         host,
         ok,
@@ -1155,24 +1164,19 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         sessionGenesisHash,
         firstObserved !== undefined,
       );
+      const derivedTier = containedTierOf(
+        gatewayTier,
+        containedLaunches.get(sessionUuid),
+        sessionGenesisHash,
+      );
       // What a `gateway` tier stands on: the control plane's record of a
       // served MCP call, or the first model call the proxy observed.
       const gatewayEvidenceAt =
         chainRecord?.at ??
         (firstObserved !== undefined ? new Date(firstObserved.ts) : null);
+      const effectiveTier = promotedTier(existing, derivedTier);
       const promoteToGateway =
-        existing !== undefined &&
-        // Truthiness, matching `terminal` just below: a row read without the
-        // column is as unsealed as one that is null, and either way an absent
-        // seal must not read as a sealed one.
-        !existing.sealedAt &&
-        existing.enforcementTier !== TACHO_GATEWAY_TIER &&
-        derivedTier === TACHO_GATEWAY_TIER;
-      const effectiveTier = existing
-        ? promoteToGateway
-          ? TACHO_GATEWAY_TIER
-          : existing.enforcementTier
-        : derivedTier;
+        existing !== undefined && effectiveTier !== existing.enforcementTier;
       // The grade is computed once, at seal: a sealed session is never
       // sealed again, whatever a later batch carries.
       const terminal = existing?.sealedAt ? {} : terminalPatch(fresh, now);
@@ -1295,7 +1299,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         // not demote it back to the host's mode.
         ...(promoteToGateway
           ? {
-              enforcementTier: TACHO_GATEWAY_TIER,
+              enforcementTier: effectiveTier,
               // What raised it. A tier that rose must point at the evidence.
               // Guarded on the column's presence in its own right rather than
               // leaning on `promoteToGateway` being unreachable without the
@@ -1387,7 +1391,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           now,
           sessionGatewayColumn,
           derivedTier,
-          derivedTier === TACHO_GATEWAY_TIER ? gatewayEvidenceAt : null,
+          gatewayTier === TACHO_GATEWAY_TIER ? gatewayEvidenceAt : null,
           sessionGenesisHash,
         );
         const written = await tx

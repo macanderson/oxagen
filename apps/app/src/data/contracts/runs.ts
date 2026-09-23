@@ -75,7 +75,12 @@ const ProofVerdict = z.enum([
  * command is refused: a page draws the controls disabled rather than offering
  * four that always fail.
  */
-export const EnforcementTier = z.enum(["gateway", "harness", "observe"]);
+export const EnforcementTier = z.enum([
+  "contained",
+  "gateway",
+  "harness",
+  "observe",
+]);
 export type EnforcementTier = z.infer<typeof EnforcementTier>;
 
 /**
@@ -182,6 +187,14 @@ export const RunRow = z.object({
   cost: Cost.nullable(),
   model: RunModel.nullable(),
   machine: RunMachine.nullable(),
+  harness: z
+    .object({
+      name: z.string(),
+      version: z.string().nullable(),
+      runtime: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
   taskRef: z.string().nullable(),
   /** The generated name; null until `summarize_run` wrote one. */
   name: z.string().min(1).nullable(),

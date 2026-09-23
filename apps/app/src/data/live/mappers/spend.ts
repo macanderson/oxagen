@@ -52,6 +52,7 @@ export function toSpendReport(
       ...toFigure(row),
       key: row.key,
       provider: row.provider,
+      tokens: row.tokens,
       operator: row.operator,
     })),
   };

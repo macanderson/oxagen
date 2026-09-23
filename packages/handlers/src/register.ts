@@ -753,6 +753,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .appendRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_steering_deliveries",
+    async () =>
+      (await import("./context.steering.deliveries"))
+        .getSteeringDeliveriesHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_steering_freshness",
     async () =>
       (await import("./context.steering.freshness"))
@@ -1075,6 +1081,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./tacho.events.ingest"))
         .tachoEventsIngestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "register_contained_launch",
+    async () =>
+      (await import("./tacho.contained_launch.register"))
+        .tachoContainedLaunchRegisterHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_tacho_bundle",
