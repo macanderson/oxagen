@@ -79,9 +79,7 @@ describe("GatewayPolicyForm", () => {
       modelDeny: "gpt 4o",
     });
     expect(deny.success).toBe(false);
-    expect(!deny.success && deny.error.issues[0]?.path).toEqual([
-      "modelDeny",
-    ]);
+    expect(!deny.success && deny.error.issues[0]?.path).toEqual(["modelDeny"]);
   });
 
   it("accepts an exact id, a trailing star, and a bare star", () => {
@@ -92,16 +90,12 @@ describe("GatewayPolicyForm", () => {
     expect(parsed.modelDeny).toEqual(["gpt-4o", "claude-opus-*", "*"]);
   });
 
-  it("sends observed whatever the values carry, because nothing reads the policy", () => {
-    // The panel offers no mode switch and the handler refuses `enforced`, so
-    // the form is the third place that states the one value the contract
-    // accepts. A form that passed `enforced` through would put a word in the
-    // record that no enforcer reads.
+  it("preserves the explicit model enforcement decision", () => {
     expect(GatewayPolicyForm.parse(BLANK).mode).toBe("observed");
     expect(
       GatewayPolicyForm.parse({ ...BLANK, mode: "enforced", modelDeny: "*" })
         .mode,
-    ).toBe("observed");
+    ).toBe("enforced");
   });
 
   it("refuses no combination of clauses", () => {

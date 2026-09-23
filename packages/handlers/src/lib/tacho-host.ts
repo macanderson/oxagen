@@ -19,6 +19,7 @@ import { loadRuleSetIn } from "@oxagen/rules";
 import { PROVIDER_RATE_CARD, usdPerMillionToMicros } from "@oxagen/billing";
 import {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
+  BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
   BUNDLE_FEATURE_MODEL_PRICES,
   digestJcs,
@@ -52,6 +53,11 @@ import {
   mapMandateToBundlePermissions,
 } from "./tacho-mandate";
 import { readWorkspaceSteering, type SteeringTx } from "./tacho-steering";
+
+import {
+  readTachoSessionPolicyIn,
+  type SessionPolicyTx,
+} from "./tacho-session-policy";
 
 export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
@@ -335,6 +341,7 @@ function modelPrices(host: TachoHostRow): {
 export interface HostMandate {
   permissions: PolicyBundle["permissions"];
   budget: PolicyBundle["budget"];
+  models?: PolicyBundle["models"];
 }
 
 /**
@@ -437,25 +444,21 @@ export async function resolveHostMandate(
   });
   const budgetDoc = await readAgentBudgetDoc(tx, host.agentId);
   const budget = deriveBundleBudget(budgetDoc);
-  return { permissions, budget };
+  if (!host.bundleFeatures?.includes(BUNDLE_FEATURE_INDEPENDENT_MODELS)) {
+    return { permissions, budget };
+  }
+  const policy = await readTachoSessionPolicyIn(
+    tx as unknown as SessionPolicyTx,
+    ctx.workspaceId,
+  );
+  return {
+    permissions,
+    budget,
+    ...(policy.mode === "enforced"
+      ? { models: { allow: policy.modelAllow, deny: policy.modelDeny } }
+      : {}),
+  };
 }
-
-/**
- * The bundle carries no `models` clause today.
- *
- * The workspace's allow and deny lists are stored
- * (`workspace.tacho_session_policy`) and read back by
- * `get_tacho_session_policy`, and nothing signs them into a bundle. The clause
- * they would fill fires on `budget.mode === "enforced"`, and that mode is set
- * from the agent's mandate budget (#3710) — so emitting the lists here would
- * arm them on every workspace that had already set an agent budget, which is
- * not a decision a model list's author made. `unsignedBundle` emits the
- * mandate's budget and nothing else until that ordering is settled.
- *
- * `BUNDLE_FEATURE_MODEL_ALLOWLIST` stays declared, and hosts keep advertising
- * it, so the gate is already in the field when the clause arrives. See
- * `docs/audits/2026-09-21-model-gateway-arming.md`.
- */
 
 /**
  * The unsigned bundle for a host at this moment (spec section 7.1).
@@ -488,6 +491,10 @@ export function unsignedBundle(
     permissions: mandate.permissions,
     tools: {} as PolicyBundle["tools"],
     budget: mandate.budget,
+    ...(host.bundleFeatures?.includes(BUNDLE_FEATURE_INDEPENDENT_MODELS) &&
+    mandate.models
+      ? { models: mandate.models }
+      : {}),
     context: { system: contextSystem },
     retention,
     mode,

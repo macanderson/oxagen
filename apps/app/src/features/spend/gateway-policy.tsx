@@ -7,12 +7,7 @@
 // govern Oxagen's own turns, metered as they bill. This one is about somebody's
 // laptop, where the enforcer is the daemon on it reading a signed bundle.
 //
-// **Nothing reads this policy yet.** No bundle carries a `models` clause, and
-// a session's ceiling comes from the agent's own mandate budget (#3710), so
-// the panel records a decision and refuses nothing. That is the whole reason
-// the state badge says "Not applied" and the footer says so again after a
-// save: saving is not governing, and a panel that showed only the saved value
-// would read as an enforced one.
+// Model lists are armed independently of the agent budget on upgraded hosts.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { GatewayPolicy } from "@/data/contracts/spend";
@@ -34,10 +29,7 @@ import type { GatewayReach, SpendAt } from "./view";
 /** The saved policy as the dialog's fields, so Save with no edits is a no-op. */
 function valuesOf(policy: GatewayPolicy): GatewayPolicyFormValues {
   return {
-    // Always `observed`, whatever the row holds. A row written before
-    // `enforced` was refused still says so, and saving from this panel must
-    // not write a mode nothing reads back into the record.
-    mode: "observed",
+    mode: policy.mode,
     sessionLimit:
       policy.sessionLimitUsd === null ? "" : String(policy.sessionLimitUsd),
     // A null allowlist and an empty one both render as an empty box, and both
@@ -169,7 +161,7 @@ export function GatewayPolicySection({
       note={t("note")}
       action={
         <Badge tone="quiet" data-mode={saved.mode}>
-          {t("notApplied")}
+          {saved.mode === "enforced" ? t("enforced") : t("notApplied")}
         </Badge>
       }
       footer={
@@ -177,7 +169,10 @@ export function GatewayPolicySection({
           <p data-testid="gateway-reach" className="text-xs">
             {reach.hosts === 0
               ? t("reach.none")
-              : t("reach.stored", { hosts: reach.hosts })}
+              : t("reach.stored", {
+                  hosts: reach.hosts,
+                  capable: reach.hostsEnforcingModels,
+                })}
           </p>
         )
       }
@@ -191,6 +186,24 @@ export function GatewayPolicySection({
           className="flex flex-col gap-3 px-4 py-3.5"
         >
           {alert ? <FormAlert>{t(`alert.${alert}`)}</FormAlert> : null}
+          <label htmlFor="gateway-mode" className="text-sm font-medium">
+            {t("mode")}
+          </label>
+          <select
+            id="gateway-mode"
+            className={inputBase}
+            value={values.mode}
+            onChange={(event) =>
+              setValues((prev) => ({
+                ...prev,
+                mode:
+                  event.target.value === "enforced" ? "enforced" : "observed",
+              }))
+            }
+          >
+            <option value="observed">{t("notApplied")}</option>
+            <option value="enforced">{t("enforced")}</option>
+          </select>
           <Field
             id="gateway-session-limit"
             name="sessionLimit"

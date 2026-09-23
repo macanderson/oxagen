@@ -4749,6 +4749,8 @@ type Messages = {
         denied: string;
         failed: string;
       };
+      enforced: string;
+      mode: string;
     };
   };
   steering: {

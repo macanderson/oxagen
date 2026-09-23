@@ -429,11 +429,11 @@
       "cacheHitRateNote": "cache_read ÷ (input_uncached + cache_read)"
     },
     "gateway": {
-      "title": "Gateway sessions",
-      "note": "The models this workspace permits for a wrapped Claude Code or Codex session on an enrolled machine. The lists are saved here and no machine reads them yet, so nothing is refused. Cursor and Stella sessions are not routed through the gateway.",
-      "notApplied": "Not applied",
-      "sessionLimit": "Session limit (USD)",
-      "sessionLimitHint": "Saved with the lists and not yet applied. A session's ceiling comes from the agent's own budget today. Leave blank for no limit.",
+      "title": "Gateway models",
+      "note": "Model lists apply to routed calls from Claude Code, Codex, and Stella’s Anthropic provider after an upgraded host refreshes its signed mandate. Cursor model calls are not routed. Agent budgets remain separate.",
+      "notApplied": "Lists disabled",
+      "sessionLimit": "Recorded workspace ceiling (USD)",
+      "sessionLimitHint": "This legacy value is recorded only. Set an enforced run budget on the agent mandate.",
       "modelAllow": "Allowed models",
       "modelAllowHint": "One per line. A trailing * matches by prefix, so claude-opus-* covers every dated build. Leave blank to permit every model.",
       "modelDeny": "Denied models",
@@ -448,7 +448,7 @@
       "denylist": "Denied models: {models}.",
       "reach": {
         "none": "Saved. No machine is enrolled in this workspace yet.",
-        "stored": "Saved. {hosts} enrolled machines, and none of them reads these lists yet, so every model is still permitted."
+        "stored": "Saved. {capable} of {hosts} enrolled machines support these lists. Enabled lists apply on their next mandate refresh. Upgrade the other machines."
       },
       "errors": {
         "sessionLimitInvalid": "Enter an amount above zero, or leave it blank for no limit.",
@@ -457,7 +457,9 @@
       "alert": {
         "denied": "Your role cannot change this policy. An organization or workspace owner or admin sets it.",
         "failed": "The policy could not be confirmed. Reload the tab to see what is set; saving it again replaces it."
-      }
+      },
+      "enforced": "Lists enabled",
+      "mode": "Model enforcement"
     }
   }
 }

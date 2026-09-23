@@ -164,20 +164,11 @@ export const BUNDLE_FEATURE_GATEWAY_TOOLS = "gateway_tools" as const;
  */
 export const BUNDLE_FEATURE_MODEL_PRICES = "model_prices" as const;
 
-/**
- * The host can parse `models`, the allow and deny lists the loopback model
- * proxy refuses a disallowed model against. Gated for the same reason
- * `gateway_tools` and `model_prices` are: the bundle schema is strict, so a
- * host built before the field would reject the whole mandate rather than the
- * one field it does not know.
- *
- * Nothing emits this field yet. `unsignedBundle` leaves it out of every
- * bundle it signs, so a host that advertises the feature is told no list and
- * refuses no model. The workspace's saved lists are stored and read back and
- * govern no machine until the control plane emits them; the panel that sets
- * them says so. See `docs/audits/2026-09-21-model-gateway-arming.md`.
- */
+/** Legacy support for parsing model lists, gated by the budget mode. */
 export const BUNDLE_FEATURE_MODEL_ALLOWLIST = "models" as const;
+
+/** Model lists apply independently of the agent budget on this host. */
+export const BUNDLE_FEATURE_INDEPENDENT_MODELS = "models_independent" as const;
 
 /**
  * The host can parse `hook_fail_open`: the list of hook paths the local
@@ -205,6 +196,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_GATEWAY_TOOLS,
   BUNDLE_FEATURE_MODEL_PRICES,
   BUNDLE_FEATURE_MODEL_ALLOWLIST,
+  BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
 ] as const;
 
@@ -750,16 +742,16 @@ export const policyBundleSchema = z
      *
      * The whole object is optional, and absent means *no model policy this
      * host has been told about*, never *no policy*. Emitted only to a host
-     * that advertised `BUNDLE_FEATURE_MODEL_ALLOWLIST`, because this schema is
+     * that advertised `BUNDLE_FEATURE_INDEPENDENT_MODELS`, because this schema is
      * `.strict()` and a daemon built before the field would reject the entire
      * mandate over it. Read the optionality as the rollout constraint it is;
      * a host that has not advertised calls whatever it likes until it
      * upgrades, and `update_tacho_session_policy` reports how many hosts are
      * in that state so nobody mistakes a saved list for an applied one.
      *
-     * Both lists apply only when `budget.mode` is `enforced`. One word
-     * answers "does this host refuse anything", rather than two clauses that
-     * can disagree.
+     * Presence arms the model clause independently of `budget.mode`.
+     * The server sends it only after the workspace explicitly enables it and
+     * the host advertises `BUNDLE_FEATURE_INDEPENDENT_MODELS`.
      */
     models: z
       .object({

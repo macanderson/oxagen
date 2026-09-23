@@ -8,7 +8,7 @@
 
 ## Intent
 
-Read the workspace's policy for wrapped-harness sessions — the Claude Code and Codex sessions that route their model calls through the loopback gateway. Returns the mode, the per-session dollar ceiling, and the model allow and deny lists. Every member can read it, so a person can see what their own machine will refuse before it refuses.
+Read the workspace model policy for Claude Code, Codex, and Stella requests routed through the loopback gateway. Returns the mode, model lists, host feature support, and the legacy recorded dollar ceiling. Every member can read the policy.
 
 This is a different setting from `get_budget_policy`, which governs an in-app assistant **turn**. This one governs a wrapped harness **session** on somebody's laptop, and a different enforcer applies it: the daemon's loopback model proxy, from the signed policy bundle.
 
@@ -20,8 +20,8 @@ None.
 
 | Field | Type | Notes |
 |---|---|---|
-| `mode` | `"observed" \| "enforced"` | `observed` = the gateway meters and refuses nothing, and is the only value the write accepts. `enforced` appears only on a row written before it was refused. |
-| `sessionLimitUsd` | `number \| null` | The per-session ceiling in USD; `null` when no ceiling is set. |
+| `mode` | `"observed" \| "enforced"` | `observed` omits workspace model rules from bundles. `enforced` arms them on hosts advertising `models_independent`. Agent budgets are independent. |
+| `sessionLimitUsd` | `number \| null` | Legacy recorded ceiling; does not arm enforcement. Agent mandates supply enforced run budgets. |
 | `modelAllow` | `string[] \| null` | The only models a wrapped harness may call. `null` = no allowlist, so every model is permitted. `[]` = an allowlist that permits nothing. |
 | `modelDeny` | `string[]` | Models refused whatever the allowlist says. A deny beats an allow. |
 
@@ -45,6 +45,4 @@ None. `noBillingGate: true`.
 
 ## Notes
 
-- A workspace with no row reads as observed-only, which is what every host had before the setting existed.
-- `mode` governs both enforced clauses, once a bundle carries them. One word answers "does this host refuse anything", rather than two clauses that can disagree. No bundle carries them today, so the answer is no for every host whatever this returns.
-- The ceiling is checked when a call is admitted, not mid-stream, so a session can end one call past its limit. Cutting a response in half to save its last tokens would cost the operator the whole call.
+A workspace with no row reads as observed. [ADR-149](../adr/ADR-149-independent-model-policy.md) makes model enforcement independent of agent budgets. Compatible hosts receive the policy on their next signed-bundle refresh. Host support counts indicate capability, not confirmed receipt. Older hosts need an upgrade. Cursor model traffic is outside this gateway.

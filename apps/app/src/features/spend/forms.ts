@@ -115,10 +115,6 @@ function lines(value: string): string[] {
  * This one tells the person which field to fix while they are still looking
  * at it, rather than saving a rule that silently matches nothing.
  *
- * `mode` is always `observed`. Nothing reads this policy yet, so the handler
- * refuses `enforced` and the panel offers no switch; the field stays on the
- * form's shape because the contract still carries it.
- *
  * An allowlist box left blank means *no allowlist*, so every model is
  * permitted. To permit nothing, deny `*`.
  */
@@ -163,10 +159,7 @@ export const GatewayPolicyForm = z
     // nothing. The two reach the contract as null and [].
     const modelAllow = allow.length > 0 ? allow : null;
     return {
-      // Always `observed`. The handler refuses `enforced` while no bundle
-      // carries the clauses it would name, so the panel offers no choice and
-      // the form states the one value the contract accepts.
-      mode: "observed" as const,
+      mode: form.mode,
       sessionLimitUsd,
       modelAllow,
       modelDeny: deny,

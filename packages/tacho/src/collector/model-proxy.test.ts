@@ -1155,31 +1155,52 @@ describe("the loopback model proxy", () => {
     await first.handle.stop();
   });
 
-  it("does not refuse on models while the budget mode is observed", async () => {
-    // The negative control for the test above. One mode governs both enforced
-    // clauses; a list that refused under `observed` would arm a gateway the
-    // operator never armed.
+  it.each([true, false])(
+    "enforces models with an observed budget and correlated run %s",
+    async (correlated) => {
+      const fake = await vendor(streamingAnthropic(1));
+      const host = await boot(fake.url, {
+        paths: scratchPaths(),
+        bundle: {
+          budget: { mode: "observed" as const },
+          models: { allow: [], deny: ["*"] },
+        },
+      });
+      if (correlated) await host.session("sess-observed");
+      const answer = await call(host.port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-observed",
+        ],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      });
+      expect(answer.status).toBe(403);
+      expect(answer.headers["x-oxagen-refusal"]).toBe("model_not_permitted");
+      expect(fake.requests).toHaveLength(0);
+      await host.handle.stop();
+    },
+  );
+
+  it("refuses an unreadable model call when lists are armed", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const host = await boot(fake.url, {
       paths: scratchPaths(),
       bundle: {
-        budget: { mode: "observed" as const },
-        models: { allow: [], deny: ["*"] },
+        budget: { mode: "observed" },
+        models: { allow: ["claude-*"], deny: [] },
       },
     });
-    await host.session("sess-observed");
     const answer = await call(host.port, {
       path: "/anthropic/v1/messages",
-      headers: [
-        "X-Api-Key",
-        FAKE_KEY,
-        "X-Claude-Code-Session-Id",
-        "sess-observed",
-      ],
-      body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      headers: ["X-Api-Key", FAKE_KEY],
+      body: "{}",
     });
-    expect(answer.status).toBe(200);
-    expect(fake.requests).toHaveLength(1);
+    expect(answer.status).toBe(403);
+    expect(answer.headers["x-oxagen-refusal"]).toBe("model_ambiguous");
+    expect(fake.requests).toHaveLength(0);
     await host.handle.stop();
   });
 
@@ -2461,6 +2482,7 @@ describe("the wire and the host file", () => {
       "gateway_tools",
       "model_prices",
       "models",
+      "models_independent",
       "hook_fail_open",
     ]);
   });

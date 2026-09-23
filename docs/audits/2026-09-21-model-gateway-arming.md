@@ -1,5 +1,7 @@
 # Model gateway: wired versus armed
 
+> Update 2026-09-22: [ADR-149](../adr/ADR-149-independent-model-policy.md) resolves the ownership decision in §3. Workspace mode arms model lists independently of agent budgets. Upgraded hosts advertise `models_independent`; older hosts receive no clause. The implementation is in `resolveHostMandate`, `unsignedBundle`, and the proxy's `refusalFor`. The historical findings below describe the earlier revision. CI and deployment must establish rollout.
+
 You want to know whether the loopback model proxy actually governs a wrapped
 harness's model spend today, or whether it only watches. Short answer: it
 watches. Every enforcement branch in `model-proxy.ts` is real code, but the one
