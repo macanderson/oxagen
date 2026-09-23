@@ -423,7 +423,7 @@ describe("Identity", () => {
       within(credentials).getByRole("link", {
         name: "See the connections that mint them",
       }),
-    ).toHaveAttribute("href", "/acme/core-platform/tools?tab=connections");
+    ).toHaveAttribute("href", "/acme/core-platform/tools/providers");
     const run = region("Run credential");
     expect(run).toHaveTextContent("oxa_ag_7f…");
     expect(run).toHaveTextContent("Purpose locknot recorded");
