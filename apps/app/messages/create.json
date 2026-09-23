@@ -212,6 +212,7 @@
         "orgRoleRequired": "Opening a skill pull request needs Owner or Admin on the organization.",
         "noRepository": "This workspace has no main repository yet. Bind one in Workspace settings.",
         "githubRefused": "GitHub refused the write. Check the GitHub App’s access to the repository and try again.",
+        "branchExists": "The proposal branch already exists with no open pull request, so nothing was written. Oxagen does not reset it, because that would discard its commits. Delete the branch or reopen its pull request in GitHub, then submit again.",
         "unanswered": "Oxagen did not answer. Nothing was written. Try again.",
         "refused": "The pull request was refused ({code}). Nothing was written.",
         "invalid": "The {field} value is not one propose_skill accepts. Nothing was written.",

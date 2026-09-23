@@ -111,6 +111,9 @@ const FAILURES = {
   org_role_required: "orgRoleRequired",
   workspace_repository_missing: "noRepository",
   github_refused: "githubRefused",
+  // propose_* refuses a leftover proposal branch with no open pull request
+  // rather than reset it, so a rejected commit never rides a new one (#3501).
+  proposal_branch_exists: "branchExists",
   unanswered: "unanswered",
 } as const;
 

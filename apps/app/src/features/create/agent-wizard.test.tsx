@@ -525,6 +525,20 @@ describe("the agent wizard: pull request", () => {
     expect(primary().disabled).toBe(false);
   });
 
+  it("says a leftover proposal branch must be removed or its pull request reopened (negative)", async () => {
+    proposeAgent.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "proposal_branch_exists",
+    });
+    await toPullRequest();
+    fireEvent.click(primary());
+    expect((await screen.findByTestId("pr-failure")).textContent).toBe(
+      t("failure.branchExists"),
+    );
+    expect(screen.queryByTestId("pr-opened")).toBeNull();
+  });
+
   it("names a refusal it has no sentence for by its code (negative)", async () => {
     proposeAgent.mockResolvedValue({
       ok: false,

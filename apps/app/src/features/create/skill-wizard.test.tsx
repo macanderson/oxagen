@@ -319,6 +319,20 @@ describe("the skill wizard: describe it", () => {
     expect(primary().disabled).toBe(false);
   });
 
+  it("says a leftover proposal branch must be removed or its pull request reopened (negative)", async () => {
+    proposeSkill.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "proposal_branch_exists",
+    });
+    await toPullRequest("Run a safe Postgres migration");
+    fireEvent.click(primary());
+    expect((await screen.findByTestId("pr-failure")).textContent).toBe(
+      t("skill.failure.branchExists"),
+    );
+    expect(screen.queryByTestId("pr-opened")).toBeNull();
+  });
+
   it("names a refusal it has no sentence for by its code (negative)", async () => {
     proposeSkill.mockResolvedValue({
       ok: false,

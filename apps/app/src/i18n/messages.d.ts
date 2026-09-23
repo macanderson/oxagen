@@ -1459,6 +1459,7 @@ type Messages = {
         orgRoleRequired: string;
         noRepository: string;
         githubRefused: string;
+        branchExists: string;
         unanswered: string;
         refused: string;
         invalid: string;
@@ -1637,6 +1638,7 @@ type Messages = {
       orgRoleRequired: string;
       noRepository: string;
       githubRefused: string;
+      branchExists: string;
       unanswered: string;
       refused: string;
       invalid: string;
