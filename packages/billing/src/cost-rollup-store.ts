@@ -886,3 +886,89 @@ export async function listWorkspacesWithRuns(args: {
       .where(and(gte(totals.startedAt, start), lt(totals.startedAt, next))),
   );
 }
+
+/** One row of {@link listRunsWithUnassignedCostCenter}, and the cursor for the page after it. */
+export interface UnassignedCostCenterRun {
+  runId: string;
+  orgId: string;
+  workspaceId: string;
+  /** RFC 3339, millisecond precision. */
+  startedAt: string;
+}
+
+/**
+ * Rolled-up runs charged to no cost center whose agent, or failing that
+ * whose workspace, now names a live label (ADR-142). Oldest first.
+ *
+ * These are the rows a rebuild would move out of the unassigned line: a
+ * `cost.run_totals` row written before the column existed, or before the
+ * agent or workspace was charged to a label. The seal-time rollup and the
+ * nightly sweep never revisit them, because their `rolled_up_at` postdates
+ * their seal, so `db:backfill-cost-centers` lists them here and asks the
+ * rollup job to rebuild each one. A row whose label was cleared again since
+ * is not listed: the coalesce below is the same resolution the rollup makes,
+ * so a run this lists is a run the rebuild will charge.
+ *
+ * The agent is found by its principal, the way the tacho rollup finds it, so
+ * a ledger run and a wrapped run resolve alike, and a deleted agent's row
+ * still carries its label. Only rows with a null `cost_center` are listed:
+ * moving a run from one label to another is a policy ADR-142 has not
+ * decided, and a backfill that did it silently would rewrite a closed
+ * month's statement.
+ *
+ * `after` is the last row of the previous page, at millisecond precision for
+ * the reason {@link listRunsWithIncompleteCost} gives. `orgId` narrows the
+ * pass to one organization.
+ */
+export async function listRunsWithUnassignedCostCenter(args: {
+  limit: number;
+  after?: UnassignedCostCenterRun;
+  orgId?: string;
+}): Promise<UnassignedCostCenterRun[]> {
+  const startedMs = sql<Date>`date_trunc('milliseconds', ${totals.startedAt})`;
+  const resolved = resolvedCostCenter(
+    totals.orgId,
+    schema.agents.costCenter,
+    schema.workspaces.costCenter,
+  );
+  // tenancy: the backfill runs outside a tenant scope and reads every
+  // organization's run rows, oldest first, or one organization's when asked;
+  // each joined label is filtered by the row's own orgId inside
+  // resolvedCostCenter, so no row reads another organization's list.
+  return withSystemDb(async (tx) => {
+    const rows = await tx
+      .select({
+        runId: totals.runId,
+        orgId: totals.orgId,
+        workspaceId: totals.workspaceId,
+        startedAt: totals.startedAt,
+      })
+      .from(totals)
+      .leftJoin(schema.workspaces, eq(schema.workspaces.id, totals.workspaceId))
+      .leftJoin(
+        schema.agents,
+        and(
+          eq(schema.agents.principalId, totals.agentPrincipalId),
+          eq(schema.agents.orgId, totals.orgId),
+        ),
+      )
+      .where(
+        and(
+          isNull(totals.costCenter),
+          sql`${resolved} is not null`,
+          args.orgId === undefined ? undefined : eq(totals.orgId, args.orgId),
+          args.after === undefined
+            ? undefined
+            : sql`(${startedMs}, ${totals.runId}) > (${args.after.startedAt}::timestamptz, ${args.after.runId})`,
+        ),
+      )
+      .orderBy(asc(startedMs), asc(totals.runId))
+      .limit(args.limit);
+    return rows.map((r) => ({
+      runId: r.runId,
+      orgId: r.orgId,
+      workspaceId: r.workspaceId,
+      startedAt: r.startedAt.toISOString(),
+    }));
+  });
+}
