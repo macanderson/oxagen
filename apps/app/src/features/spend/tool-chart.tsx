@@ -83,7 +83,7 @@ export function ToolChart({ tools }: { tools: readonly ToolChartItem[] }) {
           {t("empty")}
         </p>
       ) : (
-        <ol
+        <div
           role="img"
           aria-label={t("label", { metric: t(`metric.${metric}`) })}
           className="flex flex-col gap-2.5 px-4 py-3.5"
@@ -91,7 +91,7 @@ export function ToolChart({ tools }: { tools: readonly ToolChartItem[] }) {
           {shown.map(({ key, value }) => {
             const ratio = peak === null ? null : ratioOfMicros(value, peak);
             return (
-              <li key={key} data-key={key} className="flex flex-col gap-1">
+              <div key={key} data-key={key} className="flex flex-col gap-1">
                 <span className="flex items-baseline justify-between gap-2 text-[12px]">
                   <span className={`${mono} min-w-0 truncate`}>{key}</span>
                   <span className="font-semibold">
@@ -107,10 +107,10 @@ export function ToolChart({ tools }: { tools: readonly ToolChartItem[] }) {
                     style={{ width: ratioWidth(ratio ?? 0) }}
                   />
                 </span>
-              </li>
+              </div>
             );
           })}
-        </ol>
+        </div>
       )}
       <p className={panelFooter}>
         {t("footer", {

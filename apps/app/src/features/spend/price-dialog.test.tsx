@@ -133,7 +133,7 @@ describe("Set a negotiated rate", () => {
 
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/spend?tab=pricing",
+        "/acme/core-platform/spend/pricing",
       );
     });
     expect(setPriceEntryAction).toHaveBeenCalledTimes(1);
@@ -301,7 +301,7 @@ describe("Remove a negotiated rate", () => {
     );
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/spend?tab=pricing",
+        "/acme/core-platform/spend/pricing",
       );
     });
     expect(removePriceEntryAction).toHaveBeenCalledWith(at, {
@@ -337,7 +337,7 @@ describe("Remove a negotiated rate", () => {
     );
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/spend?tab=pricing",
+        "/acme/core-platform/spend/pricing",
       );
     });
   });
