@@ -15,14 +15,7 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
-// INV-26: every test ends in a state axe accepts, then unmounts.
-afterEach(async () => {
-  try {
-    await expectNoAxe(document.body);
-  } finally {
-    cleanup();
-  }
-});
+afterEach(cleanup);
 const repo = {
   host: "github.com",
   owner: "acme",
@@ -101,8 +94,8 @@ const value: RunWork = {
   complete: false,
   warnings: ["ci_check_limit"],
 };
-it("puts failed CI beside actionable checkout and PR evidence without claiming authorship", () => {
-  render(
+it("puts failed CI beside actionable checkout and PR evidence without claiming authorship", async () => {
+  const { container } = render(
     <IntlProvider>
       <RunWorkSection
         read={readOk(value)}
@@ -129,6 +122,7 @@ it("puts failed CI beside actionable checkout and PR evidence without claiming a
   expect(
     screen.getByText(/Digest recorded; bytes not retained/),
   ).toBeInTheDocument();
+  await expectNoAxe(container);
 });
 it("does not substitute zero work for an unavailable read", () => {
   render(

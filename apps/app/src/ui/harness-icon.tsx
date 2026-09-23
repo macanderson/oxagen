@@ -22,8 +22,6 @@ export function HarnessIcon({
   size = 24,
   className = "",
 }: HarnessIconProps) {
-  // Only a canonical recorded harness gets a mark. An alias or a custom name
-  // keeps the generic icon, so the mark never claims more than the record does.
   const key = harness ?? "";
   const mark = MARKS[key];
   const style = { width: size, height: size };
