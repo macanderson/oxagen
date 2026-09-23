@@ -121,8 +121,9 @@ repository. The launcher asks GitHub which repositories the token reaches and
 refuses it unless the answer is exactly that one. The token stays in the
 daemon. The bridge adds it to git and REST requests for that repository and
 records each forwarded request as a `contained_github_route` decision. When
-the run ends, the launcher revokes the token (`DELETE /installation/token`),
-so it expires with the run rather than at GitHub's one-hour ceiling. The
+the run ends, or the launcher refuses it at any check, the launcher revokes
+the token (`DELETE /installation/token`), so it expires with the run rather
+than at GitHub's one-hour ceiling. The
 receipt's configuration digest covers the repository name, never the token.
 
 Minting the token from the workspace's own App installation on the server,

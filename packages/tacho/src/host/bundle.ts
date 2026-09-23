@@ -412,7 +412,7 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
   // session the launcher did not start (ADR-152). Read only from a verified
   // bundle, so a forged requirement cannot deny, and a forged absence is
   // what an unverified bundle already fails closed on above.
-  if (input.containmentUnmet === true) {
+  if (input.containmentUnmet === true && bundle.mode === "enforce") {
     return deny(
       "containment_required",
       "This agent's mandate requires the contained tier. Start it with `tacho run --contained`.",

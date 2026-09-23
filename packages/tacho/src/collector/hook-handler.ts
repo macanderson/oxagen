@@ -56,13 +56,16 @@ export interface PolicyView {
 
 /**
  * The mandate requires `contained` and this session is not one the launcher
- * started. Enforce mode only: an observe host records and never refuses.
+ * started. Read only from a verified bundle, so a requirement written into
+ * the host file cannot refuse a session. Enforce mode only: an observe host
+ * records and never refuses.
  */
 export function containmentUnmet(
   view: PolicyView,
   record: Pick<SessionRecord, "harnessSessionId">,
 ): boolean {
   return (
+    view.verified &&
     view.bundle.mode === "enforce" &&
     view.bundle.containment?.required === true &&
     view.launchedContained?.(record.harnessSessionId) !== true

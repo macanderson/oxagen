@@ -1,4 +1,3 @@
-import { createContainedRunner } from "../contained/runner";
 /**
  * `tachod`: the per-host collector (spec section 3). Composes the listener,
  * the session registry, the WAL, the shipper, the command inbox, the
@@ -6,6 +5,7 @@ import { createContainedRunner } from "../contained/runner";
  * a side effect is injectable so the whole daemon runs in a test against a
  * fake control plane and a scratch `TACHO_HOME`.
  */
+import { createContainedRunner } from "../contained/runner";
 import {
   existsSync,
   readdirSync,

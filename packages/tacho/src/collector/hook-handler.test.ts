@@ -20,7 +20,12 @@ import {
 } from "../host/test-support";
 import { toProtocolTimestamp } from "../timestamp";
 import type { CommandAcknowledgement, PolicyBundle } from "../wire";
-import { handleHookEvent, type PolicyView } from "./hook-handler";
+import {
+  CONTAINMENT_REQUIRED_REASON,
+  containmentUnmet,
+  handleHookEvent,
+  type PolicyView,
+} from "./hook-handler";
 import { SessionRegistry } from "./registry";
 
 const FIXTURES = join(
@@ -466,6 +471,23 @@ describe("handleHookEvent over the recorded session", () => {
       });
     });
 
+    it("does not refuse on a requirement read from an unverified bundle", async () => {
+      // A requirement written into host.json without a valid signature must
+      // not refuse a session: containment is read only from a verified bundle.
+      const { deps } = harness(
+        { mode: "enforce", containment: { required: true } },
+        { verified: false, launchedContained: () => false },
+      );
+      const start = await handleHookEvent(
+        fixture("01-SessionStart.json").stdin,
+        {},
+        deps,
+      );
+      expect(JSON.stringify(start.events)).not.toContain(
+        "containment_required",
+      );
+    });
+
     it("admits a session the launcher started", async () => {
       const { deps } = harness(
         { mode: "enforce", containment: { required: true } },
@@ -496,6 +518,180 @@ describe("handleHookEvent over the recorded session", () => {
         deps,
       );
       expect(start.response).not.toMatchObject({ continue: false });
+    });
+
+    it("records the prompt refusal as a bundle decision, not an operator one", async () => {
+      const { deps } = harness(
+        { mode: "enforce", containment: { required: true } },
+        { launchedContained: () => false },
+      );
+      const prompt = await handleHookEvent(
+        fixture("03-UserPromptSubmit.json").stdin,
+        {},
+        deps,
+      );
+      expect(prompt.response).toEqual({
+        decision: "block",
+        reason: CONTAINMENT_REQUIRED_REASON,
+      });
+      expect(prompt.events[0]?.body).toMatchObject({
+        policy_decision: "deny",
+        policy_source: "bundle",
+        policy_reason_code: "containment_required",
+      });
+    });
+
+    it("refuses a permission request in a session the launcher did not start", async () => {
+      const { deps } = harness(
+        { mode: "enforce", containment: { required: true } },
+        { launchedContained: () => false },
+      );
+      const permission = await handleHookEvent(
+        {
+          ...fixture("04-PreToolUse.json").stdin,
+          hook_event_name: "PermissionRequest",
+        },
+        {},
+        deps,
+      );
+      expect(permission.response).toEqual({
+        hookSpecificOutput: {
+          hookEventName: "PermissionRequest",
+          decision: { behavior: "deny", message: CONTAINMENT_REQUIRED_REASON },
+        },
+      });
+      expect(permission.events.at(-1)?.body).toMatchObject({
+        policy_decision: "deny",
+        policy_source: "bundle",
+        policy_reason_code: "containment_required",
+      });
+    });
+
+    it("refuses a subagent start in a session the launcher did not start", async () => {
+      // Cursor reads an empty subagentStart answer as allow, so the refusal
+      // has to be explicit here too.
+      const { deps } = harness(
+        { mode: "enforce", containment: { required: true } },
+        { launchedContained: () => false },
+      );
+      const sub = await handleHookEvent(
+        fixture("13-SubagentStart.json").stdin,
+        {},
+        deps,
+      );
+      expect(sub.evaluation).toMatchObject({
+        decision: "deny",
+        reason_code: "containment_required",
+      });
+      expect(sub.response).toMatchObject({
+        hookSpecificOutput: {
+          hookEventName: "SubagentStart",
+          permissionDecision: "deny",
+          permissionDecisionReason: CONTAINMENT_REQUIRED_REASON,
+        },
+      });
+    });
+
+    it("fails closed when the daemon has not bound the launcher's answer yet", async () => {
+      // The daemon starts with no answer bound; absent must read as
+      // "not launched", never as "launched".
+      const { deps } = harness({
+        mode: "enforce",
+        containment: { required: true },
+      });
+      const start = await handleHookEvent(
+        fixture("01-SessionStart.json").stdin,
+        {},
+        deps,
+      );
+      expect(start.response).toMatchObject({ continue: false });
+    });
+
+    it("lets operator state speak first", async () => {
+      const { deps, registry } = harness(
+        { mode: "enforce", containment: { required: true } },
+        { launchedContained: () => false },
+      );
+      await handleHookEvent(fixture("01-SessionStart.json").stdin, {}, deps);
+      const record = registry.get(LAUNCHED);
+      if (record === undefined) throw new Error("no record");
+      record.control.paused = "review pending";
+      const prompt = await handleHookEvent(
+        fixture("03-UserPromptSubmit.json").stdin,
+        {},
+        deps,
+      );
+      expect(prompt.events[0]?.body).toMatchObject({
+        policy_source: "human",
+        policy_reason_code: "session_paused",
+      });
+    });
+
+    it("never refuses a tool or a subagent in observe mode", async () => {
+      const { deps } = harness(
+        { mode: "observe", containment: { required: true } },
+        { launchedContained: () => false },
+      );
+      for (const name of ["04-PreToolUse.json", "13-SubagentStart.json"]) {
+        const outcome = await handleHookEvent(fixture(name).stdin, {}, deps);
+        expect(outcome.evaluation?.reason_code).not.toBe(
+          "containment_required",
+        );
+        expect(JSON.stringify(outcome.events)).not.toContain(
+          "containment_required",
+        );
+      }
+    });
+
+    it("containmentUnmet asks the launcher only for an enforce bundle that requires it", () => {
+      const signer = bundleSigner();
+      const view = (
+        overrides: Partial<Omit<PolicyBundle, "signature">>,
+        launched?: (id: string) => boolean,
+      ): PolicyView => {
+        const bundle = signer.sign(unsignedBundle(overrides));
+        return {
+          bundle,
+          verified: true,
+          hostStatus: "active",
+          denyGeneration: bundle.deny_generation,
+          controlReachable: true,
+          ...(launched !== undefined ? { launchedContained: launched } : {}),
+        };
+      };
+      const record = { harnessSessionId: LAUNCHED };
+      const required = {
+        mode: "enforce" as const,
+        containment: { required: true as const },
+      };
+      expect(
+        containmentUnmet(
+          view(required, () => false),
+          record,
+        ),
+      ).toBe(true);
+      expect(containmentUnmet(view(required), record)).toBe(true);
+      expect(
+        containmentUnmet(
+          view(required, (id) => id === LAUNCHED),
+          record,
+        ),
+      ).toBe(false);
+      expect(
+        containmentUnmet(
+          view({ mode: "enforce" }, () => false),
+          record,
+        ),
+      ).toBe(false);
+      expect(
+        containmentUnmet(
+          view(
+            { mode: "observe", containment: { required: true } },
+            () => false,
+          ),
+          record,
+        ),
+      ).toBe(false);
     });
   });
 

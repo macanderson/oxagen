@@ -1,10 +1,10 @@
-import type { ContainedRunResult } from "../contained/launcher";
 /**
  * The daemon's listener (spec section 3.1 step 1): one HTTP request handler
  * served on a Unix socket (for `tacho-hook`) and on `127.0.0.1:<port>` (for
  * Claude Code's `http` hooks and its OTLP exporter). Every request carries
  * the per-install bearer so another local user cannot post fake events.
  */
+import type { ContainedRunResult } from "../contained/launcher";
 import {
   createServer,
   type IncomingMessage,
