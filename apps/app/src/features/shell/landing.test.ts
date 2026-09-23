@@ -76,6 +76,7 @@ const source = {
     apiKeys: vi.fn(),
     costCenters: vi.fn(),
     modelCredential: vi.fn(),
+    sso: vi.fn(),
   },
   mandates: { list: vi.fn(), get: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
@@ -86,6 +87,7 @@ const source = {
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),
+    deliveries: vi.fn(),
   },
   tools: {
     versions: vi.fn(),

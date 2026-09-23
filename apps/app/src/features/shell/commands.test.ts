@@ -23,6 +23,7 @@ describe("buildCommands", () => {
       "/acme/roles",
       "/acme/api-keys",
       "/acme/model-funding",
+      "/acme/sso",
       "/acme/billing",
       "/acme/audit",
     ]);
@@ -30,6 +31,7 @@ describe("buildCommands", () => {
     expect(commands.map((c) => c.label)).toContain("nav:apiKeys");
     expect(commands.map((c) => c.label)).toContain("nav:roles");
     expect(commands.map((c) => c.label)).toContain("nav:modelFunding");
+    expect(commands.map((c) => c.label)).toContain("nav:sso");
   });
 
   it("offers no Skills page: Skills is a tab of Steering (negative)", () => {
@@ -53,6 +55,7 @@ describe("buildCommands", () => {
       "/acme/roles",
       "/acme/api-keys",
       "/acme/model-funding",
+      "/acme/sso",
       "/acme/billing",
       "/acme/audit",
     ]);

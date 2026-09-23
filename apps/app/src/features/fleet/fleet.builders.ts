@@ -167,6 +167,7 @@ export function fleetSource(reads: FleetReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      sso: refuse,
     },
     mandates: {
       list: (...args) => {
@@ -185,6 +186,7 @@ export function fleetSource(reads: FleetReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      deliveries: refuse,
     },
     tools: {
       versions: refuse,

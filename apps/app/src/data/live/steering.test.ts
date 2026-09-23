@@ -221,3 +221,52 @@ describe("steering.contextPr", () => {
     expect(await steering.contextPr(ctx, "prp_missing")).toEqual(missing);
   });
 });
+
+describe("steering.deliveries", () => {
+  it("reads recent manifest counts and validates the result", async () => {
+    const value = { runs: [], undelivered: [], scanned: 0, truncated: false };
+    kernelRead.mockResolvedValue(readOk(value));
+    expect(await steering.deliveries(ctx)).toEqual(readOk(value));
+    expect(kernelRead).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        input: { days: 7, limit: 50 },
+        page: "steering",
+      }),
+    );
+  });
+  it("carries a cut record's manifest id as a ref, not a public id", async () => {
+    const row = { runs: 3, lastReason: "budget", lastSeen: "2026-09-22" };
+    kernelRead.mockResolvedValue(
+      readOk({
+        runs: [],
+        undelivered: [{ recordId: "ctx.release", ...row }],
+        scanned: 3,
+        truncated: false,
+      }),
+    );
+    expect(await steering.deliveries(ctx)).toEqual(
+      readOk({
+        runs: [],
+        undelivered: [{ recordRef: "ctx.release", ...row }],
+        scanned: 3,
+        truncated: false,
+      }),
+    );
+  });
+  it("preserves a refusal and reports malformed output", async () => {
+    const refused = {
+      ok: false,
+      reason: "denied",
+      permission: "steering.read",
+    } as const;
+    kernelRead.mockResolvedValueOnce(refused);
+    expect(await steering.deliveries(ctx)).toEqual(refused);
+    kernelRead.mockResolvedValueOnce(readOk({ scanned: -1 }));
+    expect(await steering.deliveries(ctx)).toMatchObject({
+      ok: false,
+      reason: "error",
+      code: "record_unmappable",
+    });
+  });
+});

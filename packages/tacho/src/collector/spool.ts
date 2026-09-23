@@ -158,7 +158,7 @@ const SESSION_OWNED_ELSEWHERE = "session belongs to another host";
 function sessionOwnedElsewhere(error: ControlError): boolean {
   return error.status === 403 && error.body.includes(SESSION_OWNED_ELSEWHERE);
 }
-function serverRequestedWaitMs(error: ControlError): number | undefined {
+export function serverRequestedWaitMs(error: ControlError): number | undefined {
   if (error.status !== 429 && error.status !== 503) return undefined;
   const hint = error.rateLimit;
   if (!hint) return undefined;

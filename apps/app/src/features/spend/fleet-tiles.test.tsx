@@ -81,6 +81,7 @@ const source: DataSource = {
     apiKeys: refuse,
     costCenters: refuse,
     modelCredential: refuse,
+    sso: refuse,
   },
   mandates: { list: refuse, get: refuse },
   audit: { events: refuse, exportEvents: refuse },
@@ -91,6 +92,7 @@ const source: DataSource = {
     proposals: refuse,
     contextPr: refuse,
     freshness: refuse,
+    deliveries: refuse,
   },
   tools: {
     versions: refuse,

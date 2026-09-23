@@ -1,5 +1,5 @@
 {
-  "generatedCount": 356,
+  "generatedCount": 364,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -402,6 +402,17 @@
       "consumes": []
     },
     {
+      "name": "create_sso_provider",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "create_stella_enrollment",
       "domain": "telemetry",
       "surfaces": [
@@ -640,6 +651,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "delete_sso_provider",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -1630,6 +1652,17 @@
       "consumes": []
     },
     {
+      "name": "get_steering_deliveries",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_steering_freshness",
       "domain": "context",
       "surfaces": [
@@ -2487,6 +2520,17 @@
     {
       "name": "list_skills",
       "domain": "skill",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_sso_providers",
+      "domain": "org",
       "surfaces": [
         "api",
         "mcp"
@@ -3604,6 +3648,28 @@
       "consumes": []
     },
     {
+      "name": "set_sso_group_roles",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_sso_policy",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_tool_classification",
       "domain": "tool",
       "surfaces": [
@@ -3967,6 +4033,17 @@
       "consumes": []
     },
     {
+      "name": "update_sso_provider",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "update_tacho_session_policy",
       "domain": "tacho",
       "surfaces": [
@@ -4115,6 +4192,17 @@
     },
     {
       "name": "verify_model_credential",
+      "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "verify_sso_domain",
       "domain": "org",
       "surfaces": [
         "api",

@@ -142,7 +142,7 @@ redeem/resend calls on `read/index.html`, POST JSON to `{api}/v1/cms/leads`
 (and `/v1/cms/book/redeem`, `/v1/cms/book/resend`): `api.oxagen.sh` in
 production, `localhost:4000` when the page is served from localhost. The
 endpoint is the public, rate-limited route in `apps/api/src/routes/v1/cms.ts`
-(ADR-102); leads land in Postgres per the `restore_cms_ebook_lead_gate`
+(ADR-154); leads land in Postgres per the `restore_cms_ebook_lead_gate`
 migration. The API's CORS allowlist must include the marketing origin
 (`MARKETING_URL=https://oxagen.sh` in production).
 
@@ -154,7 +154,7 @@ lead, an entry on the Attio list "Inbound lead nurture" with Asset set to the
 edition requested. The row in
 `cms.leads` keeps the Attio record id and the last sync error, and
 `pnpm --filter @oxagen/api cms:crm-backfill` re-syncs any lead Attio has not
-confirmed (ADR-111). In production the same script ships in the API release
+confirmed (ADR-156). In production the same script ships in the API release
 as `cms-crm-backfill.cjs`: `docker exec oxagen-api node cms-crm-backfill.cjs`
 on the app node.
 

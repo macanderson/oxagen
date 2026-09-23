@@ -6,6 +6,7 @@ import {
   Fingerprint,
   FolderGit2,
   KeyRound,
+  LockKeyhole,
   type LucideIcon,
   Radar,
   Receipt,
@@ -27,5 +28,6 @@ export const NAV_ICONS: Record<NavKey, LucideIcon> = {
   audit: ShieldCheck,
   apiKeys: KeyRound,
   modelFunding: Wallet,
+  sso: LockKeyhole,
   roles: ShieldCheck,
 };

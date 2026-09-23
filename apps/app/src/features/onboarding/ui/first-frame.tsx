@@ -1,12 +1,6 @@
 "use client";
-// Step 3 of Register an agent: wait for the first frame. The wait itself is the
-// contract's, inside one invoke; this island re-reads the page when that wait
-// returned with no frame and a host is enrolled, so the poll costs one call per
-// wait. With no host enrolled there is nothing to wait for, so nothing polls
-// and the operator asks for the re-read.
-//
-// Beside it, the repository the enrolling host reported: binding it installs
-// the GitHub App and closes the provisional window.
+// Each completed server read schedules the next wait. A revision changes even
+// when enrollment and heartbeat fields are unchanged.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useState } from "react";
 import type {
@@ -127,6 +121,7 @@ function Repository({
 }
 
 export function FirstFrameStep({
+  pollRevision,
   org,
   ws,
   workspace,
@@ -136,6 +131,8 @@ export function FirstFrameStep({
   repository,
   provisionalUntil,
 }: {
+  /** A new opaque value after every completed server read. */
+  pollRevision: string;
   org: string;
   ws: string;
   /** The workspace's name, for the provisional line. */
@@ -152,21 +149,16 @@ export function FirstFrameStep({
   const navigate = useNavigate();
   const [waiting, setWaiting] = useState(false);
 
-  // The server render already waited out the contract's budget. With a host
-  // enrolled there is something to wait for, so ask for the next wait; with
-  // none, nothing would change and the operator asks.
-  //
-  // The dependency is the enrolment id rather than the `host` object, and
-  // `useNavigate` is memoised on the router, so the effect fires when the
-  // record changes rather than after every render — each stray fire was a
-  // 20-second `get_first_frame`, against the one-invoke-per-wait budget
-  // (§3.5). The poll refreshes rather than replacing, because the address is
-  // the one already showing and `replace` fetches it twice.
-  const enrolment = host?.hostEnrollmentId ?? null;
+  // The server waits up to 20 seconds after enrollment. Before enrollment it
+  // answers immediately, so a short delay keeps that path from a tight loop.
   useEffect(() => {
-    if (enrolment === null) return;
-    navigate.refresh();
-  }, [enrolment, navigate]);
+    const timer = setTimeout(() => {
+      navigate.refresh();
+    }, 2_000);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [pollRevision, navigate]);
 
   function again() {
     setWaiting(true);

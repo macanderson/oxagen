@@ -52,6 +52,8 @@ export async function handleAuditExport(
       return refusal(404, "not_found");
     case "mfa_enroll":
       return refusal(403, "mfa_required");
+    case "sso_required":
+      return refusal(403, "sso_required");
     case "redirect":
       return responseRedirect(
         request,
