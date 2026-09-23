@@ -34,6 +34,8 @@ An org Owner or Admin exports. The auditor needs no Oxagen account.
 
 The last line is `HELD <run-id>` when everything holds, and the command exits 0. Anything broken prints `BROKEN`, names the frame or check, and exits 1. `oxagen verify --json` prints the same result as JSON.
 
+If you open `frames.ndjson` in an editor, the editor may add one newline at the end when it saves. The verifier reads that newline as the end of the last line, so the file still holds. A second newline is a blank line, and a blank line prints `broken`.
+
 ## Without the CLI
 
 The zip also holds `verify.mjs`, which runs the same checks with Node.js alone: unzip the bundle, then run `node verify.mjs <directory>`.

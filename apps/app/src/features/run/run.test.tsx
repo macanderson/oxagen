@@ -1661,7 +1661,7 @@ describe("figures", () => {
     expect(stats.getByText("128,343")).toBeTruthy();
     expect(stats.getByText("1")).toBeTruthy();
     expect(stats.getByText("$4.13")).toBeTruthy();
-    expect(stats.getByText("gateway_observed")).toBeTruthy();
+    expect(stats.getByText("Finalized rollup (gateway_observed)")).toBeTruthy();
     // 29% of $4.131265 that the rollup did not count as productive.
     expect(stats.getByText("$1.20")).toBeTruthy();
     expect(stats.getByText("derived from the productive share")).toBeTruthy();
