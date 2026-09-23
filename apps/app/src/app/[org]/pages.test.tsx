@@ -429,8 +429,21 @@ describe("the Agents pages", () => {
       ctx,
       source,
       cursor: "c2",
+      view: "composition",
     });
     expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("the identities page hands the operations view to Agents when the URL names it", async () => {
+    await expectPageTitle(
+      await AGENTS(),
+      routeProps(SEGMENTS, { view: "operations" }),
+      title("agents"),
+    );
+    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({
+      cursor: null,
+      view: "operations",
+    });
   });
 
   it("the agent page hands the agent, the tab and the cursor the URL names to Agent", async () => {

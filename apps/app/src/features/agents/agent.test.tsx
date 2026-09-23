@@ -62,12 +62,16 @@ const ctx = unsafeMint(WsCtx, CTX_FIELDS);
 
 async function renderAgent(
   reads: Parameters<typeof agentsSource>[0],
-  tab: string | null = null,
+  tab: string | null = "identity",
   cursor: string | null = null,
   /** The viewer, for the cases that turn on the organization role it holds. */
   viewer = ctx,
 ) {
-  const { source, calls } = agentsSource(reads);
+  const { source, calls } = agentsSource(
+    tab === "permissions" || tab === "budgets" || tab === "mandates"
+      ? { budgets: readOk([]), mandates: mandateList([]), ...reads }
+      : reads,
+  );
   const element = await Agent({
     ctx: viewer,
     source,
@@ -137,37 +141,38 @@ describe("Agent header and tabs", () => {
     ).toHaveTextContent("Owner or Admin");
   });
 
-  it("links the seven sections a store backs, and no Runs tab (negative)", async () => {
-    await renderAgent({ get: readOk(agentDetail()) });
+  it("links the eight canonical sections and defaults to Overview", async () => {
+    await renderAgent({ get: readOk(agentDetail()) }, null);
     const links = within(
       screen.getByRole("navigation", { name: "Agent sections" }),
     ).getAllByRole("link");
-    expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
-      ["Identity", "/acme/core-platform/agents/release-bot?tab=identity"],
-      ["Toolbelt", "/acme/core-platform/agents/release-bot?tab=toolbelt"],
-      ["Enrollment", "/acme/core-platform/agents/release-bot?tab=enrollment"],
-      ["Budgets", "/acme/core-platform/agents/release-bot?tab=budgets"],
+    expect(
+      links.map((link) => [link.textContent, link.getAttribute("href")]),
+    ).toEqual(
       [
-        "Tamper incidents",
-        "/acme/core-platform/agents/release-bot?tab=incidents",
-      ],
-      [
-        "Configuration",
-        "/acme/core-platform/agents/release-bot?tab=definition",
-      ],
-      ["Mandates", "/acme/core-platform/agents/release-bot?tab=mandates"],
-    ]);
-    // Runs per agent still has no contract, and no trust score is recorded
-    // anywhere (ARCHITECTURE.md §3.6).
-    expect(document.body).not.toHaveTextContent(/trust|score/i);
+        "Overview",
+        "Identity",
+        "Steering",
+        "Toolbelt",
+        "Runtime",
+        "Permissions",
+        "Activity",
+        "Definition",
+      ].map((label) => [
+        label,
+        `/acme/core-platform/agents/release-bot/${label.toLowerCase()}`,
+      ]),
+    );
+    expect(current()).toEqual(["Overview"]);
+    expect(region("Composition")).toHaveTextContent("prn_91");
   });
 
-  it("reads the ceilings the agent runs under on the Budgets tab, and nothing else", async () => {
+  it("reads ceilings and mandates together on Permissions", async () => {
     const calls = await renderAgent(
       { get: readOk(agentDetail()), budgets: readOk(spendBudgets()) },
       "budgets",
     );
-    expect(current()).toEqual(["Budgets"]);
+    expect(current()).toEqual(["Permissions"]);
     const panel = region("Budgets");
     expect(
       within(panel).getByRole("row", { name: /This workspace/ }),
@@ -203,7 +208,9 @@ describe("Agent header and tabs", () => {
       "budgets",
     );
     expect(region("Budgets")).toHaveTextContent("rollup_rebuild_in_progress");
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(
+      within(region("Budgets")).queryByRole("table"),
+    ).not.toBeInTheDocument();
   });
 
   it("offers Resume for a suspended agent and Clone alone for a retired one", async () => {
@@ -236,9 +243,12 @@ describe("Agent header and tabs", () => {
     ).toEqual(["Clone"]);
   });
 
-  it("opens Identity for an unknown tab (negative)", async () => {
-    const calls = await renderAgent({ get: readOk(agentDetail()) }, "runs");
-    expect(current()).toEqual(["Identity"]);
+  it("opens Overview for an unknown tab (negative)", async () => {
+    const calls = await renderAgent(
+      { get: readOk(agentDetail()) },
+      "not-a-tab",
+    );
+    expect(current()).toEqual(["Overview"]);
     expect(calls.toolbelt).toEqual([]);
     expect(calls.incidents).toEqual([]);
   });
@@ -269,6 +279,29 @@ describe("Agent header and tabs", () => {
   );
 });
 
+describe("Permissions", () => {
+  it("keeps role assignment and mandate and budget panels together", async () => {
+    const calls = await renderAgent(
+      {
+        get: readOk(agentDetail()),
+        budgets: readOk(spendBudgets()),
+        mandates: mandateList([]),
+      },
+      "permissions",
+    );
+    expect(current()).toEqual(["Permissions"]);
+    expect(
+      within(region("Roles")).getByRole("button", { name: "Assign a role" }),
+    ).toBeInTheDocument();
+    expect(
+      within(region("Roles")).getByRole("button", { name: "Revoke CI writer" }),
+    ).toBeInTheDocument();
+    expect(calls.budgets).toHaveLength(1);
+    expect(calls.mandates).toHaveLength(1);
+    expect(calls.toolbelt).toEqual([]);
+  });
+});
+
 describe("Identity", () => {
   // set_cost_center admits an org Owner, Admin or Billing member (ADR-142),
   // so Billing sees the control the role writes deny it, and a Member sees
@@ -276,7 +309,7 @@ describe("Identity", () => {
   it("draws the cost center and offers the change to a billing member", async () => {
     await renderAgent(
       { get: readOk(agentDetail({ identity: { costCenter: "ENG-1001" } })) },
-      null,
+      "identity",
       null,
       unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: "billing" }),
     );
@@ -285,13 +318,13 @@ describe("Identity", () => {
     expect(
       within(identity).getByRole("button", { name: "Change cost center" }),
     ).toBeInTheDocument();
-    expect(within(region("Roles")).queryAllByRole("button")).toEqual([]);
+    expect(screen.queryByRole("region", { name: "Roles" })).toBeNull();
   });
 
   it("says the label is inherited and offers no change to a member (negative)", async () => {
     await renderAgent(
       { get: readOk(agentDetail()) },
-      null,
+      "identity",
       null,
       unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: "member" }),
     );
@@ -317,7 +350,7 @@ describe("Identity", () => {
   ])("offers no role control to %s (negative)", async (_name, at) => {
     await renderAgent(
       { get: readOk(at.detail) },
-      null,
+      "permissions",
       null,
       unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: at.role }),
     );
@@ -336,21 +369,7 @@ describe("Identity", () => {
     const identity = region("Identity");
     expect(identity).toHaveTextContent("Principalprn_91");
     expect(identity).toHaveTextContent("Operatorusr_marcusbell");
-    expect(
-      within(region("Roles"))
-        .getAllByRole("cell")
-        .map((c) => c.textContent),
-    ).toEqual([
-      "CI writer",
-      "workspace",
-      "Sep 2, 2026, 10:00 AM",
-      "standing",
-      // The owner reading this page may change the agent's roles (#2956).
-      "Revoke CI writer",
-    ]);
-    expect(
-      within(region("Roles")).getByRole("button", { name: "Assign a role" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Roles" })).toBeNull();
     expect(
       within(region("Run credentials"))
         .getAllByRole("cell")
@@ -380,9 +399,6 @@ describe("Identity", () => {
     expect(identity).toHaveTextContent("Principalnot recorded");
     expect(identity).toHaveTextContent("Operatornot recorded");
     expect(identity).toHaveTextContent("First frameno frame yet");
-    expect(region("Roles")).toHaveTextContent(
-      "No role is assigned: the agent reaches nothing but its own run channel.",
-    );
     expect(region("Run credentials")).toHaveTextContent(
       "The agent holds no long-lived credential.",
     );
@@ -660,7 +676,7 @@ describe("Enrollment", () => {
       },
       "enrollment",
     );
-    expect(current()).toEqual(["Enrollment"]);
+    expect(current()).toEqual(["Runtime"]);
     const [first, second] = screen.getAllByTestId("host-row");
     expect(
       within(first ?? document.body)
@@ -862,13 +878,10 @@ describe("Tamper incidents", () => {
         .getAllByRole("link")
         .map((l) => [l.textContent, l.getAttribute("href")]),
     ).toEqual([
-      [
-        "Newest incidents",
-        "/acme/core-platform/agents/release-bot?tab=incidents",
-      ],
+      ["Newest incidents", "/acme/core-platform/agents/release-bot/activity"],
       [
         "Older incidents",
-        "/acme/core-platform/agents/release-bot?tab=incidents&cursor=c4",
+        "/acme/core-platform/agents/release-bot/activity?cursor=c4",
       ],
     ]);
   });
@@ -907,7 +920,7 @@ describe("Configuration", () => {
       },
       "definition",
     );
-    expect(current()).toEqual(["Configuration"]);
+    expect(current()).toEqual(["Definition"]);
     const identity = region("Identity");
     expect(screen.getByRole("textbox", { name: "Schema" })).toHaveValue(
       "agent-definition/v0.1",
