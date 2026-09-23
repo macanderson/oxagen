@@ -7,9 +7,9 @@
 //
 //  - Output schemas observed rather than declared have no store, so no version
 //    waits on approval and the banner says the proposals are not recorded
-//    (#3865). The tab's count is the registry's, never "N to approve".
+//    (#3921). The tab's count is the registry's, never "N to approve".
 //  - The ten categories the design groups by are not a registry attribute yet
-//    (#3865). The chips and the Category column show the consequence tags the
+//    (#3921). The chips and the Category column show the consequence tags the
 //    classification records, which is what `list_tool_versions` filters on.
 //  - Toolbelts and Agents: no store holds a toolbelt or who carries it (#3852).
 import { useLocale, useTranslations } from "next-intl";

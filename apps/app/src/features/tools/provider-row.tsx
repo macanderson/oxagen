@@ -7,7 +7,7 @@
 // transport (every roster row is reached over `mcp`) over the wire and the
 // endpoint, the versions the registry holds from it, and the recorded health.
 // Toolbelts, Agents, Connection, Authorization and Last import have no field
-// on any read yet (#3852, #3862, #3863), and each cell says so.
+// on any read yet (#3852, #3917, #3918), and each cell says so.
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { buttonSecondary, mono } from "@/ui/control-styles";

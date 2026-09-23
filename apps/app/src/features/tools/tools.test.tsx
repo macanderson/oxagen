@@ -161,10 +161,9 @@ describe("Tools › header", () => {
     await renderTools();
     fireEvent.click(screen.getByTestId("tools-new-tool-open"));
     const dialog = await screen.findByTestId("tools-new-tool");
-    expect(within(dialog).getByText(/The tool wizard is not built yet/)).toHaveAttribute(
-      "data-gap",
-      "#3868",
-    );
+    expect(
+      within(dialog).getByText(/The tool wizard is not built yet/),
+    ).toHaveAttribute("data-gap", "#3924");
     expect(within(dialog).getByTestId("tools-new-tool-confirm")).toBeDisabled();
     expect(within(dialog).getAllByRole("listitem")).toHaveLength(5);
   });
@@ -179,7 +178,9 @@ describe("Tools › header", () => {
 describe("Tools › tabs", () => {
   it("draws the five tabs as a tablist of path segments, the current one selected", async () => {
     await renderTools({}, "providers");
-    const tabs = within(screen.getByRole("tablist", { name: "Tools sections" }));
+    const tabs = within(
+      screen.getByRole("tablist", { name: "Tools sections" }),
+    );
     const all = tabs.getAllByRole("tab");
     expect(all.map((tab) => tab.getAttribute("data-tab"))).toEqual([
       "tools",
@@ -215,17 +216,19 @@ describe("Tools › tabs", () => {
   });
 
   it("marks the versions count as a floor while the registry has a later page", async () => {
-    await renderTools({ versions: readOk(toolVersionPage({ nextCursor: "c2" })) });
-    expect(
-      document.querySelector('[data-count="tools"]')?.textContent,
-    ).toBe("2+");
+    await renderTools({
+      versions: readOk(toolVersionPage({ nextCursor: "c2" })),
+    });
+    expect(document.querySelector('[data-count="tools"]')?.textContent).toBe(
+      "2+",
+    );
   });
 
   it("marks the switch count as a floor when the board came back full", async () => {
     await renderTools({ killSwitches: readOk(killSwitchBoard({}, 3)) });
-    expect(
-      document.querySelector('[data-count="switches"]')?.textContent,
-    ).toBe("1 or more on");
+    expect(document.querySelector('[data-count="switches"]')?.textContent).toBe(
+      "1 or more on",
+    );
   });
 
   it("shows no switch count when the board did not answer", async () => {
@@ -271,7 +274,9 @@ describe("Tools › not loaded", () => {
 
     fireEvent.click(panel.getByRole("button", { name: "Request access" }));
     const dialog = await screen.findByTestId("tools-request-access");
-    expect(within(dialog).getByTestId("tools-request-access-confirm")).toBeDisabled();
+    expect(
+      within(dialog).getByTestId("tools-request-access-confirm"),
+    ).toBeDisabled();
     expect(
       element(dialog.querySelector('[data-state="not-backed"]'), "note"),
     ).toHaveAttribute("data-gap", "#3820");
@@ -290,7 +295,9 @@ describe("Tools › not loaded", () => {
     expect(
       within(panel).getByRole("link", { name: "Try again" }),
     ).toHaveAttribute("href", "/acme/core-platform/tools/switches");
-    fireEvent.click(within(panel).getByRole("button", { name: "Open an incident" }));
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "Open an incident" }),
+    );
     const dialog = await screen.findByTestId("tools-incident");
     expect(within(dialog).getByTestId("tools-incident-confirm")).toBeDisabled();
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
@@ -410,7 +417,7 @@ describe("Tools › tools tab", () => {
     await renderTools();
     expect(screen.getByTestId("tools-observed-schemas")).toHaveAttribute(
       "data-gap",
-      "#3865",
+      "#3921",
     );
     expect(screen.queryByText(/to approve/)).not.toBeInTheDocument();
   });
@@ -435,7 +442,9 @@ describe("Tools › tools tab", () => {
       owner,
       { category: "moves_money", cursor: null },
     ]);
-    const chips = within(screen.getByRole("group", { name: "Filter by category" }));
+    const chips = within(
+      screen.getByRole("group", { name: "Filter by category" }),
+    );
     const picked = chips.getByRole("button", { name: /moves_money/ });
     expect(picked).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(picked);
@@ -459,7 +468,9 @@ describe("Tools › tools tab", () => {
   });
 
   it("links a later page when the read carried a cursor", async () => {
-    await renderTools({ versions: readOk(toolVersionPage({ nextCursor: "c2" })) });
+    await renderTools({
+      versions: readOk(toolVersionPage({ nextCursor: "c2" })),
+    });
     expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
       "href",
       "/acme/core-platform/tools?cursor=c2",
@@ -481,7 +492,9 @@ describe("Tools › tools tab", () => {
     const dialog = await screen.findByTestId("tools-categories");
     expect(within(dialog).getByText("moves_money")).toBeVisible();
     expect(
-      within(dialog).getByText(/Category is a registry attribute, not a policy/),
+      within(dialog).getByText(
+        /Category is a registry attribute, not a policy/,
+      ),
     ).toBeVisible();
   });
 
@@ -493,7 +506,9 @@ describe("Tools › tools tab", () => {
       name: "Tools imported from Stripe",
     });
     expect(within(tools).getByText("Create payment")).toBeVisible();
-    expect(within(tools).queryByText("Get file contents")).not.toBeInTheDocument();
+    expect(
+      within(tools).queryByText("Get file contents"),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -567,7 +582,9 @@ describe("Tools › providers tab", () => {
 
   it("names a provider by its system and carries the transport as a column value", async () => {
     await renderTools({}, "providers");
-    const stripe = within(rowOf(screen.getByRole("button", { name: "Open Stripe" })));
+    const stripe = within(
+      rowOf(screen.getByRole("button", { name: "Open Stripe" })),
+    );
     expect(stripe.getByText("mcp")).toBeVisible();
     expect(
       stripe.getByText("streamable-http · https://mcp.stripe.example/v1"),
@@ -584,7 +601,7 @@ describe("Tools › providers tab", () => {
     await renderTools({}, "providers");
     expect(screen.getByTestId("tools-providers-attention")).toHaveAttribute(
       "data-gap",
-      "#3863",
+      "#3918",
     );
     expect(
       screen.getByText(/MCP is one transport among several/),
@@ -608,7 +625,9 @@ describe("Tools › providers tab", () => {
       expect(dialog.getByText(term)).toBeVisible();
     }
     expect(dialog.getByText("Authorization")).toBeVisible();
-    expect(dialog.getByRole("button", { name: "Connect with OAuth" })).toBeVisible();
+    expect(
+      dialog.getByRole("button", { name: "Connect with OAuth" }),
+    ).toBeVisible();
     expect(dialog.getByText("Create payment")).toBeVisible();
     expect(dialog.queryByText("Get file contents")).not.toBeInTheDocument();
   });
@@ -635,9 +654,7 @@ describe("Tools › providers tab", () => {
       "providers",
     );
     fireEvent.click(screen.getByTestId("provider-open-mcs_01k5s1"));
-    expect(
-      await screen.findByTestId("provider-health-warning"),
-    ).toBeVisible();
+    expect(await screen.findByTestId("provider-health-warning")).toBeVisible();
   });
 
   it("removes a provider after saying what stops and what is kept, and re-reads the tab", async () => {
@@ -648,7 +665,9 @@ describe("Tools › providers tab", () => {
     await renderTools({}, "providers");
     fireEvent.click(screen.getByTestId("provider-remove-open-mcs_01k5s1"));
     const dialog = within(await screen.findByTestId("provider-remove-dialog"));
-    expect(dialog.getByText(/Its tools stop registering at once/)).toBeVisible();
+    expect(
+      dialog.getByText(/Its tools stop registering at once/),
+    ).toBeVisible();
     expect(dialog.getByText(/kept for at least 365 days/)).toBeVisible();
     fireEvent.click(dialog.getByTestId("provider-remove-confirm"));
     await vi.waitFor(() => {
@@ -699,9 +718,9 @@ describe("Tools › providers tab", () => {
     await renderTools({}, "providers");
     fireEvent.click(screen.getByTestId("provider-open-mcs_01k5s1"));
     fireEvent.click(await screen.findByTestId("provider-reimport-mcs_01k5s1"));
-    expect(await screen.findByTestId("provider-reimport-done")).toHaveTextContent(
-      "1 new version, 3 already registered.",
-    );
+    expect(
+      await screen.findByTestId("provider-reimport-done"),
+    ).toHaveTextContent("1 new version, 3 already registered.");
     expect(actions.importTools).toHaveBeenCalledWith("acme", "core-platform", {
       serverId: "mcs_01k5s1",
       tools: [],
@@ -712,18 +731,31 @@ describe("Tools › providers tab", () => {
     await renderTools({}, "providers");
     fireEvent.click(screen.getByTestId("provider-open-mcs_01k5s1"));
     fireEvent.click(await screen.findByTestId("provider-edit-mcs_01k5s1-open"));
-    const dialog = within(await screen.findByTestId("provider-edit-mcs_01k5s1"));
+    const dialog = within(
+      await screen.findByTestId("provider-edit-mcs_01k5s1"),
+    );
     const transport = element(
       document.querySelector("#edit-transport-mcs_01k5s1"),
       "transport",
     );
     expect(
       [...transport.querySelectorAll("option")].map((o) => o.textContent),
-    ).toEqual(["mcp", "http", "graphql", "sdk", "cli", "native", "local", "rpc"]);
+    ).toEqual([
+      "mcp",
+      "http",
+      "graphql",
+      "sdk",
+      "cli",
+      "native",
+      "local",
+      "rpc",
+    ]);
     expect(
       document.querySelectorAll("#edit-wire-mcs_01k5s1 option"),
     ).toHaveLength(5);
-    expect(dialog.getByTestId("provider-edit-mcs_01k5s1-confirm")).toBeDisabled();
+    expect(
+      dialog.getByTestId("provider-edit-mcs_01k5s1-confirm"),
+    ).toBeDisabled();
   });
 
   it("keeps the connections and the credential grants log with the design's columns", async () => {
@@ -779,7 +811,9 @@ describe("Tools › kill switches tab", () => {
     const money = cardOf('[data-switch="emd_01k5c1"]');
     expect(within(money).getByText("every moves_money tool")).toBeVisible();
     expect(
-      within(money).getByRole("switch", { name: /Allow every moves_money tool again/ }),
+      within(money).getByRole("switch", {
+        name: /Allow every moves_money tool again/,
+      }),
     ).toHaveAttribute("aria-checked", "true");
     expect(
       within(money).getByText(
@@ -789,7 +823,7 @@ describe("Tools › kill switches tab", () => {
     for (const which of ["irreversible", "egress"]) {
       expect(
         screen.getByTestId(`tools-switch-unbacked-${which}`),
-      ).toHaveAttribute("data-gap", "#3866");
+      ).toHaveAttribute("data-gap", "#3922");
     }
   });
 
@@ -798,14 +832,18 @@ describe("Tools › kill switches tab", () => {
       { killSwitches: readOk(killSwitchBoard({ switches: [] })) },
       "switches",
     );
-    const scoped = within(screen.getByRole("region", { name: "Scoped switches" }));
+    const scoped = within(
+      screen.getByRole("region", { name: "Scoped switches" }),
+    );
     const org = scoped.getByRole("switch", { name: "Deny Acme Robotics" });
     expect(org).toHaveAttribute("aria-checked", "false");
     expect(
       scoped.getByRole("switch", { name: "Deny Core platform" }),
     ).toHaveAttribute("aria-checked", "false");
     // Shipped switches carry neither Edit nor Remove.
-    expect(scoped.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    expect(
+      scoped.queryByRole("button", { name: "Remove" }),
+    ).not.toBeInTheDocument();
     // Its toggle opens the confirmation, which states the blast radius first.
     fireEvent.click(org);
     const dialog = within(await screen.findByTestId("tools-flip-dialog"));
@@ -836,7 +874,9 @@ describe("Tools › kill switches tab", () => {
     const dialog = within(
       await screen.findByTestId("tools-switch-remove-emd_01k5c3"),
     );
-    expect(dialog.getByText(/Removing a switch is not built yet/)).toBeVisible();
+    expect(
+      dialog.getByText(/Removing a switch is not built yet/),
+    ).toBeVisible();
     expect(
       dialog.getByTestId("tools-switch-remove-emd_01k5c3-confirm"),
     ).toBeDisabled();
@@ -862,7 +902,9 @@ describe("Tools › kill switches tab", () => {
     const card = cardOf('[data-switch="emd_01k5d1"]');
     // The agent is named by its slug off the workspace's agents.
     expect(within(card).getByText("invoice-bot")).toBeVisible();
-    fireEvent.click(within(card).getByTestId("tools-switch-remove-emd_01k5d1-open"));
+    fireEvent.click(
+      within(card).getByTestId("tools-switch-remove-emd_01k5d1-open"),
+    );
     expect(
       await screen.findByText(/This switch is denying. Clear it first/),
     ).toBeVisible();
@@ -876,7 +918,9 @@ describe("Tools › kill switches tab", () => {
     expect(
       [...scope.querySelectorAll("option")].map((o) => o.textContent),
     ).toEqual(["Agent", "Enrolled device", "Operator’s agents"]);
-    expect(within(dialog).getByTestId("tools-switch-new-confirm")).toBeDisabled();
+    expect(
+      within(dialog).getByTestId("tools-switch-new-confirm"),
+    ).toBeDisabled();
   });
 
   it("says the board is its newest page when the read came back full", async () => {
@@ -895,7 +939,9 @@ describe("Tools › kill switches tab", () => {
     expect(
       within(cardOf('[data-switch="emd_01k5c1"]')).getByText("denying"),
     ).toBeVisible();
-    expect(screen.queryByTestId("tools-switch-new-open")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("tools-switch-new-open"),
+    ).not.toBeInTheDocument();
   });
 });
 

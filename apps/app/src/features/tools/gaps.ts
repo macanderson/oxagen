@@ -8,19 +8,19 @@ export const TOOLS_GAPS = {
   /** A named toolbelt and who carries it: `tools.toolbelts`, `tools.toolbelt_assignments`. */
   toolbelts: 3852,
   /** A provider's system, transport and wire apart from the MCP server row, and editing one. */
-  providers: 3862,
+  providers: 3917,
   /** Client registration, code exchange, refresh, expiry and review dates on a connection. */
-  oauth: 3863,
+  oauth: 3918,
   /** G2: policy versions with their tests, drafted, activated and restored. */
-  policy: 3864,
+  policy: 3920,
   /** A tool's category, and output schemas observed rather than declared. */
-  registry: 3865,
+  registry: 3921,
   /** Class switches by side effect and egress, device scope, and editing a switch. */
-  switches: 3866,
+  switches: 3922,
   /** The tool version and agent behind each credential grant. */
-  grants: 3867,
+  grants: 3923,
   /** The tool creation wizard: describe, recommend, manifest or import, code, pull request. */
-  toolWizard: 3868,
+  toolWizard: 3924,
   /** A person refused a page asks for the role from the page. */
   requestAccess: 3820,
   /** A failed page opens an incident and names its trace. */
