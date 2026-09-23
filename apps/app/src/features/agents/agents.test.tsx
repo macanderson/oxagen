@@ -392,8 +392,25 @@ describe("Agents, loaded", () => {
     ]);
     const pending = rows()[1];
     if (pending === undefined) throw new Error("no row");
-    expect(cellsOf(pending)[5]).toBe("—not recorded · not recorded");
+    // No host, so no runtime kind: the line under the dash is the tier alone.
+    expect(cellsOf(pending)[5]).toBe("—not recorded");
+    expect(
+      pending.querySelector('[data-gap="runtimeKind"]'),
+    ).not.toBeInTheDocument();
+    expect(pending.querySelector('[data-gap="tier"]')).toBeInTheDocument();
     expect(cellsOf(pending)[6]).toBe("prn_pending");
+  });
+
+  it("prints the tier alone under the dash when an agent with a recorded tier has no host", async () => {
+    await renderAgents({
+      list: agentPage([agentRow({ host: null, enforcementTier: "gateway" })]),
+    });
+    const [row] = rows();
+    if (row === undefined) throw new Error("no row");
+    expect(cellsOf(row)[5]).toBe("—gateway");
+    expect(
+      row.querySelector('[data-gap="runtimeKind"]'),
+    ).not.toBeInTheDocument();
   });
 
   it("switches to Operations over the same agents, with its subtext and columns", async () => {
@@ -787,7 +804,7 @@ describe("Agents, not loaded", () => {
     ]);
     expect(denied.querySelector('[data-gap="policy"]')).toHaveAttribute(
       "title",
-      "The read's refusal does not name the policy that decided it.",
+      "The read's refusal does not name the policy that decided it yet (#3846).",
     );
     expect(
       [...denied.querySelectorAll("button, a")].map((el) => el.textContent),
@@ -878,6 +895,60 @@ describe("Agents at phone width", () => {
       expect(targets.length).toBeGreaterThan(1);
       for (const target of targets)
         expect(getComputedStyle(target).minHeight).toBe("44px");
+    } finally {
+      phone.restore();
+    }
+  });
+
+  it("makes the Agent cell the card's head, start-aligned, with a rule between cells", async () => {
+    const phone = phoneWidth();
+    try {
+      await renderAgents(
+        { list: agentPage([agentRow()]) },
+        null,
+        phone.container,
+      );
+      // The shell labels each body cell with its column header
+      // (features/shell/card-tables.ts); the page test renders no shell, so
+      // it labels the table the same way.
+      const table = phone.container.querySelector("table");
+      if (table === null) throw new Error("no table");
+      const labels = [...(table.tHead?.rows.item(0)?.cells ?? [])].map((th) =>
+        th.textContent.trim(),
+      );
+      for (const cell of table.tBodies.item(0)?.rows.item(0)?.cells ?? []) {
+        const label = labels[cell.cellIndex];
+        if (label) cell.setAttribute("data-label", label);
+      }
+      table.setAttribute("data-cards", "");
+
+      const cells = [...(table.tBodies.item(0)?.rows.item(0)?.cells ?? [])];
+      const [head, purpose] = cells;
+      const actions = cells.at(-1);
+      if (!head || !purpose || !actions) throw new Error("no cells");
+      // The Agent cell is labelled like every cell, and phone.css hides that
+      // label and sets the agent card at the start edge as the card's head.
+      expect(head).toHaveAttribute("data-label", "Agent");
+      expect(getComputedStyle(head).justifyContent).toBe("flex-start");
+      expect(getComputedStyle(purpose).justifyContent).toBe("flex-end");
+      // The unlabelled actions cell sits at the start edge too.
+      expect(actions).not.toHaveAttribute("data-label");
+      expect(getComputedStyle(actions).justifyContent).toBe("flex-start");
+      // A hairline between cells, none under the last.
+      expect(getComputedStyle(purpose).borderBottomStyle).toBe("solid");
+      expect(getComputedStyle(actions).borderBottomWidth).toBe("0px");
+      // The head's label is hidden by a ::before rule jsdom cannot compute,
+      // so the rule itself is asserted present in the phone block.
+      const rules = [...document.styleSheets]
+        .flatMap((sheet) => [...sheet.cssRules])
+        .map((rule) => rule.cssText);
+      expect(
+        rules.some(
+          (text) =>
+            text.includes("td:first-child::before") &&
+            text.includes("display: none"),
+        ),
+      ).toBe(true);
     } finally {
       phone.restore();
     }

@@ -286,8 +286,14 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
               {row.host ?? t("list.cells.none")}
             </span>
             <span className="block text-[10px] text-muted-foreground">
-              <NotRecordedValue gap="runtimeKind" />
-              {" · "}
+              {/* With no host there is no runtime to have a kind, so the
+                  line is the tier alone, as the design draws it. */}
+              {row.host === null ? null : (
+                <>
+                  <NotRecordedValue gap="runtimeKind" />
+                  {" · "}
+                </>
+              )}
               {row.enforcementTier === null ? (
                 <NotRecordedValue gap="tier" />
               ) : (

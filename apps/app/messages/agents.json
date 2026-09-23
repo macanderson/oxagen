@@ -183,10 +183,10 @@
         "tokens": "No wrapped session of this agent reported its token usage in the last 30 days. Ledger runs' tokens are not rolled up per agent.",
         "commit": "The commit of .oxagen/agents/ is not recorded on this read.",
         "organization": "No organization-wide rollup of agents is recorded yet.",
-        "tier": "No wrapped session has recorded an enforcement tier for this agent yet.",
+        "tier": "No wrapped session has recorded an enforcement tier for this agent yet, and no per-agent tier rollup exists (#3817).",
         "runtimeKind": "No store records a runtime's kind yet. A host row is one enrollment, not a machine.",
         "belt": "list_agents does not compute each agent's belt yet (#3852). The agent's own page shows the belt its grants give it.",
-        "policy": "The read's refusal does not name the policy that decided it.",
+        "policy": "The read's refusal does not name the policy that decided it yet (#3846).",
         "trace": "A failed read does not carry its trace id or region yet."
       },
       "stubs": {
