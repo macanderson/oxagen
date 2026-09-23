@@ -1,12 +1,16 @@
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { TranscriptZoom } from "@/data/contracts/run";
 import type { TranscriptKind } from "@/data/contracts/run";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import { PAGE_FAILURES, readError } from "@/data/read";
+import {
+  RunOutcomesConsent,
+  RunIssueConnections,
+} from "@/features/run-outcomes";
 import { ApprovalsPanel } from "@/features/fleet";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
@@ -15,7 +19,9 @@ import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
+import { RunSummary } from "./summary";
 import { RunHeader } from "./header";
+import { RunWork, RunWorkLoading } from "./work";
 import { OutputsSpine } from "./outputs";
 import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import { kindsParam, TranscriptSection } from "./transcript";
@@ -180,6 +186,11 @@ export async function Run({
     .catch(() =>
       readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
     );
+  const outcomesPolicy = source.runs
+    .outcomesSettings(ctx)
+    .catch(() =>
+      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+    );
   let section: ReactNode;
   switch (selected) {
     case "transcript":
@@ -255,6 +266,7 @@ export async function Run({
       break;
     }
   }
+  const policy = await outcomesPolicy;
   return (
     <div className="flex flex-col gap-6">
       <RunHeader
@@ -264,14 +276,35 @@ export async function Run({
         org={place.org}
         ws={place.ws}
       />
-      <OutputsSpine
-        read={await outputs}
-        reads={reads}
-        spine={spine}
-        {...place}
+      <Suspense fallback={<RunWorkLoading />}>
+        <RunWork ctx={ctx} source={source} {...place} />
+      </Suspense>
+      <RunOutcomesConsent
+        at={place}
+        policy={policy}
+        canManage={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
       />
-      <Tabs selected={selected} zoom={zoomed} kinds={chips} {...place} />
-      {section}
+      <RunIssueConnections
+        at={place}
+        runId={detail.run.id}
+        enabled={policy.ok && policy.value.effectiveEnabled}
+        canManage={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
+      />
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <RunSummary run={detail.run} org={place.org} ws={place.ws} />
+          <Tabs selected={selected} zoom={zoomed} kinds={chips} {...place} />
+          {section}
+        </div>
+        <aside className="min-w-0" data-testid="run-output-sidebar">
+          <OutputsSpine
+            read={await outputs}
+            reads={reads}
+            spine={spine}
+            {...place}
+          />
+        </aside>
+      </div>
     </div>
   );
 }

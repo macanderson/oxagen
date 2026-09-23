@@ -44,6 +44,8 @@ const source: DataSource = {
     transcript: refuse,
     chain: refuse,
     outputs: refuse,
+    work: refuse,
+    outcomesSettings: refuse,
   },
   approvals: { pending: refuse, resolved: refuse },
   agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
@@ -73,6 +75,7 @@ const source: DataSource = {
     apiKeys: refuse,
     costCenters: refuse,
     modelCredential: refuse,
+    sso: refuse,
   },
   audit: { events: refuse, exportEvents },
   onboarding: { state: refuse, firstFrame: refuse },
@@ -190,6 +193,14 @@ describe("handleAuditExport", () => {
     const res = await handleAuditExport(request(), context, deps);
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ code: "mfa_required" });
+  });
+
+  it("answers 403 for a member whose organization requires SSO and whose session is not one (negative)", async () => {
+    resolveViewer.mockResolvedValue({ kind: "sso_required" });
+    const res = await handleAuditExport(request(), context, deps);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ code: "sso_required" });
+    expect(exportEvents).not.toHaveBeenCalled();
   });
 
   it("sends a historical slug to the canonical export with the filters intact", async () => {

@@ -187,6 +187,7 @@ function treeHash(leaves) {
 const rootOf = (digests) => hex(treeHash(digests.map((d) => Buffer.from(d.slice(7), "hex"))));
 
 const failures = [];
+if (!((manifest.source === "ledger" && typeof manifest.run_id === "string" && manifest.run_id.startsWith("arun_")) || (manifest.source === "tacho" && typeof manifest.run_id === "string" && manifest.run_id.startsWith("tse_")))) failures.push("the source is invalid or does not match the run identifier");
 const frames = lines.map((line) => { try { return JSON.parse(line); } catch { return {}; } });
 const digests = frames.map((frame) => frame.event_digest ?? frame.hash);
 
@@ -234,6 +235,11 @@ for (const a of attestation.attestations) {
   const ok = a.alg === "ed25519" && a.key_id === keyId && verify(null, Buffer.from(canonical(a.payload), "utf8"), publicKey, Buffer.from(a.sig, "base64"));
   if (!ok) failures.push(\`attestation for \${a.payload.attempt_id} does not verify\`);
   const slice = digests.slice(covered, covered + a.payload.frame_count);
+  if (manifest.source === "tacho") {
+    const exportedDigest = hex(sha256(Buffer.from(lines.slice(covered, covered + a.payload.frame_count).join("\\n"), "utf8")));
+    if (exportedDigest !== a.payload.archive_segment_digest) failures.push("attempt " + a.payload.attempt_id + ": exported frame bytes do not match the signed segment digest");
+  }
+  if (a.payload.run_id !== manifest.run_id) failures.push("the manifest run differs from the signed run");
   covered += a.payload.frame_count;
   if (!allDigests || rootOf(slice) !== a.payload.merkle_root) failures.push(\`attempt \${a.payload.attempt_id}: frames do not hash to the attested root\`);
 }

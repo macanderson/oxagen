@@ -123,6 +123,8 @@ export function fleetSource(reads: FleetReads) {
       cost: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
       transcript: refuse,
     },
     approvals: {
@@ -167,6 +169,7 @@ export function fleetSource(reads: FleetReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      sso: refuse,
     },
     mandates: {
       list: (...args) => {

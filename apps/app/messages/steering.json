@@ -2,11 +2,10 @@
   "steering": {
     "tabs": {
       "label": "Steering views",
-      "records": "Records",
-      "skills": "Skills",
       "proposals": "Proposals",
-      "prs": "Context PRs",
-      "settings": "Settings"
+      "settings": "Settings",
+      "library": "Library",
+      "freshness": "Freshness"
     },
     "failure": {
       "denied": "You cannot see {section} in this workspace. The roles you hold do not include {permission}. An owner can grant it.",
@@ -186,6 +185,20 @@
     "create": {
       "skill": "Add a skill",
       "record": "Write a context record"
-    }
+    },
+    "library": {
+      "label": "Library shelves",
+      "all": "All",
+      "records": "Records",
+      "skills": "Skills",
+      "memory": "Memory"
+    },
+    "proposalSections": {
+      "label": "Proposal views",
+      "candidates": "Candidates",
+      "prs": "Context PRs"
+    },
+    "description": "Published records, observed skills, proposals and checkout freshness for this workspace.",
+    "governance": "Governance in Context PRs"
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 // The sidebar (mockup `sidebar()`): brand, the organization and workspace
 // tiles, and the Workspace and Organization sections.
+import { useShellActivity } from "./activity";
 import { OxagenWordmark } from "@oxagen/ui";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -47,6 +48,12 @@ export function SidebarNav({
   const t = useTranslations("shell");
   const { sections, pathname } = useSidebarSections(data);
   const labelId = useId();
+  const activity = useShellActivity();
+  const selectedWorkspace = useSidebarSections(data).ws;
+  const currentCounts = activity?.read?.ok
+    ? activity.read.value.workspaces.find((w) => w.slug === selectedWorkspace)
+        ?.counts
+    : null;
   return (
     <nav aria-label={t("sidebar.navLabel")} className="flex-1 px-2.5 py-3">
       {sections.map((section) => (
@@ -64,12 +71,15 @@ export function SidebarNav({
               // `.navitem .ct.hot`: the one count the workspace nav carries is
               // what waits on a person (ARCHITECTURE.md §1.2); null is "the
               // read could not say", and draws nothing rather than a zero.
+              const counts = currentCounts?.ok ? currentCounts.value : null;
               const waiting =
-                item.key === "fleet" &&
-                data.fleetWaiting !== null &&
-                data.fleetWaiting > 0
-                  ? data.fleetWaiting
-                  : null;
+                item.key === "fleet"
+                  ? (counts?.approvals ?? data.fleetWaiting)
+                  : item.key === "steering"
+                    ? (counts?.proposals ?? null)
+                    : item.key === "audit"
+                      ? (counts?.incidents ?? null)
+                      : null;
               return (
                 <li key={item.key}>
                   <SafeLink
@@ -88,7 +98,7 @@ export function SidebarNav({
                       className="size-4 flex-none opacity-85"
                     />
                     <span className="flex-1">{t(`nav.${item.key}`)}</span>
-                    {waiting === null ? null : (
+                    {waiting === null || waiting === 0 ? null : (
                       <span
                         data-count={item.key}
                         className="rounded-[5px] border border-info/40 bg-card px-[5px] font-mono text-[10.5px] text-info"

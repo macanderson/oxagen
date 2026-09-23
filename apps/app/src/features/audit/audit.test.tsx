@@ -83,6 +83,8 @@ const source: DataSource = {
     transcript: refuse,
     chain: refuse,
     outputs: refuse,
+    work: refuse,
+    outcomesSettings: refuse,
   },
   approvals: { pending: refuse, resolved: refuse },
   agents: {
@@ -117,6 +119,7 @@ const source: DataSource = {
     apiKeys: refuse,
     costCenters: refuse,
     modelCredential: refuse,
+    sso: refuse,
   },
   audit: { events, exportEvents },
   onboarding: { state: refuse, firstFrame: refuse },

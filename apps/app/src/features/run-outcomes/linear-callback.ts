@@ -1,8 +1,6 @@
 import { cookies } from "next/headers";
 import { z } from "zod";
-import { runIssueAuthorizationComplete } from "@oxagen/oxagen/contracts/run.issue.authorization.complete";
-import { kernelWrite } from "@/server/kernel";
-import { requireViewer } from "@/server/viewer";
+import { completeRunIssueAuthorization } from "./provider-actions";
 import { responseRedirect } from "@/shared/navigation";
 import { routes } from "@/shared/safe-path";
 const cookieSchema = z.object({
@@ -44,11 +42,13 @@ export async function handleLinearCallback(
       { status: 400 },
     );
   const { org, ws, runId, state } = cookie.data;
-  const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, runIssueAuthorizationComplete, {
-    state,
-    code: query.get("code") ?? "",
-  });
+  const result = await completeRunIssueAuthorization(
+    { org, ws },
+    {
+      state,
+      code: query.get("code") ?? "",
+    },
+  );
   if (!result.ok)
     return new Response(
       "Linear authorization was refused. Return to the Run to check consent and try again.",

@@ -94,7 +94,7 @@ afterEach(async () => {
 });
 
 describe("tabs", () => {
-  it("opens Records by default, marks it current and reads only the records in force, every kind, the first page", async () => {
+  it("opens the Library by default and reads the records in force", async () => {
     const calls = await renderSteering();
     expect(calls).toEqual({
       records: [[ctx, { kind: null, offset: 0 }]],
@@ -113,11 +113,9 @@ describe("tabs", () => {
           link.getAttribute("aria-current"),
         ]),
     ).toEqual([
-      ["Records", BASE, "page"],
-      ["Skills", `${BASE}?tab=skills`, null],
-      ["Proposals", `${BASE}?tab=proposals`, null],
-      ["Context PRs", `${BASE}?tab=prs`, null],
-      ["Settings", `${BASE}?tab=settings`, null],
+      ["Library", `${BASE}/library`, "page"],
+      ["Proposals", `${BASE}/proposals`, null],
+      ["Freshness", `${BASE}/freshness`, null],
     ]);
   });
 
@@ -130,7 +128,7 @@ describe("tabs", () => {
       contextPr: [],
       freshness: [[ctx]],
     });
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Freshness" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -160,7 +158,7 @@ describe("tabs", () => {
         "Settings could not be loaded: record_index_unavailable. Nothing was changed.",
       ),
     ).toBeVisible();
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Freshness" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -259,13 +257,13 @@ describe("Records", () => {
     });
     const links = within(filter).getAllByRole("link");
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      BASE,
-      `${BASE}?kind=rule`,
-      `${BASE}?kind=constraint`,
-      `${BASE}?kind=procedure`,
-      `${BASE}?kind=fact`,
-      `${BASE}?kind=memory`,
-      `${BASE}?kind=preference`,
+      `${BASE}/library/records`,
+      `${BASE}/library/records?kind=rule`,
+      `${BASE}/library/records?kind=constraint`,
+      `${BASE}/library/records?kind=procedure`,
+      `${BASE}/library/records?kind=fact`,
+      `${BASE}/library/records?kind=memory`,
+      `${BASE}/library/records?kind=preference`,
     ]);
     expect(
       links.filter((link) => link.getAttribute("aria-current") === "page"),
@@ -316,10 +314,13 @@ describe("Records", () => {
     expect(pager).toHaveTextContent("51 to 52 of 120");
     expect(
       within(pager).getByRole("link", { name: "Previous page" }),
-    ).toHaveAttribute("href", `${BASE}?kind=constraint`);
+    ).toHaveAttribute("href", `${BASE}/library/records?kind=constraint`);
     expect(
       within(pager).getByRole("link", { name: "Next page" }),
-    ).toHaveAttribute("href", `${BASE}?kind=constraint&offset=100`);
+    ).toHaveAttribute(
+      "href",
+      `${BASE}/library/records?kind=constraint&offset=100`,
+    );
   });
 
   it("shows no pager when one page holds every record (negative)", async () => {
@@ -382,7 +383,10 @@ describe("Proposals", () => {
     await renderSteering({ tab: "proposals" });
     expect(
       screen.getByRole("link", { name: "Context PR #519" }),
-    ).toHaveAttribute("href", `${BASE}?tab=prs&proposal=${PROPOSAL_ID}`);
+    ).toHaveAttribute(
+      "href",
+      `${BASE}/proposals?proposal=${PROPOSAL_ID}&section=prs`,
+    );
   });
 
   it.each<[ProposalStatus, string[]]>([
@@ -452,7 +456,10 @@ describe("Context PRs", () => {
       within(rows[0] ?? table).getByRole("link", {
         name: "#519 on acme/core-platform",
       }),
-    ).toHaveAttribute("href", `${BASE}?tab=prs&proposal=${PROPOSAL_ID}`);
+    ).toHaveAttribute(
+      "href",
+      `${BASE}/proposals?proposal=${PROPOSAL_ID}&section=prs`,
+    );
     expect(
       screen.queryByRole("region", { name: /^Context PR for/ }),
     ).toBeNull();

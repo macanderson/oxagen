@@ -185,6 +185,8 @@ export function toolsSource(reads: ToolsReads) {
       transcript: refuse,
       chain: refuse,
       outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse },
     agents: {
@@ -217,6 +219,7 @@ export function toolsSource(reads: ToolsReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      sso: refuse,
     },
     skills: { inventory: refuse, configuration: refuse },
     audit: { events: refuse, exportEvents: refuse },

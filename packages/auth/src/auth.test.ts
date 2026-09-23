@@ -46,6 +46,45 @@ vi.mock("better-auth", () => ({
   },
 }));
 
+// createAuthMiddleware is the identity here so the hooks in the captured
+// config are the plain async functions auth.ts wrote.
+vi.mock("better-auth/api", () => ({
+  APIError: class APIError extends Error {
+    constructor(
+      readonly status: string,
+      readonly body: { code?: string; message?: string },
+    ) {
+      super(body.message);
+    }
+  },
+  createAuthMiddleware: (fn: unknown) => fn,
+}));
+
+vi.mock("better-auth/cookies", () => ({
+  deleteSessionCookie: vi.fn(),
+}));
+
+// The SSO plugin and its Postgres store are exercised end to end in
+// sso/sign-in.test.ts; here only their wiring into the config is asserted.
+vi.mock("./sso/plugin", () => ({
+  SSO_DISABLED_PATHS: ["/sso/register", "/sso/verify-domain"],
+  buildSsoPlugin: () => ({ id: "sso" }),
+}));
+vi.mock("./sso/entitlement", () => ({
+  orgHasSso: vi.fn(async () => true),
+}));
+vi.mock("./sso/pg-store", () => ({
+  createPgSsoProvisioningStore: () => ({}),
+}));
+vi.mock("./sso/policy", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./sso/policy")>()),
+  isNonSsoSignInRefused: vi.fn().mockResolvedValue(false),
+}));
+vi.mock("@oxagen/database/sso-secrets", () => ({
+  resolveSsoKms: vi.fn(() => null),
+  openSsoConfig: vi.fn(),
+}));
+
 vi.mock("better-auth/adapters/drizzle", () => ({
   drizzleAdapter: () => ({ __mock: "drizzle-adapter" }),
 }));
@@ -127,6 +166,8 @@ vi.mock("drizzle-orm", () => ({
   eq: (a: unknown, b: unknown) => ({ op: "eq", a, b }),
   and: (...args: unknown[]) => ({ op: "and", args }),
   isNotNull: (a: unknown) => ({ op: "isNotNull", a }),
+  isNull: (a: unknown) => ({ op: "isNull", a }),
+  inArray: (a: unknown, b: unknown) => ({ op: "inArray", a, b }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -138,6 +179,8 @@ import { auth } from "./auth";
 import { withSystemDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { sendEmailFireAndForget } from "@oxagen/notifications";
+import { deleteSessionCookie } from "better-auth/cookies";
+import { isNonSsoSignInRefused } from "./sso/policy";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -329,6 +372,133 @@ describe("auth module — import and betterAuth config", () => {
     const session = hooks["session"] as Record<string, Record<string, unknown>>;
     expect(typeof session["create"]!["after"]).toBe("function");
     expect(typeof session["delete"]!["after"]).toBe("function");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Enterprise SSO wiring (ADR-145)
+// ---------------------------------------------------------------------------
+
+describe("enterprise SSO wiring", () => {
+  it("registers the SSO plugin and disables its provider-management paths", () => {
+    const plugins = getConfig()["plugins"] as { id: string }[];
+    expect(plugins.map((p) => p.id)).toContain("sso");
+    expect(getConfig()["disabledPaths"]).toEqual([
+      "/sso/register",
+      "/sso/verify-domain",
+    ]);
+  });
+
+  it("rate-limits /sign-in/sso like a password attempt", () => {
+    const rl = getConfig()["rateLimit"] as Record<string, unknown>;
+    const rules = rl["customRules"] as Record<string, Record<string, number>>;
+    expect(rules["/sign-in/sso"]).toEqual({ window: 60, max: 5 });
+  });
+
+  it("declares sessions.authMethod as server-written only", () => {
+    const s = getConfig()["session"] as Record<string, unknown>;
+    const fields = s["additionalFields"] as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(fields["authMethod"]).toMatchObject({
+      type: "string",
+      input: false,
+    });
+  });
+
+  it("session.create.before records how the session was established", async () => {
+    const hooks = getConfig()["databaseHooks"] as Record<
+      string,
+      Record<string, Record<string, AnyFn>>
+    >;
+    const before = hooks["session"]!["create"]!["before"]!;
+    const sso = await before(
+      { userId: "u1" },
+      { path: "/sso/callback/:providerId", params: { providerId: "acme" } },
+    );
+    expect(sso.data.authMethod).toBe("sso:acme");
+    const pw = await before({ userId: "u1" }, { path: "/sign-in/email" });
+    expect(pw.data.authMethod).toBe("password");
+    const none = await before({ userId: "u1" }, null);
+    expect(none.data.authMethod).toBe("other");
+  });
+
+  // The require-SSO hooks live in a plugin so the middleware types stay out
+  // of the exported `auth` type (TS2883); find it among the plugins.
+  const hooks = () => {
+    const plugin = (
+      getConfig()["plugins"] as {
+        id: string;
+        hooks?: {
+          before: { matcher: AnyFn; handler: AnyFn }[];
+          after: { matcher: AnyFn; handler: AnyFn }[];
+        };
+      }[]
+    ).find((p) => p.id === "oxagen-require-sso");
+    const h = plugin!.hooks!;
+    return {
+      before: h.before[0]!.handler,
+      beforeMatches: h.before[0]!.matcher,
+      after: h.after[0]!.handler,
+      afterMatches: h.after[0]!.matcher,
+    };
+  };
+
+  it("refuses a password sign-in when the domain requires SSO", async () => {
+    vi.mocked(isNonSsoSignInRefused).mockResolvedValueOnce(true);
+    await expect(
+      hooks().before({ path: "/sign-in/email", body: { email: "a@acme.com" } }),
+    ).rejects.toMatchObject({ body: { code: "SSO_REQUIRED" } });
+  });
+
+  it("lets a password sign-in through when the domain does not require SSO", async () => {
+    vi.mocked(isNonSsoSignInRefused).mockResolvedValueOnce(false);
+    await expect(
+      hooks().before({ path: "/sign-in/email", body: { email: "a@b.com" } }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("runs only on the password sign-in and the social callback", () => {
+    expect(hooks().beforeMatches({ path: "/sign-in/email" })).toBe(true);
+    expect(hooks().beforeMatches({ path: "/sign-in/sso" })).toBe(false);
+    expect(hooks().afterMatches({ path: "/callback/google" })).toBe(true);
+    expect(hooks().afterMatches({ path: "/sso/callback/acme" })).toBe(false);
+  });
+
+  it("ends a social sign-in into an SSO-required domain and redirects to /login", async () => {
+    vi.mocked(isNonSsoSignInRefused).mockResolvedValueOnce(true);
+    const deleteSession = vi.fn();
+    const redirect = vi.fn((url: string) => new Error(`redirect:${url}`));
+    await expect(
+      hooks().after({
+        path: "/callback/google",
+        redirect,
+        context: {
+          newSession: {
+            user: { email: "a@acme.com" },
+            session: { token: "t" },
+          },
+          internalAdapter: { deleteSession },
+        },
+      }),
+    ).rejects.toThrow("redirect:/login?sso=required");
+    expect(deleteSession).toHaveBeenCalledWith("t");
+    expect(deleteSessionCookie).toHaveBeenCalled();
+  });
+
+  it("leaves a social sign-in alone when the domain does not require SSO", async () => {
+    vi.mocked(isNonSsoSignInRefused).mockResolvedValueOnce(false);
+    const deleteSession = vi.fn();
+    await hooks().after({
+      path: "/callback/google",
+      redirect: vi.fn(),
+      context: {
+        newSession: { user: { email: "a@b.com" }, session: { token: "t" } },
+        internalAdapter: { deleteSession },
+      },
+    });
+    expect(deleteSession).not.toHaveBeenCalled();
   });
 });
 

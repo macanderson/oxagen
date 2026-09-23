@@ -82,6 +82,9 @@ export const routes = {
       next: nextParam(next),
       error: error.trim() === "" ? undefined : error,
     }),
+  /** Where requireViewer sends a member whose organization requires SSO and whose session is not one (sso-gate.ts); outside `[org]`, so it cannot loop. */
+  ssoRequired: (next?: SafePath): SafePath =>
+    withQuery(mint("/login"), { next: nextParam(next), sso: "required" }),
   signup: (next?: SafePath): SafePath =>
     withQuery(mint("/signup"), { next: nextParam(next) }),
   verify: (q: { email: string; next?: SafePath }): SafePath =>
@@ -123,6 +126,11 @@ export const routes = {
    * calls (ADR-053 §2). Org-scoped — the key pays for every workspace.
    */
   modelFunding: (org: string): SafePath => pathOf(org, "model-funding"),
+  /**
+   * Organization › Single sign-on: the organisation's identity providers,
+   * their domain proofs, and whether SSO is required (ADR-145).
+   */
+  sso: (org: string): SafePath => pathOf(org, "sso"),
   /** Fleet; `cursor` opens a later page of its runs table. */
   fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws), { cursor: q?.cursor }),
@@ -299,27 +307,37 @@ export const routes = {
     tab === undefined
       ? pathOf(org, ws, "repositories")
       : pathOf(org, ws, "repositories", tab),
-  /** Steering filters, a selected proposal, and a Skills inventory cursor. */
+  /** Canonical Steering sections, with legacy query links retained for redirects. */
   steering: (
     org: string,
     ws: string,
     q: {
       tab?: string;
+      shelf?: string;
+      section?: string;
       kind?: string;
       offset?: string;
       proposal?: string;
       cursor?: string;
       view?: string;
     } = {},
-  ): SafePath =>
-    withQuery(pathOf(org, ws, "steering"), {
-      tab: q.tab,
+  ): SafePath => {
+    const canonical = ["library", "proposals", "freshness"].includes(
+      q.tab ?? "",
+    );
+    const segments = canonical ? [q.tab!] : [];
+    if (q.tab === "library" && q.shelf && q.shelf !== "all")
+      segments.push(q.shelf);
+    return withQuery(pathOf(org, ws, "steering", ...segments), {
+      tab: canonical ? undefined : q.tab,
       kind: q.kind,
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,
       view: q.view,
-    }),
+      section: q.section,
+    });
+  },
   /**
    * One published record, by its lineage (#3395). The lineage is a file stem
    * under `.oxagen/rules/`, so it reaches here from the repository rather

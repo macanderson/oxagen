@@ -37,6 +37,7 @@ import type {
   MemberList,
   ModelCredential,
   RoleCatalog,
+  SsoSettings,
   WorkspaceList,
 } from "./contracts/org";
 import type {
@@ -49,6 +50,7 @@ import type {
   TranscriptKind,
   TranscriptZoom,
 } from "./contracts/run";
+import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
@@ -183,6 +185,8 @@ export interface DataSource {
      * — caller features/run/run.tsx.
      */
     outputs(ctx: WsCtx, runId: string): Promise<Read<RunOutputs>>;
+    work(ctx: WsCtx, runId: string): Promise<Read<RunWork>>;
+    outcomesSettings(ctx: WsCtx): Promise<Read<RunOutcomesPolicy>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {
@@ -340,6 +344,13 @@ export interface DataSource {
      * Org-scoped: the key pays for every workspace's assistant turns.
      */
     modelCredential(ctx: OrgCtx): Promise<Read<ModelCredential>>;
+    /**
+     * list_sso_providers — the organisation's identity providers, their
+     * domain proofs and group mappings, and whether SSO is required. No
+     * secret: a stored one is reported as set. Org-scoped; callers:
+     * features/organization/sso.tsx and roles.tsx.
+     */
+    sso(ctx: OrgCtx): Promise<Read<SsoSettings>>;
   };
   /**
    * The organization's audit record (#3097), both noBillingGate reads for an

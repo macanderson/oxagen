@@ -2,7 +2,9 @@
 import { cookies } from "next/headers";
 import { runIssueAuthorizationBegin } from "@oxagen/oxagen/contracts/run.issue.authorization.begin";
 import { runIssueProvidersGet } from "@oxagen/oxagen/contracts/run.issue.providers.get";
-import { kernelWrite, kernelRead } from "@/server/kernel";
+import { kernelWrite, kernelRead, readToActionResult } from "@/server/kernel";
+import type { ActionResult, ContractOutput } from "@/server/kernel";
+import { runIssueAuthorizationComplete } from "@oxagen/oxagen/contracts/run.issue.authorization.complete";
 import { requireViewer } from "@/server/viewer";
 import { parseLinearAuthorizationUrl } from "@/shared/linear-authorization-url";
 import { redirectToLinearAuthorization } from "@/shared/navigation";
@@ -11,18 +13,20 @@ export async function loadRunIssueProviders(
   at: { org: string; ws: string },
   linearConnectionId?: string,
   after?: string,
-) {
+): Promise<ActionResult<ContractOutput<typeof runIssueProvidersGet>>> {
   const ctx = await requireViewer(at.org, at.ws);
-  return kernelRead(ctx, {
-    contract: runIssueProvidersGet,
-    input: { linearConnectionId, after },
-    page: "run",
-  });
+  return readToActionResult(
+    await kernelRead(ctx, {
+      contract: runIssueProvidersGet,
+      input: { linearConnectionId, after },
+      page: "run",
+    }),
+  );
 }
 export async function authorizeRunIssues(
   at: { org: string; ws: string },
   runId: string,
-) {
+): Promise<ActionResult<never>> {
   const ctx = await requireViewer(at.org, at.ws);
   const result = await kernelWrite(ctx, runIssueAuthorizationBegin, {
     provider: "linear",
@@ -48,4 +52,12 @@ export async function authorizeRunIssues(
     },
   );
   redirectToLinearAuthorization(url);
+}
+
+export async function completeRunIssueAuthorization(
+  at: { org: string; ws: string },
+  input: { state: string; code: string },
+): Promise<ActionResult<{ connectionId: string }>> {
+  const ctx = await requireViewer(at.org, at.ws);
+  return kernelWrite(ctx, runIssueAuthorizationComplete, input);
 }

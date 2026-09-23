@@ -112,6 +112,8 @@ export function onboardingSource(reads: Reads): {
       transcript: refuse("runs.transcript"),
       chain: refuse("runs.transcript"),
       outputs: refuse("runs.transcript"),
+      work: refuse("runs.transcript"),
+      outcomesSettings: refuse("runs.transcript"),
     },
     approvals: {
       pending: refuse("approvals.pending"),
@@ -147,6 +149,7 @@ export function onboardingSource(reads: Reads): {
       apiKeys: refuse("org.apiKeys"),
       costCenters: refuse("org.costCenters"),
       modelCredential: refuse("org.modelCredential"),
+      sso: refuse("org.sso"),
     },
     skills: {
       inventory: refuse("skills.inventory"),

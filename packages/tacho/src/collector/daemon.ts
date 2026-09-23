@@ -6,6 +6,11 @@
  * fake control plane and a scratch `TACHO_HOME`.
  */
 import {
+  readWorktreeSnapshot,
+  type WorktreeSnapshot,
+} from "./worktree-snapshot";
+import { jsonContent } from "../evidence/frame-body";
+import {
   existsSync,
   readdirSync,
   readFileSync,
@@ -132,7 +137,11 @@ import {
   createCollectorServer,
   type HookEnvelope,
 } from "./server";
-import { type RetentionDecision, Shipper } from "./spool";
+import {
+  type RetentionDecision,
+  Shipper,
+  serverRequestedWaitMs,
+} from "./spool";
 import { TranscriptTailer } from "./transcript-tailer";
 
 export interface DaemonTimers {
@@ -531,6 +540,13 @@ async function initializeDaemon(
   let lastControlAt: number | undefined;
   let lastOtlpAt: number | undefined;
   let lastIngestAt: number | undefined;
+  // When a command poll last succeeded. The poll's cadence gate reads it next
+  // to `lastIngestAt`: a successful poll carries the same control envelope an
+  // ingest does, so it earns the same `commandsPollMs` of quiet. Without it, a
+  // host with no ingest for 30 s polled on every one-second tick, spent the
+  // 30/min `tacho-host` budget in 30 s, and took 429s until the window turned
+  // over, every minute, for as long as the host was idle (2026-09-23).
+  let lastCommandPollAt: number | undefined;
   let stateDirty = false;
   let stopped = false;
   const pendingAcks: CommandAcknowledgement[] = [];
@@ -1105,10 +1121,13 @@ async function initializeDaemon(
   // --- end transcript tailer ---------------------------------------------
 
   async function sendAcks(): Promise<void> {
+    const lastEnvelopeAt = Math.max(
+      lastIngestAt ?? -Infinity,
+      lastCommandPollAt ?? -Infinity,
+    );
     if (
       pendingAcks.length === 0 &&
-      lastIngestAt !== undefined &&
-      now() - lastIngestAt < timers.commandsPollMs
+      now() - lastEnvelopeAt < timers.commandsPollMs
     ) {
       return;
     }
@@ -1121,6 +1140,7 @@ async function initializeDaemon(
     try {
       const { spool_oldest_at: _o, bundle_etag: _e, ...daemon } = health();
       const response = await client.commands(acks, daemon);
+      lastCommandPollAt = now();
       await onControl(response.control);
       if (commandPollFailures > 0) {
         log(`command poll recovered after ${commandPollFailures} failures`);
@@ -1151,12 +1171,21 @@ async function initializeDaemon(
         }
         return;
       }
-      const retryInMs = commandPollBackoffMs;
+      // A 429 names its own wait, and the Shipper already obeys it on ingest.
+      // The poll used to guess 2, 4, 8, 16 s instead, spending four more
+      // requests from a bucket the server had just said was empty.
+      const serverWaitMs =
+        error instanceof ControlError
+          ? serverRequestedWaitMs(error)
+          : undefined;
+      const retryInMs = serverWaitMs ?? commandPollBackoffMs;
       commandPollNextAttemptAt = now() + retryInMs;
-      commandPollBackoffMs = Math.min(
-        commandPollBackoffMs * 2,
-        COMMAND_POLL_MAX_BACKOFF_MS,
-      );
+      if (serverWaitMs === undefined) {
+        commandPollBackoffMs = Math.min(
+          commandPollBackoffMs * 2,
+          COMMAND_POLL_MAX_BACKOFF_MS,
+        );
+      }
       // The failure count and the wait are on the line because a reader
       // watching this log needs to tell one failure from the eight hundredth,
       // and needs to know the daemon is holding off rather than wedged.
@@ -1487,6 +1516,7 @@ async function initializeDaemon(
       // describe but does have a worktree to reconcile.
       facts?: GitFacts;
       changes?: GitWorkingTreeChange[];
+      snapshot?: WorktreeSnapshot;
     }> = [];
     for (const harnessSessionId of work) {
       const want = gitPending.get(harnessSessionId);
@@ -1566,14 +1596,23 @@ async function initializeDaemon(
                 cwd,
                 session.baselineCommit,
               );
-              return changes === undefined ? {} : { changes };
+              return changes === undefined
+                ? {}
+                : {
+                    changes,
+                    snapshot: await readWorktreeSnapshot(
+                      execAsync,
+                      cwd,
+                      session.baselineCommit,
+                    ),
+                  };
             })()
           : {}),
       });
     }
     if (found.length === 0) return;
     await serial.run(async () => {
-      for (const { session, cwd, facts, changes, ending } of found) {
+      for (const { session, cwd, facts, changes, snapshot, ending } of found) {
         if (session.sealed) continue;
         // The session moved while the probe ran, so this answer describes a
         // repository it is no longer in. A later turn reads the new one.
@@ -1587,7 +1626,8 @@ async function initializeDaemon(
         }
         if (facts !== undefined)
           session.recorder.noteContext(gitContextOf(facts));
-        if (changes !== undefined) recordReconciliation(session, changes);
+        if (changes !== undefined)
+          recordReconciliation(session, changes, snapshot);
         if (
           ending !== undefined &&
           pendingSessionEnds.get(session.recorder.sessionUuid) === ending
@@ -1621,6 +1661,7 @@ async function initializeDaemon(
   function recordReconciliation(
     session: SessionRecord,
     changes: GitWorkingTreeChange[],
+    snapshot?: WorktreeSnapshot,
   ): void {
     const mark = session.recorder.markChain();
     try {
@@ -1628,6 +1669,23 @@ async function initializeDaemon(
         session.recorder.sealCollectorEvent(
           "oxagen:worktree_reconciled",
           worktreeReconciledBody(changes),
+          snapshot
+            ? {
+                attrs: {
+                  worktree_root: snapshot.root,
+                  ...(snapshot.repository
+                    ? { repository_url: snapshot.repository }
+                    : {}),
+                  ...(snapshot.baseline
+                    ? { diff_base_sha: snapshot.baseline }
+                    : {}),
+                  ...(snapshot.head ? { diff_head_sha: snapshot.head } : {}),
+                  diff_complete: String(snapshot.complete),
+                  diff_limitations: snapshot.limitations.join(","),
+                },
+                content: jsonContent(JSON.stringify(snapshot)),
+              }
+            : {},
         ),
       ]);
     } catch (error) {

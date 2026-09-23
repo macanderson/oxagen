@@ -7,6 +7,10 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { readOk, readError } from "@/data/read";
 import { RunOutcomesConsent } from "./consent";
 const action = vi.hoisted(() => vi.fn());
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
+}));
 vi.mock("./actions", () => ({ setRunOutcomesConsentAction: action }));
 const off = {
   customerEnabled: false,
@@ -16,7 +20,10 @@ const off = {
 };
 const at = { org: "acme", ws: "core" };
 afterEach(cleanup);
-beforeEach(() => action.mockReset());
+beforeEach(() => {
+  action.mockReset();
+  refresh.mockReset();
+});
 async function show(
   props: Partial<Parameters<typeof RunOutcomesConsent>[0]> = {},
 ) {
@@ -41,6 +48,7 @@ describe("run follow-through consent", () => {
       screen.getByRole("button", { name: "Enable metered follow-through" }),
     );
     expect(action).toHaveBeenCalledWith(at, true);
+    expect(refresh).toHaveBeenCalledOnce();
     expect(
       await screen.findByRole("button", { name: "Disable follow-through" }),
     ).toBeVisible();
