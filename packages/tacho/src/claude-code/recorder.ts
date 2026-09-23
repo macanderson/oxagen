@@ -221,7 +221,8 @@ function compact<T extends Record<string, unknown>>(value: T): T {
 
 /** The `.max()` length a schema field carries, or undefined for an unbounded one. */
 function maxLengthOf(field: z.ZodTypeAny): number | undefined {
-  const inner = field instanceof z.ZodOptional ? field.unwrap() : field;
+  const inner: z.ZodTypeAny =
+    field instanceof z.ZodOptional ? (field.unwrap() as z.ZodTypeAny) : field;
   if (!(inner instanceof z.ZodString)) return undefined;
   for (const check of inner._def.checks) {
     if (check.kind === "max") return check.value;

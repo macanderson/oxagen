@@ -45,7 +45,9 @@ export function isWhole(transcript: RunTranscript): boolean {
  * failing a list it mostly holds.
  */
 export async function readWholeTranscript(
-  source: DataSource,
+  // Only the transcript read: a caller hands in its whole source, and a test
+  // hands in the one method this reads.
+  source: { runs: Pick<DataSource["runs"], "transcript"> },
   ctx: WsCtx,
   runId: string,
   zoom: TranscriptZoom,

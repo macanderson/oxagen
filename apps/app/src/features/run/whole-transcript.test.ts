@@ -7,7 +7,8 @@ import {
 } from "@/data/contracts/run";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk, type Read } from "@/data/read";
-import type { WsCtx } from "@/server/viewer";
+import { WsCtx } from "@/server/viewer";
+import { unsafeMint } from "@/server/viewer.testing";
 import { runTranscript, transcriptEntry } from "./run.builders";
 import {
   isWhole,
@@ -15,7 +16,17 @@ import {
   WHOLE_TRANSCRIPT_PAGES,
 } from "./whole-transcript";
 
-const ctx = {} as WsCtx;
+const ctx = unsafeMint(WsCtx, {
+  userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "admin",
+  workspaceId: "7b000000-0000-4000-8000-000000000001",
+  wsSlug: "core-platform",
+  wsName: "Core platform",
+  wsRole: "member",
+});
 
 /** A full page of `count` entries named from `from`. */
 function page(from: number, count: number, cursor: string | null) {
@@ -30,18 +41,10 @@ function page(from: number, count: number, cursor: string | null) {
 function sourceOf(
   answer: (after: string | null | undefined) => Read<RunTranscript>,
 ) {
-  const transcript = vi.fn(
-    (
-      _ctx: WsCtx,
-      _runId: string,
-      _zoom: string,
-      q?: { kinds?: string[]; after?: string | null },
-    ) => Promise.resolve(answer(q?.after)),
+  const transcript = vi.fn<DataSource["runs"]["transcript"]>(
+    (_ctx, _runId, _zoom, q) => Promise.resolve(answer(q?.after)),
   );
-  return {
-    source: { runs: { transcript } } as unknown as DataSource,
-    transcript,
-  };
+  return { source: { runs: { transcript } }, transcript };
 }
 
 describe("readWholeTranscript", () => {
