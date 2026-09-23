@@ -3020,41 +3020,86 @@ type Messages = {
   record: {
     loading: string;
     header: {
-      breadcrumbs: string;
       steering: string;
       record: string;
       published: string;
       archived: string;
-      pendingBranch: string;
+      forceTitle: string;
+      effectTitle: string;
+      kindLine: {
+        rule: string;
+        constraint: string;
+        procedure: string;
+        fact: string;
+        memory: string;
+        preference: string;
+      };
+      unclassifiedLine: string;
       inForce: string;
-      inForceUnclassified: string;
+      inForceNoCommit: string;
+      discard: string;
+      archive: string;
+      propose: string;
     };
     editor: {
+      path: string;
       modified: string;
       unchanged: string;
-      stat: string;
-      discard: string;
-      propose: string;
-      readOnly: string;
-      pending: string;
+      unsaved: string;
+      tokensNotRecorded: string;
+      find: string;
+      findLabel: string;
+      matchOf: string;
       caret: string;
+      selected: string;
+      grammar: string;
       counts: string;
-      tokenCost: string;
+      lineEnding: string;
+      encoding: string;
+      keys: string;
+      note: string;
+      noteNoRepository: string;
     };
     propose: {
       title: string;
-      diff: string;
-      diffLabel: string;
-      rationale: string;
-      rationaleHint: string;
-      checksLabel: string;
-      checksLead: string;
+      lead: string;
+      cancel: string;
       submit: string;
       pending: string;
+      pendingOpen: string;
+      readOnly: string;
+      statLabel: string;
+      nothingChanged: string;
+      checksLabel: string;
+      checks: {
+        schema: {
+          name: string;
+          what: string;
+        };
+        lineage: {
+          name: string;
+          what: string;
+        };
+        hash: {
+          name: string;
+          what: string;
+        };
+        secret: {
+          name: string;
+          what: string;
+        };
+        conflict: {
+          name: string;
+          what: string;
+        };
+        effect: {
+          name: string;
+          what: string;
+          absent: string;
+        };
+      };
       done: string;
       doneNoPr: string;
-      notInForce: string;
-      reload: string;
       status: {
         proposed: string;
         pr_open: string;
@@ -3065,113 +3110,147 @@ type Messages = {
         rejected: string;
       };
     };
+    archive: {
+      title: string;
+      body: string;
+      gate: string;
+      kept: string;
+      keep: string;
+      submit: string;
+      notRecorded: string;
+      notRecordedNoRepo: string;
+      archivedTitle: string;
+      archivedBody: string;
+      pendingTitle: string;
+      pendingBody: string;
+    };
     lineage: {
       title: string;
-      lineageTerm: string;
-      pathTerm: string;
-      pathUnknown: string;
-      backingTerm: string;
-      backing: {
-        file: string;
-        registry: string;
-      };
-      commitTerm: string;
-      commitUnknown: string;
-      authorTerm: string;
-      author: string;
-      committedTerm: string;
-      summaryTerm: string;
-      versionTerm: string;
-      effectTerm: string;
+      badge: string;
+      lineage: string;
+      file: string;
+      fileOn: string;
+      fileAlone: string;
+      publishedBy: string;
+      publishedValue: string;
+      publishedNotRecorded: string;
       effect: string;
-      effectUnknown: string;
-      schemaTerm: string;
+      effectLine: string;
+      neverRendered: string;
+      effectNotRecorded: string;
+      schema: string;
     };
     related: {
       title: string;
       unclassified: string;
       only: string;
       open: string;
+      search: string;
+      sort: string;
+      sorts: {
+        shown: string;
+        az: string;
+        za: string;
+      };
+      rows: string;
+      nothing: string;
+      range: string;
+      previous: string;
+      next: string;
     };
     meters: {
       label: string;
-      notRecorded: string;
       rendered: string;
       cited: string;
-      uncounted: string;
+      of: string;
+      notRecorded: string;
+      rollupNotRecorded: string;
+      thirdNotRecorded: string;
     };
     kindPanel: {
+      deliverEyebrow: string;
       never: string;
+      deliver: {
+        rule: string;
+        constraint: string;
+        procedure: string;
+        fact: string;
+        memory: string;
+        preference: string;
+      };
+      neverDo: {
+        rule: string;
+        constraint: string;
+        procedure: string;
+        fact: string;
+        memory: string;
+        preference: string;
+      };
       unclassified: {
         title: string;
         body: string;
       };
       rule: {
-        title: string;
-        lead: string;
-        placementTerm: string;
+        whereEyebrow: string;
+        force: string;
+        forceUnknown: string;
         placement: {
           prefix: string;
           relevance: string;
         };
-        placementUnknown: string;
-        shareTerm: string;
-        shareNotRecorded: string;
-        departure: string;
-        never: string;
+        effect: string;
+        bundle: string;
+        bundleNotRecorded: string;
+        bundleVersion: string;
+        third: string;
       };
       constraint: {
-        title: string;
-        boundary: string;
-        effect: {
+        effectUnknownWord: string;
+        boundary: {
           require: string;
-          forbid: string;
+          forbidNoGrant: string;
+          unknown: string;
         };
-        effectUnknown: string;
-        dispatch: string;
-        grant: string;
-        conflict: string;
-        departure: string;
-        never: string;
+        conflictsEyebrow: string;
+        conflicts: string;
+        conflictsNoCount: string;
+        third: string;
       };
       procedure: {
-        title: string;
-        lead: string;
+        stepsEyebrow: string;
         noSteps: string;
-        never: string;
+        order: string;
       };
       fact: {
-        title: string;
-        lead: string;
-        falsifiesTerm: string;
-        falsifies: string;
-        validFromTerm: string;
-        validFromUnknown: string;
-        readTerm: string;
-        read: string;
-        readNotRecorded: string;
-        never: string;
+        claimEyebrow: string;
+        falsifiable: string;
+        falsifiableNotRecorded: string;
+        validFrom: string;
+        validFromNotRecorded: string;
+        validFromValue: string;
+        lastConfirmed: string;
+        lastConfirmedNotRecorded: string;
+        lastConfirmedValue: string;
+        steers: string;
+        steersValue: string;
+        note: string;
       };
       memory: {
-        title: string;
-        lead: string;
-        whenTerm: string;
-        whenUnknown: string;
-        selectionTerm: string;
+        whenEyebrow: string;
+        recorded: string;
+        recordedNotRecorded: string;
+        explains: string;
+        explainsNotRecorded: string;
         selection: string;
-        decayTerm: string;
+        selectionValue: string;
+        selectionShare: string;
         decay: string;
-        recalledTerm: string;
-        recalled: string;
-        recalledNotRecorded: string;
-        never: string;
+        decayValue: string;
       };
       preference: {
-        title: string;
-        lead: string;
-        notFollowed: string;
-        departure: string;
-        never: string;
+        softEyebrow: string;
+        soft: string;
+        third: string;
       };
     };
     failure: {
@@ -3195,8 +3274,14 @@ type Messages = {
         title: string;
         body: string;
         needed: string;
-        decidedBy: string;
+        request: string;
+        requestNotRecorded: string;
         back: string;
+        signedInTerm: string;
+        signedIn: string;
+        neededTerm: string;
+        decidedByTerm: string;
+        decidedBy: string;
       };
       pending: {
         title: string;
@@ -3206,8 +3291,9 @@ type Messages = {
         title: string;
         body: string;
         retry: string;
-        code: string;
-        readAt: string;
+        incident: string;
+        incidentNotRecorded: string;
+        trace: string;
       };
     };
   };
