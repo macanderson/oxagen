@@ -826,3 +826,54 @@ describe("reported frame usage", () => {
     );
   });
 });
+
+describe("transcript reasoning splits", () => {
+  it("retains reasoning from a duplicate transcript without recounting its input or output", () => {
+    const first = tachoFrame(
+      tachoRow(1, "llm_call", {
+        source: "otel_log",
+        attrs: {},
+        body: JSON.stringify({ input_tokens: 12, output_tokens: 9 }),
+      }),
+    );
+    const transcript = tachoFrame(
+      tachoRow(2, "llm_call", {
+        source: "transcript",
+        attrs: { "oxagen.llm_call_duplicate_of": "otel_log" },
+        body: JSON.stringify({
+          input_tokens: 12,
+          output_tokens: 9,
+          thinking_tokens: 4,
+        }),
+      }),
+    );
+    const continuation = tachoFrame(
+      tachoRow(3, "llm_call", {
+        source: "transcript",
+        attrs: { "oxagen.llm_call_duplicate_of": "transcript" },
+        body: JSON.stringify({
+          input_tokens: 12,
+          output_tokens: 9,
+          thinking_tokens: 4,
+        }),
+      }),
+    );
+    expect(transcript.usage).toEqual({
+      inputUncached: null,
+      cacheRead: null,
+      cacheWrite: null,
+      output: null,
+      reasoning: 4,
+    });
+    expect(continuation.usage).toBeNull();
+    expect(
+      foldTranscript([first, transcript, continuation], "turns")[0]?.usage,
+    ).toEqual({
+      inputUncached: 12,
+      cacheRead: null,
+      cacheWrite: null,
+      output: 9,
+      reasoning: 4,
+    });
+  });
+});

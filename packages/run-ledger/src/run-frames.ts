@@ -26,6 +26,7 @@ import type { FrameBodyColumns } from "./frame-body";
 import {
   isTranscriptKind,
   countsLlmCallUsage,
+  countsLlmCallSplit,
   TACHO_METERING_ATTR,
   TACHO_METERING_OBSERVED,
   TRANSCRIPT_KINDS,
@@ -503,13 +504,26 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
     row.source === "collector" &&
     row.fidelity === "proxy" &&
     row.attrs?.[TACHO_METERING_ATTR] === TACHO_METERING_OBSERVED;
-  const counted = countsLlmCallUsage({
+  const usageSource = {
     kind: row.kind,
     source: row.source ?? "",
     attrs: row.attrs ?? {},
-  });
+  };
+  const counted = countsLlmCallUsage(usageSource);
+  const split = countsLlmCallSplit(usageSource);
+  let usage = usageObserved || counted || split ? usageFrom(payload) : null;
+  if (usage) {
+    if (!usageObserved && !counted) {
+      usage.inputUncached = null;
+      usage.cacheRead = null;
+      usage.cacheWrite = null;
+      usage.output = null;
+    }
+    if (!usageObserved && !split) usage.reasoning = null;
+    if (Object.values(usage).every((value) => value === null)) usage = null;
+  }
   return {
-    usage: usageObserved || counted ? usageFrom(payload) : null,
+    usage,
     usageObserved,
     seq: String(row.seq),
     type: row.kind,
