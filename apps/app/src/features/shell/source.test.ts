@@ -98,7 +98,6 @@ const source = {
     connections: vi.fn(),
     mcpServers: vi.fn(),
   },
-  runtimes: { list: vi.fn(), agents: vi.fn() },
 };
 const listed = readOk({
   orgs: [{ slug: "acme", name: "Acme Robotics" }],
