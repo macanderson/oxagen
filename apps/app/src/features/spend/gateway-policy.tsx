@@ -32,9 +32,7 @@ function valuesOf(policy: GatewayPolicy): GatewayPolicyFormValues {
     mode: policy.mode,
     sessionLimit:
       policy.sessionLimitUsd === null ? "" : String(policy.sessionLimitUsd),
-    // A null allowlist and an empty one both render as an empty box, and both
-    // mean the same thing coming back out: no allowlist. "Permit nothing" is
-    // expressed by denying `*`, which survives the round trip.
+    ...(policy.modelAllow?.length === 0 ? { permitNoModels: true } : {}),
     modelAllow: (policy.modelAllow ?? []).join("\n"),
     modelDeny: policy.modelDeny.join("\n"),
   };
@@ -161,11 +159,17 @@ export function GatewayPolicySection({
       note={t("note")}
       action={
         <Badge tone="quiet" data-mode={saved.mode}>
-          {saved.mode === "enforced" ? t("enforced") : t("notApplied")}
+          {saved.mode === "enforced"
+            ? t("enforcementRequested")
+            : t("notApplied")}
         </Badge>
       }
       footer={
-        reach === null ? null : (
+        reach === null ? (
+          saved.mode === "enforced" ? (
+            <p className="text-xs">{t("reach.unknown")}</p>
+          ) : null
+        ) : (
           <p data-testid="gateway-reach" className="text-xs">
             {reach.hosts === 0
               ? t("reach.none")
@@ -230,6 +234,19 @@ export function GatewayPolicySection({
               }));
             }}
           />
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={values.permitNoModels ?? false}
+              onChange={(event) => {
+                setValues((prev) => ({
+                  ...prev,
+                  permitNoModels: event.target.checked,
+                }));
+              }}
+            />
+            {t("permitNoModels")}
+          </label>
           <ModelList
             id="gateway-model-allow"
             label={t("modelAllow")}
@@ -271,7 +288,9 @@ export function GatewayPolicySection({
           <p>
             {saved.modelAllow === null
               ? t("noAllowlist")
-              : t("allowlist", { models: saved.modelAllow.join(", ") })}
+              : saved.modelAllow.length === 0
+                ? t("permitNoModels")
+                : t("allowlist", { models: saved.modelAllow.join(", ") })}
           </p>
           {saved.modelDeny.length > 0 ? (
             <p>{t("denylist", { models: saved.modelDeny.join(", ") })}</p>

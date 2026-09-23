@@ -8,7 +8,7 @@
 
 ## Intent
 
-Read the workspace model policy for Claude Code, Codex, and Stella requests routed through the loopback gateway. Returns the mode, model lists, host feature support, and the legacy recorded dollar ceiling. Every member can read the policy.
+Read the workspace model policy for Claude Code, Codex, and Stella requests routed through the loopback gateway. Returns the mode, model lists, and the legacy recorded dollar ceiling. Every member can read the policy.
 
 This is a different setting from `get_budget_policy`, which governs an in-app assistant **turn**. This one governs a wrapped harness **session** on somebody's laptop, and a different enforcer applies it: the daemon's loopback model proxy, from the signed policy bundle.
 
@@ -45,4 +45,4 @@ None. `noBillingGate: true`.
 
 ## Notes
 
-A workspace with no row reads as observed. [ADR-149](../adr/ADR-149-independent-model-policy.md) makes model enforcement independent of agent budgets. Compatible hosts receive the policy on their next signed-bundle refresh. Host support counts indicate capability, not confirmed receipt. Older hosts need an upgrade. Cursor model traffic is outside this gateway.
+A workspace with no row reads as observed. [ADR-149](../adr/ADR-149-independent-model-policy.md) makes model enforcement independent of agent budgets. Compatible hosts receive the policy on their next signed-bundle refresh. The write capability returns host support counts, which indicate capability rather than confirmed receipt. Older hosts need an upgrade. Cursor model traffic is outside this gateway.

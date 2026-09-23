@@ -20,6 +20,7 @@ import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GatewayPolicyForm } from "./forms";
 import type { GatewayPolicy } from "@/data/contracts/spend";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import spend from "../../../messages/spend.json";
@@ -75,6 +76,45 @@ afterEach(async () => {
 });
 
 describe("the gateway policy section", () => {
+  it("preserves an empty allowlist on save until explicitly cleared", async () => {
+    const user = userEvent.setup();
+    renderSection({
+      ...OBSERVED,
+      mode: "enforced",
+      modelAllow: [],
+      modelDeny: ["gpt-4o"],
+    });
+    expect(
+      screen.getByLabelText(spend.spend.gateway.permitNoModels),
+    ).toBeChecked();
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    await waitFor(() =>
+      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(1),
+    );
+    expect(
+      GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[0]?.[1])
+        .modelAllow,
+    ).toEqual([]);
+    await user.click(screen.getByLabelText(spend.spend.gateway.permitNoModels));
+    await user.click(screen.getByRole("button", { name: /save the policy/i }));
+    await waitFor(() =>
+      expect(setGatewayPolicyAction).toHaveBeenCalledTimes(2),
+    );
+    expect(
+      GatewayPolicyForm.parse(setGatewayPolicyAction.mock.calls[1]?.[1])
+        .modelAllow,
+    ).toBeNull();
+  });
+
+  it("qualifies saved enforcement until host support is known", () => {
+    renderSection({ ...OBSERVED, mode: "enforced", modelDeny: ["*"] }, false);
+    expect(
+      screen.getByText(spend.spend.gateway.enforcementRequested),
+    ).toBeTruthy();
+    expect(screen.getByText(spend.spend.gateway.reach.unknown)).toBeTruthy();
+    expect(screen.queryByText(spend.spend.gateway.enforced)).toBeNull();
+  });
+
   it("offers an explicit model switch and starts with lists disabled", () => {
     renderSection();
     expect(screen.getByLabelText(spend.spend.gateway.mode)).toHaveValue(

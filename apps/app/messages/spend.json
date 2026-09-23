@@ -435,7 +435,9 @@
       "sessionLimit": "Recorded workspace ceiling (USD)",
       "sessionLimitHint": "This legacy value is recorded only. Set an enforced run budget on the agent mandate.",
       "modelAllow": "Allowed models",
-      "modelAllowHint": "One per line. A trailing * matches by prefix, so claude-opus-* covers every dated build. Leave blank to permit every model.",
+      "permitNoModels": "Permit no models",
+      "enforcementRequested": "Enforcement requested",
+      "modelAllowHint": "One per line. A trailing * matches by prefix, so claude-opus-* covers every dated build. Leave blank to permit every model unless Permit no models is selected.",
       "modelDeny": "Denied models",
       "modelDenyHint": "One per line, refused whatever the allowed list says. Deny * to refuse every model.",
       "submit": "Save the policy",
@@ -447,6 +449,7 @@
       "allowlist": "Allowed models: {models}.",
       "denylist": "Denied models: {models}.",
       "reach": {
+        "unknown": "Host support has not been checked. Save the policy to check which enrolled machines support these lists.",
         "none": "Saved. No machine is enrolled in this workspace yet.",
         "stored": "Saved. {capable} of {hosts} enrolled machines support these lists. Enabled lists apply on their next mandate refresh. Upgrade the other machines."
       },

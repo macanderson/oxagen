@@ -83,6 +83,7 @@ export type GatewayPolicyFormValues = {
   sessionLimit: string;
   /** One model pattern per line; blank means no allowlist at all. */
   modelAllow: string;
+  permitNoModels?: boolean;
   modelDeny: string;
 };
 
@@ -122,13 +123,14 @@ function lines(value: string): string[] {
  * at it, rather than saving a rule that silently matches nothing.
  *
  * An allowlist box left blank means *no allowlist*, so every model is
- * permitted. To permit nothing, deny `*`.
+ * permitted unless the explicit permit-no-models control is selected.
  */
 export const GatewayPolicyForm = z
   .object({
     mode: z.enum(["observed", "enforced"]),
     sessionLimit: z.string(),
     modelAllow: z.string(),
+    permitNoModels: z.boolean().optional(),
     modelDeny: z.string(),
   })
   .transform((form, ctx) => {
@@ -163,7 +165,11 @@ export const GatewayPolicyForm = z
     }
     // Blank is no allowlist, which is not the same as one that permits
     // nothing. The two reach the contract as null and [].
-    const modelAllow = allow.length > 0 ? allow : null;
+    const modelAllow = form.permitNoModels
+      ? []
+      : allow.length > 0
+        ? allow
+        : null;
     if (form.mode === "enforced" && modelAllow === null && deny.length === 0) {
       ctx.addIssue({
         code: "custom",
