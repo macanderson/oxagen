@@ -356,6 +356,16 @@
       "consumes": []
     },
     {
+      "name": "create_github_token",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "create_org",
       "domain": "org",
       "surfaces": [

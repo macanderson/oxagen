@@ -6,6 +6,11 @@
 import { Command } from "commander";
 import { runHookProcess } from "../claude-code/hook-process";
 import { runDaemonProcess } from "../collector/run";
+import {
+  githubConfigure,
+  githubCredential,
+  readCredentialInput,
+} from "./github";
 import { addArpCommands } from "./arp";
 import {
   credentialIssue,
@@ -120,6 +125,46 @@ export function buildTachoProgram(): Command {
         if (!verified.ok) process.exitCode = 1;
       }
     });
+
+  const github = program
+    .command("github")
+    .description(
+      "Route repository Git requests through the host's credential custody",
+    );
+  github
+    .command("configure")
+    .requiredOption("--repository <owner/name>", "Governed GitHub repository")
+    .requiredOption(
+      "--harness <name>",
+      "Enrolled harness: claude-code, codex, cursor, or stella",
+    )
+    .option("--cwd <path>", "Repository working directory", process.cwd())
+    .option("--remove", "Remove this repository's proxy configuration")
+    .action(
+      (opts: {
+        repository: string;
+        harness: string;
+        cwd: string;
+        remove?: boolean;
+      }) => {
+        githubConfigure(opts, deps);
+      },
+    );
+  github
+    .command("credential <operation>")
+    .requiredOption(
+      "--harness <name>",
+      "Harness whose live session owns the request",
+    )
+    .requiredOption("--cwd <path>", "Repository working directory")
+    .action(
+      async (operation: string, opts: { harness: string; cwd: string }) => {
+        await githubCredential(
+          { ...opts, operation, input: readCredentialInput() },
+          deps,
+        );
+      },
+    );
 
   const credential = program
     .command("credential")

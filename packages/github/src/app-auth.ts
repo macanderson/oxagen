@@ -29,11 +29,16 @@ function cacheKey(args: AppInstallationTokenArgs): string {
   return `${host}|${args.appId}|${args.installationId}|${narrowing}`;
 }
 
-function narrowingBody(
-  args: AppInstallationTokenArgs,
-):
-  | { repositories?: string[]; permissions?: Record<string, string> }
+function narrowingBody(args: AppInstallationTokenArgs):
+  | {
+      repositories?: string[];
+      repository_ids?: number[];
+      permissions?: Record<string, string>;
+    }
   | undefined {
+  const repositoryIds = args.repositoryIds?.length
+    ? [...args.repositoryIds].sort((a, b) => a - b)
+    : undefined;
   const repositories = args.repositories?.length
     ? [...args.repositories].sort()
     : undefined;
@@ -45,9 +50,15 @@ function narrowingBody(
           ),
         )
       : undefined;
-  if (repositories === undefined && permissions === undefined) return undefined;
+  if (
+    repositories === undefined &&
+    repositoryIds === undefined &&
+    permissions === undefined
+  )
+    return undefined;
   return {
     ...(repositories !== undefined ? { repositories } : {}),
+    ...(repositoryIds !== undefined ? { repository_ids: repositoryIds } : {}),
     ...(permissions !== undefined ? { permissions } : {}),
   };
 }
@@ -106,6 +117,8 @@ export interface AppInstallationTokenArgs {
    * the installation does not include.
    */
   repositories?: string[];
+  /** Immutable repository ids to scope a token across repository renames. */
+  repositoryIds?: number[];
   /**
    * Permission scopes the token may hold, as `{ contents: "read" }`. Omitted,
    * the token carries the installation's full grant. A scope may only be
@@ -196,6 +209,29 @@ export async function getInstallationToken(
   // above, so caching it only pins a dead entry in memory — skip it.
   if (!Number.isNaN(result.expiresAt)) _cache.set(key, result);
   return result;
+}
+
+/**
+ * Revoke an installation token before its hour is up. GitHub answers 204 on
+ * success; a 401 means the token is already dead, which is the goal, so it
+ * counts as success too.
+ */
+export async function revokeInstallationToken(args: {
+  token: string;
+  baseUrl?: string;
+}): Promise<void> {
+  const baseUrl = (args.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "");
+  const res = await fetch(`${baseUrl}/installation/token`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${args.token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  if (res.status !== 204 && res.status !== 401) {
+    throw new Error(`GitHub token revoke failed (${res.status})`);
+  }
 }
 
 // Exported for test-only cache inspection / reset.

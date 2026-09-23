@@ -230,6 +230,7 @@ function toTranscriptPage(
       type: entry.type,
       label: entry.label,
       callKey: entry.callId,
+      usage: entry.usage ?? null,
       kinds: entry.kinds,
       turn: entry.turn,
       request: entry.request,
