@@ -63,7 +63,7 @@ export function ForgotPasswordForm({ header = null, footer = null }: Frame) {
     return (
       <>
         <OutcomePanel
-          tone="neutral"
+          tone="ok"
           testId="forgot-sent"
           title={t("forgot.sentTitle")}
           icon={<Inbox aria-hidden className="size-5" />}

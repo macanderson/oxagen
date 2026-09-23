@@ -24,6 +24,15 @@ const NOTICE_KEY = "oxagen.auth.notice";
 
 export type AuthNotice = "passwordSet";
 
+/**
+ * Set just before a sign-in leaves for its destination: the password form on
+ * success, the two-factor form on success, and a social or SSO sign-in as it
+ * leaves for the provider. The organization shell reads it once and shows
+ * "Signed in as …" (mockups `obSignedIn`). A sign-in that fails comes back to
+ * /login, which clears it, so a stale mark never reaches the shell.
+ */
+const SIGNED_IN_KEY = "oxagen.auth.signedIn";
+
 async function client() {
   const { authClient } = await import("@oxagen/auth/client");
   return authClient;
@@ -178,5 +187,24 @@ export function takeNotice(): AuthNotice | null {
     return value === "passwordSet" ? value : null;
   } catch {
     return null;
+  }
+}
+
+export function rememberSignedIn(): void {
+  try {
+    sessionStorage.setItem(SIGNED_IN_KEY, "1");
+  } catch {
+    // Storage can be unavailable; the destination then shows no toast.
+  }
+}
+
+/** Whether a sign-in just landed here. Read once: the mark is removed as it is read. */
+export function takeSignedIn(): boolean {
+  try {
+    const value = sessionStorage.getItem(SIGNED_IN_KEY);
+    sessionStorage.removeItem(SIGNED_IN_KEY);
+    return value === "1";
+  } catch {
+    return false;
   }
 }

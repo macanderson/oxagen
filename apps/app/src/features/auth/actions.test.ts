@@ -65,7 +65,7 @@ describe("resetPassword", () => {
     });
   });
 
-  it("maps a spent token to linkExpired without logging, and anything else to its outcome with a log", async () => {
+  it("maps a spent token to linkExpired without logging, an unknown failure to unavailable, and logs every failure but the spent token", async () => {
     session.resetPassword.mockRejectedValueOnce({
       body: { code: "INVALID_TOKEN" },
     });
@@ -82,7 +82,7 @@ describe("resetPassword", () => {
     session.resetPassword.mockRejectedValueOnce(new Error("mystery"));
     await expect(actions.resetPassword(good)).resolves.toEqual({
       ok: false,
-      outcome: "linkExpired",
+      outcome: "unavailable",
     });
     expect(warn).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(warn.mock.calls)).not.toContain("Rq7!mesa-lattice");

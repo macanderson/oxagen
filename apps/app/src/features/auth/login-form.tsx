@@ -4,7 +4,7 @@
 // does (who suspended the account, and when, is not recorded yet: #3885).
 // Validates in the browser, then signs in through Better Auth. The
 // destination is the sanitised `next` the page passed down, and the SSO entry
-// under the two providers sends a single sign-on to the same place.
+// under the card sends a single sign-on to the same place.
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
@@ -20,7 +20,9 @@ import {
   liveSignIn,
   rememberPendingEmail,
   rememberPendingNext,
+  rememberSignedIn,
   takeNotice,
+  takeSignedIn,
 } from "./auth-client";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { useNavigate } from "@/ui/navigation";
@@ -77,11 +79,14 @@ export function LoginForm({
 
   // A notice another screen left (a password just set) shows once, after
   // hydration; the ref keeps a development double-run from taking it twice.
+  // A signed-in mark found here belongs to a sign-in that came back failed
+  // (a provider round-trip lands on /login?error=), so it is dropped unread.
   const took = useRef(false);
   useEffect(() => {
     if (took.current) return;
     took.current = true;
     setNotice(takeNotice());
+    takeSignedIn();
   }, []);
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
@@ -115,7 +120,13 @@ export function LoginForm({
         setOutcome(result.outcome);
         return;
       }
-      navigate.replace(result.twoFactor ? routes.twoFactor(next) : next);
+      if (result.twoFactor) {
+        navigate.replace(routes.twoFactor(next));
+        return;
+      }
+      // The destination shows "Signed in as …" once (SignedInToast).
+      rememberSignedIn();
+      navigate.replace(next);
     } catch {
       setOutcome("unavailable");
     } finally {
@@ -145,9 +156,24 @@ export function LoginForm({
   const ssoOpen = ssoRequired || outcome === "ssoRequired";
   const credentialsWrong = outcome === "wrongCredentials";
 
+  // Single sign-on is not in the design's card, which runs Google, GitHub,
+  // the rule, then the password form. It sits under the card, or above it when
+  // the organization requires it or the password was refused for it, so the
+  // way in that works is the first thing on the screen.
+  const sso = (
+    <SsoSignIn
+      key={ssoOpen ? "open" : "closed"}
+      callbackURL={next}
+      required={ssoRequired}
+      initialOutcome={initialSso}
+      startOpen={ssoOpen}
+    />
+  );
+
   return (
     <>
       {header}
+      {ssoOpen ? sso : null}
       {notice ? (
         <p
           role="status"
@@ -164,15 +190,7 @@ export function LoginForm({
             message={t(`outcomes.${outcome}`)}
           />
         ) : null}
-        <OAuthButtons callbackURL={next}>
-          <SsoSignIn
-            key={ssoOpen ? "open" : "closed"}
-            callbackURL={next}
-            required={ssoRequired}
-            initialOutcome={initialSso}
-            startOpen={ssoOpen}
-          />
-        </OAuthButtons>
+        <OAuthButtons callbackURL={next} announceSignIn />
         <form
           noValidate
           aria-label={t("login.title")}
@@ -221,6 +239,7 @@ export function LoginForm({
           />
         </form>
       </AuthPanel>
+      {ssoOpen ? null : sso}
       {footer}
     </>
   );
