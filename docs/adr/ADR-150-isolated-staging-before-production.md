@@ -25,3 +25,7 @@ Staging must pass its schema migrations, deployment, and public endpoint checks 
 Staging has recurring AWS infrastructure cost and an independent database migration history. Its stores can be reset without changing production. Integration-dependent features need staging credentials from their providers.
 
 The module provides a starting point for a customer-owned AWS account. Its runbook must distinguish an exercised staging deployment from a second-account deployment. No second account was available during this implementation: the authenticated account is not a member of AWS Organizations.
+
+## Amendment, 2026-09-23
+
+Staging deploys only the commit main is about to ship, through `workflow_call` from `pipeline.yml`, and a manual dispatch. It first also ran on `pull_request`, in the same `isolated-staging` concurrency group. GitHub keeps one pending run per group and cancels the older one, so every pull request push evicted main's queued staging job and production skipped its deploy. On 2026-09-23 the run for `b18c1bffc` passed checks, test, e2e, and the migration gate, and its staging job was cancelled 12 seconds after it started, the second a pull request's run was queued. Pull request runs also deployed branch code to the one staging stack, which broke this record's rule that staging proves the same commit production deploys. Pull requests are validated by CI and the merge queue (ADR-147), not by staging.

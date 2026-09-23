@@ -1,7 +1,8 @@
 name: Staging
 
 on:
-  pull_request:
+  # Staging proves the commit main is about to deploy (ADR-150). A pull_request
+  # trigger shared this concurrency group and evicted main's queued run.
   workflow_dispatch:
   workflow_call:
 
@@ -19,7 +20,6 @@ env:
 
 jobs:
   schema:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 30
