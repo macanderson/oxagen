@@ -323,6 +323,170 @@ describe("dodStatus", () => {
       expect(status.heading).toBe("Done when");
     });
   });
+
+  // oxagen#3678. The section used to end at the next heading of any level, so a
+  // DoD that opens with a `###` subheading read as holding no checkbox, and the
+  // gate told the author to rewrite boxes already in the right form. The body
+  // below has #3536's shape, which kept #3618 red whatever was ticked. #3536
+  // carries 14 boxes across three subsections (the report said thirteen). The
+  // old collector returned `present: false` with nothing read, so the count
+  // and pass assertions here fail against it.
+  describe("a definition of done grouped under subheadings (oxagen#3678)", () => {
+    const grouped = [
+      "## In plain language",
+      "",
+      "The Skills page must show counts and rows from the same data.",
+      "",
+      "## Definition of done",
+      "",
+      "### Bug from #3107",
+      "",
+      "- [ ] Skill totals and rows come from one consistent database view.",
+      "",
+      "Original completion checks from #3107:",
+      "",
+      "- [ ] In `packages/handlers/src/skill.list.ts`, both reads use one snapshot",
+      "- [ ] If the two statements stay separate, the isolation level is set",
+      "- [ ] A test proves the fix",
+      "- [ ] `skill.list.test.ts` and `skill.list.pg.test.ts` are updated",
+      "- [ ] The fix stays inside `packages/handlers/src/skill.list.ts`",
+      "- [ ] No contract or docs change needed",
+      "",
+      "### Bug from #3434",
+      "",
+      "- [ ] A skill with more than 20 tool names shows how many were left out.",
+      "",
+      "Original completion checks from #3434:",
+      "",
+      "- [ ] `sections.tsx` shows the omitted count",
+      "- [ ] The label is added to the catalogues",
+      "- [ ] `skills.test.tsx` covers a skill with more than 20 harnesses",
+      "",
+      "### Final checks",
+      "",
+      "- [ ] Every bug and completion check above is verified.",
+      "- [ ] The pull request lists the tests and completed CI checks.",
+      "- [ ] Update the affected docs and app text to match the final behavior.",
+      "",
+      "## Source reports and evidence",
+      "",
+      "- [#3107: Keep the skill count and list on the same data](https://github.com/macanderson/oxagen/issues/3107)",
+      "- [ ] a stray box under a sibling section, which is not the DoD",
+      "",
+      "## Planning",
+      "",
+      "Priority: P2.",
+    ].join("\n");
+
+    const tickAll = (body: string) =>
+      body.replace(/- \[ \] (?!a stray box)/g, "- [x] ");
+
+    it("counts every item under each subheading, and nothing after the section", () => {
+      const status = dodStatus(grouped);
+      expect(status.present).toBe(true);
+      expect(status.heading).toBe("Definition of done");
+      expect(status.checked).toBe(0);
+      expect(status.unchecked).toHaveLength(14);
+      expect(status.unchecked[0]).toBe(
+        "Skill totals and rows come from one consistent database view.",
+      );
+      expect(status.unchecked.at(-1)).toBe(
+        "Update the affected docs and app text to match the final behavior.",
+      );
+      expect(status.unchecked).not.toContain(
+        "a stray box under a sibling section, which is not the DoD",
+      );
+    });
+
+    it("reads ticked items inside a subheading as ticked, so the gate can pass", () => {
+      const ticked = tickAll(grouped);
+      const status = dodStatus(ticked);
+      expect(status.present).toBe(true);
+      expect(status.checked).toBe(14);
+      expect(status.unchecked).toEqual([]);
+
+      const result = verdict({ body: "Closes #3536", labels: [] }, [
+        { ref: "#3536", body: ticked },
+      ]);
+      expect(result.ok).toBe(true);
+      expect(result.reasons).toEqual([]);
+    });
+
+    it("fails the close while one subsection item is still open", () => {
+      const oneOpen = tickAll(grouped).replace(
+        "- [x] A test proves the fix",
+        "- [ ] A test proves the fix",
+      );
+      const result = verdict({ body: "Closes #3536", labels: [] }, [
+        { ref: "#3536", body: oneOpen },
+      ]);
+      expect(result.ok).toBe(false);
+      expect(result.reasons).toEqual([
+        "#3536 has 1 unchecked DoD item(s):\n  - [ ] A test proves the fix",
+      ]);
+    });
+
+    it("still ends a section at a sibling of the same level", () => {
+      const status = dodStatus(
+        "### Definition of done\n\n- [x] done\n\n### Notes\n\n- [ ] not the DoD",
+      );
+      expect(status.checked).toBe(1);
+      expect(status.unchecked).toEqual([]);
+    });
+
+    it("ends a subheading-level DoD at a higher-level heading", () => {
+      const status = dodStatus(
+        "### Definition of done\n\n- [x] done\n\n## Notes\n\n- [ ] not the DoD",
+      );
+      expect(status.checked).toBe(1);
+      expect(status.unchecked).toEqual([]);
+    });
+
+    it("still ends a bold-label DoD at the next heading of any level", () => {
+      const status = dodStatus(
+        "**Definition of done**\n\n- [x] done\n\n#### Aside\n\n- [ ] not the DoD",
+      );
+      expect(status.checked).toBe(1);
+      expect(status.unchecked).toEqual([]);
+    });
+
+    it("does not read an issue reference as a heading that ends the section", () => {
+      const status = dodStatus(
+        "## Definition of done\n\n#3107 was the first report.\n\n- [ ] still inside",
+      );
+      expect(status.unchecked).toEqual(["still inside"]);
+    });
+
+    it("keeps the no-checkbox message for subheadings holding only prose", () => {
+      const prose = [
+        "## Definition of done",
+        "",
+        "### Bug from #3107",
+        "",
+        "- the counts add up",
+        "",
+        "### Final checks",
+        "",
+        "Everything above is verified.",
+        "",
+        "## Notes",
+        "",
+        "- [ ] a box outside the section",
+      ].join("\n");
+      const status = dodStatus(prose);
+      expect(status.present).toBe(false);
+      expect(status.heading).toBe("Definition of done");
+
+      const result = verdict({ body: "Closes #3536", labels: [] }, [
+        { ref: "#3536", body: prose },
+      ]);
+      expect(result.ok).toBe(false);
+      expect(result.reasons[0]).toContain(
+        '#3536 has a "Definition of done" section, but nothing in it is a checkbox',
+      );
+      expect(result.reasons[0]).toContain("rewrite that section's bullets as");
+    });
+  });
 });
 
 describe("verdict", () => {

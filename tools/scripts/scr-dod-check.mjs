@@ -356,6 +356,31 @@ const DOD_HEADING = new RegExp(
 const HEADING_PREFIX = /^\s*(?:#{1,6}\s*|\*\*)\s*/;
 
 /**
+ * The pattern for the heading that closes a done-conditions section.
+ *
+ * A `#`-level heading's section runs to the next heading of the same level or
+ * higher, so `## Definition of done` ends at the next `##` or `#`. Subheadings
+ * inside it, such as `### Bug from #3107` or `### Final checks`, stay inside
+ * it, and so do their checkboxes. The old rule ended every section at the next
+ * heading of any level. A DoD that opened with a `###` subheading then read as
+ * holding no checkbox, and the gate told the author to rewrite boxes that were
+ * already in the right form. oxagen#3618 could not go green whatever was
+ * ticked (oxagen#3678).
+ *
+ * A bold label (`**Definition of done**`) has no level, so its section still
+ * ends at the next heading of any level.
+ *
+ * The change moves in the conservative direction. A section can only gain
+ * items, so it can gain unchecked items but never hide one. An issue the old
+ * rule failed on an unticked box still fails.
+ */
+function sectionEnd(headingText) {
+  const hashes = headingText.match(/^\s*(#{1,6})/);
+  const level = hashes ? hashes[1].length : 6;
+  return new RegExp(String.raw`^\s*#{1,${level}}\s+\S`, "m");
+}
+
+/**
  * Read the DoD checklist state out of an issue body.
  *
  * Only the section under one of `DOD_HEADING`'s spellings counts. Scanning the
@@ -408,9 +433,7 @@ export function dodStatus(issueBody) {
 
     const start = heading.index + heading[0].length;
     const after = body.slice(start);
-    // The DoD section ends at the next heading of any level, so a later
-    // "### Notes" section's task list is not counted against the DoD.
-    const endMatch = after.match(/^\s*#{1,6}\s+\S/m);
+    const endMatch = after.match(sectionEnd(heading[0]));
     const section = endMatch ? after.slice(0, endMatch.index) : after;
 
     let offset = start;

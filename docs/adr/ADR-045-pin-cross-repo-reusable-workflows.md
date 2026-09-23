@@ -100,3 +100,26 @@ suppression alone would leave the checker comparing the wrong fact.
 
 The checker-script exposure recorded above is unchanged: called workflows read
 Oxagen's main branch for their script, even while their workflow steps are pinned.
+
+## Amendment: the DoD collector reads subheadings (#3678)
+
+On 2026-09-23 the collector in `tools/scripts/scr-dod-check.mjs` changed how far
+a done-conditions section reaches. A `#`-level section such as
+`## Definition of done` now runs to the next heading of the same level or
+higher. Checkboxes under `###` subheadings inside it count, ticked or not.
+Before, the section ended at the next heading of any level. An issue that
+grouped its DoD under subheadings, such as #3536, read as holding no checkbox,
+and the gate told its author to rewrite boxes that were already correct.
+
+A bold label (`**Definition of done**`) has no level, so its section still ends
+at the next heading of any level. A section that holds no checkbox anywhere
+beneath it still gets the "nothing in it is a checkbox" message.
+
+`dod-check.yml` and `dod-close-guard.yml` both read the DoD through this one
+file's `dodStatus`. `dod-recheck.yml` imports the same file and re-runs a failed
+`dod-check`, so it holds no collector of its own. The three gates change
+together. As the section above records, a
+caller fetches the checker from oxagen's `main`, so every pinning repository
+reads the new collector once this change merges, with no re-pin. The change can
+only add items to a section. An issue that failed on an unticked box before
+still fails. An issue whose subsection boxes are all ticked now passes.
