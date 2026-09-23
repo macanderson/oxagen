@@ -254,9 +254,27 @@ export type SsoProvider = z.infer<typeof SsoProvider>;
  * SSO. Only the Enterprise plan does; without it the page lists providers so
  * they can be deleted, and offers nothing that sets SSO up.
  */
+/**
+ * The organization's SCIM endpoint and its live token (#3734), described by
+ * the token's first characters. The token itself reaches the page only in the
+ * answer to minting or rotating it.
+ */
+export const ScimSettings = z.object({
+  baseUrl: z.string(),
+  token: z
+    .object({
+      prefix: z.string(),
+      createdAt: z.string(),
+      lastUsedAt: z.string().nullable(),
+    })
+    .nullable(),
+});
+export type ScimSettings = z.infer<typeof ScimSettings>;
+
 export const SsoSettings = z.object({
   providers: z.array(SsoProvider),
   policy: z.object({ ssoRequired: z.boolean() }),
   entitled: z.boolean(),
+  scim: ScimSettings,
 });
 export type SsoSettings = z.infer<typeof SsoSettings>;

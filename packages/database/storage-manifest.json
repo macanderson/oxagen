@@ -358,6 +358,15 @@
     },
     {
       "domain": "org",
+      "name": "create_scim_token",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
       "name": "create_sso_provider",
       "reads": [],
       "surfaces": [
@@ -702,6 +711,13 @@
         "api",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "execute_scim_request",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -2952,6 +2968,16 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "revoke_scim_token",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tacho",
       "name": "revoke_tacho_enrollment",
       "reads": [],
@@ -2977,6 +3003,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "rotate_scim_token",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3848,7 +3883,7 @@
       "writes": []
     }
   ],
-  "contentHash": "9c19de4102ed7789f4bdcf7ba777d5bcd480e7a7fbd303fa184976cbe7cd414f",
+  "contentHash": "cc2222b9563d6fee564859126f9ce6c4d9c3526799690021a048b4c17d9ea550",
   "domains": [
     {
       "name": "agent",
@@ -4136,6 +4171,9 @@
         "postgres:org.org_slug_history",
         "postgres:org.org_users",
         "postgres:org.organizations",
+        "postgres:org.scim_group_members",
+        "postgres:org.scim_groups",
+        "postgres:org.scim_tokens",
         "postgres:org.sso_group_roles"
       ]
     },
@@ -4302,7 +4340,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 144
+      "tableCount": 147
     },
     {
       "domains": [
@@ -17765,6 +17803,190 @@
       "name": "organizations",
       "store": "postgres",
       "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "group_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.scim_groups",
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.scim_group_members",
+      "name": "scim_group_members",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "display_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "external_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.scim_groups",
+      "name": "scim_groups",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "token_prefix",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "token_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_used_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "revoked_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "revoked_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        }
+      ],
+      "domain": "org",
+      "id": "postgres:org.scim_tokens",
+      "name": "scim_tokens",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
     },
     {
       "columns": [

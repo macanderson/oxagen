@@ -11,7 +11,8 @@
     "./client": "./src/client.ts",
     "./route": "./src/auth-route.ts",
     "./cli-auth": "./src/cli-auth/index.ts",
-    "./resolvers": "./src/resolvers/index.ts"
+    "./resolvers": "./src/resolvers/index.ts",
+    "./scim-token": "./src/scim-token.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

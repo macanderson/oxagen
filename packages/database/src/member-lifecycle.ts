@@ -241,8 +241,8 @@ export interface MemberRemovalResult {
   workspaceMembershipsRemoved: number;
 }
 
-/** Whether `userId` holds the Owner org role here, by role string or IAM assignment. */
-async function isOrgOwner(
+/** Whether `userId` holds the Owner org role here, by role string or IAM assignment. Locks the membership row. */
+export async function isOrgOwner(
   tx: Tx,
   orgId: string,
   userId: string,

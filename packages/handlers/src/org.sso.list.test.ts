@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   listRoles: vi.fn(),
   readRequired: vi.fn(),
+  readScimToken: vi.fn(),
   withSystemDb: vi.fn(),
 }));
 
@@ -14,6 +15,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: mocks.emit,
+}));
+vi.mock("./lib/scim/token-store", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/scim/token-store")>()),
+  readLiveScimToken: mocks.readScimToken,
 }));
 vi.mock("./lib/sso-store", () => ({
   listOrgSsoProviders: mocks.list,
@@ -82,9 +87,35 @@ beforeEach(() => {
     { providerId: "acme-saml", idpGroup: "ops", role: "admin" },
   ]);
   mocks.readRequired.mockResolvedValue(true);
+  mocks.readScimToken.mockResolvedValue(null);
 });
 
 describe("org.sso.list handler", () => {
+  it("names the SCIM endpoint and reports no token when none is live", async () => {
+    const out = await orgSsoListHandler({}, CTX);
+    expect(out.scim).toEqual({
+      baseUrl: `${SSO_BASE_URL}/api/scim/v2`,
+      token: null,
+    });
+    expect(mocks.readScimToken).toHaveBeenCalledWith(expect.anything(), CTX.orgId);
+  });
+
+  it("describes the live SCIM token by its prefix and dates, never the token", async () => {
+    mocks.readScimToken.mockResolvedValue({
+      id: "tok-row",
+      tokenPrefix: "oxscim_AbCdEfGh",
+      createdAt: new Date("2026-09-23T10:00:00Z"),
+      lastUsedAt: null,
+    });
+    const out = await orgSsoListHandler({}, CTX);
+    expect(out.scim.token).toEqual({
+      tokenPrefix: "oxscim_AbCdEfGh",
+      createdAt: "2026-09-23T10:00:00.000Z",
+      lastUsedAt: null,
+    });
+    expect(JSON.stringify(out.scim)).not.toContain("tok-row");
+  });
+
   it("refuses a caller who is not an org Owner or Admin", async () => {
     roleGate.refuse = true;
     await expect(orgSsoListHandler({}, CTX)).rejects.toThrow(/forbidden/);

@@ -13,7 +13,9 @@
 //   - a viewer below Owner or Admin sees no control, and a refused read says
 //     so in place of the page's sections, with the tabs kept;
 //   - the forms' lists mirror the contract, so no role or protocol the
-//     contract refuses can be offered.
+//     contract refuses can be offered;
+//   - SCIM (#3734): the base URL is always shown, a new token shows once in
+//     the dialog that minted it, and rotate and revoke ask first.
 import {
   cleanup,
   render,
@@ -44,6 +46,9 @@ const { router, actions } = vi.hoisted(() => ({
     verifySsoDomain: vi.fn(),
     setSsoRequired: vi.fn(),
     setSsoGroupRoles: vi.fn(),
+    createScimToken: vi.fn(),
+    rotateScimToken: vi.fn(),
+    revokeScimToken: vi.fn(),
   },
 }));
 vi.mock("next/navigation", () => ({
@@ -359,6 +364,96 @@ describe("Sso: a read that did not list", () => {
       "error",
     );
     expect(screen.getByRole("link", { name: "Single sign-on" })).toBeTruthy();
+  });
+});
+
+describe("Sso: SCIM provisioning", () => {
+  const LIVE = ssoSettings({
+    scim: {
+      baseUrl: "https://app.oxagen.sh/api/scim/v2",
+      token: {
+        prefix: "oxscim_AbCdEfGh",
+        createdAt: "2026-09-23T10:00:00.000Z",
+        lastUsedAt: null,
+      },
+    },
+  });
+
+  it("gives the base URL and offers a token when there is none", async () => {
+    const { container } = await renderSection({ ok: true, value: ssoSettings() });
+    const section = screen.getByTestId("sso-scim");
+    expect(within(section).getByTestId("sso-scim-base-url")).toHaveTextContent(
+      "https://app.oxagen.sh/api/scim/v2",
+    );
+    expect(within(section).getByTestId("sso-scim-none")).toBeTruthy();
+    expect(within(section).getByRole("button", { name: "Generate token" })).toBeTruthy();
+    expect(within(section).queryByRole("button", { name: "Rotate token" })).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("shows a new token once, in the dialog that minted it, then re-reads the page", async () => {
+    actions.createScimToken.mockResolvedValue({
+      ok: true,
+      value: {
+        token: "oxscim_the-whole-token-value",
+        baseUrl: "https://app.oxagen.sh/api/scim/v2",
+        prefix: "oxscim_the-whole",
+      },
+    });
+    await renderSection({ ok: true, value: ssoSettings() });
+    await userEvent.click(screen.getByRole("button", { name: "Generate token" }));
+    const dialog = await screen.findByTestId("scim-token-generate");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Generate token" }));
+    expect(await screen.findByTestId("scim-token-value")).toHaveTextContent(
+      "oxscim_the-whole-token-value",
+    );
+    expect(actions.createScimToken).toHaveBeenCalledWith("acme");
+    expect(router.refresh).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalled();
+    });
+  });
+
+  it("describes a live token by its prefix and never shows it", async () => {
+    await renderSection({ ok: true, value: LIVE });
+    expect(screen.getByTestId("sso-scim-token")).toHaveTextContent("oxscim_AbCdEfGh");
+    expect(screen.getByTestId("sso-scim-token")).toHaveTextContent("Not used yet.");
+    expect(screen.queryByRole("button", { name: "Generate token" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Rotate token" })).toBeTruthy();
+  });
+
+  it("asks before it revokes the token", async () => {
+    actions.revokeScimToken.mockResolvedValue({ ok: true, value: { revoked: true } });
+    await renderSection({ ok: true, value: LIVE });
+    await userEvent.click(screen.getByRole("button", { name: "Revoke token" }));
+    expect(actions.revokeScimToken).not.toHaveBeenCalled();
+    const dialog = await screen.findByTestId("scim-token-revoke");
+    expect(dialog).toHaveTextContent("People it already created keep their access.");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Revoke token" }));
+    await waitFor(() => {
+      expect(actions.revokeScimToken).toHaveBeenCalledWith("acme");
+    });
+  });
+
+  it("off the Enterprise plan, keeps only Revoke for a leftover token (negative)", async () => {
+    await renderSection({ ok: true, value: { ...LIVE, entitled: false } });
+    const section = screen.getByTestId("sso-scim");
+    expect(within(section).queryByRole("button", { name: "Rotate token" })).toBeNull();
+    expect(within(section).getByRole("button", { name: "Revoke token" })).toBeTruthy();
+  });
+
+  it("off the Enterprise plan with no token, shows no SCIM section (negative)", async () => {
+    await renderSection({ ok: true, value: ssoSettings({ entitled: false }) });
+    expect(screen.queryByTestId("sso-scim")).toBeNull();
+  });
+
+  it("gives a viewer below Owner or Admin no token control (negative)", async () => {
+    await renderSection({ ok: true, value: LIVE }, "member");
+    const section = screen.getByTestId("sso-scim");
+    expect(within(section).queryByRole("button")).toBeTruthy(); // the copy button only
+    expect(within(section).queryByRole("button", { name: "Revoke token" })).toBeNull();
+    expect(section).toHaveTextContent("Only an Owner or an Admin can manage the SCIM token.");
   });
 });
 

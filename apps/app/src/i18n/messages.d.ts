@@ -2939,6 +2939,29 @@ type Messages = {
         pendingApproval: string;
         unavailable: string;
         requiresEnterprise: string;
+        scimTokenExists: string;
+      };
+      scim: {
+        title: string;
+        lead: string;
+        baseUrl: string;
+        tokenLabel: string;
+        none: string;
+        live: string;
+        lastUsed: string;
+        neverUsed: string;
+        generate: string;
+        rotate: string;
+        revoke: string;
+        pending: string;
+        once: string;
+        rotateTitle: string;
+        rotateBody: string;
+        revokeTitle: string;
+        revokeBody: string;
+        revoked: string;
+        cancel: string;
+        readOnly: string;
       };
     };
     ssoGroups: {

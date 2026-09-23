@@ -577,7 +577,30 @@
         "refused": "Oxagen refused the change ({code}).",
         "pendingApproval": "The change is waiting for approval.",
         "unavailable": "The change could not be saved ({code}). Try again.",
-        "requiresEnterprise": "Single sign-on is part of the Enterprise plan. Upgrade the organization to set it up."
+        "requiresEnterprise": "Single sign-on is part of the Enterprise plan. Upgrade the organization to set it up.",
+        "scimTokenExists": "The organization already has a SCIM token. Rotate it to get a new one."
+      },
+      "scim": {
+        "title": "SCIM provisioning",
+        "lead": "Your identity provider can create people in Oxagen before they sign in, and remove them when they leave. Removing someone ends their sessions, revokes their API keys and machine keys, and removes their roles and membership. Groups decide roles through the IdP group mappings on the Roles tab.",
+        "baseUrl": "SCIM base URL",
+        "tokenLabel": "Bearer token",
+        "none": "No SCIM token. Generate one, then enter it with the base URL in your identity provider.",
+        "live": "Token {prefix}… created {createdAt}.",
+        "lastUsed": "Last used {lastUsedAt}.",
+        "neverUsed": "Not used yet.",
+        "generate": "Generate token",
+        "rotate": "Rotate token",
+        "revoke": "Revoke token",
+        "pending": "Working",
+        "once": "Copy this token now. Oxagen stores only its hash and cannot show it again.",
+        "rotateTitle": "Rotate the SCIM token",
+        "rotateBody": "The current token stops working at once. Enter the new token in your identity provider before its next push.",
+        "revokeTitle": "Revoke the SCIM token",
+        "revokeBody": "Your identity provider can no longer create or remove people. People it already created keep their access.",
+        "revoked": "Token revoked.",
+        "cancel": "Cancel",
+        "readOnly": "Only an Owner or an Admin can manage the SCIM token."
       }
     },
     "ssoGroups": {

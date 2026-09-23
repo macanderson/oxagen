@@ -3663,6 +3663,56 @@
       }
     },
     {
+      "name": "create_scim_token",
+      "file": "org.scim_token.create.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "revoke_scim_token",
+      "file": "org.scim_token.revoke.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "rotate_scim_token",
+      "file": "org.scim_token.rotate.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_org_settings",
       "file": "org.settings.read.ts",
       "domain": "org",
@@ -5389,6 +5439,18 @@
         "api": true,
         "mcp": true,
         "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "execute_scim_request",
+      "file": "scim.request.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
         "docs": true
       }
     },

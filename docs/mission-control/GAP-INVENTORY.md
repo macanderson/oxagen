@@ -185,7 +185,7 @@ Feature: `apps/app/src/features/organization/`.
 | Set model route | **Partial** | The wrapped-harness allowlist is on Spend › Budgets (`update_tacho_session_policy`). Routing for the in-app assistant is still unbuilt. |
 | Data plane UI | **Missing** | Effectively cut for rev1 |
 | SSO (OIDC, SAML) and IdP group mapping | **Built** | `/{org}/sso` and Roles › IdP group mappings (ADR-145) |
-| SCIM provisioning | **Missing** | #3734 |
+| SCIM provisioning | **Built** | `/api/scim/v2`, token on `/{org}/sso` (ADR-145, #3734) |
 
 ---
 
@@ -259,7 +259,7 @@ Feature: `apps/app/src/features/audit/`. Export at `/{org}/audit/export`.
 
 **Do not build (cut)**
 
-Ontology engine, SCIM, policy simulation, assurance suite, two-person mandates, steering effect and retirement, legal holds, crypto-shredding, Spend reconciliation.
+Ontology engine, policy simulation, assurance suite, two-person mandates, steering effect and retirement, legal holds, crypto-shredding, Spend reconciliation.
 
 ---
 
