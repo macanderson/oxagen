@@ -16,8 +16,9 @@ import {
   jsonContent,
   textContent,
 } from "../evidence/frame-body";
+import { redactText } from "../evidence/redaction";
 import { contextFactsFromEnv, digestText, hostFactsFromEnv } from "./context";
-import { classifyTool, type EffectKind } from "./tools";
+import { classifyTool, type EffectKind, pullRequestAttrs } from "./tools";
 
 /** Tolerant: passthrough so a new upstream member lands in `attrs`. */
 export const hookInputSchema = z
@@ -44,6 +45,12 @@ export const hookInputSchema = z
   .passthrough();
 
 export type HookInput = z.infer<typeof hookInputSchema>;
+
+/**
+ * The attr saying why a turn closed when no `Stop` closed it: `api_error`
+ * for a `StopFailure`, `interrupted` for a turn the person stopped with Esc.
+ */
+export const TURN_END_REASON_ATTR = "oxagen.turn_end_reason";
 
 export interface HookDraft {
   kind: TachoKind;
@@ -151,11 +158,23 @@ function bool(value: unknown): boolean | undefined {
 const ATTR_MAX = 4096;
 const ATTR_CUT = "…";
 
+/**
+ * One leftover field as it is sealed: credentials replaced by their
+ * redaction markers, then cut to the envelope's bound. An attribute ships
+ * inline, never as a body, so the redaction every body goes through would
+ * otherwise never reach it. The redaction runs before the cut, because a cut
+ * through a secret can leave a prefix too short for any detector to know,
+ * and the cut never keeps the high half of a surrogate pair.
+ */
 function attrValue(value: unknown): string {
-  const text = typeof value === "string" ? value : JSON.stringify(value);
-  return text.length > ATTR_MAX
-    ? `${text.slice(0, ATTR_MAX - ATTR_CUT.length)}${ATTR_CUT}`
-    : text;
+  const text = redactText(
+    typeof value === "string" ? value : JSON.stringify(value),
+  );
+  if (text.length <= ATTR_MAX) return text;
+  let end = ATTR_MAX - ATTR_CUT.length;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}${ATTR_CUT}`;
 }
 
 function leftovers(input: HookInput): Record<string, string> {
@@ -466,7 +485,22 @@ export function normalizeHook(
               facts["tool_source"] as string | undefined,
             );
       if (effectFrame !== undefined) {
-        drafts.push(draft(effectFrame, { ...facts, tool_status: "ok" }));
+        // The pull request a `pr_open` call opened is named only in its
+        // response, which the frame keeps as a digest.
+        drafts.push(
+          draft(
+            effectFrame,
+            { ...facts, tool_status: "ok" },
+            facts["effect_kind"] === "pr_open"
+              ? {
+                  attrs: {
+                    ...base.attrs,
+                    ...pullRequestAttrs(input.tool_response),
+                  },
+                }
+              : {},
+          ),
+        );
       }
       return drafts;
     }
@@ -539,6 +573,9 @@ export function normalizeHook(
     case "StopFailure": {
       const error = str(input["error_type"]) ?? str(input.error);
       const last = str(input["last_assistant_message"]);
+      // Claude Code fires this in place of `Stop` when the turn ends on an
+      // API error, so it closes the turn as `Stop` would; without the
+      // `turn_end` the turn stayed open until the next prompt.
       return [
         draft("error", {
           ...(error !== undefined
@@ -548,6 +585,19 @@ export function normalizeHook(
             ? { last_assistant_message_digest: digestText(last) }
             : {}),
         }),
+        draft(
+          "turn_end",
+          {
+            ...(error !== undefined ? { stop_failure_error_type: error } : {}),
+            ...(last !== undefined
+              ? { last_assistant_message_digest: digestText(last) }
+              : {}),
+          },
+          {
+            attrs: { ...base.attrs, [TURN_END_REASON_ATTR]: "api_error" },
+            ...(last !== undefined ? { content: textContent(last) } : {}),
+          },
+        ),
       ];
     }
     case "SubagentStart": {

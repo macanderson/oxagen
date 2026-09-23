@@ -37,12 +37,28 @@ export interface TranscriptTotals {
   has_unknown_model_cost?: boolean;
   models_used?: Record<string, unknown>;
   session_title?: string;
+  /** Which record named `session_title`; the recorder keeps it. */
+  session_title_source?: SessionTitleSource;
   permission_mode?: string;
 }
+
+/**
+ * The record a session title came from. Claude Code writes an `ai-title` it
+ * generates, and rewrites it as the session goes, and a `custom-title` when
+ * the person renames the session, which outranks it.
+ */
+export type SessionTitleSource = "ai-title" | "custom-title";
 
 export interface TranscriptNormalized {
   drafts: TranscriptDraft[];
   totals: Partial<TranscriptTotals>;
+  /** The session's title, when this line names one. */
+  title?: { text: string; source: SessionTitleSource };
+  /**
+   * The person stopped the turn (Esc). Claude Code fires no `Stop` for it,
+   * so this is the only word that the turn ended.
+   */
+  interrupted?: { ts: string; prompt_id?: string };
 }
 
 type Rec = Record<string, unknown>;
@@ -62,6 +78,29 @@ function n(value: unknown): number | undefined {
 }
 function b(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+/** The text Claude Code writes as a user message when the person presses Esc. */
+const INTERRUPT_MARKER = "[Request interrupted by user";
+
+/**
+ * Whether a user record says the person interrupted the turn: the marker
+ * text, as the message or as one of its text blocks, or an
+ * `interruptedMessageId` on a record that is not a typed prompt (a typed
+ * prompt is the next turn, which its own hook has opened).
+ */
+function isInterrupt(record: Rec, content: unknown): boolean {
+  if (typeof content === "string")
+    return content.trimStart().startsWith(INTERRUPT_MARKER);
+  if (!Array.isArray(content)) return false;
+  if (s(record["interruptedMessageId"]) !== undefined) return true;
+  return content.some((block) => {
+    const item = rec(block);
+    return (
+      s(item?.["type"]) === "text" &&
+      (s(item?.["text"]) ?? "").trimStart().startsWith(INTERRUPT_MARKER)
+    );
+  });
 }
 
 /**
@@ -292,7 +331,20 @@ export function normalizeTranscriptLine(
       const totals: Partial<TranscriptTotals> = {};
       if (s(record["permissionMode"]) !== undefined)
         totals.permission_mode = s(record["permissionMode"]);
-      return { drafts, totals };
+      return {
+        drafts,
+        totals,
+        ...(isInterrupt(record, content)
+          ? {
+              interrupted: {
+                ts,
+                ...(s(record["promptId"]) !== undefined
+                  ? { prompt_id: s(record["promptId"]) }
+                  : {}),
+              },
+            }
+          : {}),
+      };
     }
     case "system": {
       const subtype = s(record["subtype"]);
@@ -452,15 +504,24 @@ export function normalizeTranscriptLine(
         totals.models_used = rec(record["modelUsage"]);
       return { drafts: [], totals };
     }
-    case "ai-title":
+    case "ai-title": {
+      const text = s(record["aiTitle"]);
       return {
         drafts: [],
-        totals: {
-          ...(s(record["aiTitle"]) !== undefined
-            ? { session_title: s(record["aiTitle"]) }
-            : {}),
-        },
+        totals: text !== undefined ? { session_title: text } : {},
+        ...(text !== undefined ? { title: { text, source: "ai-title" } } : {}),
       };
+    }
+    case "custom-title": {
+      const text = s(record["customTitle"]);
+      return {
+        drafts: [],
+        totals: text !== undefined ? { session_title: text } : {},
+        ...(text !== undefined
+          ? { title: { text, source: "custom-title" } }
+          : {}),
+      };
+    }
     default:
       return { drafts: [], totals: {} };
   }

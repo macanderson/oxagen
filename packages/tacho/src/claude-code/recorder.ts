@@ -29,6 +29,7 @@ import {
   type DraftContent,
   type FrameBody,
   prepareContent,
+  textContent,
 } from "../evidence/frame-body";
 import { newEventId, sessionUuid } from "../ids";
 import {
@@ -49,7 +50,7 @@ import {
   harnessVersionFromExecPath,
   snapshotEnv,
 } from "./context";
-import { type HookDraft, normalizeHook } from "./hooks";
+import { type HookDraft, normalizeHook, TURN_END_REASON_ATTR } from "./hooks";
 import {
   type OtelDraft,
   type OtelMetricPoint,
@@ -57,7 +58,11 @@ import {
   type OtlpPayload,
 } from "./otel";
 import { inventoryFromInit, totalsFromResult } from "./result";
-import { normalizeTranscriptLine, type TranscriptTotals } from "./transcript";
+import {
+  normalizeTranscriptLine,
+  type SessionTitleSource,
+  type TranscriptTotals,
+} from "./transcript";
 
 type Context = NonNullable<TachoEvent["context"]>;
 type Host = NonNullable<TachoEvent["host"]>;
@@ -85,6 +90,27 @@ interface SightingAttrs {
 
 /** What a row no ledger judges takes part in: nothing. */
 const NO_SIGHTING: SightingAttrs = { attrs: {}, commit: () => {} };
+
+/**
+ * The attr on a frame sealed on a chain that has already sealed its
+ * `agent_stop`. Such a frame is kept, because it is still a fact about the
+ * session, but a reader must not take it for activity of a live session.
+ */
+export const AFTER_STOP_ATTR = "oxagen.after_stop";
+
+/**
+ * The attr on an OTel record that names a subagent type more than one
+ * subagent of this session could have been, sealed on the session's own
+ * chain rather than guessed onto one of them.
+ */
+export const SUBAGENT_TYPE_AMBIGUOUS_ATTR = "oxagen.subagent_type_ambiguous";
+
+/**
+ * How long after a subagent stops an OTel record naming only its type is
+ * still taken for it. Claude Code exports logs in batches, so a subagent's
+ * last `api_request` often arrives after its `SubagentStop`.
+ */
+const RECENTLY_CLOSED_MS = 30_000;
 
 export interface RecorderOptions {
   context: ClaudeCodeContext;
@@ -116,6 +142,8 @@ interface SubagentLink {
   recorder: SessionRecorder;
   type?: string;
   open: boolean;
+  /** When the subagent stopped, in epoch ms, for routing its late records. */
+  closedAt?: number;
 }
 
 /** Everything a recorder needs to continue its chain after a restart. */
@@ -178,7 +206,12 @@ export interface ChainMark {
   /** One mark per subagent chain open at the time, by subagent id. */
   children: Map<
     string,
-    { mark: ChainMark; type: string | undefined; open: boolean }
+    {
+      mark: ChainMark;
+      type: string | undefined;
+      open: boolean;
+      closedAt: number | undefined;
+    }
   >;
 }
 
@@ -283,6 +316,14 @@ export class SessionRecorder {
   readonly metrics: OtelMetricPoint[] = [];
   private llmCalls = new LlmCallLedger();
   private toolCalls = new ToolCallLedger();
+  /**
+   * The session's own recorder, on a subagent's. A call is reported on both
+   * chains (the hook on the subagent's, OTel with no `agent_id` and the model
+   * proxy on the session's), so the two ledgers above are the root's for the
+   * whole family, and a subagent's own stay empty. The root marks, rolls back
+   * and persists them.
+   */
+  private familyRoot: SessionRecorder | undefined;
 
   constructor(options: RecorderOptions) {
     this.options = options;
@@ -360,6 +401,33 @@ export class SessionRecorder {
         },
         restore: link.state,
       });
+      // A state written while each chain kept its own ledgers holds the
+      // subagent's calls on the subagent: they join the family's.
+      this.llmCalls = new LlmCallLedger({
+        keys: [
+          ...this.llmCalls.state().keys,
+          ...recorder.llmCalls.state().keys,
+        ],
+      });
+      this.toolCalls = new ToolCallLedger({
+        calls: [
+          ...this.toolCalls.state().calls,
+          ...recorder.toolCalls
+            .state()
+            .calls.map(
+              ([id, sources, body]) =>
+                [id, sources, body, subagentId] as [
+                  string,
+                  string[],
+                  boolean,
+                  string,
+                ],
+            ),
+        ],
+      });
+      recorder.llmCalls = new LlmCallLedger();
+      recorder.toolCalls = new ToolCallLedger();
+      recorder.familyRoot = this.familyRoot ?? this;
       this.children.set(subagentId, {
         recorder,
         ...(link.type !== undefined ? { type: link.type } : {}),
@@ -416,6 +484,7 @@ export class SessionRecorder {
         mark: link.recorder.markChain(),
         type: link.type,
         open: link.open,
+        closedAt: link.closedAt,
       });
     }
     return {
@@ -468,6 +537,7 @@ export class SessionRecorder {
         recorder: link.recorder,
         ...(saved.type !== undefined ? { type: saved.type } : {}),
         open: saved.open,
+        ...(saved.closedAt !== undefined ? { closedAt: saved.closedAt } : {}),
       });
     }
     this.cursor = { ...mark.cursor };
@@ -538,6 +608,10 @@ export class SessionRecorder {
    * Seal a collector-originated event on this chain (a policy decision, a
    * checkpoint, a gap, an applied command). Body members are the typed
    * columns of the kind; extra facts go to `attrs`.
+   *
+   * On a chain that has already sealed its `agent_stop` the frame is still
+   * sealed, stamped {@link AFTER_STOP_ATTR}. A caller that can put it on the
+   * host chain instead checks {@link isStopped} first.
    */
   sealCollectorEvent(
     kind: TachoKind,
@@ -557,10 +631,9 @@ export class SessionRecorder {
     } = {},
   ): TachoEvent {
     if (kind === "agent_start") this.started = true;
-    if (kind === "agent_stop") {
-      this.stopped = true;
-      this.turnOpen = false;
-    }
+    // `stopped` is set once the stop has sealed, so the stop itself is not
+    // stamped as a frame that arrived after one.
+    if (kind === "agent_stop") this.turnOpen = false;
     // A proxy frame is the first sighting of its call by construction (it
     // is sealed as the response ends); noting it is what lets the transcript
     // and OTel sightings that follow be stamped as its duplicates.
@@ -581,6 +654,7 @@ export class SessionRecorder {
       turn: {},
     });
     sighting.commit();
+    if (kind === "agent_stop") this.stopped = true;
     return event;
   }
 
@@ -589,6 +663,15 @@ export class SessionRecorder {
   }
 
   get hasStopped(): boolean {
+    return this.stopped;
+  }
+
+  /**
+   * Whether this chain has sealed its `agent_stop`. Every frame sealed on it
+   * from then on carries {@link AFTER_STOP_ATTR}, until a resume starts it
+   * again.
+   */
+  get isStopped(): boolean {
     return this.stopped;
   }
 
@@ -632,6 +715,7 @@ export class SessionRecorder {
     recorder.anthropic = { ...this.anthropic };
     recorder.host = { ...this.host };
     recorder.envSnapshot = this.envSnapshot;
+    recorder.familyRoot = this.familyRoot ?? this;
     this.children.set(subagentId, {
       recorder,
       ...(subagentType !== undefined ? { type: subagentType } : {}),
@@ -660,12 +744,34 @@ export class SessionRecorder {
     return recorder;
   }
 
-  private childByType(type: string): SessionRecorder | undefined {
-    let candidate: SubagentLink | undefined;
-    for (const link of this.children.values()) {
-      if (link.type === type && link.open) candidate = link;
-    }
-    return candidate?.recorder;
+  /**
+   * The subagent an OTel record naming only its type belongs to, or
+   * "ambiguous" when more than one could have sent it. Two parallel `Explore`
+   * agents are both open, and taking the last one opened sealed the first
+   * one's calls on the second's chain. With none open, the record is one a
+   * subagent sent before it stopped and the batch delivered after, so a
+   * subagent of that type that stopped within `RECENTLY_CLOSED_MS` of it is
+   * taken, if it is the only one.
+   */
+  private childByType(
+    type: string,
+    at: string,
+  ): SessionRecorder | "ambiguous" | undefined {
+    const links = [...this.children.values()].filter(
+      (link) => link.type === type,
+    );
+    const open = links.filter((link) => link.open);
+    const when = Date.parse(at);
+    const candidates =
+      open.length > 0
+        ? open
+        : links.filter(
+            (link) =>
+              link.closedAt !== undefined &&
+              when - link.closedAt <= RECENTLY_CLOSED_MS,
+          );
+    if (candidates.length > 1) return "ambiguous";
+    return candidates[0]?.recorder;
   }
 
   private seal(
@@ -722,6 +828,11 @@ export class SessionRecorder {
             "oxagen.content_redactions_total": String(prepared.redactionsTotal),
           }
         : {}),
+      // The OTel exporter, the transcript tailer, the model proxy and the
+      // inbox all outlive a session's end, and each can hand this chain a
+      // frame after its `agent_stop`. The frame is a fact and is kept, but
+      // marked, so no reader counts it as activity of a live session.
+      ...(this.stopped ? { [AFTER_STOP_ATTR]: "1" } : {}),
     };
     const unsealed = compact({
       v: "tacho/1.0",
@@ -810,7 +921,10 @@ export class SessionRecorder {
     body: Record<string, unknown>,
     source: string,
   ): SightingAttrs {
-    const { verdict, commit } = this.llmCalls.judge(body, source);
+    const { verdict, commit } = (this.familyRoot ?? this).llmCalls.judge(
+      body,
+      source,
+    );
     if (verdict.kind === "repeat") return { attrs: undefined, commit };
     if (verdict.kind === "duplicate")
       return { attrs: { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of }, commit };
@@ -835,10 +949,11 @@ export class SessionRecorder {
   ): SightingAttrs {
     const toolUseId =
       typeof body["tool_use_id"] === "string" ? body["tool_use_id"] : undefined;
-    const { verdict, commit } = this.toolCalls.judge(
+    const { verdict, commit } = (this.familyRoot ?? this).toolCalls.judge(
       toolUseId,
       source,
       hasBody,
+      this.options.parent?.subagentId,
     );
     if (verdict.kind === "repeat") return { attrs: undefined, commit };
     if (verdict.kind === "body")
@@ -877,6 +992,18 @@ export class SessionRecorder {
       const isStart = first.hook_event_name === "SubagentStart";
       const child = this.child(subagentId, subagentType, spawnToolUseId, ts);
       const out: TachoEvent[] = this.pendingChildGenesis.splice(0);
+      // The OTel records of this subagent's tool calls carry no `agent_id`,
+      // only the `tool_use_id` this hook names first. The spawn's id is the
+      // parent's own `Agent` call, not one of the subagent's.
+      for (const draft of drafts) {
+        const toolUseId = draft.body["tool_use_id"];
+        if (
+          typeof toolUseId === "string" &&
+          draft.kind !== "subagent_start" &&
+          draft.kind !== "subagent_stop"
+        )
+          this.toolCalls.claim(toolUseId, subagentId);
+      }
       if (isStart) {
         // The parent records the spawn; the child opened its own chain above.
         this.absorbContext(first.context);
@@ -909,7 +1036,10 @@ export class SessionRecorder {
       if (first.hook_event_name === "SubagentStop") {
         out.push(...child.finalize("completed", ts));
         const link = this.children.get(subagentId);
-        if (link) link.open = false;
+        if (link) {
+          link.open = false;
+          link.closedAt = Date.parse(ts);
+        }
         out.push(
           this.seal(
             "subagent_stop",
@@ -961,6 +1091,14 @@ export class SessionRecorder {
       );
     }
     let body = draft.body;
+    if (draft.kind === "agent_stop" && this.options.parent === undefined) {
+      // A background subagent, or one whose SubagentStop never arrived, would
+      // otherwise read as running for good on a session that has ended.
+      out.push(...this.closeOpenChildren("aborted", ts));
+      // The clean exit carries the transcript's totals, as the stop the
+      // collector seals for a crash does.
+      body = { ...this.sessionTotals(), ...body };
+    }
     if (draft.kind === "agent_start") {
       if (this.started) {
         // A second SessionStart on a live chain is a resume or fork.
@@ -971,6 +1109,8 @@ export class SessionRecorder {
         };
       }
       this.started = true;
+      // A resume starts a stopped chain again, and what it seals is live.
+      this.stopped = false;
       body = { ...body, env_snapshot: this.envSnapshot };
     }
     if (draft.kind === "turn_start") {
@@ -1057,14 +1197,14 @@ export class SessionRecorder {
         draft.standard.session_id !== this.harnessSessionId
       )
         continue;
-      const target = this.routeOtel(draft);
+      const { target, draft: routed } = this.routeOtel(draft);
       out.push(...this.pendingChildGenesis.splice(0));
       // One record the envelope refuses must not cost the rest of the export.
       // The events already sealed in this loop have advanced the chain; had
       // the throw escaped, they would never reach the WAL and the control
       // plane would see a sequence gap on every chain the export touched.
       try {
-        const sealed = target.sealOtelDraft(draft);
+        const sealed = target.sealOtelDraft(routed);
         if (sealed !== undefined) out.push(sealed);
       } catch (error) {
         this.otelRefusals.push(
@@ -1138,21 +1278,44 @@ export class SessionRecorder {
     return this.otelRefusals.splice(0);
   }
 
-  private routeOtel(draft: OtelDraft): SessionRecorder {
-    if (this.options.parent) return this;
+  private routeOtel(draft: OtelDraft): {
+    target: SessionRecorder;
+    draft: OtelDraft;
+  } {
+    if (this.options.parent) return { target: this, draft };
     if (draft.standard.agent_id !== undefined) {
-      return this.child(
-        draft.standard.agent_id,
-        draft.standard.agent_name,
-        undefined,
-        draft.ts,
-      );
+      return {
+        target: this.child(
+          draft.standard.agent_id,
+          draft.standard.agent_name,
+          undefined,
+          draft.ts,
+        ),
+        draft,
+      };
+    }
+    // Claude Code's `tool_result` and `tool_decision` records name neither
+    // the agent nor its type, only the call, whose owner the subagent's own
+    // hook already named.
+    const toolUseId = draft.body["tool_use_id"];
+    if (typeof toolUseId === "string") {
+      const owner = this.toolCalls.ownerOf(toolUseId);
+      const link = owner !== undefined ? this.children.get(owner) : undefined;
+      if (link !== undefined) return { target: link.recorder, draft };
     }
     if (draft.standard.agent_name !== undefined) {
-      const byType = this.childByType(draft.standard.agent_name);
-      if (byType) return byType;
+      const byType = this.childByType(draft.standard.agent_name, draft.ts);
+      if (byType === "ambiguous")
+        return {
+          target: this,
+          draft: {
+            ...draft,
+            attrs: { ...draft.attrs, [SUBAGENT_TYPE_AMBIGUOUS_ATTR]: "1" },
+          },
+        };
+      if (byType !== undefined) return { target: byType, draft };
     }
-    return this;
+    return { target: this, draft };
   }
 
   /**
@@ -1300,11 +1463,17 @@ export class SessionRecorder {
         ...child.ingestTranscriptLine(line),
       ];
     }
-    const { drafts, totals } = normalizeTranscriptLine(line, this.now());
-    Object.assign(this.totals, totals);
+    const { drafts, totals, title, interrupted } = normalizeTranscriptLine(
+      line,
+      this.now(),
+    );
+    // The title is taken by `sealSessionTitle`, which knows which one wins.
+    const { session_title: _title, ...facts } = totals;
+    Object.assign(this.totals, facts);
     if (totals.permission_mode !== undefined)
       this.absorbContext({ permission_mode: totals.permission_mode });
-    const out: TachoEvent[] = [];
+    const out: TachoEvent[] =
+      title !== undefined ? this.sealSessionTitle(title) : [];
     for (const draft of drafts) {
       this.absorbContext(draft.context);
       let body = draft.body;
@@ -1342,7 +1511,69 @@ export class SessionRecorder {
       );
       sighting.commit();
     }
+    if (interrupted !== undefined) out.push(...this.sealInterrupt(interrupted));
     return out;
+  }
+
+  /**
+   * Seal the session's title each time it changes. Claude Code generates one
+   * (`ai-title`) and rewrites it as the session goes; a name the person gives
+   * the session (`custom-title`) outranks it. The text is the frame's
+   * content, never a body member, so retention and redaction apply to it as
+   * they do to any text the harness wrote.
+   */
+  private sealSessionTitle(title: {
+    text: string;
+    source: SessionTitleSource;
+  }): TachoEvent[] {
+    const current = this.totals.session_title_source;
+    if (title.source === "ai-title" && current === "custom-title") return [];
+    if (title.text === this.totals.session_title && title.source === current)
+      return [];
+    const event = this.seal(
+      "oxagen:notification",
+      { notification_type: "session_title" },
+      {
+        ts: this.now(),
+        source: "transcript",
+        hook_source_kind: title.source,
+        content: textContent(title.text),
+      },
+    );
+    this.totals.session_title = title.text;
+    this.totals.session_title_source = title.source;
+    return [event];
+  }
+
+  /**
+   * Close the turn the person interrupted. Claude Code fires no `Stop` on
+   * Esc, so the turn stayed open until the next prompt or the session's end.
+   * A record naming another prompt than the open turn's is about a turn
+   * already closed: the tailer can read it after the next prompt opened a
+   * new one, which must stay open.
+   */
+  private sealInterrupt(interrupted: {
+    ts: string;
+    prompt_id?: string;
+  }): TachoEvent[] {
+    if (!this.turnOpen) return [];
+    if (
+      interrupted.prompt_id !== undefined &&
+      this.promptId !== undefined &&
+      interrupted.prompt_id !== this.promptId
+    )
+      return [];
+    const event = this.seal(
+      "turn_end",
+      {},
+      {
+        ts: interrupted.ts,
+        source: "collector",
+        attrs: { [TURN_END_REASON_ATTR]: "interrupted" },
+      },
+    );
+    this.turnOpen = false;
+    return [event];
   }
 
   /** Ingest one record of the `-p` JSON stream (`system.init`, `result`, ...). */
@@ -1426,7 +1657,6 @@ export class SessionRecorder {
       out.push(...link.recorder.finalize(outcome, at));
     }
     if (this.started && !this.stopped) {
-      this.stopped = true;
       this.turnOpen = false;
       out.push(
         this.seal(
@@ -1442,6 +1672,22 @@ export class SessionRecorder {
           },
         ),
       );
+      this.stopped = true;
+    }
+    return out;
+  }
+
+  /**
+   * Finalize every subagent chain still open, the way `SubagentStop` does,
+   * and mark it closed. The session's own end leaves no subagent running.
+   */
+  private closeOpenChildren(outcome: "aborted", at: string): TachoEvent[] {
+    const out: TachoEvent[] = [];
+    for (const link of this.children.values()) {
+      if (!link.open) continue;
+      out.push(...link.recorder.finalize(outcome, at));
+      link.open = false;
+      link.closedAt = Date.parse(at);
     }
     return out;
   }

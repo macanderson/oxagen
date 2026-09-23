@@ -28,6 +28,14 @@
  * `tool_denial_kind`) are not sealed. ADR-140 records that choice and why the
  * two alternatives are worse: deferring the seal until the sources settle, and
  * keeping the digest-only frames.
+ *
+ * One ledger serves a session and every subagent under it. A subagent's call
+ * reaches the recorder on two chains: the hook carries its `agent_id` and
+ * seals on the subagent's chain, while Claude Code's OTel records carry no
+ * `agent_id` and land on the session's own. A ledger per chain judged each
+ * of those a first sighting and the call was counted twice. The ledger also
+ * remembers which subagent a call belongs to, so a record that names only the
+ * `tool_use_id` can be routed to that subagent's chain.
  */
 
 /** The attr a stamped sighting carries, naming the source sealed first. */
@@ -55,30 +63,70 @@ interface Entry {
   sources: string[];
   /** Whether a frame carrying this call's body is on the chain. */
   body: boolean;
+  /** The subagent whose call this is, when it is not the session's own. */
+  owner?: string;
 }
 
 /** The ledger's memory, for the recorder state a restart continues from. */
 export interface ToolCallLedgerState {
-  /** Tool use id, the sources that reported it (first sealed first), body. */
-  calls: Array<[string, string[], boolean]>;
+  /**
+   * Tool use id, the sources that reported it (first sealed first), body, and
+   * the owning subagent. States written before owners were kept have three
+   * members.
+   */
+  calls: Array<
+    [string, string[], boolean] | [string, string[], boolean, string]
+  >;
 }
 
 export class ToolCallLedger {
   private readonly entries = new Map<string, Entry>();
 
   constructor(state?: ToolCallLedgerState) {
-    for (const [id, sources, body] of state?.calls ?? [])
-      this.entries.set(id, { sources: [...sources], body });
+    for (const [id, sources, body, owner] of state?.calls ?? [])
+      this.entries.set(id, {
+        sources: [...sources],
+        body,
+        ...(owner !== undefined ? { owner } : {}),
+      });
   }
 
   state(): ToolCallLedgerState {
     return {
-      calls: [...this.entries].map(([id, entry]) => [
-        id,
-        [...entry.sources],
-        entry.body,
-      ]),
+      calls: [...this.entries].map(([id, entry]) =>
+        entry.owner !== undefined
+          ? [id, [...entry.sources], entry.body, entry.owner]
+          : [id, [...entry.sources], entry.body],
+      ),
     };
+  }
+
+  /** The subagent that owns a call, or undefined for the session's own. */
+  ownerOf(toolUseId: string): string | undefined {
+    return this.entries.get(toolUseId)?.owner;
+  }
+
+  /**
+   * Note that a subagent owns a call before any row of it is sealed: its
+   * `PreToolUse` names the call first, and the OTel records that follow name
+   * only the `tool_use_id`. Registers no sighting.
+   */
+  claim(toolUseId: string, owner: string): void {
+    const entry = this.entries.get(toolUseId);
+    if (entry !== undefined) {
+      entry.owner ??= owner;
+      return;
+    }
+    this.entries.set(toolUseId, { sources: [], body: false, owner });
+    this.evict();
+  }
+
+  private evict(): void {
+    while (this.entries.size > TOOL_CALL_LEDGER_CAPACITY) {
+      const oldest = this.entries.keys().next().value;
+      if (oldest === undefined) break;
+      this.entries.delete(oldest);
+    }
   }
 
   /**
@@ -89,12 +137,13 @@ export class ToolCallLedger {
    *
    * A row with no `tool_use_id` is nothing this can join on (the MCP
    * gateway's own `tool_call` is one), so it is always a first sighting and
-   * registers nothing.
+   * registers nothing. `owner` is the subagent whose chain the row seals on.
    */
   judge(
     toolUseId: string | undefined,
     source: string,
     hasBody: boolean,
+    owner?: string,
   ): ToolCallSighting {
     if (toolUseId === undefined || toolUseId.length === 0)
       return { verdict: { kind: "first" }, commit: () => {} };
@@ -104,12 +153,9 @@ export class ToolCallLedger {
       const entry: Entry = seen ?? { sources: [], body: false };
       if (!entry.sources.includes(source)) entry.sources.push(source);
       entry.body = entry.body || hasBody;
+      if (owner !== undefined) entry.owner ??= owner;
       this.entries.set(toolUseId, entry);
-      while (this.entries.size > TOOL_CALL_LEDGER_CAPACITY) {
-        const oldest = this.entries.keys().next().value;
-        if (oldest === undefined) break;
-        this.entries.delete(oldest);
-      }
+      this.evict();
     };
     if (first === undefined) return { verdict: { kind: "first" }, commit };
     if (hasBody && seen?.body !== true)
