@@ -7,6 +7,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 
 const { getAuthUser } = vi.hoisted(() => ({ getAuthUser: vi.fn() }));
@@ -61,7 +62,14 @@ async function draw(source: never) {
   render(<IntlProvider>{element}</IntlProvider>);
 }
 
-afterEach(cleanup);
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("WorkspaceDenied", () => {
   it("names the workspace permission, the viewer and a way back to Fleet", async () => {

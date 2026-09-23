@@ -33,13 +33,6 @@ import { SheetHandle } from "@/ui/sheet-dialog";
 /** How long typing rests before the query goes to `search_tools`. */
 const SEARCH_DEBOUNCE_MS = 150;
 
-/** Groups that carry a note beside the label (mockup `grp(label, note)`). */
-const NOTED: ReadonlySet<CommandGroup> = new Set([
-  "assistant",
-  "create",
-  "actions",
-]);
-
 export function CommandMenu({ data }: { data: ShellData }) {
   const { commandOpen, setCommandOpen } = useShellState();
   return (
@@ -119,6 +112,13 @@ function CommandPalette({
   const optionId = (c: Command) =>
     `${listId}-${c.id.replace(/[^A-Za-z0-9_-]/g, "_")}`;
   const org = data.org.slug;
+  // The groups that carry a note beside the label (mockup `grp(label, note)`),
+  // each key spelled out so the catalog check can follow it.
+  const notes: Partial<Record<CommandGroup, string>> = {
+    assistant: t("commands.groups.assistant.note"),
+    create: t("commands.groups.create.note"),
+    actions: t("commands.groups.actions.note"),
+  };
 
   const commands = useMemo(
     () =>
@@ -232,11 +232,11 @@ function CommandPalette({
                 className="flex items-baseline gap-2 px-3 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-dim"
               >
                 <span>{t(`commands.groups.${group}.label`)}</span>
-                {NOTED.has(group) ? (
+                {notes[group] === undefined ? null : (
                   <span className="font-normal normal-case tracking-normal">
-                    {noteOf(t, group)}
+                    {notes[group]}
                   </span>
-                ) : null}
+                )}
               </div>
               {items.map((c) => {
                 const i = ordered.indexOf(c);
@@ -327,24 +327,4 @@ function groupsOf(
     else out.push({ group: c.group, items: [c] });
   }
   return out;
-}
-
-/**
- * A noted group's note. Spelled per key rather than built from the group, so
- * INV-12 can follow each key the translator is called with.
- */
-function noteOf(
-  t: ReturnType<typeof useTranslations<"shell">>,
-  group: CommandGroup,
-): string | null {
-  switch (group) {
-    case "assistant":
-      return t("commands.groups.assistant.note");
-    case "create":
-      return t("commands.groups.create.note");
-    case "actions":
-      return t("commands.groups.actions.note");
-    default:
-      return null;
-  }
 }

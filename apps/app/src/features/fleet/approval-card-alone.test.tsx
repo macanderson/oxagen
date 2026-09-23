@@ -8,6 +8,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApprovalItem } from "@/data/contracts/approvals";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
 vi.mock("next/navigation", () => ({
@@ -38,7 +39,14 @@ const item: ApprovalItem = {
   expiresAt: "2026-09-23T09:40:20Z",
 };
 
-afterEach(cleanup);
+afterEach(async () => {
+  // INV-26: every test ends in a state of its section; axe checks it.
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
 
 describe("ApprovalCardAlone", () => {
   it("draws one card with its chain and decision, and no panel heading, count or grid", () => {
