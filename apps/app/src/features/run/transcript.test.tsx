@@ -275,6 +275,42 @@ describe("a subagent's frames", () => {
   });
 });
 
+describe("a decision on a subagent's chain", () => {
+  it("names the decision's chain when the server names one, and leaves it off otherwise", () => {
+    const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c2";
+    const page = runTranscript({ entries: [transcriptEntry()] });
+    const first = page.entries[0];
+    if (!first) throw new Error("Missing transcript fixture entry");
+    const { subagent: _appSubagent, ...entry } = first;
+    const decided = (seq: string, sessionUuid?: string) => ({
+      ...entry,
+      seq,
+      endSeq: seq,
+      callId: null,
+      cost: null,
+      cumulativeCost: null,
+      request: null,
+      response: null,
+      decision: {
+        seq,
+        ...(sessionUuid === undefined ? {} : { sessionUuid }),
+        decision: "deny",
+        type: "policy_decision",
+        at: entry.at,
+      },
+    });
+    const mapped = RunTranscript.parse(
+      toRunTranscript({
+        ...page,
+        entries: [decided("5", CHAIN), decided("6")],
+      }),
+    );
+    expect(mapped.entries[0]?.decision?.chainRef).toBe(CHAIN);
+    expect(mapped.entries[1]?.decision).not.toHaveProperty("chainRef");
+    expect(mapped.entries[1]?.decision?.decision).toBe("deny");
+  });
+});
+
 describe("the filter chips", () => {
   it("draws one chip per kind the contract publishes, and none the mockup drew that it does not (negative)", () => {
     renderSection();

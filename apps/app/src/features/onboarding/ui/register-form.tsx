@@ -3,6 +3,7 @@
 // harness that decides how it is wrapped. `register_agent` mints the identity,
 // its delegated principal and one long-lived credential, which is shown here
 // once and is never recoverable.
+import { HarnessIcon } from "@/ui/harness-icon";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
@@ -164,22 +165,25 @@ export function RegisterAgentForm({ org, ws }: { org: string; ws: string }) {
         >
           {t("register.name.harness")}
         </label>
-        <select
-          id="agent-harness"
-          name="harness"
-          value={values.harness}
-          onChange={(e) => {
-            update("harness", e.target.value);
-          }}
-          aria-describedby="agent-harness-hint"
-          className="block w-full min-w-0 rounded-md border border-input-border bg-input-bg px-3 py-2.5 text-sm text-input-fg"
-        >
-          {HARNESSES.map((harness) => (
-            <option key={harness} value={harness}>
-              {harnessLabel(harness)}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <HarnessIcon harness={values.harness} />
+          <select
+            id="agent-harness"
+            name="harness"
+            value={values.harness}
+            onChange={(e) => {
+              update("harness", e.target.value);
+            }}
+            aria-describedby="agent-harness-hint"
+            className="block w-full min-w-0 rounded-md border border-input-border bg-input-bg px-3 py-2.5 text-sm text-input-fg"
+          >
+            {HARNESSES.map((harness) => (
+              <option key={harness} value={harness}>
+                {harnessLabel(harness)}
+              </option>
+            ))}
+          </select>
+        </div>
         <p id="agent-harness-hint" className="text-xs text-muted-foreground">
           {t("register.name.harnessHint")}
         </p>

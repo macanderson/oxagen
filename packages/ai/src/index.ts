@@ -26,7 +26,10 @@ export type { ModelFundingSource, TurnFunding } from "./funding-source";
 
 // The pair applied together. Prefer this to calling resolveModelFundingSource
 // and selectModel separately — see the module comment for what that costs.
-export { selectModelForOrg } from "./select-model-for-org";
+export {
+  selectModelForOrg,
+  selectModelFromFunding,
+} from "./select-model-for-org";
 export type { OrgModelSelection } from "./select-model-for-org";
 
 // The vendor's spend refusal on a minted key, as one named error a surface

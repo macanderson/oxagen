@@ -83,9 +83,15 @@ function RunsPageView({
               <SafeLink
                 to={routes.run(org, ws, run.id)}
                 className={`${linkText} block truncate font-medium`}
-                title={run.name ?? run.taskRef ?? run.id}
+                title={
+                  run.enrichmentEnabled === false
+                    ? run.id
+                    : (run.name ?? run.taskRef ?? run.id)
+                }
               >
-                {run.name ?? run.taskRef ?? t("unnamedRun")}
+                {run.enrichmentEnabled === false
+                  ? run.id
+                  : (run.name ?? run.taskRef ?? run.id)}
               </SafeLink>
               <span
                 className={`block truncate text-[10px] text-muted-foreground ${mono}`}

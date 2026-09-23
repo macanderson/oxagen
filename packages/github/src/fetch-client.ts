@@ -954,7 +954,43 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       ),
     ]);
 
-    const checkRuns: GitHubCheckRun[] = checksRes.check_runs.map((r) => ({
+    const allChecks = [...checksRes.check_runs];
+    const allStatuses = [...statusRes.statuses];
+    let checkPage = checksRes.check_runs.length;
+    let statusPage = statusRes.statuses.length;
+    for (
+      let page = 2;
+      page <= 10 &&
+      (allChecks.length < checksRes.total_count || statusPage === 100);
+      page++
+    ) {
+      const [checks, statuses] = await Promise.all([
+        allChecks.length < checksRes.total_count
+          ? request<GHCheckRunsResponse>(
+              "GET",
+              `${repoPath}/commits/${ref}/check-runs?per_page=100&page=${page}`,
+            )
+          : Promise.resolve(null),
+        statusPage === 100
+          ? request<GHCombinedStatus>(
+              "GET",
+              `${repoPath}/commits/${ref}/status?per_page=100&page=${page}`,
+            )
+          : Promise.resolve(null),
+      ]);
+      if (checks) {
+        allChecks.push(...checks.check_runs);
+        checkPage = checks.check_runs.length;
+      }
+      if (statuses) {
+        allStatuses.push(...statuses.statuses);
+        statusPage = statuses.statuses.length;
+      }
+      if (checkPage === 0 && statusPage < 100) break;
+    }
+    const complete =
+      allChecks.length >= checksRes.total_count && statusPage < 100;
+    const checkRuns: GitHubCheckRun[] = allChecks.map((r) => ({
       name: r.name,
       status: normaliseCheckStatus(r.status),
       conclusion: normaliseConclusion(r.conclusion),
@@ -964,7 +1000,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       appName: r.app?.name ?? null,
     }));
 
-    const statuses: GitHubCommitStatus[] = statusRes.statuses.map((s) => ({
+    const statuses: GitHubCommitStatus[] = allStatuses.map((s) => ({
       context: s.context,
       state: normaliseStatusState(s.state),
       targetUrl: s.target_url,
@@ -974,7 +1010,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
 
     // Prefer the SHA from the combined-status endpoint; it always resolves the
     // ref to a concrete commit.
-    return { sha: statusRes.sha, checkRuns, statuses };
+    return { sha: statusRes.sha, checkRuns, statuses, complete };
   }
 
   async function listPullRequestFiles(args: {

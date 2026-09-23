@@ -1,4 +1,5 @@
 import {
+  ENVELOPE_COLUMNS,
   GENESIS_CURSOR,
   type TachoEvent,
   type UnsealedTachoEvent,
@@ -25,6 +26,7 @@ vi.mock("./tenant", () => ({
 
 import {
   insertTachoEvents,
+  selectTachoEventRecords,
   selectTachoEvents,
   selectTachoStoredFrames,
   selectTachoSubagentEvents,
@@ -335,5 +337,46 @@ describe("selectTachoStoredFrames", () => {
     expect(call?.query).toContain("FINAL");
     expect(call?.query).toContain("seq IN {seqs:Array(UInt64)}");
     expect(call?.params).toEqual({ sessionUuid: SESSION, seqs: [2, 3] });
+  });
+});
+
+describe("selectTachoEventRecords", () => {
+  it("reads every envelope column beside the frame row, and leaves the server's bytes_ref off the envelope", async () => {
+    const event = genesis();
+    const stored = tachoEventRow(
+      { event, chainVerified: true, bytesRef: "evb:v1:k1:" + "a".repeat(64) },
+      RECEIVED_AT.toISOString(),
+    );
+    chSelect.mockResolvedValueOnce({
+      data: [{ ...stored, seq: "0", ts: "2026-09-08 10:06:03.000" }],
+    });
+    const [record] = await selectTachoEventRecords({
+      sessionUuid: SESSION,
+      afterSeq: -1,
+      limit: 500,
+    });
+    expect(record?.frame).toMatchObject({
+      seq: 0,
+      hash: event.hash,
+      bytesRef: "evb:v1:k1:" + "a".repeat(64),
+    });
+    expect(record?.envelope["bytes_ref"]).toBeUndefined();
+    expect(record?.envelope["hash"]).toBe(event.hash);
+    expect(record?.envelope["ts"]).toBe("2026-09-08 10:06:03.000");
+    expect(Object.keys(record?.envelope ?? {}).sort()).toEqual(
+      ENVELOPE_COLUMNS.filter((c) => c !== "bytes_ref").sort(),
+    );
+
+    const [call] = chSelect.mock.calls.at(-1) ?? [];
+    expect(call?.query).toContain("toString(ts) AS ts");
+    expect(call?.query).toContain("`attrs`");
+    expect(call?.query).toContain("`tool_name`");
+    expect(call?.query).toContain("FINAL");
+    expect(call?.query).toContain("seq > {afterSeq:Int64}");
+    expect(call?.params).toEqual({
+      sessionUuid: SESSION,
+      afterSeq: -1,
+      limit: 500,
+    });
   });
 });

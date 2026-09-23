@@ -1,4 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+
+const seams = vi.hoisted(() => ({ org: vi.fn(), workspace: vi.fn() }));
+beforeEach(() => vi.clearAllMocks());
 
 const mockRows = [
   {
@@ -24,6 +27,8 @@ vi.mock("@oxagen/database", () => {
     schema: {
       notifications: {
         userId: "userId_col",
+        orgId: "orgId_col",
+        workspaceId: "workspaceId_col",
         archived: "archived_col",
         unread: "unread_col",
         createdAt: "createdAt_col",
@@ -61,12 +66,23 @@ vi.mock("@oxagen/database", () => {
       });
     }),
   };
-  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+  return {
+    ...dbMock,
+    withTenantDb: (...args: Parameters<typeof dbMock.withTenantDb>) => {
+      seams.workspace();
+      return dbMock.withTenantDb(...args);
+    },
+    withOrgDb: (...args: Parameters<typeof dbMock.withTenantDb>) => {
+      seams.org();
+      return dbMock.withTenantDb(...args);
+    },
+  };
 });
 
 // Stub drizzle helpers used in the handler
 
 import { handler } from "./notification.list";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 
 describe("notifications.list handler", () => {
   it("returns notifications and unreadCount", async () => {
@@ -90,6 +106,25 @@ describe("notifications.list handler", () => {
       event: "approval.requested",
     });
     expect(result.unreadCount).toBeGreaterThanOrEqual(0);
+    expect(seams.workspace).toHaveBeenCalledOnce();
+    expect(seams.org).not.toHaveBeenCalled();
+  });
+
+  it("reads organization notifications without entering a workspace scope", async () => {
+    await handler(
+      { unreadOnly: false, limit: 50 },
+      {
+        orgId: "org-1",
+        workspaceId: ORG_ONLY_WORKSPACE_ID,
+        userId: "user-1",
+        apiKeyId: null,
+        requestId: "req-1",
+        surface: "api",
+        messageId: null,
+      },
+    );
+    expect(seams.org).toHaveBeenCalledOnce();
+    expect(seams.workspace).not.toHaveBeenCalled();
   });
 
   it("throws when userId is absent", async () => {
