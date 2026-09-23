@@ -227,7 +227,11 @@ export async function Billing({
   let blocked: PlanChangeBlock | null = null;
   if (!buys) blocked = { kind: "role" };
   else if (plan.ok && plan.value.subscription !== null)
-    blocked = { kind: "subscribed", plan: plan.value.subscription.plan };
+    blocked = {
+      kind: "subscribed",
+      plan: plan.value.subscription.plan,
+      tier: rate.ok ? rate.value.tier : null,
+    };
   const header = (
     <Header
       title={title}

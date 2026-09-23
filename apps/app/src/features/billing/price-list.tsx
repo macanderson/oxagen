@@ -15,7 +15,7 @@ import type { Read } from "@/data/read";
 import { panelBody } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
-import { cell, numericCell } from "@/ui/table";
+import { cell } from "@/ui/table";
 import { BillingReadFailure } from "./read-failure";
 import { Section } from "./section";
 
@@ -32,10 +32,15 @@ function Price({
 }) {
   return (
     <tr data-price={name}>
-      <th scope="row" className={`${cell} text-left text-[12.5px] font-normal`}>
+      <th
+        scope="row"
+        className={`${cell} w-[42%] text-left align-top text-[12.5px] font-normal`}
+      >
         {term}
       </th>
-      <td className={`${numericCell} whitespace-normal text-[11.5px]`}>
+      <td
+        className={`${cell} text-right align-top font-mono text-[11.5px] tabular-nums text-muted-foreground`}
+      >
         {children}
       </td>
     </tr>
@@ -54,7 +59,10 @@ export function PriceList({
   const rate = mulMicros(ONE_MICRO, PUBLISHED_TERMS.ratePerGauMicros);
   return (
     <Section id="billing-price-list" title={title} flush>
-      <table aria-label={title} className="w-full border-collapse text-[13px]">
+      <table
+        aria-label={title}
+        className="w-full table-fixed border-collapse text-[13px]"
+      >
         <tbody className="divide-y divide-border">
           <Price name="free" term={t("priceList.free")}>
             {t("priceList.freeTerms", {

@@ -65,6 +65,8 @@ function PlanTile({
     );
   }
   const { subscription } = plan.value;
+  // The tier the terms resolve to names the plan for a person; the Stripe
+  // plan slug is the fallback when the terms could not be read.
   if (subscription !== null) {
     return (
       <Tile
@@ -76,7 +78,7 @@ function PlanTile({
             : t("tiles.planMonth")
         }
       >
-        {subscription.plan}
+        {rate.ok ? t(`tiers.${rate.value.tier}`) : subscription.plan}
       </Tile>
     );
   }

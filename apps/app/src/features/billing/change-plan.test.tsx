@@ -191,9 +191,13 @@ describe("a viewer the page blocks", () => {
   });
 
   it("names the existing subscription and says what the product would do, with no form", async () => {
-    const dialog = await openDialog({ kind: "subscribed", plan: "build" });
+    const dialog = await openDialog({
+      kind: "subscribed",
+      plan: "build-v2",
+      tier: "build",
+    });
     expect(dialog).toHaveTextContent(
-      "This organization already has a build subscription. Changing a running subscription is not in the app yet. It would swap the plan in Stripe from the next renewal.",
+      "This organization already has a Build subscription. Changing a running subscription is not in the app yet. It would swap the plan in Stripe from the next renewal.",
     );
     expect(within(dialog).queryByRole("combobox")).toBeNull();
     expect(startPlanChange).not.toHaveBeenCalled();

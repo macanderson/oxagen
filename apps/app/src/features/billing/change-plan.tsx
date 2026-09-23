@@ -33,7 +33,12 @@ export type PlanOption = {
 /** Why the form is not offered, when it is not. */
 export type PlanChangeBlock =
   | { kind: "role" }
-  | { kind: "subscribed"; plan: string };
+  | {
+      kind: "subscribed";
+      /** The Stripe plan slug, printed when the tier is not known. */
+      plan: string;
+      tier: "free" | "build" | "scale" | "enterprise" | null;
+    };
 
 type Interval = "month" | "year";
 
@@ -142,6 +147,7 @@ export function ChangePlan({
   blocked: PlanChangeBlock | null;
 }) {
   const t = useTranslations("billing.changePlan");
+  const tiers = useTranslations("billing.tiers");
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState<PlanChangeState, FormData>(
     startPlanChange.bind(null, org),
@@ -190,7 +196,10 @@ export function ChangePlan({
           <p data-blocked={blocked.kind} className="text-sm text-foreground">
             {blocked.kind === "role"
               ? t("denied")
-              : t("subscribed", { plan: blocked.plan })}
+              : t("subscribed", {
+                  plan:
+                    blocked.tier === null ? blocked.plan : tiers(blocked.tier),
+                })}
           </p>
         )}
       </SheetDialog>

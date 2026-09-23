@@ -75,6 +75,7 @@ const usd = (micros: string) => ({ micros, currency: "USD" });
  * 250,000 allowance, and September's $199.00 plan invoice.
  */
 const LOADED: Partial<BillingReads> = {
+  rate: readOk(contractRate({ tier: "build" })),
   bucket: readOk(
     prepaidBucket({
       includedGau: 250_000,
@@ -214,7 +215,7 @@ describe("header", () => {
     await userEvent.click(screen.getByRole("button", { name: "Change plan" }));
     expect(
       screen.getByRole("dialog", { name: "Change plan" }),
-    ).toHaveTextContent("This organization already has a build subscription.");
+    ).toHaveTextContent("This organization already has a Build subscription.");
   });
 
   it("opens the plan dialog to the role-denied sentence for a member (negative)", async () => {
@@ -262,7 +263,7 @@ describe("section order", () => {
 describe("summary tiles", () => {
   it("prints the plan and its basis", async () => {
     await renderBilling();
-    expect(tile("plan")).toHaveTextContent("Planbuildmonthly, cancel any time");
+    expect(tile("plan")).toHaveTextContent("PlanBuildmonthly, cancel any time");
   });
 
   it("says yearly for a subscription billed annually", async () => {
@@ -367,7 +368,7 @@ describe("This period", () => {
       "total",
     ]);
     expect(row("data-line", "plan")).toHaveTextContent(
-      "Planbuild, billed monthly · 1 Stripe invoice$199.00",
+      "PlanBuild, billed monthly · 1 Stripe invoice$199.00",
     );
     expect(row("data-line", "tokens")).toHaveTextContent(
       "Tokensreported at zero · the customer’s own model spend is on Spend$0.00",

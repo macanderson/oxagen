@@ -44,6 +44,8 @@ export type Statement = {
   /** Null for an organization with no subscription: the line is not drawn. */
   plan: {
     subscription: NonNullable<PlanCard["subscription"]>;
+    /** The tier the contracted terms resolve to: the plan's name for a person. */
+    tier: ContractRate["tier"];
     invoices: number;
     amount: Money | null;
   } | null;
@@ -112,6 +114,7 @@ export function statementFor({
     );
     planLine = {
       subscription,
+      tier: rate.tier,
       invoices: rows.length,
       amount:
         rows.length === 0 ? zero : sumMoney(rows.map((row) => row.amountDue)),

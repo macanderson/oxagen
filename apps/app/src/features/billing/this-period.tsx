@@ -134,7 +134,7 @@ export function ThisPeriod({
             name="plan"
             line={t("thisPeriod.lines.plan")}
             basis={t("thisPeriod.basis.plan", {
-              plan: s.plan.subscription.plan,
+              plan: t(`tiers.${s.plan.tier}`),
               interval: t(`intervals.${s.plan.subscription.billingInterval}`),
               count: s.plan.invoices,
             })}

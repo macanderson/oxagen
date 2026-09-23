@@ -125,6 +125,7 @@ describe("statementFor", () => {
     });
     expect(s.plan).toEqual({
       subscription: SUBSCRIPTION,
+      tier: "enterprise",
       invoices: 1,
       amount: usd("199000000"),
     });
