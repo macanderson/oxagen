@@ -25,6 +25,7 @@ import {
   markShellNotification,
   readShellActivity,
   readShellNavCounts,
+  readShellUnreadCount,
 } from "./activity-actions";
 
 const notification = (publicId: string) => ({
@@ -95,6 +96,27 @@ describe("organization activity", () => {
     expect(fake.context).not.toHaveBeenCalled();
     expect(fake.pending).not.toHaveBeenCalled();
     expect(fake.mandates).not.toHaveBeenCalled();
+  });
+  it("reads the unread count once in the current scope for the idle badge", async () => {
+    const result = await readShellUnreadCount("org", "two");
+    expect(result).toEqual(
+      ok({ notifications: expect.any(Array), unreadCount: 2 }),
+    );
+    expect(fake.viewer.mock.calls).toEqual([["org", "two"]]);
+    expect(fake.read).toHaveBeenCalledOnce();
+    expect(fake.read).toHaveBeenCalledWith(
+      { org: "org", ws: "two" },
+      expect.objectContaining({
+        contract: expect.objectContaining({ name: "list_notifications" }),
+        input: { limit: 1, unreadOnly: true },
+      }),
+    );
+    expect(fake.context).not.toHaveBeenCalled();
+  });
+  it("reads the organization's unread count on a page outside any workspace", async () => {
+    await readShellUnreadCount("org", null);
+    expect(fake.viewer.mock.calls).toEqual([["org"]]);
+    expect(fake.read).toHaveBeenCalledOnce();
   });
   it("keeps the verified workspace on each notification and deduplicates shared rows", async () => {
     const result = await readShellActivity("org", "one");
