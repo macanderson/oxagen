@@ -137,6 +137,12 @@ const tile = (name: string): HTMLElement => {
   if (found === null) throw new Error(`no ${name} tile`);
   return found;
 };
+/** The page's `data-state` panel. */
+const stateOf = (name: string): HTMLElement => {
+  const found = document.querySelector<HTMLElement>(`[data-state=${name}]`);
+  if (found === null) throw new Error(`no ${name} state`);
+  return found;
+};
 /** A row of a panel's table by its `data-*` name. */
 const row = (attr: string, name: string): HTMLElement => {
   const found = document.querySelector<HTMLElement>(`[${attr}="${name}"]`);
@@ -300,8 +306,9 @@ describe("summary tiles", () => {
 describe("figures reconcile", () => {
   /** The count the first line of This period is labelled with. */
   const lineCount = () => {
-    const label = (row("data-line", "governed") as HTMLTableRowElement).cells[0]
-      ?.textContent;
+    const line = row("data-line", "governed");
+    if (!(line instanceof HTMLTableRowElement)) throw new Error("no line row");
+    const label = line.cells[0]?.textContent;
     return /^Governed actions 1 – ([\d,]+)$/.exec(label ?? "")?.[1];
   };
 
@@ -754,7 +761,7 @@ describe("empty", () => {
 
   it("says nothing is billable yet, with Back to Fleet, in place of the statement", async () => {
     await renderBilling(EMPTY);
-    const state = document.querySelector("[data-state=empty]") as HTMLElement;
+    const state = stateOf("empty");
     expect(
       within(state).getByRole("heading", { name: "Nothing billable yet" }),
     ).toBeInTheDocument();
@@ -851,7 +858,7 @@ describe("which state wins", () => {
       retention: readError("clickhouse_unreachable", 503),
       plan: DOWN,
     });
-    const state = document.querySelector("[data-state=error]") as HTMLElement;
+    const state = stateOf("error");
     expect(state).toHaveTextContent("answered 502 stripe_unreachable");
     expect(
       within(state).getByRole("button", { name: "Open an incident" }),
@@ -886,7 +893,7 @@ describe("error", () => {
     "replaces the page with the error state when the %s read fails",
     async (_read, reads) => {
       await renderBilling({ ...LOADED, ...reads });
-      const state = document.querySelector("[data-state=error]") as HTMLElement;
+      const state = stateOf("error");
       expect(
         within(state).getByRole("heading", {
           name: "Billing could not be loaded",
@@ -941,7 +948,7 @@ describe("access denied", () => {
       },
       { role: "member" },
     );
-    const state = document.querySelector("[data-state=denied]") as HTMLElement;
+    const state = stateOf("denied");
     expect(
       within(state).getByRole("heading", { name: "You cannot see billing" }),
     ).toBeInTheDocument();
@@ -971,7 +978,7 @@ describe("access denied", () => {
       { ...LOADED, plan: DENIED },
       { role: "compliance", viewerName: null },
     );
-    const state = document.querySelector("[data-state=denied]") as HTMLElement;
+    const state = stateOf("denied");
     expect(state.querySelector("[data-fact=signed-in]")).toHaveTextContent(
       /^compliance$/,
     );
