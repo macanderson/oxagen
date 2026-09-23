@@ -701,3 +701,420 @@ describe("rules every identity provider meets", () => {
     expect(err.status).toBe(405);
   });
 });
+
+// ── Paths the recorded payloads do not reach ─────────────────────────────────
+
+const patchUser = (id: string, Operations: unknown[]) =>
+  call({ method: "PATCH", path: `/Users/${id}`, body: { schemas: [PATCH_OP], Operations } });
+const patchGroup = (id: string, Operations: unknown[]) =>
+  call({ method: "PATCH", path: `/Groups/${id}`, body: { schemas: [PATCH_OP], Operations } });
+async function pushGroup(displayName: string, members: string[], externalId?: string) {
+  const res = await call({
+    method: "POST",
+    path: "/Groups",
+    body: { displayName, externalId, members: members.map((value) => ({ value })) },
+  });
+  return (res.body as { id: string }).id;
+}
+
+describe("changing a userName", () => {
+  it("moves the account to a new address on a verified domain and records the field", async () => {
+    const id = await oktaProvision();
+    const res = await patchUser(id, [{ op: "replace", path: "userName", value: "Ada.King@acme.com" }]);
+    expect(res.body).toMatchObject({ userName: "ada.king@acme.com" });
+    expect(store.audits.at(-1)).toEqual({
+      eventType: "scim.user_updated",
+      detail: expect.objectContaining({
+        userId: id,
+        userName: "ada.king@acme.com",
+        changedFields: ["userName"],
+      }),
+    });
+  });
+
+  it("refuses an address off the organization's verified domains and writes nothing", async () => {
+    const id = await oktaProvision();
+    const audits = store.audits.length;
+    const err = await refusal(
+      patchUser(id, [{ op: "replace", path: "userName", value: "ada@evil.test" }]),
+    );
+    expect(err).toMatchObject({ status: 400, denial: "domain_not_verified" });
+    expect(store.users.get(id)?.email).toBe("ada@acme.com");
+    expect(store.audits).toHaveLength(audits);
+  });
+
+  it("answers the store's 409 when another account holds the address", async () => {
+    const ada = await oktaProvision();
+    await entraProvision();
+    const err = await refusal(
+      patchUser(ada, [{ op: "replace", path: "userName", value: "grace@eng.acme.com" }]),
+    );
+    expect(err).toMatchObject({ status: 409, scimType: "uniqueness" });
+  });
+
+  it("refuses to remove the userName", async () => {
+    const id = await oktaProvision();
+    const err = await refusal(patchUser(id, [{ op: "remove", path: "userName" }]));
+    expect(err).toMatchObject({ status: 400, scimType: "mutability" });
+  });
+
+  it("refuses a userName that is not an email address", async () => {
+    for (const userName of ["ada", "ada@", "@acme.com"]) {
+      const err = await refusal(call({ method: "POST", path: "/Users", body: { userName } }));
+      expect(err).toMatchObject({ status: 400, scimType: "invalidValue" });
+      expect(err.denial).toBeUndefined();
+    }
+  });
+});
+
+describe("user PATCH edges", () => {
+  it("replaces name parts by the name path and by a nested value object, keeping the display name", async () => {
+    const id = await oktaProvision();
+    await patchUser(id, [
+      { op: "replace", path: "name", value: { givenName: "Augusta", familyName: "King", formatted: "x" } },
+    ]);
+    expect(store.users.get(id)).toMatchObject({
+      givenName: "Augusta",
+      familyName: "King",
+      displayName: "Ada Lovelace",
+    });
+    await patchUser(id, [{ op: "replace", value: { name: { givenName: "Ada" } } }]);
+    expect(store.users.get(id)).toMatchObject({ givenName: "Ada", familyName: "King" });
+  });
+
+  it("removes name parts, and takes name.formatted as the display name only when there is none", async () => {
+    const id = await oktaProvision();
+    await patchUser(id, [
+      { op: "remove", path: "name.familyName" },
+      { op: "remove", path: "displayName" },
+      { op: "replace", path: "name.formatted", value: "Countess of Lovelace" },
+      { op: "remove", path: "name.formatted" },
+    ]);
+    expect(store.users.get(id)).toMatchObject({
+      familyName: null,
+      displayName: "Countess of Lovelace",
+    });
+    await patchUser(id, [{ op: "replace", path: "name.formatted", value: "Ignored" }]);
+    expect(store.users.get(id)?.displayName).toBe("Countess of Lovelace");
+  });
+
+  it("clears the external id on remove", async () => {
+    const id = await oktaProvision();
+    await patchUser(id, [{ op: "remove", path: "externalId" }]);
+    expect(store.users.get(id)?.externalId).toBeNull();
+    expect(store.audits.at(-1)?.detail).toMatchObject({ externalId: null, changedFields: ["externalId"] });
+  });
+
+  it("writes no audit row when nothing changed", async () => {
+    const id = await oktaProvision();
+    const audits = store.audits.length;
+    await patchUser(id, [
+      { op: "replace", path: "externalId", value: oktaUser.externalId },
+      { op: "replace", path: "active", value: true },
+      { op: "remove", path: "active" },
+    ]);
+    expect(store.audits).toHaveLength(audits);
+    expect(store.deprovisioned).toEqual([]);
+  });
+
+  it("refuses an operation without a path whose value is not an object, and a remove without a path", async () => {
+    const id = await oktaProvision();
+    for (const op of [
+      { op: "replace", value: "Ada" },
+      { op: "add", value: null },
+      { op: "remove", value: { active: false } },
+    ]) {
+      const err = await refusal(patchUser(id, [op]));
+      expect(err).toMatchObject({ status: 400, scimType: "invalidSyntax" });
+    }
+    expect(store.deprovisioned).toEqual([]);
+  });
+
+  it("refuses a non-string attribute value", async () => {
+    const id = await oktaProvision();
+    const err = await refusal(patchUser(id, [{ op: "replace", path: "displayName", value: 7 }]));
+    expect(err).toMatchObject({ status: 400, scimType: "invalidValue" });
+  });
+
+  it("refuses an active value that is not a boolean", async () => {
+    const id = await oktaProvision();
+    const err = await refusal(patchUser(id, [{ op: "replace", path: "active", value: "no" }]));
+    expect(err).toMatchObject({ status: 400, scimType: "invalidValue" });
+    expect(store.deprovisioned).toEqual([]);
+  });
+});
+
+describe("user POST and PUT edges", () => {
+  it("takes the primary email, else the first, when no userName is sent", async () => {
+    const primary = await call({
+      method: "POST",
+      path: "/Users",
+      body: {
+        emails: [
+          { value: "home@elsewhere.test" },
+          { value: "Ada@Acme.com", primary: true },
+        ],
+      },
+    });
+    expect(primary.body).toMatchObject({ userName: "ada@acme.com" });
+    const first = await call({
+      method: "POST",
+      path: "/Users",
+      body: { emails: [{ value: "grace@acme.com" }, "not-an-object"] },
+    });
+    expect(first.body).toMatchObject({ userName: "grace@acme.com" });
+  });
+
+  it("refuses a POST with no userName and no usable email", async () => {
+    for (const body of [{}, { emails: [] }, { emails: ["ada@acme.com"] }]) {
+      const err = await refusal(call({ method: "POST", path: "/Users", body }));
+      expect(err).toMatchObject({ status: 400, detail: "userName is required" });
+    }
+    expect(store.users.size).toBe(0);
+  });
+
+  it("refuses a body that is not a JSON object", async () => {
+    for (const body of [[oktaUser], "ada", null]) {
+      const err = await refusal(call({ method: "POST", path: "/Users", body }));
+      expect(err).toMatchObject({ status: 400, scimType: "invalidSyntax" });
+    }
+  });
+
+  it("provisions a person pushed as inactive straight into the deprovisioned state", async () => {
+    const res = await call({ method: "POST", path: "/Users", body: { ...oktaUser, active: "False" } });
+    const id = (res.body as { id: string }).id;
+    expect(res).toMatchObject({ status: 201, body: { active: false } });
+    expect(store.deprovisioned).toEqual([{ userId: id, trigger: "scim_active_false" }]);
+  });
+
+  it("refuses to link an Owner's account as inactive", async () => {
+    const owner = "00000000-0000-4000-8000-00000000aaaa";
+    store.accounts.set("ada@acme.com", owner);
+    store.owners.add(owner);
+    const err = await refusal(
+      call({ method: "POST", path: "/Users", body: { ...oktaUser, active: false } }),
+    );
+    expect(err).toMatchObject({ status: 403, denial: "owner_protected" });
+    expect(store.deprovisioned).toEqual([]);
+  });
+
+  it("deprovisions on a PUT with active false, and leaves active alone when PUT omits it", async () => {
+    const id = await oktaProvision();
+    const { active: _omit, ...withoutActive } = oktaUser;
+    await call({ method: "PUT", path: `/Users/${id}`, body: withoutActive });
+    expect(store.deprovisioned).toEqual([]);
+    const res = await call({ method: "PUT", path: `/Users/${id}`, body: { ...oktaUser, active: false } });
+    expect(res.body).toMatchObject({ active: false });
+    expect(store.deprovisioned).toEqual([{ userId: id, trigger: "scim_active_false" }]);
+  });
+
+  it("reads one user by id", async () => {
+    const id = await oktaProvision();
+    const res = await call({ method: "GET", path: `/Users/${id}` });
+    expect(res).toMatchObject({
+      status: 200,
+      body: { id, userName: "ada@acme.com", meta: { location: `${BASE}/Users/${id}` } },
+    });
+  });
+});
+
+describe("group PUT", () => {
+  it("replaces the member list and recomputes the people who left and joined", async () => {
+    const ada = await oktaProvision();
+    const grace = await entraProvision();
+    const groupId = await pushGroup("Engineering", [ada]);
+    expect(store.roles.get(ada)).toBe("member");
+
+    const res = await call({
+      method: "PUT",
+      path: `/Groups/${groupId}`,
+      body: { displayName: "Oxagen Admins", members: [{ value: grace }] },
+    });
+    expect(res.status).toBe(200);
+    expect((res.body as { members: { value: string }[] }).members.map((m) => m.value)).toEqual([
+      grace,
+    ]);
+    expect(store.roles.get(grace)).toBe("admin");
+    expect(store.roles.has(ada)).toBe(false);
+    expect(store.audits.at(-1)?.detail).toMatchObject({
+      change: "updated",
+      displayName: "Oxagen Admins",
+      membersAdded: [grace],
+      membersRemoved: [ada],
+    });
+  });
+
+  it("keeps the members when PUT omits them, and a rename still recomputes each", async () => {
+    const ada = await oktaProvision();
+    const groupId = await pushGroup("Engineering", [ada]);
+    await call({ method: "PUT", path: `/Groups/${groupId}`, body: { displayName: "Oxagen Admins" } });
+    expect(store.groups.get(groupId)?.members).toEqual(new Set([ada]));
+    expect(store.roles.get(ada)).toBe("admin");
+  });
+
+  it("refuses a PUT without a displayName", async () => {
+    const groupId = await pushGroup("Engineering", []);
+    const err = await refusal(call({ method: "PUT", path: `/Groups/${groupId}`, body: { displayName: " " } }));
+    expect(err).toMatchObject({ status: 400, scimType: "invalidValue" });
+  });
+});
+
+describe("group PATCH edges", () => {
+  it("refuses a rename onto another group's name and writes nothing", async () => {
+    await pushGroup("Oxagen Admins", []);
+    const ada = await oktaProvision();
+    const groupId = await pushGroup("Engineering", [ada]);
+    const roleWrites = store.roleWrites.length;
+    const err = await refusal(
+      patchGroup(groupId, [{ op: "replace", path: "displayName", value: "Oxagen Admins" }]),
+    );
+    expect(err).toMatchObject({ status: 409, scimType: "uniqueness" });
+    expect(store.groups.get(groupId)?.displayName).toBe("Engineering");
+    expect(store.roleWrites).toHaveLength(roleWrites);
+  });
+
+  it("refuses to remove the displayName or set it empty", async () => {
+    const groupId = await pushGroup("Engineering", []);
+    expect(await refusal(patchGroup(groupId, [{ op: "remove", path: "displayName" }]))).toMatchObject({
+      status: 400,
+      scimType: "mutability",
+    });
+    expect(
+      await refusal(patchGroup(groupId, [{ op: "replace", path: "displayName", value: "" }])),
+    ).toMatchObject({ status: 400, scimType: "invalidValue" });
+  });
+
+  it("refuses to add or replace through a member filter path", async () => {
+    const ada = await oktaProvision();
+    const groupId = await pushGroup("Engineering", []);
+    for (const op of ["add", "replace"]) {
+      const err = await refusal(
+        patchGroup(groupId, [{ op, path: `members[value eq "${ada}"]`, value: { value: ada } }]),
+      );
+      expect(err).toMatchObject({ status: 400, scimType: "invalidPath" });
+    }
+    expect(store.groups.get(groupId)?.members.size).toBe(0);
+  });
+
+  it("empties the group on a members remove with no value, and recomputes everyone", async () => {
+    const ada = await oktaProvision();
+    const grace = await entraProvision();
+    const groupId = await pushGroup("Engineering", [ada, grace]);
+    await patchGroup(groupId, [{ op: "remove", path: "members" }]);
+    expect(store.groups.get(groupId)?.members.size).toBe(0);
+    expect(store.roles.size).toBe(0);
+    expect(store.audits.at(-1)?.detail).toMatchObject({ membersRemoved: [ada, grace] });
+  });
+
+  it("replaces the members with a members replace", async () => {
+    const ada = await oktaProvision();
+    const grace = await entraProvision();
+    const groupId = await pushGroup("Engineering", [ada]);
+    await patchGroup(groupId, [{ op: "replace", path: "members", value: [{ value: grace }] }]);
+    expect(store.groups.get(groupId)?.members).toEqual(new Set([grace]));
+    expect(store.roles.has(ada)).toBe(false);
+    expect(store.roles.get(grace)).toBe("member");
+  });
+
+  it("removing the external id a mapping matched on takes back the role it granted", async () => {
+    const grace = await entraProvision();
+    const groupId = await pushGroup("Compliance Reviewers", [grace], ENTRA_GROUP_OBJECT_ID);
+    expect(store.roles.get(grace)).toBe("compliance");
+    await patchGroup(groupId, [{ op: "remove", path: "externalId" }]);
+    expect(store.groups.get(groupId)?.externalId).toBeNull();
+    expect(store.roles.has(grace)).toBe(false);
+  });
+
+  it("refuses a remove without a path", async () => {
+    const groupId = await pushGroup("Engineering", []);
+    const err = await refusal(patchGroup(groupId, [{ op: "remove", value: { members: [] } }]));
+    expect(err).toMatchObject({ status: 400, scimType: "invalidSyntax" });
+  });
+});
+
+describe("role recompute", () => {
+  it("never grants a role to a deprovisioned person still listed in a group", async () => {
+    const ada = await oktaProvision();
+    const groupId = await pushGroup("Engineering", [ada]);
+    await patchUser(ada, [{ op: "replace", path: "active", value: false }]);
+    expect(store.roles.has(ada)).toBe(false);
+    const writes = store.roleWrites.length;
+    // A rename touches every member, including the deprovisioned one.
+    await patchGroup(groupId, [{ op: "replace", path: "displayName", value: "Oxagen Admins" }]);
+    expect(store.roleWrites).toHaveLength(writes);
+    expect(store.roles.has(ada)).toBe(false);
+    expect(store.audits.at(-1)?.detail).toMatchObject({
+      rolesRecomputed: [{ userId: ada, role: null }],
+    });
+  });
+
+  it("writes no role when the person's role does not change", async () => {
+    const ada = await oktaProvision();
+    await pushGroup("Engineering", [ada]);
+    const writes = store.roleWrites.length;
+    store.mappings.push({ group: "Platform", role: "member" });
+    await pushGroup("Platform", [ada]);
+    expect(store.roleWrites).toHaveLength(writes);
+    expect(store.roles.get(ada)).toBe("member");
+  });
+
+  it("reads one group with its members", async () => {
+    const ada = await oktaProvision();
+    const groupId = await pushGroup("Engineering", [ada]);
+    const res = await call({ method: "GET", path: `/Groups/${groupId}` });
+    expect(res.body).toMatchObject({
+      id: groupId,
+      members: [{ value: ada, display: "ada@acme.com", $ref: `${BASE}/Users/${ada}` }],
+    });
+  });
+
+  it("refuses a group POST without a displayName", async () => {
+    const err = await refusal(call({ method: "POST", path: "/Groups", body: { members: [] } }));
+    expect(err).toMatchObject({ status: 400, scimType: "invalidValue" });
+  });
+});
+
+describe("routing", () => {
+  it.each([
+    ["PUT", "/Users"],
+    ["DELETE", "/Groups"],
+    ["POST", "/Users/00000000-0000-4000-8000-000000000001"],
+  ] as const)("answers 405 to %s %s", async (method, path) => {
+    if (path.startsWith("/Users/")) await oktaProvision();
+    const err = await refusal(call({ method, path, body: {} }));
+    expect(err.status).toBe(405);
+  });
+
+  it("answers 405 to a POST on a group", async () => {
+    const groupId = await pushGroup("Engineering", []);
+    expect((await refusal(call({ method: "POST", path: `/Groups/${groupId}`, body: {} }))).status).toBe(
+      405,
+    );
+  });
+
+  it.each(["/", "/Nope", "/Users/a/b", "/ResourceTypes/Device", "/Schemas/urn:nope"])(
+    "answers 404 at %s",
+    async (path) => {
+      expect((await refusal(call({ method: "GET", path }))).status).toBe(404);
+    },
+  );
+
+  it("serves one resource type and one schema by id, ignoring a query string", async () => {
+    expect((await call({ method: "GET", path: "/ResourceTypes/Group" })).body).toMatchObject({
+      endpoint: "/Groups",
+    });
+    expect(
+      (await call({
+        method: "GET",
+        path: "/Schemas/urn%3Aietf%3Aparams%3Ascim%3Aschemas%3Acore%3A2.0%3AGroup",
+      })).body,
+    ).toMatchObject({ name: "Group" });
+    expect((await call({ method: "GET", path: "/ServiceProviderConfig?x=1" })).status).toBe(200);
+  });
+
+  it("refuses a write to the resource types and schemas", async () => {
+    for (const path of ["/ResourceTypes", "/Schemas", "/ServiceProviderConfig/extra"]) {
+      expect((await refusal(call({ method: "POST", path, body: {} }))).status).toBe(405);
+    }
+  });
+});

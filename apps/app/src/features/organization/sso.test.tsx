@@ -436,6 +436,78 @@ describe("Sso: SCIM provisioning", () => {
     });
   });
 
+  it("rotates: warns the old token stops at once, shows the new one once, then re-reads", async () => {
+    actions.rotateScimToken.mockResolvedValue({
+      ok: true,
+      value: {
+        token: "oxscim_the-rotated-token-value",
+        baseUrl: "https://app.oxagen.sh/api/scim/v2",
+        prefix: "oxscim_the-rotat",
+      },
+    });
+    await renderSection({ ok: true, value: LIVE });
+    await userEvent.click(screen.getByRole("button", { name: "Rotate token" }));
+    expect(actions.rotateScimToken).not.toHaveBeenCalled();
+    const dialog = await screen.findByTestId("scim-token-rotate");
+    expect(dialog).toHaveTextContent("The current token stops working at once.");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Rotate token" }));
+    expect(await screen.findByTestId("scim-token-value")).toHaveTextContent(
+      "oxscim_the-rotated-token-value",
+    );
+    expect(screen.getByTestId("scim-token-base-url")).toHaveTextContent(
+      "https://app.oxagen.sh/api/scim/v2",
+    );
+    expect(actions.rotateScimToken).toHaveBeenCalledWith("acme");
+    expect(router.refresh).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalled();
+    });
+    expect(screen.queryByTestId("scim-token-value")).toBeNull();
+  });
+
+  it("says when a live token was last used", async () => {
+    await renderSection({
+      ok: true,
+      value: {
+        ...LIVE,
+        scim: {
+          ...LIVE.scim,
+          token: { ...LIVE.scim.token!, lastUsedAt: "2026-09-23T11:30:00.000Z" },
+        },
+      },
+    });
+    const line = screen.getByTestId("sso-scim-token");
+    expect(line).toHaveTextContent("Last used");
+    expect(line).not.toHaveTextContent("Not used yet.");
+  });
+
+  it("a refused generate keeps the dialog open on the reason, shows no token, and re-reads nothing (negative)", async () => {
+    actions.createScimToken.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "scim_token_exists",
+    });
+    await renderSection({ ok: true, value: ssoSettings() });
+    await userEvent.click(screen.getByRole("button", { name: "Generate token" }));
+    const dialog = await screen.findByTestId("scim-token-generate");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Generate token" }));
+    expect(await screen.findByTestId("scim-token-generate-failure")).toBeTruthy();
+    expect(screen.queryByTestId("scim-token-value")).toBeNull();
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it("a generate that throws shows a failure rather than a token (negative)", async () => {
+    actions.createScimToken.mockRejectedValue(new Error("socket hang up"));
+    await renderSection({ ok: true, value: ssoSettings() });
+    await userEvent.click(screen.getByRole("button", { name: "Generate token" }));
+    const dialog = await screen.findByTestId("scim-token-generate");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Generate token" }));
+    expect(await screen.findByTestId("scim-token-generate-failure")).toBeTruthy();
+    expect(screen.queryByTestId("scim-token-value")).toBeNull();
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
   it("off the Enterprise plan, keeps only Revoke for a leftover token (negative)", async () => {
     await renderSection({ ok: true, value: { ...LIVE, entitled: false } });
     const section = screen.getByTestId("sso-scim");
