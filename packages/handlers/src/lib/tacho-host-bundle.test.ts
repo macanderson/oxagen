@@ -80,6 +80,8 @@ const STEERING = assembleWorkspaceSteering("org", "ws", [
   },
 ]);
 
+const NO_STEERING = assembleWorkspaceSteering("org", "ws", []);
+
 function bundle(bundleFeatures: string[] = CURRENT) {
   return unsignedBundle(
     host(bundleFeatures),
@@ -391,7 +393,7 @@ describe("the active definition budget on the signed bundle", () => {
         governedHost(),
         { org: 1, workspace: 1 },
         { mode: "digest_only", classes: [] },
-        null,
+        NO_STEERING,
         mandate,
         NOW,
       ),
@@ -428,7 +430,7 @@ describe("the active definition budget on the signed bundle", () => {
           governedHost(),
           { org: 1, workspace: 1 },
           { mode: "digest_only", classes: [] },
-          null,
+          NO_STEERING,
           mandate,
           NOW,
         ),
