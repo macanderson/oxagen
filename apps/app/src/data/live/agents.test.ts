@@ -39,20 +39,27 @@ const item = {
   id: "agt_releasebot",
   slug: "release-bot",
   name: "Release bot",
+  description: null,
   agentKey: null,
   harness: "stella",
   principalId: null,
   operatorId: null,
+  operatorName: null,
   status: "unenrolled",
   tier: null,
+  enforcementTier: null,
   beltSize: null,
   runs30d: 0,
   spend30d: null,
+  tokens30d: null,
   proven30d: null,
   mandates: null,
   incidents: 0,
+  tamperIncidents: 0,
+  tamperIncidentsRecorded: 0,
   credentials: 0,
   hosts: 0,
+  host: null,
   registeredAt: "2026-09-01T10:00:00.000Z",
 };
 const listOut = {
@@ -63,6 +70,7 @@ const listOut = {
     enrolled: 0,
     holdingMandate: null,
     tamperIncidents: 0,
+    tamper: { recorded: 0, open: 0, newest: null },
   },
 };
 const getOut = {
@@ -114,8 +122,15 @@ describe("agents.list", () => {
     ]);
     await agents.list(ctx, { cursor: "c2" });
     expect(kernelRead.mock.calls).toEqual([
-      [ctx, { contract: agentList, input: {}, page: "agents" }],
-      [ctx, { contract: agentList, input: { cursor: "c2" }, page: "agents" }],
+      [ctx, { contract: agentList, input: { limit: 100 }, page: "agents" }],
+      [
+        ctx,
+        {
+          contract: agentList,
+          input: { limit: 100, cursor: "c2" },
+          page: "agents",
+        },
+      ],
     ]);
   });
 

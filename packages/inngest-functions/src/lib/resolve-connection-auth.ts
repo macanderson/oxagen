@@ -177,6 +177,7 @@ export async function resolveConnectionAuth(
   const conn = connRows[0];
   if (!conn) return null;
   const deliveryConfig = conn.delivery_config ?? {};
+  if (deliveryConfig["runOutcomesOnly"] === true) return null;
 
   // ── Path 1: org-level OAuth account (source_connections.oauth_account_id) ──
   if (conn.oauth_account_id) {

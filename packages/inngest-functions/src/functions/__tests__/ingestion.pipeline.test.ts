@@ -714,6 +714,25 @@ describe("ingestion.pipeline Inngest function", () => {
       return [payload];
     }
 
+    it("refuses raw records for an issue-only connection before normalization", async () => {
+      const normalize = vi.fn();
+      mocks.getConnector.mockReturnValue({ normalizeRecord: normalize });
+      mockRowWithConfig({ runOutcomesOnly: true });
+      const sendEvent = vi.fn();
+      const result = await capturedHandler!({
+        event: { data: BASE_EVENT },
+        step: makeStep({ sendEvent }),
+      });
+      expect(result).toEqual({
+        skipped: true,
+        reason: "issue_connection_not_ingestible",
+      });
+      expect(normalize).not.toHaveBeenCalled();
+      expect(mocks.embedEntity).not.toHaveBeenCalled();
+      expect(mocks.upsertEntityNode).not.toHaveBeenCalled();
+      expect(sendEvent).not.toHaveBeenCalled();
+    });
+
     // ── Stage 1: record-type filter ─────────────────────────────────────────
     it("drops a record whose type is not in recordTypeFilters (Stage 1)", async () => {
       mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });

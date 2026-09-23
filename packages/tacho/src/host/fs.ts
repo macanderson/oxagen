@@ -5,11 +5,13 @@
  */
 import {
   closeSync,
+  existsSync,
   fsyncSync,
   mkdirSync,
   openSync,
   readFileSync,
   renameSync,
+  unlinkSync,
   writeSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -28,14 +30,28 @@ export function writeSensitiveFileAtomic(
     dirname(path),
     `.${basename(path) || "file"}.${process.pid}.${Date.now()}.tmp`,
   );
-  const fd = openSync(tmp, "w", mode);
   try {
-    writeSync(fd, data);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
+    const fd = openSync(tmp, "w", mode);
+    try {
+      writeSync(fd, data);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(tmp, path);
+  } catch (error) {
+    // A write, fsync, or rename that fails leaves the sibling temp file
+    // behind — holding a sensitive payload nothing will ever pick up — and,
+    // on a directory this function is called against repeatedly (`cursor.json`,
+    // `state.json`), a growing pile of them. Best effort: the write already
+    // failed, and a failed cleanup must not hide that error.
+    try {
+      if (existsSync(tmp)) unlinkSync(tmp);
+    } catch {
+      /* the write's own error is the one that matters */
+    }
+    throw error;
   }
-  renameSync(tmp, path);
 }
 
 export function readJsonFile(path: string): unknown {

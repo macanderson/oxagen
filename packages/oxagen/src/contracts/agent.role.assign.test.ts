@@ -18,6 +18,22 @@ describe("agent.role.assign capability", () => {
       roleName: "Agent Contributor",
     });
     expect(parsed.roleName).toBe("Agent Contributor");
+    expect(parsed.reason).toBeUndefined();
+  });
+
+  it("carries an optional reason, trimmed, and refuses a blank or overlong one", () => {
+    const base = { agentId: "agt_1", roleName: "Agent Contributor" };
+    expect(
+      agentRoleAssign.input.parse({ ...base, reason: "  Cuts releases  " })
+        .reason,
+    ).toBe("Cuts releases");
+    expect(
+      agentRoleAssign.input.safeParse({ ...base, reason: "   " }).success,
+    ).toBe(false);
+    expect(
+      agentRoleAssign.input.safeParse({ ...base, reason: "x".repeat(501) })
+        .success,
+    ).toBe(false);
   });
 
   it("declares deny-by-default, high sensitivity, approval-gated mutation", () => {

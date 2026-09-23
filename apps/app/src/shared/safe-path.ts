@@ -74,7 +74,6 @@ const AGENT_SECTION_ALIASES: Readonly<Record<string, string>> = {
   runs: "activity",
 };
 
-/** Every route the app navigates to; each builder returns a SafePath. */
 /**
  * The path segments each Steering tab or shelf id lands on, old ids included
  * (roadmap pages/steering.md, "Old URLs still land").
@@ -98,6 +97,7 @@ const STEERING_SEGMENTS: Readonly<Record<string, readonly string[]>> = {
   preview: ["compiler"],
 };
 
+/** Every route the app navigates to; each builder returns a SafePath. */
 export const routes = {
   root: (): SafePath => ROOT,
   login: (next?: SafePath): SafePath =>
@@ -359,6 +359,11 @@ export const routes = {
     tab === undefined
       ? pathOf(org, ws, "repositories")
       : pathOf(org, ws, "repositories", tab),
+  /** Runtimes: the hosts agents run on (roadmap mockups/pages/runtimes.md). */
+  runtimes: (org: string, ws: string): SafePath => pathOf(org, ws, "runtimes"),
+  /** One runtime, addressed by its enrollment's public id (`tch_…`). */
+  runtime: (org: string, ws: string, runtime: string): SafePath =>
+    pathOf(org, ws, "runtimes", runtime),
   /**
    * Steering (roadmap pages/steering.md): the five tabs and the Library
    * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`, and

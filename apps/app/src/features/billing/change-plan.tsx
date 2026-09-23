@@ -74,7 +74,7 @@ function PlanForm({
   const t = useTranslations("billing");
   const locale = useLocale();
   const first = plans[0];
-  const [choice, setChoice] = useState(
+  const [choice, setChoice] = useState(() =>
     first === undefined ? "" : choiceOf(first.slug, "month"),
   );
   const [slug = "", interval = ""] = choice.split(":");

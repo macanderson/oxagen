@@ -1,3 +1,4 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
@@ -76,9 +77,15 @@ describe("connection.update handler", () => {
       { connectionId: "con_1", deliveryConfig: { x: 2 } },
       TEST_CTX,
     );
-    expect(setSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ deliveryConfig: { x: 2 } }),
+    const query = new PgDialect().sqlToQuery(
+      setSpy.mock.calls[0]?.[0].deliveryConfig,
     );
+    expect(query.sql).toContain("runOutcomesOnly");
+    expect(query.sql).toContain("CASE WHEN");
+    expect(query.params).toEqual([
+      JSON.stringify({ x: 2 }),
+      JSON.stringify({ x: 2 }),
+    ]);
   });
 
   it("throws 404 when the connection does not exist", async () => {
@@ -90,4 +97,22 @@ describe("connection.update handler", () => {
       ),
     ).rejects.toThrow("Connection not found");
   });
+});
+
+it("preserves the issue-only marker when replacement configuration is null", async () => {
+  const { setSpy } = setup({
+    publicId: "con_1",
+    displayName: "Issues",
+    status: "connected",
+    deliveryConfig: { runOutcomesOnly: true },
+  });
+  await connectionUpdateHandler(
+    { connectionId: "con_1", deliveryConfig: null },
+    TEST_CTX,
+  );
+  const query = new PgDialect().sqlToQuery(
+    setSpy.mock.calls[0]?.[0].deliveryConfig,
+  );
+  expect(query.params).toEqual(["{}", null]);
+  expect(query.sql).toContain(`'{"runOutcomesOnly":true}'::jsonb`);
 });

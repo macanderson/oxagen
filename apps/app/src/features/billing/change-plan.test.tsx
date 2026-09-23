@@ -93,7 +93,7 @@ describe("an allowed viewer", () => {
         .getAllByRole("option")
         .map((option) => [
           option.textContent,
-          (option as HTMLOptionElement).disabled,
+          option instanceof HTMLOptionElement && option.disabled,
         ]),
     ).toEqual([
       ["Build, $199.00 a month", false],
@@ -122,7 +122,8 @@ describe("an allowed viewer", () => {
 
   it("puts Cancel and Change plan in the footer", async () => {
     const dialog = await openDialog();
-    const footer = dialog.querySelector("[data-sheet-footer]") as HTMLElement;
+    const footer = dialog.querySelector<HTMLElement>("[data-sheet-footer]");
+    if (footer === null) throw new Error("no footer");
     expect(
       within(footer)
         .getAllByRole("button")
