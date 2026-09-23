@@ -10,6 +10,7 @@
 //
 // Steering text is evidence. Oxagen records it, quotes it and hands it to the
 // model as content; it is never executed here.
+import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import {
   COMMAND_REASON_MAX,
   STEER_TEXT_MAX,
@@ -230,6 +231,7 @@ function toTranscriptPage(
       type: entry.type,
       label: entry.label,
       callKey: entry.callId,
+      usage: entry.usage ?? null,
       kinds: entry.kinds,
       turn: entry.turn,
       request: entry.request,
@@ -381,4 +383,21 @@ export async function bisectRuns(
         },
       }
     : result;
+}
+
+export async function setRunEnrichment(
+  org: string,
+  ws: string,
+  enabled: boolean,
+): Promise<ActionResult<ContractOutput<typeof workspaceSettingsWrite>>> {
+  const ctx = await requireViewer(org, ws);
+  if (typeof enabled !== "boolean")
+    return {
+      ok: false as const,
+      reason: "invalid" as const,
+      code: "invalid_enrichment_setting",
+    };
+  return kernelWrite(ctx, workspaceSettingsWrite, {
+    runEnrichmentEnabled: enabled,
+  });
 }

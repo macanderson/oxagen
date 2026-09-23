@@ -1989,7 +1989,6 @@ type Messages = {
         reread: string;
         unavailable: string;
       };
-      unnamedRun: string;
       operatorKind: {
         human: string;
         agent: string;
@@ -3634,6 +3633,10 @@ type Messages = {
   };
   run: {
     notRecorded: string;
+    enrichment: {
+      label: string;
+      description: string;
+    };
     noSummary: string;
     source: {
       ledger: string;
