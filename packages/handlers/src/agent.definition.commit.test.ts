@@ -73,7 +73,10 @@ const gh = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@oxagen/github", () => ({
+// Keep the real exports so constants the handler reads, such as
+// OXAGEN_PR_LABELS, stay the ones production uses; only the client is faked.
+vi.mock("@oxagen/github", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/github")>()),
   createGitHubClient: vi.fn(() => gh.client),
 }));
 vi.mock("@oxagen/github/workspace-token", () => ({
@@ -477,7 +480,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         "putFile",
         "openPullRequest",
       ]);
-      expect(gh.calls[2]!.args).toMatchObject({ title: "reopen after merge" });
+      expect(gh.calls[2]!.args).toMatchObject({
+        title: "reopen after merge",
+        labels: ["no-issue"],
+      });
     });
 
     it("refuses the configured default ref and the repository's default branch without touching GitHub", async () => {

@@ -94,13 +94,18 @@ record first. The level can re-key to it once one exists.
 
 ## Consequences
 
-- Resolving at rollup means a rebuild after a reassignment moves that run to
-  the new cost center. Rollups happen at seal, nightly for missed seals, and
-  on a reprice. A statement for a closed month is stable unless one of those
-  rebuilds a run from it.
-- `cost.run_totals` rows written before this change have a null
-  `cost_center` until they are rebuilt, so their spend reads as unassigned.
-  The nightly sweep does not revisit them. A backfill is a separate change.
+- A run keeps the cost center its first rollup resolved. A later rebuild (a
+  reprice, or the nightly sweep of a missed seal) fills a null and changes
+  nothing else, so a statement for a closed month stays where finance booked
+  it after an agent or workspace is reassigned. Amended 2026-09-23 after
+  review of PR #3732; the first version let a rebuild move the run.
+- `cost.run_totals` rows written before this change, or before their agent
+  or workspace was charged to a label, have a null `cost_center` until they
+  are rebuilt, so their spend reads as unassigned. The nightly sweep does not
+  revisit them. `pnpm db:backfill-cost-centers` lists the rows a live label
+  now claims and, with `--apply`, sends `cost/run.sealed` for each so
+  `cost.run-rollup` rebuilds it in place. The pass takes null rows only:
+  moving a run from one label to another is not decided here.
 - The statement holds a month of the organization's run rows in memory.
   `get_spend` caps a workspace read at 92 days for the same reason. A month is
   inside that bound per workspace, but not across a large organization.

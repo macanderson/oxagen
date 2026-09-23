@@ -12,6 +12,7 @@ import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import type { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
 import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import type { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
+import type { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import type { z } from "zod";
@@ -21,6 +22,7 @@ import type {
   MemberList,
   ModelCredential,
   RoleCatalog,
+  SsoSettings,
   WorkspaceList,
 } from "@/data/contracts/org";
 import type { ContractOutput } from "@/server/kernel";
@@ -146,5 +148,52 @@ export function toModelCredential(
     modelMap: out.modelMap,
     lastVerifiedAt: out.lastVerifiedAt,
     rotatedAt: out.rotatedAt,
+  };
+}
+
+/**
+ * `list_sso_providers` onto the Single sign-on page's view model. The OIDC
+ * scopes and the timestamps stay behind: the page shows neither. Nothing here
+ * can carry a secret, because the contract returns none.
+ */
+export function toSsoSettings(
+  out: ContractOutput<typeof orgSsoList>,
+): z.input<typeof SsoSettings> {
+  return {
+    providers: out.providers.map((provider) => ({
+      providerRef: provider.providerId,
+      displayName: provider.displayName,
+      protocol: provider.protocol,
+      domain: provider.domain,
+      domainVerified: provider.domainVerified,
+      issuer: provider.issuer,
+      groupsClaim: provider.groupsClaim,
+      verification: {
+        recordName: provider.domainVerification.recordName,
+        recordValue: provider.domainVerification.recordValue,
+      },
+      callbackUrl: provider.callbackUrl,
+      spMetadataUrl: provider.spMetadataUrl,
+      oidc:
+        provider.oidc === null
+          ? null
+          : {
+              clientRef: provider.oidc.clientId,
+              clientSecretSet: provider.oidc.clientSecretSet,
+            },
+      saml:
+        provider.saml === null
+          ? null
+          : {
+              entryPoint: provider.saml.entryPoint,
+              spPrivateKeySet: provider.saml.spPrivateKeySet,
+            },
+      groupRoles: provider.groupRoles.map((m) => ({
+        group: m.group,
+        role: m.role,
+      })),
+    })),
+    policy: { ssoRequired: out.policy.ssoRequired },
+    entitled: out.entitled,
   };
 }

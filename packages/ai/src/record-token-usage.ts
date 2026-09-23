@@ -2,7 +2,9 @@
 import {
   admitUsage,
   finalizeUsage,
+  voidUsage,
   type ChargeUsageArgs,
+  type UsageVoidReason,
 } from "@oxagen/billing";
 import { stampTokenUsage, type TokenUsageRow } from "@oxagen/telemetry";
 import { getScope, runInTenantScope } from "@oxagen/tenancy";
@@ -27,5 +29,22 @@ export async function recordTokenUsage(
   await runInTenantScope(
     getScope() ?? { orgId: row.org_id, workspaceId: row.workspace_id },
     () => finalizeUsage({ id, row: stamped, charge, complete }),
+  );
+}
+
+/**
+ * Close an admission whose provider call ended before any usage was reported.
+ * Nothing is staged and nothing is charged; the row stops counting as
+ * incomplete. See `voidUsage` for the conditional update that makes this safe
+ * beside a late usage report.
+ */
+export async function voidTokenUsage(
+  id: string,
+  orgId: string,
+  workspaceId: string,
+  reason: UsageVoidReason,
+): Promise<void> {
+  await runInTenantScope(getScope() ?? { orgId, workspaceId }, () =>
+    voidUsage({ id, orgId, workspaceId, reason }),
   );
 }

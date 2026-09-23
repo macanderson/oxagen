@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   dbFn: vi.fn(),
   loggerError: vi.fn(),
   loggerWarn: vi.fn(),
+  /** The transaction seam, counted so a test can prove a read opened none. */
+  withTenantDb: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -30,8 +32,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const dbMock = {
     ...real,
     db: mocks.dbFn,
-    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn(mocks.dbFn()),
+    withTenantDb: mocks.withTenantDb,
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
@@ -53,6 +54,7 @@ vi.mock("./logger", () => ({
 
 import {
   fetchAgentRunAuthz,
+  fetchAgentRunAuthzIn,
   fetchAgentRunLiveAuthority,
 } from "./fetch-agent-authz";
 
@@ -214,6 +216,15 @@ describe("fetchAgentRunLiveAuthority()", () => {
 describe("fetchAgentRunAuthz()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => fn(mocks.dbFn()),
+    );
+  });
+
+  it("opens one transaction of its own", async () => {
+    mocks.dbFn.mockReturnValue(buildDbMock(fullSequence()));
+    await fetchAgentRunAuthz(ARGS);
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
 
   it("flattens live rows into resolver inputs with per-principal memberships", async () => {
@@ -344,5 +355,44 @@ describe("fetchAgentRunAuthz()", () => {
 
     await expect(fetchAgentRunAuthz(ARGS)).rejects.toBe(otherErr);
     expect(mocks.loggerError).not.toHaveBeenCalled();
+  });
+});
+
+describe("fetchAgentRunAuthzIn()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("reads through the caller's transaction and opens no second one", async () => {
+    // A caller inside `withTenantDb` already holds one pool connection. The
+    // Tacho control envelope is built there on every poll and ingest batch,
+    // so a read that opened its own transaction would wait on a second
+    // connection while holding the first (review of #3710).
+    const tx = buildDbMock(fullSequence());
+
+    const inputs = await fetchAgentRunAuthzIn(tx as never, ARGS);
+
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.dbFn).not.toHaveBeenCalled();
+    expect(inputs.roles.find((r) => r.id === "role_a")?.principalIds).toEqual([
+      AGENT_PRN,
+    ]);
+    expect(inputs.roleGrants).toHaveLength(2);
+  });
+
+  it("still raises the missing-migration alert and fails closed", async () => {
+    const pgErr = Object.assign(new Error("relation does not exist"), {
+      code: "42P01",
+    });
+    const tx = {
+      select: () => ({
+        from: () => ({ where: () => Promise.reject(pgErr) }),
+      }),
+    };
+
+    await expect(fetchAgentRunAuthzIn(tx as never, ARGS)).rejects.toBe(pgErr);
+
+    expect(mocks.loggerError).toHaveBeenCalledTimes(1);
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
   });
 });

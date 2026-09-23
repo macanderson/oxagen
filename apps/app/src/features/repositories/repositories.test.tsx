@@ -332,7 +332,7 @@ describe("states", () => {
 
   it("draws the loaded page: eyebrow, h1, one gold action, four tabs with live counts", async () => {
     const { root } = await loaded();
-    expect(screen.getByText("Workspace · Core platform")).toBeTruthy();
+    expect(screen.getByText("Workspace Core platform")).toBeTruthy();
     const tabs = screen.getByRole("navigation", { name: "Repository views" });
     const labels = within(tabs)
       .getAllByRole("link")

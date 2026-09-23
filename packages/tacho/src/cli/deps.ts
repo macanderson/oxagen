@@ -18,6 +18,10 @@ import { createRequire } from "node:module";
 import { dirname, posix, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { postUnix } from "../claude-code/hook-client";
+import {
+  type CodexAppServer,
+  codexAppServerClient,
+} from "../host/codex-app-server";
 import type { FetchLike } from "../host/control-client";
 import {
   type CredentialStore,
@@ -56,6 +60,7 @@ import {
   serviceManagerFor,
 } from "../host/service";
 import { TACHO_VERSION } from "../version";
+import { HARNESS_BINARY } from "../wire";
 
 export interface Credentials {
   token: string;
@@ -148,7 +153,7 @@ export interface RuntimeCommands {
   /**
    * Shell command line that runs `tacho credential issue --harness
    * claude-code`, which Claude Code runs as its `apiKeyHelper` on a brokered
-   * host (ADR-138). Computed beside the hook command so it names the same
+   * host (ADR-143). Computed beside the hook command so it names the same
    * binary layout: a helper that outlives its executable leaves Claude Code
    * with no credential at all.
    */
@@ -314,6 +319,19 @@ export interface CliDeps {
   platform: NodeJS.Platform;
   fetch: FetchLike;
   exec: Exec;
+  /**
+   * The same port with a budget fit for a whole agent turn rather than a
+   * fact probe. `exec` times out at `EXEC_TIMEOUT_MS`, which is right for
+   * `command -v` and `--version` and wrong for the headless turn `verify`
+   * drives: a harness that thinks for eleven seconds was being killed
+   * mid-turn and reported as a failed verification.
+   */
+  execLong: Exec;
+  /**
+   * Drive `codex app-server` for one JSON-RPC exchange. Used to read hook
+   * trust out of Codex and record it (`host/codex-hook-trust.ts`).
+   */
+  codexAppServer: CodexAppServer;
   serviceManager: ServiceManager;
   out: (line: string) => void;
   err: (line: string) => void;
@@ -385,7 +403,7 @@ export interface CliDeps {
     read: (options: ModelBaseUrlOptions) => Promise<ModelBaseUrlState>;
   };
   /**
-   * The brokered credential contract (`host/model-credential.ts`, ADR-138):
+   * The brokered credential contract (`host/model-credential.ts`, ADR-143):
    * take a harness's vendor key out of its file and point it at the
    * gateway's run tokens, put it back, or report it. Optional for the same
    * reason `modelBaseUrls` is, and absent means no credential is ever taken
@@ -441,7 +459,20 @@ export interface CliDeps {
 /** Nothing the CLI shells out to for a fact may take longer than this. */
 export const EXEC_TIMEOUT_MS = 10_000;
 
-function realExec(command: string, args: string[]): ReturnType<Exec> {
+/**
+ * How long a whole headless agent turn may take. `verify` runs one, and a
+ * turn is a model round trip plus whatever tools it decides to call, so it
+ * belongs nowhere near the budget for reading a `--version` string. Every
+ * harness `verify` drives gives up on its own well before this; the bound is
+ * only here so a harness that hangs cannot hang the CLI with it.
+ */
+export const EXEC_LONG_TIMEOUT_MS = 180_000;
+
+function spawnCapture(
+  command: string,
+  args: string[],
+  timeoutMs: number,
+): ReturnType<Exec> {
   // stdin is closed, never inherited: a probe must not wait on the parent
   // (the desktop app keeps its sidecar's stdin pipe open for the process
   // lifetime), and the timeout turns a shell profile that prompts or hangs
@@ -449,13 +480,21 @@ function realExec(command: string, args: string[]): ReturnType<Exec> {
   const result = spawnSync(command, args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-    timeout: EXEC_TIMEOUT_MS,
+    timeout: timeoutMs,
   });
   return {
     status: result.error !== undefined ? null : result.status,
     stdout: result.stdout ?? "",
     stderr: result.stderr || (result.error?.message ?? ""),
   };
+}
+
+function realExec(command: string, args: string[]): ReturnType<Exec> {
+  return spawnCapture(command, args, EXEC_TIMEOUT_MS);
+}
+
+function realExecLong(command: string, args: string[]): ReturnType<Exec> {
+  return spawnCapture(command, args, EXEC_LONG_TIMEOUT_MS);
 }
 
 /**
@@ -581,7 +620,7 @@ export function claudeDesktopFacts(
 }
 
 /** Only this alias identifies Cursor without trusting a generic executable name. */
-export const CURSOR_CLI_NAMES = ["cursor-agent"] as const;
+export const CURSOR_CLI_NAMES = [HARNESS_BINARY.cursor] as const;
 
 /**
  * What a Cursor probe found. `path` and `version` describe the `cursor-agent`
@@ -725,6 +764,18 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     platform,
     fetch: (input, init) => fetch(input, init) as never,
     exec,
+    execLong: overrides.execLong ?? overrides.exec ?? realExecLong,
+    codexAppServer: (requests) =>
+      // Resolved per call: `codex` may be installed between one command and
+      // the next, and the probe is cheap next to spawning the server.
+      codexAppServerClient({
+        binary:
+          harnessFacts(exec, "codex", platform, env, home).path ?? "codex",
+        cwd: process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        clientName: "tacho",
+        clientVersion: TACHO_VERSION,
+      })(requests),
     serviceManager: serviceManagerFor({
       platform,
       home,

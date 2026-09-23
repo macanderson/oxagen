@@ -105,7 +105,7 @@ function Loaded({
   pendingBranch: string | null;
   related: ReactNode;
 }) {
-  const path = `${detail.record.path ?? `.oxagen/rules/${at.lineage}.toml`} · statement`;
+  const path = `statement in ${detail.record.path ?? `.oxagen/rules/${at.lineage}.toml`}`;
   return (
     <div className="flex flex-col gap-6">
       <PageRecord route="steering" id={at.lineage} />

@@ -11,7 +11,7 @@ import { ORG_NAV, THUMB_SLOTS, WORKSPACE_NAV } from "./nav";
 const messages = shell.shell;
 
 /** The Organization pages nav labels but no sidebar item (nav.ts ORG_PAGE_NAV). */
-const ORG_PAGE_NAV = ["apiKeys", "roles", "modelFunding"] as const;
+const ORG_PAGE_NAV = ["apiKeys", "roles", "modelFunding", "sso"] as const;
 
 describe("messages/shell.json", () => {
   it("is registered and owns only the shell namespace", () => {

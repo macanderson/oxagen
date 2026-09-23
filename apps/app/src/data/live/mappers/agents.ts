@@ -64,6 +64,7 @@ export function toAgentDetail(
       status: out.identity.status,
       registeredAt: out.identity.registeredAt,
       firstFrameAt: out.identity.firstFrameAt,
+      costCenter: out.identity.costCenter,
     },
     credentials: out.credentials.map((credential) => ({
       id: credential.id,

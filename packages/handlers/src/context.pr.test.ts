@@ -88,6 +88,23 @@ beforeEach(() => {
 });
 
 describe("open_context_pr", () => {
+  it("quotes every line of a statement that carries a line break", async () => {
+    const h = harness();
+    const proposalId = await proposed(h, {
+      record: {
+        lineageId: LINEAGE,
+        kind: "rule",
+        force: "should",
+        sharingScope: "workspace",
+        statement: "Do not re-read CHANGELOG.md \nmore than once in a run.",
+      },
+    });
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    expect(h.github.pulls[0]!.body).toContain(
+      "> Do not re-read CHANGELOG.md \n> more than once in a run.",
+    );
+  });
+
   it("branches from the production branch, commits the single stamped file, opens the PR and passes the six checks", async () => {
     const h = harness();
     const proposalId = await proposed(h);
@@ -121,6 +138,9 @@ describe("open_context_pr", () => {
     expect(h.github.pulls[0]!.body).toContain("`cta_1`");
     expect(h.github.pulls[0]!.body).toContain("`fnd_01K5RT6C`");
     expect(h.github.pulls[0]!.body).toContain(out.record!.recordHash);
+    expect(h.github.pulls[0]!.body).toContain(
+      "> Do not re-read CHANGELOG.md more than once in a run; cache the first read.",
+    );
 
     expect(out.status).toBe("checks_passed");
     expect(out.governanceMode).toBe("team");
@@ -162,6 +182,27 @@ describe("open_context_pr", () => {
         "team: an org Owner or Admin, or a workspace Owner, other than the author merges",
     });
     expect(() => contextPrOpen.output.parse(out)).not.toThrow();
+  });
+
+  it("opens the PR with the no-issue label and quotes every line of the statement, so the dod check passes and the block quote holds", async () => {
+    const h = harness();
+    const proposalId = await proposed(h, {
+      record: {
+        lineageId: LINEAGE,
+        kind: "rule",
+        force: "should",
+        sharingScope: "workspace",
+        statement: "Do not re-read CHANGELOG.md.\nCache the first read.\n",
+      },
+    });
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+
+    expect(h.github.pulls).toHaveLength(1);
+    expect(h.github.pulls[0]!.labels).toEqual(["no-issue"]);
+    expect(h.github.pulls[0]!.body).toContain(
+      "> Do not re-read CHANGELOG.md.\n> Cache the first read.\n",
+    );
+    expect(h.github.pulls[0]!.body).not.toContain("\nCache the first read.");
   });
 
   it("records each check's outcome on the row before the next one starts, so a poll sees the state machine move", async () => {

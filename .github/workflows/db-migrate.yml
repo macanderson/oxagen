@@ -1,4 +1,4 @@
-# db-migrate.yml — manual, reusable Postgres migration runner.
+# db-migrate.yml — manual Postgres migration runner.
 #
 # Why this exists: pipeline.yml used to carry a `migrate` job that applied the
 # committed Atlas migrations to prod on every push to main. That job was retired
@@ -6,20 +6,27 @@
 # behind the migration directory until someone runs a migration by hand
 # ("column ... does not exist" 500s — most recently #1275, 2026-09-09).
 #
-# This workflow is NOT that working path for `target: production` today, and
-# the "Guard — the database is reachable from this runner" step below exists
-# because it is not: on account 916294258235, Aurora's security group admits
-# 5432 only from the app node, so a hosted runner always fails that guard
-# (oxagen#2652). The path that actually reaches production Postgres is
-# `infra/tools/run-db-migrations.sh`, run from the app node itself — see that
-# script's header, and #1275's most recent comment for it being used that way
-# against production on 2026-09-09. Whether `target: preview` reaches its
-# database from a hosted runner is not established here either way; the guard
-# above checks TCP reachability for both targets rather than assuming.
+# Two targets, two jobs, because they reach their databases differently.
+#
+# `target: production` runs `infra/tools/run-db-migrations.sh`, the one path
+# that reaches production Postgres. On account 916294258235, Aurora's security
+# group admits 5432 only from the app node, so nothing on a hosted runner can
+# connect to it (oxagen#2652). The script does not try: it uploads the
+# migration directory to the deploy bucket and sends `atlas migrate status`
+# (and, with apply, the apply and the platform seed) to the app node over SSM.
+# The job assumes the deploy role over OIDC to do that, the same role and the
+# same script `migration-gate` in pipeline.yml already uses read-only on every
+# push to main. The same script run from a laptop with AWS credentials, on a
+# checkout of origin/main, is the other way to apply, and README.md's
+# Deployment section describes both.
+#
+# `target: preview` keeps the direct path: Atlas on the runner, connecting to
+# `PREVIEW_DATABASE_URL`. Whether a hosted runner reaches that database is not
+# established here either way, so the job checks TCP reachability before it
+# runs Atlas rather than assuming.
 #
 # pipeline.yml still runs `atlas migrate apply --env ci` in three jobs, but each
 # targets an ephemeral Postgres service container in CI, never production.
-# `PRODUCTION_DATABASE_URL` is read here and in no other workflow.
 #
 # There is deliberately no Atlas Cloud workflow. The atlasgo.cloud onboarding
 # wizard generates one (`.github/workflows/ci-atlas.yaml`, added in #3646 and
@@ -59,25 +66,69 @@ concurrency:
   group: db-migrate-${{ github.event.inputs.target }}
   cancel-in-progress: false
 
-# This workflow reads PRODUCTION_DATABASE_URL and needs nothing but the code.
-# Stated rather than inherited from the repository default.
+# `id-token: write` is what lets the production job assume the deploy role
+# over OIDC. The preview job reads PREVIEW_DATABASE_URL and needs nothing but
+# the code. Stated rather than inherited from the repository default.
 permissions:
   contents: read
+  id-token: write
 
 jobs:
-  migrate:
+  production:
+    if: github.event.inputs.target == 'production'
     runs-on: ubuntu-latest
-    # Uses the GitHub Environment of the same name if it exists, so its secrets
-    # resolve here; repo-level secrets still resolve when no environment secret
-    # shadows them.
-    #
-    # It gates nothing. This comment used to say required reviewers stood in
-    # front of a production apply. They do not: the `production` environment
+    timeout-minutes: 20
+    # Required: the deploy role's trust policy accepts only an OIDC `sub`
+    # carrying `environment:production` (infra/stacks-new/ci-deploy/main.tf's
+    # deploy_subjects). It gates nothing else. The `production` environment
     # carries one protection rule and it is a branch policy
     # (`gh api repos/macanderson/oxagen/environments`), so a dispatch applies
     # with no second person involved. Naming a reviewer that does not exist is
     # worse than naming none, because it is the reason someone stops looking.
-    environment: ${{ github.event.inputs.target }}
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # The apply bundles the platform seed from the workspace with esbuild
+      # (tools/scripts/build-platform-seed.mjs) before uploading it, so it
+      # needs the workspace installed. The status-only run needs neither.
+      - uses: actions/setup-node@v4
+        if: ${{ github.event.inputs.apply == 'true' }}
+        with:
+          node-version-file: .node-version
+
+      - uses: pnpm/action-setup@v4
+        if: ${{ github.event.inputs.apply == 'true' }}
+
+      - name: Install the workspace
+        if: ${{ github.event.inputs.apply == 'true' }}
+        run: pnpm install --frozen-lockfile
+
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
+
+      # The script prints the pending list and changes nothing without
+      # `--apply`. It exits 0 on success, 1 on a failed migration, and 2 when
+      # the SSM command is still running or its status could not be read; a 2
+      # is not a failure to re-run, and the output says so.
+      - name: Status — pending migrations (dry run, changes nothing)
+        if: ${{ github.event.inputs.apply != 'true' }}
+        run: bash infra/tools/run-db-migrations.sh packages/database
+
+      - name: Apply migrations and the platform seed
+        if: ${{ github.event.inputs.apply == 'true' }}
+        run: bash infra/tools/run-db-migrations.sh packages/database --apply
+
+  preview:
+    if: github.event.inputs.target == 'preview'
+    runs-on: ubuntu-latest
+    # Uses the GitHub Environment of the same name if it exists, so its secrets
+    # resolve here; repo-level secrets still resolve when no environment secret
+    # shadows them. It gates nothing.
+    environment: preview
     # DATABASE_URL is deliberately NOT set at job level. The step below is its
     # one writer, via $GITHUB_ENV, because that step has to rewrite the value
     # and a job-level `env:` of the same name would leave which one wins to
@@ -98,17 +149,16 @@ jobs:
 
       - name: Guard — DATABASE_URL is set
         env:
-          # Mirror pipeline.yml: pick the prod or preview connection string.
           # Scoped to this step; the composed value below is what every later
           # step sees.
-          SECRET_URL: ${{ github.event.inputs.target == 'production' && secrets.PRODUCTION_DATABASE_URL || secrets.PREVIEW_DATABASE_URL }}
+          SECRET_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
         run: |
           if [ -z "${SECRET_URL:-}" ]; then
-            echo "::error::DATABASE_URL secret for target '${{ github.event.inputs.target }}' is empty. Check the PRODUCTION_DATABASE_URL / PREVIEW_DATABASE_URL secret."
+            echo "::error::PREVIEW_DATABASE_URL is empty. Set the secret before dispatching a preview run."
             exit 1
           fi
           echo "DATABASE_URL=$SECRET_URL" >> "$GITHUB_ENV"
-          echo "Target: ${{ github.event.inputs.target }} — DATABASE_URL is set (value masked)."
+          echo "Target: preview — DATABASE_URL is set (value masked)."
 
       # Without this the directory cannot be applied by anything that is not a
       # Postgres superuser, which every managed cluster is not (#1368). The
@@ -165,16 +215,13 @@ jobs:
           echo "DATABASE_URL=$composed" >> "$GITHUB_ENV"
           echo "Appended options=-c app.rls_bypass=on to the connection (separator '$sep')."
 
-      # A hosted runner is outside the VPC. On the current account
-      # (916294258235) Aurora sits in private subnets and its only security
-      # group admits 5432 from the APP NODE's security group and nothing else
-      # (infra/stacks-new/oxagen/data-services.tf's aws_security_group.aurora).
-      # So a production dispatch from here cannot connect.
-      #
-      # Without this, that arrives as Atlas hanging until its own TCP timeout
-      # and then a generic dial error — a confusing failure that looks like a
-      # broken migration rather than a workflow that cannot reach its database.
-      # Ten seconds and a named message instead (oxagen#2652).
+      # A hosted runner is outside every VPC. Whether the preview database
+      # admits one is not established here, and a database that does not
+      # arrives as Atlas hanging until its own TCP timeout and then a generic
+      # dial error — a failure that looks like a broken migration rather than a
+      # workflow that cannot reach its database. Ten seconds and a named
+      # message instead (oxagen#2652). Production never runs this path: its
+      # job above sends Atlas to the app node over SSM.
       - name: Guard — the database is reachable from this runner
         run: |
           set -uo pipefail
@@ -186,9 +233,8 @@ jobs:
             echo "Reachable."
             exit 0
           fi
-          echo "::error::This runner cannot open a TCP connection to the target database on port $port."
-          echo "::error::On account 916294258235, Aurora admits 5432 only from the app node's security group, so a hosted runner is refused by design — see infra/stacks-new/oxagen/data-services.tf and oxagen#2652."
-          echo "::error::Applying migrations to that cluster needs a path from inside the VPC. This workflow is not one."
+          echo "::error::This runner cannot open a TCP connection to the preview database on port $port."
+          echo "::error::Applying migrations to it needs a path from inside its network, and a hosted runner is not one (oxagen#2652)."
           exit 1
 
       - name: Validate migration directory (checksums)

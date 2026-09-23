@@ -232,6 +232,26 @@ describe("requireViewer", () => {
     expect(nav.redirect).toHaveBeenCalledWith(MFA_ENROLL_PATH);
   });
 
+  it("sends a member without an SSO session to the SSO sign-in, carrying the page", async () => {
+    requestHeaders.set(
+      "x-url",
+      "https://app.oxagen.sh/acme/core/spend?range=7d",
+    );
+    resolveMock.mockResolvedValue({ kind: "sso_required" });
+    await expect(requireViewer("acme", "core")).rejects.toThrow(
+      "NEXT_REDIRECT",
+    );
+    expect(nav.redirect).toHaveBeenCalledWith(
+      "/login?next=%2Facme%2Fcore%2Fspend%3Frange%3D7d&sso=required",
+    );
+  });
+
+  it("sends a member without an SSO session to the SSO sign-in with no page when the request URL is unknown", async () => {
+    resolveMock.mockResolvedValue({ kind: "sso_required" });
+    await expect(requireViewer("acme")).rejects.toThrow("NEXT_REDIRECT");
+    expect(nav.redirect).toHaveBeenCalledWith("/login?sso=required");
+  });
+
   it("308s a historical slug to the canonical URL, keeping the path and query from x-url over next-url", async () => {
     requestHeaders.set("next-url", "/acme-robotics/platform/steering");
     requestHeaders.set(

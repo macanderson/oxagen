@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Each lookup issues one to two sequential queries. The fake transaction pops a
@@ -24,6 +24,14 @@ const { queue, tables, where, withSystemDbMock } = vi.hoisted(() => {
 vi.mock("@oxagen/database", async () => ({
   schema: await vi.importActual("@oxagen/database/schema"),
   withSystemDb: withSystemDbMock,
+}));
+
+const { resolveOrgTier } = vi.hoisted(() => ({
+  resolveOrgTier: vi.fn(() => Promise.resolve("enterprise")),
+}));
+vi.mock("@oxagen/billing", () => ({
+  resolveOrgTier,
+  canAccessSSO: (tier: string) => tier === "enterprise",
 }));
 
 import * as schema from "@oxagen/database/schema";
@@ -166,6 +174,46 @@ describe("systemLookups", () => {
       schema.users,
       schema.users,
     ]);
+  });
+
+  it("stops asking for SSO once the organization's plan lacks it", async () => {
+    resolveOrgTier.mockResolvedValueOnce("scale");
+    queue.push([{ ssoRequired: true }]);
+    await expect(l.ssoPolicy(orgRow.id)).resolves.toEqual({
+      ssoRequired: false,
+      providerIds: [],
+    });
+    expect(resolveOrgTier).toHaveBeenCalledWith(orgRow.id);
+    // The provider read never runs.
+    expect(tables).toEqual([schema.orgSecurityPolicy]);
+  });
+
+  it("reads the require-SSO policy, and the verified providers only when it is on", async () => {
+    queue.push([]);
+    await expect(l.ssoPolicy(orgRow.id)).resolves.toBeNull();
+    queue.push([{ ssoRequired: false }]);
+    await expect(l.ssoPolicy(orgRow.id)).resolves.toEqual({
+      ssoRequired: false,
+      providerIds: [],
+    });
+    queue.push([{ ssoRequired: true }], [{ providerId: "acme-okta" }]);
+    await expect(l.ssoPolicy(orgRow.id)).resolves.toEqual({
+      ssoRequired: true,
+      providerIds: ["acme-okta"],
+    });
+    expect(tables).toEqual([
+      schema.orgSecurityPolicy,
+      schema.orgSecurityPolicy,
+      schema.orgSecurityPolicy,
+      schema.ssoProviderTable,
+    ]);
+    // The provider read is pinned to this organization and to verified domains.
+    expect(where).toHaveBeenLastCalledWith(
+      and(
+        eq(schema.ssoProviderTable.organizationId, orgRow.id),
+        eq(schema.ssoProviderTable.domainVerified, true),
+      ),
+    );
   });
 
   describe("invitationByToken", () => {

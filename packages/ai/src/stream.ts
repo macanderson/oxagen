@@ -14,7 +14,11 @@ import {
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
-import { admitTokenUsage, recordTokenUsage } from "./record-token-usage";
+import {
+  admitTokenUsage,
+  recordTokenUsage,
+  voidTokenUsage,
+} from "./record-token-usage";
 import { providerCostUsdMicros, type CreditReason } from "@oxagen/billing";
 import { trace, context, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import { defaultModel, modelIdOf } from "./models";
@@ -455,9 +459,41 @@ export function streamAgentReply(
         });
       }
     })().catch((err: unknown) => {
+      // The usage row is staged before settlement is attempted, so a failure
+      // here leaves it for the outbox to settle on its schedule. The caller's
+      // onFinish is withheld, because the turn is not settled yet.
       logger.error(
         { err, usageId, alert: "billing_usage_finalize_failed" },
-        "Usage settlement remains pending",
+        "Usage settlement remains pending; the outbox retries it",
+      );
+      throw err;
+    });
+    return settlement;
+  };
+
+  /**
+   * The provider call ended before its first step reported usage. There is
+   * nothing to stage, so the admission is closed as void rather than left
+   * counting as incomplete for ever. Shares the `settlement` guard with
+   * `finish`, so a stream is settled or voided, never both.
+   */
+  const finishEmpty = (
+    reason: "provider_error_before_first_step" | "aborted_before_first_step",
+  ): Promise<void> => {
+    settlement ??= (async () => {
+      _otelSpan.setStatus({ code: SpanStatusCode.ERROR });
+      _otelSpan.end();
+      if (!usageId) return;
+      await voidTokenUsage(
+        usageId,
+        args.telemetry.orgId,
+        args.telemetry.workspaceId,
+        reason,
+      );
+    })().catch((err: unknown) => {
+      logger.error(
+        { err, usageId, alert: "billing_usage_void_failed" },
+        "Usage admission could not be voided; it stays counted as incomplete",
       );
       throw err;
     });
@@ -466,6 +502,7 @@ export function streamAgentReply(
 
   const finishPartial = async (
     usages: readonly LanguageModelUsage[],
+    reason: "provider_error_before_first_step" | "aborted_before_first_step",
   ): Promise<void> => {
     const totalUsage = usages.reduce(
       (total, usage) => ({
@@ -490,10 +527,7 @@ export function streamAgentReply(
     );
     if (usages.length > 0)
       await finish({ totalUsage, text: "", finishReason: "other" }, false);
-    else {
-      _otelSpan.setStatus({ code: SpanStatusCode.ERROR });
-      _otelSpan.end();
-    }
+    else await finishEmpty(reason);
   };
 
   return streamText({
@@ -525,14 +559,12 @@ export function streamAgentReply(
       completedUsage.push(event.usage);
     },
     onError: async (event) => {
-      _otelSpan.setStatus({ code: SpanStatusCode.ERROR });
-      _otelSpan.end();
       logger.error(
         { usageId, alert: "billing_usage_incomplete" },
         "Provider call ended before complete usage was reported",
       );
       try {
-        await finishPartial(completedUsage);
+        await finishPartial(completedUsage, "provider_error_before_first_step");
       } finally {
         await args.onError?.(event);
       }
@@ -546,6 +578,10 @@ export function streamAgentReply(
       ? { abortSignal: args.abortSignal }
       : {}),
     onFinish: (event) => finish(event, true),
-    onAbort: ({ steps }) => finishPartial(steps.map((step) => step.usage)),
+    onAbort: ({ steps }) =>
+      finishPartial(
+        steps.map((step) => step.usage),
+        "aborted_before_first_step",
+      ),
   });
 }

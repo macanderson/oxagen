@@ -12,7 +12,7 @@ import type { MandateRow } from "@/data/contracts/mandates";
 import type { RunCost, RunTranscript } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
-import type { Read } from "@/data/read";
+import { PAGE_FAILURES, type Read, readError } from "@/data/read";
 import { ApprovalsPanel } from "@/features/fleet";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
@@ -286,7 +286,16 @@ export async function Run({
   const agentSlug = run.agentKey?.split(".").at(-1) ?? null;
   const [outputs, everything, cost, pending, resolved, agent] =
     await Promise.all([
-      source.runs.outputs(ctx, run.id),
+      // A thrown outputs read folds to the Run page's own read error, so
+      // the spine says the read failed rather than the page throwing.
+      source.runs
+        .outputs(ctx, run.id)
+        .catch(() =>
+          readError(
+            PAGE_FAILURES.run.error.code,
+            PAGE_FAILURES.run.error.status,
+          ),
+        ),
       source.runs.transcript(ctx, run.id, "everything"),
       source.runs.cost(ctx, run.id),
       readApprovals(source, ctx, run.id, now),

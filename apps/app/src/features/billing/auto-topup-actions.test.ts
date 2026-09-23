@@ -19,6 +19,7 @@ const { invoke, getSession, lookups, nav } = vi.hoisted(() => ({
     orgBySlugHistory: vi.fn(() => Promise.resolve(null)),
     orgRole: vi.fn<() => Promise<string | null>>(),
     mfaPolicy: vi.fn(() => Promise.resolve(null)),
+    ssoPolicy: vi.fn(() => Promise.resolve(null)),
     twoFactorEnabled: vi.fn(() => Promise.resolve(false)),
   },
   nav: {

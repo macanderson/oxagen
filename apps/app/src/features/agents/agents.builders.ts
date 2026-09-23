@@ -61,6 +61,7 @@ export function agentDetail(overrides: DetailOverrides = {}): AgentDetail {
       status: "enrolled",
       registeredAt: "2026-09-01T10:00:00.000Z",
       firstFrameAt: "2026-09-02T10:00:00.000Z",
+      costCenter: null,
       ...identity,
     },
     credentials: [
@@ -313,6 +314,7 @@ export function agentsSource(reads: AgentReads) {
       apiKeys: refuse,
       costCenters: refuse,
       modelCredential: refuse,
+      sso: refuse,
     },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse, configuration: refuse },

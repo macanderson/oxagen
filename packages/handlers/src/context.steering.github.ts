@@ -109,7 +109,13 @@ export interface SteeringGitHub {
   ): Promise<{ commitSha: string }>;
   openPullRequest(
     repo: SteeringRepository,
-    args: { title: string; head: string; base: string; body: string },
+    args: {
+      title: string;
+      head: string;
+      base: string;
+      body: string;
+      labels?: readonly string[];
+    },
   ): Promise<{ number: number; htmlUrl: string }>;
   updatePullRequest(
     repo: SteeringRepository,
@@ -398,7 +404,14 @@ export function assertProductionBase(
 }
 
 /** Wrap a GitHub error as a `conflict` the surfaces map to 409. */
-function githubRefused(err: unknown): HandlerError {
+/**
+ * Wrap a GitHub refusal as `conflict: github_refused` with GitHub's own
+ * message. A `HandlerError` passes through unchanged, so a refusal this
+ * module already shaped (`proposal_branch_exists`, a missing binding) keeps
+ * its reason when a caller wraps a whole GitHub sequence in one try.
+ */
+export function githubRefused(err: unknown): HandlerError {
+  if (err instanceof HandlerError) return err;
   return new HandlerError({
     code: "conflict",
     reason: "github_refused",

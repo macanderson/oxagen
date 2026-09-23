@@ -14,7 +14,9 @@
 // off as the file.
 import type { GitHubPathCommit } from "@oxagen/github";
 import { HandlerError } from "@oxagen/oxagen";
+import { lineageIdSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import type { SteeringGitHub } from "./context.steering.github";
+import type { SteeringStore } from "./context.steering.store";
 import {
   type ParsedRecordFile,
   readRecordFile,
@@ -101,4 +103,58 @@ export async function readRecordFromRepo(
     }
     return null;
   }
+}
+
+/** What the registry mirror holds for one record: the row, its versions and its publication. */
+export type MirroredRecord = NonNullable<
+  Awaited<ReturnType<SteeringStore["findRecord"]>>
+>;
+
+/** The one shape every record read refuses an unknown id with. */
+export function recordNotFound(id: string): HandlerError {
+  return new HandlerError({
+    code: "not_found",
+    reason: "record_not_found",
+    message: `No record ${id} in this workspace`,
+  });
+}
+
+/**
+ * Whether `id` can be a lineage: the file stem under `.oxagen/rules/`, as the
+ * proposal contract spells it. A `ctr_` id fails this by construction.
+ */
+function isLineageId(id: string): boolean {
+  return lineageIdSchema.safeParse(id).success;
+}
+
+/**
+ * The record an id names, from the mirror and from the file.
+ *
+ * The lineage is the file's name, so a `ctr_` id can only reach a file
+ * through the mirror that knows which lineage it is. Anything that is a valid
+ * lineage reaches the file directly, which is what lets a record whose mirror
+ * row is gone still be read back. An id that is neither reaches nothing: the
+ * lineage is spliced into the file path, and only the proposal contract's
+ * lineage shape may go there.
+ *
+ * Refuses `record_not_found` when neither the mirror nor the production
+ * branch holds the record.
+ */
+export async function resolveRecordById(
+  deps: { store: Pick<SteeringStore, "findRecord">; github: SteeringGitHub },
+  scope: { orgId: string; workspaceId: string },
+  recordId: string,
+): Promise<{
+  mirrored: MirroredRecord | null;
+  lineageId: string | null;
+  fileRead: RecordFileRead | null;
+}> {
+  const mirrored = await deps.store.findRecord(scope, recordId);
+  const lineageId =
+    mirrored?.record.slug ?? (isLineageId(recordId) ? recordId : null);
+  const fileRead = lineageId
+    ? await readRecordFromRepo(deps.github, scope, lineageId)
+    : null;
+  if (!mirrored && !fileRead) throw recordNotFound(recordId);
+  return { mirrored, lineageId, fileRead };
 }

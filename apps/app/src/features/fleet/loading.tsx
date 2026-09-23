@@ -6,7 +6,8 @@
 //
 // Next replaces page.tsx's whole return value with this default export while
 // the route segment suspends, the page header included, so this reproduces
-// it. The landmark carries no `id`: while the page streams in, React holds
+// it. The route lives in the `(fleet)` group so this skeleton, Fleet heading
+// and all, never stands in for a nested workspace page. The landmark carries no `id`: while the page streams in, React holds
 // the resolved page hidden beside this fallback, and two `main#main` in one
 // document is what the page-load check refused.
 import { useTranslations } from "next-intl";

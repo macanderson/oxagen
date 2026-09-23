@@ -96,7 +96,7 @@ describe("skill configuration publication", () => {
       }),
     );
     expect(github.openPullRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ base: "release" }),
+      expect.objectContaining({ base: "release", labels: ["no-issue"] }),
     );
     expect(store.publish).not.toHaveBeenCalled();
   });

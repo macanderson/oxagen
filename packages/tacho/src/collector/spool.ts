@@ -145,7 +145,20 @@ export const RETENTION_HOLD_LOG_INTERVAL_MS = 5 * 60_000;
  * so the host still escalates, and only stops coming back sooner than asked.
  */
 const MAX_SERVER_REQUESTED_WAIT_MS = 5 * 60_000;
-function serverRequestedWaitMs(error: ControlError): number | undefined {
+
+/**
+ * Whether a refusal says the control plane holds this session under another
+ * host. Re-enrolling mid-session does it: the live session keeps recording,
+ * its new events carry the new enrollment id, and the session row still
+ * names the old host. The ingest route answers 403 for the whole batch, and
+ * no retry changes the owner. Matched on the route's message, which
+ * `tacho.events.ingest.ts` keeps in step with this string.
+ */
+const SESSION_OWNED_ELSEWHERE = "session belongs to another host";
+function sessionOwnedElsewhere(error: ControlError): boolean {
+  return error.status === 403 && error.body.includes(SESSION_OWNED_ELSEWHERE);
+}
+export function serverRequestedWaitMs(error: ControlError): number | undefined {
   if (error.status !== 429 && error.status !== 503) return undefined;
   const hint = error.rateLimit;
   if (!hint) return undefined;
@@ -172,6 +185,12 @@ export class Shipper {
   private lastRetentionHoldLogAt: number | undefined;
   private consecutiveFailures = 0;
   private lastRateLimit: RateLimitHint | undefined;
+  /**
+   * Sessions the control plane refused as another host's. Their events are
+   * quarantined without being offered again. Held in memory only: after a
+   * restart one refusal finds each session again.
+   */
+  private readonly foreignSessions = new Set<string>();
   lastSuccessAt: number | undefined;
   lastError: string | undefined;
 
@@ -241,6 +260,14 @@ export class Shipper {
   }
 
   private quarantine(event: TachoEvent, reason: string): void {
+    this.stash(event, reason);
+    this.options.log(
+      `quarantined ${event.session_uuid}#${event.seq}: ${reason}`,
+    );
+  }
+
+  /** Quarantine without a log line, for callers that log one line per batch. */
+  private stash(event: TachoEvent, reason: string): void {
     const path = join(
       this.options.quarantineDir,
       `${event.session_uuid}-${String(event.seq).padStart(8, "0")}.json`,
@@ -252,9 +279,6 @@ export class Shipper {
       );
     }
     this.options.wal.markShipped(event.session_uuid, event.seq);
-    this.options.log(
-      `quarantined ${event.session_uuid}#${event.seq}: ${reason}`,
-    );
   }
 
   private markShipped(events: readonly TachoEvent[]): void {
@@ -475,7 +499,54 @@ export class Shipper {
     return { ...result, quarantined: result.quarantined + quarantined };
   }
 
+  /**
+   * Set aside the events of sessions the control plane holds under another
+   * host, then send the rest. Every bisected half comes back through here,
+   * so a session found in one half is not sent again in the other.
+   */
   private async shipBatch(
+    batch: TachoEvent[],
+    bodies: ReadonlyMap<string, TachoBody>,
+  ): Promise<ShipResult> {
+    const refused = batch.filter((e) =>
+      this.foreignSessions.has(e.session_uuid),
+    );
+    if (refused.length === 0) return this.sendBatch(batch, bodies);
+    for (const event of refused)
+      this.stash(event, `control plane holds session under another host`);
+    this.markShipped(refused);
+    this.options.log(
+      `quarantined ${refused.length} event(s) from session(s) the control plane holds under another host`,
+    );
+    const rest = batch.filter((e) => !this.foreignSessions.has(e.session_uuid));
+    if (rest.length === 0)
+      return {
+        shipped: 0,
+        quarantined: refused.length,
+        reachable: this.reachable,
+      };
+    const result = await this.sendBatch(rest, bodies);
+    return { ...result, quarantined: result.quarantined + refused.length };
+  }
+
+  /** Halve a refused batch and ship each half, stopping at the first that stalls. */
+  private async bisect(
+    batch: TachoEvent[],
+    bodies: ReadonlyMap<string, TachoBody>,
+  ): Promise<ShipResult> {
+    const middle = Math.ceil(batch.length / 2);
+    const leftHalf = batch.slice(0, middle);
+    const left = await this.shipBatch(leftHalf, bodies);
+    if (left.shipped + left.quarantined < leftHalf.length) return left;
+    const right = await this.shipBatch(batch.slice(middle), bodies);
+    return {
+      shipped: left.shipped + right.shipped,
+      quarantined: left.quarantined + right.quarantined,
+      reachable: left.reachable && right.reachable,
+    };
+  }
+
+  private async sendBatch(
     batch: TachoEvent[],
     bodies: ReadonlyMap<string, TachoBody>,
   ): Promise<ShipResult> {
@@ -542,16 +613,21 @@ export class Shipper {
           this.succeed();
           return { shipped: 0, quarantined: 1, reachable: true };
         }
-        const middle = Math.ceil(batch.length / 2);
-        const leftHalf = batch.slice(0, middle);
-        const left = await this.shipBatch(leftHalf, bodies);
-        if (left.shipped + left.quarantined < leftHalf.length) return left;
-        const right = await this.shipBatch(batch.slice(middle), bodies);
-        return {
-          shipped: left.shipped + right.shipped,
-          quarantined: left.quarantined + right.quarantined,
-          reachable: left.reachable && right.reachable,
-        };
+        return this.bisect(batch, bodies);
+      }
+      if (error instanceof ControlError && sessionOwnedElsewhere(error)) {
+        // Unlike a revoked key, this 403 is about one session, and retrying
+        // it stops every other session queued behind it. Bisect to the
+        // session and set it aside; the rest of the batch ships.
+        const sessions = new Set(batch.map((e) => e.session_uuid));
+        if (sessions.size > 1) return this.bisect(batch, bodies);
+        const session = (batch[0] as TachoEvent).session_uuid;
+        this.foreignSessions.add(session);
+        this.options.log(
+          `control plane holds session ${session} under another host, usually after a re-enrollment mid-session; its events go to quarantine`,
+        );
+        this.succeed();
+        return this.shipBatch(batch, bodies);
       }
       // 401/403 (revoked or denied key), 429, 5xx: keep the batch, back off.
       this.fail(error);

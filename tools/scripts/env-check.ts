@@ -47,7 +47,9 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "NEXT_PHASE",
   // Standard CI signal
   "CI",
-  // Set by the GitHub Actions runner itself, not by operators or env-manager
+  // Set by the GitHub Actions runner itself, not by operators or env-manager.
+  // The migration script also reads it before masking a decrypted parameter
+  // in the log.
   "GITHUB_ACTIONS",
   // Process-placement knobs for the self-hosted API (apps/api/src/index.ts):
   // supplied by whatever runs the process — Caddy/systemd on the shared
@@ -114,10 +116,6 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "GITHUB_EVENT_PATH",
   "GITHUB_OUTPUT",
   "GITHUB_STEP_SUMMARY",
-  // Actions sets this to "true" in every job. The migration script checks it
-  // before masking a decrypted parameter in the log. It is not an operator's
-  // variable, and it does not belong in the registry.
-  "GITHUB_ACTIONS",
   // Read by check-main-preflight.mjs's runtime mode to tell a push to main
   // apart from every other trigger, before it ever calls the GitHub API.
   "GITHUB_EVENT_NAME",

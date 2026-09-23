@@ -98,6 +98,49 @@ export function apiLayerSatisfied({
   );
 }
 
+/**
+ * Pure evidence check for the "cli" layer. The CLI groups its commands by
+ * noun (`run.ts` carries `oxagen run export`, `export-status`, `download`
+ * and `chain`; `repo.ts` carries the repository commands), so a per-capability
+ * filename exists for almost nothing. A capability is wired when it declares
+ * "cli" in surfaces[] and either a dedicated command file exists or some
+ * command file names the capability, by its registered name in a string or
+ * a backtick, or by importing its contract. Before this the layer had no
+ * rule at all, so declaring it reported a gap for every capability that
+ * carried it, and none did.
+ *
+ * @param {{stems: string[], capName: string, capSurfaces: string[], hasDirectFile: boolean, commandIndex: {importedStems: Set<string>, content: string}}} args
+ */
+export function cliLayerSatisfied({
+  stems,
+  capName,
+  capSurfaces,
+  hasDirectFile,
+  commandIndex,
+}) {
+  if (!capSurfaces.includes("cli")) return false;
+  if (hasDirectFile) return true;
+  if (stems.some((s) => commandIndex.importedStems.has(s))) return true;
+  return (
+    commandIndex.content.includes(`"${capName}"`) ||
+    commandIndex.content.includes(`'${capName}'`) ||
+    commandIndex.content.includes(`\`${capName}\``)
+  );
+}
+
+let cliCommandIndexCache = null;
+function getCliCommandIndex() {
+  if (cliCommandIndexCache) return cliCommandIndexCache;
+  const dir = join(ROOT, "apps/cli/src/commands");
+  const files = existsSync(dir)
+    ? readdirSync(dir)
+        .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+        .map((f) => ({ name: f, content: readFileSync(join(dir, f), "utf8") }))
+    : [];
+  cliCommandIndexCache = buildApiRouteIndex(files);
+  return cliCommandIndexCache;
+}
+
 let apiRouteIndexCache = null;
 function getApiRouteIndex() {
   if (apiRouteIndexCache) return apiRouteIndexCache;
@@ -264,6 +307,21 @@ function layerSatisfied(layer, capName, capSurfaces, fileStem) {
       capName,
       hasDirectFile,
       routeIndex: getApiRouteIndex(),
+    });
+  }
+  // The "cli" layer reads the command files the way the api layer reads the
+  // route files: a dedicated file, or the capability named inside a grouped
+  // one. See cliLayerSatisfied above.
+  if (layer === "cli") {
+    const hasDirectFile = stems.some((s) =>
+      existsSync(join(ROOT, `apps/cli/src/commands/${s}.ts`)),
+    );
+    return cliLayerSatisfied({
+      stems,
+      capName,
+      capSurfaces,
+      hasDirectFile,
+      commandIndex: getCliCommandIndex(),
     });
   }
   const candidates = {

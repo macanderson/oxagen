@@ -4,9 +4,11 @@
  * `agent_stop`. Proves the hooks, the socket, and the recorder end to end
  * on this machine; the control plane's copy is checked by `oxagen tacho`.
  */
+import { codexTrustProblem } from "../host/codex-hook-trust";
 import { readHostFile } from "../host/host-file";
 import { isInternalSession } from "../collector/registry";
 import {
+  HARNESS_BINARY,
   isWrappedHarness,
   type TachoHarness,
   type WrappedHarness,
@@ -22,13 +24,8 @@ export interface VerifyOptions {
 
 const DEFAULT_PROMPT = "Reply with exactly the word OK and nothing else.";
 
-const BINARY: Record<WrappedHarness, string> = {
-  "claude-code": "claude",
-  codex: "codex",
-  // The probe requires Cursor's unambiguous alias, not a generic agent binary.
-  cursor: "cursor-agent",
-  stella: "stella",
-};
+/** The one table of harness executables; Cursor's is its unambiguous alias. */
+const BINARY: Record<WrappedHarness, string> = HARNESS_BINARY;
 
 /**
  * How long to wait for a sealed chain. Stella sends no SessionEnd: its chain
@@ -42,9 +39,21 @@ const DEFAULT_TIMEOUT_MS: Record<WrappedHarness, number> = {
   stella: 45_000,
 };
 
+/** Name the final evidence that verification is still waiting for. */
+const UNSEALED_DETAIL: Record<WrappedHarness, string> = {
+  "claude-code":
+    "session started but SessionEnd never arrived within the timeout",
+  codex:
+    "session started but its final chain seal never arrived; check Codex Stop and SessionEnd hook delivery with `tacho status`",
+  cursor:
+    "session started but its final chain seal never arrived; check Cursor stop and sessionEnd hook delivery with `tacho status`",
+  stella:
+    "session started but was not sealed within the timeout; Stella sends no SessionEnd, so tachod seals the chain once the stella process has exited and its sweep has run",
+};
+
 /**
  * One headless turn per harness. Claude Code prints a JSON result carrying
- * its session id; Codex CLI (`codex exec`), Cursor (`agent -p`) and Stella
+ * its session id; Codex CLI (`codex exec`), Cursor (`cursor-agent -p`) and Stella
  * (`stella run`) are matched as a chain the daemon did not have before the
  * turn ran, carrying the harness label. Cursor's JSON result does carry a
  * `session_id`, but its hooks name the session by `conversation_id`, and
@@ -55,6 +64,13 @@ function headlessTurn(
   prompt: string,
 ): { args: string[]; parsesSession: boolean } {
   if (harness === "codex") {
+    // No `--dangerously-bypass-hook-trust` here, deliberately. Codex has a
+    // flag that runs untrusted hooks, and passing it would make this check
+    // pass on a machine where every real session still runs unhooked —
+    // which is the failure `verify` exists to catch. The trust records are
+    // read before the turn instead (`codexTrustProblem` below), so an
+    // untrusted machine is named as untrusted rather than proved by a flag
+    // no real session uses.
     return {
       args: ["exec", "--skip-git-repo-check", prompt],
       parsesSession: false,
@@ -142,6 +158,21 @@ export async function verify(
   if (facts.path === undefined)
     return { ok: false, detail: `\`${name}\` is not on PATH` };
   const turn = headlessTurn(harness, options.prompt ?? DEFAULT_PROMPT);
+  // Codex skips a hook whose definition is not recorded as trusted in its
+  // own config: every symptom of an untrusted
+  // hook is a symptom of a missing one. Reading the records first turns a
+  // timeout the operator cannot act on into a sentence that names the cause,
+  // and costs nothing when they are in order. It is read-only — `enroll`
+  // records trust, `verify` only reports on it.
+  if (harness === "codex") {
+    const untrusted = await codexTrustProblem({
+      appServer: deps.codexAppServer,
+      hooksPath: deps.paths.codexHooks,
+      hookCommand: host.hook_command,
+      enrollmentId: host.host_enrollment_id,
+    });
+    if (untrusted !== undefined) return { ok: false, detail: untrusted };
+  }
   // Every chain the daemon already holds. A turn whose own session id cannot
   // be read is matched by what appears after it: the busiest chain is not the
   // newest one, and a sealed chain retained from a real session would
@@ -162,7 +193,7 @@ export async function verify(
   deps.out(
     `Running ${name} ${turn.args[0]} (one headless turn) with hooks installed...`,
   );
-  const run = deps.exec(facts.path, turn.args);
+  const run = deps.execLong(facts.path, turn.args);
   if (run.status !== 0) {
     return {
       ok: false,
@@ -213,10 +244,7 @@ export async function verify(
       sessionId: found.session_id,
       sessionUuid: found.session_uuid,
       seq: found.seq,
-      detail:
-        harness === "stella"
-          ? "session started but was not sealed within the timeout; Stella sends no SessionEnd, so tachod seals the chain once the stella process has exited and its sweep has run"
-          : "session started but SessionEnd never arrived within the timeout",
+      detail: UNSEALED_DETAIL[harness],
     };
   }
   deps.out(

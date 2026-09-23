@@ -62,7 +62,7 @@ function canAdministerOrg(ctx: WsCtx): boolean {
  * `ctx.wsRole === "owner"` would promise authority nothing can grant, and
  * would promise it to a viewer who cannot reach the control anyway:
  * `list_tool_versions` asserts the same empty workspace clause, so an org
- * `member` is denied the registry read and `Registry` answers `ReadFailure`
+ * `member` is denied the registry read and `Registry` answers `ToolsReadFailure`
  * before `ImportControls` is reached.
  *
  * The gate is not the decision. Whether workspace membership should confer

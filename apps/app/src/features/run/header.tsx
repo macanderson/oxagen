@@ -194,6 +194,7 @@ function When({ run }: { run: RunRow }) {
       tr("notRecorded")
     ) : (
       <OperatorName
+        testId="run-operator-name"
         operator={{
           id: run.operatorId,
           name: run.operatorName,
@@ -201,9 +202,13 @@ function When({ run }: { run: RunRow }) {
         }}
       >
         {run.operatorName ??
-          (run.operatorKind === null
-            ? tr("notRecorded")
-            : tr(`facts.operatorKind.${run.operatorKind}`))}
+          (run.operatorKind === null ? (
+            // An id with no name and no kind is still a recorded operator:
+            // the id is the label, never "not recorded".
+            <span className={mono}>{run.operatorId}</span>
+          ) : (
+            tr(`facts.operatorKind.${run.operatorKind}`)
+          ))}
       </OperatorName>
     );
   const title = run.name ?? run.taskRef;

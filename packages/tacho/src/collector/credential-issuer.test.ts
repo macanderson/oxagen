@@ -1,5 +1,5 @@
 /**
- * The daemon's run token mint (ADR-138) on its own: a real recorder on its
+ * The daemon's run token mint (ADR-143) on its own: a real recorder on its
  * own chain, a real custody store in a scratch directory, a real signing
  * key. What the proxy test proves end to end, this file proves branch by
  * branch: every refusal, every clamp, and the one failure the mint survives.
@@ -152,6 +152,35 @@ describe("issuing a run token", () => {
     expect(providerForHarness("codex")).toBe("openai");
     expect(providerForHarness("claude-desktop")).toBeUndefined();
     expect(recorded).toEqual([]);
+  });
+
+  it("answers a static mint past the enrollment's expiry with 403 host_expired, and mints nothing", () => {
+    store.take(
+      "openai",
+      { kind: "bearer", secret: "sk-proj-FAKE" },
+      "codex:auth.json",
+      NOW,
+    );
+    const expired = deps({
+      host: () => ({
+        host_enrollment_id: HOST,
+        host_status: "active",
+        expires_at: new Date(NOW - 1).toISOString(),
+      }),
+    });
+    expect(
+      issueRunToken({ harness: "codex", placement: "static" }, expired),
+    ).toEqual({
+      status: 403,
+      body: {
+        error: expect.stringContaining("enrollment expired"),
+        code: "host_expired",
+      },
+    });
+    expect(recorded).toEqual([]);
+    // A helper token is not bounded by the enrollment, so it still mints;
+    // the proxy checks host status on every call it is spent on.
+    expect(issueRunToken({ harness: "codex" }, expired).status).toBe(200);
   });
 
   it("refuses a host that is not active, naming the status, and mints nothing", () => {

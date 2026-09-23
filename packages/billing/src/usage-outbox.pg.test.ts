@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { CREDIT_REASONS } from "./constants";
@@ -22,7 +22,13 @@ vi.mock("./metering", async (original) => {
     },
   };
 });
-import { admitUsage, finalizeUsage, deliverUsageOutbox } from "./usage-outbox";
+import {
+  admitUsage,
+  deliverUsageOutbox,
+  finalizeUsage,
+  USAGE_OUTBOX_RETENTION_DAYS,
+  voidUsage,
+} from "./usage-outbox";
 const orgId = randomUUID();
 const workspaceId = randomUUID();
 const scope = <T>(fn: () => T) => runInTenantScope({ orgId, workspaceId }, fn);
@@ -201,10 +207,11 @@ describe.skipIf(!process.env["DATABASE_URL"])(
           }),
         ),
       ).rejects.toThrow("scope differs");
+      // Two hours old: past the grace period, inside the reporting window.
       await withSystemDb((tx) =>
         tx
           .update(schema.usageOutbox)
-          .set({ admittedAt: new Date(0) })
+          .set({ admittedAt: new Date(Date.now() - 2 * 3_600_000) })
           .where(eq(schema.usageOutbox.id, id)),
       );
       expect((await deliverUsageOutbox()).incomplete).toBeGreaterThan(0);
@@ -216,6 +223,111 @@ describe.skipIf(!process.env["DATABASE_URL"])(
       );
       expect(entry?.finalizedAt).toBeNull();
       expect(entry?.payload).toBeNull();
+      // Past the window, the same admission leaves the count. It is still in
+      // the table for an audit; it no longer drives the alert.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.usageOutbox)
+          .set({ admittedAt: new Date(Date.now() - 30 * 86_400_000) })
+          .where(eq(schema.usageOutbox.id, id)),
+      );
+      expect((await deliverUsageOutbox()).incomplete).toBe(0);
+    });
+    it("voids an admission whose provider call reported nothing, and refuses usage after the void", async () => {
+      const id = await scope(() => admitUsage(orgId, workspaceId));
+      await expect(
+        scope(() =>
+          voidUsage({
+            id,
+            orgId,
+            workspaceId,
+            reason: "provider_call_failed",
+          }),
+        ),
+      ).resolves.toBe(true);
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.usageOutbox)
+          .set({ admittedAt: new Date(Date.now() - 2 * 3_600_000) })
+          .where(eq(schema.usageOutbox.id, id)),
+      );
+      const ledgerBefore = (await state()).ledger.length;
+      // Closed: not incomplete, not pending, and not open to a late report.
+      const sweep = await deliverUsageOutbox();
+      expect(sweep.selected).toBe(0);
+      await scope(() => finalizeUsage({ id, row, charge }));
+      const [entry] = await withSystemDb((tx) =>
+        tx
+          .select()
+          .from(schema.usageOutbox)
+          .where(eq(schema.usageOutbox.id, id)),
+      );
+      expect(entry?.usageComplete).toBe(true);
+      expect(entry?.payload).toBeNull();
+      expect(entry?.finalizedAt).not.toBeNull();
+      expect((await state()).ledger).toHaveLength(ledgerBefore);
+      // A second void is a no-op, reported as such.
+      await expect(
+        scope(() =>
+          voidUsage({ id, orgId, workspaceId, reason: "provider_call_failed" }),
+        ),
+      ).resolves.toBe(false);
+    });
+    it("does not void an admission that already carries usage", async () => {
+      const id = await scope(() => admitUsage(orgId, workspaceId));
+      await scope(() => finalizeUsage({ id, row, charge }));
+      await expect(
+        scope(() =>
+          voidUsage({ id, orgId, workspaceId, reason: "provider_call_failed" }),
+        ),
+      ).resolves.toBe(false);
+      const [entry] = await withSystemDb((tx) =>
+        tx
+          .select()
+          .from(schema.usageOutbox)
+          .where(eq(schema.usageOutbox.id, id)),
+      );
+      expect(entry?.payload).toMatchObject(row);
+    });
+    it("sweeps delivered admissions past the retention window and keeps the rest", async () => {
+      const retained = await scope(() => admitUsage(orgId, workspaceId));
+      const expired = await scope(() => admitUsage(orgId, workspaceId));
+      const dayMs = 86_400_000;
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.usageOutbox)
+          .set({ deliveredAt: new Date(), payload: null, charge: null })
+          .where(eq(schema.usageOutbox.id, retained)),
+      );
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.usageOutbox)
+          .set({
+            deliveredAt: new Date(
+              Date.now() - (USAGE_OUTBOX_RETENTION_DAYS + 1) * dayMs,
+            ),
+            payload: null,
+            charge: null,
+          })
+          .where(eq(schema.usageOutbox.id, expired)),
+      );
+      const [privilege] = (await withSystemDb((tx) =>
+        tx.execute(
+          sql`select has_table_privilege(current_user, 'billing.usage_outbox', 'DELETE') as ok`,
+        ),
+      )) as unknown as Array<{ ok: boolean }>;
+      const result = await deliverUsageOutbox();
+      const ids = (await state()).entries.map((entry) => entry.id);
+      expect(ids).toContain(retained);
+      if (privilege?.ok === true) {
+        expect(result.swept).toBeGreaterThanOrEqual(1);
+        expect(ids).not.toContain(expired);
+      } else {
+        // The grant is missing on this database: the pass reports once and
+        // deletes nothing rather than failing every minute.
+        expect(result.swept).toBe(0);
+        expect(ids).toContain(expired);
+      }
     });
   },
 );

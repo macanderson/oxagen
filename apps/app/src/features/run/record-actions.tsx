@@ -281,13 +281,18 @@ function ExportStatus({
     (status === null ||
       status.status === "queued" ||
       status.status === "building");
+  // "Check again" is offered where a later read can answer differently: a
+  // stalled or ready export, or a read the control plane could not serve. A
+  // refusal on the export itself (not found, denied, waiting on approval)
+  // would get the same answer again, so the button is withheld.
+  const retryable = refusal === null || refusal.reason === "unavailable";
   return (
     <div data-testid="export-status" className="flex flex-col gap-3">
       {body}
       {stalled && pending ? (
         <p data-testid="export-stalled">{t("stalled")}</p>
       ) : null}
-      {stalled || status?.status === "ready" ? (
+      {(stalled || status?.status === "ready") && retryable ? (
         <button
           type="button"
           data-testid="export-check-again"

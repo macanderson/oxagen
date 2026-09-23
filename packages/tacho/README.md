@@ -116,7 +116,7 @@ still one edit; it is no longer a silent one.
 ### The credential seam: the harness holds a run token
 
 By default `tacho enroll` also takes the vendor key out of the harness and
-gives the harness a **run token** instead (ADR-138). It seals the key first
+gives the harness a **run token** instead (ADR-143). It seals the key first
 and edits the file second, so a crash between the two leaves the key where it
 was. The key is sealed in
 `credentials.json` under `TACHO_HOME`, AES-256-GCM under `credentials.key`

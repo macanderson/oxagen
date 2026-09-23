@@ -6,9 +6,10 @@ import { logger } from "./logger";
 /**
  * The workspace's policy for wrapped-harness sessions, as a person reads it.
  *
- * The same row `unsignedBundle` signs into the bundle's `budget` and `models`
- * clauses, so what this returns is what a machine will actually apply — minus
- * the per-host reach, which only the write reports.
+ * Nothing applies this row yet. `unsignedBundle` (`lib/tacho-host.ts`) signs
+ * no `models` clause, and the bundle's budget comes from the agent's mandate,
+ * not from here. What this returns is the decision the workspace recorded,
+ * and the per-host reach is reported by the write alone.
  */
 export const tachoSessionPolicyReadHandler: CapabilityHandler<
   typeof tachoSessionPolicyRead

@@ -32,7 +32,7 @@ import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeForm } from "@/ui/navigation";
 import { type CreditTopupState, purchaseCredits } from "./actions";
-import { ReadFailure } from "./read-failure";
+import { BillingReadFailure } from "./read-failure";
 import { Fact, Facts, Section } from "./section";
 
 /** One dollar in micros; a preset's face value is that times its dollars (INV-09). */
@@ -153,7 +153,7 @@ export function UsageCreditsSection({
   if (!credits.ok) {
     return (
       <Section id="billing-usage-credits" title={title}>
-        <ReadFailure read={credits} section={title} />
+        <BillingReadFailure read={credits} section={title} />
       </Section>
     );
   }

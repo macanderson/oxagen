@@ -13,7 +13,10 @@ import { createProposal } from "./context.proposal.shared";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 
 export function createProposeRecordHandler(
-  deps: Pick<SteeringDeps, "store">,
+  deps: Pick<SteeringDeps, "store"> & {
+    /** Refuse a lineage that already has a proposal (a clone's row is new by definition). */
+    createOnly?: boolean;
+  },
 ): CapabilityHandler<typeof contextProposalCreate> {
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);
@@ -21,18 +24,23 @@ export function createProposeRecordHandler(
       { ...ctx, userId: actingUserId },
       { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
     );
-    const row = await createProposal(deps.store, ctx, {
-      lineageId: input.record.lineageId,
-      title: input.record.title,
-      kind: input.record.kind,
-      force: input.record.force,
-      constraintEffect: input.record.constraintEffect ?? null,
-      sharingScope: input.record.sharingScope,
-      statement: input.record.statement,
-      rationale: input.rationale,
-      source: input.source,
-      support: input.support,
-    });
+    const row = await createProposal(
+      deps.store,
+      ctx,
+      {
+        lineageId: input.record.lineageId,
+        title: input.record.title,
+        kind: input.record.kind,
+        force: input.record.force,
+        constraintEffect: input.record.constraintEffect ?? null,
+        sharingScope: input.record.sharingScope,
+        statement: input.record.statement,
+        rationale: input.rationale,
+        source: input.source,
+        support: input.support,
+      },
+      deps.createOnly ? { createOnly: true } : undefined,
+    );
     return {
       proposalId: row.publicId,
       lineageId: row.lineageId,

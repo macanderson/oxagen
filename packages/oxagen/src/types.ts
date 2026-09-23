@@ -68,6 +68,11 @@ export type CapabilityLayer =
   | "schema"
   | "api"
   | "mcp"
+  // "cli" — a command in apps/cli invokes the capability. check_manifest
+  // proves it by a dedicated command file, an import of the contract, or the
+  // registered name in a command file (cliLayerSatisfied), so the layer can
+  // be declared wherever surfaces[] carries "cli".
+  | "cli"
   | "unit"
   | "e2e"
   | "docs"

@@ -236,7 +236,7 @@ describe("header", () => {
     expect(when.getByText("Marcus Bell")).toBeTruthy();
     // The id is a key, not a label: it is in the hover card, never in the line.
     expect(when.queryByText("prn_marcusbell")).toBeNull();
-    await userEvent.hover(when.getByTestId("operator"));
+    await userEvent.hover(when.getByTestId("run-operator-name"));
     expect(when.getByTestId("operator-card")).toHaveTextContent(
       "prn_marcusbell",
     );
@@ -380,6 +380,37 @@ describe("header", () => {
     expect(screen.queryByTestId("run-paused")).toBeNull();
   });
 
+  it("reads the operator id when the record holds neither a name nor a kind", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            operatorId: "prn_unknown_kind",
+            operatorKind: null,
+            operatorName: null,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-operator-name")).toHaveTextContent(
+      /^prn_unknown_kind$/,
+    );
+    expect(screen.getByTestId("run-operator")).not.toHaveTextContent(
+      "not recorded",
+    );
+  });
+
+  it("names the operator on the started line with its hover card", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    const operator = screen.getByTestId("run-operator-name");
+    expect(operator).toHaveTextContent(/^Marcus Bell$/);
+    expect(operator.getAttribute("data-operator-id")).toBe("prn_marcusbell");
+  });
+
   it("omits witness details from the operator view", async () => {
     await renderRun({
       detail: ok(runDetail({ witnessed: true })),
@@ -500,6 +531,20 @@ describe("the outputs spine", () => {
     // column, so a phone reads the tabs first.
     expect(tabs.compareDocumentPosition(work) & 4).toBe(4);
     await expectNoAxe(container);
+  });
+
+  it("folds an outputs read that throws to the run's read error, and the page still renders", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      outputs: () => Promise.reject(new Error("outputs store down")),
+    });
+    expect(screen.getByRole("region", { name: "Transcript" })).toBeTruthy();
+    expect(
+      screen.getByText(
+        /What this run produced could not be loaded.*frame_store_unreachable/,
+      ),
+    ).toBeTruthy();
   });
 });
 

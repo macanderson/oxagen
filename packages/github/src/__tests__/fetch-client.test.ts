@@ -715,6 +715,89 @@ describe("openPullRequest", () => {
     });
   });
 
+  it("labels the pull request through the issues endpoint once it exists", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({
+          number: 7,
+          html_url: "https://github.com/acme/my-repo/pull/7",
+        }),
+      )
+      .mockResolvedValueOnce(makeResponse([{ name: "no-issue" }]));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const result = await client.openPullRequest({
+      owner: "acme",
+      repo: "my-repo",
+      title: "Labelled PR",
+      head: "feature-x",
+      base: "main",
+      labels: ["no-issue"],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe(
+      "https://api.github.com/repos/acme/my-repo/issues/7/labels",
+    );
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ labels: ["no-issue"] });
+    expect(result).toEqual({
+      number: 7,
+      htmlUrl: "https://github.com/acme/my-repo/pull/7",
+    });
+  });
+
+  it("returns the label failure instead of throwing once the pull request exists", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({
+          number: 9,
+          html_url: "https://github.com/acme/my-repo/pull/9",
+        }),
+      )
+      .mockResolvedValueOnce(makeResponse({ message: "Forbidden" }, 403));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const result = await client.openPullRequest({
+      owner: "acme",
+      repo: "my-repo",
+      title: "Labelled PR",
+      head: "feature-x",
+      base: "main",
+      labels: ["no-issue"],
+    });
+
+    expect(result.number).toBe(9);
+    expect(result.labelError).toContain("403");
+  });
+
+  it("skips the labels call when none are given", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        number: 8,
+        html_url: "https://github.com/acme/my-repo/pull/8",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    await client.openPullRequest({
+      owner: "acme",
+      repo: "my-repo",
+      title: "Unlabelled PR",
+      head: "feature-x",
+      base: "main",
+      labels: [],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("omits body and draft when not provided", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       makeResponse({

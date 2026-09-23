@@ -7,6 +7,12 @@ existing ledger run and attempt. It creates no run, attempt, or process.
 An organization Owner or Admin, or workspace Owner or Member, may issue it.
 Machine credentials cannot issue another credential.
 
+The role gate is the whole check. A V2 run row records the operator who
+delegated it and the agent principal acting for them, but issuance does not
+compare the caller to either, so any workspace Member can mint a credential
+for any unsealed attempt in the workspace. Narrowing issuance to the run's
+own principals is a follow-up.
+
 The strict input contains `runId` (`arun_...`) and `attemptId` (`arat_...`).
 The output contains `token`, shown once, and `expiresAt`. The credential is
 stored as a SHA-256 hash in `auth.api_keys`. Its server-authored scope binds

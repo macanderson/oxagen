@@ -64,7 +64,7 @@ contains "$PIPE" "  migration-gate:" "pipeline.yml defines a migration-gate job"
 # The one line that makes every other line in this change matter. Without it
 # the gate still runs, still goes red, and still ships the deploy anyway.
 
-contains "$PIPE" "needs: [checks, test, migration-gate]" \
+contains "$PIPE" "needs: [checks, test, migration-gate, staging]" \
   "deploy-node waits on migration-gate — this is the ordering guarantee itself"
 
 # --- the gate asks all three stores ----------------------------------------
@@ -88,10 +88,10 @@ done
 
 # --- the gate never applies ------------------------------------------------
 #
-# The rule it must not break, stated in CLAUDE.md: "Apply production migrations
-# through the manual db-migrate.yml and store-migrate.yml workflows. Deployment
-# does not apply them." #3653 is the issue filed when a generated workflow broke
-# that rule. A gate that grew an apply would be the same mistake wearing a name
+# The rule it must not break, stated in CLAUDE.md: production Postgres
+# migrations are applied by hand with run-db-migrations.sh, the stores through
+# store-migrate.yml, and "Deployment applies none of them." #3653 is the issue
+# filed when a generated workflow broke that rule. A gate that grew an apply would be the same mistake wearing a name
 # nobody would think to check.
 #
 # Scoped to the gate's own YAML block, because the file's prose discusses
@@ -120,7 +120,11 @@ else
       fail "the gate runs 'migrate apply' — deployment must not apply migrations (CLAUDE.md, #3653)" ;;
     *) pass ;;
   esac
-  case "$GATE" in
+  # Judged on the lines that run something. The blocked-deploy summary the
+  # gate writes names the apply command for the operator to run by hand, and
+  # an `echo` of that command applies nothing.
+  GATE_COMMANDS=$(printf '%s\n' "$GATE" | awk '$1 != "echo"')
+  case "$GATE_COMMANDS" in
     *"--apply"*)
       fail "the gate passes --apply — deployment must not apply migrations (CLAUDE.md, #3653)" ;;
     *) pass ;;
@@ -144,7 +148,9 @@ else
 
   # A blocked deploy has to tell its reader what to do next, or the gate is an
   # obstacle rather than a control.
-  contains "$GATE" "DB Migrate (manual)" "the failure names the workflow that applies Postgres"
+  contains "$GATE" "run-db-migrations.sh packages/database --apply" \
+    "the failure names the script that applies Postgres"
+  contains "$GATE" "DB Migrate (manual)" "the failure names the dispatch that runs the same script"
   contains "$GATE" "Store Migrate (manual)" "the failure names the workflow that applies the stores"
 fi
 

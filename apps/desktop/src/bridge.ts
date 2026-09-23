@@ -347,6 +347,15 @@ export function parseConnect(result: RunResult): ConnectResult {
   };
 }
 
+/**
+ * One headless agent turn plus the wait for its chain to seal. Generous, and
+ * bounded: with no bound at all a harness that hung left the Connect button
+ * spinning for as long as the app stayed open, with nothing to click and no
+ * reason given. `tacho verify` gives up well inside this on its own, so
+ * reaching it means the harness never returned.
+ */
+const CONNECT_TIMEOUT_MS = 240_000;
+
 export async function connectRun(
   harness: Harness,
   onLine?: (line: string, stream: "stdout" | "stderr") => void,
@@ -355,6 +364,7 @@ export async function connectRun(
     "tacho",
     ["verify", "--harness", harness, "--json"],
     onLine,
+    { timeoutMs: CONNECT_TIMEOUT_MS },
   );
   return parseConnect(result);
 }

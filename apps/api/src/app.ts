@@ -108,6 +108,7 @@ import { promptSettingsReadRoute } from "./routes/v1/prompt.settings.read";
 import { promptSettingsWriteRoute } from "./routes/v1/prompt.settings.write";
 import { orgDataPlaneRoute } from "./routes/v1/org.data_plane";
 import { orgModelCredentialRoute } from "./routes/v1/org.model_credential";
+import { orgSsoRoute } from "./routes/v1/org.sso";
 import { orgSettingsReadRoute } from "./routes/v1/org.settings.read";
 import { orgSettingsWriteRoute } from "./routes/v1/org.settings.write";
 import { workspaceSettingsReadRoute } from "./routes/v1/workspace.settings.read";
@@ -388,6 +389,26 @@ app.route("/v1/cms", cmsRoute);
 // auditor fetches the bundle with the link alone. The signed, expiring token
 // in the query is the boundary. Mounted before the auth-gated /v1 groups for
 // the same reason as /v1/auth/cli above.
+//
+// The IP-keyed pre-auth ceiling sits above the mount because Hono runs
+// middleware in registration order, and a limiter registered after the route
+// would not wrap it. IP only: the URL carries no Authorization header, so a
+// credential bucket would pool every caller into one counter. `methods: "all"`
+// because the route is a GET and the limiter counts POST alone by default.
+// Each hit streams a whole bundle, so the ceiling is well under the ingest
+// one; an attributable caller gets 300 downloads a minute, and an
+// unattributable one skips the counter rather than sharing a bucket, the same
+// rule as every other pre-auth mount.
+app.use(
+  "/v1/run-exports/download",
+  distributedRateLimiter({
+    keyPrefix: "run-export-preauth-ip",
+    max: 300,
+    bucketKey: trustedClientIpBucketKey,
+    methods: "all",
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
 app.route("/v1/run-exports/download", runExportDownloadRoute);
 
 // Shared pre-authentication ceilings for credential stuffing on Stella intake.
@@ -908,6 +929,7 @@ orgScoped.route("/workspace/prompt-settings", promptSettingsWriteRoute);
 orgScoped.route("/org/settings", orgSettingsReadRoute);
 orgScoped.route("/org/data-plane", orgDataPlaneRoute);
 orgScoped.route("/org/model-credential", orgModelCredentialRoute);
+orgScoped.route("/org/sso", orgSsoRoute);
 orgScoped.route("/org/settings", orgSettingsWriteRoute);
 orgScoped.route("/workspace/settings", workspaceSettingsReadRoute);
 orgScoped.route("/workspace/settings", workspaceSettingsWriteRoute);

@@ -14,6 +14,7 @@ import type { RunTotalsRecord } from "./cost-rollup";
 import {
   type IncompleteCostRun,
   listRunsWithIncompleteCost,
+  listRunsWithUnassignedCostCenter,
   upsertRunTotals,
 } from "./cost-rollup-store";
 
@@ -371,6 +372,260 @@ describe.skipIf(!enabled)(
       );
       expect(row?.costBasis).toBe(null);
       expect(row?.modelCalls).toBe(3);
+    });
+
+    it("keeps a run's first cost center on a later rebuild and fills a null (ADR-142)", async () => {
+      const read = async (id: string) =>
+        (
+          await withSystemDb((tx) =>
+            tx.select().from(totals).where(eq(totals.runId, id)).limit(1),
+          )
+        )[0]?.costCenter;
+      // A closed month stays where finance booked it: a rebuild after the
+      // agent moved to MKT-2002 leaves the run on ENG-1001.
+      const kept = runId("keepcc");
+      await upsertRunTotals(
+        { ...priced, runId: kept, costCenter: "ENG-1001" },
+        new Date(),
+      );
+      await upsertRunTotals(
+        { ...priced, runId: kept, costCenter: "MKT-2002" },
+        new Date(),
+      );
+      expect(await read(kept)).toBe("ENG-1001");
+      // A run first rolled up with no label takes one when a rebuild finds it.
+      const filled = runId("fillcc");
+      await upsertRunTotals({ ...priced, runId: filled }, new Date());
+      await upsertRunTotals(
+        { ...priced, runId: filled, costCenter: "ENG-1001" },
+        new Date(),
+      );
+      expect(await read(filled)).toBe("ENG-1001");
+    });
+  },
+);
+
+// The backfill's lister (ADR-142): a run charged to no cost center is listed
+// once its agent, or its workspace, names a live label, and not otherwise.
+// The fixture is one organization with two workspaces, `core` charged to
+// MKT-2002 and `lab` charged to nothing, and two agents in `core`: `alpha`
+// charged to ENG-1001 through its principal, `beta` charged to nothing.
+describe.skipIf(!enabled)(
+  "listRunsWithUnassignedCostCenter against Postgres",
+  () => {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const orgId = crypto.randomUUID();
+    const runId = (name: string) => `tse_ccbf_${tag}_${name}`;
+    const namespace = () => crypto.randomUUID().replace(/-/g, "").slice(0, 6);
+    let core = "";
+    let lab = "";
+    let alphaPrincipal = "";
+    let betaPrincipal = "";
+
+    const row = (
+      name: string,
+      at: string,
+      over: {
+        workspaceId: string;
+        agentPrincipalId: string | null;
+        costCenter?: string | null;
+      },
+    ) => ({
+      orgId,
+      workspaceId: over.workspaceId,
+      runId: runId(name),
+      runSource: "tacho",
+      agentPrincipalId: over.agentPrincipalId,
+      costCenter: over.costCenter ?? null,
+      startedAt: new Date(at),
+      steps: 1,
+      modelCalls: 1,
+      toolCalls: 0,
+      tokens: {},
+      costMicros: 10n,
+      costBasis: "gateway_observed",
+      breakdown: { models: [], tools: [] },
+      rolledUpAt: new Date("2026-09-15T00:00:00.000Z"),
+    });
+
+    beforeAll(async () => {
+      await withSystemDb(async (tx) => {
+        await tx.insert(schema.organizations).values({
+          id: orgId,
+          name: `Cost center backfill ${tag}`,
+          slug: `ccbf-${tag}`,
+          namespace: namespace(),
+          planType: "free",
+          status: "active",
+        });
+        const [ws1] = await tx
+          .insert(schema.workspaces)
+          .values({
+            orgId,
+            name: "core",
+            slug: `core-${tag}`,
+            namespace: namespace(),
+            costCenter: "MKT-2002",
+          })
+          .returning({ id: schema.workspaces.id });
+        const [ws2] = await tx
+          .insert(schema.workspaces)
+          .values({
+            orgId,
+            name: "lab",
+            slug: `lab-${tag}`,
+            namespace: namespace(),
+          })
+          .returning({ id: schema.workspaces.id });
+        core = ws1!.id;
+        lab = ws2!.id;
+        const principals = await tx
+          .insert(schema.principals)
+          .values([
+            { orgId, workspaceId: core, kind: "agent", displayName: "alpha" },
+            { orgId, workspaceId: core, kind: "agent", displayName: "beta" },
+          ])
+          .returning({
+            id: schema.principals.id,
+            displayName: schema.principals.displayName,
+          });
+        alphaPrincipal = principals.find((p) => p.displayName === "alpha")!.id;
+        betaPrincipal = principals.find((p) => p.displayName === "beta")!.id;
+        await tx.insert(schema.agents).values([
+          {
+            orgId,
+            workspaceId: core,
+            slug: "alpha",
+            name: "alpha",
+            agentType: "custom",
+            principalId: alphaPrincipal,
+            costCenter: "ENG-1001",
+          },
+          {
+            orgId,
+            workspaceId: core,
+            slug: "beta",
+            name: "beta",
+            agentType: "custom",
+            principalId: betaPrincipal,
+          },
+        ]);
+        await tx.insert(schema.costCenters).values([
+          { orgId, label: "ENG-1001" },
+          { orgId, label: "MKT-2002" },
+          // A deleted label claims no rollup, so a run under it stays out.
+          {
+            orgId,
+            label: "OLD-9",
+            deletedAt: new Date("2026-09-01T00:00:00.000Z"),
+          },
+        ]);
+        await tx.insert(totals).values([
+          // alpha's label applies.
+          row("alpha1", "2001-02-01T00:00:00.000Z", {
+            workspaceId: core,
+            agentPrincipalId: alphaPrincipal,
+          }),
+          // beta names none; core's label applies.
+          row("beta1", "2001-02-01T00:00:01.000Z", {
+            workspaceId: core,
+            agentPrincipalId: betaPrincipal,
+          }),
+          // No agent row at all; core's label still applies.
+          row("noagent", "2001-02-01T00:00:02.000Z", {
+            workspaceId: core,
+            agentPrincipalId: null,
+          }),
+          // lab names none and neither does its run: stays unassigned.
+          row("lab1", "2001-02-01T00:00:03.000Z", {
+            workspaceId: lab,
+            agentPrincipalId: null,
+          }),
+          // Already charged: not the backfill's to move.
+          row("charged", "2001-02-01T00:00:04.000Z", {
+            workspaceId: core,
+            agentPrincipalId: alphaPrincipal,
+            costCenter: "ENG-1001",
+          }),
+        ]);
+      });
+    });
+
+    afterAll(async () => {
+      await withSystemDb(async (tx) => {
+        await tx.delete(totals).where(eq(totals.orgId, orgId));
+        await tx.delete(schema.agents).where(eq(schema.agents.orgId, orgId));
+        await tx
+          .delete(schema.principals)
+          .where(eq(schema.principals.orgId, orgId));
+        await tx
+          .delete(schema.costCenters)
+          .where(eq(schema.costCenters.orgId, orgId));
+        await tx
+          .delete(schema.workspaces)
+          .where(eq(schema.workspaces.orgId, orgId));
+        await tx
+          .delete(schema.organizations)
+          .where(eq(schema.organizations.id, orgId));
+      });
+      await closeDatabase();
+    });
+
+    it("lists the unassigned runs a live label now claims, oldest first, and no other", async () => {
+      const page = await listRunsWithUnassignedCostCenter({
+        limit: 10,
+        orgId,
+      });
+      expect(page.map((r) => r.runId)).toEqual([
+        runId("alpha1"),
+        runId("beta1"),
+        runId("noagent"),
+      ]);
+      expect(page[0]).toMatchObject({ orgId, workspaceId: core });
+    });
+
+    it("pages through the list with the cursor and ends", async () => {
+      const first = await listRunsWithUnassignedCostCenter({
+        limit: 2,
+        orgId,
+      });
+      expect(first).toHaveLength(2);
+      const second = await listRunsWithUnassignedCostCenter({
+        limit: 2,
+        orgId,
+        after: first[1],
+      });
+      expect(second.map((r) => r.runId)).toEqual([runId("noagent")]);
+      const third = await listRunsWithUnassignedCostCenter({
+        limit: 2,
+        orgId,
+        after: second[0],
+      });
+      expect(third).toEqual([]);
+    });
+
+    it("leaves a run out once its label is cleared or deleted (negative)", async () => {
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.workspaces)
+          .set({ costCenter: "OLD-9" })
+          .where(eq(schema.workspaces.id, core)),
+      );
+      try {
+        const page = await listRunsWithUnassignedCostCenter({
+          limit: 10,
+          orgId,
+        });
+        // alpha still resolves through its own label; the workspace's is dead.
+        expect(page.map((r) => r.runId)).toEqual([runId("alpha1")]);
+      } finally {
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.workspaces)
+            .set({ costCenter: "MKT-2002" })
+            .where(eq(schema.workspaces.id, core)),
+        );
+      }
     });
   },
 );

@@ -20,7 +20,7 @@ export type PageHeaderProps = {
   title: string;
   /** Sets the h1 in the mono face, for a title that is an identifier. */
   mono?: boolean;
-  /** The scope line: `Workspace · <name>` on a workspace page, `Organization` on an organization page. */
+  /** The scope line: `Workspace <name>` on a workspace page, `Organization <name>` on an organization page. */
   eyebrow?: ReactNode;
   description?: ReactNode;
   /** Badges and facts that sit under the title (status, tier, owner). */

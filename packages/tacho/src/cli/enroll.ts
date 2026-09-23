@@ -15,6 +15,7 @@ import {
   hooksShapeProblem,
   mergeCodexHooks,
 } from "../host/codex-writer";
+import { trustCodexHooks } from "../host/codex-hook-trust";
 import { ControlError } from "../host/control-client";
 import {
   absoluteHookCommandProblem,
@@ -25,10 +26,7 @@ import {
 import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
 import { acquireInstallLock } from "../host/install-lock";
-import {
-  type ModelBaseUrlHarness,
-  modelBaseUrlFile,
-} from "../host/model-base-url";
+import { modelBaseUrlFile } from "../host/model-base-url";
 import { mcpConfigShapeProblem } from "../host/mcp-config-writer";
 import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
@@ -47,6 +45,7 @@ import {
 import { toProtocolTimestamp } from "../timestamp";
 import {
   enrollmentResponseSchema,
+  isModelRoutedHarness,
   TACHO_BUNDLE_FEATURES,
   TACHO_HARNESS_LABELS,
   type TachoHarness,
@@ -87,7 +86,7 @@ export interface EnrollOptions extends CredentialOptions {
   /** Harnesses to hook (default: `["claude-code"]`). */
   harnesses?: TachoHarness[];
   /**
-   * How the routed harnesses' model credentials are held (ADR-138).
+   * How the routed harnesses' model credentials are held (ADR-143).
    * `brokered` (the default) takes each vendor key into the gateway's
    * custody and leaves the harness a run token; `passthrough` leaves the
    * key with the harness and puts back any the gateway holds.
@@ -544,7 +543,7 @@ export async function enrollLocked(
         deps,
         warnings,
       );
-      stripEnrollmentHooks(existing, deps);
+      await stripEnrollmentHooks(existing, deps);
     }
 
     step(2, `Generating the host device key at ${deps.paths.deviceKey}`);
@@ -776,7 +775,7 @@ export async function enrollLocked(
       existing.host_enrollment_id !== response.hostEnrollmentId
     ) {
       try {
-        stripEnrollmentHooks(existing, deps);
+        await stripEnrollmentHooks(existing, deps);
       } catch (error) {
         warnings.push(
           `the previous enrollment's hooks could not be removed: ${error instanceof Error ? error.message : String(error)}`,
@@ -1001,6 +1000,33 @@ export async function enrollLocked(
       );
       deps.out(JSON.stringify(managedSettings, null, 2));
     }
+    // Codex runs no hook whose definition is not recorded as trusted in its
+    // own config, and it records nothing on its own outside the interactive
+    // TUI. Writing `hooks.json` and stopping there is what made an enrolled
+    // machine report every Codex event as installed while none of them ever
+    // fired. Trust is bound to the hook's contents, so this runs after every
+    // write and not only after one that changed the file: a rewritten
+    // `hooks.json` invalidates the records the last run made.
+    if (harnesses.includes("codex") && !unhooked.includes("codex")) {
+      const trust = await trustCodexHooks({
+        appServer: deps.codexAppServer,
+        hooksPath: deps.paths.codexHooks,
+        hookCommand: host.hook_command,
+        enrollmentId: host.host_enrollment_id,
+      });
+      if (trust.ok) {
+        deps.out(
+          trust.recorded.length === 0
+            ? `      all ${trust.found} hooks already trusted by Codex`
+            : `      ${trust.recorded.length} of ${trust.found} hooks recorded as trusted in Codex's config (Codex skips an untrusted hook)`,
+        );
+      } else {
+        warnings.push(
+          `Codex's hook installation is not ready: ${trust.problem ?? "unknown reason"}. Open Codex and accept the hooks, or re-run \`tacho enroll\`.`,
+        );
+        deps.out("      needs attention (see the warning below)");
+      }
+    }
   }
 
   step(6, "Verifying");
@@ -1070,12 +1096,7 @@ export async function enrollLocked(
     // is listening and on which port, and never before: a base URL that
     // names a dead port stops the agent making any model call, which is a
     // worse machine than one whose model calls are not routed.
-    const routed = harnesses.filter(
-      (harness): harness is ModelBaseUrlHarness =>
-        harness === "claude-code" ||
-        harness === "codex" ||
-        harness === "stella",
-    );
+    const routed = harnesses.filter(isModelRoutedHarness);
     const stellaHome = dirname(deps.paths.stellaToml);
     if (
       deps.modelBaseUrls !== undefined &&
@@ -1143,7 +1164,7 @@ export async function enrollLocked(
             `model calls are not routed through Oxagen: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
-        // The credential seam (ADR-138). Only once the base URL points at a
+        // The credential seam (ADR-143). Only once the base URL points at a
         // listening proxy: a harness holding a run token and no route to
         // the gateway that honours it has no credential at all.
         if (routedOk && writable.length > 0) {

@@ -25,6 +25,8 @@ import { oxagenConfigPath, tachoPaths } from "../host/paths";
 import type { Exec, ServiceManager, ServiceSpec } from "../host/service";
 import {
   bundleSigner,
+  type FakeCodexAppServer,
+  fakeCodexAppServer,
   scratchPaths,
   TEST_ENROLLMENT,
   testHostFile,
@@ -34,7 +36,12 @@ import { Wal } from "../host/wal";
 import { minimalSession } from "../test-helpers";
 import { TACHO_TIER_SUMMARY } from "../wire";
 import type { EnrollmentResponse } from "../wire";
-import { CODEX_HOOK_EVENTS, codexHookPresence } from "../host/codex-writer";
+import { trustCodexHooks } from "../host/codex-hook-trust";
+import {
+  CODEX_HOOK_EVENTS,
+  codexHookPresence,
+  mergeCodexHooks,
+} from "../host/codex-writer";
 import { CURSOR_HOOK_EVENTS } from "../claude-code/cursor-adapter";
 import { cursorHookPresence } from "../host/cursor-writer";
 import {
@@ -82,6 +89,7 @@ import {
   credentialStatus,
   describeHarness,
   parseCredentialMode,
+  parseIssueAnswer,
   restoreCredentials,
 } from "./credential";
 import { detect } from "./detect";
@@ -195,11 +203,13 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
   errors: string[];
   service: ReturnType<typeof fakeService>;
   requests: Array<{ url: string; body: unknown }>;
+  codexServer: FakeCodexAppServer;
 } {
   const paths = scratchPaths();
   const lines: string[] = [];
   const errors: string[] = [];
   const service = fakeService();
+  const codexServer = fakeCodexAppServer(paths.codexHooks);
   const requests: Array<{ url: string; body: unknown }> = [];
   const signer = bundleSigner();
   let healthy = false;
@@ -362,9 +372,39 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
     randomToken: () => "local-token-0123456789abcdef",
     sleep: async () => undefined,
     wrapperVersion: "2.1.1",
+    // The turn `verify` drives goes through the long-budget port; the short
+    // one is for `command -v` and `--version`. Both are the same fake here.
+    execLong: (command, args) => base.exec(command, args),
+    codexAppServer: codexServer.server,
     ...overrides,
   };
-  return { ...base, lines, errors, service, requests };
+  return { ...base, lines, errors, service, requests, codexServer };
+}
+
+/**
+ * Put Tacho's Codex hooks on disk and record their trust, which is what an
+ * enrolled machine looks like to `verify`. Codex runs no hook it has not
+ * recorded a hash for, so a test that writes only the file is testing an
+ * untrusted machine whatever it meant to test.
+ */
+async function seedTrustedCodexHooks(
+  d: ReturnType<typeof deps>,
+  enrollmentId: string = TEST_ENROLLMENT,
+): Promise<void> {
+  const merged = mergeCodexHooks(d.readCodexHooks(), {
+    enrollmentId,
+    hookCommand: "node /opt/tacho/tacho-hook.mjs",
+    port: 47123,
+    localToken: "local-token-0123456789abcdef",
+  });
+  d.writeCodexHooks(merged.settings);
+  const trust = await trustCodexHooks({
+    appServer: d.codexAppServer,
+    hooksPath: d.paths.codexHooks,
+    hookCommand: d.runtime.hookCommand,
+    enrollmentId,
+  });
+  if (!trust.ok) throw new Error(trust.problem ?? "could not seed trust");
 }
 
 describe("credentials", () => {
@@ -1399,8 +1439,13 @@ describe("enroll → status → unenroll", () => {
     expect(d.requests).toEqual([]);
     expect(readHostFile(d.paths.hostFile)?.revoked_at).toBe(marked);
     // With a token the pending revoke is made, and only then does host.json go.
+    // A deferred session end that never reached the WAL holds run content,
+    // so the purge takes it with the WAL.
+    writeSensitiveFileAtomic(d.paths.pendingEnds, "[]");
     const second = await unenroll({ token: "t", purge: true }, d);
     expect(second.revoked).toBe(true);
+    expect(existsSync(d.paths.pendingEnds)).toBe(false);
+    expect(d.lines.join("\n")).toContain("pending session ends");
     expect(d.requests.map((r) => r.url)).toEqual([
       "https://api.example.test/v1/acme/core/tacho/enrollments/revoke",
     ]);
@@ -2177,6 +2222,7 @@ describe("export and verify", () => {
       d.paths.hostFile,
       testHostFile(signer, signer.sign(unsignedBundle())),
     );
+    await seedTrustedCodexHooks(d);
     const result = await verify({ harness: "codex" }, d);
     expect(result.ok).toBe(true);
     expect(result.sessionId).toBe("sess-verify");
@@ -2208,9 +2254,68 @@ describe("export and verify", () => {
       quiet.paths.hostFile,
       testHostFile(signer, signer.sign(unsignedBundle())),
     );
+    await seedTrustedCodexHooks(quiet);
     const missed = await verify({ harness: "codex", timeoutMs: 10_000 }, quiet);
     expect(missed.ok).toBe(false);
     expect(missed.detail).toContain("never saw the session");
+  });
+
+  it("verify names untrusted Codex hooks instead of driving a turn that proves nothing", async () => {
+    const signer = bundleSigner();
+    const calls: string[][] = [];
+    const d = deps({
+      exec: (command, args) => {
+        calls.push([command, ...args]);
+        return { status: 0, stdout: "OK\n", stderr: "" };
+      },
+    });
+    d.service.running = true;
+    writeHostFile(
+      d.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+
+    // Hooks on disk, nothing recorded in Codex's config: the shape of the
+    // machine that reported a complete enrollment and never fired a hook.
+    d.writeCodexHooks(
+      mergeCodexHooks(d.readCodexHooks(), {
+        enrollmentId: TEST_ENROLLMENT,
+        hookCommand: "node /opt/tacho/tacho-hook.mjs",
+        port: 47123,
+        localToken: "local-token-0123456789abcdef",
+      }).settings,
+    );
+    const untrusted = await verify({ harness: "codex" }, d);
+    expect(untrusted.ok).toBe(false);
+    expect(untrusted.detail).toContain("skips a hook it does not trust");
+    // Short-circuited: no point spending a turn to fail the way a missing
+    // hook fails, and the turn would have hidden the reason.
+    expect(calls).toEqual([]);
+
+    // Nothing on disk at all is a different sentence, because the fix is a
+    // different one.
+    const bare = deps();
+    bare.service.running = true;
+    writeHostFile(
+      bare.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    expect((await verify({ harness: "codex" }, bare)).detail).toContain(
+      "not reading the hooks file Tacho wrote",
+    );
+
+    // A Codex that cannot be driven at all must not block the check: it is
+    // read-only advice, and the turn itself is still evidence.
+    const mute = deps();
+    mute.service.running = true;
+    mute.codexServer.breakWith("codex app-server exited");
+    writeHostFile(
+      mute.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    expect((await verify({ harness: "codex" }, mute)).detail).not.toContain(
+      "does not trust",
+    );
   });
 
   it("detect reports installed harnesses and which are enrolled", () => {
@@ -2998,7 +3103,7 @@ describe("cursor", () => {
   });
 });
 
-describe("brokered credentials (ADR-138)", () => {
+describe("brokered credentials (ADR-143)", () => {
   const ANTHROPIC_KEY = "sk-ant-api03-FAKE-ENROLL-CUSTODY-0001";
   const OPENAI_KEY = "sk-proj-FAKE-ENROLL-CUSTODY-0002";
 
@@ -3680,6 +3785,28 @@ describe("brokered credentials (ADR-138)", () => {
     expect(
       describeHarness({ ...base, harness: "claude-code", brokered: false }),
     ).toContain("holds its own credential");
+    expect(
+      describeHarness({
+        ...base,
+        harness: "claude-code",
+        brokered: false,
+        reason: "two_credentials",
+      }),
+    ).toContain("sets both ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN");
+    // The one parser both `credential issue` and enroll's static mint read.
+    expect(
+      parseIssueAnswer({ status: 200, body: '{"token":"oxrt_x"}' }),
+    ).toEqual({ token: "oxrt_x", detail: "issued by tachod" });
+    expect(parseIssueAnswer({ status: 200, body: "{}" }).detail).toBe(
+      "tachod answered without a run token",
+    );
+    expect(
+      parseIssueAnswer({ status: 403, body: '{"error":"host is paused"}' })
+        .detail,
+    ).toBe("host is paused");
+    expect(parseIssueAnswer({ status: 500, body: "nope" }).detail).toBe(
+      "tachod refused to issue a run token (500)",
+    );
 
     // Status on a machine with nothing in custody and no contract wired.
     const d = brokeredDeps();

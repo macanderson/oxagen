@@ -854,6 +854,89 @@ describe("shipper", () => {
     expect(logs.some((l) => l.includes("previous enrollment"))).toBe(true);
   });
 
+  it("sets aside a session the control plane holds under another host and ships the rest", async () => {
+    // A re-enrollment mid-session: the live session's new events carry this
+    // host's id, but the control plane recorded the session under the old
+    // host and refuses any batch holding it with 403. Retrying stopped every
+    // other session queued behind it.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const mine = minimalSession();
+    const spanning = minimalSession().map((e) => ({
+      ...e,
+      session_uuid: `${e.session_uuid}-spanning`,
+    })) as typeof mine;
+    wal.append(spanning);
+    wal.append(mine);
+
+    const accepted: string[] = [];
+    let calls = 0;
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          calls += 1;
+          if (batch.some((e) => e.session_uuid.endsWith("-spanning")))
+            throw new ControlError(
+              403,
+              '{"error":{"code":"forbidden","message":"Forbidden: session belongs to another host"}}',
+            );
+          accepted.push(...batch.map((e) => `${e.session_uuid}#${e.seq}`));
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+      mine[0]?.agent.host_enrollment_id,
+    );
+
+    const result = await s.drain();
+    expect(result.shipped).toBe(mine.length);
+    expect(result.quarantined).toBe(spanning.length);
+    expect(accepted).toHaveLength(mine.length);
+    expect(wal.stats().unshipped).toBe(0);
+    expect(s.lastError).toBeUndefined();
+    expect(logs.some((l) => l.includes("under another host"))).toBe(true);
+
+    // Later events of that session are set aside without being offered.
+    const before = calls;
+    const later = minimalSession().map((e) => ({
+      ...e,
+      session_uuid: spanning[0]?.session_uuid as string,
+      seq: e.seq + spanning.length,
+    })) as typeof mine;
+    wal.append(later);
+    const again = await s.drain();
+    expect(calls).toBe(before);
+    expect(again.quarantined).toBe(later.length);
+    expect(wal.stats().unshipped).toBe(0);
+  });
+
+  it("keeps retrying a 403 that is not about session ownership", async () => {
+    // A revoked or denied key is also a 403, and quarantining on it would
+    // throw away every queued event on the host.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async () => {
+          throw new ControlError(
+            403,
+            '{"error":{"code":"forbidden","message":"Forbidden"}}',
+          );
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    expect(result.quarantined).toBe(0);
+    expect(wal.stats().unshipped).toBe(events.length);
+  });
+
   it("still ships this host's own events in a batch that also held orphans", async () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
@@ -1744,7 +1827,7 @@ describe("request handler", () => {
     expect(await call("POST", "/elsewhere", "{}")).toMatchObject({
       status: 404,
     });
-    // A daemon booted without the credential seam (ADR-138) issues no run
+    // A daemon booted without the credential seam (ADR-143) issues no run
     // tokens, and says so as a 404 rather than a refusal a harness would
     // read as "the key is wrong".
     expect(

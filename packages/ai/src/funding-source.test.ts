@@ -13,6 +13,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   loadModelCredential: vi.fn(),
   loadAssistantModelKey: vi.fn(),
+  /** What `OXAGEN_MODEL_PROVIDER` names in the deployment under test. */
+  platformProvider: "openrouter" as "gateway" | "openrouter",
+}));
+
+vi.mock("./platform-provider", () => ({
+  mintedKeysServeHere: () => mocks.platformProvider === "openrouter",
 }));
 
 vi.mock("@oxagen/database/model-credential", () => ({
@@ -23,7 +29,11 @@ vi.mock("@oxagen/database/assistant-model-key", () => ({
   loadAssistantModelKey: mocks.loadAssistantModelKey,
 }));
 
-import { PLATFORM_FUNDING, resolveModelFundingSource } from "./funding-source";
+import {
+  PLATFORM_FUNDING,
+  resetMintedKeyNoticeForTests,
+  resolveModelFundingSource,
+} from "./funding-source";
 
 const ORG = "00000000-0000-4000-8000-0000000000aa";
 
@@ -51,6 +61,8 @@ const MINTED = {
 };
 
 beforeEach(() => {
+  mocks.platformProvider = "openrouter";
+  resetMintedKeyNoticeForTests();
   mocks.loadModelCredential.mockReset();
   mocks.loadModelCredential.mockResolvedValue(null);
   mocks.loadAssistantModelKey.mockReset();
@@ -143,6 +155,39 @@ describe("resolveModelFundingSource", () => {
     expect(source.modelKey?.apiKey).toBe("sk-or-v1-customer-secret");
     // Not even asked for: the brought key short-circuits the lookup.
     expect(mocks.loadAssistantModelKey).not.toHaveBeenCalled();
+  });
+
+  // ── ADR-131 §9: a minted key serves only where the platform is on OpenRouter
+
+  it("never consults the minted key on a gateway deployment, and answers the shared key", async () => {
+    // A client built on a minted key is an OpenRouter client. On a gateway
+    // deployment that would move the organisation off the gateway and out of
+    // its metering the moment OPENROUTER_MANAGEMENT_KEY was set, which the
+    // env registry says never happens by itself. The row is not even read.
+    mocks.platformProvider = "gateway";
+    mocks.loadAssistantModelKey.mockResolvedValue(MINTED);
+    const source = await resolveModelFundingSource(ORG);
+    expect(source).toBe(PLATFORM_FUNDING);
+    expect(mocks.loadAssistantModelKey).not.toHaveBeenCalled();
+  });
+
+  it("consults the minted key where the platform provider is OpenRouter", async () => {
+    mocks.platformProvider = "openrouter";
+    mocks.loadAssistantModelKey.mockResolvedValue(MINTED);
+    const source = await resolveModelFundingSource(ORG);
+    expect(source.fundedBy).toBe("platform");
+    expect(source.modelKey?.apiKey).toBe("sk-or-v1-oxagen-minted");
+    expect(mocks.loadAssistantModelKey).toHaveBeenCalledWith(ORG);
+  });
+
+  it("answers a key the customer brought on every deployment", async () => {
+    // BYOK names its own provider and the customer chose it; the platform
+    // provider switch is about which key OXAGEN pays with.
+    mocks.platformProvider = "gateway";
+    mocks.loadModelCredential.mockResolvedValue(BROUGHT);
+    const source = await resolveModelFundingSource(ORG);
+    expect(source.fundedBy).toBe("org");
+    expect(source.modelKey?.apiKey).toBe("sk-or-v1-customer-secret");
   });
 
   it("propagates a failed read rather than silently billing the platform key", async () => {

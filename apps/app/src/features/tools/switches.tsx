@@ -18,7 +18,7 @@ import type { Read } from "@/data/read";
 import type { OrgRole } from "@/server/viewer";
 import { mono, panel } from "@/ui/control-styles";
 import { Fact, Facts, Section, StateDot, useDate } from "./parts";
-import { ReadFailure } from "./read-failure";
+import { ToolsReadFailure } from "./read-failure";
 import { FlipControls } from "./switch-controls";
 import { type ToolsAt, toolsLink } from "./view";
 
@@ -197,7 +197,7 @@ export function Switches({
   const t = useTranslations("tools.switches");
   if (!read.ok) {
     return (
-      <ReadFailure
+      <ToolsReadFailure
         at={at}
         orgRole={orgRole}
         read={read}

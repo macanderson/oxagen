@@ -150,6 +150,10 @@ describe("set_governance_mode", () => {
         overrodeReview: false,
       });
       expect(out.pullRequest).toMatchObject({ reused: false });
+      expect(deps.github.pulls[0]).toMatchObject({
+        head: "oxagen/governance",
+        labels: ["no-issue"],
+      });
       // The branch, never the production branch.
       expect(deps.github.commits).toEqual([
         expect.objectContaining({ branch: "oxagen/governance" }),

@@ -278,7 +278,7 @@ CI runs lint, typecheck, unit tests, coverage, builds, contract checks, and inte
 | **Analytics** | ClickHouse | Append-only usage events → Stripe meters |
 | **Billing** | Stripe | Meters, ledgers, customer invoicing |
 | **Jobs** | Inngest | Durable workflows, retries, scheduling |
-| **Auth** | Better Auth | Passkeys, OAuth, org/workspace RBAC |
+| **Auth** | Better Auth | Email and password, Google and GitHub sign-in, TOTP two-factor, SSO over OIDC and SAML with IdP group mapping, org/workspace RBAC, database-backed rate limiting |
 | **Storage** | Vercel Blob via `@oxagen/storage` | Signed URLs, Postgres reference rows |
 | **Language** | TypeScript 6 | Strict mode, no `any` |
 | **Testing** | Vitest + Playwright | Unit + browser E2E |
@@ -418,7 +418,7 @@ when a committed store migration has not been applied.
 
 | Workflow | What it does | Safe default |
 | --- | --- | --- |
-| `db-migrate.yml` | Validates the committed Atlas migrations; for `target: production` it stops at its reachability guard, because Aurora admits 5432 from the app node only. The path that applies to production Postgres is `infra/tools/run-db-migrations.sh packages/database --apply`, run from a laptop with AWS credentials — it executes on the app node over SSM | `apply=false` (and the script without `--apply`) prints the pending list and changes nothing |
+| `db-migrate.yml` | For `target: production`, runs `infra/tools/run-db-migrations.sh packages/database` under the deploy role, which executes Atlas on the app node over SSM because Aurora admits 5432 from the app node only. The same script run from a laptop with AWS credentials, on a checkout of `origin/main`, is the other way to apply. For `target: preview`, runs Atlas on the runner against `PREVIEW_DATABASE_URL` | `apply=false` (and the script without `--apply`) prints the pending list and changes nothing |
 | `store-migrate.yml` | Applies ClickHouse and Neo4j migrations over an SSM tunnel through the app node | `apply=false` prints the pending list |
 | `store-migrate-drift.yml` | Scheduled daily (also dispatchable): reads production ClickHouse and Neo4j over the same tunnel and compares them with the committed schema; opens or closes a `store-drift` issue | read-only by construction — it never applies |
 | `stripe-sync.yml` | Reconciles Stripe products and prices with `packages/billing/src/pricing.ts` | `apply=false` is a dry run that writes nothing |
