@@ -61,21 +61,21 @@ for (const row of SIGNED_IN_ROUTES) {
       .info()
       .attach("phone", { path: phonePath, contentType: "image/png" });
     if (row.titleKey === "steering") {
-      await page.locator('[data-tab="settings"]').click();
-      await expect(page.locator('[data-tab="settings"]')).toHaveAttribute(
+      await page.locator('[data-tab="freshness"]').click();
+      await expect(page.locator('[data-tab="freshness"]')).toHaveAttribute(
         "aria-current",
         "page",
       );
-      await expect(page).toHaveURL(/tab=settings/);
+      await expect(page).toHaveURL(/\/steering\/freshness(?:\?|$)/);
       await page.setViewportSize({ width: 1280, height: 720 });
       await page.screenshot({
-        path: test.info().outputPath("settings-desktop.png"),
+        path: test.info().outputPath("freshness-desktop.png"),
         fullPage: true,
         animations: "disabled",
       });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({
-        path: test.info().outputPath("settings-phone.png"),
+        path: test.info().outputPath("freshness-phone.png"),
         fullPage: true,
         animations: "disabled",
       });
