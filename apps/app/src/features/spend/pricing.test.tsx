@@ -165,7 +165,7 @@ async function renderPricing() {
   const element = await Spend({
     ctx,
     source,
-    searchParams: { tab: "pricing" },
+    view: { tab: "pricing", drill: null, finding: null },
     today: TODAY,
   });
   return render(

@@ -156,7 +156,9 @@ const CHANGES: RepositoryChanges = {
   changes: [
     {
       proposalId: "prp_open1",
+      lineage: "ctx.scr.001-never-push-to-main",
       statement: "Never push to main",
+      why: "Main is shared and contested.",
       kind: "context_record",
       pullRequest: {
         number: 42,
@@ -171,7 +173,9 @@ const CHANGES: RepositoryChanges = {
     },
     {
       proposalId: "prp_done1",
+      lineage: "ctx.scr.002-run-tests-before-a-pr",
       statement: "Run tests before a PR",
+      why: "CI is the gate, not the first reviewer.",
       kind: "context_record",
       pullRequest: {
         number: 41,
@@ -186,6 +190,13 @@ const CHANGES: RepositoryChanges = {
     },
   ],
   open: 1,
+};
+
+/** The signed-in person the denied state names, as the route resolves them. */
+const VIEWER = {
+  name: "Mac Anderson",
+  email: "mac@acme.test",
+  role: "workspace.viewer",
 };
 
 const BOUND_SETUP: WorkspaceRepository = {
@@ -220,9 +231,10 @@ function page(
       <Repositories
         org="acme"
         ws="core-platform"
+        orgName="Acme"
         wsName="Core platform"
-        tab={tab}
-        roles={{ org: "member", workspace: "viewer" }}
+        view={{ tab, change: null }}
+        viewer={VIEWER}
       />
     </IntlProvider>,
     container ? { container } : undefined,
@@ -415,7 +427,7 @@ describe("states", () => {
     );
     expect(denied).toHaveTextContent("repository.read");
     expect(screen.getByTestId("repositories-denied-roles")).toHaveTextContent(
-      "member in the organization, viewer in this workspace",
+      `${VIEWER.name} · ${VIEWER.role}`,
     );
     expect(screen.getByTestId("repositories-back-to-fleet")).toHaveAttribute(
       "href",
@@ -1150,7 +1162,7 @@ describe("change read states", () => {
   it("shows a pending read before any change rows exist", () => {
     render(
       <IntlProvider>
-        <Changes org="acme" ws="core-platform" changes={{ kind: "loading" }} />
+        <Changes changes={{ kind: "loading" }} onOpen={() => {}} />
       </IntlProvider>,
     );
     expect(screen.getByTestId("changes-loading")).toHaveAttribute(
@@ -1166,8 +1178,7 @@ describe("change read states", () => {
     render(
       <IntlProvider>
         <Changes
-          org="acme"
-          ws="core-platform"
+          onOpen={() => {}}
           changes={{
             kind: "ready",
             value: {
