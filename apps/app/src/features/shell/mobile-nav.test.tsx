@@ -210,6 +210,7 @@ describe("thumb bar", () => {
     ["/acme/billing", "more"],
     ["/acme/api-keys", "more"],
     ["/acme/model-funding", "more"],
+    ["/acme/sso", "more"],
   ])("%s marks the %s slot current, and only it", (pathname, slot) => {
     nav.pathname = pathname;
     renderPhone(shellData());

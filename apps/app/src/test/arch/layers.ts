@@ -289,6 +289,12 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/shared/skill-source-identity.ts": {
     "@oxagen/oxagen/skill-frontmatter": ["readSkillFrontmatter"],
   },
+  // The org gate's Require SSO lookup asks one question of billing: does the
+  // organisation's plan include SSO (ADR-145). The same single tier read the
+  // kernel's gates use, and nothing else from the package.
+  "src/server/tenancy-lookups.ts": {
+    "@oxagen/billing": ["canAccessSSO", "resolveOrgTier"],
+  },
   // Browser controls read the shared ceiling without loading the contract registry.
   "src/features/fleet/run-row-controls.tsx": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],

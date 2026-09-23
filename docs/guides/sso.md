@@ -1,0 +1,197 @@
+# Single sign-on
+
+This guide sets up single sign-on (SSO) for an Oxagen organization. People from your email domain sign in through your identity provider (IdP), and the groups the IdP sends decide their organization role. Oxagen supports OIDC and SAML 2.0. [ADR-145](../adr/ADR-145-enterprise-sso-behind-better-auth.md) records how it is built.
+
+## Before you start
+
+Your organization needs the Enterprise plan. On any other plan, Oxagen refuses to add, edit, or verify a provider, to map groups, and to turn on **Require SSO**.
+
+You need the Owner or Admin role in the Oxagen organization.
+
+You need admin access to your IdP, such as Okta, Microsoft Entra ID, or Google Workspace.
+
+You need to be able to publish a DNS TXT record for the email domain.
+
+Pick a provider id before you begin. It is a slug of 2 to 63 lowercase letters, digits, or hyphens, such as `acme-okta`. It appears in the redirect URLs, so you cannot change it later without reconfiguring the IdP.
+
+One email domain belongs to one organization. A second organization cannot register a provider for a domain that already has one.
+
+The redirect URLs below use `https://app.oxagen.sh`. The page in the app shows the exact URLs for your provider, each with a copy button.
+
+## Register an OIDC provider
+
+1. In your IdP, create an OIDC web application.
+2. Set its sign-in redirect URI to `https://app.oxagen.sh/api/auth/sso/callback/<providerId>`.
+3. Configure the IdP to send a groups claim in the ID token or the userinfo response.
+4. Copy the issuer URL, the client ID, and the client secret from the IdP.
+5. In Oxagen, open **Organization › Single sign-on** (`/{org}/sso`).
+6. Choose OIDC as the protocol.
+7. Enter the provider id, a display name, and your email domain.
+8. Enter the issuer URL, the client ID, and the client secret.
+9. Leave the groups claim as `groups`, or enter the claim name your IdP uses.
+10. Save the provider.
+
+Oxagen reads the issuer's discovery document (`/.well-known/openid-configuration`) when you save. The issuer URL must use https and name a public host. Oxagen refuses a private, loopback, or link-local address.
+
+Oxagen requests the `openid`, `email`, and `profile` scopes. Add a scope, such as `groups`, when your IdP only sends groups for that scope.
+
+After you save, the page shows whether a client secret is set. It never shows the secret. To keep the stored secret during an edit, leave the field empty.
+
+## Register a SAML provider
+
+1. In your IdP, create a SAML 2.0 application.
+2. Set the assertion consumer service (ACS) URL to `https://app.oxagen.sh/api/auth/sso/saml2/sp/acs/<providerId>`.
+3. Set the audience, or SP entity ID, to `https://app.oxagen.sh/api/auth/sso/saml2/sp/metadata?providerId=<providerId>`.
+4. Add an attribute statement named `groups` that carries the person's groups.
+5. Copy the IdP entity ID, the IdP single sign-on URL, and the IdP signing certificate.
+6. In Oxagen, open **Organization › Single sign-on** (`/{org}/sso`).
+7. Choose SAML as the protocol.
+8. Enter the provider id, a display name, and your email domain.
+9. Enter the IdP entity ID, the single sign-on URL, and the signing certificate in PEM form.
+10. Set the groups claim to the attribute name from step 4.
+11. Save the provider.
+
+The SP metadata URL in step 3 also serves Oxagen's SP metadata. Import it when your IdP reads metadata from a URL.
+
+To sign AuthnRequests, paste an SP private key in PEM form. Oxagen stores it encrypted, and the page shows only that a key is set.
+
+Oxagen refuses an assertion that has no `NotBefore` and `NotOnOrAfter` conditions, and an assertion signed with a deprecated algorithm such as SHA-1.
+
+## Verify your domain
+
+Nobody signs in through a provider until its domain is verified.
+
+1. Copy the TXT record name and value from the provider on the Single sign-on page.
+2. Publish a TXT record named `_oxagen-sso.<domain>` with the value `oxagen-sso-verification=<token>`.
+3. Wait for the record to reach public DNS.
+4. Press **Verify domain**.
+
+Verification also lets a person who already has an Oxagen password account for that email link it to SSO on their first SSO sign-in.
+
+## Map groups to roles
+
+1. Open **Organization › Roles**.
+2. Find the **IdP group mappings** section.
+3. Choose the provider.
+4. Add a row for each IdP group that should reach the organization.
+5. Enter the group name exactly as the IdP sends it.
+6. Choose the role: admin, compliance, billing, or member.
+7. Save the mappings.
+
+Group names are case-sensitive. `Engineering` and `engineering` are two groups.
+
+Owner cannot be mapped. Ownership passes only by a transfer inside Oxagen.
+
+Mapping denies by default. A group with no row grants nothing.
+
+On every SSO sign-in, Oxagen replaces the person's organization role with the highest role their groups map to. The order is admin, then compliance, then billing, then member.
+
+A person whose groups match no row loses their organization role and their membership.
+
+SSO never changes an Owner.
+
+### Send groups from your IdP
+
+- **Okta**: add a groups claim to the app's ID token and set a groups filter, such as "Matches regex `.*`" or a name prefix.
+- **Microsoft Entra ID**: add a group claim under Token configuration. Entra sends group object IDs by default. Map the IDs, or change the group claim to emit names where your tenant supports it.
+- **Google Workspace**: Google does not send groups over OIDC, so an OIDC provider for Google grants no role to anyone. Register Google as a SAML provider and map group membership to the groups attribute.
+
+## Require SSO
+
+1. Verify at least one provider's domain.
+2. Open **Organization › Single sign-on**.
+3. Turn on **Require SSO**.
+
+With SSO required, Oxagen refuses password, Google, and GitHub sign-in for an email on your providers' domains, unless the person is an Owner.
+
+Members other than Owners reach the organization only with a session one of its SSO providers created. Oxagen sends anyone else to `/login?sso=required`.
+
+Owners keep password access, so an IdP outage cannot lock the organization out.
+
+## Leaving the Enterprise plan
+
+When your organization moves off the Enterprise plan:
+
+- Its providers stop signing people in. Oxagen keeps their settings.
+- **Require SSO** stops applying, so password, Google, and GitHub sign-in work again for your domains.
+- Members sign in with a password, or with Google or GitHub. A member who never set a password sets one with **Forgot password** on the login page.
+- An Owner or Admin can still delete providers and turn off **Require SSO**.
+
+## Sign in
+
+1. Open the Oxagen login page.
+2. Choose **Sign in with SSO**.
+3. Enter your work email.
+4. Choose **Continue with SSO**.
+5. Sign in at your IdP.
+
+Oxagen finds the provider from the email domain and sends you back signed in.
+
+## Audit events
+
+Each change and each SSO sign-in writes a row to `security.security_events`. Read them on **Organization › Audit**.
+
+| Event | Written when |
+|---|---|
+| `sso.provider_created` | A provider is registered |
+| `sso.domain_verified` | A domain passes verification |
+| `sso.provider_updated` | A provider's settings change |
+| `sso.provider_deleted` | A provider is removed |
+| `sso.policy_updated` | Require SSO is turned on or off |
+| `sso.group_roles_set` | The group mappings are saved |
+| `sso.sign_in` | A person signs in through SSO |
+
+An `sso.sign_in` row carries outcome `success` when the sign-in granted a role, `deny` when no group mapped, and `error` when Oxagen could not apply the role. Its detail holds `providerId`, `groups`, `grantedRole`, `previousRole`, and `reason`.
+
+## Troubleshooting
+
+### No provider for the domain
+
+The login page says no single sign-on is set up for the email domain.
+
+1. Check that the email's domain matches the provider's domain exactly.
+2. Register a provider for that domain if none exists.
+
+### Domain not verified
+
+The login page says single sign-on is waiting on domain verification.
+
+1. Query the TXT record with `dig TXT _oxagen-sso.<domain> +short`.
+2. Compare the value with the one on the Single sign-on page.
+3. Press **Verify domain** again.
+
+### Groups missing from the token
+
+The `sso.sign_in` row shows an empty `groups` list.
+
+1. Check that the IdP sends the claim or attribute named in the provider's groups claim.
+2. For OIDC, check whether the IdP needs an extra scope to send groups.
+
+### Signed in but no role
+
+The person signs in and cannot open the organization. The `sso.sign_in` row shows outcome `deny` and reason `no_mapped_group`.
+
+1. Read the `groups` the row recorded.
+2. Add a mapping for one of those groups, spelled exactly as recorded.
+3. Ask the person to sign in again.
+
+Entra ID sends group object IDs unless you configure it to send names. When the recorded groups are GUIDs, map the GUIDs or change the claim.
+
+### Locked out
+
+The IdP is down or misconfigured, and members cannot sign in.
+
+1. Sign in as an Owner with email and password.
+2. Turn off **Require SSO**, or fix the provider settings.
+
+An Owner who also forgot their password resets it from the login page.
+
+### Previews
+
+On a preview deployment, the IdP sends people back to the host in `BETTER_AUTH_URL`. The OAuth proxy that relays Google and GitHub sign-in on previews does not relay SSO. Test SSO on a deployment whose `BETTER_AUTH_URL` is the host you registered in the IdP.
+
+## What is not included yet
+
+Oxagen does not yet support SCIM provisioning. Your IdP cannot push users and groups to Oxagen, and it cannot deprovision them.
+
+Removing someone from the IdP stops their next SSO sign-in. It does not end a session they already hold, and it does not revoke their API keys. Until SCIM lands, remove the person on the Organization page and revoke their keys on **Organization › API keys**.

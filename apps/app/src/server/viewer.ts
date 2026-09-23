@@ -16,6 +16,8 @@
 //   unknown org / workspace → notFound()
 //   non-member              → notFound(), indistinguishable from an unknown slug
 //   historical slug         → 308 to the canonical URL, rest of the path kept
+//   SSO required, session
+//   not the org's SSO       → redirect to /login?sso=required, carrying the page
 //   MFA enrollment overdue  → redirect to MFA_ENROLL_PATH
 //
 // A member who lacks a permission is not an exception here: the kernel refuses
@@ -32,6 +34,7 @@ import { permanentRedirectTo, redirectTo } from "@/shared/navigation";
 import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 import { MFA_ENROLL_PATH } from "./mfa-gate";
 import { getSession } from "./session";
+import { ssoSignInPath } from "./sso-gate";
 import { type InvitationRecord, systemLookups } from "./tenancy-lookups";
 import {
   canonicalPath,
@@ -256,6 +259,14 @@ const requireCtx = cache(
         return notFound();
       case "mfa_enroll":
         return redirectTo(MFA_ENROLL_PATH);
+      case "sso_required": {
+        // Back to the page asked for once the identity provider signs them in.
+        const url = await requestUrl();
+        const next = url
+          ? sanitizeNext(`${url.pathname}${url.search}`, routes.root())
+          : undefined;
+        return redirectTo(ssoSignInPath(next));
+      }
       case "redirect": {
         const url = await requestUrl();
         const canonical = canonicalPath({

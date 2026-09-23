@@ -1429,6 +1429,10 @@ export const contextRecords = agentSchema.table(
     activeVersionIdx: index("context_records_active_version_idx").on(
       t.activeVersionId,
     ),
+    labelCheck: check(
+      "context_records_label_check",
+      sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 200)`,
+    ),
     statusCheck: check(
       "context_records_status_check",
       sql`${t.status} IN ('active', 'retired', 'superseded')`,

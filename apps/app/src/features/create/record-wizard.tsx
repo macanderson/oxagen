@@ -208,7 +208,9 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
             api.draft.name ??
             contextRecordLabel(lineageOf(ctx.ws, api.draft.desc))
           }
-          onChange={(event) => api.update({ name: event.target.value })}
+          onChange={(event) => {
+            api.update({ name: event.target.value });
+          }}
           onBlur={() => {
             if (api.draft.name?.trim())
               api.update({ name: contextRecordLabel(api.draft.name) });
@@ -226,7 +228,9 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
               ? lineageOf(ctx.ws, api.draft.desc)
               : contextRecordSlug(api.draft.name))
           }
-          onChange={(event) => api.update({ slug: event.target.value })}
+          onChange={(event) => {
+            api.update({ slug: event.target.value });
+          }}
           onBlur={() => {
             if (api.draft.slug !== null)
               api.update({ slug: contextRecordSlug(api.draft.slug) });

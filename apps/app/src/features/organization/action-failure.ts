@@ -32,6 +32,8 @@ const WORDS = {
     repository_not_installed: "repositoryNotInstalled",
     main_repo_claimed: "mainRepoClaimed",
     repository_linked_elsewhere: "repositoryLinkedElsewhere",
+    // Deleting a provider another admin already removed (ADR-145).
+    sso_provider_not_found: "ssoProviderNotFound",
   },
 } as const;
 
