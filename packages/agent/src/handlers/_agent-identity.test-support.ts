@@ -320,6 +320,44 @@ export async function seedIncident(
   });
 }
 
+/** A mandate held by the agent's principal; `active` unless told otherwise. */
+export async function seedMandate(
+  tenant: SeededTenant,
+  agent: SeededAgent,
+  over: {
+    status?: "draft" | "active" | "expired" | "revoked";
+    expired?: boolean;
+  } = {},
+): Promise<{ id: string }> {
+  const status = over.status ?? "active";
+  const now = Date.now();
+  return withSystemDb(async (tx) => {
+    const [row] = await tx
+      .insert(schema.mandates)
+      .values({
+        orgId: tenant.orgId,
+        workspaceId: tenant.workspaceId,
+        agentPrincipalId: agent.principalId!,
+        requestedBy: tenant.userId,
+        grantedBy: status === "draft" ? null : tenant.userId,
+        roleAtGrant: status === "draft" ? null : "Owner",
+        consequenceTags: ["spend"],
+        limits: {},
+        tools: ["stripe__*"],
+        purpose: "seeded mandate",
+        validFrom: new Date(now - 10 * DAY_MS),
+        validTo: over.expired
+          ? new Date(now - DAY_MS)
+          : new Date(now + 10 * DAY_MS),
+        status,
+        createdById: tenant.userId,
+        updatedById: tenant.userId,
+      })
+      .returning({ id: schema.mandates.id });
+    return row!;
+  });
+}
+
 /** A root wrapped session under `agentKey`; priced when `costMicros` and a basis are given. */
 export async function seedSession(
   tenant: SeededTenant,
@@ -330,6 +368,13 @@ export async function seedSession(
     costBasis?: string | null;
     hasUnknownModelCost?: boolean;
     child?: boolean;
+    /** Usage as the harness reported it; every class defaults to zero. */
+    tokens?: {
+      input?: number;
+      output?: number;
+      cacheRead?: number;
+      cacheCreation?: number;
+    };
   },
 ): Promise<void> {
   const sessionUuid = crypto.randomUUID();
@@ -349,6 +394,10 @@ export async function seedSession(
       totalCostMicros: over.costMicros ?? 0,
       costBasis: over.costBasis ?? null,
       hasUnknownModelCost: over.hasUnknownModelCost ?? null,
+      inputTokens: over.tokens?.input ?? 0,
+      outputTokens: over.tokens?.output ?? 0,
+      cacheReadTokens: over.tokens?.cacheRead ?? 0,
+      cacheCreationTokens: over.tokens?.cacheCreation ?? 0,
     });
   });
 }
@@ -401,6 +450,7 @@ export async function cleanupTenants(orgIds: readonly string[]): Promise<void> {
   if (orgIds.length === 0) return;
   const ids = [...orgIds];
   await withSystemDb(async (tx) => {
+    await tx.delete(schema.mandates).where(inArray(schema.mandates.orgId, ids));
     await tx
       .delete(schema.tachoControlCommands)
       .where(inArray(schema.tachoControlCommands.orgId, ids));

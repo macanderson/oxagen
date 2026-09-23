@@ -75,13 +75,24 @@ export function agentPageRow(
     id: `agt_${slug.replace(/[^0-9a-z]/g, "")}`,
     slug,
     name: slug,
+    description: null,
     agentKey: null,
     harness: "custom",
     operatorId: null,
+    operatorName: null,
+    principalId: null,
+    credentials: 0,
+    hosts: 0,
+    host: null,
     status,
+    enforcementTier: null,
     runs30d: 0,
     spend30d: null,
+    tokens30d: null,
+    mandates: null,
     incidents: 0,
+    tamperIncidents: 0,
+    tamperIncidentsRecorded: 0,
   };
 }
 
@@ -96,7 +107,9 @@ export function agentPage(
     totals: {
       identities: agents.length,
       enrolled: agents.filter((agent) => agent.status === "enrolled").length,
+      holdingMandate: 0,
       tamperIncidents: 0,
+      tamper: { recorded: 0, open: 0, newest: null },
     },
   };
 }

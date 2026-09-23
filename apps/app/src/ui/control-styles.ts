@@ -32,6 +32,13 @@ export const buttonPrimary = `${buttonBase} border border-button-primary-border 
  */
 export const buttonSecondary = `${buttonBase} border border-button-default-border bg-button-default-bg text-button-default-fg hover:border-rule hover:bg-button-default-hover-bg active:bg-button-default-active-bg`;
 
+/**
+ * `.btn.danger { color:var(--st-failed); border-color:<st-failed 40%> }` and
+ * `.btn.danger:hover { background:<st-failed 12%> }`: an action that ends
+ * something, such as Deregister. It carries the failed hue as ink, never a fill.
+ */
+export const buttonDanger = `${buttonBase} border border-error/40 bg-button-default-bg text-error-ink hover:bg-error/10 active:bg-error/15`;
+
 /** `a { color:var(--accent-text) }` — gold as ink, underlined on hover. */
 export const linkText =
   "font-medium text-link underline-offset-4 hover:text-link-hover hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-sm";
