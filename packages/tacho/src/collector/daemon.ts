@@ -112,6 +112,7 @@ import {
   type GatewayFetch,
 } from "./mcp-gateway";
 import { createGithubProxy } from "./github-proxy";
+import { pushCredentialBasis } from "./push-basis";
 import { issueRunToken } from "./credential-issuer";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
@@ -1799,6 +1800,12 @@ async function initializeDaemon(
           pendingAcks.push(ack);
         },
         now,
+        pushCredentialBasis: (command, cwd) =>
+          pushCredentialBasis(command, cwd, {
+            receipts: () =>
+              readHostFile(paths.hostFile)?.github_repositories ?? [],
+            execAsync,
+          }),
       },
       envelope.replay,
       envelope.harness,
