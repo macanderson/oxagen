@@ -173,6 +173,8 @@ export function prBody(row: ProposalRow): string {
     "",
     `**kind** \`${row.kind}\` · **force** \`${row.force}\`${effect} · **scope** \`${row.sharingScope}\``,
     "",
+    // Every line of the statement is quoted, so one that carries a line
+    // break (an API caller can send one) does not fall out of the quote.
     blockquote(row.statement),
     "",
     "### Rationale",

@@ -47,6 +47,7 @@ import {
   hasEffect,
   isStable,
   lineageOf,
+  normalizeStatement,
   type RecordChoice,
   STATEMENT_MAX,
   seedStatement,
@@ -143,12 +144,18 @@ function useFailureText(): (failure: Failure) => string {
 
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 
-/** What the draft adds up to: the record propose_record will be sent. */
+/**
+ * What the draft adds up to: the record propose_record will be sent.
+ * `statement` is the editor's text as typed; `sent` is that text on one line
+ * (normalizeStatement), which is what the choice carries, what the preview
+ * shows, and what the length and token counts measure.
+ */
 function recordOf(api: Api, ctx: CreateContext) {
   const d = api.draft;
   const kind = d.kind ?? "rule";
   const seed = seedStatement(d.desc, d.kind);
   const statement = d.statement ?? seed;
+  const sent = normalizeStatement(statement);
   const lineageId = lineageOf(ctx.ws, d.desc);
   const force = forceOf(kind, d.force);
   const choice: RecordChoice = {
@@ -157,16 +164,17 @@ function recordOf(api: Api, ctx: CreateContext) {
     force,
     ...(hasEffect(kind) ? { constraintEffect: d.effect } : {}),
     sharingScope: "workspace",
-    statement: statement.trim(),
+    statement: sent,
   };
   return {
     choice,
     seed,
     statement,
+    sent,
     edited: statement !== seed,
     path: `.oxagen/rules/${lineageId}.toml`,
-    tokens: statementTokens(statement),
-    fits: statement.trim() !== "" && statement.trim().length <= STATEMENT_MAX,
+    tokens: statementTokens(sent),
+    fits: sent !== "" && sent.length <= STATEMENT_MAX,
   };
 }
 
@@ -246,7 +254,7 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
   const forces = forcesFor(kind);
   const force = record.choice.force;
   const repo = ctx.repo.state === "bound" ? ctx.repo.fullName : null;
-  const length = record.statement.trim().length;
+  const length = record.sent.length;
   const set = (value: string) => {
     api.update({ statement: value === record.seed ? null : value });
   };
@@ -385,7 +393,7 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
             constraintEffect={record.choice.constraintEffect ?? null}
             sharingScope="workspace"
             lineage={record.choice.lineageId}
-            statement={record.statement}
+            statement={record.sent}
             badge={
               <span className="rounded-sm border border-dashed border-border px-1.5 py-0.5">
                 {t("preview.badge")}

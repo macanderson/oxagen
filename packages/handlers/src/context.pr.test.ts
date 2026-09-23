@@ -88,6 +88,23 @@ beforeEach(() => {
 });
 
 describe("open_context_pr", () => {
+  it("quotes every line of a statement that carries a line break", async () => {
+    const h = harness();
+    const proposalId = await proposed(h, {
+      record: {
+        lineageId: LINEAGE,
+        kind: "rule",
+        force: "should",
+        sharingScope: "workspace",
+        statement: "Do not re-read CHANGELOG.md \nmore than once in a run.",
+      },
+    });
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    expect(h.github.pulls[0]!.body).toContain(
+      "> Do not re-read CHANGELOG.md \n> more than once in a run.",
+    );
+  });
+
   it("branches from the production branch, commits the single stamped file, opens the PR and passes the six checks", async () => {
     const h = harness();
     const proposalId = await proposed(h);
@@ -121,6 +138,9 @@ describe("open_context_pr", () => {
     expect(h.github.pulls[0]!.body).toContain("`cta_1`");
     expect(h.github.pulls[0]!.body).toContain("`fnd_01K5RT6C`");
     expect(h.github.pulls[0]!.body).toContain(out.record!.recordHash);
+    expect(h.github.pulls[0]!.body).toContain(
+      "> Do not re-read CHANGELOG.md more than once in a run; cache the first read.",
+    );
 
     expect(out.status).toBe("checks_passed");
     expect(out.governanceMode).toBe("team");
