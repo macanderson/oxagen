@@ -56,6 +56,22 @@ describe("the model's instructions", () => {
       "(none)",
     );
   });
+
+  it("lead with the maintainer's headline when one is given, and only then", () => {
+    const prompt = userPrompt({
+      ...HISTORY,
+      highlight: "The desktop installer for tacho.",
+    });
+    expect(prompt).toContain("## The headline");
+    expect(prompt).toContain("The desktop installer for tacho.");
+    expect(prompt.indexOf("## The headline")).toBeLessThan(
+      prompt.indexOf("## Commit log"),
+    );
+    expect(userPrompt(HISTORY)).not.toContain("## The headline");
+    expect(userPrompt({ ...HISTORY, highlight: "  " })).not.toContain(
+      "## The headline",
+    );
+  });
 });
 
 describe("parseNotes", () => {
