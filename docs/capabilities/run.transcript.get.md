@@ -2,6 +2,10 @@
 
 One run read as a transcript at one of three zoom levels (Mission Control spec §8.4, §14 "the transcript at three zoom levels (turns, steps, everything)"; ADR-058). The transcript is derived on the server from the frames and the bodies the recorder kept; nothing is stored.
 
+A wrapped run's subagents record on chains of their own. The transcript reads every chain under the run's root session and places each subagent chain directly after the `subagent_start` that spawned it. An entry from a subagent chain carries `subagent`, and its body halves and decisions carry `sessionUuid`, because a subagent chain numbers its frames from 0 like the run's. `get_run_frame_body` reads the run's own chain only. A cursor is `t:<seq>` on the run's chain or `t:<session uuid>:<seq>` on a subagent's; both forms are accepted.
+
+A body the store cannot return reads as `text: null` on its half; the rest of the page is still answered.
+
 ## Mode
 
 **sync**
