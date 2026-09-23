@@ -5736,7 +5736,7 @@
       }
     },
     {
-      "name": "issue_tacho_github_token",
+      "name": "create_github_token",
       "file": "tacho.github_token.issue.ts",
       "domain": "tacho",
       "mode": "sync",

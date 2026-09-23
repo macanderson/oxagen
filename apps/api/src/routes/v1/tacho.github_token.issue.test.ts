@@ -49,7 +49,7 @@ describe("GitHub credential control endpoint", () => {
   it("passes validated input through the kernel on the API surface", async () => {
     expect((await app().fetch(request())).status).toBe(200);
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "issue_tacho_github_token",
+      "create_github_token",
       input,
       { apiKeyId: "host-key" },
       { surface: "api" },

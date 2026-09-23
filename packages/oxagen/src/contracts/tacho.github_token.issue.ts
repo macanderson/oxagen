@@ -21,7 +21,7 @@ const githubRepoNameSchema = z
   .refine((name) => name !== "." && name !== "..");
 
 export const tachoGithubTokenIssue = registerCapability({
-  name: "issue_tacho_github_token",
+  name: "create_github_token",
   domain: "tacho",
   description:
     "Mint a GitHub App installation token scoped to one repository bound to an enrolled Tacho host's workspace.",

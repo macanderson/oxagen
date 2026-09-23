@@ -60,7 +60,7 @@ describe("repository-scoped GitHub credentials", () => {
     const d = deps();
     const result = await createTachoGithubTokenIssueHandler(d)(input, ctx);
     expect(mocks.resolve).toHaveBeenCalledWith(
-      "issue_tacho_github_token",
+      "create_github_token",
       ctx,
       {},
       input.host_enrollment_id,

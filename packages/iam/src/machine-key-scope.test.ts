@@ -346,7 +346,7 @@ describe("the Tacho host key", () => {
       "ingest_tacho_events",
       "get_tacho_bundle",
       "fetch_commands",
-      "issue_tacho_github_token",
+      "create_github_token",
     ]) {
       keyWithScope({
         purpose: TACHO_HOST_PURPOSE,

@@ -26,7 +26,7 @@ import {
   resolveWorkspaceGithubInstallation,
 } from "./repository.github-connection";
 
-const CAPABILITY = "issue_tacho_github_token";
+const CAPABILITY = "create_github_token";
 
 /**
  * The server half of the flag. Both halves must be on: the host configures a repository

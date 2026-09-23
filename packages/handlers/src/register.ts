@@ -1042,7 +1042,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoBundleGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "issue_tacho_github_token",
+    "create_github_token",
     async () =>
       (await import("./tacho.github_token.issue"))
         .tachoGithubTokenIssueHandler as CapabilityHandlerFn,

@@ -6,7 +6,7 @@ const input = {
   name: "repo",
   run_token_id: "rt_0123456789abcdef0123",
 };
-describe("issue_tacho_github_token contract", () => {
+describe("create_github_token contract", () => {
   it("is a scoped, default-deny machine API capability", () => {
     expect(tachoGithubTokenIssue).toMatchObject({
       surfaces: ["api"],

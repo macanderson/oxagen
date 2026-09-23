@@ -116,7 +116,7 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
     "fetch_commands",
     // ADR-151: the git credential a wrapped run pushes with. Refused unless
     // the repository is bound to the host's workspace.
-    "issue_tacho_github_token",
+    "create_github_token",
   ]),
   [LEDGER_RUN_SCOPE_PURPOSE]: new Set(["ingest_run_frames"]),
   [STELLA_TELEMETRY_PURPOSE]: new Set(["ingest_stella_operational_telemetry"]),

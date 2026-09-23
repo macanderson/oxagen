@@ -346,6 +346,16 @@
       "consumes": []
     },
     {
+      "name": "create_github_token",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "create_org",
       "domain": "org",
       "surfaces": [
@@ -1832,16 +1842,6 @@
         "api",
         "mcp",
         "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "issue_tacho_github_token",
-      "domain": "tacho",
-      "surfaces": [
-        "api"
       ],
       "component": null,
       "produces": [],

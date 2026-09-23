@@ -1,4 +1,4 @@
-# issue_tacho_github_token
+# create_github_token
 
 Mint a GitHub App installation token for one repository bound to the calling host's workspace. The enrolled daemon uses this endpoint for its local Git smart HTTP proxy. Git receives a local session lease and does not receive the installation token.
 
