@@ -272,6 +272,7 @@ const workspacesOut = {
       name: "Core platform",
       role: "Owner",
       archivedAt: null,
+      costCenter: null,
     },
   ],
 };
@@ -288,6 +289,7 @@ describe("org.workspaces", () => {
             name: "Core platform",
             role: "Owner",
             archivedAt: null,
+            costCenter: null,
           },
         ],
       }),

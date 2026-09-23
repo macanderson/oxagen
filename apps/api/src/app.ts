@@ -313,6 +313,11 @@ import { skillSearchPreviewRoute } from "./routes/v1/skill.search.preview";
 import { skillListRoute } from "./routes/v1/skill.list";
 import { skillProposeRoute } from "./routes/v1/skill.propose";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
+import { spendCostCenterStatementExportRoute } from "./routes/v1/spend.cost_center_statement.export";
+import { costCenterListRoute } from "./routes/v1/cost_center.list";
+import { costCenterCreateRoute } from "./routes/v1/cost_center.create";
+import { costCenterDeleteRoute } from "./routes/v1/cost_center.delete";
+import { costCenterSetRoute } from "./routes/v1/cost_center.set";
 import { findingListRoute } from "./routes/v1/finding.list";
 import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
 import { findingFixRecordRoute } from "./routes/v1/finding.fix.record";
@@ -687,6 +692,17 @@ orgScoped.route("/spend", spendGetRoute);
 orgScoped.route("/spend/drill", spendDrillRoute);
 orgScoped.route("/spend/waste", spendWasteListRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
+// Cost-center chargeback (ADR-142). The list, create, delete, and statement
+// are organization-level (`scoped: false`). Set writes the active workspace or
+// one of its agents.
+orgScoped.route(
+  "/spend/cost-center-statement/export",
+  spendCostCenterStatementExportRoute,
+);
+orgScoped.route("/spend/cost-centers", costCenterListRoute);
+orgScoped.route("/spend/cost-centers/create", costCenterCreateRoute);
+orgScoped.route("/spend/cost-centers/delete", costCenterDeleteRoute);
+orgScoped.route("/spend/cost-centers/set", costCenterSetRoute);
 // The skills a workspace's harness sessions reported at start (#3098): a
 // noBillingGate read of tacho.sessions.
 orgScoped.route("/configurations/clone", configurationCloneGetRoute);

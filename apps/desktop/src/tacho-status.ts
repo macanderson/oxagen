@@ -73,7 +73,7 @@ export interface TachoStatus {
   gateway?: TachoGateway;
   /** One entry per harness the model base URL contract covers. */
   modelBaseUrls?: TachoModelBaseUrl[];
-  /** One entry per harness the credential seam covers (ADR-142). */
+  /** One entry per harness the credential seam covers (ADR-143). */
   modelCredentials?: TachoModelCredential[];
   /** The tier each harness's sessions earned since the collector started. */
   tiers?: Partial<Record<string, TachoTier>>;
@@ -192,7 +192,7 @@ function tiers(value: unknown): Partial<Record<string, TachoTier>> | undefined {
 }
 
 /**
- * How a harness gets its model credential (ADR-142). `brokered`: it holds a
+ * How a harness gets its model credential (ADR-143). `brokered`: it holds a
  * run token and the gateway supplies the vendor key from custody. Otherwise
  * its own credential crosses the proxy, and `reason` says why when the file
  * said so (a ChatGPT login, a symlinked file, no file yet, nothing to take).

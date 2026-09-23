@@ -87,11 +87,28 @@ const Workspace = z.object({
   role: z.string().nullable(),
   /** When the workspace was archived; null while it is live. */
   archivedAt: z.iso.datetime().nullable(),
+  /** The cost-center label its spend is charged back to; null when it names none (ADR-142). */
+  costCenter: z.string().min(1).nullable(),
 });
 
 export const WorkspaceList = z.object({ workspaces: z.array(Workspace) });
 export type WorkspaceList = z.infer<typeof WorkspaceList>;
 export type Workspace = z.infer<typeof Workspace>;
+
+/**
+ * One label on the organization's cost-center list (`list_cost_centers`,
+ * ADR-142), with how many live agents and workspaces name it.
+ */
+const CostCenter = z.object({
+  id: PublicId,
+  label: z.string().min(1),
+  description: z.string().min(1).nullable(),
+  agents: z.number().int().nonnegative(),
+  workspaces: z.number().int().nonnegative(),
+});
+export const CostCenterList = z.object({ costCenters: z.array(CostCenter) });
+export type CostCenterList = z.infer<typeof CostCenterList>;
+export type CostCenter = z.infer<typeof CostCenter>;
 /**
  * One API key as `list_api_keys` records it (ARCHITECTURE.md §1.2 API keys
  * row): what it is called, the leading window that identifies it on sight, and

@@ -31,6 +31,7 @@ const LEVELS: readonly SpendGroupKind[] = [
   "model",
   "tool",
   "task",
+  "cost_center",
 ];
 
 /** The first and last day of a `YYYY-MM` month. */

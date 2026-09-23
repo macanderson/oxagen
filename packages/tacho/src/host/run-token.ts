@@ -1,6 +1,6 @@
 /**
  * Run tokens: the one credential a brokered harness holds (Mission Control
- * spec §6.2 and §6.8, ADR-142).
+ * spec §6.2 and §6.8, ADR-143).
  *
  * A wrapped harness on the brokered credential path never sees its model
  * vendor's key. It is given a run token instead, and it presents that token

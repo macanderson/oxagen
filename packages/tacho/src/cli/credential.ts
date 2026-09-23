@@ -1,5 +1,5 @@
 /**
- * `tacho credential`: the CLI face of the credential seam (ADR-142), and the
+ * `tacho credential`: the CLI face of the credential seam (ADR-143), and the
  * enrollment and unenrollment steps that move a vendor key between a harness
  * file and the gateway's custody.
  *

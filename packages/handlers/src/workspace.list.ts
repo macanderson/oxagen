@@ -61,6 +61,9 @@ export const workspaceListHandler: CapabilityHandler<
   // Capture into a const so TS narrowing survives across the withSystemDb closure.
   const resolvedUserId = userId;
 
+  // tenancy: unscoped by contract (the caller has picked an org, not a
+  // workspace); the membership check below verifies the authenticated userId
+  // belongs to the org, and every workspace row is filtered by that org's id.
   return withSystemDb(async (tx) => {
     const org = await tx.query.organizations.findFirst({
       where: and(
@@ -96,6 +99,7 @@ export const workspaceListHandler: CapabilityHandler<
         name: schema.workspaces.name,
         role: schema.workspaceUsers.role,
         archivedAt: schema.workspaces.archivedAt,
+        costCenter: schema.workspaces.costCenter,
       })
       .from(schema.workspaces)
       .leftJoin(
@@ -130,6 +134,7 @@ export const workspaceListHandler: CapabilityHandler<
         name: r.name,
         role: r.role ?? null,
         archivedAt: r.archivedAt ? r.archivedAt.toISOString() : null,
+        costCenter: r.costCenter ?? null,
       })),
     };
   });

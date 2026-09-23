@@ -1,0 +1,87 @@
+{
+  "name": "create_cost_center",
+  "domain": "spend",
+  "description": "Add a cost-center label to this organization's list, so agents and workspaces can be charged back to it. Restores a label that was deleted.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "label": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 280
+      }
+    },
+    "required": [
+      "label"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "costCenter": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agents": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "workspaces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "agents",
+          "workspaces",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "costCenter"
+    ],
+    "additionalProperties": false
+  }
+}

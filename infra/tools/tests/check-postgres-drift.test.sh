@@ -94,7 +94,7 @@ expect_code 1 "$CODE" "a store behind the repository is behind"
 contains "$OUT" "::error::" "being behind is annotated as an error"
 contains "$OUT" "behind this repository" "the message names the condition"
 contains "$OUT" "20260919120000_add_durable_token_usage.sql" "the message names the pending file"
-contains "$OUT" "DB Migrate (manual)" "the message names the workflow that applies it"
+contains "$OUT" "run-db-migrations.sh packages/database" "the message names the path that reaches production"
 
 # The pending list is a convenience, not the verdict. A version of Atlas that
 # prints no file names must still block.
@@ -124,7 +124,7 @@ OUT=$(classify_atlas_status "$WORK/virgin.txt" 188); CODE=$?
 expect_code 1 "$CODE" "an unstamped store blocks like any other behind store"
 contains "$OUT" "revision table is empty" "the message names the real cause"
 contains "$OUT" "do NOT apply" "the message refuses the apply that would break it"
-lacks "$OUT" "apply with the DB Migrate (manual) workflow" \
+lacks "$OUT" "run it again in apply mode" \
   "an unstamped store is not told to apply — that is the opposite of the right move"
 
 # --- output that answers nothing -------------------------------------------

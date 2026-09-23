@@ -190,7 +190,7 @@ function connectionTokens(raw: readonly string[]): Set<string> {
 export const CREDENTIAL_HEADERS = ["authorization", "x-api-key"] as const;
 
 /**
- * A credential the proxy attaches in place of what the caller sent (ADR-142):
+ * A credential the proxy attaches in place of what the caller sent (ADR-143):
  * the caller presented a run token, and this is the vendor credential from
  * custody. `api_key` goes out as `X-Api-Key`, `bearer` as
  * `Authorization: Bearer`.

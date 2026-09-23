@@ -89,7 +89,7 @@ describe("fetch_commands contract", () => {
   });
 
   it("accepts the credential bases a brokering daemon reports, and never a secret", () => {
-    // ADR-142: the daemon says which providers it holds a credential for.
+    // ADR-143: the daemon says which providers it holds a credential for.
     // The same strictness argument as `bundle_features`: unnamed here, the
     // field would refuse the poll of every host that brokers.
     const parsed = tachoCommandFetch.input.parse({

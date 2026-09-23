@@ -127,6 +127,11 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
+import { spendCostCenterStatementExport } from "@oxagen/oxagen/contracts/spend.cost_center_statement.export";
+import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
+import { costCenterCreate } from "@oxagen/oxagen/contracts/cost_center.create";
+import { costCenterDelete } from "@oxagen/oxagen/contracts/cost_center.delete";
+import { costCenterSet } from "@oxagen/oxagen/contracts/cost_center.set";
 import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/contracts/audit.log.query";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
@@ -224,6 +229,11 @@ import { runCostGetRoute } from "./run.cost";
 import { spendDrillRoute } from "./spend.drill";
 import { spendGetRoute } from "./spend.get";
 import { spendStatementExportRoute } from "./spend.statement.export";
+import { spendCostCenterStatementExportRoute } from "./spend.cost_center_statement.export";
+import { costCenterListRoute } from "./cost_center.list";
+import { costCenterCreateRoute } from "./cost_center.create";
+import { costCenterDeleteRoute } from "./cost_center.delete";
+import { costCenterSetRoute } from "./cost_center.set";
 import { auditEventsExportRoute } from "./audit.events.export";
 import { spendWasteListRoute } from "./spend.waste";
 import { findingDismissRoute } from "./finding.dismiss";
@@ -1492,6 +1502,60 @@ const ROUTES: ThinRoute[] = [
     body: { month: "2026-09" },
     expectedInput: { month: "2026-09", format: "csv" },
     invalidBody: { month: "2026-13" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "spend.cost_center_statement.export",
+    route: spendCostCenterStatementExportRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendCostCenterStatementExport.name,
+    body: { month: "2026-09" },
+    expectedInput: { month: "2026-09", format: "csv" },
+    invalidBody: { month: "2026-13" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "cost_center.list",
+    route: costCenterListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: costCenterList.name,
+    body: {},
+    // The input is strict: an unknown field never reaches invoke.
+    invalidBody: { workspace: "wrk_1" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "cost_center.create",
+    route: costCenterCreateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: costCenterCreate.name,
+    body: { label: "ENG-1001", description: "Platform engineering" },
+    // `~none` is the unassigned key, and the label pattern refuses it.
+    invalidBody: { label: "~none" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "cost_center.delete",
+    route: costCenterDeleteRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: costCenterDelete.name,
+    body: { label: "ENG-1001" },
+    invalidBody: { label: "" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "cost_center.set",
+    route: costCenterSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: costCenterSet.name,
+    body: { target: "agent", agent: "reviewer", costCenter: "ENG-1001" },
+    // An agent target must name the agent (the contract's refinement).
+    invalidBody: { target: "agent", costCenter: "ENG-1001" },
     jsonGuard: true,
     status: 200,
   },

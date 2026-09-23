@@ -258,7 +258,7 @@ function tierFields(
 }
 
 /**
- * One line on how the harness gets its model credential (ADR-142). Brokered
+ * One line on how the harness gets its model credential (ADR-143). Brokered
  * means the harness holds a run token and the gateway supplies the key from
  * its custody; otherwise the harness's own credential crosses the proxy, and
  * the line says why when the status did.

@@ -1,5 +1,5 @@
 /**
- * The daemon's run token mint (ADR-142) on its own: a real recorder on its
+ * The daemon's run token mint (ADR-143) on its own: a real recorder on its
  * own chain, a real custody store in a scratch directory, a real signing
  * key. What the proxy test proves end to end, this file proves branch by
  * branch: every refusal, every clamp, and the one failure the mint survives.
