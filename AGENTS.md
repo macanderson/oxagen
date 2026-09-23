@@ -359,6 +359,6 @@ belong to steers it.
   the deploy of that change, never after. Here the label is applied from the
   diff by `.github/workflows/migration-label.yml` and comes back if removed,
   and `migration-gate` in `pipeline.yml` holds the deploy until the stores
-  carry the schema. Say in the PR which store changed and what must be
-  applied. The automatic apply in `migration-gate` is a separate decision,
-  made on 2026-09-23 in #3653.
+  carry the schema. `migration-gate` also applies the pending migrations on
+  merge (decided 2026-09-23, #3653), so the label is the only thing a
+  schema-changing PR adds. Write no apply steps and apply nothing by hand.
