@@ -13,7 +13,10 @@ import { buildContext } from "../context";
 export const schema = {
   ...costCenterSetInputObject.shape,
   target: costCenterSetInputObject.shape.target.describe(
-    "What to label: 'workspace' for the active workspace, 'agent' for one of its agents",
+    "What to label: 'workspace' for a workspace, 'agent' for one agent in the active workspace",
+  ),
+  workspaceId: costCenterSetInputObject.shape.workspaceId.describe(
+    "The workspace's public id (wrk_…) when target is 'workspace'. Omit it for the active workspace",
   ),
   agent: costCenterSetInputObject.shape.agent.describe(
     "The agent's slug in this workspace. Required when target is 'agent'",

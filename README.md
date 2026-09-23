@@ -278,7 +278,7 @@ CI runs lint, typecheck, unit tests, coverage, builds, contract checks, and inte
 | **Analytics** | ClickHouse | Append-only usage events → Stripe meters |
 | **Billing** | Stripe | Meters, ledgers, customer invoicing |
 | **Jobs** | Inngest | Durable workflows, retries, scheduling |
-| **Auth** | Better Auth | Passkeys, OAuth, org/workspace RBAC |
+| **Auth** | Better Auth | Email and password, Google and GitHub sign-in, TOTP two-factor, SSO over OIDC and SAML with IdP group mapping, org/workspace RBAC, database-backed rate limiting |
 | **Storage** | Vercel Blob via `@oxagen/storage` | Signed URLs, Postgres reference rows |
 | **Language** | TypeScript 6 | Strict mode, no `any` |
 | **Testing** | Vitest + Playwright | Unit + browser E2E |

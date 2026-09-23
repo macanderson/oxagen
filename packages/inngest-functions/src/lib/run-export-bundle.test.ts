@@ -297,6 +297,64 @@ describe("the run export bundle", () => {
     );
   });
 
+  it("checks exported wrapped content with both offline verifiers", () => {
+    const bundle = buildRunExportBundle({
+      runId: "tse_0a1b2c",
+      source: "tacho",
+      segments: [tachoSegment()],
+      key,
+      now: new Date(),
+    });
+    const files = unpack(bundle.bytes);
+    expect(runVerifier(writeBundle(files)).ok).toBe(true);
+    const cliFiles = {
+      "manifest.json": files["manifest.json"]!,
+      "attestation.json": files["attestation.json"]!,
+      "frames.ndjson": files["frames.ndjson"]!,
+      "redactions.json": files["redactions.json"]!,
+    };
+    expect(verifyRunExport(cliFiles).ok).toBe(true);
+    const lines = cliFiles["frames.ndjson"].split("\n");
+    const changed = JSON.parse(lines[0]!);
+    changed.body = { tool_status: "changed" };
+    lines[0] = JSON.stringify(changed);
+    const tampered = { ...files, "frames.ndjson": lines.join("\n") };
+    const standalone = runVerifier(writeBundle(tampered));
+    expect(standalone.ok).toBe(false);
+    expect(standalone.output).toContain("exported frame bytes do not match");
+    const cli = verifyRunExport({
+      ...cliFiles,
+      "frames.ndjson": tampered["frames.ndjson"],
+    });
+    expect(cli.ok).toBe(false);
+    for (const source of [undefined, "bogus", "ledger"]) {
+      const sourceTampered = {
+        ...tampered,
+        "manifest.json": JSON.stringify({
+          ...JSON.parse(files["manifest.json"]!),
+          source,
+        }),
+      };
+      const result = runVerifier(writeBundle(sourceTampered));
+      expect(result.ok).toBe(false);
+      expect(result.output).toContain("the source is invalid");
+      expect(
+        verifyRunExport({
+          ...cliFiles,
+          "manifest.json": sourceTampered["manifest.json"],
+          "frames.ndjson": tampered["frames.ndjson"],
+        }).ok,
+      ).toBe(false);
+    }
+    expect(cli.checks).toContainEqual(
+      expect.objectContaining({
+        status: "broken",
+        detail:
+          "the exported frame bytes do not match the signed segment digest",
+      }),
+    );
+  });
+
   it("exports a sealed run, and verify reports broken at the one frame that was tampered with", () => {
     const bundle = buildRunExportBundle({
       runId: "arun_5f0c2e9a1b7d4c3e8f6a02",
