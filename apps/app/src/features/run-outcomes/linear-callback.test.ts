@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   redirect: vi.fn(),
 }));
 vi.mock("next/headers", () => ({
-  cookies: async () => ({ get: mocks.get, set: mocks.set }),
+  cookies: () => Promise.resolve({ get: mocks.get, set: mocks.set }),
 }));
 vi.mock("@/server/viewer", () => ({ requireViewer: mocks.viewer }));
 vi.mock("@/server/kernel", () => ({ kernelWrite: mocks.write }));

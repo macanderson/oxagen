@@ -71,8 +71,8 @@ export function RunWorkSection({
             {t("failedChecks", { count: failures.length })}
           </h3>
           <ul className="mt-2 space-y-2 text-sm">
-            {failures.map(({ pr, check }, index) => (
-              <li key={`${pr.repository.url}/${pr.number}/${index}`}>
+            {failures.map(({ pr, check }) => (
+              <li key={[pr.url, check.name, check.url ?? ""].join("|")}>
                 <ProviderLink url={check.url}>{check.name}</ProviderLink>
                 {" · "}
                 <ProviderLink url={pr.url}>
@@ -131,7 +131,7 @@ export function RunWorkSection({
           ) : (
             <ul className="mt-2 space-y-3">
               {value.pullRequests.map((pr) => (
-                <li key={`${pr.repository.url}/${pr.number}`}>
+                <li key={pr.url}>
                   <ProviderLink url={pr.url}>
                     {pr.repository.owner}/{pr.repository.name} #{pr.number}:{" "}
                     {pr.title}

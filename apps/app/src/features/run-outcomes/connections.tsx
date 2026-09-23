@@ -81,7 +81,7 @@ export function RunIssueConnections({
           {data ? (
             <div className="space-y-4">
               <div className="space-y-2">
-                <h3 className="text-sm font-medium">GitHub</h3>
+                <h3 className="text-sm font-medium">{t("githubTitle")}</h3>
                 {data.github.connected ? (
                   <p className="text-sm text-muted-foreground">
                     {t("githubConnected")}
@@ -107,7 +107,7 @@ export function RunIssueConnections({
                 ) : null}
               </div>
               <div className="space-y-2">
-                <h3 className="text-sm font-medium">Linear</h3>
+                <h3 className="text-sm font-medium">{t("linearTitle")}</h3>
                 {data.linear.connections.length ? (
                   data.linear.connections.map((connection) => (
                     <p

@@ -1912,7 +1912,8 @@ it("returns the Run page without waiting for connected provider evidence", async
     detail: readOk(runDetail()),
     transcript: readOk(runTranscript()),
   });
-  source.runs.work = vi.fn(() => new Promise<never>(() => {}));
+  const work = vi.fn(() => new Promise<never>(() => {}));
+  source.runs.work = work;
   const page = await Run({
     ctx,
     source,
@@ -1927,5 +1928,5 @@ it("returns the Run page without waiting for connected provider evidence", async
     now: NOW,
   });
   expect(page).toBeTruthy();
-  expect(source.runs.work).not.toHaveBeenCalled();
+  expect(work).not.toHaveBeenCalled();
 });

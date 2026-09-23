@@ -4280,10 +4280,12 @@ type Messages = {
     providerFailed: string;
     providerConsent: string;
     providerOwner: string;
+    githubTitle: string;
     githubConnected: string;
     githubUnconfigured: string;
     githubConnect: string;
     githubInstall: string;
+    linearTitle: string;
     linearConnect: string;
     linearConnecting: string;
     linearUnconfigured: string;
