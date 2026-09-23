@@ -2328,6 +2328,9 @@ type Messages = {
       roles: string;
       apiKeys: string;
       modelFunding: string;
+      invitations: string;
+      workspaces: string;
+      costCenters: string;
     };
     roles: {
       owner: string;
@@ -2812,6 +2815,10 @@ type Messages = {
         none: string;
         hint: string;
       };
+    };
+    header: {
+      eyebrow: string;
+      description: string;
     };
   };
   record: {

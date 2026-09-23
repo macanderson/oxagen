@@ -7,3 +7,6 @@ export { ModelFunding } from "./model-funding";
 export { People } from "./people";
 export { Roles } from "./roles";
 export { Workspaces } from "./workspaces";
+
+export { OrganizationTabs } from "./tabs";
+export { OrganizationHeader } from "./header";
