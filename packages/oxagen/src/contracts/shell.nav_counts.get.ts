@@ -1,12 +1,10 @@
 /**
- * `get_nav_counts`: the sidebar's three counts (MC spec App. E; Mockups
- * `origin/main` `mc.html` 3776-3813): Fleet = pending approvals, Steering =
- * proposals, Audit = open critical incidents. Each count is null when its
- * store is absent, and a null renders as no badge: rev1 has approvals
- * (`agent.approval_requests`), no proposals store until the #2961 lane
- * lands, and no incident store (Audit is cut to the archive at seal,
- * apps/app/ARCHITECTURE.md §1.2), so `proposals` and `incidents` are null
- * here and the contract says so rather than printing a zero.
+ * `get_nav_counts`: the sidebar's three counts (MC spec App. E; mockups
+ * `pages/shell.md`): Fleet = pending approvals, Steering = open proposals,
+ * Audit = open critical incidents. Each count reads the store that owns it
+ * (`agent.approval_requests`, `agent.context_proposals`, `tacho.incidents`).
+ * A count is null only when its read answered no row, and a null renders as
+ * "not recorded", never as a zero.
  *
  * A console read is never a governed action (ADR-052 exclusion 2):
  * `noBillingGate: true`.
@@ -20,7 +18,7 @@ export const shellNavCountsGet = registerCapability({
   name: "get_nav_counts",
   domain: "shell",
   description:
-    "The sidebar's counts for this workspace: pending approvals, open proposals and open critical incidents, each null when its store does not exist.",
+    "The sidebar's counts for this workspace: pending approvals, open steering proposals and open critical incidents, each null when its read answered nothing.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -38,9 +36,9 @@ export const shellNavCountsGet = registerCapability({
     .object({
       /** Pending, unexpired approvals in the workspace. */
       approvals: count,
-      /** Open steering proposals; null until a proposals store exists. */
+      /** Steering proposals that have not merged and were not rejected. */
       proposals: count,
-      /** Open critical incidents; null until an incident store exists. */
+      /** Unresolved incidents at severity 10. */
       incidents: count,
     })
     .strict(),

@@ -1,7 +1,7 @@
 {
   "name": "get_nav_counts",
   "domain": "shell",
-  "description": "The sidebar's counts for this workspace: pending approvals, open proposals and open critical incidents, each null when its store does not exist.",
+  "description": "The sidebar's counts for this workspace: pending approvals, open steering proposals and open critical incidents, each null when its read answered nothing.",
   "mode": "sync",
   "surfaces": [
     "api",
