@@ -86,7 +86,7 @@ describe("/invite/[token]", () => {
     loadInvitation.mockResolvedValue({ ok: true, value: invitation });
     getAuthUser.mockResolvedValue({ email: "dana@a-intel.com" });
     const props = routeProps({ token: TOKEN });
-    const container = await renderPage(await page.default(props));
+    const container = await renderPage(page.default(props));
     expect(screen.getByTestId("invite-wrong-account")).toHaveTextContent(
       "dana@a-intel.com",
     );

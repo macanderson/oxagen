@@ -77,10 +77,11 @@ export function LoginForm({
 
   // A notice another screen left (a password just set) shows once, after
   // hydration; the ref keeps a development double-run from taking it twice.
-  const took = useRef(false);
+  const tookRef = useRef(false);
   useEffect(() => {
-    if (took.current) return;
-    took.current = true;
+    if (tookRef.current) return;
+    tookRef.current = true;
+    // eslint-disable-next-line @eslint-react/set-state-in-effect -- sessionStorage exists only after hydration, so the notice is read here once, not during render
     setNotice(takeNotice());
   }, []);
 

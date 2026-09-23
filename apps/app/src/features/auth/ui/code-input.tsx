@@ -44,14 +44,14 @@ export function CodeInput({
   const [digits, setDigits] = useState<string[]>(() =>
     Array.from({ length: LENGTH }, () => ""),
   );
-  const boxes = useRef<(HTMLInputElement | null)[]>([]);
+  const boxesRef = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    if (autoFocus) boxes.current[0]?.focus();
+    if (autoFocus) boxesRef.current[0]?.focus();
   }, [autoFocus]);
 
   function focus(index: number) {
-    boxes.current[Math.max(0, Math.min(LENGTH - 1, index))]?.focus();
+    boxesRef.current[Math.max(0, Math.min(LENGTH - 1, index))]?.focus();
   }
 
   /** Write `value` from box `from` onward; returns the index after the last digit written. */
@@ -111,9 +111,9 @@ export function CodeInput({
           <input
             key={position}
             ref={(node) => {
-              boxes.current[index] = node;
+              boxesRef.current[index] = node;
             }}
-            id={`${id}-${position}`}
+            id={`${id}-${String(position)}`}
             aria-label={digitLabel(position)}
             aria-invalid={error ? true : undefined}
             inputMode="numeric"
@@ -121,10 +121,18 @@ export function CodeInput({
             autoComplete={index === 0 ? "one-time-code" : "off"}
             maxLength={index === 0 ? LENGTH : 1}
             value={digits[index] ?? ""}
-            onFocus={(e) => e.target.select()}
-            onChange={(e) => onChange(index, e.target.value)}
-            onKeyDown={(e) => onKeyDown(index, e)}
-            onPaste={(e) => onPaste(index, e)}
+            onFocus={(e) => {
+              e.target.select();
+            }}
+            onChange={(e) => {
+              onChange(index, e.target.value);
+            }}
+            onKeyDown={(e) => {
+              onKeyDown(index, e);
+            }}
+            onPaste={(e) => {
+              onPaste(index, e);
+            }}
             className="h-12 w-[calc((100%-25px)/6)] min-w-0 rounded-md border border-input-border bg-input-bg p-0 text-center font-mono text-lg text-input-fg hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring aria-invalid:border-input-invalid-border sm:h-[54px] sm:w-[46px] sm:text-[21px]"
           />
         ))}

@@ -82,7 +82,7 @@ function controlOrder(root: HTMLElement): string[] {
     ),
   ].map((el) => {
     if (el instanceof HTMLInputElement) return `input#${el.id || el.name}`;
-    return (el.textContent ?? "").trim();
+    return el.textContent.trim();
   });
 }
 afterEach(async () => {
@@ -589,7 +589,7 @@ describe("TwoFactorForm", () => {
       />,
     );
   const box = (n: number) =>
-    screen.getByRole("textbox", { name: `digit ${n}` });
+    screen.getByRole("textbox", { name: `digit ${String(n)}` });
 
   async function typeCode(code: string) {
     await userEvent.click(box(1));
@@ -615,7 +615,7 @@ describe("TwoFactorForm", () => {
     ).toBeInTheDocument();
     for (const n of [1, 2, 3, 4, 5, 6]) {
       expect(box(n)).toHaveAttribute("inputmode", "numeric");
-      expect(box(n)).toHaveAttribute("id", `two-factor-code-${n}`);
+      expect(box(n)).toHaveAttribute("id", `two-factor-code-${String(n)}`);
     }
     expect(box(2)).toHaveAttribute("maxlength", "1");
     expect(
@@ -673,7 +673,10 @@ describe("TwoFactorForm", () => {
     await userEvent.click(box(1));
     await userEvent.paste("602 914");
     expect(
-      [1, 2, 3, 4, 5, 6].map((n) => (box(n) as HTMLInputElement).value),
+      [1, 2, 3, 4, 5, 6].map((n) => {
+        const input = box(n);
+        return input instanceof HTMLInputElement ? input.value : null;
+      }),
     ).toEqual(["6", "0", "2", "9", "1", "4"]);
     await userEvent.click(screen.getByRole("button", { name: "Verify" }));
     await waitFor(() => {

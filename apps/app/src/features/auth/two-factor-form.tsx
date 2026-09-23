@@ -8,7 +8,13 @@
 // password step was for, which only this browser tab knows.
 
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useEffect, useRef, useState } from "react";
+import {
+  type SyntheticEvent,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { AuthOutcomeKey } from "./auth-errors";
 import {
   liveVerifyTwoFactor,
@@ -35,20 +41,24 @@ function secondsLeft(now: number): number {
   return TOTP_PERIOD_SECONDS - (Math.floor(now / 1000) % TOTP_PERIOD_SECONDS);
 }
 
+/** Re-reads the clock every second; the snapshot is a whole number, so a read inside the same second renders nothing new. */
+function subscribeToSeconds(onTick: () => void): () => void {
+  const timer = setInterval(onTick, 1000);
+  return () => {
+    clearInterval(timer);
+  };
+}
+
 /** "expires 0:24": how long the code on the authenticator app stays valid. Rendered after hydration only. */
 function ExpiryClock() {
   const t = useTranslations("auth.twoFactor");
-  const [left, setLeft] = useState<number | null>(null);
-  useEffect(() => {
-    const tick = () => {
-      setLeft(secondsLeft(Date.now()));
-    };
-    tick();
-    const timer = setInterval(tick, 1000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, []);
+  // The server snapshot is null, so the server and the hydrating render agree
+  // and the clock appears once the page is live.
+  const left = useSyncExternalStore(
+    subscribeToSeconds,
+    () => secondsLeft(Date.now()),
+    () => null,
+  );
   if (left === null) return null;
   return (
     <span
@@ -81,10 +91,11 @@ export function TwoFactorForm({
   const [attempt, setAttempt] = useState(0);
 
   // Taken once per mount; the ref keeps a development double-run from taking it twice.
-  const took = useRef(false);
+  const tookRef = useRef(false);
   useEffect(() => {
-    if (took.current) return;
-    took.current = true;
+    if (tookRef.current) return;
+    tookRef.current = true;
+    // eslint-disable-next-line @eslint-react/set-state-in-effect -- sessionStorage exists only after hydration, so the address is read here once, not during render
     setEmail(takePendingEmail());
   }, []);
 
@@ -151,7 +162,7 @@ export function TwoFactorForm({
         >
           {method === "totp" ? (
             <CodeInput
-              key={`totp-${attempt}`}
+              key={`totp-${String(attempt)}`}
               autoFocus={attempt > 0}
               id="two-factor-code"
               name="code"
@@ -161,7 +172,7 @@ export function TwoFactorForm({
             />
           ) : (
             <Field
-              key={`backup-${attempt}`}
+              key={`backup-${String(attempt)}`}
               id="two-factor-backup"
               name="code"
               type="text"
