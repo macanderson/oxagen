@@ -1,7 +1,7 @@
 {
   "name": "list_agents",
   "domain": "agent",
-  "description": "List the agent identities registered in this workspace with their principal, harness, operator, status, enrollment and credential counts, and the 30-day run, spend and incident figures the stores record.",
+  "description": "List the agents registered in this workspace with their purpose, principal, harness, operator, status, enrollment and credential counts, live host, latest enforcement tier, active mandates, and the 30-day run, spend, token and incident figures the stores record.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -56,6 +56,16 @@
               "type": "string",
               "minLength": 1
             },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "agentKey": {
               "anyOf": [
                 {
@@ -97,6 +107,16 @@
                 }
               ]
             },
+            "operatorName": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "status": {
               "type": "string",
               "enum": [
@@ -110,6 +130,22 @@
               "anyOf": [
                 {
                   "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "enforcementTier": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "contained",
+                    "gateway",
+                    "harness",
+                    "observe"
+                  ]
                 },
                 {
                   "type": "null"
@@ -164,6 +200,54 @@
                 }
               ]
             },
+            "tokens30d": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "input": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cacheRead": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cacheReadRate": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "sessions": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "input",
+                    "cacheRead",
+                    "cacheReadRate",
+                    "sessions"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "proven30d": {
               "anyOf": [
                 {
@@ -190,6 +274,14 @@
               "type": "integer",
               "minimum": 0
             },
+            "tamperIncidents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tamperIncidentsRecorded": {
+              "type": "integer",
+              "minimum": 0
+            },
             "credentials": {
               "type": "integer",
               "minimum": 0
@@ -197,6 +289,16 @@
             "hosts": {
               "type": "integer",
               "minimum": 0
+            },
+            "host": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "registeredAt": {
               "type": "string"
@@ -206,20 +308,27 @@
             "id",
             "slug",
             "name",
+            "description",
             "agentKey",
             "harness",
             "principalId",
             "operatorId",
+            "operatorName",
             "status",
             "tier",
+            "enforcementTier",
             "beltSize",
             "runs30d",
             "spend30d",
+            "tokens30d",
             "proven30d",
             "mandates",
             "incidents",
+            "tamperIncidents",
+            "tamperIncidentsRecorded",
             "credentials",
             "hosts",
+            "host",
             "registeredAt"
           ],
           "additionalProperties": false
@@ -261,13 +370,62 @@
           "tamperIncidents": {
             "type": "integer",
             "minimum": 0
+          },
+          "tamper": {
+            "type": "object",
+            "properties": {
+              "recorded": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "open": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "newest": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "agentKey": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "kind": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "detectedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "agentKey",
+                      "kind",
+                      "detectedAt"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "recorded",
+              "open",
+              "newest"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
           "identities",
           "enrolled",
           "holdingMandate",
-          "tamperIncidents"
+          "tamperIncidents",
+          "tamper"
         ],
         "additionalProperties": false
       }

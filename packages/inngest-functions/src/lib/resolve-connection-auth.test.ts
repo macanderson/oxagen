@@ -203,3 +203,11 @@ describe("resolveConnectionAuth — no credential", () => {
     );
   });
 });
+
+it("never decrypts issue-only credentials for ingestion or webhook provisioning", async () => {
+  queueDb([
+    { delivery_config: { runOutcomesOnly: true }, oauth_account_id: null },
+  ]);
+  expect(await resolveConnectionAuth("conn", "org")).toBeNull();
+  expect(mocks.decrypt).not.toHaveBeenCalled();
+});

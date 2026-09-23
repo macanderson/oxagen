@@ -2,7 +2,7 @@
 
 **Status:** Current
 **Date:** 2026-09-19
-**Related:** `packages/auth/src/auth.ts`, `packages/auth/src/oauth-proxy-config.ts`, `docs/specs/google-oauth-clients.md` (login vs data client split)
+**Related:** `packages/auth/src/auth.ts`, `packages/auth/src/oauth-proxy-config.ts`, `oxagen-roadmap:docs/oxagen/specs/google-oauth-clients.md` (login vs data client split)
 
 Use this checklist when Google or GitHub sign-in fails on `/login`, or when you create or rotate the login OAuth apps. These are the **LOGIN** clients only. They are not the Google DATA client, the GitHub App connector (`GITHUB_APP_*`), or MCP OAuth.
 
@@ -107,6 +107,6 @@ In [GitHub Developer Settings → OAuth Apps](https://github.com/settings/develo
 
 ## Related, not this checklist
 
-- Google DATA client and Workspace connector scopes: `docs/specs/google-oauth-clients.md`
+- Google DATA client and Workspace connector scopes: `oxagen-roadmap:docs/oxagen/specs/google-oauth-clients.md`
 - GitHub App install / connector OAuth: `GITHUB_APP_*`, `apps/api` github-oauth routes
 - MCP provider OAuth: `MCP_OAUTH_PREREGISTERED_CLIENTS`

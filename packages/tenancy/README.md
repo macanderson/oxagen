@@ -5,6 +5,64 @@ single `AsyncLocalStorage<TenantScope>`, so data accessors can read the active
 scope instead of passing ids by hand. This package only carries the scope — the
 enforcement lives next to each store. It has no runtime dependencies.
 
+## Boundary
+
+- **Owns:** the active tenant scope (`orgId`, `workspaceId`) in one
+  `AsyncLocalStorage`, the principal attribution layered onto it,
+  `TenantScopeError`, and the data-plane resolver seam that answers which
+  store an organization's data lives on (ADR-042).
+- **Does not own:** row-level security, the database wrappers, or the
+  platform data-plane resolver ([`@oxagen/database`](../database/README.md):
+  `withTenantDb`, `withSystemDb`, `src/data-plane-resolver.ts`); the scoped
+  Neo4j and ClickHouse clients
+  ([`@oxagen/ontology`](../ontology/README.md),
+  [`@oxagen/telemetry`](../telemetry/README.md)); deciding who may act
+  ([`@oxagen/iam`](../iam/README.md)).
+- **Depends on:** No `@oxagen/*` runtime dependencies.
+- **Used by:** the kernel (`@oxagen/oxagen`), every store client
+  (`@oxagen/database`, `@oxagen/ontology`, `@oxagen/telemetry`), the
+  packages that read or enter the scope (`@oxagen/handlers`,
+  `@oxagen/agent`, `@oxagen/inngest-functions`, `@oxagen/ingestion`,
+  `@oxagen/billing`, `@oxagen/plugins`, `@oxagen/rules`, `@oxagen/ai`),
+  `apps/api`, `apps/app`, `apps/app_deprecated`, and `tools/scripts`. Read
+  each `package.json` for the current list.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| `runInTenantScope` / `requireScope` / `getScope` | export | `packages/tenancy/src/scope.ts` | `packages/oxagen/src/kernel.ts` enters the scope on every scoped `invoke()`. Inngest functions and some API routes enter it directly |
+| `runWithPrincipal` / `getPrincipalAttribution` | export | `packages/tenancy/src/scope.ts` | `packages/oxagen/src/kernel.ts`, after the IAM check |
+| `setDataPlaneResolver` | injection | `packages/tenancy/src/data-plane.ts` | `bootstrapDataPlaneResolver()` in `packages/database/src/data-plane-resolver.ts`, called from `apps/app/instrumentation.ts`, `apps/api/src/bootstrap.ts`, and `apps/mcp/src/middleware.ts` |
+| `DataPlaneResolver` | port | `packages/tenancy/src/data-plane.ts` | Implemented by `platformDataPlaneResolver` in `packages/database/src/data-plane-resolver.ts` |
+| `resolveDataPlane` / `assertDataPlaneUsable` | export | `packages/tenancy/src/data-plane.ts` | `packages/database/src/tenant.ts`, `packages/ontology/src/tenant.ts`, `packages/telemetry/src/tenant.ts`, and a few handlers |
+| Raw-client import ban | boundary | `eslint.tenancy-seams.mjs` | `eslint.config.mjs` and `apps/app/eslint.config.mjs` |
+
+## Entry points
+
+- `.` → `src/index.ts`: the scope functions, `TenantScopeError`, and the
+  data-plane resolver seam and its types.
+- `./testing` → `src/testing.ts`: `TEST_ORG`, `TEST_WS`, `TEST_SCOPE`, and
+  `withTestScope`.
+
+## Rules
+
+- `runInTenantScope` throws on any id that is not a UUID, and the stored
+  scope is frozen.
+- Attribution records who a decision was for. It is never an access check.
+- Forgetting the data-plane resolver is inert: every organization stays on
+  the shared plane (ADR-042).
+- The package takes no runtime dependencies.
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/tenancy test:unit src/scope.test.ts
+```
+
+Never put `--` before the filename. The tests live beside the source:
+`src/scope.test.ts`, `src/data-plane.test.ts`, and `src/testing.test.ts`.
+
 ## The scope
 
 ```ts

@@ -422,7 +422,7 @@
   }
 
   var FAIL =
-    'Something went wrong. Try again, or email <a href="mailto:success@oxagen.sh">success@oxagen.sh</a>.';
+    'The form did not send. Try again, or email <a href="mailto:success@oxagen.sh">success@oxagen.sh</a>.';
 
   /* demo / contact forms: the lead lands in cms.leads, no book code minted. */
   function wireForm(form) {
@@ -444,7 +444,10 @@
             throw new Error("status " + res.status);
           }
           form.reset();
-          setStatus(form, "Thanks. We got it. We will be in touch shortly.");
+          setStatus(
+            form,
+            "Thanks. Oxagen has your note and will email you soon.",
+          );
           btn.disabled = false;
         })
         .catch(function () {
@@ -490,8 +493,7 @@
             form.hidden = true;
             if (successMsg) {
               successMsg.textContent =
-                data.message ||
-                "The link to the book has been sent to your email.";
+                data.message || "The link to the book is in your email.";
             }
             if (successPanel) {
               successPanel.hidden = false;
@@ -512,7 +514,7 @@
             setStatus(
               form,
               data.message ||
-                "We saved your details, but couldn't send the email. Please try again.",
+                "Oxagen saved your details, but the email did not send. Submit the form again.",
               true,
             );
           } else {

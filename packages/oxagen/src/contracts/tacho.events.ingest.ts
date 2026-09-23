@@ -12,31 +12,22 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { controlEnvelopeSchema, tachoBatchSchema } from "../tacho/schemas";
-import {
-  PROOF_OBSERVED_KIND,
-  proofObservedBodySchema,
-} from "@oxagen/run-evidence";
 
 const MAX_BATCH = 200;
 
 /**
- * The batch as the host ships it, with every `proof.observed` body held to
- * its schema (@oxagen/run-evidence, ADR-064): the leaf tacho package carries
- * that body opaquely, so the control plane is where a malformed verdict is
- * refused, and it refuses the whole batch at the input parse. The refinement
- * sits on `events` so the input stays an object (v2 `ingest_frames` unions it).
+ * The batch as the host ships it.
+ *
+ * A `proof.observed` body is NOT held to its schema here. The leaf tacho
+ * package carries that body opaquely, and refusing the whole batch at the
+ * input parse for one malformed verdict made the host bisect and quarantine
+ * it; the next batch then failed the dense-seq check, and the session read
+ * `chain_verified = false` for the rest of its life. The handler records the
+ * frame, skips only its verdict row, and names it in `proof_rejections`
+ * (@oxagen/run-evidence `proofObservedBodySchema`, ADR-064). Kept as its own
+ * name so the v2 `ingest_frames` union keeps an object input.
  */
-const ingestBatchSchema = tachoBatchSchema.extend({
-  events: tachoBatchSchema.shape.events.superRefine((events, ctx) => {
-    events.forEach((event, index) => {
-      if (event.kind !== PROOF_OBSERVED_KIND) return;
-      const parsed = proofObservedBodySchema.safeParse(event.body);
-      if (parsed.success) return;
-      for (const issue of parsed.error.issues)
-        ctx.addIssue({ ...issue, path: [index, "body", ...issue.path] });
-    });
-  }),
-});
+const ingestBatchSchema = tachoBatchSchema;
 
 export const tachoEventsIngest = registerCapability({
   name: "ingest_tacho_events",
@@ -112,6 +103,22 @@ export const tachoEventsIngest = registerCapability({
             .strict(),
         )
         .max(MAX_BATCH),
+      /**
+       * `proof.observed` frames whose body the run-evidence schema refused.
+       * The frame was recorded as a link in its chain; its verdict row was
+       * not written. Absent when there were none.
+       */
+      proof_rejections: z
+        .array(
+          z
+            .object({
+              event_id_idem: z.string().regex(/^evt_[0-9a-f]{64}$/),
+              reason: z.string().max(256),
+            })
+            .strict(),
+        )
+        .max(MAX_BATCH)
+        .optional(),
       control: controlEnvelopeSchema,
     })
     .strict()

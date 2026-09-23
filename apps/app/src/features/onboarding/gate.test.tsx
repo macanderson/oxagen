@@ -11,7 +11,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { onboardingGate, onboardingSource } from "./onboarding.builders";
+import {
+  onboardingGate,
+  onboardingSource,
+  runsPage,
+} from "./onboarding.builders";
 
 const { router, bindMainRepository } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
@@ -81,8 +85,14 @@ describe("OnboardingGate", () => {
   it("names the provisional window and offers the repository the host reported", async () => {
     await renderGate({ state: { ok: true, value: onboardingGate() } });
     const banner = screen.getByTestId("onboarding-provisional");
+    // The design names the workspace and ends the title with a period, and
+    // its pill is the denied tone.
     expect(banner).toHaveTextContent(
-      "core-platform is provisional until Sep 29, 2026",
+      "Core platform is provisional until Sep 29, 2026.",
+    );
+    expect(banner.querySelector("[data-banner-badge]")).toHaveAttribute(
+      "data-banner-badge",
+      "denied",
     );
     expect(banner).toHaveTextContent(
       "Steering, context records and agent definitions stay off",
@@ -154,21 +164,53 @@ describe("OnboardingGate", () => {
     expect(screen.queryByTestId("bind-main-repo")).toBeNull();
   });
 
-  it("drops the rail once the first frame opened the gate and names the run it recorded", async () => {
-    await renderGate({
-      state: {
-        ok: true,
-        value: onboardingGate({
-          step: "unlocked",
-          firstFrameAt: "2026-09-15T14:02:11.000Z",
-          firstRunId: "tse_first",
-        }),
-      },
+  const unlocked = onboardingGate({
+    step: "unlocked",
+    firstFrameAt: "2026-09-15T14:02:11.000Z",
+    firstRunId: "tse_first",
+  });
+
+  it("drops the rail once the first frame opened the gate and draws the first run as the design words it", async () => {
+    const user = userEvent.setup();
+    const { calls } = await renderGate({
+      state: { ok: true, value: unlocked },
+      runs: runsPage([{ id: "tse_first", agentKey: "acme.core.release-bot" }]),
     });
+    expect(calls.runs).toEqual([[ctx, { cursor: null }]]);
     expect(railSteps()).toEqual([]);
     const banner = screen.getByTestId("onboarding-first-run");
-    expect(banner).toHaveTextContent("tse_first");
-    expect(banner).toHaveTextContent("Open the first run");
+    expect(banner).toHaveTextContent("One run so far.");
+    expect(banner).toHaveTextContent(
+      "This workspace has recorded the installer’s smoke session, tse_first from acme.core.release-bot, and nothing else. The tiles below read off that run.",
+    );
+    expect(banner.querySelector("[data-banner-badge]")).toHaveAttribute(
+      "data-banner-badge",
+      "quiet",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Show the seeded fleet" }),
+    );
+    expect(screen.queryByTestId("onboarding-first-run")).toBeNull();
+  });
+
+  it("draws no first-run banner once the workspace holds a second run (negative)", async () => {
+    await renderGate({
+      state: { ok: true, value: unlocked },
+      runs: runsPage([
+        { id: "tse_second", agentKey: "acme.core.release-bot" },
+        { id: "tse_first", agentKey: "acme.core.release-bot" },
+      ]),
+    });
+    expect(screen.queryByTestId("onboarding-first-run")).toBeNull();
+    expect(screen.getByTestId("onboarding-provisional")).toBeInTheDocument();
+  });
+
+  it("draws no first-run banner when the runs read failed (negative)", async () => {
+    await renderGate({
+      state: { ok: true, value: unlocked },
+      runs: readError("run_index_unavailable", 503),
+    });
+    expect(screen.queryByTestId("onboarding-first-run")).toBeNull();
   });
 
   it("draws nothing once the gate is open and a main repo is bound (negative)", async () => {

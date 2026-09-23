@@ -5,7 +5,7 @@ Oxagen is workforce management for autonomous agents, on the shared agent contro
 ## Prerequisites
 
 - Node.js 24.21.0 or later (`node -v`; `.node-version` holds the pin, so `nvm use` or `fnm use` picks it up)
-- pnpm 11+ (`npm i -g pnpm`) — the repo pins `pnpm@11.7.0` via `packageManager`
+- pnpm 12+ (`npm i -g pnpm`) — the repo pins `pnpm@12.6.0` via `packageManager`
 - Docker (for local Postgres :5433, Neo4j :7687, ClickHouse :8123)
 
 ## First-Time Setup

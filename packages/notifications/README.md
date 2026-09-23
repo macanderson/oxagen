@@ -4,6 +4,55 @@ Vendor-neutral transactional email for the Oxagen monorepo. One entry point,
 `sendEmail`, dispatches welcome emails, password resets, invitations, and any
 other transactional message from the API, app, or MCP server.
 
+## Boundary
+
+- **Owns:**
+  - `sendEmail` and `sendEmailFireAndForget` (`src/send-email.ts`).
+  - The `EmailTransport` interface, the configured transport singleton
+    (`src/transport.ts`), and the SMTP driver (`src/smtp-transport.ts`).
+  - The in-app notification feed writes, `createNotification` and
+    `notifyOrgManagers` (`src/notifications/`).
+  - The transactional email templates: password reset, email verification,
+    invitation, re-authorization, low balance, payment failed, payment
+    receipt, and book access (`src/notifications/`).
+- **Does not own:**
+  - Per-organization usage metering for a send. The calling handler owns it.
+  - Retries and a durable outbox. Neither exists (see "What happens when a
+    send fails").
+  - The `approval.requested` feed rows for approvals:
+    [`@oxagen/rules`](../rules/README.md) (`src/approval-notify.ts`).
+- **Depends on:**
+  - `@oxagen/config`: `requireEnv` for the `SMTP_*` settings.
+  - `@oxagen/database`: `withSystemDb` for the notification feed rows and the
+    organization manager lookup.
+- **Used by:** `apps/api`, `apps/app_deprecated`, `@oxagen/auth`,
+  `@oxagen/billing`, `@oxagen/handlers`, and `@oxagen/plugins`.
+
+## Seams
+
+| Seam | Kind | Source | Wired by |
+|---|---|---|---|
+| `EmailTransport` | port | `packages/notifications/src/types.ts` | Implemented by `createSmtpTransport` in `src/smtp-transport.ts` |
+| `sendEmail` | export | `packages/notifications/src/send-email.ts` | `packages/handlers/src/workspace.invite.send.ts`, `packages/handlers/src/lib/manage-invitation.ts`, `apps/api/src/routes/v1/cms.ts` |
+| `sendEmailFireAndForget` | export | `packages/notifications/src/send-email.ts` | `packages/auth/src/auth.ts` |
+| `notifyOrgManagers` | export | `packages/notifications/src/notifications/notify-org-managers.ts` | `packages/plugins/src/oauth/mark-reauth.ts`, `packages/billing/src/dunning.ts`, `packages/billing/src/receipts.ts`, `packages/billing/src/autoreload.ts` |
+| `isEmailTransportConfigured` | export | `packages/notifications/src/transport.ts` | `apps/api/src/bootstrap.ts`, `apps/api/src/routes/health.ts` |
+| SMTP network boundary | boundary | `packages/notifications/src/smtp-transport.ts` | `SMTP_HOST` and `SMTP_PORT` |
+
+## Entry points
+
+- `.` (`src/index.ts`): `sendEmail`, `sendEmailFireAndForget`,
+  `emailTransport`, `isEmailTransportConfigured`, `createSmtpTransport`,
+  `sendEmailInputSchema`, the notification service, and every template.
+
+## Tests
+
+```bash
+pnpm --filter @oxagen/notifications test:unit src/send-email.test.ts
+```
+
+Tests sit beside their source under `src/` and `src/notifications/`.
+
 ## Usage
 
 ```ts

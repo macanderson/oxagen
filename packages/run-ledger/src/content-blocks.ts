@@ -266,10 +266,16 @@ function responseWire(wire: string): string {
   if (!wire.trimStart().startsWith("{")) return wire;
   try {
     const exchange = asRecord(JSON.parse(wire));
-    return typeof exchange?.request === "string" &&
-      typeof exchange.response === "string"
-      ? exchange.response
-      : wire;
+    if (typeof exchange?.response !== "string") return wire;
+    // `request` may be absent: a request over the cap, or a call this build
+    // could not fold within it, ships `{"response":...}` alone (JCS drops
+    // the member with no bytes; `model-proxy.ts`'s `exchangeContent`). The
+    // response still renders; only the request half is missing. A `request`
+    // that is present but not a string is not this shape at all, and is left
+    // alone rather than guessed at.
+    if (exchange.request !== undefined && typeof exchange.request !== "string")
+      return wire;
+    return exchange.response;
   } catch {
     return wire;
   }
@@ -355,15 +361,23 @@ export interface AssemblyTiming {
  * `timing` is what the frame's own receipt timed, which the stream itself
  * cannot say: the bytes carry no clock.
  *
- * Answers null when the bytes are not a model stream, so the caller keeps
- * showing the body it already showed.
+ * Answers null when the bytes are neither a streamed model response nor one
+ * of the three vendor shapes a `stream: false` call answers with, so the
+ * caller keeps showing the body it already showed.
  */
 export function assembleModelStream(
   wire: string,
   timing: AssemblyTiming = {},
 ): MessageAssembly | null {
-  if (!looksLikeModelStream(wire)) return null;
+  if (looksLikeModelStream(wire)) return assembleSseStream(wire, timing);
+  return assembleNonStreamedDocument(wire, timing);
+}
 
+/** The SSE half of `assembleModelStream`: Anthropic and OpenAI's streamed shapes. */
+function assembleSseStream(
+  wire: string,
+  timing: AssemblyTiming,
+): MessageAssembly | null {
   const drafts = new Map<number, Draft>();
   const order: number[] = [];
   let stopReason: string | null = null;
@@ -431,9 +445,77 @@ export function assembleModelStream(
     }
   };
 
+  // OpenAI Chat Completions chunks carry no `type` field at all — they are
+  // told apart by `choices`, which every chunk carries, empty in the
+  // trailing one `stream_options.include_usage` adds to report usage once
+  // the message is done. Chat Completions has one text stream, not an
+  // indexed array of content blocks, so its deltas fold into a fixed index;
+  // tool calls get their own indices, offset clear of it.
+  const CHAT_COMPLETION_TEXT_INDEX = 0;
+  const chatCompletionToolIndex = (toolIndex: number): number =>
+    1000 + toolIndex;
+  const foldChatCompletionChunk = (event: Record<string, unknown>): void => {
+    sawMessage = true;
+    const choices = event["choices"];
+    if (Array.isArray(choices)) {
+      for (const raw of choices) {
+        const choice = asRecord(raw);
+        if (choice === null) continue;
+        const finish = str(choice, "finish_reason");
+        const delta = asRecord(choice["delta"]);
+        const content = str(delta, "content");
+        if (content !== null) {
+          at(CHAT_COMPLETION_TEXT_INDEX, "text").text += content;
+        }
+        const toolCalls = delta?.["tool_calls"];
+        if (Array.isArray(toolCalls)) {
+          for (const rawCall of toolCalls) {
+            const call = asRecord(rawCall);
+            if (call === null) continue;
+            const held = at(
+              chatCompletionToolIndex(num(call, "index") ?? 0),
+              "tool_use",
+            );
+            const fn = asRecord(call["function"]);
+            const name = str(fn, "name");
+            if (name !== null) held.name = name;
+            held.json += str(fn, "arguments") ?? "";
+            const id = str(call, "id");
+            if (id !== null) held.callKey = id;
+          }
+        }
+        if (finish !== null) {
+          stopReason = finish;
+          ended = true;
+          // Chat Completions signals the end once, on a chunk that carries
+          // no further content of its own: every block folded so far for
+          // this stream closes together, not just whichever one this
+          // particular chunk happened to touch.
+          for (const held of drafts.values()) held.closed = true;
+        }
+      }
+    }
+    const reported = asRecord(event["usage"]);
+    if (reported !== null) {
+      const cached = num(
+        asRecord(reported["prompt_tokens_details"]),
+        "cached_tokens",
+      );
+      const prompt = num(reported, "prompt_tokens");
+      if (prompt !== null) usage.inputTokens = prompt - (cached ?? 0);
+      if (cached !== null) usage.cacheReadTokens = cached;
+      const completion = num(reported, "completion_tokens");
+      if (completion !== null) usage.outputTokens = completion;
+    }
+  };
+
   for (const event of sseEvents(responseWire(wire))) {
     events += 1;
     const type = str(event, "type");
+    if (type === null && Array.isArray(event["choices"])) {
+      foldChatCompletionChunk(event);
+      continue;
+    }
     switch (type) {
       case "response.created":
       case "response.in_progress":
@@ -656,6 +738,257 @@ export function assembleModelStream(
     partial: !ended || blocks.some((block) => block.partial),
     wire: { events, bytes: Buffer.byteLength(wire, "utf8") },
   };
+}
+
+/** One block, before it is apportioned a token share and given an id. */
+interface NonStreamedPart {
+  kind: ContentBlock["kind"];
+  text?: string;
+  /** The tool call's arguments, as JSON text (parsed at `finishNonStreamed`). */
+  json?: string;
+  name?: string | null;
+  callKey?: string | null;
+}
+
+/**
+ * Turn parts read straight off a non-streamed document into blocks: the same
+ * shape `assembleSseStream` produces, apportioning `usage.outputTokens`
+ * across them by character share the same way.
+ */
+function finishNonStreamed(
+  parts: readonly NonStreamedPart[],
+  stopReason: string | null,
+  usage: AssemblyUsage,
+  timing: AssemblyTiming,
+  wire: string,
+): MessageAssembly {
+  const chars = parts.map((part) =>
+    part.kind === "tool_use"
+      ? (part.json ?? "").length
+      : (part.text ?? "").length,
+  );
+  const tokens = apportion(chars, usage.outputTokens);
+  const blocks: ContentBlock[] = parts.map((part, i) => {
+    const base = {
+      id: `b${i}`,
+      chars: chars[i] as number,
+      tokens: tokens[i] as number,
+      partial: false,
+    };
+    if (part.kind === "tool_use") {
+      const parsed = parseJson(part.json ?? "");
+      return {
+        ...base,
+        kind: "tool_use",
+        name: part.name ?? "tool",
+        input: parsed.value,
+        inputRaw: parsed.raw,
+        callKey: part.callKey ?? null,
+        verdict: null,
+        partial: parsed.raw,
+      } satisfies ToolUseBlock;
+    }
+    if (part.kind === "thinking") {
+      return {
+        ...base,
+        kind: "thinking",
+        text: part.text ?? "",
+        seconds: null,
+      };
+    }
+    return { ...base, kind: "text", text: part.text ?? "" };
+  });
+  return {
+    version: MESSAGE_ASSEMBLY_VERSION,
+    blocks,
+    stopReason,
+    ttftMs: timing.ttftMs ?? null,
+    durationMs: timing.durationMs ?? null,
+    usage,
+    partial: blocks.some((block) => block.partial),
+    // A non-streamed document arrived as one response, so it counts as one
+    // event: `wire.events` says how many SSE envelopes were folded, and a
+    // document folds in a single pass.
+    wire: { events: 1, bytes: Buffer.byteLength(wire, "utf8") },
+  };
+}
+
+/** Anthropic Messages, not streamed: the whole `content` array in one document. */
+function assembleAnthropicMessageDoc(
+  root: Record<string, unknown>,
+  timing: AssemblyTiming,
+  wire: string,
+): MessageAssembly | null {
+  const content = root["content"];
+  if (!Array.isArray(content)) return null;
+  const parts: NonStreamedPart[] = [];
+  for (const raw of content) {
+    const item = asRecord(raw);
+    if (item === null) continue;
+    const kind = blockKindOf(str(item, "type"));
+    if (kind === "tool_use") {
+      const input = item["input"];
+      parts.push({
+        kind: "tool_use",
+        json: input === undefined ? "" : JSON.stringify(input),
+        name: str(item, "name"),
+        callKey: str(item, "id"),
+      });
+      continue;
+    }
+    // A model's own message carries no `tool_result` block; one would only
+    // appear in a request the caller sent back, which is not this shape.
+    if (kind === "tool_result") continue;
+    const text = str(item, "text") ?? str(item, "thinking");
+    if (text === null) continue;
+    parts.push({ kind, text });
+  }
+  const usage = asRecord(root["usage"]);
+  const assemblyUsage: AssemblyUsage = {
+    inputTokens: num(usage, "input_tokens"),
+    cacheReadTokens: num(usage, "cache_read_input_tokens"),
+    cacheWriteTokens: num(usage, "cache_creation_input_tokens"),
+    outputTokens: num(usage, "output_tokens"),
+  };
+  return finishNonStreamed(
+    parts,
+    str(root, "stop_reason"),
+    assemblyUsage,
+    timing,
+    wire,
+  );
+}
+
+/** OpenAI Responses, not streamed: the whole `output` array in one document. */
+function assembleOpenAiResponseDoc(
+  root: Record<string, unknown>,
+  timing: AssemblyTiming,
+  wire: string,
+): MessageAssembly | null {
+  const output = root["output"];
+  if (!Array.isArray(output)) return null;
+  const parts: NonStreamedPart[] = [];
+  for (const raw of output) {
+    const item = asRecord(raw);
+    if (item === null) continue;
+    if (item["type"] === "function_call") {
+      const args = item["arguments"];
+      parts.push({
+        kind: "tool_use",
+        json: typeof args === "string" ? args : "",
+        name: str(item, "name"),
+        callKey: str(item, "call_id"),
+      });
+      continue;
+    }
+    const reasoning = item["type"] === "reasoning";
+    const pieces = reasoning ? item["summary"] : item["content"];
+    if (!Array.isArray(pieces)) continue;
+    for (const rawPiece of pieces) {
+      const piece = asRecord(rawPiece);
+      const text = str(piece, "text") ?? str(piece, "refusal");
+      if (text === null) continue;
+      parts.push({ kind: reasoning ? "thinking" : "text", text });
+    }
+  }
+  const usage = asRecord(root["usage"]);
+  const cached = num(
+    asRecord(usage?.["input_tokens_details"]),
+    "cached_tokens",
+  );
+  const input = num(usage, "input_tokens");
+  const assemblyUsage: AssemblyUsage = {
+    inputTokens: input === null ? null : input - (cached ?? 0),
+    cacheReadTokens: cached,
+    cacheWriteTokens: null,
+    outputTokens: num(usage, "output_tokens"),
+  };
+  const stopReason =
+    str(asRecord(root["incomplete_details"]), "reason") ?? str(root, "status");
+  return finishNonStreamed(parts, stopReason, assemblyUsage, timing, wire);
+}
+
+/** OpenAI Chat Completions, not streamed: `choices[0].message`. */
+function assembleChatCompletionDoc(
+  root: Record<string, unknown>,
+  timing: AssemblyTiming,
+  wire: string,
+): MessageAssembly | null {
+  const choices = root["choices"];
+  if (!Array.isArray(choices) || choices.length === 0) return null;
+  const choice = asRecord(choices[0]);
+  const message = asRecord(choice?.["message"]);
+  if (message === null) return null;
+  const parts: NonStreamedPart[] = [];
+  const content = message["content"];
+  if (typeof content === "string" && content.length > 0) {
+    parts.push({ kind: "text", text: content });
+  }
+  const toolCalls = message["tool_calls"];
+  if (Array.isArray(toolCalls)) {
+    for (const raw of toolCalls) {
+      const call = asRecord(raw);
+      const fn = asRecord(call?.["function"]);
+      parts.push({
+        kind: "tool_use",
+        json: str(fn, "arguments") ?? "",
+        name: str(fn, "name"),
+        callKey: str(call, "id"),
+      });
+    }
+  }
+  const usage = asRecord(root["usage"]);
+  const cached = num(
+    asRecord(usage?.["prompt_tokens_details"]),
+    "cached_tokens",
+  );
+  const prompt = num(usage, "prompt_tokens");
+  const assemblyUsage: AssemblyUsage = {
+    inputTokens: prompt === null ? null : prompt - (cached ?? 0),
+    cacheReadTokens: cached,
+    cacheWriteTokens: null,
+    outputTokens: num(usage, "completion_tokens"),
+  };
+  return finishNonStreamed(
+    parts,
+    str(choice, "finish_reason"),
+    assemblyUsage,
+    timing,
+    wire,
+  );
+}
+
+/**
+ * Fold a response that was never streamed: one JSON document, in any of the
+ * three shapes `assembleSseStream` reads incrementally above. A harness may
+ * ask with `stream: false`, which every vendor here honors, and the bytes
+ * that come back are the whole message at once rather than deltas, so this
+ * reads the document's arrays directly rather than through the block/delta
+ * machinery above, which exists for a stream that has no array to read yet.
+ */
+function assembleNonStreamedDocument(
+  wire: string,
+  timing: AssemblyTiming,
+): MessageAssembly | null {
+  const trimmed = responseWire(wire).trim();
+  if (!trimmed.startsWith("{")) return null;
+  let root: Record<string, unknown> | null;
+  try {
+    root = asRecord(JSON.parse(trimmed));
+  } catch {
+    return null;
+  }
+  if (root === null) return null;
+  if (str(root, "type") === "message" && Array.isArray(root["content"])) {
+    return assembleAnthropicMessageDoc(root, timing, trimmed);
+  }
+  if (str(root, "object") === "response" && Array.isArray(root["output"])) {
+    return assembleOpenAiResponseDoc(root, timing, trimmed);
+  }
+  if (Array.isArray(root["choices"])) {
+    return assembleChatCompletionDoc(root, timing, trimmed);
+  }
+  return null;
 }
 
 /** The stored assembly as JSON bytes, for the object written beside the wire. */

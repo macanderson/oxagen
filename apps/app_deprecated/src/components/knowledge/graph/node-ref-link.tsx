@@ -15,7 +15,7 @@
  * `NodeRef`'s internals are untouched; this only reuses it.
  *
  * Used by the Knowledge → Graph node-detail Neighbors section (spec:
- * docs/web-app-2.0/workspace/knowledge/graph/node/spec.md) so a neighbor chip
+ * docs/web-app-2.0/workspace/knowledge/graph/node/spec.md, removed 2026-09-23; git history keeps it) so a neighbor chip
  * both inspects in place and opens its own detail page.
  */
 

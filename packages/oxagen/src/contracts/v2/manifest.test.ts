@@ -5,8 +5,10 @@ import { describe, expect, it } from "vitest";
 /**
  * Parity gate between the generated traceability matrix and the v2 tree.
  *
- * The matrix (docs/mission-control/matrix.json) is derived from Appendix E of
- * the Mission Control spec joined against the live contracts. It is the plan;
+ * The matrix (fixtures/matrix.json) is derived from Appendix E of
+ * the Mission Control spec joined against the live contracts. The spec and the
+ * scripts that generated the matrix live in macanderson/oxagen-roadmap
+ * (docs/mission-control-spec.md, docs/oxagen/mission-control/). It is the plan;
  * this directory is the execution. The two drifting silently is the failure
  * this test exists to prevent — a tool that quietly stops carrying one of its
  * sources, or a v2 file that carries something Appendix E never assigned it.
@@ -21,10 +23,7 @@ type MatrixRow = {
 };
 
 const MATRIX: MatrixRow[] = JSON.parse(
-  readFileSync(
-    join(__dirname, "../../../../../docs/mission-control/matrix.json"),
-    "utf8",
-  ),
+  readFileSync(join(__dirname, "fixtures/matrix.json"), "utf8"),
 );
 
 const INHERIT = MATRIX.filter(

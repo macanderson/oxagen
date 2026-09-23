@@ -603,6 +603,7 @@ export function runSource(reads: RunReads) {
     };
   };
   const source: DataSource = {
+    runtimes: { list: refuse, agents: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: { context: refuse, preferences: refuse },
     runs: {
@@ -664,6 +665,7 @@ export function runSource(reads: RunReads) {
     billing: {
       plan: refuse,
       usageCredits: refuse,
+      retention: refuse,
       bucket: refuse,
       contractRate: refuse,
       invoices: refuse,
@@ -699,6 +701,7 @@ export function runSource(reads: RunReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      hub: refuse,
       deliveries: refuse,
     },
     tools: {

@@ -9,6 +9,13 @@
 //     rejects the batch (telemetry is fail-open); it is recorded on the row,
 //     stamped on every event as chain_verified = false, and answered back.
 //
+// A re-sent event (one below its session's recorded head) is compared with
+// the frame ClickHouse holds at its seq: the same hash is not written again,
+// another hash is refused and answered as a chain break, and a seq ClickHouse
+// does not hold is written, because that is the retry of an append that
+// failed after the Postgres commit. The control envelope, which drains the
+// host's queued commands, is built only after the append has landed.
+//
 // What lands: every event in ClickHouse `tacho_events`; the session rows,
 // per-model rollups, files touched, and commands run in Postgres; the host's
 // liveness; and the control envelope in the response. A batch that carried
@@ -26,7 +33,8 @@
 // (lib/proof.ts) under the run it is part of, the root session named by its
 // `root_session_uuid`, whichever session's chain carried it. A verdict reaching
 // a root sealed before it asks the rollup for the run's row again, so the row
-// carries it.
+// carries it. A proof body the run-evidence schema refuses is still recorded
+// as a frame; only its verdict row is skipped, and `proof_rejections` names it.
 //
 // Bodies (ADR-058): a batch may ship the bytes a frame's `content.digest`
 // names. The host is resolved first (a revoked, expired or mismatched host
@@ -44,7 +52,10 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
-import { PROOF_OBSERVED_KIND } from "@oxagen/run-evidence";
+import {
+  PROOF_OBSERVED_KIND,
+  proofObservedBodySchema,
+} from "@oxagen/run-evidence";
 import {
   countsLlmCallSplit,
   countsLlmCallUsage,
@@ -58,7 +69,7 @@ import {
 } from "@oxagen/tacho";
 import {
   insertTachoEvents,
-  selectTachoEvents,
+  selectTachoStoredFrames,
   storeOverloadedFrom,
   type TachoEventInsert,
 } from "@oxagen/telemetry";
@@ -1025,6 +1036,36 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     ) {
       throw tachoDenied(capability, "Forbidden: event names another host");
     }
+    // A session another host opened is refused here, before any of this
+    // batch's bodies reach the tenant's store. The same refusal inside the
+    // write transaction below stays as the guard of record; this one only
+    // stops a refused batch from writing objects first.
+    const named = [...new Set(input.events.map((event) => event.session_uuid))];
+    const owners = (await tx
+      .select({
+        sessionUuid: schema.tachoSessions.sessionUuid,
+        hostId: schema.tachoSessions.hostId,
+      })
+      .from(schema.tachoSessions)
+      .where(inArray(schema.tachoSessions.sessionUuid, named))) as Array<{
+      sessionUuid?: string;
+      hostId?: string | null;
+    }>;
+    if (
+      owners.some(
+        (row) =>
+          row.sessionUuid !== undefined &&
+          named.includes(row.sessionUuid) &&
+          row.hostId !== host.id,
+      )
+    ) {
+      // The collector's Shipper matches this message to set the session
+      // aside (`SESSION_OWNED_ELSEWHERE`), as it does the one below.
+      throw tachoDenied(
+        capability,
+        "Forbidden: session belongs to another host",
+      );
+    }
     const retention = await readWorkspaceRetention(
       tx as never,
       ctx.orgId,
@@ -1032,6 +1073,31 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     );
     return { host, retention };
   });
+
+  // A `proof.observed` body the run-evidence schema refuses. The frame is
+  // still a link in the chain and is recorded like any other; only its
+  // verdict row is not written, and the response says which frames were
+  // refused. Refusing the whole batch at the input parse made the host
+  // quarantine it, and the next batch then failed the dense-seq check, so the
+  // session read `chain_verified = false` for the rest of its life.
+  const proofRejections: Array<{ event_id_idem: string; reason: string }> = [];
+  for (const event of input.events) {
+    if (event.kind !== PROOF_OBSERVED_KIND) continue;
+    const parsed = proofObservedBodySchema.safeParse(event.body);
+    if (parsed.success) continue;
+    const issue = parsed.error.issues[0];
+    const what =
+      issue === undefined
+        ? "schema"
+        : `${issue.path.join(".")} ${issue.message}`;
+    proofRejections.push({
+      event_id_idem: event.event_id_idem,
+      reason: `proof_body_invalid: ${what}`.slice(0, 256),
+    });
+  }
+  const refusedProofs = new Set(
+    proofRejections.map((rejection) => rejection.event_id_idem),
+  );
 
   // Bodies next: verified against the chain, then written content-addressed
   // before any row references them. A rejected body leaves its frame without
@@ -1062,15 +1128,23 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     retained.push(body);
   }
   const bytesRefs = new Map<string, string>();
-  for (const body of retained) {
-    const { ref } = await evidenceStore().put({
-      orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
-      runId: body.sessionUuid,
-      digest: body.digest,
-      contentType: body.contentType,
-      bytes: body.bytes,
-    });
+  // A few at a time, each bounded: a batch carries up to 200 bodies, and one
+  // at a time with no bound held the request open for as long as the slowest
+  // store answer took, however many there were. A write that runs out its
+  // time fails the batch, which the host keeps and ships again.
+  await eachConcurrently(retained, BODY_WRITE_CONCURRENCY, async (body) => {
+    const { ref } = await withinTime(
+      evidenceStore().put({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        runId: body.sessionUuid,
+        digest: body.digest,
+        contentType: body.contentType,
+        bytes: body.bytes,
+      }),
+      BODY_WRITE_TIMEOUT_MS,
+      "evidence body write",
+    );
     bytesRefs.set(body.eventIdIdem, ref);
     // A recorded model stream is folded into the message it was HERE, once,
     // and stored beside the wire the row references. The bytes above are the
@@ -1094,7 +1168,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         "frame reassembly was not stored; the transcript will fold this frame on read",
       );
     }
-  }
+  });
 
   const result = await withTenantDb(async (tx) => {
     const bySession = new Map<string, TachoEvent[]>();
@@ -1117,6 +1191,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // root sessions it sealed. Both are acted on after the transaction.
     const spendDeltas: { micros: number; at: Date }[] = [];
     const rollupRoots: string[] = [];
+    // Each sealed root session this batch touched, by session uuid. A re-send
+    // that finds its frames missing from ClickHouse is the retry of an append
+    // that failed, and the seal dispatch that attempt never sent is sent now.
+    const sealedRoots = new Map<string, string>();
     // The batch's fresh `proof.observed` frames, by the root session they belong to.
     const proofsByRoot = new Map<string, TachoEvent[]>();
     // Who each session's tool calls are billed to, read off the rows this
@@ -1684,6 +1762,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       if (accepted) {
         for (const event of fresh) {
           if (event.kind !== PROOF_OBSERVED_KIND) continue;
+          if (refusedProofs.has(event.event_id_idem)) continue;
           const frames = proofsByRoot.get(event.root_session_uuid) ?? [];
           frames.push(event);
           proofsByRoot.set(event.root_session_uuid, frames);
@@ -1698,6 +1777,13 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         "sealedAt" in terminalColumns
       )
         rollupRoots.push(sessionRow.publicId);
+      if (
+        accepted &&
+        sessionRow?.publicId &&
+        sessionRow.parentSessionUuid === null &&
+        (existing?.sealedAt || "sealedAt" in terminalColumns)
+      )
+        sealedRoots.set(sessionUuid, sessionRow.publicId);
     }
 
     // Every session in the batch has its row now, so a root the batch opened
@@ -1799,6 +1885,11 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       }
     }
     const seen = await touchHost(tx as never, host, input.daemon, now, true);
+    // The control envelope is NOT built here. Building it drains the host's
+    // queued commands and marks them `sent`, and this transaction commits
+    // before the ClickHouse append below. An append that failed after the
+    // commit answered the host a 500 or a 503: the commands never reached it,
+    // and a `sent` row is never selected again, so they were lost.
     return {
       chainBreaks,
       verified,
@@ -1807,6 +1898,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       spendDeltas,
       rollupRoots,
       attribution,
+      sealedRoots,
     };
   });
 
@@ -1814,12 +1906,16 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   // are written, and the counter write may not fail the intake.
   for (const spend of result.spendDeltas) {
     try {
-      await recordSpend({
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        at: spend.at,
-        micros: BigInt(spend.micros),
-      });
+      // Tried more than once: a retried batch folds these frames as already
+      // recorded, so a write lost here is not written by any later request.
+      await withRetries(SPEND_WRITE_ATTEMPTS, () =>
+        recordSpend({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          at: spend.at,
+          micros: BigInt(spend.micros),
+        }),
+      );
     } catch (err) {
       logger.error(
         { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
@@ -1827,18 +1923,21 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       );
     }
   }
-  // This read reaches the same node the append below does, and it is on the
-  // retry path by construction: a batch that failed at the append is re-sent,
-  // and a re-sent event carrying content is exactly what sends this query. A
-  // refusal here has to be answered as a refusal too, or the second attempt
-  // 500s one call earlier than the first (#3662).
-  let storedRefs: Map<string, string>;
+  // Every event this batch re-sends below a session's recorded head is
+  // compared with the frame ClickHouse holds at that seq (§8.3). The same
+  // hash is a frame already landed: it is not written again, so a re-send
+  // never restamps a stored row. A different hash is another frame claiming a
+  // position the chain already holds: it is refused and reported as a chain
+  // break, and the stored frame stands, sealed or not. A seq ClickHouse does
+  // not hold is the retry of an append that failed after the Postgres commit,
+  // and it is written.
+  //
+  // The read reaches the same node the append below does, and it is on the
+  // retry path by construction, so a refusal here is answered as a refusal
+  // too, or the second attempt 500s one call earlier than the first (#3662).
+  let resent: ResentVerdicts;
   try {
-    storedRefs = await storedBytesRefs(
-      input.events,
-      result.recordedHeads,
-      bytesRefs,
-    );
+    resent = await compareResent(input.events, result.recordedHeads);
   } catch (err) {
     refuseIfStoreOverloaded(err, ctx, input.events.length);
     throw err;
@@ -1849,15 +1948,20 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   // to a colleague's row. The session's person is `initiatingPrincipalId` /
   // `initiatingUserId`, which this deployment issues rather than the harness
   // reports (#3072).
-  const inserts: TachoEventInsert[] = input.events.map((event) => {
-    const bytesRef =
-      bytesRefs.get(event.event_id_idem) ?? storedRefs.get(event.event_id_idem);
-    return {
-      event,
-      chainVerified: result.verified.get(event.session_uuid) ?? false,
-      ...(bytesRef === undefined ? {} : { bytesRef }),
-    };
-  });
+  const inserts: TachoEventInsert[] = input.events
+    .filter(
+      (event) =>
+        !resent.landed.has(event.event_id_idem) &&
+        !resent.refused.has(event.event_id_idem),
+    )
+    .map((event) => {
+      const bytesRef = bytesRefs.get(event.event_id_idem);
+      return {
+        event,
+        chainVerified: result.verified.get(event.session_uuid) ?? false,
+        ...(bytesRef === undefined ? {} : { bytesRef }),
+      };
+    });
   try {
     await insertTachoEvents(inserts);
   } catch (err) {
@@ -1879,7 +1983,18 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   // The seal event goes out after the batch's frames are in ClickHouse: the
   // rollup job reads tacho_events as soon as it receives the event, and the
   // sweep does not revisit a run whose rollup postdates its seal.
-  for (const runId of new Set(result.rollupRoots)) {
+  //
+  // A re-send that wrote a sealed root's missing `agent_stop` is the retry of
+  // an append that failed, and that attempt sent no seal event. Its own fold
+  // saw the stop as already recorded, so without this nothing would send one.
+  const rollupRoots = new Set(result.rollupRoots);
+  for (const event of input.events) {
+    if (event.kind !== "agent_stop") continue;
+    if (!resent.missing.has(event.event_id_idem)) continue;
+    const root = result.sealedRoots.get(event.session_uuid);
+    if (root !== undefined) rollupRoots.add(root);
+  }
+  for (const runId of rollupRoots) {
     try {
       await eventClient.send({
         name: "cost/run.sealed",
@@ -1954,17 +2069,142 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   // with no error anywhere. Drained here, any earlier failure leaves them
   // queued, and the re-sent batch delivers them.
   const control = await withTenantDb((tx) =>
-    controlEnvelope(tx as never, ctx, result.seen, now),
+    controlEnvelope(tx as never, ctx, result.seen, new Date()),
   );
 
   return {
     accepted: input.events.length,
     event_ids: input.events.map((event) => event.event_id_idem),
-    chain_breaks: result.chainBreaks,
+    chain_breaks: [...result.chainBreaks, ...resent.breaks],
     body_rejections: bodyRejections,
+    ...(proofRejections.length > 0
+      ? { proof_rejections: proofRejections }
+      : {}),
     control,
   };
 };
+
+/** Bodies written to the evidence store at once. */
+const BODY_WRITE_CONCURRENCY = 8;
+/** How long one body write may take before the batch is failed and re-sent. */
+const BODY_WRITE_TIMEOUT_MS = 30_000;
+/** Attempts at the spend counter write before it is logged as lost. */
+const SPEND_WRITE_ATTEMPTS = 3;
+
+/** Run `fn` over `items`, at most `limit` at once; rejects on the first failure. */
+async function eachConcurrently<T>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= items.length) return;
+      await fn(items[index] as T);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
+  );
+}
+
+/** `work`, or a rejection once `ms` have passed without an answer. */
+async function withinTime<T>(
+  work: Promise<T>,
+  ms: number,
+  what: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${what} took longer than ${ms} ms`)),
+      ms,
+    );
+  });
+  try {
+    return await Promise.race([work, late]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/** `fn`, tried up to `attempts` times; the last failure is thrown. */
+async function withRetries<T>(
+  attempts: number,
+  fn: () => Promise<T>,
+): Promise<T> {
+  let last: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      last = err;
+    }
+  }
+  throw last;
+}
+
+/** What `compareResent` found about a batch's re-sent events, by `event_id_idem`. */
+interface ResentVerdicts {
+  /** Stored with the same hash: already landed, not written again. */
+  landed: Set<string>;
+  /** Stored with another hash: refused. */
+  refused: Set<string>;
+  /** Below the recorded head and not stored: the retry of a failed append. */
+  missing: Set<string>;
+  /** One chain break per refused event. */
+  breaks: Array<{ session_uuid: string; at_seq: number; reason: string }>;
+}
+
+/**
+ * Compare each event below its session's recorded head with the frame
+ * ClickHouse holds at that seq. One read per session that re-sent anything,
+ * of the hash, the content digest and the body reference only.
+ */
+async function compareResent(
+  events: readonly TachoEvent[],
+  recordedHeads: ReadonlyMap<string, number>,
+): Promise<ResentVerdicts> {
+  const out: ResentVerdicts = {
+    landed: new Set(),
+    refused: new Set(),
+    missing: new Set(),
+    breaks: [],
+  };
+  const bySession = new Map<string, TachoEvent[]>();
+  for (const event of events) {
+    const head = recordedHeads.get(event.session_uuid) ?? 0;
+    if (event.seq >= head) continue;
+    const list = bySession.get(event.session_uuid) ?? [];
+    list.push(event);
+    bySession.set(event.session_uuid, list);
+  }
+  for (const [sessionUuid, resent] of bySession) {
+    const stored = await selectTachoStoredFrames({
+      sessionUuid,
+      seqs: resent.map((event) => event.seq),
+    });
+    for (const event of resent) {
+      const row = stored.get(event.seq);
+      if (row === undefined) {
+        out.missing.add(event.event_id_idem);
+      } else if (row.hash === event.hash) {
+        out.landed.add(event.event_id_idem);
+      } else {
+        out.refused.add(event.event_id_idem);
+        out.breaks.push({
+          session_uuid: sessionUuid,
+          at_seq: event.seq,
+          reason: `seq ${event.seq} was re-sent with a hash other than the recorded frame's; the recorded frame stands`,
+        });
+      }
+    }
+  }
+  return out;
+}
 
 /**
  * Answer a store that is refusing work as a refusal, or return and let the
@@ -1978,10 +2218,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
  * as a server fault and ships the batch straight back into.
  *
  * Nothing is lost on either path. The host's WAL cursor advances only on a
- * 2xx, so a refused batch stays on disk, and a re-sent batch re-inserts every
- * event — which is how a ClickHouse failure after the Postgres commit has
- * always recovered (see `storedBytesRefs`). What the refusal changes is when
- * the host tries again.
+ * 2xx, so a refused batch stays on disk, and a re-sent batch writes every
+ * event ClickHouse does not yet hold, which is how a ClickHouse failure after
+ * the Postgres commit recovers (see `compareResent`). What the refusal
+ * changes is when the host tries again.
  */
 function refuseIfStoreOverloaded(
   err: unknown,
@@ -2004,52 +2244,6 @@ function refuseIfStoreOverloaded(
     "tacho.events.ingest: the store refused this batch under pressure; the host keeps it and ships it again",
   );
   throw overloaded;
-}
-
-/**
- * The body references already stored for re-sent events that carry content
- * and ship no body in this batch, keyed by `event_id_idem`. The batch
- * re-inserts every event (that is how a ClickHouse failure after the Postgres
- * commit recovers), and `tacho_events` keeps the newest row per seq, so a row
- * written without its reference would serve a body the seal counted as
- * `digest_only`. A stored reference is carried only onto an event with the
- * same content digest.
- */
-async function storedBytesRefs(
-  events: readonly TachoEvent[],
-  recordedHeads: ReadonlyMap<string, number>,
-  shipped: ReadonlyMap<string, string>,
-): Promise<Map<string, string>> {
-  const bySession = new Map<string, TachoEvent[]>();
-  for (const event of events) {
-    const head = recordedHeads.get(event.session_uuid) ?? 0;
-    if (event.seq >= head || !event.content?.digest) continue;
-    if (shipped.has(event.event_id_idem)) continue;
-    const list = bySession.get(event.session_uuid) ?? [];
-    list.push(event);
-    bySession.set(event.session_uuid, list);
-  }
-  const refs = new Map<string, string>();
-  for (const [sessionUuid, resent] of bySession) {
-    const seqs = resent.map((event) => event.seq);
-    const low = Math.min(...seqs);
-    const rows = await selectTachoEvents({
-      sessionUuid,
-      afterSeq: low - 1,
-      limit: Math.max(...seqs) - low + 1,
-    });
-    const stored = new Map(rows.map((row) => [row.seq, row]));
-    for (const event of resent) {
-      const row = stored.get(event.seq);
-      if (
-        row &&
-        row.bytesRef !== "" &&
-        row.contentDigest === event.content?.digest
-      )
-        refs.set(event.event_id_idem, row.bytesRef);
-    }
-  }
-  return refs;
 }
 
 type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];

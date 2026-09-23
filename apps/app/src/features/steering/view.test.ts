@@ -1,76 +1,184 @@
+// Which Steering view an address resolves to (roadmap pages/steering.md):
+// every tab and shelf as a path segment, every address written before the
+// five tabs landing where it lives now, the query values each view keeps,
+// and a 404 for a segment that names nothing.
 import { describe, expect, it } from "vitest";
-import { parseSteeringView, steeringLink, steeringPathParams } from "./view";
-const AT = { org: "acme", ws: "core-platform" };
+import { resolveSteeringRoute, shelfLink, steeringLink } from "./view";
 
-describe("Steering routes", () => {
-  it("opens the whole Library by default", () => {
-    expect(parseSteeringView({})).toEqual({
-      tab: "library",
-      shelf: "all",
-      kind: null,
-      offset: 0,
-      proposal: null,
-      cursor: null,
-      section: "candidates",
+const AT = { org: "acme", ws: "core" };
+const BASE = "/acme/core/steering";
+const resolve = (segments?: string[], query: Record<string, string> = {}) =>
+  resolveSteeringRoute(AT, segments, query);
+
+describe("resolveSteeringRoute", () => {
+  it("opens the Library's All shelf on the bare route and on /library", () => {
+    for (const segments of [undefined, ["library"]]) {
+      expect(resolve(segments)).toEqual({
+        kind: "view",
+        view: {
+          tab: "library",
+          shelf: "all",
+          segment: null,
+          agent: null,
+          kind: null,
+          offset: 0,
+          proposal: null,
+          cursor: null,
+          skillView: undefined,
+          skill: null,
+        },
+      });
+    }
+  });
+
+  it.each(["records", "instructions", "skills", "memory", "ontology"])(
+    "lands /%s on the Library with that shelf",
+    (shelf) => {
+      expect(resolve([shelf])).toMatchObject({
+        kind: "view",
+        view: { tab: "library", shelf },
+      });
+    },
+  );
+
+  it.each(["assignments", "gates", "proposals", "compiler"])(
+    "opens /%s as its own tab with no shelf",
+    (tab) => {
+      expect(resolve([tab])).toMatchObject({
+        kind: "view",
+        view: { tab, shelf: null },
+      });
+    },
+  );
+
+  it("keeps the kind and the page on Records, and drops a kind it does not know", () => {
+    expect(resolve(["records"], { kind: "rule", offset: "50" })).toMatchObject({
+      view: { shelf: "records", kind: "rule", offset: 50 },
+    });
+    expect(resolve(["records"], { kind: "wish" })).toMatchObject({
+      view: { kind: null },
+    });
+    expect(resolve(["library"], { kind: "rule" })).toMatchObject({
+      view: { kind: null },
     });
   });
-  it.each([
-    ["records", "library", "records"],
-    ["skills", "library", "skills"],
-    ["memory", "library", "memory"],
-    ["settings", "freshness", "all"],
-    ["prs", "proposals", "all"],
-  ])("keeps the meaning of the legacy %s link", (legacy, tab, shelf) => {
-    expect(parseSteeringView({ tab: legacy })).toMatchObject({ tab, shelf });
-  });
-  it("retains inventory cursors, record kinds and selected PRs on their sections", () => {
-    expect(parseSteeringView({ tab: "skills", cursor: "c2" })).toMatchObject({
-      cursor: "c2",
+
+  it("opens the Context PRs segment with the proposal it selects, and ignores a malformed id (negative)", () => {
+    expect(
+      resolve(["proposals", "prs"], { proposal: "prp_01k5ru4a" }),
+    ).toMatchObject({
+      view: { tab: "proposals", segment: "prs", proposal: "prp_01k5ru4a" },
     });
     expect(
-      parseSteeringView({ kind: "constraint", offset: "50" }),
-    ).toMatchObject({ shelf: "records", kind: "constraint", offset: 50 });
-    expect(
-      parseSteeringView({ tab: "prs", proposal: ["prp_1", "prp_2"] }),
-    ).toMatchObject({ section: "prs", proposal: "prp_1" });
+      resolve(["proposals", "prs"], { proposal: "prp_1;drop" }),
+    ).toMatchObject({ view: { proposal: null } });
+    expect(resolve(["proposals"], { proposal: "prp_01k5ru4a" })).toMatchObject({
+      view: { segment: "candidates", proposal: null },
+    });
   });
-  it.each([
-    [{ tab: "unknown" }, { tab: "library" }],
-    [{ tab: "__proto__" }, { tab: "library" }],
-    [{ tab: "library", shelf: "unknown" }, { shelf: "all" }],
+
+  it("names the Compiler's agent from its segment", () => {
+    expect(resolve(["compiler", "release-manager"])).toMatchObject({
+      view: { tab: "compiler", agent: "release-manager" },
+    });
+  });
+
+  it("reads the Skills shelf's view and cursor, and its source address", () => {
+    expect(resolve(["skills"], { cursor: "c2" })).toMatchObject({
+      view: { shelf: "skills", cursor: "c2" },
+    });
+    expect(resolve(["skills", "search"])).toMatchObject({
+      view: { shelf: "skills", skillView: "search" },
+    });
+    expect(
+      resolve(["skills", "a-intel.release-notes-from-prs", "source"]),
+    ).toMatchObject({
+      view: {
+        shelf: "skills",
+        skillView: "source",
+        skill: "a-intel.release-notes-from-prs",
+      },
+    });
+    // The id belongs to the source view alone.
+    expect(resolve(["skills", "search"])).toMatchObject({
+      view: { skill: null },
+    });
+  });
+
+  it("builds the skill source address from the id it carries", () => {
+    expect(
+      steeringLink(AT, { tab: "skills", skill: "a-intel.release-notes" }),
+    ).toBe(`${BASE}/skills/a-intel.release-notes/source`);
+  });
+
+  it.each<[string[] | undefined, Record<string, string>, string]>([
+    [["policy"], {}, `${BASE}/gates`],
+    [["settings"], {}, `${BASE}/gates`],
+    [["freshness"], {}, `${BASE}/gates`],
+    [["deliveries"], {}, `${BASE}/assignments`],
+    [["prs"], { proposal: "prp_1" }, `${BASE}/proposals/prs?proposal=prp_1`],
+    [["preview"], {}, `${BASE}/compiler`],
+    [["preview", "release-manager"], {}, `${BASE}/compiler/release-manager`],
+    [["library", "all"], {}, `${BASE}/library`],
+    [["library", "records"], { kind: "rule" }, `${BASE}/records?kind=rule`],
+    [["library", "skills"], {}, `${BASE}/skills`],
+    [undefined, { tab: "records", kind: "fact" }, `${BASE}/records?kind=fact`],
+    [undefined, { tab: "skills", cursor: "c2" }, `${BASE}/skills?cursor=c2`],
     [
-      { tab: "freshness", kind: "rule", proposal: "prp_1", cursor: "c2" },
-      { kind: null, proposal: null, cursor: null },
+      undefined,
+      { tab: "prs", proposal: "prp_1" },
+      `${BASE}/proposals/prs?proposal=prp_1`,
     ],
-    [{ offset: "050" }, { offset: 0 }],
-    [{ offset: "-1" }, { offset: 0 }],
-    [{ tab: "prs", proposal: "prp_1/../x" }, { proposal: null }],
-    [{ tab: "skills", cursor: "c".repeat(513) }, { cursor: null }],
-  ])("rejects invalid or unrelated selections", (query, expected) => {
-    expect(parseSteeringView(query)).toMatchObject(expected);
+    [undefined, { tab: "settings" }, `${BASE}/gates`],
+    [undefined, { tab: "deliveries" }, `${BASE}/assignments`],
+    [undefined, { tab: "memory" }, `${BASE}/memory`],
+  ])("moves an old address %o %o to %s", (segments, query, to) => {
+    expect(resolve(segments, query)).toEqual({ kind: "redirect", to });
   });
-  it("uses path sections and preserves query filters", () => {
-    expect(steeringLink(AT, { tab: "records", kind: "rule", offset: 50 })).toBe(
-      "/acme/core-platform/steering/library/records?kind=rule&offset=50",
-    );
-    expect(steeringLink(AT, { tab: "prs", proposal: "prp_1" })).toBe(
-      "/acme/core-platform/steering/proposals?proposal=prp_1&section=prs",
-    );
-    expect(
-      steeringLink(AT, { tab: "skills", cursor: "next", view: "search" }),
-    ).toBe(
-      "/acme/core-platform/steering/library/skills?cursor=next&view=search",
-    );
+
+  it("keeps the bare route for a ?tab= it does not know (negative)", () => {
+    expect(resolve(undefined, { tab: "effect" })).toMatchObject({
+      kind: "view",
+      view: { tab: "library", shelf: "all" },
+    });
+    expect(resolve(undefined, { tab: "constructor" })).toMatchObject({
+      kind: "view",
+    });
   });
-  it("gives path selectors priority over conflicting legacy queries", () => {
+
+  it.each([
+    [["nowhere"]],
+    [["records", "extra"]],
+    [["gates", "x"]],
+    [["proposals", "candidates"]],
+    [["compiler", "a b"]],
+    [["compiler", "a", "b"]],
+    [["library", "bogus"]],
+    [["library", "records", "x"]],
+    [["skills", "bogus"]],
+    [["skills", "id", "other"]],
+    [["policy", "x"]],
+    [["constructor"]],
+    [["a", "b", "c", "d"]],
+  ])("answers %o with a 404 (negative)", (segments) => {
+    expect(resolve(segments)).toEqual({ kind: "not_found" });
+  });
+});
+
+describe("links", () => {
+  it("builds each tab's and shelf's path, leaving the defaults off", () => {
+    expect(steeringLink(AT, { tab: "library" })).toBe(`${BASE}/library`);
+    expect(steeringLink(AT, { tab: "records", kind: "rule", offset: 0 })).toBe(
+      `${BASE}/records?kind=rule`,
+    );
+    expect(steeringLink(AT, { tab: "proposals", offset: 50 })).toBe(
+      `${BASE}/proposals?offset=50`,
+    );
+    expect(steeringLink(AT, { tab: "deliveries" })).toBe(`${BASE}/assignments`);
     expect(
-      parseSteeringView(
-        steeringPathParams(["library", "skills"], {
-          tab: "freshness",
-          shelf: "records",
-          cursor: "next",
-        }),
-      ),
-    ).toMatchObject({ tab: "library", shelf: "skills", cursor: "next" });
+      steeringLink(AT, { tab: "compiler", agent: "release-manager" }),
+    ).toBe(`${BASE}/compiler/release-manager`);
+    expect(shelfLink(AT, "all")).toBe(`${BASE}/library`);
+    expect(shelfLink(AT, "ontology")).toBe(`${BASE}/ontology`);
   });
 });

@@ -1,3 +1,4 @@
+import type { LinearAuthorizationUrl } from "./linear-authorization-url";
 // The only module that performs a redirect (ARCHITECTURE.md §3.8, INV-13).
 // Every target is a branded value: a SafePath from sanitizeNext or a route
 // builder, a LoopbackUri from parseLoopbackUri, or an ExternalCheckoutUrl from
@@ -44,4 +45,10 @@ export function responseRedirect(
   status: 307 | 308 = 307,
 ): NextResponse {
   return NextResponse.redirect(new URL(path, request.url), status);
+}
+
+export function redirectToLinearAuthorization(
+  url: LinearAuthorizationUrl,
+): never {
+  redirect(url);
 }

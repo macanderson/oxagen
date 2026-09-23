@@ -18,10 +18,12 @@ import {
   collectAdrs,
   collectApiRoutes,
   collectCaddy,
+  collectCapabilities,
   collectCli,
   collectClickHouse,
   collectCompose,
   collectInngest,
+  collectMcpTools,
   collectPostgresEdges,
   collectWorkflows,
   collectWorkspace,
@@ -213,6 +215,16 @@ describe("svg layout", () => {
     expect(chain).toContain(">denied<");
     expect(chain).toContain("var(--accent");
   });
+
+  it("chain boxes grow to fit their longest sub, so no text spills past its box", () => {
+    const widthOf = (svgText: string): number =>
+      Number(/<rect x="[\d.]+" y="[\d.]+" width="([\d.]+)"/.exec(svgText)![1]);
+    const short = renderChain([{ label: "a", sub: "b" }], "c");
+    const sub = "entity_type_mappings × delivery_config";
+    const long = renderChain([{ label: "a", sub }, { label: "b" }], "c");
+    expect(widthOf(short)).toBe(150);
+    expect(widthOf(long)).toBeGreaterThanOrEqual(sub.length * 6);
+  });
 });
 
 const svg = (s: string): string => s;
@@ -329,9 +341,14 @@ describe("collectors", () => {
     file(
       root,
       "packages/inngest-functions/src/functions/c.ts",
-      'createFunction({ id: "c" }, { cron: "0 4 * * *" }, async () => {});',
+      'export const [c] = createFunction({ id: "c" }, { cron: "0 4 * * *" }, async () => {});',
     );
     file(root, "packages/inngest-functions/src/functions/c.test.ts", "ignored");
+    file(
+      root,
+      "packages/inngest-functions/src/functions.ts",
+      "export const functions: any[] = [\n  ab,\n  c,\n];\n",
+    );
     const fns = collectInngest(root);
     expect(fns).toEqual([
       {
@@ -351,6 +368,93 @@ describe("collectors", () => {
         retries: undefined,
       },
     ]);
+  });
+
+  it("reads only served Inngest functions, one row per declaration, resolving event constants", () => {
+    const root = scratch();
+    file(
+      root,
+      "packages/inngest-functions/src/events.ts",
+      'export const SHARED_EVENT = "shared/happened";\n',
+    );
+    file(
+      root,
+      "packages/inngest-functions/src/functions/two.ts",
+      [
+        'import { SHARED_EVENT } from "../events";',
+        'export const LOCAL_EVENT = "local/requested";',
+        'export const [first, firstOnFailure] = createFunction({ id: "two.first" }, { event: LOCAL_EVENT }, async () => {});',
+        'export const [second] = createFunction({ id: "two.second" }, { cron: "*/5 * * * *" }, async ({ step }) => { await step.sendEvent("x", { name: SHARED_EVENT, data: {} }); });',
+      ].join("\n"),
+    );
+    file(
+      root,
+      "packages/inngest-functions/src/functions/unserved.ts",
+      'export const [unserved] = createFunction({ id: "unserved" }, { event: "u/v" }, async () => {});',
+    );
+    file(
+      root,
+      "packages/inngest-functions/src/functions.ts",
+      "export const functions: any[] = [\n  first,\n  firstOnFailure,\n  second,\n];\n",
+    );
+    expect(
+      collectInngest(root).map((f) => [f.id, f.triggers, f.cron, f.sends]),
+    ).toEqual([
+      ["two.first", ["local/requested"], undefined, []],
+      ["two.second", [], "*/5 * * * *", ["shared/happened"]],
+    ]);
+  });
+
+  it("reads a block-style on: whose first trigger is on the next line", () => {
+    const root = scratch();
+    file(
+      root,
+      ".github/workflows/p.yml",
+      "name: P\non:\n  pull_request:\n  merge_group:\n  push:\n    branches: [main]\njobs:\n  a:\n    runs-on: x\n",
+    );
+    expect(collectWorkflows(root)[0]!.triggers).toEqual([
+      "pull_request",
+      "merge_group",
+      "push",
+    ]);
+  });
+
+  it("binds handlers registered with either lazy-import shape", () => {
+    const root = scratch();
+    file(
+      root,
+      "packages/oxagen/capabilities.manifest.json",
+      JSON.stringify({
+        capabilities: [
+          { name: "get_a", domain: "d", surfaces: ["api"] },
+          { name: "get_b", domain: "d", surfaces: ["api"] },
+        ],
+      }),
+    );
+    file(
+      root,
+      "packages/handlers/src/register.ts",
+      [
+        'registerHandler("get_a", async () => (await import("./a.get")).handler);',
+        'registerHandler("get_b", () =>',
+        '  import("./b.get").then((m) => m.handler),',
+        ");",
+      ].join("\n"),
+    );
+    expect(
+      collectCapabilities(root).map((c) => [c.name, c.handlerFile]),
+    ).toEqual([
+      ["get_a", "packages/handlers/src/a.get.ts"],
+      ["get_b", "packages/handlers/src/b.get.ts"],
+    ]);
+  });
+
+  it("leaves _-prefixed helper files out of the MCP tool list", () => {
+    const root = scratch();
+    file(root, "apps/mcp/src/tools/get_a.ts", "");
+    file(root, "apps/mcp/src/tools/_schema-test-helpers.ts", "");
+    file(root, "apps/mcp/src/tools/get_a.test.ts", "");
+    expect(collectMcpTools(root)).toEqual(["get_a"]);
   });
 
   it("parses workflow names, triggers (inline, block, list, commented) and job needs", () => {
@@ -404,6 +508,21 @@ describe("collectors", () => {
       "docs/adr/ADR-003-z.md",
       "# ADR-003: Z\n\n- Status: superseded by ADR-004\n- Date: 2026-08-01\n",
     );
+    file(
+      root,
+      "docs/adr/ADR-004-w.md",
+      "# ADR-004: W\n\n- **Status:** Accepted; **decision 3 superseded by ADR-009**\n",
+    );
+    file(
+      root,
+      "docs/adr/ADR-005-v.md",
+      "# ADR-005: V\n\n## Status\n\nProposed\n",
+    );
+    file(
+      root,
+      "docs/adr/ADR-006-u.md",
+      "# ADR-006: U\n\nStatus: Accepted for implementation. Production application is separate.\n",
+    );
     expect(
       collectAdrs(root).map((a) => [
         a.number,
@@ -416,6 +535,9 @@ describe("collectors", () => {
       [1, "X", "Accepted", "2026-06-27", "Foundations"],
       [2, "Y", "Accepted", "2026-07-14", "Unfiled"],
       [3, "Z", "Superseded by ADR-004", "2026-08-01", "Unfiled"],
+      [4, "W", "Accepted", "", "Unfiled"],
+      [5, "V", "Proposed", "", "Unfiled"],
+      [6, "U", "Accepted", "", "Unfiled"],
     ]);
   });
 
@@ -434,7 +556,7 @@ describe("collectors", () => {
     file(
       root,
       "apps/cli/src/program.ts",
-      'retiredCommand("pr", "PR watching");\nprogram\n  .command("cost")\n  .description("Project cost");\nconst budgetCmd = program\n  .command("budget")\n  .description("Ceilings");\nbudgetCmd\n  .command("show")\n  .description("Show them");\n',
+      'function addWrap(parent: Command): void {\n  parent\n    .command("verify")\n    .description("Check the chain");\n}\nretiredCommand("pr", "PR watching");\nprogram\n  .command("cost")\n  .description("Project cost");\nconst budgetCmd = program\n  .command("budget")\n  .description("Ceilings");\nbudgetCmd\n  .command("show")\n  .description("Show them");\nconst old = program\n  .command("old", { hidden: true })\n  .description("Deprecated");\naddWrap(old);\n',
     );
     expect(collectCaddy(root)).toEqual([{ host: "api.example", port: 4000 }]);
     expect(collectCompose(root)).toEqual([
@@ -444,6 +566,8 @@ describe("collectors", () => {
       { path: "budget", description: "Ceilings" },
       { path: "budget:show", description: "Show them" },
       { path: "cost", description: "Project cost" },
+      { path: "old", description: "Deprecated" },
+      { path: "old:verify", description: "Check the chain" },
       { path: "pr", description: "PR watching", retired: true },
     ]);
   });

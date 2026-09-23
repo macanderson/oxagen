@@ -18,10 +18,10 @@
     "@resvg/resvg-js": "2.6.2",
     "@vitest/coverage-v8": "2.1.9",
     "fontkit": "2.0.4",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "remark-gfm": "4.0.1",
     "vitest": "2.1.9",
-    "yaml": "2.9.0"
+    "yaml": "2.9.1"
   }
 }

@@ -26,11 +26,13 @@ const ctx = unsafeMint(PretenantCtx, { userId: "u1" });
 const orgs = vi.fn();
 const workspaces = vi.fn();
 const source = {
+  runtimes: { list: vi.fn(), agents: vi.fn() },
   pretenant: { orgs, workspaces },
   shell: { context: vi.fn(), preferences: vi.fn() },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
+    retention: vi.fn(),
     bucket: vi.fn(),
     contractRate: vi.fn(),
     invoices: vi.fn(),
@@ -84,6 +86,7 @@ const source = {
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),
+    hub: vi.fn(),
     deliveries: vi.fn(),
   },
   tools: {
