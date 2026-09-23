@@ -175,10 +175,7 @@ export function prBody(row: ProposalRow): string {
     "",
     // Every line of the statement is quoted, so one that carries a line
     // break (an API caller can send one) does not fall out of the quote.
-    row.statement
-      .split("\n")
-      .map((line) => `> ${line}`)
-      .join("\n"),
+    blockquote(row.statement),
     "",
     "### Rationale",
     "",
