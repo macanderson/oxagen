@@ -473,7 +473,11 @@ describe("Sso: SCIM provisioning", () => {
         ...LIVE,
         scim: {
           ...LIVE.scim,
-          token: { ...LIVE.scim.token!, lastUsedAt: "2026-09-23T11:30:00.000Z" },
+          token: {
+            prefix: "oxscim_AbCdEfGh",
+            createdAt: "2026-09-23T10:00:00.000Z",
+            lastUsedAt: "2026-09-23T11:30:00.000Z",
+          },
         },
       },
     });

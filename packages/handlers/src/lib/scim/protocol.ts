@@ -211,9 +211,13 @@ export function memberFilterValue(path: string): string | null {
 
 /** The ids in a `members` value: `[{ value }]`, or one `{ value }`. */
 export function memberIds(value: unknown): string[] {
-  const list = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  const list: unknown[] = Array.isArray(value)
+    ? (value as unknown[])
+    : value === undefined
+      ? []
+      : [value];
   return list.map((m) => {
-    const id =
+    const id: unknown =
       typeof m === "object" && m !== null
         ? (m as { value?: unknown }).value
         : m;

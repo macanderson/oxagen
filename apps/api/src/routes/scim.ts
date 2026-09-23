@@ -59,7 +59,8 @@ scimRoute.use(
   "*",
   bodyLimit({
     maxSize: MAX_BODY_BYTES,
-    onError: (c) => scimError(c, 413, "The request body is too large"),
+    onError: (c) =>
+      scimError(c as Context<AppEnv>, 413, "The request body is too large"),
   }),
 );
 

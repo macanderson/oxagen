@@ -41,7 +41,9 @@ export function ScimTokenControls({
 }) {
   const t = useTranslations("organization.sso.scim");
   const navigate = useNavigate();
-  const refresh = () => navigate.refresh();
+  const refresh = () => {
+    navigate.refresh();
+  };
   const done = {
     close: t("cancel"),
     render: (minted: MintedScimToken) => <MintedToken minted={minted} />,

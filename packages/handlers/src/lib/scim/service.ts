@@ -214,8 +214,10 @@ function str(value: unknown, attribute: string): string | null {
 function emailOf(resource: Record<string, unknown>): string | null {
   const userName = str(resource.userName, "userName");
   if (userName !== null) return userName.toLowerCase();
-  const emails = Array.isArray(resource.emails) ? resource.emails : [];
-  const primary =
+  const emails: unknown[] = Array.isArray(resource.emails)
+    ? (resource.emails as unknown[])
+    : [];
+  const primary: unknown =
     emails.find(
       (e) => typeof e === "object" && e !== null && (e as { primary?: unknown }).primary,
     ) ?? emails[0];
@@ -461,7 +463,7 @@ function userPatchChanges(user: ScimUserRow, body: unknown): UserChanges {
     }
     for (const [key, value] of Object.entries(op.value)) {
       if (key === "name" && typeof value === "object" && value !== null) {
-        for (const [sub, v] of Object.entries(value)) {
+        for (const [sub, v] of Object.entries(value as Record<string, unknown>)) {
           setAttr(`name.${sub}`, v, false);
         }
       } else {
