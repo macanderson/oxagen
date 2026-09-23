@@ -75,7 +75,12 @@ const ProofVerdict = z.enum([
  * command is refused: a page draws the controls disabled rather than offering
  * four that always fail.
  */
-export const EnforcementTier = z.enum(["gateway", "harness", "observe"]);
+export const EnforcementTier = z.enum([
+  "contained",
+  "gateway",
+  "harness",
+  "observe",
+]);
 export type EnforcementTier = z.infer<typeof EnforcementTier>;
 
 /**

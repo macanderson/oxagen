@@ -1,0 +1,89 @@
+{
+  "name": "register_contained_launch",
+  "domain": "tacho",
+  "description": "Register a launch measured by the enrolled host's trusted containment launcher.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "host_enrollment_id": {
+        "type": "string"
+      },
+      "session_uuid": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "genesis_hash": {
+        "type": "string"
+      },
+      "measurement": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "const": "oxagen-linux-docker-v1"
+          },
+          "containerId": {
+            "type": "string"
+          },
+          "imageDigest": {
+            "type": "string"
+          },
+          "configurationDigest": {
+            "type": "string"
+          },
+          "gatewayOnlyEgress": {
+            "const": true
+          },
+          "workspaceOnlyWrites": {
+            "const": true
+          },
+          "readOnlyHooks": {
+            "const": true
+          }
+        },
+        "required": [
+          "profile",
+          "containerId",
+          "imageDigest",
+          "configurationDigest",
+          "gatewayOnlyEgress",
+          "workspaceOnlyWrites",
+          "readOnlyHooks"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "host_enrollment_id",
+      "session_uuid",
+      "genesis_hash",
+      "measurement"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "registered": {
+        "const": true
+      }
+    },
+    "required": [
+      "registered"
+    ],
+    "additionalProperties": false
+  }
+}

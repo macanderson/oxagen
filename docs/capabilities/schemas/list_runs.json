@@ -267,6 +267,7 @@
             "enforcementTier": {
               "type": "string",
               "enum": [
+                "contained",
                 "gateway",
                 "harness",
                 "observe"
