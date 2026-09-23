@@ -280,6 +280,78 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     expect(mocks.bootstrapWorkspace).not.toHaveBeenCalled();
   });
 
+  // ── a namespace the operator chose (onboarding step 1) ───────────────────
+
+  /** A system transaction whose namespace read answers the given taken set. */
+  function withTakenNamespaces(taken: string[]): void {
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
+        fn({
+          ...makeTx(),
+          select: () => ({
+            from: async () => taken.map((namespace) => ({ namespace })),
+          }),
+        }),
+    );
+  }
+
+  it("stores a chosen namespace verbatim rather than deriving one", async () => {
+    await organizationCreateHandler(
+      organizationCreate.input.parse({ ...INPUT, namespace: "aintel" }),
+      CTX,
+    );
+    expect(mocks.provisionOrgGraph).toHaveBeenCalledWith(
+      expect.objectContaining({ namespace: "aintel" }),
+    );
+  });
+
+  it("refuses a chosen namespace another organization holds, writing nothing", async () => {
+    withTakenNamespaces(["aintel"]);
+    await expect(
+      organizationCreateHandler(
+        organizationCreate.input.parse({ ...INPUT, namespace: "aintel" }),
+        CTX,
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "namespace_taken" });
+    expect(mocks.txInsertOrg).not.toHaveBeenCalled();
+  });
+
+  it("derives past a taken namespace when none was chosen", async () => {
+    withTakenNamespaces(["acme"]);
+    await organizationCreateHandler(INPUT, CTX);
+    expect(mocks.provisionOrgGraph).toHaveBeenCalledWith(
+      expect.objectContaining({ namespace: "acme1" }),
+    );
+  });
+
+  it("answers a chosen namespace lost to a concurrent create as namespace_taken", async () => {
+    let callIdx = 0;
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        callIdx++;
+        if (callIdx === 1) return fn(makeTx());
+        throw Object.assign(new Error("dup"), {
+          code: "23505",
+          constraint_name: "organizations_namespace_idx",
+        });
+      },
+    );
+    await expect(
+      organizationCreateHandler(
+        organizationCreate.input.parse({ ...INPUT, namespace: "aintel" }),
+        CTX,
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "namespace_taken" });
+  });
+
+  it("refuses a namespace outside the column's shape at the contract", () => {
+    for (const namespace of ["a", "a-intel", "ABC", "toolong7"]) {
+      expect(
+        organizationCreate.input.safeParse({ ...INPUT, namespace }).success,
+      ).toBe(false);
+    }
+  });
+
   // ── happy path ───────────────────────────────────────────────────────────
 
   it("returns the new org and its first workspace", async () => {

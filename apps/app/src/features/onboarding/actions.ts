@@ -20,7 +20,9 @@ import { OrganizationForm, type OrganizationField } from "./org-form";
 /**
  * A field the form refuses is `invalid` with the field and its
  * `onboarding.errors` key as the code, and no capability runs. A taken address
- * is the handler's `conflict` with code `slug_taken`.
+ * is the handler's `conflict` with code `slug_taken`, a taken namespace the
+ * same with `namespace_taken`. A created organization continues to the gate's
+ * Wrap an agent step.
  */
 export async function createOrganizationAction(
   input: Record<OrganizationField, string>,
@@ -36,17 +38,24 @@ export async function createOrganizationAction(
       field: issue?.path.map(String).join(".") ?? "",
     };
   }
-  const { name, slug, workspaceName, workspaceSlug } = parsed.data;
+  const { name, slug, namespace, workspaceName, workspaceSlug } = parsed.data;
   const result = await kernelWrite(ctx, organizationCreate, {
     name,
     slug,
+    namespace,
     workspace: { name: workspaceName, slug: workspaceSlug },
   });
+  // The gate's next step is Wrap an agent, outside the app shell; Fleet opens
+  // once the first frame arrives (or on Cancel).
   return result.ok
     ? {
         ok: true,
         value: {
-          to: routes.fleet(result.value.slug, result.value.workspace.slug),
+          to: routes.welcome(
+            result.value.slug,
+            result.value.workspace.slug,
+            "wrap",
+          ),
         },
       }
     : result;

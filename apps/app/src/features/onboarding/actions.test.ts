@@ -70,6 +70,7 @@ const agentForm = {
 const form = {
   name: "  Acme Robotics ",
   slug: "acme",
+  namespace: "acme",
   workspaceName: "Core platform",
   workspaceSlug: "core-platform",
 };
@@ -139,17 +140,41 @@ describe("createOrganizationAction", () => {
     });
   });
 
-  it("creates the organization as the signed-in person before any tenant and lands on its first workspace", async () => {
+  it("returns a taken namespace as the handler's conflict (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({ code: "conflict", reason: "namespace_taken" }),
+    );
+    expect(await createOrganizationAction(form)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "namespace_taken",
+    });
+  });
+
+  it("refuses a namespace outside 2-6 letters or digits, creating nothing (negative)", async () => {
+    expect(
+      await createOrganizationAction({ ...form, namespace: "a-intel" }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "namespaceInvalid",
+      field: "namespace",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("creates the organization with its chosen namespace as the signed-in person and continues to Wrap an agent", async () => {
     invoke.mockResolvedValue(created);
     expect(await createOrganizationAction(form)).toEqual({
       ok: true,
-      value: { to: "/acme/core-platform" },
+      value: { to: "/welcome/acme/core-platform/wrap" },
     });
     expect(invoke).toHaveBeenCalledWith(
       "create_org",
       {
         name: "Acme Robotics",
         slug: "acme",
+        namespace: "acme",
         workspace: { name: "Core platform", slug: "core-platform" },
       },
       expect.objectContaining({

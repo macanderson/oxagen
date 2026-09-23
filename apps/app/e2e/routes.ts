@@ -39,6 +39,10 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/sso`, titleKey: "sso" },
   { path: `/${org}/billing`, titleKey: "billing" },
   { path: `/${org}/audit`, titleKey: "audit" },
+  { path: "/new-organization", titleKey: "newOrganization" },
+  { path: `/welcome/${org}/${ws}/wrap`, titleKey: "welcomeWrap" },
+  { path: `/welcome/${org}/${ws}/run`, titleKey: "welcomeRun" },
+  { path: `/welcome/${org}/${ws}/installer`, titleKey: "installer" },
 ] as const;
 
 /**
