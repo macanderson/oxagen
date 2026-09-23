@@ -326,4 +326,5 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // read by `tacho.events.ingest` through `withTenantDb`, where the policy is
   // what keeps one organisation's evidence out of another's tier.
   { table: "tacho.gateway_chains", policyClass: "standard" },
+  { table: "tacho.contained_launches", policyClass: "standard" },
 ];

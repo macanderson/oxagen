@@ -1036,6 +1036,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoEventsIngestHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "register_contained_launch",
+    async () =>
+      (await import("./tacho.contained_launch.register"))
+        .tachoContainedLaunchRegisterHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_tacho_bundle",
     async () =>
       (await import("./tacho.bundle.get"))

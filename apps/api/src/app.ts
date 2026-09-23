@@ -253,6 +253,7 @@ import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
 import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
 import { cmsRoute } from "./routes/v1/cms";
+import { tachoContainedLaunchRegisterRoute } from "./routes/v1/tacho.contained_launch.register";
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
@@ -610,8 +611,17 @@ const tachoControlLimiter = distributedRateLimiter({
 });
 tachoScoped.use("/bundle", tachoControlLimiter);
 tachoScoped.use("/commands", tachoControlLimiter);
+tachoScoped.use(
+  "/contained-launch",
+  distributedRateLimiter({
+    keyPrefix: "tacho-contained-launch",
+    max: TACHO_HOST_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
 tachoScoped.route("/", tachoEventsIngestRoute);
 tachoScoped.route("/", tachoBundleGetRoute);
+tachoScoped.route("/", tachoContainedLaunchRegisterRoute);
 tachoScoped.route("/", tachoCommandFetchRoute);
 app.route("/v1/tacho", tachoScoped);
 

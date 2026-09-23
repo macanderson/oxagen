@@ -65,6 +65,7 @@ import { telemetryStellaIngest } from "./telemetry.stella.ingest";
 import { tachoEnrollmentCreate } from "./tacho.enrollment.create";
 import { tachoEnrollmentRevoke } from "./tacho.enrollment.revoke";
 import { tachoEventsIngest } from "./tacho.events.ingest";
+import { tachoContainedLaunchRegister } from "./tacho.contained_launch.register";
 import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { tachoCommandFetch } from "./tacho.command.fetch";
@@ -644,6 +645,7 @@ export {
   tachoEnrollmentRevoke,
   tachoEventsIngest,
   tachoBundleGet,
+  tachoContainedLaunchRegister,
   tachoCommandDispatch,
   tachoCommandFetch,
   tachoCommandList,
@@ -1011,6 +1013,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoEnrollmentRevoke,
   tachoEventsIngest,
   tachoBundleGet,
+  tachoContainedLaunchRegister,
   tachoCommandDispatch,
   tachoCommandFetch,
   tachoCommandList,

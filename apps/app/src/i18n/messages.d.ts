@@ -5674,6 +5674,7 @@ type Messages = {
       };
     };
     enforcementTier: {
+      contained: string;
       gateway: string;
       harness: string;
       observe: string;
