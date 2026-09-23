@@ -1,4 +1,4 @@
-import { HarnessLabel } from "@/ui/harness-icon";
+import { HarnessIcon } from "@/ui/harness-icon";
 import { useLocale, useTranslations } from "next-intl";
 import { useFormatter } from "@/ui/formatter";
 import type { RunPage } from "@/data/contracts/runs";
@@ -110,14 +110,13 @@ function RunsPageView({
                 sub={t(`source.${run.source}`)}
               />
               {run.harness && (
-                <HarnessLabel
-                  harness={run.harness.name}
-                  size={16}
-                  className="mt-1 text-xs text-muted-foreground"
-                >
-                  {run.harness.name}
-                  {run.harness.version ? ` ${run.harness.version}` : ""}
-                </HarnessLabel>
+                <span className="mt-1 inline-flex items-center gap-2 text-xs text-muted-foreground">
+                  <HarnessIcon harness={run.harness.name} size={16} />
+                  <span>
+                    {run.harness.name}
+                    {run.harness.version ? ` ${run.harness.version}` : ""}
+                  </span>
+                </span>
               )}
             </td>
             <td className={`${cell} min-w-36 whitespace-nowrap`}>
