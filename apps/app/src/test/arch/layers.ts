@@ -216,6 +216,23 @@ export function clientBoundaryRefuses(
   );
 }
 
+/**
+ * INV-21, the platform half (#3521): a "use client" module never takes a value
+ * from a kernel contract module. A contract module calls `registerCapability`
+ * when it loads, and some reach Node builtins through the modules they import
+ * (`tacho.command.dispatch` → `run.list` → `@oxagen/run-evidence` →
+ * `node:readline`), which stopped the Turbopack build of the Fleet page. A
+ * value a client needs is mirrored under `@/data/contracts/` and pinned to the
+ * contract by that module's test. A type-only import is erased and admitted.
+ */
+export function clientRefusesPlatform(edge: ImportEdge): boolean {
+  return (
+    !edge.typeOnly &&
+    (edge.specifier === "@oxagen/oxagen/contracts" ||
+      edge.specifier.startsWith("@oxagen/oxagen/contracts/"))
+  );
+}
+
 // --- Platform-package allowlist (INV-03, INV-05) -----------------------------
 
 /** A specifier the allowlist governs: every `@oxagen/*` entry except the UI library, plus the ORM. */
@@ -305,10 +322,9 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/server/tenancy-lookups.ts": {
     "@oxagen/billing": ["canAccessSSO", "resolveOrgTier"],
   },
-  // Browser controls read the shared ceiling without loading the contract registry.
-  "src/features/fleet/run-row-controls.tsx": {
-    "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
-  },
+  // The command failure copy names the ceiling without loading the contract
+  // registry. The UI kit may import only types from `@/data/contracts/*`, so
+  // it reads the pure limits module rather than the mirror features read.
   "src/ui/command-failure.ts": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
   },

@@ -96,6 +96,18 @@ export type EnforcementTier = z.infer<typeof EnforcementTier>;
 export const DeliveryMode = z.enum(["next_step", "interrupt", "turn_boundary"]);
 export type DeliveryMode = z.infer<typeof DeliveryMode>;
 
+/**
+ * The longest pause, resume or cancel reason `dispatch_command` accepts,
+ * mirrored from `COMMAND_REASON_MAX` in `@oxagen/oxagen/tacho/command-limits`.
+ * The Fleet row's reason field caps at it, so the form never takes text the
+ * contract refuses.
+ *
+ * A mirror because a client component reads it, and no client module in this
+ * app imports a kernel contract module (#3521). `runs.test.ts` holds the
+ * mirror equal to the contract.
+ */
+export const COMMAND_REASON_MAX = 512;
+
 /** The gaps a seal recorded, from the closed vocabulary (spec §13.1). */
 const CompletenessGap = z.enum([
   "digest_only",

@@ -13,10 +13,9 @@
 // refuses with a reason `action-failure.ts` has a sentence for when it cannot.
 // The edit form keeps its two fields, because which repository is main does
 // not change from here (spec §10.1 makes that an org owner's decision).
-import { GOVERNANCE_MODES } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import type { Workspace } from "@/data/contracts/org";
+import { GOVERNANCE_MODES, type Workspace } from "@/data/contracts/org";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
 import { Field } from "@/ui/field";

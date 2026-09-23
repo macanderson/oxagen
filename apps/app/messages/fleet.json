@@ -14,15 +14,14 @@
         "title": "Waiting on a human",
         "oldest": "oldest approval has waited <clock></clock> of {window}",
         "none": "nothing is parked",
-        "more": "{count}+",
-        "moreBasis": "more are parked than this page read",
+        "pageBasis": "the oldest wait is read from the {count} that time out soonest",
         "open": "Review waiting approvals"
       }
     },
     "approvals": {
       "title": "Approvals",
       "parked": "{count} parked",
-      "more": "{count}+",
+      "partial": "Showing the {shown} of {total} parked calls that time out soonest. The rest move up as these are answered.",
       "empty": "Nothing is waiting on a human.",
       "emptyDetail": "A call parks here when policy returns approve. Denials never park: they end the call.",
       "timesOut": "Times out in <clock></clock>, then the call ends",
@@ -41,7 +40,8 @@
       },
       "eligibility": {
         "none": "No auto-approval rule covered this call, so it waited for a person.",
-        "ok": "Rule {rule} would have released this call. A mandate asked for a person anyway.",
+        "okMandate": "Rule {rule} would have released this call. Mandate {mandate} asked for a person anyway.",
+        "okNoMandate": "Rule {rule} would have released this call. It is still waiting for a person, and the record names no mandate that asked for one.",
         "blocked": "Rule {rule} did not release this call.",
         "floor": "At least one of these is a floor no rule can lift.",
         "recorded": "Recorded when the call was parked. A rule edited since is a different rule.",
@@ -71,10 +71,16 @@
         "approving": "Approving",
         "denying": "Denying",
         "checking": "Reading the recorded evaluation.",
-        "settled": "This call was already resolved by {by}. Nothing here can change it.",
+        "settled": {
+          "person": "{name} (<id></id>) already answered this call: {resolution, select, approved {approved} denied {denied} other {closed}}. Nothing here can change it.",
+          "personUnnamed": "A person with no display name (<id></id>) already answered this call: {resolution, select, approved {approved} denied {denied} other {closed}}. Nothing here can change it.",
+          "rule": "Rule {rule} already resolved this call with no person: {resolution, select, approved {approved} denied {denied} other {closed}}. Nothing here can change it.",
+          "none": "{resolution, select, expired {This call expired before anyone answered it, or its mandate was revoked.} other {This call is already closed, and the record names nobody who closed it.}} Nothing here can change it."
+        },
         "eligibilityUnread": "The recorded evaluation could not be read again ({code}). The line above is what the page read.",
         "failure": {
           "noteRequired": "Write the reason this call is denied.",
+          "noteTooLong": "The reason is longer than {max} characters. Shorten it and decide again.",
           "noPrincipal": "Oxagen could not establish who you are. Sign in again. The call is untouched.",
           "orgRoleRequired": "Your roles do not cover this decision. On a call a mandate parked, the office accountable for the mandate's consequences answers it. The call is untouched.",
           "noRoleCoversAllTags": "No single organization role is named for all of this mandate's consequence tags, so nobody can answer this call until the workspace names one. The call is untouched.",
@@ -131,7 +137,9 @@
         "sending": "Sending the {command}.",
         "queued": "The {command} is queued. The run's status says when the agent has taken it.",
         "reread": "Re-read the runs",
-        "unavailable": "View only"
+        "unavailable": "View only",
+        "observeReason": "This run was observed from the side. Oxagen was never in the path of its calls, so there is no connection point to pause, resume, or cancel.",
+        "ledgerReason": "This run reports through the evidence ledger. Its pause, resume, and cancel act on evidence ingress, and they are on the run's own page."
       },
       "operatorKind": {
         "human": "Unnamed operator",

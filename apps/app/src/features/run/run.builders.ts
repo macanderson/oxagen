@@ -648,7 +648,7 @@ export function runSource(reads: RunReads) {
     approvals: {
       pending: answer(
         "approvals",
-        reads.approvals ?? readOk({ items: [], more: false }),
+        reads.approvals ?? readOk({ items: [], total: 0, more: false }),
       ),
       resolved: answer(
         "resolvedApprovals",

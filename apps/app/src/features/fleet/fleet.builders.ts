@@ -73,15 +73,16 @@ export function approvalItem(
 }
 
 /**
- * The pending queue as `approvals.pending` answers it. `more` is the read
- * having stopped before the end of the queue, which is what the waiting tile
- * and the panel header mark with a `+`.
+ * The pending queue as `approvals.pending` answers it: one page of `items`,
+ * the whole queue's count, and `more` when the queue holds approvals past the
+ * page (#3521). The count defaults to the page, the queue a test means unless
+ * it names a larger one.
  */
 export function approvalQueue(
   items: ApprovalItem[],
-  more = false,
+  total = items.length,
 ): Read<ApprovalQueue> {
-  return readOk({ items, more });
+  return readOk({ items, total, more: total > items.length });
 }
 
 export function runPage(

@@ -1383,7 +1383,7 @@ describe("approvals on the run", () => {
     const { calls } = await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok({ items: [], more: false }),
+        approvals: ok({ items: [], total: 0, more: false }),
         resolvedApprovals: ok({ items: [], more: false }),
       },
       // Transcript, not Governed actions: the count reads on every tab.
@@ -1398,7 +1398,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok({ items: [], more: false }),
+        approvals: ok({ items: [], total: 0, more: false }),
         resolvedApprovals: ok({ items: [], more: false }),
       },
       { tab: "approvals" },
@@ -1426,6 +1426,7 @@ describe("approvals on the run", () => {
               expiresAt: new Date(NOW + 3_600_000).toISOString(),
             },
           ],
+          total: 1,
           more: false,
         }),
         resolvedApprovals: ok({ items: [], more: false }),
@@ -1465,6 +1466,7 @@ describe("approvals on the run", () => {
               expiresAt: new Date(NOW + 3_600_000).toISOString(),
             },
           ],
+          total: 1,
           more: false,
         }),
         resolvedApprovals: ok({ items: [], more: false }),
@@ -1504,6 +1506,7 @@ describe("approvals on the run", () => {
               expiresAt: new Date(NOW + 3_600_000).toISOString(),
             },
           ],
+          total: 1,
           more: false,
         }),
         resolvedApprovals: ok({ items: [], more: false }),
@@ -1539,6 +1542,7 @@ describe("approvals on the run", () => {
               expiresAt: new Date(NOW + 3_600_000).toISOString(),
             },
           ],
+          total: 1,
           more: false,
         }),
         resolvedApprovals: ok({ items: [], more: false }),
@@ -1554,7 +1558,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok({ items: [], more: false }),
+        approvals: ok({ items: [], total: 0, more: false }),
         resolvedApprovals: ok({
           items: [
             {
@@ -1595,7 +1599,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok({ items: [], more: false }),
+        approvals: ok({ items: [], total: 0, more: false }),
         resolvedApprovals: ok({
           items: [
             {
@@ -1642,7 +1646,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok({ items: [], more: false }),
+        approvals: ok({ items: [], total: 0, more: false }),
         resolvedApprovals: ok({
           items: [resolvedRow(1), resolvedRow(2)],
           more: true,
@@ -1660,7 +1664,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok({ items: [], more: false }),
+        approvals: ok({ items: [], total: 0, more: false }),
         resolvedApprovals: ok({
           items: [
             {
@@ -1692,7 +1696,7 @@ describe("approvals on the run", () => {
     await renderRun(
       {
         detail: ok(runDetail()),
-        approvals: ok({ items: [], more: false }),
+        approvals: ok({ items: [], total: 0, more: false }),
         resolvedApprovals: DOWN,
       },
       { tab: "approvals" },

@@ -59,7 +59,7 @@ beforeEach(() => {
         {
           slug: "core-platform",
           name: "Core platform",
-          pending: ok({ items: [{ id: "a" }], more: false }),
+          pending: ok({ items: [{ id: "a" }], total: 1, more: false }),
         },
       ],
       notifications: { items: [], partial: false, failures: [] },

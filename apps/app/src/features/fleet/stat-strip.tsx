@@ -36,11 +36,11 @@ function LiveRuns({ page }: { page: RunPage }) {
 /**
  * How many calls are parked, and how long the oldest has waited.
  *
- * The figure is the whole queue, not one page of it. `approvals.pending` walks
- * the cursor to the end under a bound and sets `more` when the bound stopped
- * it, so a count this tile cannot stand behind reads `1,000+` rather than an
- * exact number that is wrong. The line under it then says a bound stopped the
- * read, because "1,000+" with no explanation is a figure nobody can act on.
+ * The figure is the whole queue's count, which `list_approvals` answers beside
+ * its first page (#3521), not the length of the page. The oldest wait is read
+ * from that page, which holds the calls that time out soonest. When the queue
+ * is longer than the page, a line says so, because a call parked earlier with
+ * a longer window can sit past the page.
  */
 function Waiting({ queue, now }: { queue: ApprovalQueue; now: number }) {
   const t = useTranslations("fleet.stats.waiting");
@@ -53,18 +53,15 @@ function Waiting({ queue, now }: { queue: ApprovalQueue; now: number }) {
         : first,
     null,
   );
-  const count = formatCount(items.length, locale);
   return (
     <dl data-testid="tile" className={statTile}>
       <dt className={statTerm}>{t("title")}</dt>
-      <dd className={`${statValue} ${items.length > 0 ? "text-info" : ""}`}>
-        <ApprovalsEntry>
-          {queue.more ? t("more", { count }) : count}
-        </ApprovalsEntry>
+      <dd className={`${statValue} ${queue.total > 0 ? "text-info" : ""}`}>
+        <ApprovalsEntry>{formatCount(queue.total, locale)}</ApprovalsEntry>
       </dd>
       {queue.more ? (
         <dd data-testid="waiting-more" className={statNote}>
-          {t("moreBasis")}
+          {t("pageBasis", { count: formatCount(items.length, locale) })}
         </dd>
       ) : null}
       <dd className={statNote}>

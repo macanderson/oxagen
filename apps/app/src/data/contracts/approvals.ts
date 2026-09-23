@@ -62,6 +62,71 @@ export function toAutoEligibility(
       };
 }
 
+/**
+ * Who or what closed an approval request that is no longer pending, as the
+ * decision dialog names it (#3521).
+ *
+ * - `person`: somebody answered. `name` is their display name, the label a
+ *   reader sees; `id` is their public id (`usr_…`), drawn beside it and
+ *   copyable, never as the label. `name` is null for an account with none.
+ * - `rule`: an auto-approval rule released it with no person; `rule` is the
+ *   rule id, which is its own name.
+ * - `none`: nothing recorded a resolver. A mandate revoke or expiry closes
+ *   its parked calls this way, and so does a request's own expiry.
+ */
+export type ApprovalSettlement =
+  | {
+      by: "person";
+      resolution: "approved" | "denied" | "expired";
+      id: string;
+      name: string | null;
+    }
+  | {
+      by: "rule";
+      resolution: "approved" | "denied" | "expired";
+      rule: string;
+    }
+  | { by: "none"; resolution: "approved" | "denied" | "expired" };
+
+/**
+ * The settlement `get_auto_eligibility` records, or null while the request is
+ * still pending.
+ *
+ * It reads `state`, never `resolvedBy`, for whether the request is open: a
+ * request closed by a mandate revoke or its own expiry has no resolver, and
+ * reading a null `resolvedBy` as "still waiting" offered a decision the
+ * handler refuses as `approval_expired`.
+ */
+export function toApprovalSettlement(recorded: {
+  state: "pending" | "approved" | "denied" | "expired";
+  resolvedBy: string | null;
+  resolvedByName: string | null;
+}): ApprovalSettlement | null {
+  const { state: resolution, resolvedBy } = recorded;
+  if (resolution === "pending") return null;
+  if (resolvedBy?.startsWith("user:"))
+    return {
+      by: "person",
+      resolution,
+      id: resolvedBy.slice("user:".length),
+      name: recorded.resolvedByName,
+    };
+  if (resolvedBy?.startsWith("policy:"))
+    return { by: "rule", resolution, rule: resolvedBy.slice("policy:".length) };
+  return { by: "none", resolution };
+}
+
+/**
+ * The longest decision note `resolve_approval` accepts, mirrored from
+ * `APPROVAL_NOTE_MAX` on that contract. The decision dialog's textarea caps at
+ * it, so the form never takes a note the kernel refuses.
+ *
+ * A mirror because the dialog is a client component, and the contract module
+ * registers its capability at import time (#3521). `approvals.test.ts` holds
+ * the mirror equal to the contract.
+ */
+export const APPROVAL_NOTE_MAX = 2000;
+
 export const ApprovalItem = z.object({
   id: PublicId,
   runId: PublicId.nullable(),
@@ -91,18 +156,24 @@ export const ApprovalItem = z.object({
 export type ApprovalItem = z.infer<typeof ApprovalItem>;
 
 /**
- * The pending queue as a page reads it: the approvals themselves, and whether
- * the read stopped before the end of the queue.
+ * The pending queue as a page reads it: the first page of approvals, the
+ * whole queue's count, and whether the queue holds approvals past that page.
  *
- * `list_approvals` answers at most 100 rows a page, and the Fleet waiting tile
- * counts what this carries. Counting one page read as a fact: a workspace with
- * 140 parked calls showed 100 and said nothing, and 100 is the figure an
- * operator would have staffed against. So the read walks the cursor to the end
- * of the queue, and `more` says when a bound stopped it, which is what lets the
- * tile read "1,000+" instead of a number it cannot stand behind.
+ * `list_approvals` answers at most 100 rows a page and counts the whole queue
+ * beside every page (#3521). The read takes one page and the count rather
+ * than walking every cursor: the walk cost up to ten serial kernel reads
+ * before Fleet could render, and mounted a card with its own decision dialog
+ * for every row it took. The Fleet waiting tile and the panel header print
+ * `total`. The panel draws the cards in `items`, soonest expiry first, and
+ * says it is showing part of the queue when `more` is set.
  */
 export const ApprovalQueue = z.object({
   items: z.array(ApprovalItem),
+  /**
+   * Every pending approval the read's filter matches, across all pages, and
+   * never fewer than `items` holds.
+   */
+  total: z.number().int().nonnegative(),
   /** True when the queue holds approvals past the ones in `items`. */
   more: z.boolean(),
 });

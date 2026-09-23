@@ -91,6 +91,17 @@ const Workspace = z.object({
   costCenter: z.string().min(1).nullable(),
 });
 
+/**
+ * The governance modes a workspace can declare, loosest to strictest,
+ * mirrored from `GOVERNANCE_MODES` in `@oxagen/oxagen/contracts/context.steering.shared`.
+ * The workspace dialog offers them in this order.
+ *
+ * A mirror because the dialog is a client component, and no client module in
+ * this app imports a kernel contract module (#3521). `org.test.ts` holds the
+ * mirror equal to the contract.
+ */
+export const GOVERNANCE_MODES = ["solo", "team", "regulated"] as const;
+
 export const WorkspaceList = z.object({ workspaces: z.array(Workspace) });
 export type WorkspaceList = z.infer<typeof WorkspaceList>;
 export type Workspace = z.infer<typeof Workspace>;

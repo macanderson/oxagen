@@ -102,13 +102,16 @@ function useTabCounts({
   return {
     transcript: String(run.steps),
     issues: run.taskRef === null ? "0" : "1",
+    // The pending read carries its whole queue's count (#3521). Only the
+    // resolved ledger can stop short of the run's record, so only it makes
+    // the figure a floor.
     actions:
       pending.ok && resolved.ok
-        ? pending.value.more || resolved.value.more
+        ? resolved.value.more
           ? t("atLeast", {
-              count: pending.value.items.length + resolved.value.items.length,
+              count: pending.value.total + resolved.value.items.length,
             })
-          : String(pending.value.items.length + resolved.value.items.length)
+          : String(pending.value.total + resolved.value.items.length)
         : undefined,
     cost: runCost === null ? undefined : <Money value={runCost} />,
     policy: policy === null ? undefined : floor(policy.length),

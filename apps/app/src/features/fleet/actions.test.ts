@@ -27,7 +27,8 @@
 // its target and nothing wider, a command outside the three a row sends is
 // refused before the kernel, and no payload is ever attached, which
 // `dispatch_command` refuses on pause, resume and cancel.
-import { COMMAND_REASON_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import { APPROVAL_NOTE_MAX } from "@oxagen/oxagen/contracts/agent.approval.resolve";
+import { COMMAND_REASON_MAX } from "@oxagen/oxagen/tacho/command-limits";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
@@ -156,6 +157,39 @@ describe("resolveApprovalAction", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  // #3521: the note's bound is the contract's, and an endpoint refuses an
+  // overlong one with a code the dialog names rather than a schema refusal.
+  it("refuses a note over the contract's bound before the kernel (negative)", async () => {
+    const result = await resolveApprovalAction("acme", "core-platform", {
+      approvalId: APPROVAL,
+      decision: "approved",
+      note: "x".repeat(APPROVAL_NOTE_MAX + 1),
+    });
+    expect(result).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "note_too_long",
+      field: "note",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("sends a note exactly at the bound", async () => {
+    invoke.mockResolvedValue(settled);
+    const note = "x".repeat(APPROVAL_NOTE_MAX);
+    const result = await resolveApprovalAction("acme", "core-platform", {
+      approvalId: APPROVAL,
+      decision: "approved",
+      note,
+    });
+    expect(result.ok).toBe(true);
+    expect(written()).toEqual({
+      approvalId: APPROVAL,
+      decision: "approved",
+      note,
+    });
+  });
+
   it("denies with the reason, and the mandate releases what the call reserved", async () => {
     invoke.mockResolvedValue({
       approvalId: APPROVAL,
@@ -239,7 +273,9 @@ describe("readApprovalEligibility", () => {
     };
     invoke.mockResolvedValue({
       approvalId: APPROVAL,
+      state: "approved",
       resolvedBy: "policy:small-vendor-payments",
+      resolvedByName: null,
       eligibility: recorded,
     });
     const result = await readApprovalEligibility(
@@ -250,7 +286,14 @@ describe("readApprovalEligibility", () => {
     );
     expect(result).toEqual({
       ok: true,
-      value: { resolvedBy: "policy:small-vendor-payments", eligibility },
+      value: {
+        settlement: {
+          by: "rule",
+          resolution: "approved",
+          rule: "small-vendor-payments",
+        },
+        eligibility,
+      },
     });
     expect(invoke.mock.calls[0]?.[0]).toBe("get_auto_eligibility");
     expect(invoke.mock.calls[0]?.[1]).toEqual({ approvalId: APPROVAL });
@@ -259,7 +302,9 @@ describe("readApprovalEligibility", () => {
   it("answers null on a call no rule covered", async () => {
     invoke.mockResolvedValue({
       approvalId: APPROVAL,
+      state: "pending",
       resolvedBy: null,
+      resolvedByName: null,
       eligibility: null,
     });
     const result = await readApprovalEligibility(
@@ -270,7 +315,55 @@ describe("readApprovalEligibility", () => {
     );
     expect(result).toEqual({
       ok: true,
-      value: { resolvedBy: null, eligibility: null },
+      value: { settlement: null, eligibility: null },
+    });
+  });
+
+  // #3521: a mandate revoke or expiry closes the call with no resolver. The
+  // action carries the recorded state, so the dialog holds its buttons rather
+  // than reading a null resolver as "still waiting".
+  it("carries a call closed with no resolver as settled, not pending", async () => {
+    invoke.mockResolvedValue({
+      approvalId: APPROVAL,
+      state: "expired",
+      resolvedBy: null,
+      resolvedByName: null,
+      eligibility: null,
+    });
+    const result = await readApprovalEligibility(
+      "acme",
+      "core-platform",
+      APPROVAL,
+      "fleet",
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        settlement: { by: "none", resolution: "expired" },
+        eligibility: null,
+      },
+    });
+  });
+
+  it("names the person who answered, with their public id beside the name", async () => {
+    invoke.mockResolvedValue({
+      approvalId: APPROVAL,
+      state: "denied",
+      resolvedBy: "user:usr_marcusbell",
+      resolvedByName: "Marcus Bell",
+      eligibility: null,
+    });
+    const result = await readApprovalEligibility(
+      "acme",
+      "core-platform",
+      APPROVAL,
+      "fleet",
+    );
+    expect(result.ok && result.value.settlement).toEqual({
+      by: "person",
+      resolution: "denied",
+      id: "usr_marcusbell",
+      name: "Marcus Bell",
     });
   });
 

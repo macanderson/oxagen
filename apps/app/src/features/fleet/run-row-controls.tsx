@@ -12,7 +12,8 @@
 //
 //   not live         → no controls; there is nothing running to reach
 //   observe tier     → the reason; Oxagen was never in the path of its calls
-//   ledger source    → the reason; no run token Oxagen can revoke (WL-61)
+//   ledger source    → the reason; its controls act on evidence ingress and
+//                      live on the run's page (WL-61)
 //   role refused     → the reason; `dispatch_command` would answer denied
 //
 // Where the run page draws the buttons disabled beside the reason, a row
@@ -20,12 +21,17 @@
 // three dead buttons per row, and the sentence is the part that tells a
 // person why.
 //
+// The observe and ledger sentences are the row's own (#3521). The run page's
+// versions name the controls that page draws, steer among them, and a row
+// never draws steer: a reason line naming a control the row does not offer
+// sends a reader looking for it. The role sentence names no control, so both
+// surfaces share it.
+//
 // The queued marker is optimistic: it appears the moment the form is
 // submitted and rolls back if the control plane refused, or if it queued the
 // command for nobody. It never says the run paused, only that the pause was
 // taken, because `dispatch_command` queues and the run's own status is what
 // says the agent obeyed.
-import { COMMAND_REASON_MAX } from "@oxagen/oxagen/tacho/command-limits";
 import { useTranslations } from "next-intl";
 import {
   type SyntheticEvent,
@@ -34,7 +40,11 @@ import {
   useState,
   useTransition,
 } from "react";
-import { acceptsCommands, type RunRow } from "@/data/contracts/runs";
+import {
+  acceptsCommands,
+  COMMAND_REASON_MAX,
+  type RunRow,
+} from "@/data/contracts/runs";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, inputBase, linkText } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -43,15 +53,15 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 import { ROW_COMMANDS, type RowCommand } from "@/shared/row-commands";
 import { dispatchRunCommand } from "./actions";
 
-/** Why a live run draws no controls, in the words the run page already uses. */
+/** Why a live run draws no controls on its row. */
 function NoRowControls({
   reason,
   testId,
 }: {
-  reason: "observeReason" | "ledgerReason" | "roleReason";
+  reason: "observe" | "ledger" | "role";
   testId: string;
 }) {
-  const t = useTranslations("run.commands");
+  const command = useTranslations("run.commands");
   const controls = useTranslations("fleet.runs.controls");
   return (
     <details
@@ -61,7 +71,13 @@ function NoRowControls({
       <summary className="cursor-pointer whitespace-nowrap">
         {controls("unavailable")}
       </summary>
-      <p className="pt-2">{t(reason)}</p>
+      <p className="pt-2">
+        {reason === "observe"
+          ? controls("observeReason")
+          : reason === "ledger"
+            ? controls("ledgerReason")
+            : command("roleReason")}
+      </p>
     </details>
   );
 }
@@ -253,17 +269,13 @@ export function RunRowControls({
 }) {
   if (status !== "live") return null;
   if (!acceptsCommands(enforcementTier)) {
-    return (
-      <NoRowControls reason="observeReason" testId="row-observe-no-control" />
-    );
+    return <NoRowControls reason="observe" testId="row-observe-no-control" />;
   }
   if (source === "ledger") {
-    return (
-      <NoRowControls reason="ledgerReason" testId="row-ledger-no-control" />
-    );
+    return <NoRowControls reason="ledger" testId="row-ledger-no-control" />;
   }
   if (!canCommand) {
-    return <NoRowControls reason="roleReason" testId="row-role-no-control" />;
+    return <NoRowControls reason="role" testId="row-role-no-control" />;
   }
   return <RowCommands org={org} ws={ws} runId={runId} />;
 }

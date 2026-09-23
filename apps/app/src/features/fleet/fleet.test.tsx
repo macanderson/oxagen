@@ -310,6 +310,7 @@ describe("approvals panel", () => {
       runs: NO_RUNS,
       approvals: approvalQueue([
         approvalItem({
+          mandateId: "mnd_4f2a9c",
           autoEligibility: {
             ruleRef: "small-vendor-payments",
             ok: true,
@@ -322,19 +323,65 @@ describe("approvals panel", () => {
     expect(
       within(approvalsSection()).getByTestId("eligibility"),
     ).toHaveTextContent(
-      "Rule small-vendor-payments would have released this call. A mandate asked for a person anyway.",
+      "Rule small-vendor-payments would have released this call. Mandate mnd_4f2a9c asked for a person anyway.",
     );
   });
 
-  it("marks a count the read could not finish, on the tile and on the panel", () => {
+  // #3521: the line names a mandate only on a row that records one.
+  it("names no mandate on a qualified call whose row records none (negative)", () => {
     renderApprovalPanel({
       runs: NO_RUNS,
-      approvals: approvalQueue([approvalItem()], true),
+      approvals: approvalQueue([
+        approvalItem({
+          mandateId: null,
+          autoEligibility: {
+            ruleRef: "small-vendor-payments",
+            ok: true,
+            reasons: [],
+            floor: false,
+          },
+        }),
+      ]),
     });
-    expect(approvalsSection()).toHaveTextContent("1+ parked");
-    expect(screen.getByTestId("waiting-more")).toHaveTextContent(
-      "more are parked than this page read",
+    const line = within(approvalsSection()).getByTestId("eligibility");
+    expect(line).toHaveTextContent(
+      "It is still waiting for a person, and the record names no mandate that asked for one.",
     );
+    expect(line).not.toHaveTextContent("A mandate asked");
+  });
+
+  // #3521: the port reads one page and the queue's count, so a queue over a
+  // hundred prints its exact count and mounts one page of cards, where it used
+  // to walk ten pages and mount up to 1,000 decision dialogs.
+  it("prints the whole queue's count and draws one page of cards for a queue over a hundred", () => {
+    const page = Array.from({ length: 100 }, (_, n) =>
+      approvalItem({ id: `apr_q${n.toString(36)}` }),
+    );
+    renderApprovalPanel({
+      runs: NO_RUNS,
+      approvals: approvalQueue(page, 1437),
+    });
+    expect(approvalsSection()).toHaveTextContent("1,437 parked");
+    expect(tile("Waiting on a human")).toHaveTextContent("1,437");
+    expect(within(approvalsSection()).getAllByTestId("approval")).toHaveLength(
+      100,
+    );
+    expect(screen.getByTestId("approvals-partial")).toHaveTextContent(
+      "Showing the 100 of 1,437 parked calls that time out soonest.",
+    );
+    expect(screen.getByTestId("waiting-more")).toHaveTextContent(
+      "the oldest wait is read from the 100 that time out soonest",
+    );
+  });
+
+  it("says nothing about a partial page when the page is the whole queue (negative)", () => {
+    renderApprovalPanel({
+      runs: NO_RUNS,
+      approvals: approvalQueue([approvalItem()]),
+    });
+    expect(approvalsSection()).toHaveTextContent("1 parked");
+    expect(screen.queryByTestId("approvals-partial")).toBeNull();
+    expect(screen.queryByTestId("waiting-more")).toBeNull();
   });
 
   it("says nothing is waiting on a human when the queue is empty", () => {
@@ -394,7 +441,7 @@ describe("runs table", () => {
       // A live ledger run carries the recorded reason in place of controls:
       // pause and resume govern evidence ingress, cancel revokes the run
       // credentials, and steering needs a producer connection.
-      "View onlyPause refuses the next evidence batch. Resume reopens evidence ingress. Cancel revokes the run credentials. These controls do not stop the external process; steering needs a producer connection.",
+      "View onlyThis run reports through the evidence ledger. Its pause, resume, and cancel act on evidence ingress, and they are on the run's own page.",
     ]);
     // The run cell leads with what the run was, keeps the id under it, and
     // labels the model's sentence so it cannot read as the record.

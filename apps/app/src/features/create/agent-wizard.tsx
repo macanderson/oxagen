@@ -10,9 +10,9 @@
 // runs somewhere and mints its identity; this writes one that does not exist
 // yet, and writes no row. The describe step says so.
 import { HarnessIcon } from "@/ui/harness-icon";
-import { SUBAGENT_FILE_HARNESSES } from "@oxagen/oxagen/contracts/agent.propose";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
+import { SUBAGENT_FILE_HARNESSES } from "@/data/contracts/agents";
 import type { ActionResult } from "@/server/kernel";
 import { agentSourceSlug, renameAgentSource } from "@/shared/source-identity";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";

@@ -11,6 +11,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { COMMAND_REASON_MAX } from "@/data/contracts/runs";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
@@ -173,20 +174,36 @@ describe("run row controls", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  // #3521: a row draws pause, resume and cancel, never steer, so its reason
+  // lines name only those. The run page keeps its own wording for its four.
   it("draws the recorded reason and no controls on an observe-tier run (negative)", () => {
     renderRow({ enforcementTier: "observe" });
-    expect(screen.getByTestId("row-observe-no-control")).toHaveTextContent(
-      "Oxagen was never in the path of its calls",
+    const reason = screen.getByTestId("row-observe-no-control");
+    expect(reason).toHaveTextContent(
+      "Oxagen was never in the path of its calls, so there is no connection point to pause, resume, or cancel.",
     );
+    expect(reason).not.toHaveTextContent(/steer/i);
     expect(screen.queryByTestId("row-pause")).toBeNull();
   });
 
   it("draws the recorded reason and no controls on a ledger run (negative)", () => {
     renderRow({ source: "ledger" });
-    expect(screen.getByTestId("row-ledger-no-control")).toHaveTextContent(
-      "steering needs a producer connection",
+    const reason = screen.getByTestId("row-ledger-no-control");
+    expect(reason).toHaveTextContent(
+      "Its pause, resume, and cancel act on evidence ingress, and they are on the run's own page.",
     );
+    expect(reason).not.toHaveTextContent(/steer/i);
     expect(screen.queryByTestId("row-cancel")).toBeNull();
+  });
+
+  it("caps the reason at dispatch_command's bound, read from the app's mirror", async () => {
+    renderRow();
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    expect(screen.getByLabelText("Reason")).toHaveAttribute(
+      "maxlength",
+      String(COMMAND_REASON_MAX),
+    );
   });
 
   it("puts the observe reason ahead of the ledger one, as the handler does (negative)", () => {

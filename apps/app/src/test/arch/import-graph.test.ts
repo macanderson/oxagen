@@ -7,6 +7,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
   clientBoundaryRefuses,
+  clientRefusesPlatform,
   isPlatformSpecifier,
   layerAllows,
   MINT_IMPORTERS,
@@ -54,6 +55,9 @@ function violationsOf(source: SourceText): string[] {
       !platformAllows(source.file, edge)
     ) {
       out.push(`platform ${at}`);
+    }
+    if (directive === "use client" && clientRefusesPlatform(edge)) {
+      out.push(`client ${at}`);
     }
     // instrumentation.ts sits outside src/: the platform row is its only rule.
     if (!source.file.startsWith("src/")) continue;
@@ -187,7 +191,7 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/server/tenancy-lookups.ts", expect: null },
   ],
   "oxagen-command-limits.ts": [
-    { at: "src/features/fleet/run-row-controls.tsx", expect: null },
+    { at: "src/features/fleet/run-row-controls.tsx", expect: "platform" },
     { at: "src/ui/command-failure.ts", expect: null },
     { at: "src/ui/probe.ts", expect: "platform" },
   ],
@@ -407,6 +411,16 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   ],
   "client-imports-feature-barrel.tsx": [
     { at: "src/features/shell/switchers.tsx", expect: "client" },
+  ],
+  // #3521: a client module takes a contract value from its mirror under
+  // `@/data/contracts/`, never from the contract module, which registers a
+  // capability on load. `oxagen-contract.ts` above is the same import from a
+  // module with no directive, which the base row admits.
+  "client-imports-contract.tsx": [
+    { at: "src/features/fleet/run-row-controls.tsx", expect: "client" },
+  ],
+  "client-imports-contract-type.tsx": [
+    { at: "src/features/fleet/run-row-controls.tsx", expect: null },
   ],
 };
 

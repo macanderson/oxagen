@@ -17,7 +17,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
-const { approvals } = await import("./approvals");
+const { approvals, PAGE_SIZE } = await import("./approvals");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -64,7 +64,9 @@ describe("approvals.pending", () => {
         floor: false,
       },
     };
-    kernelRead.mockResolvedValue(readOk({ items: [judged], nextCursor: null }));
+    kernelRead.mockResolvedValue(
+      readOk({ items: [judged], nextCursor: null, total: 1 }),
+    );
     expect(await approvals.pending(ctx, { runId: null })).toEqual(
       readOk({
         items: [
@@ -86,6 +88,7 @@ describe("approvals.pending", () => {
             expiresAt: "2026-09-15T09:07:30.000Z",
           },
         ],
+        total: 1,
         more: false,
       }),
     );
@@ -98,7 +101,9 @@ describe("approvals.pending", () => {
   });
 
   it("narrows to one run and answers a refusal with the Run page's failure", async () => {
-    kernelRead.mockResolvedValue(readOk({ items: [], nextCursor: null }));
+    kernelRead.mockResolvedValue(
+      readOk({ items: [], nextCursor: null, total: 0 }),
+    );
     await approvals.pending(ctx, { runId: "arun_7k2m9q" });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: agentApprovalList,
@@ -107,35 +112,50 @@ describe("approvals.pending", () => {
     });
   });
 
-  // The Fleet waiting tile counts what this returns, so one page read as the
-  // whole queue is a figure an operator staffs against.
-  it("walks every page the queue hands back and combines them into one list", async () => {
-    kernelRead
-      .mockResolvedValueOnce(readOk({ items: [item], nextCursor: "c2" }))
-      .mockResolvedValueOnce(
-        readOk({ items: [{ ...item, id: "apr_next" }], nextCursor: null }),
-      );
-    const out = await approvals.pending(ctx, { runId: null });
-    expect(out.ok && out.value.items.map((i) => i.id)).toEqual([
-      "apr_q8t1",
-      "apr_next",
-    ]);
-    expect(out.ok && out.value.more).toBe(false);
-    expect(kernelRead).toHaveBeenNthCalledWith(2, ctx, {
-      contract: agentApprovalList,
-      input: { limit: 100, cursor: "c2" },
-      page: "fleet",
-    });
-  });
-
-  it("stops at the page bound and says the count is short of the queue (negative)", async () => {
-    kernelRead.mockImplementation(() =>
-      Promise.resolve(readOk({ items: [item], nextCursor: "more" })),
+  // #3521: Fleet used to walk up to ten pages in series to count the queue,
+  // and mounted a card for every row. The count now comes with the first page.
+  it("reads one page for a queue over a hundred, and carries the whole queue's count", async () => {
+    const page = Array.from({ length: PAGE_SIZE }, (_, n) => ({
+      ...item,
+      id: `apr_q${n.toString(36)}`,
+    }));
+    kernelRead.mockResolvedValue(
+      readOk({ items: page, nextCursor: "c2", total: 1_437 }),
     );
     const out = await approvals.pending(ctx, { runId: null });
-    expect(kernelRead).toHaveBeenCalledTimes(10);
-    expect(out.ok && out.value.items).toHaveLength(10);
+    expect(kernelRead).toHaveBeenCalledOnce();
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: agentApprovalList,
+      input: { limit: PAGE_SIZE },
+      page: "fleet",
+    });
+    expect(out.ok && out.value.items).toHaveLength(PAGE_SIZE);
+    expect(out.ok && out.value.total).toBe(1_437);
     expect(out.ok && out.value.more).toBe(true);
+  });
+
+  it("reads the last page as the whole queue", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ items: [item], nextCursor: null, total: 1 }),
+    );
+    const out = await approvals.pending(ctx, { runId: null });
+    expect(out.ok && out.value.total).toBe(1);
+    expect(out.ok && out.value.more).toBe(false);
+  });
+
+  // The count and the page are two statements. A call answered between them
+  // can leave the count one short of the page, and the panel draws the page.
+  it("never counts fewer approvals than the page it drew (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        items: [item, { ...item, id: "apr_next" }],
+        nextCursor: null,
+        total: 1,
+      }),
+    );
+    const out = await approvals.pending(ctx, { runId: null });
+    expect(out.ok && out.value.total).toBe(2);
+    expect(out.ok && out.value.more).toBe(false);
   });
 
   it("passes a failed read through, without paging further (negative)", async () => {
@@ -147,7 +167,7 @@ describe("approvals.pending", () => {
 
   it("answers record_unmappable and reports once for a record the view refuses (negative)", async () => {
     kernelRead.mockResolvedValue(
-      readOk({ items: [{ ...item, tool: "" }], nextCursor: null }),
+      readOk({ items: [{ ...item, tool: "" }], nextCursor: null, total: 1 }),
     );
     expect(await approvals.pending(ctx, { runId: null })).toEqual(
       readError("record_unmappable", 502),

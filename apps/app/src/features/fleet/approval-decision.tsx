@@ -19,7 +19,11 @@
 // is the recorded one.
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
-import type { AutoEligibility } from "@/data/contracts/approvals";
+import {
+  APPROVAL_NOTE_MAX,
+  type ApprovalSettlement,
+  type AutoEligibility,
+} from "@/data/contracts/approvals";
 import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
 import {
@@ -27,6 +31,7 @@ import {
   buttonSecondary,
   inputBase,
   linkText,
+  mono,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
@@ -93,12 +98,18 @@ function Reason({ code }: { code: string }) {
  * `ok: true` on a call that is still parked is not a contradiction. A mandate's
  * own approval rule outranks any workspace rule (MC spec §6.9 part 3), so the
  * rule would have released the call and the mandate asked for a person anyway.
- * The copy says that rather than leaving a reader to reconcile the two.
+ * The copy names that mandate only on a row that records one (#3521). On a
+ * row that records none it says the call is waiting and the record names no
+ * mandate, because a line about trust shows the recorded value and nothing
+ * stronger (spec §14).
  */
 export function Eligibility({
   eligibility,
+  mandateId,
 }: {
   eligibility: AutoEligibility | null;
+  /** The mandate the parked call drew on (`mnd_…`), or null when the row records none. */
+  mandateId: string | null;
 }) {
   const t = useTranslations("fleet.approvals.eligibility");
   if (eligibility === null)
@@ -110,9 +121,11 @@ export function Eligibility({
   return (
     <div data-testid="eligibility" className="flex flex-col gap-1 text-xs">
       <p>
-        {eligibility.ok
-          ? t("ok", { rule: eligibility.ruleRef })
-          : t("blocked", { rule: eligibility.ruleRef })}
+        {!eligibility.ok
+          ? t("blocked", { rule: eligibility.ruleRef })
+          : mandateId === null
+            ? t("okNoMandate", { rule: eligibility.ruleRef })
+            : t("okMandate", { rule: eligibility.ruleRef, mandate: mandateId })}
       </p>
       {eligibility.reasons.length === 0 ? null : (
         <ul className="list-inside list-disc text-muted-foreground">
@@ -155,9 +168,14 @@ function useFailureText(): (failure: Failure) => string {
             return t("refused", { code: failure.code });
         }
       case "invalid":
-        return failure.code === "note_required"
-          ? t("noteRequired")
-          : t("invalid");
+        switch (failure.code) {
+          case "note_required":
+            return t("noteRequired");
+          case "note_too_long":
+            return t("noteTooLong", { max: APPROVAL_NOTE_MAX });
+          default:
+            return t("invalid");
+        }
       case "pending_approval":
         return t("pendingApproval", {
           accessRequestId: failure.accessRequestId,
@@ -168,6 +186,45 @@ function useFailureText(): (failure: Failure) => string {
         return t("unavailable", { code: failure.code });
     }
   };
+}
+
+/**
+ * Who or what already closed this call, read when the dialog opened (#3521).
+ *
+ * A person is named by display name, with the public id beside it in a
+ * copyable span rather than as the label (CLAUDE.md, Runtime checks that
+ * matter). A rule is named by its id, which is its own name. A call that
+ * nothing resolved (a mandate revoke, or the request's own expiry) says it
+ * expired, rather than naming a resolver the record does not hold.
+ */
+function Settled({ settlement }: { settlement: ApprovalSettlement }) {
+  const t = useTranslations("fleet.approvals.decide.settled");
+  const id = (publicId: string) => () => (
+    <span data-testid="approval-settled-id" className={`${mono} select-all`}>
+      {publicId}
+    </span>
+  );
+  return (
+    <FormAlert testId="approval-settled">
+      {settlement.by === "person"
+        ? settlement.name === null
+          ? t.rich("personUnnamed", {
+              resolution: settlement.resolution,
+              id: id(settlement.id),
+            })
+          : t.rich("person", {
+              name: settlement.name,
+              resolution: settlement.resolution,
+              id: id(settlement.id),
+            })
+        : settlement.by === "rule"
+          ? t("rule", {
+              rule: settlement.rule,
+              resolution: settlement.resolution,
+            })
+          : t("none", { resolution: settlement.resolution })}
+    </FormAlert>
+  );
 }
 
 /**
@@ -183,12 +240,15 @@ export function ApprovalDecision({
   approvalId,
   tool,
   eligibility,
+  mandateId,
   org,
   ws,
   on,
 }: {
   onResolved?: () => void;
   approvalId: string;
+  /** The mandate the parked call drew on, which the eligibility line names. */
+  mandateId: string | null;
   /** The capability the parked call asked for, which titles the dialog. */
   tool: string;
   /** The evaluation the page read, shown until the dialog reads it again. */
@@ -213,7 +273,7 @@ export function ApprovalDecision({
   const [failure, setFailure] = useState<Failure | null>(null);
   /** What the dialog read when it opened: null while it is reading. */
   const [fresh, setFresh] = useState<{
-    resolvedBy: string | null;
+    settlement: ApprovalSettlement | null;
     eligibility: AutoEligibility | null;
   } | null>(null);
   /** The code a refused re-read answered; the recorded line stays either way. */
@@ -252,7 +312,8 @@ export function ApprovalDecision({
   }
 
   async function submit(decision: "approved" | "denied") {
-    if (pending !== null || reading) return;
+    if (pending !== null || reading || (fresh?.settlement ?? null) !== null)
+      return;
     setPending(decision);
     setFailure(null);
     try {
@@ -276,7 +337,9 @@ export function ApprovalDecision({
     }
   }
 
-  const settledBy = fresh?.resolvedBy ?? null;
+  /** Null while the call is still pending, or before the read answered. */
+  const settlement = fresh?.settlement ?? null;
+  const settled = settlement !== null;
   const shown = fresh === null ? eligibility : fresh.eligibility;
   const busy = pending !== null || reading;
 
@@ -304,7 +367,7 @@ export function ApprovalDecision({
       >
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{t("body")}</p>
-          <Eligibility eligibility={shown} />
+          <Eligibility eligibility={shown} mandateId={mandateId} />
           {fresh === null && unread === null ? (
             <p
               data-testid="eligibility-checking"
@@ -321,18 +384,14 @@ export function ApprovalDecision({
               {t("eligibilityUnread", { code: unread })}
             </p>
           )}
-          {settledBy === null ? null : (
-            <FormAlert testId="approval-settled">
-              {t("settled", { by: settledBy })}
-            </FormAlert>
-          )}
+          {settlement === null ? null : <Settled settlement={settlement} />}
           <div className="flex flex-col gap-1 text-sm text-foreground">
             <label htmlFor={noteId}>{t("note")}</label>
             <textarea
               id={noteId}
               name="note"
               rows={2}
-              maxLength={2000}
+              maxLength={APPROVAL_NOTE_MAX}
               value={note}
               onChange={(event) => {
                 setNote(event.target.value);
@@ -362,10 +421,10 @@ export function ApprovalDecision({
             <button
               type="button"
               data-testid="approve"
-              aria-disabled={busy || settledBy !== null || undefined}
+              aria-disabled={busy || settled || undefined}
               className={buttonPrimary}
               onClick={() => {
-                if (settledBy === null) void submit("approved");
+                if (!settled) void submit("approved");
               }}
             >
               {pending === "approved" ? t("approving") : t("approve")}
@@ -373,10 +432,10 @@ export function ApprovalDecision({
             <button
               type="button"
               data-testid="deny"
-              aria-disabled={busy || settledBy !== null || undefined}
+              aria-disabled={busy || settled || undefined}
               className={buttonSecondary}
               onClick={() => {
-                if (settledBy === null) void submit("denied");
+                if (!settled) void submit("denied");
               }}
             >
               {pending === "denied" ? t("denying") : t("deny")}

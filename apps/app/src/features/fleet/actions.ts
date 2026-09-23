@@ -35,14 +35,22 @@
 // boundary the harness reaches and a cancel revokes the run token on a
 // best-effort basis, so this answers the command ids the control plane wrote
 // and the row says Oxagen took the command rather than that the agent stopped.
-import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
+import {
+  APPROVAL_NOTE_MAX,
+  agentApprovalResolve,
+} from "@oxagen/oxagen/contracts/agent.approval.resolve";
 import { approvalAutoEligibilityGet } from "@oxagen/oxagen/contracts/approval.auto_eligibility.get";
 import {
   COMMAND_REASON_MAX,
   tachoCommandDispatch,
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { captureError } from "@oxagen/telemetry";
-import { AutoEligibility, toAutoEligibility } from "@/data/contracts/approvals";
+import {
+  type ApprovalSettlement,
+  AutoEligibility,
+  toApprovalSettlement,
+  toAutoEligibility,
+} from "@/data/contracts/approvals";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -61,8 +69,11 @@ export type ApprovalDecision = {
 
 /** What `get_auto_eligibility` answers, as the dialog reads it. */
 export type ApprovalEligibility = {
-  /** `user:<usr_…>` or `policy:<rule id>`; null while the call is still waiting. */
-  resolvedBy: string | null;
+  /**
+   * Who or what closed the request, read from its recorded state; null only
+   * while it is still pending (#3521).
+   */
+  settlement: ApprovalSettlement | null;
   eligibility: AutoEligibility | null;
 };
 
@@ -99,6 +110,17 @@ export async function resolveApprovalAction(
       field: "note",
     };
   }
+  // The contract bounds the note (#3521). A server action is an endpoint, so
+  // an overlong note is refused here with a code the dialog can name, rather
+  // than reaching the kernel as a schema refusal.
+  if (note.length > APPROVAL_NOTE_MAX) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "note_too_long",
+      field: "note",
+    };
+  }
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, agentApprovalResolve, {
     approvalId: input.approvalId,
@@ -126,7 +148,9 @@ export async function resolveApprovalAction(
  * can answer it, between the render and the click. So the dialog reads the row
  * once more and says who resolved it when somebody already has, instead of
  * sending a decision that the handler would refuse as `approval_expired` after
- * the operator had written a reason.
+ * the operator had written a reason. Whether it is still open comes from the
+ * recorded state, not from whether a resolver is named: a mandate revoke or
+ * the request's own expiry closes it with none (#3521).
  *
  * The evaluation itself is still the recorded one, never recomputed (ADR-070):
  * a rule edited since is a different rule than the one that judged this call.
@@ -164,7 +188,10 @@ export async function readApprovalEligibility(
   }
   return {
     ok: true,
-    value: { resolvedBy: read.value.resolvedBy, eligibility: view.data },
+    value: {
+      settlement: toApprovalSettlement(read.value),
+      eligibility: view.data,
+    },
   };
 }
 

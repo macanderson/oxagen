@@ -27,7 +27,11 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutoEligibility } from "@/data/contracts/approvals";
+import {
+  APPROVAL_NOTE_MAX,
+  type ApprovalSettlement,
+  type AutoEligibility,
+} from "@/data/contracts/approvals";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
@@ -62,13 +66,17 @@ const eligibility: AutoEligibility = {
   floor: false,
 };
 
-function draw(recorded: AutoEligibility | null = eligibility) {
+function draw(
+  recorded: AutoEligibility | null = eligibility,
+  mandateId: string | null = null,
+) {
   render(
     <IntlProvider>
       <ApprovalDecision
         approvalId={APPROVAL}
         tool="stripe__create_payment"
         eligibility={recorded}
+        mandateId={mandateId}
         org="acme"
         ws="core-platform"
         on="fleet"
@@ -110,7 +118,7 @@ beforeEach(() => {
   readApprovalEligibility.mockReset();
   readApprovalEligibility.mockResolvedValue({
     ok: true,
-    value: { resolvedBy: null, eligibility },
+    value: { settlement: null, eligibility },
   });
   resolveApprovalAction.mockResolvedValue({
     ok: true,
@@ -317,7 +325,7 @@ describe("the evaluation the dialog reads again", () => {
     }
     expect(resolveApprovalAction).not.toHaveBeenCalled();
     await act(async () => {
-      read.resolve({ ok: true, value: { resolvedBy: null, eligibility } });
+      read.resolve({ ok: true, value: { settlement: null, eligibility } });
       await read.promise;
     });
     expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
@@ -351,7 +359,15 @@ describe("the evaluation the dialog reads again", () => {
     await act(async () => {
       first.resolve({
         ok: true,
-        value: { resolvedBy: "user:stale", eligibility },
+        value: {
+          settlement: {
+            by: "person",
+            resolution: "approved",
+            id: "usr_stale",
+            name: "Stale Reader",
+          },
+          eligibility,
+        },
       });
       await first.promise;
     });
@@ -361,23 +377,106 @@ describe("the evaluation the dialog reads again", () => {
     expect(screen.queryByTestId("approval-settled")).toBeNull();
     expect(screen.getByTestId("eligibility-checking")).toBeInTheDocument();
     await act(async () => {
-      second.resolve({ ok: true, value: { resolvedBy: null, eligibility } });
+      second.resolve({ ok: true, value: { settlement: null, eligibility } });
       await second.promise;
     });
   });
 
-  it("refuses to decide a call somebody else already answered", async () => {
+  it("refuses to decide a call somebody else already answered, naming them", async () => {
     readApprovalEligibility.mockResolvedValue({
       ok: true,
-      value: { resolvedBy: "user:usr_marcusbell", eligibility },
+      value: {
+        settlement: {
+          by: "person",
+          resolution: "denied",
+          id: "usr_marcusbell",
+          name: "Marcus Bell",
+        },
+        eligibility,
+      },
+    });
+    draw();
+    await open();
+    const settled = screen.getByTestId("approval-settled");
+    // #3521: the person's name is the label, and the public id sits beside it
+    // in its own copyable span rather than standing in for the name.
+    expect(settled).toHaveTextContent(
+      "Marcus Bell (usr_marcusbell) already answered this call: denied. Nothing here can change it.",
+    );
+    expect(
+      within(settled).getByTestId("approval-settled-id"),
+    ).toHaveTextContent(/^usr_marcusbell$/);
+    expect(within(settled).getByTestId("approval-settled-id")).toHaveClass(
+      "select-all",
+    );
+    const user = userEvent.setup({ delay: null });
+    await user.click(within(dialog()).getByTestId("approve"));
+    await user.click(within(dialog()).getByTestId("deny"));
+    expect(resolveApprovalAction).not.toHaveBeenCalled();
+  });
+
+  it("names a person with no display name by what they are, with the id beside it", async () => {
+    readApprovalEligibility.mockResolvedValue({
+      ok: true,
+      value: {
+        settlement: {
+          by: "person",
+          resolution: "approved",
+          id: "usr_q8t1",
+          name: null,
+        },
+        eligibility,
+      },
     });
     draw();
     await open();
     expect(screen.getByTestId("approval-settled")).toHaveTextContent(
-      "already resolved by user:usr_marcusbell",
+      "A person with no display name (usr_q8t1) already answered this call: approved.",
     );
-    const user = userEvent.setup({ delay: null });
-    await user.click(within(dialog()).getByTestId("approve"));
+  });
+
+  it("names the rule that released a call with no person, by its id", async () => {
+    readApprovalEligibility.mockResolvedValue({
+      ok: true,
+      value: {
+        settlement: {
+          by: "rule",
+          resolution: "approved",
+          rule: "small-vendor-payments",
+        },
+        eligibility,
+      },
+    });
+    draw();
+    await open();
+    const settled = screen.getByTestId("approval-settled");
+    expect(settled).toHaveTextContent(
+      "Rule small-vendor-payments already resolved this call with no person: approved.",
+    );
+    expect(within(settled).queryByTestId("approval-settled-id")).toBeNull();
+  });
+
+  // #3521: a mandate revoke or expiry closes the call with no resolver. The
+  // dialog used to read a null resolver as "still waiting" and left both
+  // buttons live until the write came back approval_expired.
+  it("holds both decisions on a call that expired with nobody resolving it", async () => {
+    const expired: ApprovalSettlement = { by: "none", resolution: "expired" };
+    readApprovalEligibility.mockResolvedValue({
+      ok: true,
+      value: { settlement: expired, eligibility },
+    });
+    draw();
+    const user = await open();
+    expect(screen.getByTestId("approval-settled")).toHaveTextContent(
+      "This call expired before anyone answered it, or its mandate was revoked. Nothing here can change it.",
+    );
+    for (const decision of ["approve", "deny"]) {
+      expect(within(dialog()).getByTestId(decision)).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+      await user.click(within(dialog()).getByTestId(decision));
+    }
     expect(resolveApprovalAction).not.toHaveBeenCalled();
   });
 
@@ -412,7 +511,7 @@ describe("the evaluation the dialog reads again", () => {
   it("says no rule covered a call the clause never judged", async () => {
     readApprovalEligibility.mockResolvedValue({
       ok: true,
-      value: { resolvedBy: null, eligibility: null },
+      value: { settlement: null, eligibility: null },
     });
     draw(null);
     await open();
@@ -505,6 +604,70 @@ describe("approval refusal recovery", () => {
     );
     expect(within(dialog()).getByTestId("approve")).not.toHaveAttribute(
       "aria-disabled",
+    );
+  });
+});
+
+describe("the eligibility line on a call a rule would have released", () => {
+  const qualified: AutoEligibility = {
+    ruleRef: "small-vendor-payments",
+    ok: true,
+    reasons: [],
+    floor: false,
+  };
+
+  // #3521: the line names a mandate only on a row that records one.
+  it("names the mandate that asked for a person, on a row that records one", async () => {
+    readApprovalEligibility.mockResolvedValue({
+      ok: true,
+      value: { settlement: null, eligibility: qualified },
+    });
+    draw(qualified, "mnd_4f2a9c");
+    await open();
+    expect(within(dialog()).getByTestId("eligibility")).toHaveTextContent(
+      "Rule small-vendor-payments would have released this call. Mandate mnd_4f2a9c asked for a person anyway.",
+    );
+  });
+
+  it("says what the record holds on a row that names no mandate (negative)", async () => {
+    readApprovalEligibility.mockResolvedValue({
+      ok: true,
+      value: { settlement: null, eligibility: qualified },
+    });
+    draw(qualified, null);
+    await open();
+    const line = within(dialog()).getByTestId("eligibility");
+    expect(line).toHaveTextContent(
+      "the record names no mandate that asked for one.",
+    );
+    expect(line).not.toHaveTextContent("A mandate asked");
+  });
+});
+
+describe("the decision note", () => {
+  // #3521: the cap comes from the contract, through the app's mirror, not a
+  // literal of the dialog's own.
+  it("caps the reason at the contract's bound", async () => {
+    draw();
+    await open();
+    expect(within(dialog()).getByLabelText("Reason")).toHaveAttribute(
+      "maxlength",
+      String(APPROVAL_NOTE_MAX),
+    );
+  });
+
+  it("names the bound when the server refuses an overlong note (negative)", async () => {
+    resolveApprovalAction.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "note_too_long",
+      field: "note",
+    });
+    draw();
+    const user = await open();
+    await user.click(within(dialog()).getByTestId("approve"));
+    expect(await decisionFailure()).toHaveTextContent(
+      "The reason is longer than 2000 characters.",
     );
   });
 });

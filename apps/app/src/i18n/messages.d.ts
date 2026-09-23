@@ -1871,15 +1871,14 @@ type Messages = {
         title: string;
         oldest: string;
         none: string;
-        more: string;
-        moreBasis: string;
+        pageBasis: string;
         open: string;
       };
     };
     approvals: {
       title: string;
       parked: string;
-      more: string;
+      partial: string;
       empty: string;
       emptyDetail: string;
       timesOut: string;
@@ -1898,7 +1897,8 @@ type Messages = {
       };
       eligibility: {
         none: string;
-        ok: string;
+        okMandate: string;
+        okNoMandate: string;
         blocked: string;
         floor: string;
         recorded: string;
@@ -1928,10 +1928,16 @@ type Messages = {
         approving: string;
         denying: string;
         checking: string;
-        settled: string;
+        settled: {
+          person: string;
+          personUnnamed: string;
+          rule: string;
+          none: string;
+        };
         eligibilityUnread: string;
         failure: {
           noteRequired: string;
+          noteTooLong: string;
           noPrincipal: string;
           orgRoleRequired: string;
           noRoleCoversAllTags: string;
@@ -1989,6 +1995,8 @@ type Messages = {
         queued: string;
         reread: string;
         unavailable: string;
+        observeReason: string;
+        ledgerReason: string;
       };
       operatorKind: {
         human: string;

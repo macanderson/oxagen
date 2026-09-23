@@ -21,6 +21,22 @@ const AgentHarness = z.enum([
   "custom",
 ]);
 
+/**
+ * The harnesses that read a generated subagent file (`.claude/agents/<slug>.md`)
+ * beside the definition, mirrored from `SUBAGENT_FILE_HARNESSES` in the
+ * `propose_agent` contract. The agent wizard lists that file only for these.
+ *
+ * A mirror rather than an import because the contract module registers its
+ * capability at import time, and the wizard is a client component: importing
+ * it would ship the contract registry to the browser (#3521). `agents.test.ts`
+ * holds the mirror equal to the contract.
+ */
+export const SUBAGENT_FILE_HARNESSES: readonly string[] = [
+  "claude-code",
+  "cursor",
+  "stella",
+];
+
 /** Derived on the read: retired (archived), suspended (principal), enrolled (a live credential or host), unenrolled. */
 export const AgentStatus = z.enum([
   "unenrolled",

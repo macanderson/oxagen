@@ -173,13 +173,13 @@ export function ActivityButtons() {
       : undefined;
   const count = value
     ? value.workspaces.reduce(
-        (n, w) => n + (w.pending.ok ? w.pending.value.items.length : 0),
+        (n, w) => n + (w.pending.ok ? w.pending.value.total : 0),
         0,
       )
     : idleApprovals;
-  const incomplete = value?.workspaces.some(
-    (w) => !w.pending.ok || w.pending.value.more,
-  );
+  // Each workspace's read carries its whole queue's count (#3521), so only a
+  // workspace whose read failed leaves the badge short of the truth.
+  const incomplete = value?.workspaces.some((w) => !w.pending.ok);
   const unread = value
     ? value.notifications.items.filter((n) => n.notification.unread).length
     : (state?.unread ?? null);
@@ -316,7 +316,11 @@ export function ActivityDrawers({ data }: { data: ShellData }) {
               org={data.org.slug}
               ws={selected.w.slug}
               now={Date.parse(value?.readAt ?? "")}
-              approvals={readOk({ items: [selected.item], more: false })}
+              approvals={readOk({
+                items: [selected.item],
+                total: 1,
+                more: false,
+              })}
               mandates={
                 new Map(
                   selected.w.mandates.ok

@@ -106,7 +106,10 @@ function ApprovalCard({
           </dd>
         )}
       </dl>
-      <Eligibility eligibility={item.autoEligibility} />
+      <Eligibility
+        eligibility={item.autoEligibility}
+        mandateId={item.mandateId}
+      />
       {mandate !== null ? (
         <>
           {metered.map((measure) => (
@@ -165,6 +168,7 @@ function ApprovalCard({
         approvalId={item.id}
         tool={item.tool}
         eligibility={item.autoEligibility}
+        mandateId={item.mandateId}
         org={org}
         ws={ws}
         on={on}
@@ -207,20 +211,12 @@ export function ApprovalsPanel({
         {approvals.ok ? (
           <span className="text-xs text-muted-foreground">
             {/*
-              The figure the header and the waiting tile both stand behind: the
-              count the read took, marked `+` when the read stopped before the
-              end of the queue. Writing the bare length here read as the whole
-              queue, which is the figure an operator staffs against. The `more`
-              call sits in the component rather than in a helper the translator
-              is passed to, because INV-12 follows a translator to its calls
-              and a key it cannot see is a key it reports as unused.
+              The whole queue's count, which `list_approvals` answers beside
+              its first page (#3521), and the figure the waiting tile prints
+              too. The cards below are that first page.
             */}
             {t("parked", {
-              count: approvals.value.more
-                ? t("more", {
-                    count: formatCount(approvals.value.items.length, locale),
-                  })
-                : formatCount(approvals.value.items.length, locale),
+              count: formatCount(approvals.value.total, locale),
             })}
           </span>
         ) : null}
@@ -233,24 +229,43 @@ export function ApprovalsPanel({
           <p className="text-xs text-muted-foreground">{t("emptyDetail")}</p>
         </div>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
-          {approvals.value.items.map((item) => (
-            <ApprovalCard
-              onResolved={onResolved}
-              key={item.id}
-              item={item}
-              mandate={
-                item.mandateId === null
-                  ? null
-                  : (mandates.get(item.mandateId) ?? null)
-              }
-              now={now}
-              org={org}
-              ws={ws}
-              on={on}
-            />
-          ))}
-        </ul>
+        <>
+          {/*
+            A queue longer than one page draws the page, soonest timeout
+            first, and says so. The panel used to walk every page and mount
+            a card, each with its own decision dialog, for up to 1,000 rows
+            (#3521). Answering these moves the rest up on the next read.
+          */}
+          {approvals.value.more ? (
+            <p
+              data-testid="approvals-partial"
+              className="mb-3 text-xs text-muted-foreground"
+            >
+              {t("partial", {
+                shown: formatCount(approvals.value.items.length, locale),
+                total: formatCount(approvals.value.total, locale),
+              })}
+            </p>
+          ) : null}
+          <ul className="grid gap-3 md:grid-cols-2">
+            {approvals.value.items.map((item) => (
+              <ApprovalCard
+                onResolved={onResolved}
+                key={item.id}
+                item={item}
+                mandate={
+                  item.mandateId === null
+                    ? null
+                    : (mandates.get(item.mandateId) ?? null)
+                }
+                now={now}
+                org={org}
+                ws={ws}
+                on={on}
+              />
+            ))}
+          </ul>
+        </>
       )}
     </section>
   );

@@ -3,6 +3,7 @@
 // it. list_api_keys returns no secret and no hash today; these tests hold the
 // view model to that whatever the contract grows, by naming every field it
 // carries and by proving an unrecognised field does not survive the parse.
+import { GOVERNANCE_MODES as CONTRACT_GOVERNANCE_MODES } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   SSO_MAPPABLE_ROLES,
   ssoProtocolSchema,
@@ -11,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   ApiKey,
   ApiKeyList,
+  GOVERNANCE_MODES,
   SsoMappableRole,
   SsoProtocol,
   SsoProvider,
@@ -119,5 +121,14 @@ describe("SsoProvider", () => {
     expect([...SsoProtocol.options].sort()).toEqual(
       [...ssoProtocolSchema.options].sort(),
     );
+  });
+});
+
+// The workspace dialog is a client component, and no client module in this
+// app imports a kernel contract module (#3521). The modes are mirrored in
+// `./org`, and this case keeps the mirror equal to the contract, in order.
+describe("org contract mirrors", () => {
+  it("mirrors the governance modes, loosest to strictest", () => {
+    expect([...GOVERNANCE_MODES]).toEqual([...CONTRACT_GOVERNANCE_MODES]);
   });
 });
