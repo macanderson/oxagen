@@ -2247,11 +2247,8 @@ async function initializeDaemon(
    * `gateway` only when the proxy saw a model call for it: a base URL written
    * into a config file is intent, not traffic.
    */
-  function tierOf(
-    sessionUuid: string,
-  ): "contained" | "gateway" | "harness" | "observe" {
-    if (modelProxy.callsObservedFor(sessionUuid) > 0)
-      return contained.attested(sessionUuid) ? "contained" : TACHO_GATEWAY_TIER;
+  function tierOf(sessionUuid: string): "gateway" | "harness" | "observe" {
+    if (modelProxy.callsObservedFor(sessionUuid) > 0) return TACHO_GATEWAY_TIER;
     return host.bundle.mode === "enforce" ? "harness" : "observe";
   }
 
