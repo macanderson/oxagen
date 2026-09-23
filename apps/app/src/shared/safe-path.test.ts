@@ -154,9 +154,9 @@ describe("routes", () => {
     expect(routes.steering("acme", "core", { tab: "library" })).toBe(
       "/acme/core/steering/library",
     );
-    expect(routes.steering("acme", "core", { tab: "records", kind: "rule" })).toBe(
-      "/acme/core/steering/records?kind=rule",
-    );
+    expect(
+      routes.steering("acme", "core", { tab: "records", kind: "rule" }),
+    ).toBe("/acme/core/steering/records?kind=rule");
     expect(routes.steering("acme", "core", { tab: "policy" })).toBe(
       "/acme/core/steering/gates",
     );
@@ -167,7 +167,10 @@ describe("routes", () => {
       "/acme/core/steering/assignments",
     );
     expect(
-      routes.steering("acme", "core", { tab: "preview", agent: "release manager" }),
+      routes.steering("acme", "core", {
+        tab: "preview",
+        agent: "release manager",
+      }),
     ).toBe("/acme/core/steering/compiler/release%20manager");
     expect(routes.steering("acme", "core", { tab: "constructor" })).toBe(
       "/acme/core/steering",

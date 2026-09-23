@@ -281,10 +281,15 @@ describe("steering.hub", () => {
   };
   /** Answers each contract the hub reads with what the case hands it. */
   function answer(
-    by: Partial<Record<"repos" | "tree" | "all" | "merged" | "rejected", unknown>>,
+    by: Partial<
+      Record<"repos" | "tree" | "all" | "merged" | "rejected", unknown>
+    >,
   ) {
     kernelRead.mockImplementation(
-      async (_ctx: unknown, call: { contract: unknown; input: { status?: string } }) => {
+      async (
+        _ctx: unknown,
+        call: { contract: unknown; input: { status?: string } },
+      ) => {
         if (call.contract === repositoryList)
           return by.repos ?? readOk({ repositories: [MAIN] });
         if (call.contract === repositoryTreeGet)
@@ -294,7 +299,11 @@ describe("steering.hub", () => {
           );
         if (call.contract === contextProposalList) {
           const key = call.input.status ?? "all";
-          const totals: Record<string, number> = { all: 15, merged: 4, rejected: 2 };
+          const totals: Record<string, number> = {
+            all: 15,
+            merged: 4,
+            rejected: 2,
+          };
           return (
             by[key as "all" | "merged" | "rejected"] ??
             readOk({ proposals: [], total: totals[key] })
@@ -310,7 +319,11 @@ describe("steering.hub", () => {
     const read = await steering.hub(ctx);
     expect(read).toEqual(
       readOk({
-        governance: { state: "read", repository: "acme/platform", mode: "regulated" },
+        governance: {
+          state: "read",
+          repository: "acme/platform",
+          mode: "regulated",
+        },
         proposalsWaiting: 9,
       }),
     );
@@ -333,7 +346,9 @@ describe("steering.hub", () => {
     const read = await steering.hub(ctx);
     expect(read.ok && read.value.governance).toEqual({ state: "unbound" });
     expect(
-      kernelRead.mock.calls.some((call) => call[1].contract === repositoryTreeGet),
+      kernelRead.mock.calls.some(
+        (call) => call[1].contract === repositoryTreeGet,
+      ),
     ).toBe(false);
   });
 

@@ -208,7 +208,9 @@ export const steering: DataSource["steering"] = {
         page: "steering",
       });
       if (!bound.ok) return { state: "unread", code: failureCode(bound) };
-      const main = bound.value.repositories.find((repo) => repo.role === "main");
+      const main = bound.value.repositories.find(
+        (repo) => repo.role === "main",
+      );
       if (main === undefined) return { state: "unbound" };
       const tree = await kernelRead(ctx, {
         contract: repositoryTreeGet,
