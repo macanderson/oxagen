@@ -650,6 +650,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY enable the installation-token path
   // in resolveGitHubToken(). Both must be set together; omitting either falls
   // through to the OAuth-connection or env-PAT fallback.
+  OXAGEN_TACHO_GITHUB_BROKER: {
+    group: "github",
+    description:
+      "Set to 1 to let enrolled hosts request repository-scoped GitHub credentials for the local Git proxy.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   GITHUB_APP_ID: {
     group: "github",
     description:

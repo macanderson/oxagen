@@ -91,6 +91,32 @@ export const hostFileSchema = z
      * loads and the daemon still serves the proxy.
      */
     model_proxy_port: z.number().int().min(1024).max(65535).optional(),
+    /** Opt-in repository Git proxy; configured by tacho github configure. */
+    github_broker_enabled: z.boolean().optional(),
+    github_repositories: z
+      .array(
+        z
+          .object({
+            cwd: z.string(),
+            repository: z.string(),
+            harness: z
+              .enum(["claude-code", "codex", "cursor", "stella"])
+              .optional(),
+            url: z.string(),
+            helper: z.string(),
+            remotes: z.array(
+              z
+                .object({
+                  key: z.string(),
+                  before: z.array(z.string()),
+                  after: z.array(z.string()),
+                })
+                .strict(),
+            ),
+          })
+          .strict(),
+      )
+      .optional(),
     local_token: z.string().min(16),
     hostname: z.string(),
     os_user: z.string(),
@@ -257,8 +283,13 @@ export interface LenientHostRead {
    */
   salvaged?: Pick<
     HostFile,
-    "host_enrollment_id" | "displaced_env" | "displaced_mcp_servers"
+    | "host_enrollment_id"
+    | "displaced_env"
+    | "displaced_mcp_servers"
+    | "github_repositories"
   >;
+  /** Malformed custody receipts must be repaired before stopping the proxy. */
+  githubRecoveryError?: string;
   /** Why the file did not validate. */
   error?: string;
 }
@@ -286,8 +317,22 @@ export function readHostFileLenient(path: string): LenientHostRead {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw))
     return { error };
   const record = raw as Record<string, unknown>;
+  const github = hostFileSchema.shape.github_repositories.safeParse(
+    record["github_repositories"],
+  );
+  const githubRecoveryError = github.success
+    ? undefined
+    : "GitHub custody receipts are invalid. Repair host.json before unenrolling so remote URLs can be restored.";
   const id = record["host_enrollment_id"];
-  if (typeof id !== "string" || id.length === 0) return { error };
+  if (typeof id !== "string" || id.length === 0)
+    return {
+      error,
+      githubRecoveryError:
+        githubRecoveryError ??
+        (github.success && github.data?.length
+          ? "Restore the host enrollment id before removing GitHub custody"
+          : undefined),
+    };
   const env = z
     .record(z.string(), z.string())
     .safeParse(record["displaced_env"]);
@@ -296,7 +341,9 @@ export function readHostFileLenient(path: string): LenientHostRead {
     .safeParse(record["displaced_mcp_servers"]);
   return {
     error,
+    githubRecoveryError,
     salvaged: {
+      ...(github.success ? { github_repositories: github.data } : {}),
       host_enrollment_id: id,
       displaced_env: env.success ? env.data : {},
       displaced_mcp_servers: servers.success ? servers.data : {},

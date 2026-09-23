@@ -149,6 +149,7 @@ export const baseEnvSchema = z.object({
   // via the App private key instead of falling back to per-user OAuth tokens.
   // Both vars are required together; omitting either disables path (1) and
   // falls through to the OAuth-connection fallback.
+  OXAGEN_TACHO_GITHUB_BROKER: z.enum(["0", "1"]).optional(),
   GITHUB_APP_ID: z.string().optional(),
   GITHUB_APP_PRIVATE_KEY: z.string().optional(),
   // LOCAL/DEMO-ONLY fallback PAT for GitHub write capabilities; must never be

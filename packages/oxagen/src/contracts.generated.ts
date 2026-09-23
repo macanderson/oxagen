@@ -353,6 +353,7 @@ import "./contracts/tacho.enrollment.create";
 import "./contracts/tacho.enrollment.revoke";
 import "./contracts/tacho.enrollment_token.create";
 import "./contracts/tacho.events.ingest";
+import "./contracts/tacho.github_token.issue";
 import "./contracts/tacho.host.enroll";
 import "./contracts/tacho.host.list";
 import "./contracts/tacho.incident.list";

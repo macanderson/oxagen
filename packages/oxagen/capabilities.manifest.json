@@ -5957,6 +5957,21 @@
       }
     },
     {
+      "name": "create_github_token",
+      "file": "tacho.github_token.issue.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "enroll_host",
       "file": "tacho.host.enroll.ts",
       "domain": "tacho",

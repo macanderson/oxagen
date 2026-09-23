@@ -24,7 +24,11 @@ export type {
   AppInstallationTokenArgs,
   InstallationTokenResult,
 } from "./app-auth";
-export { createAppInstallationToken, getInstallationToken } from "./app-auth";
+export {
+  createAppInstallationToken,
+  getInstallationToken,
+  revokeInstallationToken,
+} from "./app-auth";
 export type {
   GithubConnectReturnTo,
   GithubInstallState,
