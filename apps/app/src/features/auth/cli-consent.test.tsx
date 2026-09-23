@@ -96,6 +96,7 @@ const source = {
     connections: vi.fn(),
     mcpServers: vi.fn(),
   },
+  runtimes: { list: vi.fn(), agents: vi.fn() },
 };
 
 beforeEach(() => {

@@ -124,6 +124,7 @@ describe("ShellChrome", () => {
         connections: vi.fn(),
         mcpServers: vi.fn(),
       },
+      runtimes: { list: vi.fn(), agents: vi.fn() },
     };
     // The chrome is wrapped in the viewer's zone, so its own dates agree with
     // the page's; the client shell is the provider's one child.
